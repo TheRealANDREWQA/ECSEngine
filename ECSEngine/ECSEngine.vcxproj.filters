@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ECSEngine">
+      <UniqueIdentifier>{762CF8CA-E296-AC41-2BD5-5DE7977E8A96}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ECSEngine\Allocators">
+      <UniqueIdentifier>{792CB705-65BB-40CF-0EDA-54CAFA475175}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ECSEngine\Containers">
+      <UniqueIdentifier>{3B798BC0-2708-158A-D026-2985BC942530}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Includes\ECSEngine.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\LinearAllocator.h">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Allocators\MultipoolAllocator.h">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Allocators\PoolAllocator.h">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Allocators\StackAllocator.h">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Application.h">
+      <Filter>ECSEngine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Containers\BlockRange.h">
+      <Filter>ECSEngine\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Containers\BooleanBitField.h">
+      <Filter>ECSEngine\Containers</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Core.h">
+      <Filter>ECSEngine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Includes\ecspch.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MemoryManager.h" />
+    <ClInclude Include="src\ECSEngine\Containers\HashTable.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Stream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\SequentialTable.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityManager.h" />
+    <ClInclude Include="src\ECSEngine\Internal\InternalStructures.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Graphics.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\ConcurrentPrimitives.h">
+      <Filter>ECSEngine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Timer.h">
+      <Filter>ECSEngine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Internal\System\SystemManager.h" />
+    <ClInclude Include="src\ECSEngine\Internal\World.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskManager.h" />
+    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\StaticSequentialTable.h" />
+    <ClInclude Include="src\ECSEngine\Internal\ArchetypeBase.h" />
+    <ClInclude Include="src\ECSEngine\Internal\StaticArchetypeBase.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Archetype.h" />
+    <ClInclude Include="src\Includes\EntryPoint.h">
+      <Filter>ECSEngine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECSEngine\Internal\ResourceManager.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\RenderingStructures.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\ColorMacros.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Keyboard.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Mouse.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\FunctionTemplates.h" />
+    <ClInclude Include="src\ECSEngine\Math\ECSMatrix.h" />
+    <ClInclude Include="src\ECSEngine\Math\Vector.h" />
+    <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\Reflection.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Serialization.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
+    <ClInclude Include="src\Includes\ECSEngineUI.h" />
+    <ClInclude Include="src\ECSEngine\Containers\DataPointer.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\IndexSerialization.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeSection.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeMultisection.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskDependencyGraph.h" />
+    <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
+    <ClInclude Include="src\Includes\ECSEngineContainers.h" />
+    <ClInclude Include="src\Includes\ECSEngineInternal.h" />
+    <ClInclude Include="src\Includes\ECSEngineUtilities.h" />
+    <ClInclude Include="src\Includes\ECSEngineMath.h" />
+    <ClInclude Include="src\Includes\ECSEngineSerialization.h" />
+    <ClInclude Include="src\Includes\ECSEngineReflection.h" />
+    <ClInclude Include="src\Includes\ECSEngineRendering.h" />
+    <ClInclude Include="src\Includes\ECSEngineMultithreading.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompression.h" />
+    <ClInclude Include="src\Includes\ECSEngineStream.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawConfigs.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawer.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerActions.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerActionsTemplates.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerActionStructures.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerDescriptor.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerStructures.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerWindows.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIHelpers.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIMacros.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIOSActions.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIReflection.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIResourcePaths.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIStructures.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UISystem.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompressionTypes.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\File.h" />
+    <ClInclude Include="src\Includes\ECSEngineModule.h" />
+    <ClInclude Include="src\Includes\ECSEngineWorld.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\MeshRender.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\ShaderReflectionMacros.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Allocators\MultipoolAllocator.cpp">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Allocators\PoolAllocator.cpp">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Allocators\StackAllocator.cpp">
+      <Filter>ECSEngine\Allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Application.cpp">
+      <Filter>ECSEngine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Containers\BlockRange.cpp">
+      <Filter>ECSEngine\Containers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Containers\BooleanBitField.cpp">
+      <Filter>ECSEngine\Containers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Includes\ecspch.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MemoryManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\SequentialTable.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\EntityManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\InternalStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\Graphics.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\ConcurrentPrimitives.cpp">
+      <Filter>ECSEngine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp">
+      <Filter>ECSEngine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Internal\System\SystemManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\ArchetypeBase.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\StaticArchetypeBase.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\RenderingStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\ResourceManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Reflection\Reflection.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Serialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\World.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\DataPointer.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\IndexSerialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeSection.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeMultisection.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencyGraph.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerActions.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerActionStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerWindows.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIOSActions.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIReflection.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UISystem.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\MeshRender.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\UIVertexColor.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\UITextSpriteVertex.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UITextSpriteVertex.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UISpriteVertex.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\UISpriteVertex.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\StaticMesh.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\StaticMesh.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\SimpleShader.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SimpleShader.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="src\TODO.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\ECSEngine\Rendering\Shaders\UIViewportTransform.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
+  </ItemGroup>
+</Project>
