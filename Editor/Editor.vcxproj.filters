@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="src\UI\AssetTypes.h" />
+    <ClInclude Include="src\UI\DirectoryExplorer.h" />
+    <ClInclude Include="src\UI\FileExplorer.h" />
+    <ClInclude Include="src\UI\Game.h" />
+    <ClInclude Include="src\UI\Hub.h" />
+    <ClInclude Include="src\UI\MiscellaneousBar.h" />
+    <ClInclude Include="src\UI\Scene.h" />
+    <ClInclude Include="src\UI\ToolbarUI.h" />
+    <ClInclude Include="src\DrawFunction.h" />
+    <ClInclude Include="src\DrawFunction2.h" />
+    <ClInclude Include="src\Editor\EditorParameters.h" />
+    <ClInclude Include="src\editorpch.h" />
+    <ClInclude Include="src\Editor\EditorState.h" />
+    <ClInclude Include="src\OSFunctions.h" />
+    <ClInclude Include="src\Project\ProjectOperations.h" />
+    <ClInclude Include="src\Test.h" />
+    <ClInclude Include="src\HelperWindows.h" />
+    <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
+    <ClInclude Include="src\Editor\EditorFile.h" />
+    <ClInclude Include="src\Editor\EditorEvent.h" />
+    <ClInclude Include="src\Modules\ModuleDefinition.h" />
+    <ClInclude Include="src\Modules\Module.h" />
+    <ClInclude Include="src\UI\ModuleExplorer.h" />
+    <ClInclude Include="src\Editor\EditorPalette.h" />
+    <ClInclude Include="src\Project\ProjectUITemplate.h" />
+    <ClInclude Include="src\Modules\ModuleFile.h" />
+    <ClInclude Include="src\UI\Inspector.h" />
+    <ClInclude Include="src\UI\InspectorData.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
+    <ClCompile Include="src\UI\FileExplorer.cpp" />
+    <ClCompile Include="src\UI\Game.cpp" />
+    <ClCompile Include="src\UI\Hub.cpp" />
+    <ClCompile Include="src\UI\MiscellaneousBar.cpp" />
+    <ClCompile Include="src\UI\Scene.cpp" />
+    <ClCompile Include="src\UI\ToolbarUI.cpp" />
+    <ClCompile Include="src\Editor\Editor.cpp" />
+    <ClCompile Include="src\editorpch.cpp" />
+    <ClCompile Include="src\OSFunctions.cpp" />
+    <ClCompile Include="src\Project\ProjectOperations.cpp" />
+    <ClCompile Include="src\TestUI.cpp" />
+    <ClCompile Include="src\HelperWindows.cpp" />
+    <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />
+    <ClCompile Include="src\Editor\EditorFile.cpp" />
+    <ClCompile Include="src\Editor\EditorEvent.cpp" />
+    <ClCompile Include="src\Modules\Module.cpp" />
+    <ClCompile Include="src\UI\ModuleExplorer.cpp" />
+    <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
+    <ClCompile Include="src\Modules\ModuleFile.cpp" />
+    <ClCompile Include="src\UI\Inspector.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="ECSLogo.ico" />
+  </ItemGroup>
+</Project>
