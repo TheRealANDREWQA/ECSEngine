@@ -196,7 +196,13 @@
   <ItemGroup>
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
+    <ClInclude Include="src\ECSEngine\GLTFLoader\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
+    <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
+    <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
+    <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
+    <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
+    <ClInclude Include="src\ECSEngine\Math\Transform.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompression.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompressionTypes.h" />
     <ClInclude Include="src\ECSEngine\Rendering\MeshRender.h" />
@@ -235,7 +241,7 @@
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskDependencyGraph.h" />
-    <ClInclude Include="src\ECSEngine\Math\ECSMatrix.h" />
+    <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
@@ -291,6 +297,12 @@
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\DataPointer.cpp" />
+    <ClCompile Include="src\ECSEngine\GLTFLoader\cgtlf.c">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\ECSEngine\GLTFLoader\GLTFLoader.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencyGraph.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />

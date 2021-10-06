@@ -22,7 +22,7 @@ namespace ECSEngine {
 			{positive_span, positive_span, positive_span}
 		};
 
-		vertex_buffer = graphics->ConstructVertexBuffer(sizeof(float3), std::size(vertex_position), vertex_position);
+		vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(vertex_position), vertex_position);
 
 		unsigned int indices[] = {
 			0, 2, 1,    2, 3, 1,
@@ -33,7 +33,7 @@ namespace ECSEngine {
 			0, 1, 4,    1, 5, 4
 		};
 
-		index_buffer = graphics->ConstructIndexBuffer(Stream<unsigned int>(indices, std::size(indices)));
+		index_buffer = graphics->CreateIndexBuffer(Stream<unsigned int>(indices, std::size(indices)));
 	}
 
 }

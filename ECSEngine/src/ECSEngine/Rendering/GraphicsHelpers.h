@@ -53,6 +53,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API ID3D11Resource* GetResource(ConstantBuffer vc_buffer);
 
+	ECSENGINE_API ID3D11Resource* GetResource(StructuredBuffer buffer);
+
+	ECSENGINE_API ID3D11Resource* GetResource(StandardBuffer buffer);
+
+	ECSENGINE_API ID3D11Resource* GetResource(IndirectBuffer buffer);
+
+	ECSENGINE_API ID3D11Resource* GetResource(UABuffer buffer);
+
 	ECSENGINE_API void GetTextureDimensions(ID3D11Resource* _resource, unsigned int& width, unsigned int& height);
 
 	ECSENGINE_API void GetTextureDimensions(ID3D11Resource* _resource, unsigned short& width, unsigned short& height);

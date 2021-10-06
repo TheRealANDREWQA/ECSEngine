@@ -90,11 +90,6 @@ namespace ECSEngine {
 			}
 		}
 
-		void ECSENGINE_API ButtonToolTip(ActionData* action_data)
-		{
-			return void ECSENGINE_API();
-		}
-
 		// --------------------------------------------------------------------------------------------------------------
 
 		void SliderAction(ActionData* action_data) {

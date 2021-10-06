@@ -35,9 +35,12 @@ namespace ECSEngine {
 	};
 
 	enum class ShaderTextureType {
-		_1D,
-		_2D,
-		_3D,
+		Read1D,
+		Read2D,
+		Read3D,
+		ReadWrite1D,
+		ReadWrite2D,
+		ReadWrite3D,
 		Array1D,
 		Array2D,
 		Array3D,
@@ -74,6 +77,12 @@ namespace ECSEngine {
 
 		// Returns whether or not it succeded
 		bool ReflectShaderTextures(containers::Stream<wchar_t> path, containers::CapacityStream<ShaderReflectedTexture>& textures, containers::CapacityStream<char> name_pool);
+
+		// Returns whether or not it succeded
+		bool ReflectVertexBufferMapping(const wchar_t* path, containers::CapacityStream<ECS_MESH_INDEX>& mapping);
+
+		// Returns whether or not it succeded
+		bool ReflectVertexBufferMapping(containers::Stream<wchar_t> path, containers::CapacityStream<ECS_MESH_INDEX>& mapping);
 
 		// Returns the amount of bytes necessary to create an instance of this class
 		static size_t MemoryOf();

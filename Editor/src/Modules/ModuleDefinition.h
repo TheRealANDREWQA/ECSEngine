@@ -2,6 +2,7 @@
 #include "ECSEngineMultithreading.h"
 
 #define MODULE_FUNCTION_NAME "ModuleFunction"
+#define MODULE_DRAW_SCENE_NAME "ModuleDrawScene"
 constexpr const wchar_t* MODULE_EXTENSION = L".dll";
 
 constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {
@@ -16,6 +17,7 @@ namespace ECSEngine {
 }
 
 using ModuleFunction = void (*)(ECSEngine::World* world, ECSEngine::containers::Stream<ECSEngine::TaskGraphElement>& module_stream);
+using ModuleDrawScene = void (*)(ECSEngine::World* world);
 
 constexpr const char* MODULE_CONFIGURATION_DEBUG = "Debug";
 constexpr const char* MODULE_CONFIGURATION_RELEASE = "Release";

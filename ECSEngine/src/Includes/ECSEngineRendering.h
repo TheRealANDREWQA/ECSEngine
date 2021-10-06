@@ -4,3 +4,4 @@
 #include "../ECSEngine/Rendering/GraphicsHelpers.h"
 #include "../ECSEngine/Rendering/ColorMacros.h"
 #include "../ECSEngine/Rendering/MeshRender.h"
+#include "../ECSEngine/GLTFLoader/GLTFLoader.h"

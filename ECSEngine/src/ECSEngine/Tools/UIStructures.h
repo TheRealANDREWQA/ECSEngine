@@ -343,13 +343,17 @@ namespace ECSEngine {
 #pragma endregion
 
 #pragma region Render Resources
-		struct ECSENGINE_API UIDrawResources {
-			void Map(void** buffers, Graphics* graphics, GraphicsContext* context);
-			void UnmapNormal(Graphics* graphics, GraphicsContext* context);
-			void UnmapLate(Graphics* graphics, GraphicsContext* context);
-			void UnmapAll(Graphics* graphics, GraphicsContext* context);
 
-			void Unmap(Graphics* graphics, GraphicsContext* context, unsigned int starting_index, unsigned int end_index);
+		struct ECSENGINE_API UIDrawResources {
+			void Map(void** buffers, GraphicsContext* context);
+
+			void UnmapNormal(GraphicsContext* context);
+
+			void UnmapLate(GraphicsContext* context);
+
+			void UnmapAll(GraphicsContext* context);
+
+			void Unmap(GraphicsContext* context, unsigned int starting_index, unsigned int end_index);
 
 			void ReleaseSpriteTextures();
 			void Release();

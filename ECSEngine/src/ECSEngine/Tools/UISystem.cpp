@@ -108,9 +108,9 @@ namespace ECSEngine {
 			const char* font_uv_descriptor,
 			uint2 window_os_size,
 			GlobalMemoryManager* initial_allocator
-		) : m_graphics(graphics), m_mouse(mouse), m_keyboard(keyboard), m_memory(memory), m_resource_manager(resource),
-			m_task_manager(task_manager), m_application(application), m_frame_index(0), m_texture_evict_count(0),
-			m_texture_evict_target(60), m_window_os_size(window_os_size)
+		) : m_graphics(graphics), m_mouse(mouse), m_mouse_tracker(mouse->GetTracker()), m_keyboard(keyboard), m_keyboard_tracker(keyboard->GetTracker()),
+			m_memory(memory), m_resource_manager(resource), m_task_manager(task_manager), m_application(application), m_frame_index(0),
+			m_texture_evict_count(0), m_texture_evict_target(60), m_window_os_size(window_os_size)
 		{
 
 			// initializing default m_descriptors and materials
@@ -222,15 +222,15 @@ namespace ECSEngine {
 			m_resources.system_draw.buffers = CapacityStream<VertexBuffer>((void*)buffer, m_descriptors.materials.count, m_descriptors.materials.count);
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 				if (index == ECS_TOOLS_UI_SOLID_COLOR || index == ECS_TOOLS_UI_LINE) {
-					m_resources.system_draw.buffers[index] = m_graphics->ConstructVertexBuffer(sizeof(UIVertexColor), m_descriptors.misc.system_vertex_buffers[index]);
+					m_resources.system_draw.buffers[index] = m_graphics->CreateVertexBuffer(sizeof(UIVertexColor), m_descriptors.misc.system_vertex_buffers[index]);
 				}
 				else if (index == ECS_TOOLS_UI_TEXT_SPRITE || index == ECS_TOOLS_UI_SPRITE || index == ECS_TOOLS_UI_SPRITE_CLUSTER) {
-					m_resources.system_draw.buffers[index] = m_graphics->ConstructVertexBuffer(sizeof(UISpriteVertex), m_descriptors.misc.system_vertex_buffers[index]);
+					m_resources.system_draw.buffers[index] = m_graphics->CreateVertexBuffer(sizeof(UISpriteVertex), m_descriptors.misc.system_vertex_buffers[index]);
 				}
 			}
 
 			buffer += sizeof(VertexBuffer) * m_resources.system_draw.buffers.size;
-			m_resources.system_draw.region_viewport_info = m_graphics->ConstructConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
+			m_resources.system_draw.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
 
 			m_resources.system_draw.sprite_textures = CapacityStream<UIDynamicStream<UISpriteTexture, true>>((void*)buffer, 1, ECS_TOOLS_UI_PASSES);
 			m_resources.system_draw.sprite_textures[0] = UIDynamicStream<UISpriteTexture, true>(m_memory, 0);
@@ -2311,7 +2311,7 @@ namespace ECSEngine {
 			}
 
 			for (size_t index = 0; index < vertex_buffer_count; index++) {
-				dockspace->borders[border_index].draw_resources.buffers[index] = m_graphics->ConstructVertexBuffer(
+				dockspace->borders[border_index].draw_resources.buffers[index] = m_graphics->CreateVertexBuffer(
 					m_descriptors.materials.strides[index],
 					m_descriptors.materials.vertex_buffer_count[index],
 					D3D11_USAGE_DYNAMIC,
@@ -2375,7 +2375,7 @@ namespace ECSEngine {
 			buffer = function::align_pointer(buffer, alignof(UIActionHandler));
 			dockspace->borders[border_index].general_handler.action = (UIActionHandler*)buffer;
 
-			dockspace->borders[border_index].draw_resources.region_viewport_info = m_graphics->ConstructConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
+			dockspace->borders[border_index].draw_resources.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
 
 			// border window info
 			dockspace->borders[border_index].position = border_position;
@@ -3254,7 +3254,7 @@ namespace ECSEngine {
 			void* buffers[ECS_TOOLS_UI_MATERIALS * 2];
 			size_t counts[ECS_TOOLS_UI_MATERIALS * 2] = { 0 };
 
-			m_resources.system_draw.Map(buffers, m_graphics, m_graphics->GetContext());
+			m_resources.system_draw.Map(buffers, m_graphics->GetContext());
 			m_resources.system_draw.sprite_textures[0].Reset();
 			m_frame_pacing = 0;
 
@@ -3335,22 +3335,22 @@ namespace ECSEngine {
 				);
 			}
 
-			m_resources.system_draw.UnmapAll(m_graphics, m_graphics->GetContext());
+			m_resources.system_draw.UnmapAll(m_graphics->GetContext());
 			SetViewport(
-				m_system_draw_region.position,
-				m_system_draw_region.scale,
+				{ -1.0f, -1.0f },
+				{ 2.0f, 2.0f },
 				m_graphics->GetContext()
 			);
 			DrawPass<UIDrawPhase::System>(
 				m_resources.system_draw,
 				counts,
-				m_system_draw_region.position,
-				m_system_draw_region.scale,
+				{ -1.0f, -1.0f },
+				{ 2.0f, 2.0f },
 				m_graphics->GetContext()
 			);
 
 #ifdef ECS_TOOLS_UI_SINGLE_THREADED
-			m_graphics->EnableDepthImmediate();
+			m_graphics->EnableDepth();
 #endif
 
 			for (size_t index = 0; index < m_windows.size; index++) {
@@ -3579,7 +3579,6 @@ namespace ECSEngine {
 
 			data->dockspace->borders[data->border_index].draw_resources.Map(
 				buffers,
-				m_graphics,
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 				m_resources.thread_resources[data->thread_id].deferred_context.Get()
 #else 
@@ -3707,7 +3706,6 @@ namespace ECSEngine {
 			}
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(
-				m_graphics,
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 				m_resources.thread_resources[data->thread_id].deferred_context.Get()
 #else 
@@ -3750,7 +3748,6 @@ namespace ECSEngine {
 			}
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapLate(
-				m_graphics,
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 				m_resources.thread_resources[data->thread_id].deferred_context.Get()
 #else 
@@ -3844,7 +3841,7 @@ namespace ECSEngine {
 			size_t vertex_count[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES] = { 0 };
 			void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
 
-			data->dockspace->borders[data->border_index].draw_resources.Map(buffers, m_graphics, m_graphics->GetContext());
+			data->dockspace->borders[data->border_index].draw_resources.Map(buffers, m_graphics->GetContext());
 			m_resources.thread_resources[data->thread_id].phase = UIDrawPhase::Normal;
 
 			m_resources.thread_resources[data->thread_id].temp_allocator.Clear();
@@ -3977,7 +3974,7 @@ namespace ECSEngine {
 				HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 			}
 
-			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(m_graphics, m_graphics->GetContext());
+			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(m_graphics->GetContext());
 
 			/*SetViewport(
 				m_graphics->GetContext(),
@@ -4025,7 +4022,7 @@ namespace ECSEngine {
 				HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 			}
 
-			data->dockspace->borders[data->border_index].draw_resources.UnmapLate(m_graphics, m_graphics->GetContext());
+			data->dockspace->borders[data->border_index].draw_resources.UnmapLate(m_graphics->GetContext());
 
 			/*SetViewport(
 				m_graphics->GetContext(),
@@ -4870,25 +4867,25 @@ namespace ECSEngine {
 			void* extra_information,
 			unsigned int material_offset
 		) {
-			m_graphics->BindVertexConstantBuffer(viewport_buffer, context);
+			BindVertexConstantBuffer(viewport_buffer, context);
 
 			if (counts[ECS_TOOLS_UI_SOLID_COLOR + material_offset] > 0) {
-				m_graphics->BindVertexBuffer(buffers[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
+				BindVertexBuffer(buffers[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
 				SetSolidColorRenderState(context);
-				m_graphics->Draw(counts[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
+				ECSEngine::Draw(counts[ECS_TOOLS_UI_SOLID_COLOR + material_offset], context);
 			}
 
 			if (counts[ECS_TOOLS_UI_LINE + material_offset] > 0) {
-				m_graphics->BindVertexBuffer(buffers[ECS_TOOLS_UI_LINE + material_offset], context);
+				BindVertexBuffer(buffers[ECS_TOOLS_UI_LINE + material_offset], context);
 				SetSolidColorRenderState(context);
 
 				Topology topology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-				m_graphics->BindTopology(topology, context);
-				m_graphics->Draw(counts[ECS_TOOLS_UI_LINE + material_offset], context);
+				BindTopology(topology, context);
+				ECSEngine::Draw(counts[ECS_TOOLS_UI_LINE + material_offset], context);
 			}
 
 			if (counts[ECS_TOOLS_UI_SPRITE + material_offset] > 0) {
-				m_graphics->BindVertexBuffer(buffers[ECS_TOOLS_UI_SPRITE + material_offset], context);
+				BindVertexBuffer(buffers[ECS_TOOLS_UI_SPRITE + material_offset], context);
 				SetSpriteRenderState(context);
 
 				// drawing each sprite one by one
@@ -4897,14 +4894,14 @@ namespace ECSEngine {
 				UIDynamicStream<UISpriteTexture, true>* textures = &sprite_textures[ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS];
 				
 				for (size_t index = 0; index < sprite_texture_count; index++) {
-					m_graphics->BindPSResourceView(textures->buffer[index].view, context);
-					m_graphics->Draw(6, context, index * 6);
+					BindPixelResourceView(textures->buffer[index].view, context);
+					ECSEngine::Draw(6, context, index * 6);
 				}
 				m_graphics->DisableAlphaBlending(context);
 			}
 
 			if (counts[ECS_TOOLS_UI_SPRITE_CLUSTER + material_offset] > 0) {
-				m_graphics->BindVertexBuffer(buffers[ECS_TOOLS_UI_SPRITE_CLUSTER + material_offset], context);
+				BindVertexBuffer(buffers[ECS_TOOLS_UI_SPRITE_CLUSTER + material_offset], context);
 				SetSpriteRenderState(context);
 
 				// drawing each cluster one by one
@@ -4913,17 +4910,17 @@ namespace ECSEngine {
 				unsigned int sprite_texture_material_offset = material_offset / ECS_TOOLS_UI_MATERIALS;
 				UIDynamicStream<UISpriteTexture, true>* textures = &sprite_textures[ECS_TOOLS_UI_SPRITE_CLUSTER_TEXTURE_BUFFER_INDEX + sprite_texture_material_offset * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS];
 				for (size_t index = 0; index < substream->size; index++) {
-					m_graphics->BindPSResourceView(textures->buffer[index].view, context);
-					m_graphics->Draw(substream->buffer[index], offset);
+					BindPixelResourceView(textures->buffer[index].view, context);
+					ECSEngine::Draw(substream->buffer[index], context, offset);
 					offset += substream->buffer[index];
 				}
 				m_graphics->DisableAlphaBlending(context);
 			}
 
 			if (counts[ECS_TOOLS_UI_TEXT_SPRITE + material_offset] > 0) {
-				m_graphics->BindVertexBuffer(buffers[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
+				BindVertexBuffer(buffers[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
 				SetTextSpriteRenderState(context);
-				m_graphics->Draw(counts[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
+				ECSEngine::Draw(counts[ECS_TOOLS_UI_TEXT_SPRITE + material_offset], context);
 				m_graphics->DisableAlphaBlending(context);
 			}
 		}
@@ -4937,7 +4934,7 @@ namespace ECSEngine {
 			float2 viewport_scale,
 			GraphicsContext* context
 		) {
-			void* constant_buffer = m_graphics->MapBuffer(resources.region_viewport_info.buffer, context);
+			void* constant_buffer = MapBuffer(resources.region_viewport_info.buffer, context);
 			// viewport buffer description: 
 			// float2 region_center_position;
 			// float2 region_half_dimensions_inverse;
@@ -4947,7 +4944,7 @@ namespace ECSEngine {
 			// add a small offset in order to have the borders drawn
 			FillViewportBuffer(viewport_buffer_ptr, viewport_position, viewport_half_scale);
 
-			m_graphics->UnmapBuffer(resources.region_viewport_info.buffer, context);
+			UnmapBuffer(resources.region_viewport_info.buffer, context);
 
 			if constexpr (phase == UIDrawPhase::System) {
 				DrawPass(resources.buffers, resources.sprite_textures, resources.region_viewport_info, counts, context, &resources.sprite_cluster_subtreams, 0);
@@ -8015,10 +8012,9 @@ namespace ECSEngine {
 
 		float2 UISystem::GetNormalizeMousePosition() const
 		{
-			int mouse_x, mouse_y;
-			m_mouse->GetMousePosition(mouse_x, mouse_y);
+			int2 mouse_position = m_mouse->GetPosition();
 
-			return { static_cast<float>(mouse_x) / m_window_os_size.x * 2 - 1.0f,  static_cast<float>(mouse_y) / m_window_os_size.y * 2 - 1.0f };
+			return { static_cast<float>(mouse_position.x) / m_window_os_size.x * 2 - 1.0f,  static_cast<float>(mouse_position.y) / m_window_os_size.y * 2 - 1.0f };
 		}
 
 		float2 UISystem::GetSquareScale(float y_scale) const
@@ -8260,13 +8256,13 @@ namespace ECSEngine {
 		}
 
 		void UISystem::SetSolidColorRenderState(GraphicsContext* context) {
-			m_graphics->BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
-			m_graphics->BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
+			BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
+			BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
 
-			m_graphics->BindInputLayout(m_resources.input_layouts[ECS_TOOLS_UI_SOLID_COLOR], context);
+			BindInputLayout(m_resources.input_layouts[ECS_TOOLS_UI_SOLID_COLOR], context);
 
 			Topology topology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			m_graphics->BindTopology(topology, context);
+			BindTopology(topology, context);
 		}
 
 		void UISystem::SetTextSpriteRenderState() {
@@ -8286,17 +8282,17 @@ namespace ECSEngine {
 		void UISystem::SetTextSpriteRenderState(GraphicsContext* context) {
 			m_graphics->EnableAlphaBlending(context);
 
-			m_graphics->BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_TEXT_SPRITE], context);
-			m_graphics->BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_TEXT_SPRITE], context);
+			BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_TEXT_SPRITE], context);
+			BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_TEXT_SPRITE], context);
 
-			m_graphics->BindSamplerState(m_resources.texture_samplers[ECS_TOOLS_UI_ANISOTROPIC_SAMPLER], context);
+			BindSamplerState(m_resources.texture_samplers[ECS_TOOLS_UI_ANISOTROPIC_SAMPLER], context);
 
-			m_graphics->BindPSResourceView(m_resources.font_texture, context);
+			BindPixelResourceView(m_resources.font_texture, context);
 
-			m_graphics->BindInputLayout(m_resources.input_layouts[ECS_TOOLS_UI_TEXT_SPRITE], context);
+			BindInputLayout(m_resources.input_layouts[ECS_TOOLS_UI_TEXT_SPRITE], context);
 
 			Topology topology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			m_graphics->BindTopology(topology, context);
+			BindTopology(topology, context);
 		}
 
 		void UISystem::SetSpriteRenderState() {
@@ -8316,15 +8312,15 @@ namespace ECSEngine {
 		void UISystem::SetSpriteRenderState(GraphicsContext* context) {
 			m_graphics->EnableAlphaBlending(context);
 
-			m_graphics->BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_SPRITE], context);
-			m_graphics->BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_SPRITE], context);
+			BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_SPRITE], context);
+			BindPixelShader(m_resources.pixel_shaders[ECS_TOOLS_UI_SPRITE], context);
 
-			m_graphics->BindSamplerState(m_resources.texture_samplers[ECS_TOOLS_UI_ANISOTROPIC_SAMPLER], context);
+			BindSamplerState(m_resources.texture_samplers[ECS_TOOLS_UI_ANISOTROPIC_SAMPLER], context);
 
-			m_graphics->BindInputLayout(m_resources.input_layouts[ECS_TOOLS_UI_SPRITE], context);
+			BindInputLayout(m_resources.input_layouts[ECS_TOOLS_UI_SPRITE], context);
 
 			Topology topology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			m_graphics->BindTopology(topology, context);
+			BindTopology(topology, context);
 		}
 
 		void UISystem::SetSprite(
@@ -8535,7 +8531,7 @@ namespace ECSEngine {
 			unsigned int window_width, window_height;
 			m_graphics->GetWindowSize(window_width, window_height);
 
-			m_graphics->BindViewport(
+			BindViewport(
 				(position.x + 1.0f) * (float)window_width * 0.5f,
 				(position.y + 1.0f) * (float)window_height * 0.5f,
 				(half_scale.x) * (float)window_width,
@@ -8727,7 +8723,7 @@ namespace ECSEngine {
 
 		void UISystem::RegisterPixelShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.pixel_shaders.size < m_resources.pixel_shaders.capacity);
-			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_graphics->ConstructPSShader(filename);
+			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_graphics->CreatePixelShader(ToStream(filename));
 		}
 
 		void UISystem::RegisterPixelShaders() {
@@ -8745,7 +8741,7 @@ namespace ECSEngine {
 			anisotropic.Filter = D3D11_FILTER_ANISOTROPIC;
 			anisotropic.MaxAnisotropy = 4;
 
-			m_resources.texture_samplers[ECS_TOOLS_UI_ANISOTROPIC_SAMPLER] = m_graphics->ConstructSamplerState(anisotropic);
+			m_resources.texture_samplers[ECS_TOOLS_UI_ANISOTROPIC_SAMPLER] = m_graphics->CreateSamplerState(anisotropic);
 			m_resources.texture_samplers.size = m_descriptors.materials.sampler_count;
 		}
 
@@ -8765,7 +8761,7 @@ namespace ECSEngine {
 
 		void UISystem::RegisterVertexShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.vertex_shaders.size < m_resources.vertex_shaders.capacity);
-			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_graphics->ConstructVSShader(filename);
+			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_graphics->CreateVertexShader(ToStream(filename));
 		}
 
 		void UISystem::RegisterVertexShaders() {

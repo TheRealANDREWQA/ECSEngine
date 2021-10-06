@@ -13,6 +13,8 @@
 
 constexpr float PI = 3.14159265358979323846f;
 constexpr float PI_INVERSE = 1.0f / PI;
+constexpr float DEG_TO_RAD_FACTOR = PI / 180.0f;
+constexpr float RAD_TO_DEG_FACTOR = 180.0f / PI;
 constexpr size_t ECS_KB = 1 << 10;
 constexpr size_t ECS_MB = ECS_KB * ECS_KB;
 constexpr size_t ECS_GB = ECS_MB * ECS_KB;
@@ -20,13 +22,11 @@ constexpr size_t ECS_GB = ECS_MB * ECS_KB;
 namespace ECSEngine {
 
 	static inline float DegToRad(float angle) {
-		constexpr float factor = PI / 180.0f;
-		return angle * factor;
+		return angle * DEG_TO_RAD_FACTOR;
 	}
 
 	static inline float RadToDeg(float angle) {
-		constexpr float factor = 180.0f * PI_INVERSE;
-		return angle * factor;
+		return angle * RAD_TO_DEG_FACTOR;
 	}
 
 }

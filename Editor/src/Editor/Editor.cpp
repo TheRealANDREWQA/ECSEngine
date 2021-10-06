@@ -109,7 +109,7 @@ public:
 #endif
 
 		void* debug_allocation = global_memory_manager.Allocate(sizeof(unsigned int) * 1024);
-		MemoryManager memory_manager(40'000'000, 1024, 10'000'000, &global_memory_manager);
+		MemoryManager memory_manager(100'000'000, 1024, 10'000'000, &global_memory_manager);
 		memory_manager.SetDebugBuffer(debug_allocation);
 
 		graphics_descriptor.window_size = { new_width, new_height };
@@ -122,12 +122,12 @@ public:
 		viewport_texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
 		viewport_texture_descriptor.mip_levels = 1u;
 
-		Texture2D viewport_texture = graphics.CreateTexture2D(&viewport_texture_descriptor);
+		Texture2D viewport_texture = graphics.CreateTexture(&viewport_texture_descriptor);
 		RenderTargetView viewport_render_view = graphics.CreateRenderTargetView(viewport_texture);
 
 		viewport_texture_descriptor.bind_flag = D3D11_BIND_DEPTH_STENCIL;
 		viewport_texture_descriptor.format = DXGI_FORMAT_D32_FLOAT;
-		Texture2D viewport_depth_texture = graphics.CreateTexture2D(&viewport_texture_descriptor);
+		Texture2D viewport_depth_texture = graphics.CreateTexture(&viewport_texture_descriptor);
 		DepthStencilView viewport_depth_view = graphics.CreateDepthStencilView(viewport_depth_texture);
 
 		TaskManager task_manager(std::thread::hardware_concurrency(), &memory_manager, 32);
@@ -249,7 +249,7 @@ public:
 
 		UISpriteTexture viewport_sprite_texture;
 	
-		viewport_sprite_texture.view = graphics.CreateTexture2DShaderView(viewport_texture, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 1);
+		viewport_sprite_texture.view = graphics.CreateTextureShaderView(viewport_texture, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 1);
 
 		editor_state.hub_data = &hub_data;
 		editor_state.project_file = &project_file;
@@ -288,6 +288,12 @@ public:
 		InspectorData inspector_data;
 		editor_state.inspector_data = &inspector_data;
 
+		World scene_worlds[EDITOR_SCENE_BUFFERING_COUNT];
+
+		editor_state.active_world = 0;
+		editor_state.worlds.InitializeFromBuffer(scene_worlds, 3, 3);
+		editor_state.draw_scene = nullptr;
+
 		Hub(&editor_state);
 
 		MSG message;
@@ -295,14 +301,24 @@ public:
 
 		VertexBuffer vertex_buffer;
 		IndexBuffer index_buffer;
+
+		ECS_TEMP_ASCII_STRING(ERROR_MESSAGE, 256);
+		GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2whole.glb", &ERROR_MESSAGE);
+		GLTFMesh gltf_meshes[128];
+		Mesh meshes[128];
+		success = LoadMeshesFromGLTFFile(gltf_data, gltf_meshes, &memory_manager, &ERROR_MESSAGE);
+		GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);
+		FreeGLTFMeshes(gltf_meshes, gltf_data.mesh_count, &memory_manager);
+		FreeGLTFFile(gltf_data);
+
 		CreateCubeVertexBuffer(&graphics, 0.25f, vertex_buffer, index_buffer);
-		VertexShader cube_shader = graphics.ConstructVSShader(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\CompiledShaders\\Vertex\\SimpleShader.cso");
-		PixelShader pixel_shader = graphics.ConstructPSShader(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\CompiledShaders\\Pixel\\SimpleShader.cso");
+		VertexShader cube_shader = graphics.CreateVertexShader(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\CompiledShaders\\Vertex\\SimpleShader.cso"));
+		PixelShader pixel_shader = graphics.CreatePixelShader(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\CompiledShaders\\Pixel\\SimpleShader.cso"));
 		InputLayout layout = graphics.ReflectVertexShaderInput(cube_shader, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\SimpleShader.hlsl");
 
-		ConstantBuffer obj_buffer = graphics.ConstructConstantBuffer(sizeof(float) * 32);
-		ConstantBuffer light_buffer = graphics.ConstructConstantBuffer(sizeof(float) * 4);
-		ConstantBuffer light_color = graphics.ConstructConstantBuffer(sizeof(ColorFloat));
+		ConstantBuffer obj_buffer = graphics.CreateConstantBuffer(sizeof(float) * 32);
+		ConstantBuffer light_buffer = graphics.CreateConstantBuffer(sizeof(float) * 4);
+		ConstantBuffer light_color = graphics.CreateConstantBuffer(sizeof(ColorFloat));
 		const ColorFloat COLORS[] = {
 			{1.0f, 0, 0},
 			{0, 1.0f, 0},
@@ -311,7 +327,7 @@ public:
 			{1.0f, 0, 1.0f},
 			{0, 1.0f, 1.0f}
 		};
-		ConstantBuffer index_color = graphics.ConstructConstantBuffer(sizeof(ColorFloat) * 6, COLORS);
+		ConstantBuffer index_color = graphics.CreateConstantBuffer(sizeof(ColorFloat) * 6, COLORS);
 
 		D3D11_SAMPLER_DESC descriptor = {};
 		descriptor.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -319,19 +335,19 @@ public:
 		descriptor.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 		descriptor.Filter = D3D11_FILTER_ANISOTROPIC;
 		descriptor.MaxAnisotropy = 4;
-		SamplerState sampler = graphics.ConstructSamplerState(descriptor);
+		SamplerState sampler = graphics.CreateSamplerState(descriptor);
 
-		float3* light_pos_data = (float3*)graphics.MapBufferImmediate(light_buffer.buffer);
+		float3* light_pos_data = (float3*)graphics.MapBuffer(light_buffer.buffer);
 		*light_pos_data = { 0.0f, 0.0f, 0.0f };
-		graphics.UnmapBufferImmediate(light_buffer.buffer);
+		graphics.UnmapBuffer(light_buffer.buffer);
 
-		float4* light_color_data = (float4*)graphics.MapBufferImmediate(light_color.buffer);
+		float4* light_color_data = (float4*)graphics.MapBuffer(light_color.buffer);
 		*light_color_data = {1.0f, 1.0f, 1.0f, 1.0f};
-		graphics.UnmapBufferImmediate(light_color.buffer);
+		graphics.UnmapBuffer(light_color.buffer);
 
 		Camera camera;
-		camera.translation = { 0.0f, 0.0f, -5.0f };
-		camera.SetPerspectiveProjectionFOV(45.0f, (float)width / (float)height, -1.0f, 1.0f);
+		camera.translation = { 0.0f, 0.0f, 0.0f };
+		//camera.SetPerspectiveProjectionFOV(45.0f, (float)width / (float)height, -1.0f, 1.0f);
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -367,20 +383,49 @@ public:
 
 				graphics.BindRenderTargetView(viewport_render_view, viewport_depth_view);
 
-				graphics.BindVertexShaderImmediate(cube_shader);
-				graphics.BindPixelShaderImmediate(pixel_shader);
-				graphics.BindInputLayoutImmediate(layout);
+				graphics.BindVertexShader(cube_shader);
+				graphics.BindPixelShader(pixel_shader);
+				graphics.BindInputLayout(layout);
+
+				if (mouse_state->MiddleButton()) {
+					float2 mouse_position = ui.GetNormalizeMousePosition();
+					float2 delta = ui.GetMouseDelta(mouse_position);
+
+					float3 right_vector = GetRightVector(camera.rotation);
+					float3 up_vector = GetUpVector(camera.rotation);
+
+					camera.translation -= right_vector * float3::Splat(delta.x) * float3::Splat(10.0f) - up_vector * float3::Splat(delta.y) * float3::Splat(10.0f);
+				}
+				if (mouse_state->RightButton()) {
+					float2 mouse_position = ui.GetNormalizeMousePosition();
+					float2 delta = ui.GetMouseDelta(mouse_position);
+					camera.rotation.x += delta.y * 30.0f;
+					camera.rotation.y += delta.x * 30.0f;
+				}
+
+				int scroll_delta = mouse_state->ScrollDelta();
+				if (scroll_delta != 0) {
+					constexpr float FACTOR = 0.015f;
+
+					float3 forward_vector = GetForwardVector(camera.rotation);
+
+					camera.translation += forward_vector * float3::Splat(scroll_delta * FACTOR);
+				}
 
 				unsigned int window_index = ui.GetWindowFromName("Game");
 				if (window_index == -1)
 					window_index = 0;
-				void* obj_ptr = graphics.MapBufferImmediate(obj_buffer.buffer);
+
+				camera.SetPerspectiveProjectionFOV(60.0f, ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y /*(float)height / width*/, 0.5f, 1000.0f);
+
+				void* obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
 				DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
-				Matrix matrix = MatrixTranspose(
-					MatrixRotationY(60.0f) * 
-					MatrixRotationX(45.0f) *
-					MatrixTranslation(0.0f, 0.0f, 2.0f) * MatrixPerspective(ui.m_windows[window_index].transform.scale.x, ui.m_windows[window_index].transform.scale.y * (float)height / width, 0.5f, 1000.0f)
-				);
+
+				Matrix matrix = /*MatrixScale(5.0f, 1.0f, 2.5f) **/ MatrixRotationY(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 60.0f) * MatrixRotationX(0.0f) //* MatrixTranslation(ui.m_previous_mouse_position.x * 2.5f, -ui.m_previous_mouse_position.y * 2.5f, 10.0f);
+					* MatrixTranslation(0.0f, 0.0f, 20.0f);
+				//camera.translation = {cos(timer.GetDurationSinceMarker_ms() * 0.001f), 0.0f, sin(timer.GetDurationSinceMarker_ms() * 0.005f)};
+				Matrix camera_matrix = camera.GetProjectionViewMatrix();
+				matrix = MatrixTranspose(matrix * camera_matrix);
 				matrix.Store((float*)reinterpretation);
 				//*reinterpretation = DirectX::XMMatrixTranspose(
 				//	/*DirectX::XMMatrixRotationZ(timer.GetDurationSinceMarker_ms() * 0.0005f) * */
@@ -389,33 +434,48 @@ public:
 				//	DirectX::XMMatrixPerspectiveLH(ui.m_windows[window_index].transform.scale.x, ui.m_windows[window_index].transform.scale.y * (float)height / width /*/ ui.m_windows[window_index].transform.scale.x*/, 0.5f, 10.0f)
 				//);			
 
-				graphics.UnmapBufferImmediate(obj_buffer.buffer);
+				graphics.UnmapBuffer(obj_buffer.buffer);
 
-				graphics.BindVertexConstantBufferImmediate(obj_buffer.buffer);
-				//graphics.BindVertexConstantBufferImmediate(light_buffer.buffer, 1);
-				//graphics.BindPixelConstantBufferImmediate(light_color.buffer);
+				graphics.BindVertexConstantBuffer(obj_buffer.buffer);
 
-				graphics.BindVertexBufferImmediate(vertex_buffer);
-				graphics.BindIndexBuffer(index_buffer);
-				graphics.BindTopology({ D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST });
 				graphics.BindPixelConstantBuffer(index_color);
-				//graphics.BindSamplerStateImmediate(sampler);
-				//graphics.BindPSResourceViewImmediate(ui.m_resources.font_texture);
 
-				//graphics.DisableDepth();
-				//graphics.DisableCulling();
-				graphics.DrawIndexed(36);
+				/*graphics.BindVertexBuffer(vertex_buffer);
+				graphics.BindIndexBuffer(index_buffer);
+				graphics.BindTopology({ D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST });*/
 
-				//ID3D11Resource* viewport_resource = GetResource(viewport_render_view);
-				//ID3D11Resource* target_resource = GetResource(graphics.m_target_view);
-				//graphics.m_context->CopyResource(target_resource, viewport_resource);
+				for (size_t index = 0; index < gltf_data.mesh_count; index++) {
+					graphics.BindMesh(meshes[index]);
+
+					graphics.DrawIndexed(meshes[index].index_buffer.count);
+				}
+				/*graphics.BindMesh(meshes[60]);
+				graphics.DrawIndexed(meshes[60].index_buffer.count);*/
+
+				//obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
+				//reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
+				//matrix = MatrixRotationY(60.0f * sin(timer.GetDurationSinceMarker_ms() * .0005f)) * MatrixRotationX(45.0f) * MatrixTranslation(sin(timer.GetDurationSinceMarker_ms() * 0.0005f), 0.0f, 2.0f);
+				////camera.translation = {cos(timer.GetDurationSinceMarker_ms() * 0.001f), 0.0f, sin(timer.GetDurationSinceMarker_ms() * 0.005f)};
+				//camera_matrix = camera.GetProjectionViewMatrix();
+				//matrix = MatrixTranspose(matrix * camera_matrix);
+				//matrix.Store((float*)reinterpretation);
+				////*reinterpretation = DirectX::XMMatrixTranspose(
+				////	/*DirectX::XMMatrixRotationZ(timer.GetDurationSinceMarker_ms() * 0.0005f) * */
+				////	DirectX::XMMatrixRotationY(DegToRad(60.0f)) * 
+				////	DirectX::XMMatrixTranslation(0.0f, 0.0f, 2.0f /*+ sin(timer.GetDurationSinceMarker_ms() * 0.005f)*/) *
+				////	DirectX::XMMatrixPerspectiveLH(ui.m_windows[window_index].transform.scale.x, ui.m_windows[window_index].transform.scale.y * (float)height / width /*/ ui.m_windows[window_index].transform.scale.x*/, 0.5f, 10.0f)
+				////);			
+
+				//graphics.UnmapBuffer(obj_buffer.buffer);
+
+				//graphics.DrawIndexed(36);
 
 				graphics.BindRenderTargetViewFromInitialViews();
 
 				frame_pacing = ui.DoFrame();
 
 				graphics.SwapBuffers(0);
-				mouse.SetPreviousPosition();
+				mouse.SetPreviousPositionAndScroll();
 				task_manager.ResetTaskAllocator();
 			}
 

@@ -26,39 +26,39 @@ namespace ECSEngine {
 			return state.xButton2;
 		}
 
-		int MouseState::PositionX() const {
-			return state.x;
+		int2 MouseState::Position() const {
+			return {state.x, state.y};
 		}
 
-		int MouseState::PositionY() const {
-			return state.y;
+		int2 MouseState::PreviousPosition() const {
+			return previous_position;
+		}
+
+		int MouseState::PreviousScroll() const {
+			return previous_scroll;
+		}
+
+		int2 MouseState::PositionDelta() const {
+			return int2(state.x, state.y) - previous_position;
+		}
+
+		int MouseState::ScrollDelta() const {
+			return state.scrollWheelValue - previous_scroll;
 		}
 
 		int MouseState::MouseWheelScroll() const {
 			return state.scrollWheelValue;
 		}
 
-		int MouseState::GetPreviousX() const
-		{
-			return m_previous_x;
-		}
-
-		int MouseState::GetPreviousY() const {
-			return m_previous_y;
-		}
-
-		int MouseState::GetDeltaX() const {
-			return PositionX() - m_previous_x;
-		}
-
-		int MouseState::GetDeltaY() const {
-			return PositionY() - m_previous_y;
-		}
-
 		void MouseState::SetPreviousPosition()
 		{
-			m_previous_x = PositionX();
-			m_previous_y = PositionY();
+			previous_position.x = Position().x;
+			previous_position.y = Position().y;
+		}
+
+		void MouseState::SetPreviousScroll()
+		{
+			previous_scroll = state.scrollWheelValue;
 		}
 
 		void MouseTracker::Reset() {
@@ -109,6 +109,11 @@ namespace ECSEngine {
 		Mouse::Mouse() {
 			m_implementation = std::make_unique<DirectX::Mouse>();
 			m_tracker.Reset();
+			m_state.previous_position = { 0, 0 };
+			m_state.previous_scroll = 0;
+			m_state.state.x = 0;
+			m_state.state.y = 0;
+			m_state.state.scrollWheelValue = 0;
 		}
 
 		int Mouse::GetScrollValue() const
@@ -116,30 +121,29 @@ namespace ECSEngine {
 			return m_state.state.scrollWheelValue;
 		}
 
-		int Mouse::GetPreviousMouseX() const
+		int2 Mouse::GetPreviousPosition() const
 		{
-			return m_state.GetPreviousX();
+			return m_state.PreviousPosition();
 		}
 
-		int Mouse::GetPreviousMouseY() const
+		int Mouse::GetPreviousScroll() const
 		{
-			return m_state.GetPreviousY();
+			return m_state.PreviousScroll();
 		}
 
-		int Mouse::GetDeltaX() const
+		int2 Mouse::GetPositionDelta() const
 		{
-			return m_state.GetDeltaX();
+			return m_state.PositionDelta();
+		}
+		
+		int Mouse::GetScrollDelta() const
+		{
+			return m_state.ScrollDelta();
 		}
 
-		int Mouse::GetDeltaY() const
+		int2 Mouse::GetPosition() const
 		{
-			return m_state.GetDeltaY();
-		}
-
-		void Mouse::GetMousePosition(int& x, int& y) const
-		{
-			x = m_state.state.x;
-			y = m_state.state.y;
+			return m_state.Position();
 		}
 
 		bool Mouse::IsCursorVisible() const {
@@ -166,9 +170,10 @@ namespace ECSEngine {
 			m_implementation->SetVisible(false);
 		}
 
-		void Mouse::SetPreviousPosition()
+		void Mouse::SetPreviousPositionAndScroll()
 		{
 			m_state.SetPreviousPosition();
+			m_state.SetPreviousScroll();
 		}
 
 		void Mouse::SetCursorVisible() {
@@ -180,7 +185,7 @@ namespace ECSEngine {
 		}
 
 		void Mouse::UpdateState() {
-			m_state = { m_implementation->GetState() };
+			m_state.state = m_implementation->GetState();
 		}
 
 		void Mouse::Procedure(const MouseProcedureInfo& info) {

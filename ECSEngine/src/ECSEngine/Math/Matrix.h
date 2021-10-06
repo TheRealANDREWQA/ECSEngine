@@ -5,6 +5,7 @@
 #include "VCLExtensions.h"
 #include "Vector.h"
 #include <math.h>
+#include "../Utilities/Assert.h"
 
 namespace ECSEngine {
 
@@ -109,31 +110,36 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		ECS_INLINE Matrix& Load(const float* values) {
-			v[0].Load(values);
-			v[1].Load(values + 8);
+		ECS_INLINE Matrix& Load(const void* values) {
+			const float* float_values = (const float*)values;
+			v[0].Load(float_values);
+			v[1].Load(float_values + 8);
 			return *this;
 		}
 
-		ECS_INLINE Matrix& LoadAligned(const float* values) {
-			v[0].LoadAligned(values);
-			v[1].LoadAligned(values + 8);
+		ECS_INLINE Matrix& LoadAligned(const void* values) {
+			const float* float_values = (const float*)values;
+			v[0].LoadAligned(float_values);
+			v[1].LoadAligned(float_values + 8);
 			return *this;
 		}
 
-		ECS_INLINE void Store(float* values) const {
-			v[0].Store(values);
-			v[1].Store(values + 8);
+		ECS_INLINE void Store(void* values) const {
+			float* float_values = (float*)values;
+			v[0].Store(float_values);
+			v[1].Store(float_values + 8);
 		}
 
-		ECS_INLINE void StoreAligned(float* values) const {
-			v[0].StoreAligned(values);
-			v[1].StoreAligned(values + 8);
+		ECS_INLINE void StoreAligned(void* values) const {
+			float* float_values = (float*)values;
+			v[0].StoreAligned(float_values);
+			v[1].StoreAligned(float_values + 8);
 		}
 
-		ECS_INLINE void StoreStreamed(float* values) const {
-			v[0].StoreStreamed(values);
-			v[1].StoreStreamed(values);
+		ECS_INLINE void StoreStreamed(void* values) const {
+			float* float_values = (float*)values;
+			v[0].StoreStreamed(float_values);
+			v[1].StoreStreamed(float_values + 8);
 		}
 
 		Vector8 v[2];
@@ -207,19 +213,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixIdentity() {
-		static const float values[] = {
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f
-		};
-		return Matrix(values);
+		return Matrix(VectorGlobals::RIGHT_4, VectorGlobals::UP_4, VectorGlobals::FORWARD_4, VectorGlobals::QUATERNION_IDENTITY_4);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixNull() {
-		Vec8f zero = _mm256_set1_ps(0.0f);
+		Vector8 zero = ZeroVector8();
 		return Matrix(zero, zero);
 	}
 
@@ -551,8 +551,8 @@ namespace ECSEngine {
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixTranslation(float x, float y, float z) {
 		Matrix result;
-		result.v[1] = Vec8f(0.0f, 0.0f, 1.0f, 0.0f, x, y, z, 1.0f);
-		result.v[0] = Vec8f(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+		result.v[0] = Vec8f(VectorGlobals::RIGHT_4, VectorGlobals::UP_4);
+		result.v[1] = Vec8f(VectorGlobals::FORWARD_4, Vector4(x, y, z, 1.0f));
 		return result;
 	}
 
@@ -566,8 +566,13 @@ namespace ECSEngine {
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixScale(float x, float y, float z) {
 		Matrix result;
-		result.v[0] = Vec8f(0.0f, 0.0f, 0.0f, x, 0.0f, 0.0f, y, 0.0f);
-		result.v[1] = Vec8f(0.0f, z, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+
+		Vector8 zero = ZeroVector8();
+		Vector8 values(x, 0.0f, z, 0.0f, 0.0f, y, 0.0f, 1.0f);
+
+		result.v[0] = blend8<0, 1, 10, 3, 4, 5, 6, 15>(values, zero);
+		result.v[1] = blend8<8, 1, 2, 3, 4, 13, 6, 7>(values, zero);
+
 		return result;
 	}
 
@@ -579,51 +584,90 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationX(float angle) {
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationXRad(float angle_radians) {
 		Matrix result;
 
-		angle = DegToRad(angle);
-		float cosine = cos(angle);
-		float sine = sin(angle);
-		result.v[0] = Vec8f(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, cosine, sine, 0.0f);
-		result.v[1] = Vec8f(0.0f, -sine, cosine, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+		Vector8 zero = ZeroVector8();
+		Vec8f cosine;
+		Vector8 sine = sincos(&cosine, Vector8(angle_radians));
+		Vector8 sine_cosine = blend8<V_DC, 9, 2, V_DC, V_DC, 5, 14, V_DC>(cosine, sine);
+		sine_cosine = change_sign<0, 1, 0, 0, 0, 0, 0, 0>(sine_cosine);
+
+		sine_cosine = blend8<8, 1, 2, 11, 12, 5, 6, 15>(sine_cosine, zero);
+		result.v[0] = Vec8f(VectorGlobals::RIGHT_4, sine_cosine.value.get_high());
+		result.v[1] = Vec8f(sine_cosine.value.get_low(), VectorGlobals::QUATERNION_IDENTITY_4);
 
 		return result;
 	}
 
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationX(float angle) {
+		angle = DegToRad(angle);
+		return MatrixRotationXRad(angle);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationYRad(float angle_radians) {
+		Matrix result;
+
+		Vector8 zero = ZeroVector8();
+		Vec8f cosine;
+		Vector8 sine = sincos(&cosine, Vector8(angle_radians));
+
+		Vector8 sine_cosine = blend8<0, V_DC, 10, V_DC, 12, V_DC, 6, V_DC>(cosine, sine);
+		sine_cosine = change_sign<0, 0, 1, 0, 0, 0, 0, 0>(sine_cosine);
+		sine_cosine = blend8<0, 9, 2, 11, 4, 13, 6, 15>(sine_cosine, zero);
+
+		result.v[0] = Vec8f(sine_cosine.value.get_low(), VectorGlobals::UP_4);
+		result.v[1] = Vec8f(sine_cosine.value.get_high(), VectorGlobals::QUATERNION_IDENTITY_4);
+
+		return result;
+	}
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationY(float angle) {
-		Matrix result;
-
 		angle = DegToRad(angle);
-		float cosine = cos(angle);
-		float sine = sin(angle);
-		result.v[0] = Vec8f(cosine, 0.0f, -sine, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-		result.v[1] = Vec8f(sine, 0.0f, cosine, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-
-		return result;
+		return MatrixRotationYRad(angle);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZ(float angle) {
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZRad(float angle_radians) {
 		Matrix result;
 
-		angle = DegToRad(angle);
-		float cosine = cos(angle);
-		float sine = sin(angle);
-		result.v[0] = Vec8f(cosine, sine, 0.0f, 0.0f, -sine, cosine, 0.0f, 0.0f);
-		result.v[1] = Vec8f(0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+		Vector8 angle_vector(angle_radians);
+		Vec8f cosine;
+		Vector8 sine = sincos(&cosine, angle_vector);
+		Vector8 sine_cosine = blend8<0, 9, V_DC, V_DC, 4, 13, V_DC, V_DC>(cosine, sine);
+		sine_cosine = change_sign<0, 0, 0, 0, 0, 1, 0, 0>(sine_cosine);
+
+		Vector8 zero = ZeroVector8();
+		sine_cosine = blend8<0, 1, 10, 11, 5, 6, 14, 15>(sine_cosine, zero);
+		result.v[0] = sine_cosine;
+		result.v[1] = Vec8f(VectorGlobals::FORWARD_4, VectorGlobals::QUATERNION_IDENTITY_4);
 
 		return result;
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationZ(float angle) {
+		angle = DegToRad(angle);
+		return MatrixRotationZRad(angle);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotation(float3 rotation) {
+		return MatrixRotationX(rotation.x) * MatrixRotationY(rotation.y) * MatrixRotationZ(rotation.z);
+	}
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationRad(float3 rotation) {
+		return MatrixRotationXRad(rotation.x) * MatrixRotationYRad(rotation.y) * MatrixRotationZRad(rotation.z);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookTo(Vector4 origin, Vector4 direction, Vector4 up) {
-		ECS_ASSERT(origin != ZERO_4);
-		ECS_ASSERT(up != ZERO_4);
+		ECS_ASSERT(origin != ZeroVector4());
+		ECS_ASSERT(up != ZeroVector4());
 		ECS_ASSERT(!IsInfinite(direction));
 		ECS_ASSERT(!IsInfinite(up));
 
@@ -642,7 +686,7 @@ namespace ECSEngine {
 			Select(mask_last_element, dot0, normalized_right),
 			Select(mask_last_element, dot1, inverted_normalized_up),
 			Select(mask_last_element, dot2, normalized_direction),
-			Vector4(0.0f, 0.0f, 0.0f, 1.0f)
+			VectorGlobals::QUATERNION_IDENTITY_4
 		);
 
 		return MatrixTranspose(matrix);
@@ -680,6 +724,7 @@ namespace ECSEngine {
 		//    0         0        range           1
 		//    0         0   -range * near_z      0
 		
+		angle_y = DegToRad(angle_y);
 		float tangent = tanf(angle_y / 2.0f);
 		float y_scale = 1.0f / tangent;
 		float x_scale = y_scale / aspect_ratio;
@@ -698,6 +743,184 @@ namespace ECSEngine {
 		float range = 1.0f / (far_z - near_z);
 		return Matrix(2.0f / width, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f / height, 0.0f, 0.0f, 0.0f, 0.0f, range, 0.0f, 0.0f, 0.0f, -range * near_z, 1.0f);
 	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+#undef near
+#undef far
+
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixFrustum(float left, float right, float top, float bottom, float near, float far) {
+		float near2 = 2.0f * near;
+		float right_left = right - left;
+		float top_bottom = top - bottom;
+		float far_near = far - near;
+		return Matrix(
+			     near2 / right_left,                      0.0f,                         0.0f,                0.0f,
+			           0.0f,                        near2 / top_bottom,                 0.0f,                0.0f,
+			(right + left) / right_left,      (top + bottom) / top_bottom,    -(far + near) / far_near,     -1.0f,
+			           0.0f,                              0.0f,               (-far * near2) / far_near,     0.0f
+		);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Vector4 ECS_VECTORCALL MatrixVectorMultiply(Vector4 vector, Matrix matrix) {
+		Vector4 x_splatted = permute4<0, 0, 0, 0>(vector);
+		Vector4 y_splatted = permute4<1, 1, 1, 1>(vector);
+		Vector4 z_splatted = permute4<2, 2, 2, 2>(vector);
+		Vector4 w_splatted = permute4<3, 3, 3, 3>(vector);
+
+		Vector8 xy_splatted(x_splatted, y_splatted);
+		Vector8 zw_splatted(z_splatted, w_splatted);
+
+		Vector8 rows01 = xy_splatted * matrix.v[0];
+		Vector8 rows23 = zw_splatted * matrix.v[1];
+
+		Vector8 half_sum = rows01 + rows23;
+		Vector8 other_half = permute8<4, 5, 6, 7, V_DC, V_DC, V_DC, V_DC>(half_sum);
+
+		Vector8 result = half_sum + other_half;
+		return result.Low();
+	}
+
+	// Applies the same matrix to low and upper
+	ECS_INLINE Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix) {
+		Vector8 x_splatted = permute8<0, 0, 0, 0, 4, 4, 4, 4>(vector);
+		Vector8 y_splatted = permute8<1, 1, 1, 1, 5, 5, 5, 5>(vector);
+		Vector8 z_splatted = permute8<2, 2, 2, 2, 6, 6, 6, 6>(vector);
+		Vector8 w_splatted = permute8<3, 3, 3, 3, 7, 7, 7, 7>(vector);
+
+		Vector8 matrix_row0 = Permute2f128<0x00>(matrix.v[0], matrix.v[0]);
+		Vector8 matrix_row1 = Permute2f128<0x11>(matrix.v[0], matrix.v[0]);
+		Vector8 matrix_row2 = Permute2f128<0x00>(matrix.v[1], matrix.v[1]);
+		Vector8 matrix_row3 = Permute2f128<0x11>(matrix.v[1], matrix.v[1]);
+
+		Vector8 row0 = x_splatted * matrix_row0;
+		Vector8 row1 = y_splatted * matrix_row1;
+		Vector8 row2 = z_splatted * matrix_row2;
+		Vector8 row3 = w_splatted * matrix_row3;
+
+		return row0 + row1 + row2 + row3;
+	}
+
+	// If matrices are different, this method can be used but it will perform worse than the single matrix
+	// because of the register usage that might push onto the stack some registers
+	ECS_INLINE Vector8 ECS_VECTORCALL MatrixVectorMultiply(Vector8 vector, Matrix matrix0, Matrix matrix1) {
+		Vector8 x_splatted = permute8<0, 0, 0, 0, 4, 4, 4, 4>(vector);
+		Vector8 y_splatted = permute8<1, 1, 1, 1, 5, 5, 5, 5>(vector);
+		Vector8 z_splatted = permute8<2, 2, 2, 2, 6, 6, 6, 6>(vector);
+		Vector8 w_splatted = permute8<3, 3, 3, 3, 7, 7, 7, 7>(vector);
+
+		Vector8 matrix_row0 = Permute2f128<0x20>(matrix0.v[0], matrix1.v[0]);
+		Vector8 matrix_row1 = Permute2f128<0x31>(matrix0.v[0], matrix1.v[0]);
+		Vector8 matrix_row2 = Permute2f128<0x20>(matrix0.v[1], matrix1.v[1]);
+		Vector8 matrix_row3 = Permute2f128<0x31>(matrix0.v[1], matrix1.v[1]);
+
+		Vector8 row0 = x_splatted * matrix_row0;
+		Vector8 row1 = y_splatted * matrix_row1;
+		Vector8 row2 = z_splatted * matrix_row2;
+		Vector8 row3 = w_splatted * matrix_row3;
+
+		return row0 + row1 + row2 + row3;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL RotateVector(float3 rotation, Vector4 direction) {
+		alignas(16) float4 result;
+
+		Matrix rotation_matrix = MatrixRotation(rotation);
+		Vector4 rotated_direction = MatrixVectorMultiply(direction, rotation_matrix);
+		rotated_direction.StoreAligned(&result);
+
+		return { result.x, result.y, result.z };
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector4 direction) {
+		Matrix rotation_matrix = MatrixRotation(rotation);
+		return MatrixVectorMultiply(direction, rotation_matrix);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL GetRightVector(float3 rotation) {
+		return RotateVector(rotation, VectorGlobals::RIGHT_4);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL GetRightVectorSIMD(float3 rotation) {
+		return RotateVectorSIMD(rotation, VectorGlobals::RIGHT_4);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL GetUpVector(float3 rotation) {
+		return RotateVector(rotation, VectorGlobals::UP_4);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL GetUpVectorSIMD(float3 rotation) {
+		return RotateVectorSIMD(rotation, VectorGlobals::UP_4);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL GetForwardVector(float3 rotation) {
+		return RotateVector(rotation, VectorGlobals::FORWARD_4);
+	}
+
+	ECS_INLINE Vector4 ECS_VECTORCALL GetForwardVectorSIMD(float3 rotation) {
+		return RotateVectorSIMD(rotation, VectorGlobals::FORWARD_4);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE Vector4 ECS_VECTORCALL TransformPointSIMD(float3 point, Matrix matrix) {
+		Vector4 vector_point(&point);
+		Vector4 one = VectorGlobals::ONE_4;
+		vector_point = blend4<0, 1, 2, 7>(vector_point, one);
+
+		return MatrixVectorMultiply(vector_point, matrix);
+	}
+
+	// Applies the same matrix to low and high
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformPointSIMD(float3 point0, float3 point1, Matrix matrix) {
+		Vector8 vector_point(point0.x, point0.y, point0.z, 1.0f, point1.x, point1.y, point1.z, 1.0f);
+
+		return MatrixVectorMultiply(vector_point, matrix);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL TransformPointSIMD(float3 point0, float3 point1, Matrix matrix0, Matrix matrix1) {
+		Vector8 vector_point(point0.x, point0.y, point0.z, 1.0f, point1.x, point1.y, point1.z, 1.0f);
+
+		return MatrixVectorMultiply(vector_point, matrix0, matrix1);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	ECS_INLINE float3 ECS_VECTORCALL TransformPoint(float3 point, Matrix matrix) {
+		float3 result;
+
+		Vector4 vector_result = TransformPointSIMD(point, matrix);
+		vector_result.StorePartialConstant<3>(&result);
+
+		return result;
+	}
+
+	// Uses the same matrix for both points
+	ECS_INLINE void ECS_VECTORCALL TransformPoint(float3& point0, float3& point1, Matrix matrix) {
+		Vector8 result = TransformPointSIMD(point0, point1, matrix);	
+		result.StorePartialConstant<3>(&point0);
+		result.High().StorePartialConstant<3>(&point1);
+	}
+
+	// Might perform slower than the single matrix because of the high register usage that
+	// can cause stack spillage
+	ECS_INLINE void ECS_VECTORCALL TransformPoint(float3& point0, float3& point1, Matrix matrix0, Matrix matrix1) {
+		Vector8 result = TransformPointSIMD(point0, point1, matrix0, matrix1);
+		result.StorePartialConstant<3>(&point0);
+		result.High().StorePartialConstant<3>(&point1);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
 
 	// --------------------------------------------------------------------------------------------------------------
 
