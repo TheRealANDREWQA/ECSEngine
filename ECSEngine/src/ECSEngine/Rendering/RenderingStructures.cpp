@@ -246,9 +246,11 @@ namespace ECSEngine {
 		values[2] = blue;
 	}
 
-	Camera::Camera() {}
-	Camera::Camera(float3 _translation) : translation(_translation) {}
-	Camera::Camera(Matrix _projection, float3 _translation) : projection(_projection), translation(_translation) {}
+	Camera::Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f) {}
+
+	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation) {}
+
+	Camera::Camera(Matrix _projection, float3 _translation, float3 _rotation) : projection(_projection), translation(_translation), rotation(_rotation) {}
 
 	void Camera::SetOrthographicProjection(float width, float height, float near_z, float far_z) {
 		projection = MatrixOrthographic(width, height, near_z, far_z);
@@ -263,7 +265,7 @@ namespace ECSEngine {
 	}
 
 	Matrix Camera::GetProjectionViewMatrix() const {
-		return projection * MatrixTranslation(translation);
+		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
 	}
 
 }

@@ -69,12 +69,20 @@ namespace ECSEngine {
 			return *this;
 		}
 
+		Base2 operator -() const {
+			return { -x, -y };
+		}
+
 		Base& operator [](unsigned int index) {
 			return *((Base*)this + index);
 		}
 
 		const Base& operator [](unsigned int index) const {
 			return *((const Base*)this + index);
+		}
+		
+		static Base2 Splat(Base value) {
+			return Base2(value, value);
 		}
 
 		Base x;
@@ -151,12 +159,20 @@ namespace ECSEngine {
 			return *this;
 		}
 
+		Base3 operator -() const {
+			return Base3(-x, -y, -z);
+		}
+
 		Base& operator [](unsigned int index) {
 			return *((Base*)this + index);
 		}
 
 		const Base& operator[](unsigned int index) const {
 			return *((const Base*)this + index);
+		}
+
+		static Base3 Splat(Base value) {
+			return Base3(value, value, value);
 		}
 
 		Base x;
@@ -239,12 +255,20 @@ namespace ECSEngine {
 			return *this;
 		}
 
+		Base4 operator -() const {
+			return { -x, -y, -z, -w };
+		}
+
 		Base& operator [](unsigned int index) {
 			return *((Base*)this + index);
 		}
 
 		const Base& operator[](unsigned int index) const {
 			return *((const Base*)this + index);
+		}
+
+		static Base4 Splat(Base value) {
+			return Base4(value, value, value, value);
 		}
 
 		Base x;

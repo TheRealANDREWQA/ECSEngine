@@ -101,7 +101,7 @@ namespace ECSEngine {
 		com_buffer.Attach(buffer.buffer);
 		HRESULT result = com_buffer.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting VertexBuffer to resource failed!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Vertex Buffer to resource failed!", true);
 
 		return _resource.Detach();
 	}
@@ -113,7 +113,52 @@ namespace ECSEngine {
 		com_buffer.Attach(vc_buffer.buffer);
 		HRESULT result = com_buffer.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting VertexConstantBuffer to resource failed!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Constant Buffer to resource failed!", true);
+
+		return _resource.Detach();
+	}
+
+	ID3D11Resource* GetResource(StructuredBuffer buffer) {
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
+		com_buffer.Attach(buffer.buffer);
+		HRESULT result = com_buffer.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Structured Buffer to resource failed!", true);
+
+		return _resource.Detach();
+	}
+
+	ID3D11Resource* GetResource(StandardBuffer buffer) {
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
+		com_buffer.Attach(buffer.buffer);
+		HRESULT result = com_buffer.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Standard Buffer to resource failed!", true);
+
+		return _resource.Detach();
+	}
+
+	ID3D11Resource* GetResource(IndirectBuffer buffer) {
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
+		com_buffer.Attach(buffer.buffer);
+		HRESULT result = com_buffer.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Indirect Buffer to resource failed!", true);
+
+		return _resource.Detach();
+	}
+
+	ID3D11Resource* GetResource(UABuffer buffer)
+	{
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
+		com_buffer.Attach(buffer.buffer);
+		HRESULT result = com_buffer.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting UA Buffer to resource failed!", true);
 
 		return _resource.Detach();
 	}

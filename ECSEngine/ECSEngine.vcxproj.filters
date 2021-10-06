@@ -75,7 +75,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FunctionTemplates.h" />
-    <ClInclude Include="src\ECSEngine\Math\ECSMatrix.h" />
+    <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\Reflection.h" />
@@ -127,6 +127,12 @@
     <ClInclude Include="src\ECSEngine\Rendering\MeshRender.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflectionMacros.h" />
+    <ClInclude Include="src\ECSEngine\GLTFLoader\GLTFLoader.h" />
+    <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
+    <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
+    <ClInclude Include="src\ECSEngine\Math\Transform.h" />
+    <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
+    <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
@@ -202,6 +208,8 @@
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\MeshRender.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
+    <ClCompile Include="src\ECSEngine\GLTFLoader\cgtlf.c" />
+    <ClCompile Include="src\ECSEngine\GLTFLoader\GLTFLoader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

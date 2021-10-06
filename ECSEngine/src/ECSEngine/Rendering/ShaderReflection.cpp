@@ -25,10 +25,33 @@ constexpr const char* TEXTURE_KEYWORDS[] = {
 	"Texture1D",
 	"Texture2D",
 	"Texture3D",
+	"RWTexture1D",
+	"RWTexture2D",
+	"RWTexture3D",
 	"Texture1DArray",
 	"Texture2DArray",
 	"Texture3DArray",
 	"TextureCube"
+};
+
+constexpr const char* VERTEX_BUFFER_MAPPINGS[] = {
+	"POSITION",
+	"NORMAL",
+	"UV",
+	"COLOR",
+	"TANGENT",
+	"BONE_WEIGHT",
+	"BONE_INFLUENCE"
+};
+
+constexpr const char* VERTEX_BUFFER_MACRO_MAPPINGS[] = {
+	STRING(ECS_REFLECT_POSITION),
+	STRING(ECS_REFLECT_NORMAL),
+	STRING(ECS_REFLECT_UV),
+	STRING(ECS_REFLECT_COLOR),
+	STRING(ECS_REFLECT_TANGENT),
+	STRING(ECS_REFLECT_BONE_WEIGHT),
+	STRING(ECS_REFLECT_BONE_INFLUENCE)
 };
 
 using Hash = ECSEngine::HashFunctionAdditiveString;
@@ -108,7 +131,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 			current_character++;
 		}
 		char* name_start = current_character;
-		while (function::IsAlphabetCharacter(*current_character) || function::IsNumberCharacter(*current_character) || *current_character == '_') {
+		while (function::IsCodeIdentifierCharacter(*current_character)) {
 			current_character++;
 		}
 		output_name = SetName(name_start, current_character, name_pool);
@@ -262,7 +285,11 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 			allocation[read_count] = '\0';
 
 			char* structure_name = strstr(allocation, VERTEX_SHADER_INPUT_STRUCTURE_NAME);
+			bool is_increment_input_slot = false;
 			if (structure_name != nullptr) {
+				// Check increment input slot
+				is_increment_input_slot = strstr(structure_name, STRING(ECS_REFLECT_INCREMENT_INPUT_SLOT)) != nullptr;
+
 				// Iterate through all of the input's fields and fill the information
 				while (*structure_name != '\n') {
 					structure_name++;
@@ -274,7 +301,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 				while (*last_character != '}') {
 					size_t current_index = elements.size;
 
-					// make the end line character /0 for C functions
+					// make the end line character \0 for C functions
 					char* end_line = strchr(last_character, '\n');
 					if (end_line == nullptr) {
 						_freea(allocation);
@@ -333,18 +360,23 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					// Semantic name
 					elements[current_index].SemanticName = SetName(semantic_name, semantic_name_size, semantic_name_pool).buffer;
 
-					// Input slot
-					char* input_slot = strstr(parenthese, STRING(ECS_REFLECT_INPUT_SLOT));
-					if (input_slot != nullptr) {
-						input_slot += strlen(STRING(ECS_REFLECT_INPUT_SLOT)) + 2;
-						char* starting_input_slot = input_slot;
-						while (function::IsNumberCharacter(*input_slot)) {
-							input_slot++;
+					// Input slot - only do the check if increment input slot has not been specified
+					if (!is_increment_input_slot) {
+						char* input_slot = strstr(parenthese, STRING(ECS_REFLECT_INPUT_SLOT));
+						if (input_slot != nullptr) {
+							input_slot += strlen(STRING(ECS_REFLECT_INPUT_SLOT)) + 2;
+							char* starting_input_slot = input_slot;
+							while (function::IsNumberCharacter(*input_slot)) {
+								input_slot++;
+							}
+							elements[current_index].InputSlot = function::ConvertCharactersToInt<size_t>(Stream<char>(starting_input_slot, input_slot - starting_input_slot));
 						}
-						elements[current_index].InputSlot = function::ConvertCharactersToInt<size_t>(Stream<char>(starting_input_slot, input_slot - starting_input_slot));
+						else {
+							elements[current_index].InputSlot = 0;
+						}
 					}
 					else {
-						elements[current_index].InputSlot = 0;
+						elements[current_index].InputSlot = elements.size;
 					}
 
 					// Instance
@@ -557,6 +589,72 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 
 			_freea(allocation);
 			return true;
+		}
+		return false;
+	}
+
+	bool ShaderReflection::ReflectVertexBufferMapping(const wchar_t* path, containers::CapacityStream<ECS_MESH_INDEX>& mapping)
+	{
+		return ReflectVertexBufferMapping(ToStream(path), mapping);
+	}
+
+	bool ShaderReflection::ReflectVertexBufferMapping(containers::Stream<wchar_t> path, containers::CapacityStream<ECS_MESH_INDEX>& mapping)
+	{
+		// Returns whether or not it succeded
+		auto KeywordLoop = [](const char* struct_ptr, CapacityStream<ECS_MESH_INDEX>& mapping, Stream<const char*> keywords) {
+			for (size_t index = 0; index < keywords.size; index++) {
+				char* current_mapping = (char*)strstr(struct_ptr, keywords[index]);
+				if (current_mapping != nullptr) {
+					// Count the semicolons to determinte the current index
+					// Null the current character and start counting the semicolons
+					*current_mapping = '\0';
+
+					size_t semicolon_count = 0;
+					const char* semicolon_ptr = struct_ptr;
+					while ((semicolon_ptr = strchr(semicolon_ptr, ';')) != nullptr) {
+						semicolon_count++;
+					}
+
+					*current_mapping = 'E';
+					semicolon_count--;
+
+					if (semicolon_count == -1) {
+						return false;
+					}
+
+					mapping[semicolon_count] = (ECS_MESH_INDEX)index;
+					mapping.size = std::max(mapping.size, (unsigned int)semicolon_count);
+				}
+			}
+		};
+
+		std::ifstream stream(std::wstring(path.buffer, path.size));
+
+		if (stream.good()) {
+			// Read the whole file
+			size_t file_size = function::GetFileByteSize(stream);
+			char* allocation = (char*)_malloca(file_size);
+			stream.read(allocation, file_size);
+
+			// Make sure to make \0 the last read character
+			// since read count may differ from byte size
+			size_t read_count = stream.gcount();
+			allocation[read_count] = '\0';
+
+			const char* struct_ptr = strstr(allocation, VERTEX_SHADER_INPUT_STRUCTURE_NAME);
+			// Linearly iterate through all keywords and add each mapping accordingly
+			bool success = KeywordLoop(struct_ptr, mapping, Stream<const char*>(VERTEX_BUFFER_MAPPINGS, std::size(VERTEX_BUFFER_MAPPINGS)));
+
+			if (!success) {
+				_freea(allocation);
+				return false;
+			}
+
+			// Check macros now
+			success = KeywordLoop(struct_ptr, mapping, Stream<const char*>((VERTEX_BUFFER_MACRO_MAPPINGS), std::size(VERTEX_BUFFER_MACRO_MAPPINGS)));	
+
+			_freea(allocation);
+			return success;
 		}
 		return false;
 	}

@@ -37,6 +37,9 @@
 string_name.size = function::FormatString(string_name.buffer, base_characters, __VA_ARGS__); \
 string_name.AssertCapacity();
 
+#define ECS_FORMAT_STRING(string, base_characters, ...) (string).size = function::FormatString((string).buffer, base_characters, __VA_ARGS__); \
+(string).AssertCapacity();
+
 namespace ECSEngine {
 
 	namespace function {

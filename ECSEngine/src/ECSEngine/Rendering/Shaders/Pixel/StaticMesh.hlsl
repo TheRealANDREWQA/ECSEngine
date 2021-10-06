@@ -1,6 +1,8 @@
 Texture2D ColorMap : register(t0);
 SamplerState Sampler : register(s0);
 
+RWTexture2D<float4> ColoMap;
+
 cbuffer LightColor
 {
     float4 color;

@@ -50,3 +50,5 @@ constexpr const wchar_t* EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX = L"Resources/
 
 constexpr size_t EDITOR_HUB_PROJECT_CAPACITY = 32;
 constexpr size_t EDITOR_EVENT_QUEUE_CAPACITY = 32;
+
+constexpr size_t EDITOR_SCENE_BUFFERING_COUNT = 3;

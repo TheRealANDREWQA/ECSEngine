@@ -15,6 +15,8 @@ namespace ECSEngine {
 
 #ifdef ECSENGINE_DIRECTX11
 
+#define ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND 4
+
 	struct ECSENGINE_API GraphicsDescriptor {
 		uint2 window_size;
 		MemoryManager* allocator;
@@ -70,17 +72,43 @@ namespace ECSEngine {
 		unsigned int misc_flag = 0u;
 	};
 
+	struct ECSENGINE_API ShaderMacro {
+		const char* name;
+		const char* definition;
+	};
+
+	enum ECSENGINE_API ShaderTarget : unsigned char {
+		ECS_SHADER_TARGET_4,
+		ECS_SHADER_TARGET_5,
+		ECS_SHADER_TARGET_COUNT
+	};
+
+	enum ECSENGINE_API ShaderCompileFlags : unsigned char {
+		ECS_SHADER_COMPILE_NONE = 0,
+		ECS_SHADER_COMPILE_DEBUG = 1 << 0,
+		ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST = 1 << 1,
+		ECS_SHADER_COMPILE_OPTIMIZATION_LOW = 1 << 2,
+		ECS_SHADER_COMPILE_OPTIMIZATION_HIGH = 1 << 3,
+		ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST = 1 << 4
+	};
+
+	// Default is no macros, shader target 5 and no compile flags
+	struct ECSENGINE_API ShaderFromSourceOptions {
+		Stream<ShaderMacro> macros = {nullptr, 0};
+		ShaderTarget target = ECS_SHADER_TARGET_5;
+		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
+	};
+
 	/* It has an immediate and a deferred context. The deferred context can be used to generate CommandLists */
 	class ECSENGINE_API Graphics
 	{
-		friend class Bindable;
 	public:
 		Graphics(HWND hWnd, const GraphicsDescriptor* descriptor);
 		Graphics& operator = (const Graphics& other) = default;
 
-#pragma region Auto Context Bindings
+#pragma region Context Bindings
 
-		// ----------------------------------------------- Auto Bindings ------------------------------------------------------------------
+		// ----------------------------------------------- Context Bindings ------------------------------------------------------------------
 
 		void BindIndexBuffer(IndexBuffer index_buffer);
 
@@ -90,6 +118,14 @@ namespace ECSEngine {
 
 		void BindPixelShader(PixelShader shader);
 
+		void BindDomainShader(DomainShader shader);
+
+		void BindHullShader(HullShader shader);
+
+		void BindGeometryShader(GeometryShader shader);
+
+		void BindComputeShader(ComputeShader shader);
+
 		void BindVertexConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
 
 		void BindVertexConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
@@ -98,67 +134,65 @@ namespace ECSEngine {
 
 		void BindPixelConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
 
+		void BindDomainConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+
+		void BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+
+		void BindHullConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+
+		void BindHullConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+
+		void BindGeometryConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+
+		void BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+
+		void BindComputeConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+
+		void BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+
 		void BindVertexBuffer(VertexBuffer buffer, UINT slot = 0u);
 
 		void BindVertexBuffers(Stream<VertexBuffer> buffers, UINT start_slot = 0u);
 
 		void BindTopology(Topology topology);
 
-		void BindPSResourceView(ResourceView component, UINT slot = 0u);
+		void BindPixelResourceView(ResourceView component, UINT slot = 0u);
 
-		void BindPSResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindPixelResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+
+		void BindVertexResourceView(ResourceView component, UINT slot = 0u);
+
+		void BindVertexResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+
+		void BindDomainResourceView(ResourceView component, UINT slot = 0u);
+
+		void BindDomainResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+
+		void BindHullResourceView(ResourceView component, UINT slot = 0u);
+
+		void BindHullResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+
+		void BindGeometryResourceView(ResourceView component, UINT slot = 0u);
+
+		void BindGeometryResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+
+		void BindComputeResourceView(ResourceView component, UINT slot = 0u);
+
+		void BindComputeResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
 
 		void BindSamplerState(SamplerState sampler, UINT slot = 0u);
 
 		void BindSamplerStates(Stream<SamplerState> samplers, UINT start_slot = 0u);
 
-#pragma endregion
-
-#pragma region Argument (Deferred) Context Bindings
-
-		// ----------------------------------------------- Argument (Deferred) Context Bindings --------------------------------
-
-		void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context);
-
-		void BindInputLayout(InputLayout layout, GraphicsContext* context);
-
-		void BindVertexShader(VertexShader shader, GraphicsContext* context);
-
-		void BindPixelShader(PixelShader shader, GraphicsContext* context);
-
-		void BindVertexConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
-
-		void BindVertexConstantBuffers(
-			Stream<ConstantBuffer> buffers,
-			GraphicsContext* context,
-			UINT start_slot = 0u
-		);
-
-		void BindPixelConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
-
-		void BindPixelConstantBuffers(
-			Stream<ConstantBuffer> buffers,
-			GraphicsContext* context,
-			UINT start_slot = 0u
-		);
-
-		void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot = 0u);
-
-		void BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, UINT start_slot = 0u);
-
-		void BindTopology(Topology topology, GraphicsContext* context);
-
-		void BindPSResourceView(ResourceView component, GraphicsContext* context, UINT slot = 0u);
-
-		void BindPSResourceViews(Stream<ResourceView> component, GraphicsContext* context, UINT start_slot = 0u);
-
-		void BindSamplerState(SamplerState sampler, GraphicsContext* context, UINT slot = 0u);
-
-		void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, UINT start_slot = 0u);
-
 		void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view);
 
-		void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view, GraphicsContext* context);
+		void BindPixelUAView(UAView view, UINT start_slot = 0u);
+
+		void BindPixelUAViews(Stream<UAView> views, UINT start_slot = 0u);
+
+		void BindComputeUAView(UAView view, UINT start_slot = 0u);
+
+		void BindComputeUAViews(Stream<UAView> views, UINT start_slot = 0u);
 
 		void BindRenderTargetViewFromInitialViews();
 
@@ -166,67 +200,97 @@ namespace ECSEngine {
 
 		void BindViewport(float top_left_x, float top_left_y, float width, float height, float min_depth, float max_depth);
 
-		void BindViewport(float top_left_x, float top_left_y, float new_width, float new_height, float min_depth, float max_depth, GraphicsContext* context);
-
 		void BindDefaultViewport();
 
 		void BindDefaultViewport(GraphicsContext* context);
 
-#pragma endregion
+		void BindMesh(const Mesh& mesh);
 
-#pragma region Immediate Context Bindings
+		void BindMesh(const Mesh& mesh, Stream<ECS_MESH_INDEX> mapping);
 
-		// ----------------------------------------------- Immediate Bindings ------------------------------------------------------------------
-
-		void BindIndexBufferImmediate(IndexBuffer index_buffer);
-
-		void BindInputLayoutImmediate(InputLayout layout);
-
-		void BindVertexShaderImmediate(VertexShader shader);
-
-		void BindPixelShaderImmediate(PixelShader shader);
-
-		void BindVertexConstantBufferImmediate(ConstantBuffer buffer, UINT slot = 0u);
-
-		void BindVertexConstantBuffersImmediate(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
-
-		void BindPixelConstantBufferImmediate(ConstantBuffer buffer, UINT slot = 0u);
-
-		void BindPixelConstantBuffersImmediate(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
-
-		void BindVertexBufferImmediate(VertexBuffer buffer, UINT slot = 0u);
-
-		void BindVertexBuffersImmediate(Stream<VertexBuffer> buffers, UINT start_slot = 0u);
-
-		void BindTopologyImmediate(Topology topology);
-
-		void BindPSResourceViewImmediate(ResourceView component, UINT slot = 0u);
-
-		void BindPSResourceViewsImmediate(Stream<ResourceView> component, UINT start_slot = 0u);
-
-		void BindSamplerStateImmediate(SamplerState sampler, UINT slot = 0u);
-
-		void BindSamplerStatesImmediate(Stream<SamplerState> samplers, UINT start_slot = 0u);
+		void BindMaterial(const Material& material);
 
 #pragma endregion
 
-#pragma region Component Construction
+#pragma region Component Creation
 
-		// ----------------------------------------------- Component Construction ----------------------------------------------------
-		
-		IndexBuffer ConstructIndexBuffer(Stream<unsigned int> indices);
+		// ----------------------------------------------- Component Creation ----------------------------------------------------
 
-		PixelShader ConstructPSShader(const wchar_t* path);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices);
 
-		PixelShader ConstructPSShader(Stream<wchar_t> path);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices);
 
-		VertexShader ConstructVSShader(const wchar_t* path);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices);
 
-		VertexShader ConstructVSShader(Stream<wchar_t> path);
+		// No source code path will be assigned - so no reflection can be done on it
+		PixelShader CreatePixelShader(Stream<wchar_t> byte_code);
 
-		InputLayout ConstructInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader);
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		PixelShader CreatePixelShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
 
-		VertexBuffer ConstructVertexBuffer(
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		PixelShader CreatePixelShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+
+		// No source code path will be assigned - so no reflection can be done on it
+		VertexShader CreateVertexShader(Stream<wchar_t> byte_code);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		VertexShader CreateVertexShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		VertexShader CreateVertexShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+
+		// No source code path will be assigned - so no reflection can be done on it
+		DomainShader CreateDomainShader(Stream<wchar_t> byte_code);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		DomainShader CreateDomainShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		DomainShader CreateDomainShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+
+		// No source code path will be assigned - so no reflection can be done on it
+		HullShader CreateHullShader(Stream<wchar_t> byte_code);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		HullShader CreateHullShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		HullShader CreateHullShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+
+		// No source code path will be assigned - so no reflection can be done on it
+		GeometryShader CreateGeometryShader(Stream<wchar_t> byte_code);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		GeometryShader CreateGeometryShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		GeometryShader CreateGeometryShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+
+		// No source code path will be assigned - so no reflection can be done on it
+		ComputeShader CreateComputeShader(Stream<wchar_t> path);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		ComputeShader CreateComputeShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code);
+
+		// Source code path will be allocated from the assigned allocator;
+		// Reflection works
+		ComputeShader CreateComputeShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+
+		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader);
+
+		VertexBuffer CreateVertexBuffer(
 			size_t element_size, 
 			size_t element_count, 
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC, 
@@ -234,7 +298,7 @@ namespace ECSEngine {
 			unsigned int miscFlags = 0
 		);
 
-		VertexBuffer ConstructVertexBuffer(
+		VertexBuffer CreateVertexBuffer(
 			size_t element_size,
 			size_t element_count,
 			const void* buffer,
@@ -243,7 +307,7 @@ namespace ECSEngine {
 			unsigned int miscFlags = 0
 		);
 		
-		ConstantBuffer ConstructConstantBuffer(
+		ConstantBuffer CreateConstantBuffer(
 			size_t byte_size,
 			const void* buffer,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
@@ -251,231 +315,189 @@ namespace ECSEngine {
 			unsigned int miscFlags = 0
 		);
 
-		ConstantBuffer ConstructConstantBuffer(
+		ConstantBuffer CreateConstantBuffer(
 			size_t byte_size,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
 		);
 
-		SamplerState ConstructSamplerState(D3D11_SAMPLER_DESC descriptor);
+		StandardBuffer CreateStandardBuffer(
+			size_t byte_size,
+			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
+			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
+			unsigned int miscFlags = 0
+		);
 
-		Texture1D CreateTexture1D(const GraphicsTexture1DDescriptor* descriptor);
+		StandardBuffer CreateStandardBuffer(
+			size_t byte_size,
+			const void* data,
+			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
+			unsigned int cpuAccessFlags = 0,
+			unsigned int miscFlags = 0
+		);
 
-		Texture2D CreateTexture2D(const GraphicsTexture2DDescriptor* descriptor);
+		StructuredBuffer CreateStructuredBuffer(
+			size_t element_size,
+			size_t element_count,
+			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
+			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
+			unsigned int miscFlags = 0
+		);
 
-		Texture3D CreateTexture3D(const GraphicsTexture3DDescriptor* descriptor);
+		StructuredBuffer CreateStructuredBuffer(
+			size_t element_size,
+			size_t element_count,
+			const void* data,
+			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
+			unsigned int cpuAccessFlags = 0,
+			unsigned int miscFlags = 0
+		);
+
+		UABuffer CreateUABuffer(
+			size_t element_size,
+			size_t element_count,
+			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
+			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
+			unsigned int miscFlags = 0
+		);
+
+		UABuffer CreateUABuffer(
+			size_t element_size,
+			size_t element_count,
+			const void* data,
+			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
+			unsigned int cpuAccessFlags = 0,
+			unsigned int miscFlags = 0
+		);
+
+		IndirectBuffer CreateIndirectBuffer();
+
+		AppendStructuredBuffer CreateAppendStructuredBuffer(size_t element_size, size_t element_count);
+
+		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count);
+
+		SamplerState CreateSamplerState(D3D11_SAMPLER_DESC descriptor);
+
+		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor);
+
+		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor);
+
+		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
-		ResourceView CreateTexture1DShaderView(
+		ResourceView CreateTextureShaderView(
 			Texture1D texture,
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1
 		);
 
+		ResourceView CreateTextureShaderViewResource(Texture1D texture);
+
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
-		ResourceView CreateTexture2DShaderView(
+		ResourceView CreateTextureShaderView(
 			Texture2D texture,
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1
 		);
 
+		ResourceView CreateTextureShaderViewResource(Texture2D texture);
+
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
-		ResourceView CreateTexture3DShaderView(
+		ResourceView CreateTextureShaderView(
 			Texture3D texture,
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1
 		);
+
+		ResourceView CreateTextureShaderViewResource(Texture3D texture);
 
 		RenderTargetView CreateRenderTargetView(Texture2D texture);
 
 		DepthStencilView CreateDepthStencilView(Texture2D texture);
 
+		ResourceView CreateBufferView(StandardBuffer buffer);
+
+		ResourceView CreateBufferView(StructuredBuffer buffer);
+
+		UAView CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element = 0);
+
+		UAView CreateUAView(AppendStructuredBuffer buffer);
+
+		UAView CreateUAView(ConsumeStructuredBuffer buffer);
+
+		UAView CreateUAView(IndirectBuffer buffer);
+
+		UAView CreateUAView(Texture1D texture, unsigned int mip_slice = 0);
+
+		UAView CreateUAView(Texture2D texture, unsigned int mip_slice = 0);
+
+		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0);
+
+		Material CreateMaterial(VertexShader v_shader, PixelShader p_shader, DomainShader d_shader = nullptr, HullShader h_shader = nullptr, GeometryShader g_shader = nullptr);
+
 #pragma endregion
 
-#pragma region Change Context Mode
+#pragma region Pipeline State Changes
 
-		// -------------------------------------------------- Change Context Mode ---------------------------------------------
+		// ------------------------------------------- Pipeline State Changes ------------------------------------
 
-		void SetAutoMode(GraphicsContext* context);
-
-		void SetAutoModeImmediate();
-
-		void SetAutoModeDeferred();
-
-#pragma endregion
-
-#pragma region Auto Context Pipeline State Changes
-
-		// ------------------------------------------- Auto Context Pipeline State Changes ------------------------------------
-
-		// auto context
 		void ClearBackBuffer(float red, float green, float blue);
 
-		// auto context
 		void DisableAlphaBlending();
-
-		// auto context
-		void DisableDepth();
-
-		// auto context
-		void DisableCulling();
-
-		// auto context
-		void Draw(UINT vertex_count, UINT start_slot = 0u);
-
-		// auto context
-		void DrawIndexed(unsigned int index_count, UINT start_vertex = 0u, INT base_vertex_location = 0);
-
-		// auto context
-		void EnableAlphaBlending();
-
-		// auto context
-		void EnableDepth();
-
-		// It must be unmapped manually; auto context
-		void* MapBuffer(ID3D11Buffer* buffer, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void* MapTexture1D(Texture1D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void* MapTexture2D(Texture2D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void* MapTexture3D(Texture3D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		// auto context
-		ID3D11CommandList* FinishCommandList(bool restore_state = false);
-
-		// auto context
-		void UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, unsigned int subresource_index = 0);
-
-		// auto context
-		void UnmapBuffer(ID3D11Buffer* buffer, unsigned int subresource_index = 0);
-
-		// auto context
-		void UnmapTexture1D(Texture1D texture, unsigned int subresource_index = 0);
-
-		// auto context
-		void UnmapTexture2D(Texture2D texture, unsigned int subresource_index = 0);
-
-		// auto context
-		void UnmapTexture3D(Texture3D texture, unsigned int subresource_index = 0);
-
-#pragma endregion
-
-#pragma region Argument (Deferred) Context Pipeline State Changes
-
-		// -------------------------------------- Argument(Deferred) Context Pipeline State Changes ---------------------------
-
-		void ClearBackBuffer(float red, float green, float blue, GraphicsContext* context);
 
 		void DisableAlphaBlending(GraphicsContext* context);
 
+		void DisableDepth();
+
 		void DisableDepth(GraphicsContext* context);
+
+		void DisableCulling();
 
 		void DisableCulling(GraphicsContext* context);
 
-		void Draw(UINT vertex_count, GraphicsContext* context, UINT start_slot = 0u);
+		void Draw(UINT vertex_count, UINT start_slot = 0u);
 
-		void DrawIndexed(unsigned int index_count, GraphicsContext* context, UINT start_vertex = 0u, INT base_vertex_location = 0);
+		void DrawIndexed(unsigned int index_count, UINT start_vertex = 0u, INT base_vertex_location = 0);
+
+		void DrawInstanced(unsigned int vertex_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot = 0u);
+
+		void DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot = 0u);
+
+		void DrawIndexedInstancedIndirect(IndirectBuffer buffer);
+
+		void DrawInstancedIndirect(IndirectBuffer buffer);
+
+		void EnableAlphaBlending();
 
 		void EnableAlphaBlending(GraphicsContext* context);
 
+		void EnableDepth();
+
 		void EnableDepth(GraphicsContext* context);
 
-		ID3D11CommandList* FinishCommandList(GraphicsContext* context, bool restore_state = false);
+		void* MapBuffer(ID3D11Buffer* buffer, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		// It must be unmapped manually
-		void* MapBuffer(
-			ID3D11Buffer* buffer,
-			GraphicsContext* context,
-			D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, 
-			unsigned int subresource_index = 0,
-			unsigned int map_flags = 0
-		);
+		void* MapTexture(Texture1D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture1D(
-			Texture1D texture, 
-			GraphicsContext* context,
-			D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, 
-			unsigned int subresource_index = 0,
-			unsigned int map_flags = 0
-		);
+		void* MapTexture(Texture2D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture2D(
-			Texture2D texture,
-			GraphicsContext* context,
-			D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
-			unsigned int subresource_index = 0,
-			unsigned int map_flags = 0
-		);
+		void* MapTexture(Texture3D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture3D(
-			Texture3D texture,
-			GraphicsContext* context,
-			D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
-			unsigned int subresource_index = 0,
-			unsigned int map_flags = 0
-		);
+		ID3D11CommandList* FinishCommandList(bool restore_state = false);
 
-		void UpdateBuffer(
-			ID3D11Buffer* buffer,
-			const void* data,
-			size_t data_size,
-			GraphicsContext* context,
-			unsigned int subresource_index = 0
-		);
+		void UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int map_flags = 0u, unsigned int subresource_index = 0);
 
-		void UnmapBuffer(ID3D11Buffer* buffer, GraphicsContext* context, unsigned int subresource_index = 0);
+		void UnmapBuffer(ID3D11Buffer* buffer, unsigned int subresource_index = 0);
 
-		void UnmapTexture1D(Texture1D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+		void UnmapTexture(Texture1D texture, unsigned int subresource_index = 0);
 
-		void UnmapTexture2D(Texture2D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+		void UnmapTexture(Texture2D texture, unsigned int subresource_index = 0);
 
-		void UnmapTexture3D(Texture3D texture, GraphicsContext* context, unsigned int subresource_index = 0);
-
-#pragma endregion
-
-#pragma region Immediate Context Pipeline State Changes
-
-		// ----------------------------------------------- Immediate Context State Changes -------------------------------------
-
-		void ClearBackBufferImmediate(float red, float green, float blue);
-
-		void DisableAlphaBlendingImmediate();
-
-		void DisableDepthImmediate();
-
-		void DisableCullingImmediate();
-
-		void DrawImmediate(UINT vertex_count, UINT start_slot = 0u);
-
-		void DrawIndexedImmediate(unsigned int index_count, UINT start_vertex = 0u, INT base_vertex_location = 0);
-
-		void EnableAlphaBlendingImmediate();
-
-		void EnableDepthImmediate();
-
-		// It must be unmapped manually
-		void* MapBufferImmediate(ID3D11Buffer* buffer, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void* MapTexture1DImmediate(Texture1D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void* MapTexture2DImmediate(Texture2D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void* MapTexture3DImmediate(Texture3D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		void UpdateBufferImmediate(ID3D11Buffer* buffer, const void* data, size_t data_size, unsigned int subresource_index = 0);
-
-		void UnmapBufferImmediate(ID3D11Buffer* buffer, unsigned int subresource_index = 0);
-
-		void UnmapTexture1DImmediate(Texture1D texture, unsigned int subresource_index = 0);
-
-		void UnmapTexture2DImmediate(Texture2D texture, unsigned int subresource_index = 0);
-
-		void UnmapTexture3DImmediate(Texture3D texture, unsigned int subresource_index = 0);
+		void UnmapTexture(Texture3D texture, unsigned int subresource_index = 0);
 
 #pragma endregion
 
@@ -490,16 +512,22 @@ namespace ECSEngine {
 		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		void ReflectShaderBuffers(const wchar_t* path, CapacityStream<ShaderReflectedBuffer>& buffers);
+		bool ReflectShaderBuffers(const wchar_t* path, CapacityStream<ShaderReflectedBuffer>& buffers);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		void ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers);
+		bool ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		void ReflectShaderTextures(const wchar_t* path, CapacityStream<ShaderReflectedTexture>& textures);
+		bool ReflectShaderTextures(const wchar_t* path, CapacityStream<ShaderReflectedTexture>& textures);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		void ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures);
+		bool ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures);
+
+		// No memory needs to be allocated
+		bool ReflectVertexBufferMapping(const wchar_t* path, CapacityStream<ECS_MESH_INDEX>& mapping);
+
+		// No memory needs to be allocated
+		bool ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping);
 
 #pragma endregion
 
@@ -513,15 +541,11 @@ namespace ECSEngine {
 
 		GraphicsContext* CreateDeferredContext(UINT context_flags = 0u);
 
-		void EndFrame(float value);
-
 		GraphicsDevice* GetDevice();
 
 		GraphicsContext* GetContext();
 
 		GraphicsContext* GetDeferredContext();
-
-		GraphicsContext* GetAutoContext();
 
 		void GetWindowSize(unsigned int& width, unsigned int& height) const;
 
@@ -543,14 +567,201 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<IDXGISwapChain> m_swap_chain;
 		Microsoft::WRL::ComPtr<GraphicsContext> m_context;
 		Microsoft::WRL::ComPtr<GraphicsContext> m_deferred_context;
-		Microsoft::WRL::ComPtr<GraphicsContext> m_auto_context;
 		RenderTargetView m_target_view;
+		RenderTargetView m_bound_render_targets[ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND];
+		Stream<RenderTargetView> m_bound_targets;
 		DepthStencilView m_depth_stencil_view;
+		DepthStencilView m_current_depth_stencil;
 		Microsoft::WRL::ComPtr<ID3D11BlendState> m_blend_disabled;
 		Microsoft::WRL::ComPtr<ID3D11BlendState> m_blend_enabled;
 		ShaderReflection m_shader_reflection;
 		MemoryManager* m_allocator;
 	};
+
+	ECSENGINE_API void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context);
+
+	ECSENGINE_API void BindInputLayout(InputLayout layout, GraphicsContext* context);
+
+	ECSENGINE_API void BindVertexShader(VertexShader shader, GraphicsContext* context);
+
+	ECSENGINE_API void BindPixelShader(PixelShader shader, GraphicsContext* context);
+
+	ECSENGINE_API void BindDomainShader(DomainShader shader, GraphicsContext* context);
+
+	ECSENGINE_API void BindHullShader(HullShader shader, GraphicsContext* context);
+
+	ECSENGINE_API void BindGeometryShader(GeometryShader shader, GraphicsContext* context);
+
+	ECSENGINE_API void BindComputeShader(ComputeShader shader, GraphicsContext* context);
+
+	ECSENGINE_API void BindVertexConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindVertexConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot = 0u
+	);
+
+	ECSENGINE_API void BindPixelConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindPixelConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot = 0u
+	);
+
+	ECSENGINE_API void BindComputeConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindDomainConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindHullConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindHullConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindGeometryConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindTopology(Topology topology, GraphicsContext* context);
+
+	ECSENGINE_API void BindPixelResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindPixelResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindVertexResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindVertexResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindDomainResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindDomainResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindHullResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindHullResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindGeometryResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindGeometryResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindComputeResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindComputeResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindSamplerState(SamplerState sampler, GraphicsContext* context, UINT slot = 0u);
+
+	ECSENGINE_API void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindPixelUAView(UAView view, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindPixelUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindComputeUAView(UAView view, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindComputeUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view, GraphicsContext* context);
+
+	ECSENGINE_API void BindViewport(float top_left_x, float top_left_y, float new_width, float new_height, float min_depth, float max_depth, GraphicsContext* context);
+
+	ECSENGINE_API void BindMesh(const Mesh& mesh, GraphicsContext* context);
+
+	ECSENGINE_API void BindMesh(const Mesh& mesh, GraphicsContext* context, Stream<ECS_MESH_INDEX> mapping);
+
+	ECSENGINE_API void BindMaterial(const Material& material, GraphicsContext* context);
+
+	ECSENGINE_API void Draw(unsigned int vertex_count, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void DrawIndexed(unsigned int index_count, GraphicsContext* context, UINT start_vertex = 0u, INT base_vertex_location = 0);
+
+	ECSENGINE_API void DrawInstanced(
+		unsigned int vertex_count, 
+		unsigned int instance_count,
+		GraphicsContext* context, 
+		unsigned int vertex_offset = 0u, 
+		unsigned int instance_offset = 0u
+	);
+
+	ECSENGINE_API void DrawIndexedInstanced(
+		unsigned int index_count,
+		unsigned int instance_count,
+		GraphicsContext* context,
+		unsigned int vertex_offset = 0u,
+		unsigned int index_offset = 0u,
+		unsigned int instance_offset = 0u
+	);
+
+	ECSENGINE_API void DrawIndexedInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
+
+	ECSENGINE_API void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
+
+	ECSENGINE_API ID3D11CommandList* FinishCommandList(GraphicsContext* context, bool restore_state = false);
+
+	// It must be unmapped manually
+	ECSENGINE_API void* MapBuffer(
+		ID3D11Buffer* buffer,
+		GraphicsContext* context,
+		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		unsigned int subresource_index = 0,
+		unsigned int map_flags = 0
+	);
+
+	ECSENGINE_API void* MapTexture(
+		Texture1D texture,
+		GraphicsContext* context,
+		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		unsigned int subresource_index = 0,
+		unsigned int map_flags = 0
+	);
+
+	ECSENGINE_API void* MapTexture(
+		Texture2D texture,
+		GraphicsContext* context,
+		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		unsigned int subresource_index = 0,
+		unsigned int map_flags = 0
+	);
+
+	ECSENGINE_API void* MapTexture(
+		Texture3D texture,
+		GraphicsContext* context,
+		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		unsigned int subresource_index = 0,
+		unsigned int map_flags = 0
+	);
+
+	ECSENGINE_API void UpdateBuffer(
+		ID3D11Buffer* buffer,
+		const void* data,
+		size_t data_size,
+		GraphicsContext* context,
+		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		unsigned int map_flags = 0u,
+		unsigned int subresource_index = 0
+	);
+
+	ECSENGINE_API void UpdateBufferResource(
+		ID3D11Buffer* buffer,
+		const void* data,
+		size_t data_size,
+		GraphicsContext* context
+	);
+
+	ECSENGINE_API void UnmapBuffer(ID3D11Buffer* buffer, GraphicsContext* context, unsigned int subresource_index = 0);
+
+	ECSENGINE_API void UnmapTexture(Texture1D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+
+	ECSENGINE_API void UnmapTexture(Texture2D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+
+	ECSENGINE_API void UnmapTexture(Texture3D texture, GraphicsContext* context, unsigned int subresource_index = 0);
 
 #endif // ECSENGINE_DIRECTX11
 

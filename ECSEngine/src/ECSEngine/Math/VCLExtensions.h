@@ -9,21 +9,22 @@ namespace ECSEngine {
 	// Conditionally multiply the packed single-precision(32-bit) floating-point elements in a and b 
 	// using the high 4 bits in imm8, sum the four products, and conditionally store the sum in dst using the low 4 bits of imm8.
 	template<int mask>
-	ECS_INLINE Vec4f ECS_VECTORCALL Dot(Vec4f a, Vec4f b) {
+	Vec4f ECS_VECTORCALL Dot(Vec4f a, Vec4f b) {
 		return _mm_dp_ps(a, b, mask);
 	}
 
 	// Conditionally multiply the packed single-precision(32-bit) floating-point elements in a and b 
 	// using the high 4 bits in imm8, sum the four products, and conditionally store the sum in dst using the low 4 bits of imm8.
+	// Works as if doing two dots for the high and the low part of the vector
 	template<int mask>
-	ECS_INLINE Vec8f ECS_VECTORCALL Dot(Vec8f a, Vec8f b) {
+	Vec8f ECS_VECTORCALL Dot(Vec8f a, Vec8f b) {
 		return _mm256_dp_ps(a, b, mask);
 	}
 
 	// Conditionally multiply the packed double-precision (64-bit) floating-point elements in a and b using the high 4 bits in imm8, 
 	// sum the two products, and conditionally store the sum in dst using the low 4 bits of imm8.
 	template<int mask>
-	ECS_INLINE Vec2d ECS_VECTORCALL Dot(Vec2d a, Vec2d b) {
+	Vec2d ECS_VECTORCALL Dot(Vec2d a, Vec2d b) {
 		return _mm_dp_pd(a, b, mask);
 	}
 
@@ -163,7 +164,7 @@ namespace ECSEngine {
 	dst[MAX:256] := 0
 	*/
 	template<int mask>
-	ECS_INLINE Vec8f ECS_VECTORCALL Permute2f128(Vec8f a, Vec8f b) {
+	Vec8f ECS_VECTORCALL Permute2f128(Vec8f a, Vec8f b) {
 		return _mm256_permute2f128_ps(a, b, mask);
 	}
 
@@ -186,7 +187,7 @@ namespace ECSEngine {
 	dst[MAX:256] := 0
 	*/
 	template<int mask>
-	ECS_INLINE Vec4d ECS_VECTORCALL Permute2d128(Vec4d a, Vec4d b) {
+	Vec4d ECS_VECTORCALL Permute2d128(Vec4d a, Vec4d b) {
 		return _mm256_permute2f128_pd(a, b, mask);
 	}
 
@@ -212,7 +213,7 @@ namespace ECSEngine {
 	dst[MAX:256] := 0
 	*/
 	template<int mask>
-	ECS_INLINE Vec4d ECS_VECTORCALL Permute4x64(Vec4d a) {
+	Vec4d ECS_VECTORCALL Permute4x64(Vec4d a) {
 		return _mm256_permute4x64_pd(a, mask);
 	}
 

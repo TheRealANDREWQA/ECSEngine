@@ -1340,9 +1340,6 @@ namespace ECSEngine {
 					}
 
 					DefaultHoverableAction(action_data);
-					float2 region_position = system->GetDockspaceRegionPosition(dockspace, border_index, dockspace_mask);
-					float2 region_scale = system->GetDockspaceRegionScale(dockspace, border_index, dockspace_mask);
-					system->SetSystemDrawRegion({ region_position, region_scale });
 				}
 			}
 			else {

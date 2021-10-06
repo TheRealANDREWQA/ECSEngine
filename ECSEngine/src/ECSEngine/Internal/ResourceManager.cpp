@@ -646,7 +646,7 @@ namespace ECSEngine {
 				return nullptr;
 			}
 
-			texture_view = m_graphics->CreateTexture2DShaderView(texture).view;
+			texture_view = m_graphics->CreateTextureShaderView(texture).view;
 		}
 
 		return texture_view;

@@ -9,14 +9,101 @@
 
 namespace ECSEngine {
 
+	constexpr const char* SHADER_ENTRY_POINT = "main";
+
 	ECS_MICROSOFT_WRL;
 
 #ifdef ECSENGINE_PLATFORM_WINDOWS
 
 #ifdef ECSENGINE_DIRECTX11
 
+	enum SHADER_ORDER {
+		ECS_SHADER_VERTEX,
+		ECS_SHADER_PIXEL,
+		ECS_SHADER_DOMAIN,
+		ECS_SHADER_HULL,
+		ECS_SHADER_GEOMETRY,
+		ECS_SHADER_COMPUTE
+	};
+
+	constexpr const char* SHADER_COMPILE_TARGET[] = {
+		"vs_4_0",
+		"vs_5_0",
+		"ps_4_0",
+		"ps_5_0",
+		"ds_4_0",
+		"ds_5_0",
+		"hs_4_0",
+		"hs_5_0",
+		"gs_4_0",
+		"gs_5_0",
+		"cs_4_0",
+		"cs_5_0"
+	};
+
+#define CreateShaderFromBlob(shader_type, blob) HRESULT create_result; \
+	create_result = m_device->Create##shader_type##Shader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &shader.shader); \
+	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating " TEXT(STRING(shader_type)) L" shader failed.", true); \
+\
+	blob->Release(); 
+
+#define CreateShaderByteCode(shader_type) shader_type##Shader shader; \
+	HRESULT result; \
+	ID3DBlob* blob; \
+\
+	ECS_TEMP_STRING(null_terminated_path, 256); \
+	null_terminated_path.Copy(byte_code); \
+	null_terminated_path[byte_code.size] = L'\0'; \
+\
+	result = D3DReadFileToBlob(null_terminated_path.buffer, &blob); \
+	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading " TEXT(STRING(shader_type)) L" shader path failed.", true); \
+\
+	CreateShaderFromBlob(shader_type, blob)
+
+#define CreateShaderByteCodeWithPath(shader_type, path) shader_type##Shader shader; \
+	HRESULT result; \
+	ID3DBlob* blob; \
+\
+	result = D3DReadFileToBlob(path, &blob); \
+	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading " TEXT(STRING(shader_type)) L" shader path failed.", true); \
+\
+	CreateShaderFromBlob(shader_type, blob)
+
+#define CreateShaderByteCodeAndSourceCode(shader_type) wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts((source_code.size + 1) * sizeof(wchar_t), alignof(wchar_t)); \
+	memcpy(allocation, source_code.buffer, source_code.size * sizeof(wchar_t)); \
+	allocation[source_code.size] = L'\0'; \
+	CreateShaderByteCodeWithPath(shader_type, allocation) \
+	shader.path = { allocation, source_code.size }; 
+
+#define CreateShaderFromSourceCode(shader_type, shader_order) shader_type##Shader shader; \
+\
+	wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (source_code.size + 1), alignof(wchar_t)); \
+	memcpy(allocation, source_code.buffer, sizeof(wchar_t)* source_code.size); \
+	allocation[source_code.size] = L'\0'; \
+	shader.path = { allocation, source_code.size }; \
+\
+	D3D_SHADER_MACRO macros[32]; \
+	memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size); \
+	macros[options.macros.size] = { NULL, NULL }; \
+\
+	const char* target = SHADER_COMPILE_TARGET[shader_order + options.target]; \
+\
+	unsigned int compile_flags = 0; \
+	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); \
+	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); \
+	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); \
+	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); \
+	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); \
+\
+	ID3DBlob* blob; \
+	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, nullptr); \
+	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling " TEXT(STRING(shader_type)) L" shader failed.", true); \
+	CreateShaderFromBlob(shader_type, blob); 
+
+
 	Graphics::Graphics(HWND hWnd, const GraphicsDescriptor* descriptor) 
-		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator)
+		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
+		m_bound_targets(m_bound_render_targets, 1)
 	{
 		constexpr float resize_factor = 1.0f;
 		m_window_size.x = descriptor->window_size.x * resize_factor;
@@ -62,7 +149,6 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Initializing device and swap chain failed!", true);
 
-		m_auto_context = m_context;
 		result = m_device->CreateDeferredContext(0, m_deferred_context.GetAddressOf());
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating deferred context failed!", true);
@@ -86,6 +172,8 @@ namespace ECSEngine {
 		m_context->OMSetDepthStencilState(depth_stencil_state.Get(), 1u);
 
 		m_context->OMSetRenderTargets(1u, &m_target_view.target, m_depth_stencil_view.view);
+		m_bound_render_targets[0] = m_target_view;
+		m_current_depth_stencil = m_depth_stencil_view;
 
 		D3D11_RENDER_TARGET_BLEND_DESC render_target_descriptor = {};
 		render_target_descriptor.BlendEnable = TRUE;
@@ -131,7 +219,7 @@ namespace ECSEngine {
 
 		D3D11_RASTERIZER_DESC rasterizer_state = { };
 		rasterizer_state.AntialiasedLineEnable = TRUE;
-		rasterizer_state.CullMode = D3D11_CULL_NONE;
+		rasterizer_state.CullMode = D3D11_CULL_BACK;
 		rasterizer_state.FillMode = D3D11_FILL_SOLID;
 		rasterizer_state.DepthClipEnable = TRUE;
 		rasterizer_state.FrontCounterClockwise = FALSE;
@@ -142,418 +230,582 @@ namespace ECSEngine {
 		m_context->RSSetState(state);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::BindVertexBuffer(VertexBuffer buffer, UINT slot) {
-		BindVertexBuffer(buffer, m_auto_context.Get(), slot);
+		ECSEngine::BindVertexBuffer(buffer, m_context.Get(), slot);
 	}
 
-	void Graphics::BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot) {
-		const UINT offset = 0u;
-		context->IASetVertexBuffers(slot, 1u, &buffer.buffer, &buffer.stride, &offset);
-	}
-
-	void Graphics::BindVertexBufferImmediate(VertexBuffer buffer, UINT slot) {
-		BindVertexBuffer(buffer, m_context.Get(), slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindVertexBuffers(Stream<VertexBuffer> buffers, UINT start_slot) {
-		BindVertexBuffers(buffers, m_auto_context.Get(), start_slot);
+		ECSEngine::BindVertexBuffers(buffers, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, UINT start_slot) {
-		ID3D11Buffer* v_buffers[256];
-		UINT strides[256];
-		UINT offsets[256] = { 0 };
-		for (size_t index = 0; index < buffers.size; index++) {
-			v_buffers[index] = buffers[index].buffer;
-			strides[index] = buffers[index].stride;
-		}
-		context->IASetVertexBuffers(start_slot, buffers.size, v_buffers, strides, offsets);
-	}
-
-	void Graphics::BindVertexBuffersImmediate(Stream<VertexBuffer> buffers, UINT start_slot) {
-		BindVertexBuffers(buffers, m_context.Get(), start_slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindIndexBuffer(IndexBuffer index_buffer) {
-		BindIndexBuffer(index_buffer, m_auto_context.Get());
+		ECSEngine::BindIndexBuffer(index_buffer, m_context.Get());
 	}
-
-	void Graphics::BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context) {
-		const UINT index_offset = 0u;
-		context->IASetIndexBuffer(index_buffer.buffer, DXGI_FORMAT_R32_UINT, index_offset);
-	}
-
-	void Graphics::BindIndexBufferImmediate(IndexBuffer index_buffer) {
-		BindIndexBuffer(index_buffer, m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindInputLayout(InputLayout input_layout) {
-		BindInputLayout(input_layout, m_auto_context.Get());
+		ECSEngine::BindInputLayout(input_layout, m_context.Get());
 	}
 
-	void Graphics::BindInputLayout(InputLayout input_layout, GraphicsContext* context) {
-		context->IASetInputLayout(input_layout.layout);
-	}
-
-	void Graphics::BindInputLayoutImmediate(InputLayout input_layout) {
-		BindInputLayout(input_layout, m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindVertexShader(VertexShader shader) {
-		BindVertexShader(shader, m_auto_context.Get());
+		ECSEngine::BindVertexShader(shader, m_context.Get());
 	}
 
-	void Graphics::BindVertexShader(VertexShader shader, GraphicsContext* context) {
-		context->VSSetShader(shader.shader, nullptr, 0u);
-	}
-
-	void Graphics::BindVertexShaderImmediate(VertexShader shader) {
-		BindVertexShader(shader, m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindPixelShader(PixelShader shader) {
-		BindPixelShader(shader, m_auto_context.Get());
+		ECSEngine::BindPixelShader(shader, m_context.Get());
 	}
 
-	void Graphics::BindPixelShader(PixelShader shader, GraphicsContext* context) {
-		context->PSSetShader(shader.shader, nullptr, 0u);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindDomainShader(DomainShader shader) {
+		ECSEngine::BindDomainShader(shader, m_context.Get());
 	}
 
-	void Graphics::BindPixelShaderImmediate(PixelShader shader) {
-		BindPixelShader(shader, m_context.Get());
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindHullShader(HullShader shader) {
+		ECSEngine::BindHullShader(shader, m_context.Get());
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindGeometryShader(GeometryShader shader) {
+		ECSEngine::BindGeometryShader(shader, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeShader(ComputeShader shader) {
+		ECSEngine::BindComputeShader(shader, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindPixelConstantBuffer(ConstantBuffer buffer, UINT slot) {
-		BindPixelConstantBuffer(buffer, m_auto_context.Get(), slot);
+		ECSEngine::BindPixelConstantBuffer(buffer, m_context.Get(), slot);
 	}
 
-	void Graphics::BindPixelConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
-		context->PSSetConstantBuffers(slot, 1u, &buffer.buffer);
-	}
-
-	void Graphics::BindPixelConstantBufferImmediate(ConstantBuffer buffer, UINT slot) {
-		BindPixelConstantBuffer(buffer, m_context.Get(), slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindPixelConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot) {
-		BindPixelConstantBuffers(buffers, m_auto_context.Get(), start_slot);
+		ECSEngine::BindPixelConstantBuffers(buffers, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindPixelConstantBuffers(
-		Stream<ConstantBuffer> buffers, 
-		GraphicsContext* context,
-		UINT start_slot
-	) {
-		ID3D11Buffer* p_buffers[256];
-		for (size_t index = 0; index < buffers.size; index++) {
-			p_buffers[index] = buffers[index].buffer;
-		}
-		context->PSSetConstantBuffers(start_slot, buffers.size, p_buffers);
-	}
-
-	void Graphics::BindPixelConstantBuffersImmediate(Stream<ConstantBuffer> buffers, UINT start_slot) {
-		BindPixelConstantBuffers(buffers, m_context.Get(), start_slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindVertexConstantBuffer(ConstantBuffer buffer, UINT slot) {
-		BindVertexConstantBuffer(buffer, m_auto_context.Get(), slot);
+		ECSEngine::BindVertexConstantBuffer(buffer, m_context.Get(), slot);
 	}
 
-	void Graphics::BindVertexConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
-		context->VSSetConstantBuffers(slot, 1u, &buffer.buffer);
-	}
-
-	void Graphics::BindVertexConstantBufferImmediate(ConstantBuffer buffer, UINT slot) {
-		BindVertexConstantBuffer(buffer, m_context.Get(), slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindVertexConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot) {
-		BindVertexConstantBuffers(buffers, m_auto_context.Get(), start_slot);
+		ECSEngine::BindVertexConstantBuffers(buffers, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindVertexConstantBuffers(
-		Stream<ConstantBuffer> buffers, 
-		GraphicsContext* context,
-		UINT start_slot
-	) {
-		ID3D11Buffer* v_buffers[256];
-		for (size_t index = 0; index < buffers.size; index++) {
-			v_buffers[index] = buffers[index].buffer;
-		}
-		context->VSSetConstantBuffers(start_slot, buffers.size, v_buffers);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindDomainConstantBuffer(ConstantBuffer buffer, UINT slot) {
+		ECSEngine::BindDomainConstantBuffer(buffer, m_context.Get(), slot);
 	}
 
-	void Graphics::BindVertexConstantBuffersImmediate(Stream<ConstantBuffer> buffers, UINT start_slot) {
-		BindVertexConstantBuffers(buffers, m_context.Get(), start_slot);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot) {
+		ECSEngine::BindDomainConstantBuffers(buffers, m_context.Get(), start_slot);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindHullConstantBuffer(ConstantBuffer buffer, UINT slot) {
+		ECSEngine::BindHullConstantBuffer(buffer, m_context.Get(), slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindHullConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot) {
+		ECSEngine::BindHullConstantBuffers(buffers, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindGeometryConstantBuffer(ConstantBuffer buffer, UINT slot) {
+		ECSEngine::BindGeometryConstantBuffer(buffer, m_context.Get(), slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot) {
+		ECSEngine::BindGeometryConstantBuffers(buffers, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeConstantBuffer(ConstantBuffer buffer, UINT slot) {
+		ECSEngine::BindComputeConstantBuffer(buffer, m_context.Get(), slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot) {
+		ECSEngine::BindComputeConstantBuffers(buffers, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindTopology(Topology topology)
 	{
-		BindTopology(topology, m_auto_context.Get());
+		ECSEngine::BindTopology(topology, m_context.Get());
 	}
 
-	void Graphics::BindTopology(Topology topology, GraphicsContext* context)
-	{
-		context->IASetPrimitiveTopology(topology.value);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindPixelResourceView(ResourceView component, UINT slot) {
+		ECSEngine::BindPixelResourceView(component, m_context.Get(), slot);
 	}
 
-	void Graphics::BindTopologyImmediate(Topology topology)
-	{
-		BindTopology(topology, m_context.Get());
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindPixelResourceViews(Stream<ResourceView> views, UINT start_slot) {
+		ECSEngine::BindPixelResourceViews(views, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindPSResourceView(ResourceView component, UINT slot) {
-		BindPSResourceView(component, m_auto_context.Get(), slot);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindVertexResourceView(ResourceView component, UINT slot) {
+		ECSEngine::BindVertexResourceView(component, m_context.Get(), slot);
 	}
 
-	void Graphics::BindPSResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
-		context->PSSetShaderResources(slot, 1, &component.view);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindVertexResourceViews(Stream<ResourceView> views, UINT start_slot) {
+		ECSEngine::BindVertexResourceViews(views, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindPSResourceViewImmediate(ResourceView component, UINT slot) {
-		BindPSResourceView(component, m_context.Get(), slot);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindDomainResourceView(ResourceView component, UINT slot) {
+		ECSEngine::BindDomainResourceView(component, m_context.Get(), slot);
 	}
 
-	void Graphics::BindPSResourceViews(Stream<ResourceView> views, UINT start_slot) {
-		BindPSResourceViews(views, m_auto_context.Get(), start_slot);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindDomainResourceViews(Stream<ResourceView> views, UINT start_slot) {
+		ECSEngine::BindDomainResourceViews(views, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindPSResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
-		ID3D11ShaderResourceView* resource_views[256];
-		for (size_t index = 0; index < views.size; index++) {
-			resource_views[index] = views[index].view;
-		}
-		context->PSSetShaderResources(start_slot, views.size, resource_views);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindHullResourceView(ResourceView component, UINT slot) {
+		ECSEngine::BindHullResourceView(component, m_context.Get(), slot);
 	}
 
-	void Graphics::BindPSResourceViewsImmediate(Stream<ResourceView> views, UINT start_slot) {
-		BindPSResourceViews(views, m_context.Get(), start_slot);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindHullResourceViews(Stream<ResourceView> views, UINT start_slot) {
+		ECSEngine::BindHullResourceViews(views, m_context.Get(), start_slot);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindGeometryResourceView(ResourceView component, UINT slot) {
+		ECSEngine::BindGeometryResourceView(component, m_context.Get(), slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindGeometryResourceViews(Stream<ResourceView> views, UINT start_slot) {
+		ECSEngine::BindGeometryResourceViews(views, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeResourceView(ResourceView component, UINT slot) {
+		ECSEngine::BindComputeResourceView(component, m_context.Get(), slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeResourceViews(Stream<ResourceView> views, UINT start_slot) {
+		ECSEngine::BindComputeResourceViews(views, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindSamplerState(SamplerState sampler, UINT slot)
 	{
-		BindSamplerState(sampler, m_auto_context.Get(), slot);
+		ECSEngine::BindSamplerState(sampler, m_context.Get(), slot);
 	}
 
-	void Graphics::BindSamplerState(SamplerState sampler, GraphicsContext* context, UINT slot)
-	{
-		context->PSSetSamplers(slot, 1u, &sampler.sampler);
-	}
-
-	void Graphics::BindSamplerStateImmediate(SamplerState sampler, UINT slot)
-	{
-		BindSamplerState(sampler, m_context.Get(), slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindSamplerStates(Stream<SamplerState> samplers, UINT start_slot)
 	{
-		BindSamplerStates(samplers, m_auto_context.Get(), start_slot);
+		ECSEngine::BindSamplerStates(samplers, m_context.Get(), start_slot);
 	}
 
-	void Graphics::BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, UINT start_slot)
-	{
-		ID3D11SamplerState* states[32];
-		for (size_t index = 0; index < samplers.size; index++) {
-			states[index] = samplers[index].sampler;
-		}
-		context->PSSetSamplers(start_slot, samplers.size, states);
-	}
-
-	void Graphics::BindSamplerStatesImmediate(Stream<SamplerState> samplers, UINT start_slot)
-	{
-		BindSamplerStates(samplers, m_context.Get(), start_slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view)
 	{
-		BindRenderTargetView(render_view, depth_stencil_view, m_auto_context.Get());
+		ECSEngine::BindRenderTargetView(render_view, depth_stencil_view, m_context.Get());
+		m_bound_targets[0] = render_view;
+		m_bound_targets.size = 1;
+		m_current_depth_stencil = depth_stencil_view;
 	}
 
-	void Graphics::BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view, GraphicsContext* context)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindPixelUAView(UAView view, UINT start_slot)
 	{
-		context->OMSetRenderTargets(1u, &render_view.target, depth_stencil_view.view);
+		m_context->OMSetRenderTargetsAndUnorderedAccessViews(
+			D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL, 
+			nullptr, 
+			nullptr,
+			m_bound_targets.size,
+			1u,
+			&view.view, 
+			nullptr
+		);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeUAView(UAView view, UINT start_slot)
+	{
+		ECSEngine::BindComputeUAView(view, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindPixelUAViews(Stream<UAView> views, UINT start_slot) {
+		m_context->OMSetRenderTargetsAndUnorderedAccessViews(
+			D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL, 
+			nullptr, 
+			nullptr,
+			m_bound_targets.size, 
+			views.size, 
+			(ID3D11UnorderedAccessView**)views.buffer, 
+			nullptr
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindComputeUAViews(Stream<UAView> views, UINT start_slot) {
+		ECSEngine::BindComputeUAViews(views, m_context.Get(), start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindRenderTargetViewFromInitialViews()
 	{
-		m_auto_context->OMSetRenderTargets(1u, &m_target_view.target, m_depth_stencil_view.view);
+		m_context->OMSetRenderTargets(1u, &m_target_view.target, m_depth_stencil_view.view);
+		m_bound_targets[0] = m_target_view;
+		m_bound_targets.size = 1;
+		m_current_depth_stencil = m_depth_stencil_view;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindRenderTargetViewFromInitialViews(GraphicsContext* context)
 	{
 		context->OMSetRenderTargets(1u, &m_target_view.target, m_depth_stencil_view.view);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::BindViewport(float top_left_x, float top_left_y, float width, float height, float min_depth, float max_depth)
 	{
-		D3D11_VIEWPORT viewport = { 0 };
-		viewport.TopLeftX = top_left_x;
-		viewport.TopLeftY = top_left_y;
-		viewport.Width = width;
-		viewport.Height = height;
-		viewport.MinDepth = min_depth;
-		viewport.MaxDepth = max_depth;
-
-		m_auto_context->RSSetViewports(1u, &viewport);
+		ECSEngine::BindViewport(top_left_x, top_left_y, width, height, min_depth, max_depth, m_context.Get());
 	}
 
-	void Graphics::BindViewport(float top_left_x, float top_left_y, float width, float height, float min_depth, float max_depth, GraphicsContext* context)
-	{
-		D3D11_VIEWPORT viewport = { 0 };
-		viewport.TopLeftX = top_left_x;
-		viewport.TopLeftY = top_left_y;
-		viewport.Width = width;
-		viewport.Height = height;
-		viewport.MinDepth = min_depth;
-		viewport.MaxDepth = max_depth;
-
-		/*char characters1[128];
-		char characters2[128];
-		char characters3[128];
-		char characters4[128];
-		char characters5[128];
-		char characters6[128];
-		char characters7[128];
-		char characters8[128];
-		Stream<char> float1 = Stream<char>(characters1, 0);
-		Stream<char> float2 = Stream<char>(characters2, 0);
-		Stream<char> float3 = Stream<char>(characters3, 0);
-		Stream<char> float4 = Stream<char>(characters4, 0);
-		Stream<char> float5 = Stream<char>(characters5, 0);
-		Stream<char> float6 = Stream<char>(characters6, 0);
-		Stream<char> float7 = Stream<char>(characters7, 0);
-		Stream<char> float8 = Stream<char>(characters8, 0);
-		function::ConvertFloatToChars<3>(viewport.Width, float1);
-		function::ConvertFloatToChars<3>(viewport.Height, float2);
-		function::ConvertFloatToChars<3>(width, float3);
-		function::ConvertFloatToChars<3>(height, float4);
-		function::ConvertFloatToChars<3>(top_left_x, float5);
-		function::ConvertFloatToChars<3>(top_left_y, float6);
-		function::ConvertFloatToChars<3>(viewport.TopLeftX, float7);
-		function::ConvertFloatToChars<3>(viewport.TopLeftY, float8);
-
-		if (viewport.TopLeftX < 0.0f || viewport.TopLeftX > 1370.0f || viewport.TopLeftY < 0.0f || viewport.TopLeftY > 800.0f) {
-
-			wchar_t* c1 = function::ConvertASCIIToWide(characters5);
-			wchar_t* c2 = function::ConvertASCIIToWide(characters6);
-			OutputDebugString(c1);
-			OutputDebugString(c2);
-
-			__debugbreak();
-		}*/
-
-		context->RSSetViewports(1u, &viewport);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::BindDefaultViewport() {
 		BindViewport(0.0f, 0.0f, m_window_size.x, m_window_size.y, 0.0f, 1.0f);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::BindDefaultViewport(GraphicsContext* context) {
-		BindViewport(0.0f, 0.0f, m_window_size.x, m_window_size.y, 0.0f, 1.0f, context);
+		ECSEngine::BindViewport(0.0f, 0.0f, m_window_size.x, m_window_size.y, 0.0f, 1.0f, context);
 	}
 
-	IndexBuffer Graphics::ConstructIndexBuffer(Stream<unsigned int> indices)
-	{ 
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindMesh(const Mesh& mesh)
+	{
+		ECSEngine::BindMesh(mesh, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindMesh(const Mesh& mesh, Stream<ECS_MESH_INDEX> mapping)
+	{
+		ECSEngine::BindMesh(mesh, m_context.Get(), mapping);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindMaterial(const Material& material) {
+		ECSEngine::BindMaterial(material, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	template<typename IntType>
+	IndexBuffer CreateIndexBufferImpl(Graphics* graphics, Stream<IntType> indices) {
 		IndexBuffer component;
 		component.count = indices.size;
+		component.int_size = sizeof(IntType);
+
 		HRESULT result;
 		D3D11_BUFFER_DESC index_buffer_descriptor = {};
-		index_buffer_descriptor.ByteWidth = UINT(component.count * sizeof(unsigned int));
-		index_buffer_descriptor.Usage = D3D11_USAGE_DEFAULT;
+		index_buffer_descriptor.ByteWidth = UINT(component.count * sizeof(IntType));
+		index_buffer_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		index_buffer_descriptor.BindFlags = D3D11_BIND_INDEX_BUFFER;
 		index_buffer_descriptor.CPUAccessFlags = 0;
 		index_buffer_descriptor.MiscFlags = 0;
-		index_buffer_descriptor.StructureByteStride = sizeof(unsigned int);
+		index_buffer_descriptor.StructureByteStride = sizeof(IntType);
 
 		D3D11_SUBRESOURCE_DATA initial_data_index = {};
 		initial_data_index.pSysMem = indices.buffer;
 
-		result = m_device->CreateBuffer(&index_buffer_descriptor, &initial_data_index, &component.buffer);
+		result = graphics->m_device->CreateBuffer(&index_buffer_descriptor, &initial_data_index, &component.buffer);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
 		return component;
 	}
 
-	PixelShader Graphics::ConstructPSShader(const wchar_t* path)
-	{
-		PixelShader component;
-		component.path = function::StringCopyTs(m_allocator, path);
-		HRESULT result;
-		Microsoft::WRL::ComPtr<ID3DBlob> blob;
+	// ------------------------------------------------------------------------------------------------------------------------
 
-		result = D3DReadFileToBlob(path, &blob);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading pixel shader failed", true);
-
-		result = m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &component.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating pixel shader failed", true);
-
-		return component;
+	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned char> indices)
+	{ 
+		return CreateIndexBufferImpl(this, indices);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned short> indices)
+	{
+		return CreateIndexBufferImpl(this, indices);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned int> indices)
+	{
+		return CreateIndexBufferImpl(this, indices);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 	
-	PixelShader Graphics::ConstructPSShader(Stream<wchar_t> path)
+	PixelShader Graphics::CreatePixelShader(Stream<wchar_t> byte_code)
 	{
-		PixelShader component;
-		wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts((path.size + 1) * sizeof(wchar_t), alignof(wchar_t));
-		memcpy(allocation, path.buffer, path.size * sizeof(wchar_t));
-		allocation[path.size] = L'\0';
-		component.path = { allocation, path.size };
-
-		HRESULT result;
-		Microsoft::WRL::ComPtr<ID3DBlob> blob;
-
-		result = D3DReadFileToBlob(component.path.buffer, &blob);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading pixel shader failed", true);
-
-		result = m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &component.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating pixel shader failed", true);
-
-		return component;
+		CreateShaderByteCode(Pixel);
+		return shader;
 	}
 
-	VertexShader Graphics::ConstructVSShader(const wchar_t* path)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	PixelShader Graphics::CreatePixelShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code)
 	{
-		VertexShader component;
-		component.path = function::StringCopyTs(m_allocator, path);
+		CreateShaderByteCodeAndSourceCode(Pixel);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	PixelShader Graphics::CreatePixelShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options)
+	{
+		CreateShaderFromSourceCode(Pixel, ECS_SHADER_PIXEL);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+	// The vertex shader must not have the blob released
+	VertexShader Graphics::CreateVertexShader(Stream<wchar_t> byte_code) {
+		VertexShader shader;
+	
+		ECS_TEMP_STRING(null_terminated_path, 256);
+		null_terminated_path.Copy(byte_code);
+		null_terminated_path[byte_code.size] = L'\0';
+
 		HRESULT result;
 
-		result = D3DReadFileToBlob(path, &component.byte_code);
+		result = D3DReadFileToBlob(null_terminated_path.buffer, &shader.byte_code);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading vertex shader location failed", true);
 
 		result = m_device->CreateVertexShader(
-			component.byte_code->GetBufferPointer(), 
-			component.byte_code->GetBufferSize(), 
+			shader.byte_code->GetBufferPointer(),
+			shader.byte_code->GetBufferSize(),
 			nullptr,
-			&component.shader
+			&shader.shader
 		);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex shader failed", true);
 
-		return component;
+		return shader;
 	}
 
-	VertexShader Graphics::ConstructVSShader(Stream<wchar_t> path) {
-		VertexShader component;
-		wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (path.size + 1), alignof(wchar_t));
-		memcpy(allocation, path.buffer, sizeof(wchar_t) * path.size);
-		allocation[path.size] = L'\0';
-		component.path = { allocation, path.size };
+	// ------------------------------------------------------------------------------------------------------------------------
+	// The vertex shader must not have its blob released
+	VertexShader Graphics::CreateVertexShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
+		VertexShader shader;
+
+		wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (source_code.size + 1), alignof(wchar_t));
+		memcpy(allocation, source_code.buffer, sizeof(wchar_t) * source_code.size);
+		allocation[source_code.size] = L'\0';
+		shader.path = { allocation, source_code.size };
 
 		HRESULT result;
 
-		result = D3DReadFileToBlob(component.path.buffer, &component.byte_code);
+		result = D3DReadFileToBlob(shader.path.buffer, &shader.byte_code);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading vertex shader location failed", true);
 
 		result = m_device->CreateVertexShader(
-			component.byte_code->GetBufferPointer(),
-			component.byte_code->GetBufferSize(),
+			shader.byte_code->GetBufferPointer(),
+			shader.byte_code->GetBufferSize(),
 			nullptr,
-			&component.shader
+			&shader.shader
 		);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex shader failed", true);
 
-		return component;
+		return shader;
 	}
 
-	InputLayout Graphics::ConstructInputLayout(
+	// ------------------------------------------------------------------------------------------------------------------------
+	// The vertex shader must not have its blob released
+	VertexShader Graphics::CreateVertexShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		VertexShader shader; 
+			
+		wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (source_code.size + 1), alignof(wchar_t)); 
+		memcpy(allocation, source_code.buffer, sizeof(wchar_t) * source_code.size); 
+		allocation[source_code.size] = L'\0'; 
+		shader.path = { allocation, source_code.size }; 
+			
+		D3D_SHADER_MACRO macros[32]; 
+		memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size); 
+		macros[options.macros.size] = { NULL, NULL }; 
+			
+		const char* target = SHADER_COMPILE_TARGET[ECS_SHADER_VERTEX + options.target]; 
+			
+		unsigned int compile_flags = 0; 
+		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); 
+		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); 
+		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); 
+		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); 
+		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); 
+			
+		ID3DBlob* blob; 
+		HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, nullptr); 
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling Vertex shader failed.", true); 
+		
+		result = m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &shader.shader); \
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Vertex shader failed.", true); \
+
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DomainShader Graphics::CreateDomainShader(Stream<wchar_t> byte_code)
+	{
+		CreateShaderByteCode(Domain);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DomainShader Graphics::CreateDomainShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code)
+	{
+		CreateShaderByteCodeAndSourceCode(Domain);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DomainShader Graphics::CreateDomainShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options)
+	{
+		CreateShaderFromSourceCode(Domain, ECS_SHADER_DOMAIN);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	HullShader Graphics::CreateHullShader(Stream<wchar_t> byte_code) {
+		CreateShaderByteCode(Hull);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	HullShader Graphics::CreateHullShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
+		CreateShaderByteCodeAndSourceCode(Hull);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	HullShader Graphics::CreateHullShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		CreateShaderFromSourceCode(Hull, ECS_SHADER_HULL);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GeometryShader Graphics::CreateGeometryShader(Stream<wchar_t> byte_code) {
+		CreateShaderByteCode(Geometry);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GeometryShader Graphics::CreateGeometryShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
+		CreateShaderByteCodeAndSourceCode(Geometry);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GeometryShader Graphics::CreateGeometryShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		CreateShaderFromSourceCode(Geometry, ECS_SHADER_GEOMETRY);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ComputeShader Graphics::CreateComputeShader(Stream<wchar_t> byte_code) {
+		CreateShaderByteCode(Compute);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ComputeShader Graphics::CreateComputeShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
+		CreateShaderByteCodeAndSourceCode(Compute);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ComputeShader Graphics::CreateComputeShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		CreateShaderFromSourceCode(Compute, ECS_SHADER_COMPUTE);
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	InputLayout Graphics::CreateInputLayout(
 		Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, 
 		VertexShader vertex_shader
 	)
@@ -573,7 +825,9 @@ namespace ECSEngine {
 		return component;
 	}
 
-	VertexBuffer Graphics::ConstructVertexBuffer(size_t element_size, size_t element_count, D3D11_USAGE usage, unsigned int cpuFlags, unsigned int miscFlags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	VertexBuffer Graphics::CreateVertexBuffer(size_t element_size, size_t element_count, D3D11_USAGE usage, unsigned int cpuFlags, unsigned int miscFlags)
 	{
 		VertexBuffer component;
 		component.stride = element_size;
@@ -593,7 +847,9 @@ namespace ECSEngine {
 		return component;
 	}
 
-	VertexBuffer Graphics::ConstructVertexBuffer(size_t element_size, size_t element_count, const void* buffer, D3D11_USAGE usage, unsigned int cpuFlags, unsigned int miscFlags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	VertexBuffer Graphics::CreateVertexBuffer(size_t element_size, size_t element_count, const void* buffer, D3D11_USAGE usage, unsigned int cpuFlags, unsigned int miscFlags)
 	{
 		VertexBuffer component;
 		component.stride = element_size;
@@ -615,7 +871,9 @@ namespace ECSEngine {
 		return component;
 	}
 
-	ConstantBuffer Graphics::ConstructConstantBuffer(size_t byte_size, const void* buffer, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ConstantBuffer Graphics::CreateConstantBuffer(size_t byte_size, const void* buffer, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
 	{
 		ConstantBuffer component;
 		HRESULT result;
@@ -636,7 +894,9 @@ namespace ECSEngine {
 		return component;
 	}
 
-	ConstantBuffer Graphics::ConstructConstantBuffer(size_t byte_size, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ConstantBuffer Graphics::CreateConstantBuffer(size_t byte_size, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
 	{
 		ConstantBuffer component;
 		HRESULT result;
@@ -654,7 +914,228 @@ namespace ECSEngine {
 		return component;
 	}
 
-	SamplerState Graphics::ConstructSamplerState(D3D11_SAMPLER_DESC descriptor)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	StandardBuffer Graphics::CreateStandardBuffer(size_t byte_size, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	{
+		StandardBuffer buffer;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+
+		buffer_descriptor.ByteWidth = byte_size;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
+		buffer_descriptor.MiscFlags = miscFlags;
+		buffer_descriptor.StructureByteStride = 0u;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	StandardBuffer Graphics::CreateStandardBuffer(size_t byte_size, const void* data, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	{
+		StandardBuffer buffer;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+
+		buffer_descriptor.ByteWidth = byte_size;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
+		buffer_descriptor.MiscFlags = miscFlags;
+		buffer_descriptor.StructureByteStride = 0u;
+
+		D3D11_SUBRESOURCE_DATA initial_data = {};
+		initial_data.pSysMem = data;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	StructuredBuffer Graphics::CreateStructuredBuffer(size_t element_size, size_t element_count, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	{
+		StructuredBuffer buffer;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
+		buffer_descriptor.MiscFlags = miscFlags | D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		buffer_descriptor.StructureByteStride = element_size;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating structred buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	StructuredBuffer Graphics::CreateStructuredBuffer(size_t element_size, size_t element_count, const void* data, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	{
+		StructuredBuffer buffer;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
+		buffer_descriptor.MiscFlags = miscFlags | D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		buffer_descriptor.StructureByteStride = element_size;
+
+		D3D11_SUBRESOURCE_DATA initial_data;
+		initial_data.pSysMem = data;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Structred Buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UABuffer Graphics::CreateUABuffer(size_t element_size, size_t element_count, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	{
+		UABuffer buffer;
+
+		buffer.element_count = element_count;
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+		
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.Usage = usage;
+		buffer_descriptor.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
+		buffer_descriptor.MiscFlags = miscFlags;
+		buffer_descriptor.StructureByteStride = 0u;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UA Buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UABuffer Graphics::CreateUABuffer(size_t element_size, size_t element_count, const void* data, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	{
+		UABuffer buffer;
+
+		buffer.element_count = element_count;
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.Usage = usage;
+		buffer_descriptor.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
+		buffer_descriptor.MiscFlags = miscFlags;
+		buffer_descriptor.StructureByteStride = 0u;
+
+		D3D11_SUBRESOURCE_DATA initial_data = {};
+		initial_data.pSysMem = data;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UA Buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	IndirectBuffer Graphics::CreateIndirectBuffer()
+	{
+		IndirectBuffer buffer;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+
+		// For draw indexed instaced we need:
+		// 
+		// UINT IndexCountPerInstance,
+		// UINT InstanceCount,
+	    // UINT StartIndexLocation,
+		// INT  BaseVertexLocation,
+		// UINT StartInstanceLocation
+
+		// and for draw instanced:
+		//  UINT VertexCountPerInstance,
+		//	UINT InstanceCount,
+		// UINT StartVertexLocation,
+		// UINT StartInstanceLocation
+		
+		// So a total of max 20 bytes needed
+
+		buffer_descriptor.ByteWidth = 20;
+		buffer_descriptor.Usage = D3D11_USAGE_DEFAULT;
+		buffer_descriptor.CPUAccessFlags = 0;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+		buffer_descriptor.StructureByteStride = 0;
+
+		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Indirect Buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	AppendStructuredBuffer Graphics::CreateAppendStructuredBuffer(size_t element_size, size_t element_count) {
+		AppendStructuredBuffer buffer;
+
+		buffer.element_count = element_count;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.Usage = D3D11_USAGE_DEFAULT;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		buffer_descriptor.CPUAccessFlags = 0;
+		buffer_descriptor.StructureByteStride = element_size;
+
+		HRESULT result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Append Buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ConsumeStructuredBuffer Graphics::CreateConsumeStructuredBuffer(size_t element_size, size_t element_count) {
+		ConsumeStructuredBuffer buffer;
+
+		buffer.element_count = element_count;
+		D3D11_BUFFER_DESC buffer_descriptor = {};
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.Usage = D3D11_USAGE_DEFAULT;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		buffer_descriptor.CPUAccessFlags = 0;
+		buffer_descriptor.StructureByteStride = element_size;
+
+		HRESULT result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Consume Buffer failed.", true);
+
+		return buffer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	SamplerState Graphics::CreateSamplerState(D3D11_SAMPLER_DESC descriptor)
 	{
 		SamplerState state;
 		HRESULT result = m_device->CreateSamplerState(&descriptor, &state.sampler);
@@ -662,6 +1143,8 @@ namespace ECSEngine {
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Constructing sampler state failed!", true);
 		return state;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::CreateInitialRenderTargetView(bool gamma_corrected)
 	{
@@ -685,6 +1168,8 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed", true);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::CreateInitialDepthStencilView()
 	{
@@ -717,6 +1202,8 @@ namespace ECSEngine {
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating depth stencil view failed", true);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	GraphicsContext* Graphics::CreateDeferredContext(UINT context_flags)
 	{
 		GraphicsContext* context;
@@ -724,7 +1211,9 @@ namespace ECSEngine {
 		return context;
 	}
 
-	Texture1D Graphics::CreateTexture1D(const GraphicsTexture1DDescriptor* ecs_descriptor)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	Texture1D Graphics::CreateTexture(const GraphicsTexture1DDescriptor* ecs_descriptor)
 	{
 		Texture1D resource;
 		D3D11_TEXTURE1D_DESC descriptor = { 0 };
@@ -752,7 +1241,9 @@ namespace ECSEngine {
 		return resource;
 	}
 
-	Texture2D Graphics::CreateTexture2D(const GraphicsTexture2DDescriptor* ecs_descriptor)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	Texture2D Graphics::CreateTexture(const GraphicsTexture2DDescriptor* ecs_descriptor)
 	{
 		Texture2D resource;
 		D3D11_TEXTURE2D_DESC descriptor = { 0 };
@@ -785,7 +1276,9 @@ namespace ECSEngine {
 		return resource;
 	}
 
-	Texture3D Graphics::CreateTexture3D(const GraphicsTexture3DDescriptor* ecs_descriptor)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	Texture3D Graphics::CreateTexture(const GraphicsTexture3DDescriptor* ecs_descriptor)
 	{
 		Texture3D resource;
 		D3D11_TEXTURE3D_DESC descriptor = { 0 };
@@ -815,7 +1308,9 @@ namespace ECSEngine {
 		return resource;
 	}
 
-	ResourceView Graphics::CreateTexture1DShaderView(
+	// ------------------------------------------------------------------------------------------------------------------------
+	
+	ResourceView Graphics::CreateTextureShaderView(
 		Texture1D texture, 
 		DXGI_FORMAT format, 
 		unsigned int most_detailed_mip,
@@ -837,11 +1332,25 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &component.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 1D Shader View!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 1D Shader View failed.", true);
 		return component;
 	}
 
-	ResourceView Graphics::CreateTexture2DShaderView(
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureShaderViewResource(Texture1D texture)
+	{
+		ResourceView view;
+
+		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"CReating Texture 1D Shader Entire View failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureShaderView(
 		Texture2D texture, 
 		DXGI_FORMAT format, 
 		unsigned int most_detailed_mip, 
@@ -863,11 +1372,25 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &component.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 2D Shader View!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 2D Shader View.", true);
 		return component;
 	}
 
-	ResourceView Graphics::CreateTexture3DShaderView(
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureShaderViewResource(Texture2D texture)
+	{
+		ResourceView view;
+
+		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 2D Shader Entire View failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureShaderView(
 		Texture3D texture,
 		DXGI_FORMAT format,
 		unsigned int most_detailed_mip,
@@ -889,9 +1412,47 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &component.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 3D Shader View!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 3D Shader View failed.", true);
 		return component;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureShaderViewResource(Texture3D texture)
+	{
+		ResourceView view;
+
+		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 3D Shader Entire View failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateBufferView(StandardBuffer buffer)
+	{
+		ResourceView view;
+
+		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, nullptr, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer view failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateBufferView(StructuredBuffer buffer)
+	{
+		ResourceView view;
+
+		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, nullptr, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating structured buffer view failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	RenderTargetView Graphics::CreateRenderTargetView(Texture2D texture)
 	{
@@ -904,6 +1465,8 @@ namespace ECSEngine {
 		return view;
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	DepthStencilView Graphics::CreateDepthStencilView(Texture2D texture)
 	{
 		HRESULT result;
@@ -915,46 +1478,191 @@ namespace ECSEngine {
 		return view;
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element)
+	{
+		UAView view;
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor;
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+		descriptor.Buffer.FirstElement = first_element;
+		descriptor.Buffer.NumElements = buffer.element_count - first_element;
+		descriptor.Buffer.Flags = 0;
+		descriptor.Format = format;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from UABuffer failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(IndirectBuffer buffer) {
+		UAView view;
+
+		// Max 5 uints can be written
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor;
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+		descriptor.Buffer.FirstElement = 0;
+		descriptor.Buffer.NumElements = 5;
+		descriptor.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
+		descriptor.Format = DXGI_FORMAT_R32_TYPELESS;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Indirect Buffer failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(AppendStructuredBuffer buffer) {
+		UAView view;
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor;
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+		descriptor.Buffer.FirstElement = 0;
+		descriptor.Buffer.NumElements = buffer.element_count;
+		descriptor.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_APPEND;
+		descriptor.Format = DXGI_FORMAT_UNKNOWN;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Append Buffer failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(ConsumeStructuredBuffer buffer) {
+		UAView view;
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor = {};
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+		descriptor.Buffer.FirstElement = 0;
+		descriptor.Buffer.NumElements = buffer.element_count;
+		descriptor.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_APPEND;
+		descriptor.Format = DXGI_FORMAT_UNKNOWN;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(Texture1D texture, unsigned int mip_slice) {
+		UAView view;
+
+		D3D11_TEXTURE1D_DESC texture_desc;
+		texture.tex->GetDesc(&texture_desc);
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor = {};
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1D;
+		descriptor.Texture1D.MipSlice = mip_slice;
+		descriptor.Format = texture_desc.Format;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(Texture2D texture, unsigned int mip_slice) {
+		UAView view;
+
+		D3D11_TEXTURE2D_DESC texture_desc;
+		texture.tex->GetDesc(&texture_desc);
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor = {};
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+		descriptor.Texture2D.MipSlice = mip_slice;
+		descriptor.Format = texture_desc.Format;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	UAView Graphics::CreateUAView(Texture3D texture, unsigned int mip_slice) {
+		UAView view;
+
+		D3D11_TEXTURE3D_DESC texture_desc;
+		texture.tex->GetDesc(&texture_desc);
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor = {};
+		descriptor.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+		descriptor.Texture3D.MipSlice = mip_slice;
+		descriptor.Format = texture_desc.Format;
+
+		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+
+		return view;
+	}
+
+	Material Graphics::CreateMaterial(VertexShader v_shader, PixelShader p_shader, DomainShader d_shader, HullShader h_shader, GeometryShader g_shader)
+	{
+		constexpr size_t REFLECTED_BUFFER_COUNT = 32;
+		constexpr size_t REFLECTED_TEXTURE_COUNT = 32;
+
+		ShaderReflectedBuffer _reflected_buffers[REFLECTED_BUFFER_COUNT];
+		ShaderReflectedTexture _reflected_textures[32];
+
+		CapacityStream<ShaderReflectedBuffer> reflected_buffers(_reflected_buffers, 0, REFLECTED_BUFFER_COUNT);
+		CapacityStream<ShaderReflectedTexture> reflected_textures(_reflected_textures, 0, REFLECTED_TEXTURE_COUNT);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::ClearBackBuffer(float red, float green, float blue) {
-		ClearBackBuffer(red, green, blue, m_auto_context.Get());
-	}
-
-	void Graphics::ClearBackBuffer(float red, float green, float blue, GraphicsContext* context) {
 		const float color[] = { red, green, blue, 1.0f };
-		context->ClearRenderTargetView(m_target_view.target, color);
-		context->ClearDepthStencilView(m_depth_stencil_view.view, D3D11_CLEAR_DEPTH, 1.0f, 0u);
+		m_context->ClearRenderTargetView(m_target_view.target, color);
+		m_context->ClearDepthStencilView(m_depth_stencil_view.view, D3D11_CLEAR_DEPTH, 1.0f, 0u);
 	}
 
-	void Graphics::ClearBackBufferImmediate(float red, float green, float blue) {
-		ClearBackBuffer(red, blue, green, m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableAlphaBlending() {
-		DisableAlphaBlending(m_auto_context.Get());
+		DisableAlphaBlending(m_context.Get());
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableAlphaBlending(GraphicsContext* context) {
 		context->OMSetBlendState(m_blend_disabled.Get(), nullptr, 0xFFFFFFFF);
 	}
 
-	void Graphics::DisableAlphaBlendingImmediate() {
-		DisableAlphaBlending(m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableDepth()
 	{
-		DisableDepth(m_auto_context.Get());
+		DisableDepth(m_context.Get());
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableCulling()
 	{
-		DisableCulling(m_auto_context.Get());
+		DisableCulling(m_context.Get());
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableDepth(GraphicsContext* context)
 	{
-		context->OMSetRenderTargets(1u, &m_target_view.target, nullptr);
+		context->OMSetRenderTargets(m_bound_targets.size, (ID3D11RenderTargetView**)m_bound_targets.buffer, nullptr);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableCulling(GraphicsContext* context)
 	{
@@ -970,219 +1678,141 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failed to disable culling.", true);
 		context->RSSetState(state);
+		state->Release();
 	}
 
-	void Graphics::DisableDepthImmediate() {
-		DisableDepth(m_context.Get());
-	}
-
-	void Graphics::DisableCullingImmediate()
-	{
-		DisableCulling(m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::Draw(UINT vertex_count, UINT start_slot)
 	{
-		Draw(vertex_count, m_auto_context.Get(), start_slot);
+		ECSEngine::Draw(vertex_count, m_context.Get(), start_slot);
 	}
 
-	void Graphics::Draw(UINT vertex_count, GraphicsContext* context, UINT start_slot)
-	{
-		context->Draw(vertex_count, start_slot);
-	}
-
-	void Graphics::DrawImmediate(UINT vertex_count, UINT start_slot) {
-		Draw(vertex_count, m_context.Get(), start_slot);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DrawIndexed(unsigned int count, UINT start_vertex, INT base_vertex_location) {
-		DrawIndexed(count, m_auto_context.Get(), start_vertex, base_vertex_location);
+		ECSEngine::DrawIndexed(count, m_context.Get(), start_vertex, base_vertex_location);
 	}
 
-	void Graphics::DrawIndexed(unsigned int count, GraphicsContext* context, UINT start_vertex, INT base_vertex_location) {
-		context->DrawIndexed(count, start_vertex, base_vertex_location);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DrawInstanced(unsigned int vertex_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot) {
+		ECSEngine::DrawInstanced(vertex_count, instance_count, context, start_slot);
 	}
 
-	void Graphics::DrawIndexedImmediate(unsigned int count, UINT start_vertex, INT base_vertex_location) {
-		DrawIndexed(count, m_context.Get(), start_vertex, base_vertex_location);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot) {
+		ECSEngine::DrawIndexedInstanced(index_count, instance_count, context, start_slot);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DrawIndexedInstancedIndirect(IndirectBuffer buffer) {
+		ECSEngine::DrawIndexedInstancedIndirect(buffer, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DrawInstancedIndirect(IndirectBuffer buffer) {
+		ECSEngine::DrawInstancedIndirect(buffer, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::EnableAlphaBlending() {
-		EnableAlphaBlending(m_auto_context.Get());
+		EnableAlphaBlending(m_context.Get());
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::EnableAlphaBlending(GraphicsContext* context) {
 		context->OMSetBlendState(m_blend_enabled.Get(), nullptr, 0xFFFFFFFF);
 	}
 
-	void Graphics::EnableAlphaBlendingImmediate() {
-		EnableAlphaBlending(m_context.Get());
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::EnableDepth()
 	{
-		EnableDepth(m_auto_context.Get());
-	}
-
-	void Graphics::EnableDepth(GraphicsContext* context)
-	{
-		context->OMSetRenderTargets(1u, &m_target_view.target, m_depth_stencil_view.view);
-	}
-
-	void Graphics::EnableDepthImmediate() {
 		EnableDepth(m_context.Get());
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::EnableDepth(GraphicsContext* context)
+	{
+		context->OMSetRenderTargets(m_bound_targets.size, (ID3D11RenderTargetView**)m_bound_targets.buffer, m_current_depth_stencil.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	ID3D11CommandList* Graphics::FinishCommandList(bool restore_state) {
-		return FinishCommandList(m_auto_context.Get(), restore_state);
+		return ECSEngine::FinishCommandList(m_context.Get(), restore_state);
 	}
 
-	ID3D11CommandList* Graphics::FinishCommandList(GraphicsContext* context, bool restore_state) {
-		ID3D11CommandList* list = nullptr;
-		HRESULT result;
-		result = context->FinishCommandList(restore_state, &list);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating command list failed!", true);
-		return list;
-	}
-
-	void Graphics::EndFrame(float value) {
-		//ClearBackBuffer(value, 1.0f, value);
-		
-		//SwapBuffers();
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	GraphicsDevice* Graphics::GetDevice() {
 		return m_device.Get();
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	GraphicsContext* Graphics::GetContext() {
 		return m_context.Get();
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	GraphicsContext* Graphics::GetDeferredContext()
 	{
 		return m_deferred_context.Get();
 	}
-	
-	GraphicsContext* Graphics::GetAutoContext() {
-		return m_auto_context.Get();
-	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void* Graphics::MapBuffer(ID3D11Buffer* buffer, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
-		return MapBuffer(buffer, m_auto_context.Get(), map_type, subresource_index, map_flags);
+		return ECSEngine::MapBuffer(buffer, m_context.Get(), map_type, subresource_index, map_flags);
 	}
 
-	void* Graphics::MapTexture1D(Texture1D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* Graphics::MapTexture(Texture1D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
-		return MapTexture1D(texture, m_auto_context.Get(), map_type, subresource_index, map_flags);
+		return ECSEngine::MapTexture(texture, m_context.Get(), map_type, subresource_index, map_flags);
 	}
 
-	void* Graphics::MapTexture2D(Texture2D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* Graphics::MapTexture(Texture2D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
-		return MapTexture2D(texture, m_auto_context.Get(), map_type, subresource_index, map_flags);
+		return ECSEngine::MapTexture(texture, m_context.Get(), map_type, subresource_index, map_flags);
 	}
 
-	void* Graphics::MapTexture3D(Texture3D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* Graphics::MapTexture(Texture3D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
 	{
-		return MapTexture3D(texture, m_auto_context.Get(), map_type, subresource_index, map_flags);
+		return ECSEngine::MapTexture(texture, m_context.Get(), map_type, subresource_index, map_flags);
 	}
 
-	void* Graphics::MapBuffer(
-		ID3D11Buffer* buffer, 
-		GraphicsContext* context,
-		D3D11_MAP map_type, 
-		unsigned int subresource_index, 
-		unsigned int map_flags
-	)
-	{
-		HRESULT result;
-
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(buffer, subresource_index, map_type, map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Mapping constant buffer failed!", true);
-		return mapped_subresource.pData;
-	}
-
-	void* Graphics::MapTexture1D(
-		Texture1D texture, 
-		GraphicsContext* context,
-		D3D11_MAP map_type, 
-		unsigned int subresource_index, 
-		unsigned int map_flags
-	)
-	{
-		HRESULT result;
-
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(texture.tex, subresource_index, map_type, map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Mapping texture 1D failed!", true);
-		return mapped_subresource.pData;
-	}
-
-	void* Graphics::MapTexture2D(
-		Texture2D texture,
-		GraphicsContext* context,
-		D3D11_MAP map_type,
-		unsigned int subresource_index,
-		unsigned int map_flags
-	)
-	{
-		HRESULT result;
-
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(texture.tex, subresource_index, map_type, map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Mapping texture 2D failed!", true);
-		return mapped_subresource.pData;
-	}
-
-	void* Graphics::MapTexture3D(
-		Texture3D texture,
-		GraphicsContext* context,
-		D3D11_MAP map_type,
-		unsigned int subresource_index,
-		unsigned int map_flags
-	)
-	{
-		HRESULT result;
-
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(texture.tex, subresource_index, map_type, map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Mapping texture 1D failed!", true);
-		return mapped_subresource.pData;
-	}
-
-	void* Graphics::MapBufferImmediate(ID3D11Buffer* buffer, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
-	{
-		return MapBuffer(buffer, m_context.Get(), map_type, subresource_index, map_flags);
-	}
-
-	void* Graphics::MapTexture1DImmediate(Texture1D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
-	{
-		return MapTexture1D(texture, m_context.Get(), map_type, subresource_index, map_flags);
-	}
-
-	void* Graphics::MapTexture2DImmediate(Texture2D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
-	{
-		return MapTexture2D(texture, m_context.Get(), map_type, subresource_index, map_flags);
-	}
-
-	void* Graphics::MapTexture3DImmediate(Texture3D texture, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags)
-	{
-		return MapTexture3D(texture, m_context.Get(), map_type, subresource_index, map_flags);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::GetWindowSize(unsigned int& width, unsigned int& height) const {
 		width = m_window_size.x;
 		height = m_window_size.y;
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::GetWindowSize(uint2& size) const
 	{
 		size.x = m_window_size.x;
 		size.y = m_window_size.y;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::ResizeSwapChainSize(HWND hWnd, float width, float height)
 	{
@@ -1219,6 +1849,8 @@ namespace ECSEngine {
 		DisableAlphaBlending(m_context.Get());
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::ResizeViewport(float top_left_x, float top_left_y, float new_width, float new_height)
 	{
 		D3D11_VIEWPORT viewport;
@@ -1232,17 +1864,7 @@ namespace ECSEngine {
 		m_context->RSSetViewports(1u, &viewport);
 	}
 
-	void Graphics::SetAutoMode(GraphicsContext* context) {
-		m_auto_context = context;
-	}
-
-	void Graphics::SetAutoModeImmediate() {
-		m_auto_context = m_context;
-	}
-
-	void Graphics::SetAutoModeDeferred() {
-		m_auto_context = m_deferred_context;
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::SwapBuffers(unsigned int sync_interval) {
 		HRESULT result;
@@ -1257,6 +1879,8 @@ namespace ECSEngine {
 		}
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+	
 	void Graphics::SetNewSize(HWND hWnd, unsigned int width, unsigned int height)
 	{
 		m_window_size.x = width;
@@ -1264,91 +1888,46 @@ namespace ECSEngine {
 		ResizeSwapChainSize(hWnd, width, height);
 	}
 
-	void Graphics::UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, unsigned int subresource_index)
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, D3D11_MAP map_type, unsigned int map_flags, unsigned int subresource_index)
 	{
-		UpdateBuffer(buffer, data, data_size, m_auto_context.Get(), subresource_index);
+		ECSEngine::UpdateBuffer(buffer, data, data_size, m_context.Get(), map_type, map_flags, subresource_index);
 	}
 
-	void Graphics::UpdateBuffer(
-		ID3D11Buffer* buffer, 
-		const void* data, 
-		size_t data_size, 
-		GraphicsContext* context,
-		unsigned int subresource_index
-	)
-	{
-		HRESULT result;
-
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(buffer, subresource_index, D3D11_MAP_WRITE_DISCARD, 0u, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating constant buffer failed!", true);
-
-		memcpy(mapped_subresource.pData, data, data_size);
-		context->Unmap(buffer, subresource_index);
-	}
-
-	void Graphics::UpdateBufferImmediate(ID3D11Buffer* buffer, const void* data, size_t data_size, unsigned int subresource_index)
-	{
-		UpdateBuffer(buffer, data, data_size, m_context.Get(), subresource_index);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::UnmapBuffer(ID3D11Buffer* buffer, unsigned int resource_index)
 	{
-		UnmapBuffer(buffer, m_auto_context.Get(), resource_index);
+		ECSEngine::UnmapBuffer(buffer, m_context.Get(), resource_index);
 	}
 
-	void Graphics::UnmapBuffer(ID3D11Buffer* buffer, GraphicsContext* context, unsigned int resource_index)
-	{
-		context->Unmap(buffer, resource_index);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::UnmapTexture(Texture1D texture, unsigned int resource_index) {
+		ECSEngine::UnmapTexture(texture, m_context.Get(), resource_index);
 	}
 
-	void Graphics::UnmapBufferImmediate(ID3D11Buffer* buffer, unsigned int resource_index) {
-		UnmapBuffer(buffer, m_context.Get(), resource_index);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::UnmapTexture(Texture2D texture, unsigned int resource_index) {
+		ECSEngine::UnmapTexture(texture, m_context.Get(), resource_index);
 	}
 
-	void Graphics::UnmapTexture1D(Texture1D texture, unsigned int resource_index) {
-		UnmapTexture1D(texture, m_auto_context.Get(), resource_index);
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::UnmapTexture(Texture3D texture, unsigned int resource_index) {
+		ECSEngine::UnmapTexture(texture, m_context.Get(), resource_index);
 	}
 
-	void Graphics::UnmapTexture1D(Texture1D buffer, GraphicsContext* context, unsigned int resource_index)
-	{
-		context->Unmap(buffer.tex, resource_index);
-	}
-
-	void Graphics::UnmapTexture1DImmediate(Texture1D texture, unsigned int resource_index) {
-		UnmapTexture1D(texture, m_context.Get(), resource_index);
-	}
-
-	void Graphics::UnmapTexture2D(Texture2D texture, unsigned int resource_index) {
-		UnmapTexture2D(texture, m_auto_context.Get(), resource_index);
-	}
-
-	void Graphics::UnmapTexture2D(Texture2D buffer, GraphicsContext* context, unsigned int resource_index)
-	{
-		context->Unmap(buffer.tex, resource_index);
-	}
-
-	void Graphics::UnmapTexture2DImmediate(Texture2D texture, unsigned int resource_index) {
-		UnmapTexture2D(texture, m_context.Get(), resource_index);
-	}
-
-	void Graphics::UnmapTexture3D(Texture3D texture, unsigned int resource_index) {
-		UnmapTexture3D(texture, m_auto_context.Get(), resource_index);
-	}
-
-	void Graphics::UnmapTexture3D(Texture3D buffer, GraphicsContext* context, unsigned int resource_index)
-	{
-		context->Unmap(buffer.tex, resource_index);
-	}
-
-	void Graphics::UnmapTexture3DImmediate(Texture3D texture, unsigned int resource_index) {
-		UnmapTexture3D(texture, m_context.Get(), resource_index);
-	}
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, const wchar_t* path)
 	{
 		return ReflectVertexShaderInput(shader, ToStream(path));
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path)
 	{
@@ -1365,10 +1944,750 @@ namespace ECSEngine {
 			_freea(allocation);
 			return {};
 		}
-		InputLayout layout = ConstructInputLayout(element_descriptors, shader);
+		InputLayout layout = CreateInputLayout(element_descriptors, shader);
 		_freea(allocation);
 		return layout;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectShaderBuffers(const wchar_t* path, CapacityStream<ShaderReflectedBuffer>& buffers)
+	{
+		return ReflectShaderBuffers(ToStream(path), buffers);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers) {
+		constexpr size_t NAME_POOL_SIZE = 8192;
+		char* name_allocation = (char*)_malloca(NAME_POOL_SIZE);
+		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
+
+		bool success = m_shader_reflection.ReflectShaderBuffers(path, buffers, name_pool);
+		if (!success) {
+			_freea(name_allocation);
+			return false;
+		}
+
+		size_t total_allocation = 0;
+		for (size_t index = 0; index < buffers.size; index++) {
+			total_allocation += buffers[index].name.size;
+		}
+
+		void* permanent_name_allocation = m_allocator->Allocate_ts(total_allocation);
+		uintptr_t buffer = (uintptr_t)permanent_name_allocation;
+		for (size_t index = 0; index < buffers.size; index++) {
+			buffers[index].name.CopyTo(buffer);
+		}
+		_freea(name_allocation);
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectShaderTextures(const wchar_t* path, CapacityStream<ShaderReflectedTexture>& textures)
+	{
+		return ReflectShaderTextures(ToStream(path), textures);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures)
+	{
+		constexpr size_t NAME_POOL_SIZE = 8192;
+		char* name_allocation = (char*)_malloca(NAME_POOL_SIZE);
+		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
+
+		bool success = m_shader_reflection.ReflectShaderTextures(path, textures, name_pool);
+		if (!success) {
+			_freea(name_allocation);
+			return false;
+		}
+
+		size_t total_allocation = 0;
+		for (size_t index = 0; index < textures.size; index++) {
+			total_allocation += textures[index].name.size;
+		}
+
+		void* permanent_name_allocation = m_allocator->Allocate_ts(total_allocation);
+		uintptr_t buffer = (uintptr_t)permanent_name_allocation;
+		for (size_t index = 0; index < textures.size; index++) {
+			textures[index].name.CopyTo(buffer);
+		}
+		_freea(name_allocation);
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectVertexBufferMapping(const wchar_t* path, CapacityStream<ECS_MESH_INDEX>& mapping)
+	{
+		return m_shader_reflection.ReflectVertexBufferMapping(path, mapping);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+	
+	bool Graphics::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping) {
+		return m_shader_reflection.ReflectVertexBufferMapping(path, mapping);
+	}
+
+
+#pragma region Free functions
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot) {
+		const UINT offset = 0u;
+		context->IASetVertexBuffers(slot, 1u, &buffer.buffer, &buffer.stride, &offset);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, UINT start_slot) {
+		ID3D11Buffer* v_buffers[256];
+		UINT strides[256];
+		UINT offsets[256] = { 0 };
+		for (size_t index = 0; index < buffers.size; index++) {
+			v_buffers[index] = buffers[index].buffer;
+			strides[index] = buffers[index].stride;
+		}
+		context->IASetVertexBuffers(start_slot, buffers.size, v_buffers, strides, offsets);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context) {
+		const UINT index_offset = 0u;
+
+		DXGI_FORMAT format = DXGI_FORMAT_R32_UINT;
+		format = (DXGI_FORMAT)function::PredicateValue<unsigned int>(index_buffer.int_size == 1, DXGI_FORMAT_R8_UINT, format);
+		format = (DXGI_FORMAT)function::PredicateValue<unsigned int>(index_buffer.int_size == 2, DXGI_FORMAT_R16_UINT, format);
+
+		context->IASetIndexBuffer(index_buffer.buffer, format, index_offset);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindInputLayout(InputLayout input_layout, GraphicsContext* context) {
+		context->IASetInputLayout(input_layout.layout);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexShader(VertexShader shader, GraphicsContext* context) {
+		context->VSSetShader(shader.shader, nullptr, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelShader(PixelShader shader, GraphicsContext* context) {
+		context->PSSetShader(shader.shader, nullptr, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindHullShader(HullShader shader, GraphicsContext* context) {
+		context->HSSetShader(shader.shader, nullptr, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindDomainShader(DomainShader shader, GraphicsContext* context) {
+		context->DSSetShader(shader.shader, nullptr, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+	
+	void BindGeometryShader(GeometryShader shader, GraphicsContext* context) {
+		context->GSSetShader(shader.shader, nullptr, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeShader(ComputeShader shader, GraphicsContext* context) {
+		context->CSSetShader(shader.shader, nullptr, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
+		context->PSSetConstantBuffers(slot, 1u, &buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot
+	) {
+		context->PSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
+		context->VSSetConstantBuffers(slot, 1u, &buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot
+	) {
+		context->VSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindDomainConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
+		context->DSSetConstantBuffers(slot, 1u, &buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindDomainConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot
+	) {
+		context->DSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindHullConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
+		context->HSSetConstantBuffers(slot, 1u, &buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindHullConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot
+	) {
+		context->HSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindGeometryConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
+		context->GSSetConstantBuffers(slot, 1u, &buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindGeometryConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot
+	) {
+		context->GSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot) {
+		context->CSSetConstantBuffers(slot, 1u, &buffer.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeConstantBuffers(
+		Stream<ConstantBuffer> buffers,
+		GraphicsContext* context,
+		UINT start_slot
+	) {
+		context->CSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindTopology(Topology topology, GraphicsContext* context)
+	{
+		context->IASetPrimitiveTopology(topology.value);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
+		context->PSSetShaderResources(slot, 1, &component.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
+		context->PSSetShaderResources(start_slot, views.size, (ID3D11ShaderResourceView**)views.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
+		context->VSSetShaderResources(slot, 1, &component.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindVertexResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
+		context->VSSetShaderResources(start_slot, views.size, (ID3D11ShaderResourceView**)views.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindDomainResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
+		context->DSSetShaderResources(slot, 1, &component.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindDomainResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
+		context->DSSetShaderResources(start_slot, views.size, (ID3D11ShaderResourceView**)views.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindHullResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
+		context->HSSetShaderResources(slot, 1, &component.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindHullResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
+		context->HSSetShaderResources(start_slot, views.size, (ID3D11ShaderResourceView**)views.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindGeometryResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
+		context->GSSetShaderResources(slot, 1, &component.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindGeometryResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
+		context->GSSetShaderResources(start_slot, views.size, (ID3D11ShaderResourceView**)views.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeResourceView(ResourceView component, GraphicsContext* context, UINT slot) {
+		context->CSSetShaderResources(slot, 1, &component.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot) {
+		context->CSSetShaderResources(start_slot, views.size, (ID3D11ShaderResourceView**)views.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, UINT start_slot)
+	{
+		context->PSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindSamplerState(SamplerState sampler, GraphicsContext* context, UINT slot)
+	{
+		context->PSSetSamplers(slot, 1u, &sampler.sampler);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelUAView(UAView view, GraphicsContext* context, UINT start_slot)
+	{
+		context->OMSetRenderTargetsAndUnorderedAccessViews(
+			D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL,
+			nullptr,
+			nullptr, 
+			1u,
+			1u, 
+			&view.view, 
+			nullptr
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindPixelUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot)
+	{
+		context->OMSetRenderTargetsAndUnorderedAccessViews(
+			D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL, 
+			nullptr, 
+			nullptr, 
+			1u, 
+			views.size, 
+			(ID3D11UnorderedAccessView**)views.buffer, 
+			nullptr
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeUAView(UAView view, GraphicsContext* context, UINT start_slot)
+	{
+		context->CSSetUnorderedAccessViews(start_slot, 1u, &view.view, nullptr);
+	}
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindComputeUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot)
+	{
+		context->CSSetUnorderedAccessViews(start_slot, views.size, (ID3D11UnorderedAccessView**)views.buffer,  nullptr);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view, GraphicsContext* context)
+	{
+		context->OMSetRenderTargets(1u, &render_view.target, depth_stencil_view.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindViewport(float top_left_x, float top_left_y, float width, float height, float min_depth, float max_depth, GraphicsContext* context)
+	{
+		D3D11_VIEWPORT viewport = { 0 };
+		viewport.TopLeftX = top_left_x;
+		viewport.TopLeftY = top_left_y;
+		viewport.Width = width;
+		viewport.Height = height;
+		viewport.MinDepth = min_depth;
+		viewport.MaxDepth = max_depth;
+
+		context->RSSetViewports(1u, &viewport);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindMesh(const Mesh& mesh, GraphicsContext* context) {
+		// Vertex Buffers
+		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
+		for (size_t index = 0; index < mesh.mapping_count; index++) {
+			vertex_buffers[index] = mesh.vertex_buffers[mesh.mapping[index]];
+		}
+
+		BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, mesh.mapping_count), context);
+
+		// Topology
+		BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, context);
+
+		// Index buffer
+		BindIndexBuffer(mesh.index_buffer, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindMesh(const Mesh& mesh, GraphicsContext* context, Stream<ECS_MESH_INDEX> mapping)
+	{
+		// Vertex Buffers
+		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
+
+		size_t valid_mappings = 0;
+		for (size_t index = 0; index < mapping.size; index++) {
+			for (size_t map_index = 0; map_index < mesh.mapping_count; map_index++) {
+				if (mesh.mapping[map_index] == mapping[index]) {
+					vertex_buffers[valid_mappings++] = mesh.vertex_buffers[mapping[index]];
+					break;
+				}
+			}
+		}
+
+		ECS_ASSERT(valid_mappings == mapping.size, "The given mesh does not have the necessary vertex buffers.");
+		BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, mesh.mapping_count), context);
+
+		// Topology
+		BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, context);
+
+		// Index buffer
+		BindIndexBuffer(mesh.index_buffer, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void BindMaterial(const Material& material, GraphicsContext* context) {
+		// Bind the vertex shader
+		BindVertexShader(material.vertex_shader, context);
+
+		// Bind the pixel shader
+		BindPixelShader(material.pixel_shader, context);
+
+		// Bind the input layout
+		BindInputLayout(material.layout, context);
+		
+		// Bind the domain shader if it is not null
+		if (material.domain_shader.shader != nullptr) {
+			BindDomainShader(material.domain_shader, context);
+			
+			// Bind domain resources
+			if (material.dc_buffer_count > 0) {
+				BindDomainConstantBuffers(Stream<ConstantBuffer>(material.dc_buffers, material.dc_buffer_count), context);
+			}
+
+			if (material.domain_texture_count > 0) {
+				BindDomainResourceViews(Stream<ResourceView>(material.domain_textures, material.domain_texture_count), context);
+			}
+		}
+
+		// Bind the hull shader if it is not null
+		if (material.hull_shader.shader != nullptr) {
+			BindHullShader(material.hull_shader, context);
+
+			// Bind hull resources
+			if (material.hc_buffer_count > 0) {
+				BindHullConstantBuffers(Stream<ConstantBuffer>(material.hc_buffers, material.hc_buffer_count), context);
+			}
+
+			if (material.hull_texture_count > 0) {
+				BindHullResourceViews(Stream<ResourceView>(material.hull_textures, material.hull_texture_count), context);
+			}
+		}
+
+		// Bind the geometry shader if it not null 
+		if (material.geometry_shader.shader != nullptr) {
+			BindGeometryShader(material.geometry_shader, context);
+
+			// Bind the geometry resources
+			if (material.gc_buffer_count > 0) {
+				BindGeometryConstantBuffers(Stream<ConstantBuffer>(material.gc_buffers, material.gc_buffer_count), context);
+			}
+
+			if (material.geometry_texture_count > 0) {
+				BindGeometryResourceViews(Stream<ResourceView>(material.geometry_textures, material.geometry_texture_count), context);
+			}
+		}
+
+		// Bind vertex constant buffers
+		if (material.vc_buffer_count > 0) {
+			BindVertexConstantBuffers(Stream<ConstantBuffer>(material.vc_buffers, material.vc_buffer_count), context);
+		}
+
+		// Bind pixel constant buffers
+		if (material.pc_buffer_count > 0) {
+			BindPixelConstantBuffers(Stream<ConstantBuffer>(material.pc_buffers, material.pc_buffer_count), context);
+		}
+
+		// Bind vertex textures
+		if (material.vertex_texture_count > 0) {
+			BindVertexResourceViews(Stream<ResourceView>(material.vertex_textures, material.vertex_texture_count), context);
+		}
+
+		// Bind pixel textures
+		if (material.pixel_texture_count > 0) {
+			BindPixelResourceViews(Stream<ResourceView>(material.pixel_textures, material.pixel_texture_count), context);
+		}
+
+		// Unordered views
+		if (material.unordered_view_count > 0) {
+			BindPixelUAViews(Stream<UAView>(material.unordered_views, material.unordered_view_count), context);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Draw(unsigned int vertex_count, GraphicsContext* context, UINT start_slot)
+	{
+		context->Draw(vertex_count, start_slot);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawIndexed(unsigned int count, GraphicsContext* context, UINT start_vertex, INT base_vertex_location) {
+		context->DrawIndexed(count, start_vertex, base_vertex_location);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawInstanced(
+		unsigned int vertex_count,
+		unsigned int instance_count,
+		GraphicsContext* context,
+		unsigned int vertex_offset,
+		unsigned int instance_offset) 
+	{
+		context->DrawInstanced(vertex_count, instance_count, vertex_offset, instance_offset);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawIndexedInstanced(
+		unsigned int index_count,
+		unsigned int instance_count,
+		GraphicsContext* context,
+		unsigned int vertex_offset,
+		unsigned int index_offset,
+		unsigned int instance_offset
+	) {
+		context->DrawIndexedInstanced(index_count, instance_count, index_offset, vertex_offset, instance_offset);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawIndexedInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context) {
+		context->DrawIndexedInstancedIndirect(buffer.buffer, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context) {
+		context->DrawInstancedIndirect(buffer.buffer, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11CommandList* FinishCommandList(GraphicsContext* context, bool restore_state) {
+		ID3D11CommandList* list = nullptr;
+		HRESULT result;
+		result = context->FinishCommandList(restore_state, &list);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating command list failed!", true);
+		return list;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* MapBuffer(
+		ID3D11Buffer* buffer,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int subresource_index,
+		unsigned int map_flags
+	)
+	{
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		result = context->Map(buffer, subresource_index, map_type, map_flags, &mapped_subresource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Mapping constant buffer failed!", true);
+		return mapped_subresource.pData;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Texture>
+	void* MapTextureImpl(Texture texture, GraphicsContext* context, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags, const wchar_t* error_string) {
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		result = context->Map(texture.tex, subresource_index, map_type, map_flags, &mapped_subresource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_string, true);
+		return mapped_subresource.pData;
+	}
+
+	void* MapTexture(
+		Texture1D texture,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int subresource_index,
+		unsigned int map_flags
+	)
+	{
+		return MapTextureImpl(texture, context, map_type, subresource_index, map_flags, L"Mapping texture 1D failed!");
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* MapTexture(
+		Texture2D texture,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int subresource_index,
+		unsigned int map_flags
+	)
+	{
+		return MapTextureImpl(texture, context, map_type, subresource_index, map_flags, L"Mapping texture 2D failed!");
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* MapTexture(
+		Texture3D texture,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int subresource_index,
+		unsigned int map_flags
+	)
+	{
+		return MapTextureImpl(texture, context, map_type, subresource_index, map_flags, L"Mapping texture 3D failed!");
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void UpdateBuffer(
+		ID3D11Buffer* buffer,
+		const void* data,
+		size_t data_size,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int map_flags,
+		unsigned int subresource_index
+	)
+	{
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		result = context->Map(buffer, subresource_index, map_type, map_flags, &mapped_subresource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating buffer failed.", true);
+
+		memcpy(mapped_subresource.pData, data, data_size);
+		context->Unmap(buffer, subresource_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void UpdateBufferResource(
+		ID3D11Buffer* buffer,
+		const void* data,
+		size_t data_size,
+		GraphicsContext* context
+	) {
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		result = context->Map(buffer, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped_subresource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating buffer resource failed.", true);
+
+		memcpy(mapped_subresource.pData, data, data_size);
+		context->Unmap(buffer, 0u);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void UnmapBuffer(ID3D11Buffer* buffer, GraphicsContext* context, unsigned int resource_index)
+	{
+		context->Unmap(buffer, resource_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void UnmapTexture(Texture1D buffer, GraphicsContext* context, unsigned int resource_index)
+	{
+		context->Unmap(buffer.tex, resource_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void UnmapTexture(Texture2D buffer, GraphicsContext* context, unsigned int resource_index)
+	{
+		context->Unmap(buffer.tex, resource_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void UnmapTexture(Texture3D buffer, GraphicsContext* context, unsigned int resource_index)
+	{
+		context->Unmap(buffer.tex, resource_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+
 
 #endif // ECSENGINE_DIRECTX11
 

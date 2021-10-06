@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "ecspch.h"
 #include "../../../Dependencies/DirectXTK/Inc/Mouse.h"
+#include "../Utilities/BasicTypes.h"
 
 namespace ECSEngine {
 
@@ -11,22 +12,34 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API MouseState {
 			bool LeftButton() const;
+
 			bool RightButton() const;
+
 			bool MiddleButton() const;
+
 			bool XButton1() const;
+
 			bool XButton2() const;
-			int PositionX() const;
-			int PositionY() const;
+
+			int2 Position() const;
+
 			int MouseWheelScroll() const;
-			int GetPreviousX() const;
-			int GetPreviousY() const;
-			int GetDeltaX() const;
-			int GetDeltaY() const;
+
+			int2 PreviousPosition() const;
+
+			int PreviousScroll() const;
+
+			int2 PositionDelta()const;
+
+			int ScrollDelta() const;
+
 			void SetPreviousPosition();
 
+			void SetPreviousScroll();
+
 			DirectX::Mouse::State state;
-			int m_previous_x;
-			int m_previous_y;
+			int2 previous_position;
+			int previous_scroll;
 		};
 
 		struct ECSENGINE_API MouseTracker {
@@ -34,9 +47,13 @@ namespace ECSEngine {
 			void Update(const MouseState& state);
 
 			MouseButtonState LeftButton() const;
+
 			MouseButtonState RightButton() const;
+
 			MouseButtonState MiddleButton() const;
+
 			MouseButtonState XButton1() const;
+
 			MouseButtonState XButton2() const;
 
 			DirectX::Mouse::ButtonStateTracker tracker;
@@ -70,15 +87,15 @@ namespace ECSEngine {
 
 			int GetScrollValue() const;
 
-			int GetPreviousMouseX() const;
+			int2 GetPosition() const;
 
-			int GetPreviousMouseY() const;
+			int2 GetPreviousPosition() const;
 
-			int GetDeltaX() const;
+			int2 GetPositionDelta() const;
 
-			int GetDeltaY() const;
+			int GetPreviousScroll() const;
 
-			void GetMousePosition(int& x, int& y) const;
+			int GetScrollDelta() const;
 
 			bool IsCursorVisible() const;
 
@@ -94,7 +111,7 @@ namespace ECSEngine {
 
 			void SetCursorInvisible();
 
-			void SetPreviousPosition();
+			void SetPreviousPositionAndScroll();
 
 			void ResetCursorWheel();
 
@@ -102,7 +119,7 @@ namespace ECSEngine {
 
 			void Procedure(const MouseProcedureInfo& info);
 
-		private:
+		//private:
 			std::unique_ptr<DirectX::Mouse> m_implementation;
 			MouseState m_state;
 			MouseTracker m_tracker;

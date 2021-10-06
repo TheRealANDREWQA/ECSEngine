@@ -394,31 +394,31 @@ namespace ECSEngine {
 			);
 		}
 
-		void UIDrawResources::Map(void** void_buffers, Graphics* graphics, GraphicsContext* context)
+		void UIDrawResources::Map(void** void_buffers, GraphicsContext* context)
 		{
 			for (size_t index = 0; index < buffers.size; index++) {
-				void_buffers[index] = graphics->MapBuffer(buffers[index].buffer, context);
+				void_buffers[index] = MapBuffer(buffers[index].buffer, context);
 			}
 		}
 
-		void UIDrawResources::UnmapNormal(Graphics* graphics, GraphicsContext* context) {
+		void UIDrawResources::UnmapNormal(GraphicsContext* context) {
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-				graphics->UnmapBuffer(buffers[index].buffer, context);
+				UnmapBuffer(buffers[index].buffer, context);
 			}
 		}
 
-		void UIDrawResources::UnmapLate(Graphics* graphics, GraphicsContext* context) {
-			Unmap(graphics, context, ECS_TOOLS_UI_MATERIALS, ECS_TOOLS_UI_MATERIALS * 2);
+		void UIDrawResources::UnmapLate(GraphicsContext* context) {
+			Unmap(context, ECS_TOOLS_UI_MATERIALS, ECS_TOOLS_UI_MATERIALS * 2);
 		}
 
-		void UIDrawResources::UnmapAll(Graphics* graphics, GraphicsContext* context) {
-			Unmap(graphics, context, 0, buffers.size);
+		void UIDrawResources::UnmapAll(GraphicsContext* context) {
+			Unmap(context, 0, buffers.size);
 		}
 
-		void UIDrawResources::Unmap(Graphics* graphics, GraphicsContext* context, unsigned int starting_index, unsigned int end_index)
+		void UIDrawResources::Unmap(GraphicsContext* context, unsigned int starting_index, unsigned int end_index)
 		{
 			for (size_t index = starting_index; index < end_index; index++) {
-				graphics->UnmapBuffer(buffers[index].buffer, context);
+				UnmapBuffer(buffers[index].buffer, context);
 			}
 		}
 
