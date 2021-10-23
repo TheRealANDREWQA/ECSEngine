@@ -1,6 +1,6 @@
 #pragma once
 #include "UIDrawer.h"
-#include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../../Internal/Multithreading/ConcurrentPrimitives.h"
 
 #define ECS_TOOLS using namespace ECSEngine::Tools
 constexpr const char* ECS_TOOLS_UI_ERROR_MESSAGE_WINDOW_NAME = "Error Message";

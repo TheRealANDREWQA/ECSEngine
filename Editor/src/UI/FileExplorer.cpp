@@ -5,6 +5,7 @@
 #include "..\Project\ProjectOperations.h"
 #include "Inspector.h"
 #include "..\Editor\EditorPalette.h"
+#include "..\Editor\EditorEvent.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -18,13 +19,19 @@ constexpr float THUMBNAIL_TO_LABEL_SPACING = 0.03f;
 constexpr float TOOLTIP_OFFSET = 0.02f;
 constexpr size_t FILE_FUNCTORS_CAPACITY = 32;
 
+constexpr size_t FILE_EXPLORER_RESET_SELECTED_FREE_LIMIT = 64;
+constexpr size_t FILE_EXPLORER_RESET_COPIED_FREE_LIMIT = 64;
+
 constexpr size_t ADD_ROW_COUNT = 2;
 
-constexpr size_t FILE_RIGHT_CLICK_ROW_COUNT = 5;
-char* FILE_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path";
+constexpr size_t FILE_RIGHT_CLICK_ROW_COUNT = 7;
+char* FILE_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy";
 
-constexpr size_t FOLDER_RIGHT_CLICK_ROW_COUNT = 5;
-char* FOLDER_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path";
+constexpr size_t FOLDER_RIGHT_CLICK_ROW_COUNT = 7;
+char* FOLDER_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy";
+
+constexpr size_t FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT = 2;
+char* FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS = "Paste\nReset Copied Files";
 
 constexpr const char* RENAME_LABEL_FILE_NAME = "Rename File";
 constexpr const char* RENAME_LABEL_FILE_INPUT_NAME = "New file name";
@@ -32,12 +39,21 @@ constexpr const char* RENAME_LABEL_FILE_INPUT_NAME = "New file name";
 constexpr const char* RENAME_LABEL_FOLDER_NAME = "Rename Folder";
 constexpr const char* RENAME_LABEL_FOLDER_INPUT_NAME = "New folder name";
 
+constexpr size_t FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY = 256;
+constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
+constexpr size_t FILE_EXPLORER_COPIED_FILE_CAPACITY = 16;
+constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
+
+constexpr int COLOR_CUT_ALPHA = 90;
+
 enum FILE_RIGHT_CLICK_INDEX {
 	FILE_RIGHT_CLICK_OPEN,
 	FILE_RIGHT_CLICK_SHOW_IN_EXPLORER,
 	FILE_RIGHT_CLICK_DELETE,
 	FILE_RIGHT_CLICK_RENAME,
-	FILE_RIGHT_CLICK_COPY_PATH
+	FILE_RIGHT_CLICK_COPY_PATH,
+	FILE_RIGHT_CLICK_CUT_SELECTION,
+	FILE_RIGHT_CLICK_COPY_SELECTION
 };
 
 enum FOLDER_RIGHT_CLICK_INDEX {
@@ -45,28 +61,82 @@ enum FOLDER_RIGHT_CLICK_INDEX {
 	FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER,
 	FOLDER_RIGHT_CLICK_DELETE,
 	FOLDER_RIGHT_CLICK_RENAME,
-	FOLDER_RIGHT_CLICK_COPY_PATH
+	FOLDER_RIGHT_CLICK_COPY_PATH,
+	FOLDER_RIGHT_CLICK_CUT_SELECTION,
+	FOLDER_RIGHT_CLICK_COPY_SELECTION
 };
 
-constexpr size_t FILTER_RECURSIVE = 1 << 0;
+enum DESELECTION_RIGHT_CLICK_INDEX {
+	DESELECTION_RIGHT_CLICK_PASTE,
+	DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES
+};
 
 using Hash = HashFunctionAdditiveString;
 
-void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path) {
+void FileExplorerResetSelectedFiles(FileExplorerData* data) {
+	// Deallocate every string stored
+	for (size_t index = 0; index < data->selected_files.size; index++) {
+		data->selected_files.allocator->Deallocate(data->selected_files[index].buffer);
+	}
+
+	// If it is a long list, deallocate the buffer
+	if (data->selected_files.size > FILE_EXPLORER_RESET_SELECTED_FREE_LIMIT) {
+		data->selected_files.FreeBuffer();
+	}
+	data->selected_files.size = 0;
+}
+
+void FileExplorerResetSelectedFiles(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+
+	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerResetSelectedFiles(data);
+}
+
+void FileExplorerResetCopiedFiles(FileExplorerData* data) {
+	// Cut/Copy will make a coallesced allocation
+	if (data->copied_files.size > 0) {
+		data->selected_files.allocator->Deallocate(data->copied_files.buffer);
+		data->copied_files.size = 0;
+	}
+	data->are_copied_files_cut = false;
+}
+
+void FileExplorerAllocateSelectedFile(FileExplorerData* data, Stream<wchar_t> path) {
+	Stream<wchar_t> new_path = function::StringCopy(data->selected_files.allocator, path);
+	data->selected_files.Add(new_path);
+}
+
+void FileExplorerSetShiftIndices(FileExplorerData* explorer_data, unsigned int index) {
+	explorer_data->starting_shift_index = index;
+	explorer_data->ending_shift_index = index;
+}
+
+void FileExplorerSetShiftIndices(EditorState* editor_state, unsigned int index) {
+	FileExplorerSetShiftIndices((FileExplorerData*)editor_state->file_explorer_data, index);
+}
+
+void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	EDITOR_STATE(editor_state);
 
 	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
 	data->current_directory.Copy(path);
 	data->current_directory[path.size] = L'\0';
-	data->current_file.size = 0;
+
+	FileExplorerResetSelectedFiles(data);
+	FileExplorerSetShiftIndices(data, index);
+	data->selected_files.size = 0;
 }
 
-void ChangeFileExplorerFile(EditorState* editor_state, Stream<wchar_t> path) {
+void ChangeFileExplorerFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	EDITOR_STATE(editor_state);
 
 	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
-	data->current_file.Copy(path);
-	data->current_file[path.size] = L'\0';
+	FileExplorerResetSelectedFiles(data);
+	FileExplorerAllocateSelectedFile(data, path);
+
+	FileExplorerSetShiftIndices(data, index);
+	data->right_click_stream = data->selected_files[0];
 } 
 
 struct SelectableData {
@@ -75,40 +145,74 @@ struct SelectableData {
 	}
 
 	EditorState* editor_state;
+	unsigned int index;
 	Path selection;
 	Timer timer;
 };
 
-void FileExplorerSetNewDirectory(EditorState* editor_state, Stream<wchar_t> path) {
-	ChangeFileExplorerDirectory(editor_state, path);
+void FileExplorerSetNewDirectory(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
+	ChangeFileExplorerDirectory(editor_state, path, index);
 	ChangeInspectorToFolder(editor_state, path);
 }
 
-void FileExplorerSetNewFile(EditorState* editor_state, Stream<wchar_t> path) {
-	ChangeFileExplorerFile(editor_state, path);
+void FileExplorerSetNewFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
+	ChangeFileExplorerFile(editor_state, path, index);
 	ChangeInspectorToFile(editor_state, path);
 }
 
-void FileExplorerResetFile(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
+// Returns -1 when it doesn't exist, else the index where it is located
+unsigned int FileExplorerHasSelectedFile(EditorState* editor_state, Stream<wchar_t> path) {
 	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
-	data->current_file.size = 0;
-	data->current_file[0] = L'\0';
+	return function::IsStringInStream(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size));
+}
+
+void FileExplorerHandleControlPath(EditorState* editor_state, Stream<wchar_t> path) {
+	// Check to see if the path already exists; if it is there, remove it
+	// else add it
+	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	unsigned int index = FileExplorerHasSelectedFile(editor_state, path);
+	if (index != -1) {
+		data->selected_files.allocator->Deallocate(data->selected_files[index].buffer);
+		data->selected_files.RemoveSwapBack(index);
+	}
+	else {
+		FileExplorerAllocateSelectedFile(data, path);
+	}
+}
+
+void FileExplorerHandleShiftSelection(EditorState* editor_state, unsigned int index) {
+	FileExplorerData* explorer_data = (FileExplorerData*)editor_state->file_explorer_data;
+	if (explorer_data->ending_shift_index < index || explorer_data->ending_shift_index == -1) {
+		explorer_data->ending_shift_index = index;
+	}
+	if (explorer_data->starting_shift_index > index || explorer_data->starting_shift_index == -1) {
+		explorer_data->starting_shift_index = index;
+	}
+	explorer_data->get_selected_files_from_indices = true;
 }
 
 void FileExplorerSelectableBase(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SelectableData* data = (SelectableData*)_data;
+	FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 		if (mouse_tracker->LeftButton() == MBPRESSED) {
-			FileExplorerSetNewFile(data->editor_state, data->selection);
+			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+				FileExplorerHandleControlPath(data->editor_state, data->selection);
+			}
+			else if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+				FileExplorerHandleShiftSelection(data->editor_state, data->index);
+			}
+			else {
+				FileExplorerSetNewFile(data->editor_state, data->selection, data->index);
+			}
 		}
 	}
-	else {
-		FileExplorerResetFile(data->editor_state);
-	}
+	/*else {
+		FileExplorerResetSelectedFiles(data->editor_state);
+	}*/
 }
 
 void FileExplorerDirectorySelectable(ActionData* action_data) {
@@ -121,20 +225,29 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 		if (mouse_tracker->LeftButton() == MBPRESSED) {
 			if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
-				if (additional_data->timer.GetDurationSinceMarker_ms() < DOUBLE_CLICK_DURATION) {
-					FileExplorerSetNewDirectory(data->editor_state, data->selection);
+				if (additional_data->timer.GetDurationSinceMarker_ms() < DOUBLE_CLICK_DURATION && keyboard->IsKeyUp(HID::Key::LeftControl)) {
+					FileExplorerSetNewDirectory(data->editor_state, data->selection, data->index);
 				}
 			}
 			data->timer.SetMarker();
-			FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
-			explorer_data->current_file.Copy(data->selection);
-			explorer_data->current_file[data->selection.size] = L'\0';
-			ChangeInspectorToFolder(data->editor_state, data->selection);
+			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+				FileExplorerHandleControlPath(data->editor_state, data->selection);
+			}
+			else if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+				FileExplorerHandleShiftSelection(data->editor_state, data->index);
+			}
+			else {
+				FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+				FileExplorerResetSelectedFiles(explorer_data);
+				FileExplorerAllocateSelectedFile(explorer_data, data->selection);
+				ChangeInspectorToFolder(data->editor_state, data->selection);
+				FileExplorerSetShiftIndices(explorer_data, data->index);
+			}
 		}
 	}
-	else {
-		FileExplorerResetFile(data->editor_state);
-	}
+	/*else {
+		FileExplorerResetSelectedFile(data->editor_state);
+	}*/
 }
 
 void FileExplorerChangeDirectoryFromFile(ActionData* action_data) {
@@ -142,7 +255,7 @@ void FileExplorerChangeDirectoryFromFile(ActionData* action_data) {
 
 	EditorState* data = (EditorState*)_data;
 	FileExplorerData* explorer_data = (FileExplorerData*)data->file_explorer_data;
-	FileExplorerSetNewDirectory(data, explorer_data->current_file);
+	FileExplorerSetNewDirectory(data, explorer_data->selected_files[0], -1);
 }
 
 void FileExplorerLabelRenameCallback(ActionData* action_data) {
@@ -171,15 +284,224 @@ void FileExplorerLabelRenameCallback(ActionData* action_data) {
 	}
 }
 
+void FileExplorerPasteElements(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+
+	unsigned int* _invalid_files = (unsigned int*)_malloca(sizeof(unsigned int) * data->copied_files.size);
+	Stream<unsigned int> invalid_files(_invalid_files, 0);
+
+	// For each path, copy it to the current directory or cut it
+	if (data->are_copied_files_cut) {
+		for (size_t index = 0; index < data->copied_files.size; index++) {
+			bool is_directory = IsFolder(data->copied_files[index]);
+
+			bool current_success;
+			if (is_directory) {
+				current_success = FolderCut(data->copied_files[index], data->current_directory);
+			}
+			else {
+				current_success = FileCut(data->copied_files[index], data->current_directory, true);
+			}
+
+			if (!current_success) {
+				invalid_files.Add(index);
+			}
+		}
+	}
+	else {
+		for (size_t index = 0; index < data->copied_files.size; index++) {
+			bool is_directory = IsFolder(data->copied_files[index]);
+
+			bool current_success;
+			if (is_directory) {
+				current_success = FolderCopy(data->copied_files[index], data->current_directory);
+			}
+			else {
+				current_success = FileCopy(data->copied_files[index], data->current_directory, true);
+			}
+
+			if (!current_success) {
+				invalid_files.Add(index);
+			}
+		}
+	}
+
+	// If some files failed
+	if (invalid_files.size > 0) {
+		constexpr const char* BASE_ERROR_MESSAGE = "One or more files/folders could not be copied. These are: ";
+
+		size_t total_buffer_size = strlen(BASE_ERROR_MESSAGE);
+		for (size_t index = 0; index < invalid_files.size; index++) {
+			total_buffer_size += data->copied_files[invalid_files[index]].size + 1;
+		}
+		total_buffer_size += 8;
+
+		char* _error_message = (char*)_malloca(sizeof(char) * total_buffer_size);
+		CapacityStream<char> error_message(_error_message, 0, total_buffer_size);
+		error_message.Copy(ToStream(BASE_ERROR_MESSAGE));
+
+		for (size_t index = 0; index < invalid_files.size; index++) {
+			error_message.Add('\n');
+			function::ConvertWideCharsToASCII(data->copied_files[invalid_files[index]], error_message);
+			error_message.size += data->copied_files[invalid_files[index]].size;
+		}
+
+		EditorSetError(editor_state, error_message);
+		_freea(_error_message);
+		// Also reset the copied files
+		FileExplorerResetCopiedFiles(data);
+	}
+
+	_freea(invalid_files.buffer);
+}
+
+void FileExplorerCopySelection(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	FileExplorerData* data = (FileExplorerData*)_data;
+	size_t total_size = 0;
+
+	for (size_t index = 0; index < data->selected_files.size; index++) {
+		total_size += data->selected_files[index].size * sizeof(wchar_t);
+	}
+
+	FileExplorerResetCopiedFiles(data);
+
+	void* allocation = data->selected_files.allocator->Allocate(total_size + sizeof(Stream<wchar_t>) * data->selected_files.size);
+	uintptr_t buffer = (uintptr_t)allocation;
+
+	data->copied_files.InitializeFromBuffer(buffer, data->selected_files.size);
+	for (size_t index = 0; index < data->copied_files.size; index++) {
+		data->copied_files[index].InitializeFromBuffer(buffer, data->selected_files[index].size);
+		data->copied_files[index].Copy(data->selected_files[index]);
+	}
+
+	data->are_copied_files_cut = false;
+}
+
+void FileExplorerCutSelection(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	FileExplorerData* data = (FileExplorerData*)_data;
+	FileExplorerCopySelection(action_data);
+	data->are_copied_files_cut = true;
+}
+
+void FileExplorerDeleteSelection(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	FileExplorerData* data = (FileExplorerData*)_data;
+
+	unsigned int* _invalid_files = (unsigned int*)_malloca(data->selected_files.size * sizeof(unsigned int));
+	unsigned int* _valid_copy_files = (unsigned int*)_malloca(data->copied_files.size * sizeof(unsigned int));
+	Stream<unsigned int> invalid_files(_invalid_files, 0);
+	Stream<unsigned int> valid_copy_files(_valid_copy_files, 0);
+
+	function::MakeSequence(valid_copy_files);
+
+	for (size_t index = 0; index < data->selected_files.size; index++) {
+		bool success;
+		if (IsFolder(data->selected_files[index])) {
+			success = RemoveFolder(data->selected_files[index]);
+		}
+		else {
+			success = RemoveFile(data->selected_files[index]);
+		}
+		if (!success) {
+			invalid_files.Add(index);
+		}
+		// Check to see if this file is also in the copy stream to remove it
+		else {
+			unsigned int copy_index = function::IsStringInStream(data->selected_files[index], data->copied_files);
+			if (copy_index != -1) {
+				for (size_t index = 0; index < valid_copy_files.size; index++) {
+					if (valid_copy_files[index] == copy_index) {
+						valid_copy_files.RemoveSwapBack(index);
+						break;
+					}
+				}
+			}
+		}
+	}
+	if (invalid_files.size > 0) {
+		constexpr const char* ERROR_MESSAGE = "One or more files/folders could not be deleted. These are: ";
+		size_t total_size = strlen(ERROR_MESSAGE);
+		for (size_t index = 0; index < invalid_files.size; index++) {
+			total_size += data->selected_files[invalid_files[index]].size + 1;
+		}
+		// Safety padding
+		char* temp_allocation = (char*)_malloca(sizeof(char) * total_size + 8);
+		CapacityStream<char> error_message(temp_allocation, 0, total_size + 8);
+
+		error_message.Copy(ToStream(ERROR_MESSAGE));
+		for (size_t index = 0; index < invalid_files.size; index++) {
+			error_message.Add('\n');
+			function::ConvertWideCharsToASCII(data->selected_files[invalid_files[index]], error_message);
+			error_message.size += data->selected_files[invalid_files[index]].size;
+		}
+
+		CreateErrorMessageWindow(system, error_message);
+		_freea(temp_allocation);
+	}
+
+	if (valid_copy_files.size < data->copied_files.size) {
+		size_t total_size = 0;
+		for (size_t index = 0; index < valid_copy_files.size; index++) {
+			total_size += data->copied_files[valid_copy_files[index]].size;
+		}
+
+		void* allocation = data->selected_files.allocator->Allocate(sizeof(wchar_t) * total_size + sizeof(Stream<wchar_t>) * valid_copy_files.size, alignof(wchar_t));
+		uintptr_t buffer = (uintptr_t)allocation;
+		Stream<Stream<wchar_t>> new_copy_files;
+		new_copy_files.InitializeFromBuffer(buffer, valid_copy_files.size);
+		for (size_t index = 0; index < new_copy_files.size; index++) {
+			new_copy_files[index].InitializeFromBuffer(buffer, data->copied_files[valid_copy_files[index]].size);
+			new_copy_files[index].Copy(data->copied_files[valid_copy_files[index]]);
+		}
+		FileExplorerResetCopiedFiles(data);
+		data->copied_files = new_copy_files;
+	}
+
+	_freea(_valid_copy_files);
+	_freea(_invalid_files);
+	FileExplorerResetSelectedFiles(data);
+}
+
+using FileExplorerSelectFromIndex = void (*)(FileExplorerData* data, unsigned int index, Stream<wchar_t> path);
+
+void FileExplorerSelectFromIndexNothing(FileExplorerData* data, unsigned int index, Stream<wchar_t> path) {}
+
+void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index, Stream<wchar_t> path) {
+	if (data->starting_shift_index <= index && index <= data->ending_shift_index) {
+		unsigned int index = data->selected_files.ReserveNewElement();
+		data->selected_files.size++;
+		data->selected_files[index].Initialize(data->selected_files.allocator, path.size);
+		data->selected_files[index].Copy(path);
+	}
+}
+
 struct ForEachData {
 	EditorState* editor_state;
 	UIDrawer<false>* drawer;
 	UIDrawConfig* config;
 	unsigned int element_count;
+	FileExplorerSelectFromIndex select_function;
 };
 
-bool IsElementSelected(FileExplorerData* data, Path path) {
-	return function::CompareStrings(data->current_file, path);
+struct FileFunctorData {
+	ForEachData* for_each_data;
+	unsigned char color_alpha;
+};
+
+bool FileExplorerIsElementSelected(FileExplorerData* data, Path path) {
+	return function::IsStringInStream(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size)) != (unsigned int)-1;
+}
+
+bool FileExplorerIsElementCut(FileExplorerData* data, Path path) {
+	return data->are_copied_files_cut && function::IsStringInStream(path, data->copied_files) != (unsigned int)-1;
 }
 
 void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, SelectableData* _data, bool is_selected, bool is_folder) {
@@ -271,65 +593,67 @@ void FileExplorerPathButtonAction(ActionData* action_data) {
 
 	PathButtonData* data = (PathButtonData*)_data;
 	data->data->current_directory.size = data->size;
-	data->data->current_file.size = 0;
+	FileExplorerResetSelectedFiles(data->data);
 }
 
 #pragma region File functors
 
 #define EXPAND_ACTION UI_UNPACK_ACTION_DATA; \
 \
-ForEachData* for_each_data = (ForEachData*)_additional_data; \
+FileFunctorData* functor_data = (FileFunctorData*)_additional_data; \
 SelectableData* data = (SelectableData*)_data; \
 \
-UIDrawer<false>* drawer = for_each_data->drawer; \
-UIDrawConfig* config = for_each_data->config; 
+UIDrawer<false>* drawer = functor_data->for_each_data->drawer; \
+UIDrawConfig* config = functor_data->for_each_data->config; \
+Color white_color = ECS_COLOR_WHITE; \
+white_color.alpha = functor_data->color_alpha;
 
 void TextureDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, data->selection.buffer);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, data->selection.buffer, white_color);
 }
 
 void FileBlankDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, white_color);
 }
 
 void FileCDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_C);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_C, white_color);
 }
 
 void FileCppDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_CPP);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_CPP, white_color);
 }
 
 void FileConfigDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, white_color);
 }
 
 void FileTextDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_TEXT);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_TEXT, white_color);
 }
 
 void FileShaderDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 	
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_SHADER);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_SHADER, white_color);
 }
 
 void FileEditorDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_EDITOR);
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_EDITOR, white_color);
 }
 
 #undef EXPAND_ACTION
@@ -396,14 +720,23 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 
 #pragma endregion
 
-#pragma region File Right Click Handlers
+#pragma region Deselection Handlers
 
-		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
-		data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { DeleteFileStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
+		data->deselection_right_click_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
+
+		data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
+
+		auto reset_copied_files = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+			
+			FileExplorerResetCopiedFiles((FileExplorerData*)_data);
+		};
+		data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
+
+#pragma endregion
+
+#pragma region File Right Click Handlers
 
 		auto CopyPath = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -414,7 +747,15 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 			system->m_application->WriteTextToClipboard(ascii_path.buffer);
 		};
 
+		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
+		data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
 		data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
+		data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
 
 #pragma endregion
 
@@ -424,9 +765,11 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 		data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
 		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
 		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { DeleteFolderContentsStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
 		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
 		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
+		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
 
 #pragma endregion
 
@@ -452,6 +795,33 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 #undef ADD_FUNCTOR
 
 	}
+
+#pragma region Deselection Menu
+
+	auto DeselectClick = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		if (mouse_tracker->LeftButton() == MBPRESSED) {
+			FileExplorerData* data = (FileExplorerData*)_data;
+			FileExplorerResetSelectedFiles(data);
+			data->starting_shift_index = data->ending_shift_index = -1;
+		}
+	};
+
+	UIActionHandler deselect_click = { DeselectClick, data, 0 };
+	drawer.SetWindowClickable(&deselect_click);
+
+	UIDrawerMenuRightClickData deselection_right_click_data;
+	deselection_right_click_data.name = "Deselection Menu";
+	deselection_right_click_data.window_index = 0;
+	deselection_right_click_data.state.click_handlers = data->deselection_right_click_handlers.buffer;
+	deselection_right_click_data.state.left_characters = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS;
+	deselection_right_click_data.state.row_count = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT;
+
+	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_right_click_data, sizeof(deselection_right_click_data), UIDrawPhase::System };
+	drawer.SetWindowHoverable(&deselect_right_click_handler);
+
+#pragma endregion
 
 #pragma region Header
 
@@ -627,6 +997,12 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 		for_each_data.editor_state = editor_state;
 		for_each_data.drawer = &drawer;
 		for_each_data.element_count = 0;
+		for_each_data.select_function = FileExplorerSelectFromIndexNothing;
+		if (data->get_selected_files_from_indices) {
+			FileExplorerResetSelectedFiles(data);
+			for_each_data.select_function = FileExplorerSelectFromIndexShift;
+			data->get_selected_files_from_indices = false;
+		}
 
 		auto directory_functor = [](const std::filesystem::path& _path, void* __data) {
 			ForEachData* _data = (ForEachData*)__data;
@@ -641,6 +1017,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
 			selectable_data.selection = path;
+			selectable_data.index = _data->element_count;
 
 			bool is_valid = true;
 			ActionData action_data = drawer->GetDummyActionData();
@@ -648,10 +1025,15 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			action_data.data = &selectable_data;
 			filter_functors[data->filter_stream.size > 0](&action_data);
 
-			if (is_valid) {
-				drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FOLDER);
+			_data->select_function(data, _data->element_count, path);
 
-				bool is_selected = IsElementSelected(data, path);
+			if (is_valid) {
+				bool is_selected = FileExplorerIsElementSelected(data, path);
+				unsigned char color_alpha = function::PredicateValue(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
+
+				Color white_color = ECS_COLOR_WHITE;
+				white_color.alpha = color_alpha;
+				drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FOLDER, white_color);
 
 				UIConfigGeneralAction general_action;
 				general_action.handler = { FileExplorerDirectorySelectable, &selectable_data, sizeof(selectable_data) };
@@ -661,10 +1043,15 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 					UI_UNPACK_ACTION_DATA;
 
 					SelectableData* data = (SelectableData*)_data;
-					ChangeFileExplorerFile(data->editor_state, data->selection);
-					ChangeInspectorToFolder(data->editor_state, data->selection);
-					FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
-					explorer_data->right_click_stream.size = data->selection.size;
+					unsigned int index = FileExplorerHasSelectedFile(data->editor_state, data->selection);
+					if (index == -1) {
+						ChangeFileExplorerFile(data->editor_state, data->selection, data->index);
+						ChangeInspectorToFolder(data->editor_state, data->selection);
+					}
+					else {
+						FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+						explorer_data->right_click_stream = explorer_data->selected_files[index];
+					}
 				};
 
 				UIDrawerMenuRightClickData right_click_data;
@@ -687,6 +1074,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 				if (is_selected) {
 					UIConfigColor color;
 					color.color = drawer->color_theme.theme;
+					color.color.alpha = color_alpha;
 					config->AddFlag(color);
 
 					UIConfigBorder border;
@@ -730,6 +1118,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
 			selectable_data.selection = path;
+			selectable_data.index = _data->element_count;
 
 			bool is_valid = true;
 			ActionData action_data = drawer->GetDummyActionData();
@@ -737,19 +1126,26 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			action_data.data = &selectable_data;
 			action_data.additional_data = &is_valid;
 
+			_data->select_function(data, _data->element_count, path);
+
 			filter_functors[data->filter_stream.size > 0](&action_data);
 
 			if (is_valid && extension.size > 0) {
+				bool is_selected = FileExplorerIsElementSelected(data, path);
+				unsigned char color_alpha = function::PredicateValue(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
+
+				FileFunctorData functor_data;
+				functor_data.for_each_data = _data;
+				functor_data.color_alpha = color_alpha;
+
 				if (data->file_functors.TryGetValue(hash, identifier, functor)) {
-					action_data.additional_data = _data;
+					action_data.additional_data = &functor_data;
 
 					functor(&action_data);
 				}
 				else {
 					drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK);
 				}
-
-				bool is_selected = IsElementSelected(data, path);
 
 				UIConfigHoverableAction hoverable_action;
 
@@ -763,21 +1159,28 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
 				struct OnRightClickData {
 					EditorState* editor_state;
+					unsigned int index;
 					Stream<wchar_t> path;
 				};
 
 				OnRightClickData* action_data = (OnRightClickData*)right_click_data.action_data;
 				action_data->editor_state = _data->editor_state;
 				action_data->path = path;
+				action_data->index = _data->element_count;
 
 				auto OnRightClickAction = [](ActionData* action_data) {
 					UI_UNPACK_ACTION_DATA;
 
 					OnRightClickData* data = (OnRightClickData*)_data;
-					action_data->data = data->editor_state;
-					FileExplorerSetNewFile(data->editor_state, data->path);
-					FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
-					explorer_data->right_click_stream.size = data->path.size;
+					unsigned int index = FileExplorerHasSelectedFile(data->editor_state, data->path);
+					if (index == -1) {
+						FileExplorerSetNewFile(data->editor_state, data->path, data->index);
+					}
+					else {
+						FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+						explorer_data->right_click_stream = explorer_data->selected_files[index];
+						explorer_data->starting_shift_index = explorer_data->ending_shift_index = data->index;
+					}
 				};
 				
 				right_click_data.action = OnRightClickAction;
@@ -845,6 +1248,52 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 	
 }
 
+void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager* allocator)
+{
+	// Copied files must not be initialied since only Cut/Copy will set the appropriate stream
+	file_explorer_data->current_directory.Initialize(allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
+	file_explorer_data->selected_files.Initialize(allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
+	file_explorer_data->filter_stream.Initialize(allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
+
+	file_explorer_data->right_click_stream.buffer = nullptr;
+	file_explorer_data->right_click_stream.size = 0;
+
+	file_explorer_data->copied_files.buffer = nullptr;
+	file_explorer_data->copied_files.size = 0;
+
+	file_explorer_data->starting_shift_index = -1;
+	file_explorer_data->ending_shift_index = -1;
+
+	file_explorer_data->are_copied_files_cut = false;
+	file_explorer_data->get_selected_files_from_indices = false;
+}
+
+void FileExplorerPrivateAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_additional_data;
+	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+		if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+			action_data->data = data;
+			FileExplorerCopySelection(action_data);
+		}
+		else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+			action_data->data = editor_state;
+			FileExplorerPasteElements(action_data);
+		}
+		else if (keyboard_tracker->IsKeyPressed(HID::Key::X)) {
+			action_data->data = data;
+			FileExplorerCutSelection(action_data);
+		}
+	}
+
+	if (keyboard->IsKeyPressed(HID::Key::Delete)) {
+		action_data->data = data;
+		FileExplorerDeleteSelection(action_data);
+	}
+}
+
 void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
 	descriptor.window_name = FILE_EXPLORER_WINDOW_NAME;
@@ -853,6 +1302,8 @@ void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edit
 
 	descriptor.draw = FileExplorerDraw<false>;
 	descriptor.initialize = FileExplorerDraw<true>;
+
+	descriptor.private_action = FileExplorerPrivateAction;
 }
 
 void CreateFileExplorer(EditorState* editor_state) {

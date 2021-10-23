@@ -1,12 +1,12 @@
 #pragma once
-#include "../Core.h"
-#include "../Containers/Stream.h"
-#include "../Containers/HashTable.h"
-#include "../Containers/Stacks.h"
-#include "../Containers/Queues.h"
+#include "../../Core.h"
+#include "../../Containers/Stream.h"
+#include "../../Containers/HashTable.h"
+#include "../../Containers/Stacks.h"
+#include "../../Containers/Queues.h"
 #include "UIStructures.h"
 #include "UIDrawConfigs.h"
-#include "../Rendering/ColorMacros.h"
+#include "../../Rendering/ColorMacros.h"
 #include "UISystem.h"
 
 namespace ECSEngine {

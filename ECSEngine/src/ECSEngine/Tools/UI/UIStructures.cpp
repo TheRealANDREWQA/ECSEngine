@@ -1,8 +1,8 @@
 #include "ecspch.h"
 #include "UIStructures.h"
-#include "../Rendering/ColorMacros.h"
-#include "../Utilities/Function.h"
-#include "../Utilities/FunctionInterfaces.h"
+#include "../../Rendering/ColorMacros.h"
+#include "../../Utilities/Function.h"
+#include "../../Utilities/FunctionInterfaces.h"
 
 namespace ECSEngine {
 
@@ -426,7 +426,7 @@ namespace ECSEngine {
 		{
 			for (size_t index = 0; index < sprite_textures.size; index++) {
 				for (size_t subindex = 0; subindex < sprite_textures[index].size; subindex++) {
-					sprite_textures[index][subindex].view.view->Release();
+					sprite_textures[index][subindex].view->Release();
 				}
 			}
 		}

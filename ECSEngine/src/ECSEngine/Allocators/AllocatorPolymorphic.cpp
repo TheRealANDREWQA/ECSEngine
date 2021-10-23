@@ -26,13 +26,13 @@ namespace ECSEngine {
 	}
 
 	template<typename Allocator>
-	void DeallocateFunctionAllocator(void* _allocator, const void* buffer) {
+	void DeallocateFunctionAllocator(void* ECS_RESTRICT _allocator, const void* ECS_RESTRICT buffer) {
 		Allocator* allocator = (Allocator*)_allocator;
 		allocator->Deallocate(buffer);
 	}
 
 	template<typename Allocator>
-	void DeallocateFunctionAllocatorTs(void* _allocator, const void* buffer) {
+	void DeallocateFunctionAllocatorTs(void* ECS_RESTRICT _allocator, const void* ECS_RESTRICT buffer) {
 		Allocator* allocator = (Allocator*)_allocator;
 		allocator->Deallocate_ts(buffer);
 	}
@@ -90,12 +90,40 @@ namespace ECSEngine {
 		return ALLOCATE_TS_FUNCTIONS[(unsigned int)type](allocator, size, alignment);
 	}
 
-	void Deallocate(void* allocator, AllocatorType type, const void* buffer) {
+	void* Allocate(void* allocator, AllocatorType allocator_type, AllocationType allocation_type, size_t size, size_t alignment)
+	{
+		if (allocation_type == AllocationType::SingleThreaded) {
+			return Allocate(allocator, allocator_type, size, alignment);
+		}
+		else {
+			return AllocateTs(allocator, allocator_type, size, alignment);
+		}
+	}
+
+	void* Allocate(AllocatorPolymorphic allocator, size_t size, size_t alignment)
+	{
+		return Allocate(allocator.allocator, allocator.allocator_type, allocator.allocation_type, size, alignment);
+	}
+
+	void Deallocate(void* ECS_RESTRICT allocator, AllocatorType type, const void* ECS_RESTRICT buffer) {
 		DEALLOCATE_FUNCTIONS[(unsigned int)type](allocator, buffer);
 	}
 
-	void DeallocateTs(void* allocator, AllocatorType type, const void* buffer) {
+	void DeallocateTs(void* ECS_RESTRICT allocator, AllocatorType type, const void* ECS_RESTRICT buffer) {
 		DEALLOCATE_TS_FUNCTIONS[(unsigned int)type](allocator, buffer);
+	}
+
+	void Deallocate(void* ECS_RESTRICT allocator, AllocatorType allocator_type, const void* ECS_RESTRICT buffer, AllocationType allocation_type) {
+		if (allocation_type == AllocationType::SingleThreaded) {
+			Deallocate(allocator, allocator_type, buffer);
+		}
+		else {
+			DeallocateTs(allocator, allocator_type, buffer);
+		}
+	}
+
+	void Deallocate(AllocatorPolymorphic allocator, const void* ECS_RESTRICT buffer) {
+		Deallocate(allocator.allocator, allocator.allocator_type, buffer, allocator.allocation_type);
 	}
 
 }

@@ -231,7 +231,8 @@ namespace ECSEngine {
 	// Compare function uses AVX2 32 byte SIMD char compare
 	struct ECSENGINE_API ResourceIdentifier {
 		ResourceIdentifier();
-		ResourceIdentifier(LPCWSTR filename);
+		ResourceIdentifier(const char* filename);
+		ResourceIdentifier(const wchar_t* filename);
 		// if the identifier is something other than a LPCWSTR path
 		ResourceIdentifier(const void* id, unsigned int size);
 		ResourceIdentifier(Stream<void> identifier);

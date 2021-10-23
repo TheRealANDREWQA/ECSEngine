@@ -216,6 +216,9 @@ namespace ECSEngine {
 
 		// ----------------------------------------------- Component Creation ----------------------------------------------------
 
+		// It will create an empty index buffer - must be populated afterwards
+		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, D3D11_USAGE usage = D3D11_USAGE_DEFAULT, unsigned int cpu_access = 0);
+
 		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices);
 
 		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices);
@@ -437,6 +440,7 @@ namespace ECSEngine {
 
 		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0);
 
+		// It assumes that the given shaders can be reflected
 		Material CreateMaterial(VertexShader v_shader, PixelShader p_shader, DomainShader d_shader = nullptr, HullShader h_shader = nullptr, GeometryShader g_shader = nullptr);
 
 #pragma endregion
@@ -678,9 +682,66 @@ namespace ECSEngine {
 
 	ECSENGINE_API void BindMaterial(const Material& material, GraphicsContext* context);
 
+	template<typename Resource>
+	ECSENGINE_API void CopyGraphicsResource(Resource destination, Resource source, GraphicsContext* context);
+
+	// Available types - IndexBuffer, VertexBuffer, ConstantBuffer, StandardBuffer, StructuredBuffer 
+	// and UABuffer
+	// For vertex buffers and index buffers offsets and sizes are in element quantities
+	// For constant buffers, standard buffers and structured buffers offsets and sizes are in byte
+	// quantities
+	template<typename Buffer>
+	ECSENGINE_API void CopyBufferSubresource(
+		Buffer destination,
+		unsigned int destination_offset,
+		Buffer source,
+		unsigned int source_offset,
+		unsigned int source_size,
+		GraphicsContext* context
+	);
+	
+	// Subresource index can be used to change the mip level
+	// Most of the time it will be 0
+	ECSENGINE_API void CopyTextureSubresource(
+		Texture1D destination,
+		unsigned int destination_offset,
+		unsigned int destination_subresource_index,
+		Texture1D source,
+		unsigned int source_offset,
+		unsigned int source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	);
+
+	// Subresource index can be used to change the mip level
+	// Most of the time it will be 0
+	ECSENGINE_API void CopyTextureSubresource(
+		Texture2D destination,
+		uint2 destination_offset,
+		unsigned int destination_subreosurce_index,
+		Texture2D source,
+		uint2 source_offset,
+		uint2 source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	);
+
+	// Subresource index can be used to change the mip level
+	// Most of the time it will be 0
+	ECSENGINE_API void CopyTextureSubresource(
+		Texture3D destination,
+		uint3 destination_offset,
+		unsigned int destination_subresource_index,
+		Texture3D source,
+		uint3 source_offset,
+		uint3 source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	);
+
 	ECSENGINE_API void Draw(unsigned int vertex_count, GraphicsContext* context, UINT start_slot = 0u);
 
-	ECSENGINE_API void DrawIndexed(unsigned int index_count, GraphicsContext* context, UINT start_vertex = 0u, INT base_vertex_location = 0);
+	ECSENGINE_API void DrawIndexed(unsigned int index_count, GraphicsContext* context, UINT start_index = 0u, INT base_vertex_location = 0);
 
 	ECSENGINE_API void DrawInstanced(
 		unsigned int vertex_count, 
@@ -714,24 +775,29 @@ namespace ECSEngine {
 		unsigned int map_flags = 0
 	);
 
-	ECSENGINE_API void* MapTexture(
-		Texture1D texture,
+	// It must be unmapped manually
+	ECSENGINE_API D3D11_MAPPED_SUBRESOURCE MapBufferEx(
+		ID3D11Buffer* buffer,
 		GraphicsContext* context,
 		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
 		unsigned int map_flags = 0
 	);
 
+	// It must be unmapped manually
+	template<typename Texture>
 	ECSENGINE_API void* MapTexture(
-		Texture2D texture,
+		Texture texture,
 		GraphicsContext* context,
 		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
 		unsigned int map_flags = 0
 	);
 
-	ECSENGINE_API void* MapTexture(
-		Texture3D texture,
+	// It must be unmapped manually
+	template<typename Texture>
+	ECSENGINE_API D3D11_MAPPED_SUBRESOURCE MapTextureEx(
+		Texture texture,
 		GraphicsContext* context,
 		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
@@ -757,11 +823,18 @@ namespace ECSEngine {
 
 	ECSENGINE_API void UnmapBuffer(ID3D11Buffer* buffer, GraphicsContext* context, unsigned int subresource_index = 0);
 
-	ECSENGINE_API void UnmapTexture(Texture1D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+	template<typename Texture>
+	ECSENGINE_API void UnmapTexture(Texture texture, GraphicsContext* context, unsigned int subresource_index = 0);
 
-	ECSENGINE_API void UnmapTexture(Texture2D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
+	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh
+	// and the submeshes - the offsets into the buffers; it will release the initial mesh 
+	// buffers; The meshes must have the same index buffer int size
+	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes);
 
-	ECSENGINE_API void UnmapTexture(Texture3D texture, GraphicsContext* context, unsigned int subresource_index = 0);
+	// Same as the non mask variant - the difference is that it will only convert the meshes specified
+	// in the mesh mask
+	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes, containers::Stream<unsigned int> mesh_mask);
 
 #endif // ECSENGINE_DIRECTX11
 

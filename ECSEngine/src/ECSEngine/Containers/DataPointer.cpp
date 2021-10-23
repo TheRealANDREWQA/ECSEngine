@@ -50,6 +50,13 @@ namespace ECSEngine {
 			return (void*)ptr;
 		}
 
+		void DataPointer::SetPointer(void* new_pointer)
+		{
+			unsigned short data = GetData();
+			pointer = new_pointer;
+			SetData(data);
+		}
+
 
 
 	}
