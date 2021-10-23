@@ -17,8 +17,14 @@ namespace ECSEngine {
 	template<typename StreamType>
 	bool SerializeInternal(
 		StreamType& stream,
-		Stream<SerializeSectionData> data
+		Stream<SerializeSectionData> data,
+		Stream<void> header
 	) {
+		Write(stream, &header.size, sizeof(header.size));
+		if (header.buffer != nullptr && header.size > 0) {
+			Write(stream, header);
+		}
+
 		// Write the section count
 		Write(stream, &data.size, sizeof(size_t));
 
@@ -46,8 +52,20 @@ namespace ECSEngine {
 	size_t DeserializeInternal(
 		StreamType& ECS_RESTRICT stream,
 		Stream<SerializeSectionData> sections,
+		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index
 	) {
+		size_t header_size;
+		Read(stream, &header_size, sizeof(header_size));
+		if (header != nullptr) {
+			ECS_ASSERT(header->capacity >= header_size);
+			Read(stream, header->buffer, header_size);
+			header->size = header_size;
+		}
+		else {
+			Ignore(stream, header_size);
+		}
+
 		size_t section_count;
 		Read(stream, &section_count, sizeof(size_t));
 		if (section_count == 0) {
@@ -114,8 +132,20 @@ namespace ECSEngine {
 		Stream<const char*> section_names,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
 		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		CapacityStream<void>* header,
 		bool* ECS_RESTRICT success_status
 	) {
+		size_t header_size = 0;
+		Read(stream, &header_size, sizeof(header_size));
+		if (header != nullptr) {
+			ECS_ASSERT(header->capacity >= header_size);
+			Read(stream, header->buffer, header_size);
+			header->size = header_size;
+		}
+		else {
+			Ignore(stream, header_size);
+		}
+
 		size_t section_count;
 		Read(stream, &section_count, sizeof(size_t));
 		if (section_count == 0) {
@@ -176,10 +206,22 @@ namespace ECSEngine {
 	size_t DeserializeInternal(
 		StreamType& ECS_RESTRICT stream,
 		Stream<SerializeSectionData> sections,
-		void* allocator,
+		void* ECS_RESTRICT allocator,
 		AllocatorType allocator_type,
+		CapacityStream<void>* header,
 		bool* success
 	) {
+		size_t header_size = 0;
+		Read(stream, &header_size, sizeof(header_size));
+		if (header != nullptr) {
+			ECS_ASSERT(header->capacity >= header_size);
+			Read(stream, header->buffer, header_size);
+			header->size = header_size;
+		}
+		else {
+			Ignore(stream, header_size);
+		}
+
 		size_t section_count;
 		Read(stream, &section_count, sizeof(section_count));
 		if (section_count == 0) {
@@ -325,13 +367,14 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------
 
 	bool SerializeSection(
-		const ReflectionManager* ECS_RESTRICT reflection,
+		const ReflectionManager* reflection,
 		const char* ECS_RESTRICT type_name,
 		std::ofstream& stream,
-		const void* ECS_RESTRICT data
+		const void* ECS_RESTRICT data,
+		Stream<void> header
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		return SerializeSection(type, stream, data);
+		return SerializeSection(type, stream, data, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -339,7 +382,8 @@ namespace ECSEngine {
 	bool SerializeSection(
 		ReflectionType type,
 		std::ofstream& stream,
-		const void* ECS_RESTRICT data
+		const void* ECS_RESTRICT data,
+		Stream<void> header
 	) {
 		ECS_ASSERT(type.fields.size < 128);
 
@@ -349,19 +393,20 @@ namespace ECSEngine {
 		char name_buffer[NAME_BUFFER_CAPACITY];
 		ConvertTypeToSectionData(type, serialize_data, data, name_buffer);
 
-		return SerializeInternal(stream, serialize_data);
+		return SerializeInternal(stream, serialize_data, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	void SerializeSection(
-		const ReflectionManager* ECS_RESTRICT reflection,
+		const ReflectionManager* reflection,
 		const char* ECS_RESTRICT type_name,
 		CapacityStream<void>& stream,
-		const void* ECS_RESTRICT data
+		const void* ECS_RESTRICT data,
+		Stream<void> header
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		SerializeSection(type, stream, data);
+		SerializeSection(type, stream, data, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -369,7 +414,8 @@ namespace ECSEngine {
 	void SerializeSection(
 		ReflectionType type,
 		CapacityStream<void>& stream,
-		const void* ECS_RESTRICT data
+		const void* ECS_RESTRICT data,
+		Stream<void> header
 	) {
 		ECS_ASSERT(type.fields.size < 128);
 
@@ -378,19 +424,19 @@ namespace ECSEngine {
 
 		char name_buffer[NAME_BUFFER_CAPACITY];
 		ConvertTypeToSectionData(type, serialize_data, data, name_buffer);
-		SerializeInternal(stream, serialize_data);
+		SerializeInternal(stream, serialize_data, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	bool SerializeSection(std::ofstream& stream, Stream<SerializeSectionData> data) {
-		return SerializeInternal(stream, data);
+	bool SerializeSection(std::ofstream& stream, Stream<SerializeSectionData> data, Stream<void> header) {
+		return SerializeInternal(stream, data, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	void SerializeSection(CapacityStream<void>& stream, Stream<SerializeSectionData> data) {
-		SerializeInternal(stream, data);
+	void SerializeSection(CapacityStream<void>& stream, Stream<SerializeSectionData> data, Stream<void> header) {
+		SerializeInternal(stream, data, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -444,10 +490,11 @@ namespace ECSEngine {
 		void* ECS_RESTRICT address,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
 		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		CapacityStream<void>* header,
 		bool* ECS_RESTRICT success_status
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		return DeserializeSection(type, stream, address, memory_pool, pointers, success_status);
+		return DeserializeSection(type, stream, address, memory_pool, pointers, header, success_status);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -457,10 +504,11 @@ namespace ECSEngine {
 		const char* ECS_RESTRICT type_name,
 		std::ifstream& ECS_RESTRICT stream,
 		void* ECS_RESTRICT address,
+		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		return DeserializeSection(type, stream, address, faulty_index);
+		return DeserializeSection(type, stream, address, header, faulty_index);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -471,6 +519,7 @@ namespace ECSEngine {
 		void* ECS_RESTRICT address,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
 		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		CapacityStream<void>* header,
 		bool* ECS_RESTRICT success_status
 	) {
 		ECS_ASSERT(type.fields.size < 128);
@@ -480,7 +529,7 @@ namespace ECSEngine {
 		Stream<const char*> section_names(_section_names, 0);
 		
 		ConvertTypeToSectionNames(type, section_names, name_buffer);
-		size_t pointer_data_size = DeserializeInternal(stream, section_names, memory_pool, pointers, success_status);
+		size_t pointer_data_size = DeserializeInternal(stream, section_names, memory_pool, pointers, header, success_status);
 		
 		ResolveTypeFromSectionNames(type, section_names, pointers, address);
 		return pointer_data_size;
@@ -492,6 +541,7 @@ namespace ECSEngine {
 		ReflectionType type,
 		std::ifstream& ECS_RESTRICT stream,
 		void* ECS_RESTRICT address,
+		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index
 	) {
 		ECS_ASSERT(type.fields.size < 128);
@@ -501,7 +551,7 @@ namespace ECSEngine {
 		Stream<SerializeSectionData> serialize_data(_serialize_data, 0);
 		
 		ConvertTypeToSectionData(type, serialize_data, address, name_buffer);
-		return DeserializeInternal(stream, serialize_data, faulty_index);
+		return DeserializeInternal(stream, serialize_data, header, faulty_index);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -512,10 +562,11 @@ namespace ECSEngine {
 		uintptr_t& ECS_RESTRICT stream,
 		void* ECS_RESTRICT address,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers
+		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		CapacityStream<void>* header
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		return DeserializeSection(type, stream, address, memory_pool, pointers);
+		return DeserializeSection(type, stream, address, memory_pool, pointers, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -524,10 +575,11 @@ namespace ECSEngine {
 		const ReflectionManager* ECS_RESTRICT reflection,
 		const char* ECS_RESTRICT type_name,
 		uintptr_t& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address
+		void* ECS_RESTRICT address,
+		CapacityStream<void>* header
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		return DeserializeSection(type, stream, address);
+		return DeserializeSection(type, stream, address, header);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -537,7 +589,8 @@ namespace ECSEngine {
 		uintptr_t& ECS_RESTRICT stream,
 		void* ECS_RESTRICT address,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers
+		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		CapacityStream<void>* header
 	) {
 		ECS_ASSERT(type.fields.size < 128);
 
@@ -546,7 +599,7 @@ namespace ECSEngine {
 		Stream<const char*> section_names(_section_names, 0);
 		
 		ConvertTypeToSectionNames(type, section_names, name_buffer);
-		size_t pointer_data_size = DeserializeInternal(stream, section_names, memory_pool, pointers, nullptr);
+		size_t pointer_data_size = DeserializeInternal(stream, section_names, memory_pool, pointers, header, nullptr);
 
 		ResolveTypeFromSectionNames(type, section_names, pointers, address);
 		return pointer_data_size;
@@ -558,6 +611,7 @@ namespace ECSEngine {
 		ReflectionType type,
 		uintptr_t& ECS_RESTRICT stream,
 		void* ECS_RESTRICT address,
+		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index
 	) {
 		ECS_ASSERT(type.fields.size < 128);
@@ -567,7 +621,7 @@ namespace ECSEngine {
 		Stream<SerializeSectionData> serialize_data(_serialize_data, 0);
 
 		ConvertTypeToSectionData(type, serialize_data, address, name_buffer);
-		return DeserializeInternal(stream, serialize_data, faulty_index);
+		return DeserializeInternal(stream, serialize_data, header, faulty_index);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -577,9 +631,10 @@ namespace ECSEngine {
 		Stream<const char*> section_names,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
 		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		CapacityStream<void>* header,
 		bool* ECS_RESTRICT success_status
 	) {
-		return DeserializeInternal(stream, section_names, memory_pool, pointers, success_status);
+		return DeserializeInternal(stream, section_names, memory_pool, pointers, header, success_status);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -587,9 +642,10 @@ namespace ECSEngine {
 	size_t DeserializeSection(
 		std::ifstream& stream,
 		Stream<SerializeSectionData> data,
+		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index
 	) {
-		return DeserializeInternal(stream, data, faulty_index);
+		return DeserializeInternal(stream, data, header, faulty_index);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -598,9 +654,10 @@ namespace ECSEngine {
 		uintptr_t& stream,
 		Stream<const char*> section_names,
 		CapacityStream<void>& memory_pool,
-		Stream<function::CopyPointer>& pointers
+		Stream<function::CopyPointer>& pointers,
+		CapacityStream<void>* header
 	) {
-		return DeserializeInternal(stream, section_names, memory_pool, pointers, nullptr);
+		return DeserializeInternal(stream, section_names, memory_pool, pointers, header, nullptr);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -608,51 +665,76 @@ namespace ECSEngine {
 	size_t DeserializeSection(
 		uintptr_t& stream,
 		Stream<SerializeSectionData> data,
+		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index
 	) {
-		return DeserializeInternal(stream, data, faulty_index);
+		return DeserializeInternal(stream, data, header, faulty_index);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSection(uintptr_t& stream, Stream<SerializeSectionData> data, void* allocator, AllocatorType allocator_type)
+	size_t DeserializeSection(
+		uintptr_t& stream, 
+		Stream<SerializeSectionData> data, 
+		void* ECS_RESTRICT allocator, 
+		AllocatorType allocator_type,
+		CapacityStream<void>* header
+	)
 	{
-		return DeserializeInternal(stream, data, allocator, allocator_type, nullptr);
+		return DeserializeInternal(stream, data, allocator, allocator_type, header, nullptr);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSection(std::ifstream& stream, Stream<SerializeSectionData> data, void* allocator, AllocatorType allocator_type, bool* success)
+	size_t DeserializeSection(
+		std::ifstream& stream, 
+		Stream<SerializeSectionData> data, 
+		void* ECS_RESTRICT allocator, 
+		AllocatorType allocator_type,
+		CapacityStream<void>* header, 
+		bool* success
+	)
 	{
-		return DeserializeInternal(stream, data, allocator, allocator_type, success);
+		return DeserializeInternal(stream, data, allocator, allocator_type, header, success);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSectionCount(uintptr_t stream)
+	size_t DeserializeSectionCount(uintptr_t stream, size_t header_size)
 	{
-		return *(size_t*)stream;
+		return *(size_t*)function::OffsetPointer((void*)stream, header_size);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeSectionCount(std::ifstream& stream)
+	size_t DeserializeSectionCount(std::ifstream& stream, size_t header_size)
 	{
 		size_t count = 0;
+		Ignore(stream, header_size + sizeof(header_size));
 		Read(stream, &count, sizeof(count));
-		stream.seekg(-8, std::ios_base::cur);
+		stream.seekg(0, std::ios_base::beg);
 		ECS_ASSERT(stream.good());
 		return count;
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------
 	
 	size_t DeserializeSectionSize(
 		uintptr_t data,
-		Stream<SerializeSectionData> serialize_data
+		Stream<SerializeSectionData> serialize_data,
+		size_t* header_size
 	) {
 		unsigned short* section_name_sizes = (unsigned short*)alloca(sizeof(unsigned short) * serialize_data.size);
 		for (size_t index = 0; index < serialize_data.size; index++) {
 			section_name_sizes[index] = (unsigned short)strlen(serialize_data[index].name);
 		}
+
+		size_t _header_size = 0;
+		Read(data, &_header_size, sizeof(_header_size));
+		if (header_size != nullptr) {
+			*header_size = _header_size;
+		}
+		Ignore(data, _header_size);
 
 		size_t section_count;
 		Read(data, &section_count, sizeof(size_t));
@@ -684,14 +766,24 @@ namespace ECSEngine {
 		return total_memory;
 	}
 
+	// -------------------------------------------------------------------------------------------------------------------
+
 	size_t DeserializeSectionSize(
 		uintptr_t data,
-		Stream<const char*> section_names
+		Stream<const char*> section_names,
+		size_t* header_size
 	) {
 		unsigned short* section_name_sizes = (unsigned short*)alloca(sizeof(unsigned short) * section_names.size);
 		for (size_t index = 0; index < section_names.size; index++) {
 			section_name_sizes[index] = (unsigned short)strlen(section_names[index]);
 		}
+
+		size_t _header_size = 0;
+		Read(data, &_header_size, sizeof(_header_size));
+		if (header_size != nullptr) {
+			*header_size = _header_size;
+		}
+		Ignore(data, _header_size);
 
 		size_t section_count;
 		Read(data, &section_count, sizeof(size_t));
@@ -723,15 +815,25 @@ namespace ECSEngine {
 		return total_memory;
 	}
 
+	// -------------------------------------------------------------------------------------------------------------------
+
 	size_t DeserializeSectionSize(
 		uintptr_t data,
-		ReflectionType type
+		ReflectionType type,
+		size_t* header_size
 	) {
 		ECS_ASSERT(type.fields.size < 128);
 		unsigned short field_name_sizes[128];
 		for (size_t index = 0; index < type.fields.size; index++) {
 			field_name_sizes[index] = (unsigned short)type.fields[index].name;
 		}
+
+		size_t _header_size = 0;
+		Read(data, &_header_size, sizeof(_header_size));
+		if (header_size != nullptr) {
+			*header_size = _header_size;
+		}
+		Ignore(data, _header_size);
 
 		size_t section_count;
 		Read(data, &section_count, sizeof(size_t));
@@ -763,5 +865,43 @@ namespace ECSEngine {
 		return total_memory;
 
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	size_t DeserializeSectionHeaderSize(uintptr_t data) {
+		return *(size_t*)data;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	size_t DeserializeSectionHeaderSize(std::ifstream& stream) {
+		size_t count = 0;
+		Read(stream, &count, sizeof(count));
+		stream.seekg(0, std::ios_base::beg);
+		ECS_ASSERT(stream.good());
+		return count;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	void DeserializeSectionHeader(uintptr_t data, CapacityStream<void>& header) {
+		size_t header_size = 0;
+		Read(data, &header_size, sizeof(header_size));
+		ECS_ASSERT(header_size <= header.capacity);
+		Read(data, header, header_size);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	bool DeserializeSectionHeader(std::ifstream& stream, CapacityStream<void>& header) {
+		size_t header_size = 0;
+		Read(stream, &header_size, sizeof(header_size));
+		ECS_ASSERT(header_size <= header.capacity);
+		Read(stream, header, header_size);
+		stream.seekg(0, std::ios_base::beg);
+		return stream.good();
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
 
 }

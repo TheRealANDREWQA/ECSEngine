@@ -85,7 +85,8 @@ namespace ECSEngine {
 		return (DirectX::TEX_COMPRESS_FLAGS)((unsigned int)initial | ((unsigned int)flag * state));
 	}
 
-	bool CompressTexture(Texture2D& texture, TextureCompression compression_type, size_t flags, CapacityStream<char>* error_message) {
+	template<typename void (*LockFunction)(SpinLock*), typename void (*UnlockFunction)(SpinLock*)>
+	bool CompressTextureImplementation(Texture2D& texture, TextureCompression compression_type, SpinLock* spin_lock, size_t flags, CapacityStream<char>* error_message) {
 		// Get the texture descriptor and fill the DirectX image
 		D3D11_TEXTURE2D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
@@ -100,7 +101,7 @@ namespace ECSEngine {
 		if ((texture_descriptor.Width & 3) != 0 || (texture_descriptor.Height & 3) != 0) {
 			SetErrorMessage(error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
 			return false;
-		} 
+		}
 
 		DirectX::ScratchImage initial_image;
 		initial_image.Initialize2D(texture_descriptor.Format, texture_descriptor.Width, texture_descriptor.Height, texture_descriptor.ArraySize, texture_descriptor.MipLevels);
@@ -119,10 +120,11 @@ namespace ECSEngine {
 
 		// Create a staging resource that will copy the original texture and map every mip level
 		// For compression
-		bool success = true;
-		Texture2D staging_texture = ToStagingTexture(texture, &success);
-		if (!success) {
+		LockFunction(spin_lock);
+		Texture2D staging_texture = ToStaging(texture);
+		if (staging_texture.tex == nullptr) {
 			SetErrorMessage(error_message, "Failed compressing a texture. Could not create staging texture.");
+			UnlockFunction(spin_lock);
 			return false;
 		}
 
@@ -130,6 +132,7 @@ namespace ECSEngine {
 			HRESULT result = context->Map(staging_texture.tex, index, D3D11_MAP_READ, 0, &mapping);
 			if (FAILED(result)) {
 				SetErrorMessage(error_message, "Failed compressing a texture. Mapping a mip level failed.");
+				UnlockFunction(spin_lock);
 				return false;
 			}
 			const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
@@ -147,17 +150,18 @@ namespace ECSEngine {
 			}
 			context->Unmap(staging_texture.tex, index);
 		}
+		UnlockFunction(spin_lock);
 
 		HRESULT result;
 		// CPU codec
 		if (IsCPUCodec(compression_type)) {
 			result = DirectX::Compress(
 				initial_image.GetImages(),
-				initial_image.GetImageCount(), 
-				initial_image.GetMetadata(), 
+				initial_image.GetImageCount(),
+				initial_image.GetMetadata(),
 				compressed_format,
-				compress_flag, 
-				DirectX::TEX_THRESHOLD_DEFAULT, 
+				compress_flag | DirectX::TEX_COMPRESS_PARALLEL,
+				DirectX::TEX_THRESHOLD_DEFAULT,
 				final_image
 			);
 		}
@@ -169,7 +173,7 @@ namespace ECSEngine {
 				initial_image.GetImageCount(),
 				initial_image.GetMetadata(),
 				compressed_format,
-				compress_flag,
+				compress_flag | DirectX::TEX_COMPRESS_BC7_QUICK,
 				1.0f,
 				final_image
 			);
@@ -190,7 +194,7 @@ namespace ECSEngine {
 			new_texture_data[index].SysMemPitch = image->rowPitch;
 			new_texture_data[index].SysMemSlicePitch = image->slicePitch;
 		}
-		
+
 		ID3D11Texture2D* old_texture = texture.tex;
 		texture_descriptor.Format = compressed_format;
 		texture_descriptor.BindFlags = function::RemoveFlag(texture_descriptor.BindFlags, D3D11_BIND_RENDER_TARGET);
@@ -206,8 +210,49 @@ namespace ECSEngine {
 		return true;
 	}
 
+	void NothingSpinLock(SpinLock* spin_lock) {}
+
+	void LockSpinLock(SpinLock* spin_lock) {
+		spin_lock->lock();
+	}
+
+	void UnlockSpinLock(SpinLock* spin_lock) {
+		spin_lock->unlock();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	bool CompressTexture(Texture2D& texture, TextureCompression compression_type, size_t flags, CapacityStream<char>* error_message) {
+		return CompressTextureImplementation<NothingSpinLock, NothingSpinLock>(texture, compression_type, nullptr, flags, error_message);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	bool CompressTexture(Texture2D& texture, TextureCompression compression_type, SpinLock* spin_lock, size_t flags, CapacityStream<char>* error_message) {
+		return CompressTextureImplementation<LockSpinLock, UnlockSpinLock>(texture, compression_type, spin_lock, flags, error_message);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
 	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, CapacityStream<char>* error_message) {
-		return CompressTexture(texture, EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type], error_message);
+		return CompressTexture(
+			texture, 
+			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
+			EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type],
+			error_message
+		);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, SpinLock* spin_lock, CapacityStream<char>* error_message) {
+		return CompressTexture(
+			texture,
+			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
+			spin_lock, 
+			EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type], 
+			error_message
+		);
 	}
 
 }

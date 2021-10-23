@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-constexpr size_t SLEEP_AMOUNT[] = { 14, 10, 6, 4 };
+constexpr size_t SLEEP_AMOUNT[] = { 14, 12, 10, 8 };
 constexpr size_t GLOBAL_MEMORY_COUNT = 20'000'000;
 constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 4'000'000;
 constexpr size_t UI_RESIZABLE_ARENA_INITIAL_MEMORY = 15'000'000;
@@ -41,9 +41,6 @@ constexpr size_t CREATE_PROJECT_DEFAULT_MEMORY_MANAGER_MAXIMUM_POOL_COUNT = 1024
 constexpr size_t CREATE_PROJECT_DEFAULT_MEMORY_MANAGER_NEW_ALLOCATION_SIZE = 20'000'000;
 
 constexpr const wchar_t* CONSOLE_RELATIVE_DUMP_PATH = L"/Debug/ConsoleDump.txt";
-constexpr size_t FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY = 256;
-constexpr size_t FILE_EXPLORER_CURRENT_FILE_CAPACITY = 256;
-constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
 
 constexpr const wchar_t* EDITOR_DEFAULT_PROJECT_UI_TEMPLATE = L"Resources/DefaultTemplate";
 constexpr const wchar_t* EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX = L"Resources/EditorTemplate";

@@ -32,13 +32,21 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool CreateFolder(Stream<wchar_t> path);
 
-	ECSENGINE_API bool FileCopy(const wchar_t* from, const wchar_t* to);
+	ECSENGINE_API bool FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false);
 
-	ECSENGINE_API bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to);
+	ECSENGINE_API bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false);
+
+	ECSENGINE_API bool FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false);
+
+	ECSENGINE_API bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false);
 
 	ECSENGINE_API bool FolderCopy(const wchar_t* from, const wchar_t* to);
 
 	ECSENGINE_API bool FolderCopy(Stream<wchar_t> from, Stream<wchar_t> to);
+
+	ECSENGINE_API bool FolderCut(const wchar_t* from, const wchar_t* to);
+
+	ECSENGINE_API bool FolderCut(Stream<wchar_t> from, Stream<wchar_t> to);
 
 	// New name must only be the directory name, not the fully qualified path
 	ECSENGINE_API bool RenameFolder(const wchar_t* path, const wchar_t* new_name);

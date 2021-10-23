@@ -15,8 +15,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK_Desktop_2019", "E
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTex", "ECSEngine\Dependencies\DirectXTex\DirectXTex\DirectXTex_Desktop_2019_Win10.vcxproj", "{371B9FA9-4C90-4AC6-A123-ACED756D6C77}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CollisionSystem", "..\GeneralisModules\CollisionSystem\CollisionSystem.vcxproj", "{8D0689D6-CF70-4FEC-99ED-A8154DDAE4D8}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PhysicsSystem", "..\GeneralisModules\PhysicsSystem\PhysicsSystem.vcxproj", "{2B5EE71A-B5A2-4F55-8934-FA804ADFD64A}"
 EndProject
 Global
@@ -50,9 +48,6 @@ Global
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Distribution|x64.Build.0 = Release|x64
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Release|x64.ActiveCfg = Release|x64
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Release|x64.Build.0 = Release|x64
-		{8D0689D6-CF70-4FEC-99ED-A8154DDAE4D8}.Debug|x64.ActiveCfg = Debug|x64
-		{8D0689D6-CF70-4FEC-99ED-A8154DDAE4D8}.Distribution|x64.ActiveCfg = Distribution|x64
-		{8D0689D6-CF70-4FEC-99ED-A8154DDAE4D8}.Release|x64.ActiveCfg = Release|x64
 		{2B5EE71A-B5A2-4F55-8934-FA804ADFD64A}.Debug|x64.ActiveCfg = Debug|x64
 		{2B5EE71A-B5A2-4F55-8934-FA804ADFD64A}.Distribution|x64.ActiveCfg = Distribution|x64
 		{2B5EE71A-B5A2-4F55-8934-FA804ADFD64A}.Release|x64.ActiveCfg = Release|x64

@@ -725,7 +725,7 @@ namespace ECSEngine {
 		//    0         0   -range * near_z      0
 		
 		angle_y = DegToRad(angle_y);
-		float tangent = tanf(angle_y / 2.0f);
+		float tangent = tanf(angle_y * 0.5f);
 		float y_scale = 1.0f / tangent;
 		float x_scale = y_scale / aspect_ratio;
 		float range = far_z / (far_z - near_z);

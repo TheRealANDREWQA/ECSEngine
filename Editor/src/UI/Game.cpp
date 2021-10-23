@@ -29,7 +29,7 @@ void GameWindowDraw(void* window_data, void* drawer_descriptor) {
 	EDITOR_STATE(data->editor_state);
 
 	if constexpr (!initialize) {
-		drawer.system->SetSprite(drawer.dockspace, drawer.border_index, viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
+		drawer.system->SetSprite(drawer.dockspace, drawer.border_index, *viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
 	}
 }
 

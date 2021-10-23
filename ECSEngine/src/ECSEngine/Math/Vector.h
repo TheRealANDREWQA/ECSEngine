@@ -32,7 +32,7 @@ namespace ECSEngine {
 			value.load((const float*)&values);
 		}
 		ECS_INLINE Vector4(float3 values) {
-			value.load((const float*)&value);
+			value.load((const float*)&values);
 			Vec4f zero = _mm_setzero_ps();
 			value = blend4<0, 1, 2, 4>(value, zero);
 		}
@@ -490,22 +490,22 @@ namespace ECSEngine {
 
 	// Operates on the full vector
 	ECS_INLINE Vector4 ECS_VECTORCALL Dot(Vector4 vector1, Vector4 vector2) {
-		return Dot<0x7F>(vector1, vector2);
+		return Dot<0xFF>(vector1, vector2);
 	}
 
 	// Operates on the full vector
 	ECS_INLINE Vector8 ECS_VECTORCALL Dot(Vector8 vector1, Vector8 vector2) {
-		return Dot<0x7F>(vector1, vector2);
+		return Dot<0xFF>(vector1, vector2);
 	}
 
 	// Operates on the first 3 elements
 	ECS_INLINE Vector4 ECS_VECTORCALL Dot3(Vector4 vector1, Vector4 vector2) {
-		return Dot<0x3F>(vector1, vector2);
+		return Dot<0x7F>(vector1, vector2);
 	}
 
 	// Operates on the first 3 elements
 	ECS_INLINE Vector8 ECS_VECTORCALL Dot3(Vector8 vector1, Vector8 vector2) {
-		return Dot<0x3F>(vector1, vector2);
+		return Dot<0x7F>(vector1, vector2);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
