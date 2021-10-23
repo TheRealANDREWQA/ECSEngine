@@ -4,6 +4,8 @@
 #include "ECSEngineMultithreading.h"
 #include "ECSEngineWorld.h"
 #include "..\Modules\ModuleDefinition.h"
+#include "ECSEngineModule.h"
+#include "../Modules/ModuleDefinition.h"
 
 struct EditorEvent {
 	void* function;
@@ -32,7 +34,9 @@ struct EditorState {
 	ECSEngine::containers::Stream<ECSEngine::containers::Stream<char>> module_configurations;
 	ECSEngine::containers::CapacityStream<ECSEngine::World> worlds;
 	unsigned int active_world;
-	ModuleDrawScene draw_scene;
+	ECSEngine::GetModuleGraphicsFunctionData graphics_module_data;
+	Module graphics_module;
+	void* graphics_module_reflected_data;
 };
 
 #define EDITOR_STATE(editor_state) UIReflectionDrawer* ui_reflection = ((EditorState*)editor_state)->ui_reflection; \

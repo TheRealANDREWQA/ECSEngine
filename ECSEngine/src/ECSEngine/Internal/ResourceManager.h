@@ -12,6 +12,7 @@
 #include "../../../Dependencies/DirectXTK/Inc/WICTextureLoader.h"
 #include "../Rendering/Graphics.h"
 #include "../Rendering/Compression/TextureCompressionTypes.h"
+#include "../Internal/Multithreading/TaskManager.h"
 
 constexpr size_t ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS = 128;
 constexpr size_t ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT = 256;
@@ -27,15 +28,14 @@ namespace ECSEngine {
 	// Embed the reference count inside the pointer
 	using ResourceManagerTable = IdentifierHashTable<DataPointer, ResourceIdentifier, HashFunctionPowerOfTwo>;
 
-	enum class ResourceTypes : unsigned char {
+	enum class ResourceType : unsigned char {
 		Texture,
-		TextureResource,
 		TextFile,
 		TypeCount
 	};
 
-	constexpr const char* ECS_RESOURCE_TYPE_NAMES[] = { "Texture", "TextureResource", "TextFile" };
-	static_assert(std::size(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceTypes::TypeCount);
+	constexpr const char* ECS_RESOURCE_TYPE_NAMES[] = { "Texture", "TextFile" };
+	static_assert(std::size(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceType::TypeCount);
 	constexpr size_t ECS_RESOURCE_INCREMENT_COUNT = USHORT_MAX;
 
 	struct ECSENGINE_API ResourceManagerTextureDesc {
@@ -52,7 +52,7 @@ namespace ECSEngine {
 	// Defining ECS_RESOURCE_MANAGER_CHECK_RESOURCE will make AddResource check if the resource exists already 
 	struct ECSENGINE_API ResourceManager
 	{
-		struct ResourceType {
+		struct InternalResourceType {
 			const char* name;
 			ResourceManagerTable table;
 		};
@@ -81,27 +81,27 @@ namespace ECSEngine {
 		void AddResourceType(const char* type_name, unsigned int resource_count = ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT);
 
 		template<bool delete_if_zero = true>
-		void DecrementReferenceCount(ResourceTypes type, unsigned int amount);
+		void DecrementReferenceCount(ResourceType type, unsigned int amount);
 
 		// Pops it off the stack
 		void DeleteResourcePath(unsigned int thread_index = 0);
 
 		// Checks to see if the resource exists
-		bool Exists(ResourceIdentifier identifier, ResourceTypes type) const;
+		bool Exists(ResourceIdentifier identifier, ResourceType type) const;
 
 		// Checks to see if the resource exists and returns its position as index inside the hash table
-		bool Exists(ResourceIdentifier identifier, ResourceTypes type, unsigned int& table_index) const;
+		bool Exists(ResourceIdentifier identifier, ResourceType type, unsigned int& table_index) const;
 
 		// It will trigger an assert if the resource was not found
-		int GetResourceIndex(ResourceIdentifier identifier, ResourceTypes type) const;
+		int GetResourceIndex(ResourceIdentifier identifier, ResourceType type) const;
 
 		// It will trigger an assert if the resource was not found
-		void* GetResource(ResourceIdentifier identifier, ResourceTypes type);
+		void* GetResource(ResourceIdentifier identifier, ResourceType type);
 
 		// It will create all resource types with default resource count
 		void InitializeDefaultTypes();
 
-		void IncrementReferenceCount(ResourceTypes type, unsigned int amount);
+		void IncrementReferenceCount(ResourceType type, unsigned int amount);
 
 		// resource folder path different from -1 will use the folder in the specified thread position
 		template<bool reference_counted = false>
@@ -109,6 +109,7 @@ namespace ECSEngine {
 			const char* filename, 
 			size_t& size, 
 			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
 			unsigned int resource_folder_path_index = -1
 		);
 
@@ -118,6 +119,7 @@ namespace ECSEngine {
 			const wchar_t* filename,
 			size_t& size,
 			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
 			unsigned int resource_folder_path_index = -1
 		);
 
@@ -133,14 +135,15 @@ namespace ECSEngine {
 
 		// In order to generate mip-maps, the context must be supplied
 		template<bool reference_counted = false>
-		ID3D11ShaderResourceView* LoadTexture(
+		ResourceView LoadTexture(
 			const wchar_t* filename,
 			ResourceManagerTextureDesc& descriptor,
 			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
 			unsigned int resource_folder_path_index = -1
 		);
 
-		ID3D11ShaderResourceView* LoadTextureTemporary(
+		ResourceView LoadTextureTemporary(
 			const wchar_t* filename,
 			unsigned int& handle,
 			ResourceManagerTextureDesc& descriptor,
@@ -148,33 +151,19 @@ namespace ECSEngine {
 			bool use_path = false
 		);
 
-		ID3D11ShaderResourceView* LoadTextureImplementation(
+		ResourceView LoadTextureImplementation(
 			const wchar_t* filename, 
 			ResourceManagerTextureDesc* descriptor, 
 			unsigned int resource_folder_path_index = -1
 		);
 
-		template<bool reference_counted = false>
-		ID3D11Resource* LoadTextureResource(
-			const wchar_t* filename,
-			ResourceManagerTextureDesc& descriptor,
-			size_t load_flags = 1,
-			unsigned int resource_folder_path_index = -1
-		);
+		// Reassigns a value to a resource that has been loaded; the resource is first destroyed than reassigned
+		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource);
 
-		ID3D11Resource* LoadTextureResourceTemporary(
-			const wchar_t* filename,
-			unsigned int& handle,
-			ResourceManagerTextureDesc& descriptor,
-			unsigned int thread_index = 0,
-			bool use_path = false
-		);
+		// Reassigns a value to a resource that has been loaded; no destruction is being done
+		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource);
 
-		ID3D11Resource* LoadTextureResourceImplementation(
-			const wchar_t* filename,
-			ResourceManagerTextureDesc* descriptor,
-			unsigned int resource_folder_path_index = -1
-		);
+		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type);
 
 		template<bool reference_counted = false>
 		void UnloadTextFile(const char* filename, size_t flags = 1);
@@ -206,10 +195,24 @@ namespace ECSEngine {
 	//private:
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
-		ResizableStream<ResourceType, ResourceManagerAllocator> m_resource_types;
+		ResizableStream<InternalResourceType, ResourceManagerAllocator> m_resource_types;
 		CapacityStream<ResourceFolder> m_resource_folder_path;
 		CapacityStream<StableReferenceStream<void*>> m_temporary_resources;
 	};
+
+#pragma region Free functions
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API Material PBRToMaterial(ResourceManager* resource_manager, const PBRMaterial& pbr);
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
 
 }
 

@@ -1,3 +1,3 @@
 #pragma once
 #include "ECSEngineStream.h"
-#include "../ECSEngine/Internal/Multithreading/TaskDependencyGraph.h"
+#include "../ECSEngine/Tools/Modules/Module.h"

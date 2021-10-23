@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "UIDrawerWindows.h"
-#include "../Internal/Multithreading/TaskManager.h"
+#include "../../Internal/Multithreading/TaskManager.h"
 
 namespace ECSEngine {
 
@@ -1521,7 +1521,7 @@ namespace ECSEngine {
 			if (file_stream.good()) {
 				size_t file_size = function::GetFileByteSize(file_stream);
 				if (file_size < ECS_MB) {
-					char* allocation = (char*)_malloca(file_size + 1);
+					char* allocation = (char*)ECS_MALLOCA(file_size + 1);
 					file_stream.read(allocation, file_size);
 					size_t read_bytes = file_stream.gcount();
 					allocation[read_bytes] = '\0';
@@ -1531,7 +1531,7 @@ namespace ECSEngine {
 					drawer->Sentence<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE>(config, allocation);
 					drawer->SetNextRowYOffset(old_next_row_y_offset);
 					draw_border = true;
-					_freea(allocation);
+					ECS_FREEA(allocation);
 				}
 				else {
 					drawer->Text<UI_CONFIG_DO_NOT_CACHE>(config, "File is too big to be drawn");
@@ -1589,7 +1589,7 @@ namespace ECSEngine {
 			if (file_stream.good()) {
 				size_t file_size = function::GetFileByteSize(file_stream);
 				if (file_size < ECS_MB) {
-					char* allocation = (char*)_malloca(file_size + 1);
+					char* allocation = (char*)ECS_MALLOCA(file_size + 1);
 					file_stream.read(allocation, file_size);
 					size_t read_bytes = file_stream.gcount();
 					allocation[read_bytes] = '\0';
@@ -1599,7 +1599,7 @@ namespace ECSEngine {
 					drawer->Sentence<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE>(config, allocation);
 					drawer->SetNextRowYOffset(old_next_row_y_offset);
 					draw_border = true;
-					_freea(allocation);
+					ECS_FREEA(allocation);
 				}
 				else {
 					drawer->Text<UI_CONFIG_DO_NOT_CACHE>(config, "File is too big to be drawn");

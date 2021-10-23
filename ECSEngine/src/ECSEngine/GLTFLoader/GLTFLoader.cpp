@@ -3,9 +3,9 @@
 #include "GLTFLoader.h"
 #include "../Utilities/FunctionTemplates.h"
 #include "../Rendering/RenderingStructures.h"
-#include "../Allocators/MemoryManager.h"
 #include "../Utilities/FunctionInterfaces.h"
 #include "../Rendering/Graphics.h"
+#include "../Allocators/AllocatorPolymorphic.h"
 
 ECS_CONTAINERS;
 
@@ -14,10 +14,17 @@ namespace ECSEngine {
 	// Helpers
 	namespace {
 
-		Stream<float> GetScalarValues(MemoryManager* allocator, const cgltf_accessor* accessor, unsigned int component_count, bool* success) {
+		// -------------------------------------------------------------------------------------------------------------------------------
+
+		Stream<float> GetScalarValues(
+			AllocatorPolymorphic allocator,
+			const cgltf_accessor* accessor, 
+			unsigned int component_count,
+			bool* success
+		) {
 			Stream<float> values;
 
-			values.buffer = (float*)allocator->Allocate(component_count * accessor->count * sizeof(float));
+			values.buffer = (float*)Allocate(allocator, component_count * accessor->count * sizeof(float));
 			values.size = accessor->count * component_count;
 			for (size_t index = 0; index < accessor->count; index++) {
 				*success &= cgltf_accessor_read_float(accessor, index, values.buffer + index * component_count, component_count);
@@ -26,18 +33,7 @@ namespace ECSEngine {
 			return values;
 		}
 
-		Stream<float> GetScalarValuesTs(MemoryManager* allocator, const cgltf_accessor* accessor, unsigned int component_count, bool* success) {
-			Stream<float> values;
-
-			values.buffer = (float*)allocator->Allocate_ts(component_count * accessor->count * sizeof(float));
-			values.size = 0;
-
-			for (size_t index = 0; index < accessor->count; index++) {
-				*success &= cgltf_accessor_read_float(accessor, index, values.buffer + index * component_count, component_count);
-			}
-
-			return values;
-		}
+		// -------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int GetNodeIndex(const cgltf_node* target, const cgltf_node* nodes, unsigned int node_count) {
 			if (target == nullptr) {
@@ -52,15 +48,16 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		template<Stream<float> (*GetValues)(MemoryManager*, const cgltf_accessor*, unsigned int, bool*)>
-		bool MeshFromAttributeImpl(
+		// -------------------------------------------------------------------------------------------------------------------------------
+
+		bool MeshFromAttribute(
 			GLTFMesh& mesh,
 			const cgltf_attribute* attribute,
 			const cgltf_skin* skin,
 			const cgltf_node* nodes,
 			unsigned int current_nodex_index,
 			unsigned int node_count,
-			MemoryManager* allocator,
+			AllocatorPolymorphic allocator,
 			CapacityStream<char>* error_message
 		) {
 			cgltf_attribute_type attribute_type = attribute->type;
@@ -84,7 +81,7 @@ namespace ECSEngine {
 			}
 			component_count = accessor->type;
 
-			Stream<float> values = GetValues(allocator, accessor, component_count, &is_valid);
+			Stream<float> values = GetScalarValues(allocator, accessor, component_count, &is_valid);
 			if (!is_valid) {
 				if (error_message != nullptr) {
 					ECS_FORMAT_STRING(*error_message, "Mesh data values are invalid. Attribute name is {0}.", attribute->name);
@@ -221,8 +218,8 @@ namespace ECSEngine {
 							return false;*/
 						}
 
-						// Transform the normal
-						tangent = MatrixVectorMultiply(tangent, ecs_matrix);
+						// Transform the tangent
+						//tangent = MatrixVectorMultiply(tangent, ecs_matrix);
 
 						tangent = Normalize3(tangent);
 						tangent.StorePartialConstant<3>(mesh.tangents.buffer + index);
@@ -255,33 +252,7 @@ namespace ECSEngine {
 			return true;
 		}
 
-		// This will load a singular attribute e.g. position
-		bool MeshFromAttribute(
-			GLTFMesh& mesh,
-			const cgltf_attribute* attribute,
-			const cgltf_skin* skin,
-			const cgltf_node* nodes,
-			unsigned int current_node_index,
-			unsigned int node_count,
-			MemoryManager* allocator,
-			CapacityStream<char>* error_message
-		) {
-			return MeshFromAttributeImpl<GetScalarValues>(mesh, attribute, skin, nodes, current_node_index, node_count, allocator, error_message);
-		}
-
-		// This will load a singular attribute e.g. position
-		bool MeshFromAttributeTs(
-			GLTFMesh& mesh,
-			const cgltf_attribute* attribute,
-			const cgltf_skin* skin,
-			const cgltf_node* nodes,
-			unsigned int current_node_index,
-			unsigned int node_count,
-			MemoryManager* allocator,
-			CapacityStream<char>* error_message
-		) {
-			return MeshFromAttributeImpl<GetScalarValuesTs>(mesh, attribute, skin, nodes, current_node_index, node_count, allocator, error_message);
-		}
+		// -------------------------------------------------------------------------------------------------------------------------------
 
 		bool ValidateMesh(const GLTFMesh& mesh) {
 			// Validation - all vertex buffers must have the same size
@@ -314,6 +285,8 @@ namespace ECSEngine {
 			return true;
 		}
 
+		// -------------------------------------------------------------------------------------------------------------------------------
+
 		size_t GLTFMeshCount(const cgltf_data* data) {
 			size_t count = 0;
 
@@ -329,7 +302,16 @@ namespace ECSEngine {
 			return count;
 		}
 
+		// -------------------------------------------------------------------------------------------------------------------------------
+		Stream<char> GetMaterialName(const cgltf_primitive* primitives, unsigned int primitive_index) {
+			const cgltf_material* gltf_material = primitives[primitive_index].material;
+
+			return ToStream(gltf_material->name);
+		}
+
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
 
 	GLTFData LoadGLTFFile(const char* path, CapacityStream<char>* error_message)
 	{
@@ -370,6 +352,8 @@ namespace ECSEngine {
 		return data;
 	}
 
+	// -------------------------------------------------------------------------------------------------------------------------------
+
 	GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message)
 	{
 		ECS_TEMP_ASCII_STRING(temp_path, 512);
@@ -378,10 +362,14 @@ namespace ECSEngine {
 		return LoadGLTFFile(temp_path.buffer, error_message);
 	}
 
+	// -------------------------------------------------------------------------------------------------------------------------------
+
 	GLTFData LoadGLTFFile(const wchar_t* path, CapacityStream<char>* error_message) 
 	{
 		return LoadGLTFFile(ToStream(path), error_message);
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
 
 	GLTFData LoadGLTFFile(Stream<wchar_t> path, CapacityStream<char>* error_message)
 	{
@@ -391,56 +379,136 @@ namespace ECSEngine {
 		return LoadGLTFFile(temp_path.buffer, error_message);
 	}
 
-	void* Allocate(MemoryManager* allocator, size_t size) {
-		return allocator->Allocate(size);
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadMeshFromGLTF(
+		GLTFMesh& mesh, 
+		AllocatorPolymorphic allocator,
+		const cgltf_node* nodes, 
+		unsigned int node_index, 
+		unsigned int node_count, 
+		CapacityStream<char>* error_message
+	) {
+		unsigned int primitive_count = nodes[node_index].mesh->primitives_count;
+
+		for (size_t primitive_index = 0; primitive_index < primitive_count; primitive_index++) {
+			const cgltf_primitive* primitive = &nodes[node_index].mesh->primitives[primitive_index];
+			unsigned int attribute_count = primitive->attributes_count;
+
+			for (unsigned int attribute_index = 0; attribute_index < attribute_count; attribute_index++) {
+				const cgltf_attribute* attribute = &primitive->attributes[attribute_index];
+				bool is_valid = MeshFromAttribute(
+					mesh,
+					attribute,
+					nodes[node_index].skin,
+					nodes,
+					node_index,
+					node_count,
+					allocator,
+					error_message
+				);
+				if (!is_valid) {
+					return false;
+				}
+			}
+
+			if (primitive->indices != nullptr) {
+				unsigned int index_count = primitive->indices->count;
+
+				mesh.indices = Stream<unsigned int>(Allocate(allocator, (sizeof(unsigned int) * index_count)), index_count);
+				for (unsigned int index_index = 0; index_index < index_count; index_index++) {
+					mesh.indices[index_index] = cgltf_accessor_read_index(primitive->indices, index_index);
+				}
+			}
+		}
+		return true;
 	}
 
-	void* AllocateTs(MemoryManager* allocator, size_t size) {
-		return allocator->Allocate_ts(size);
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadMaterialFromGLTF(
+		PBRMaterial& material,
+		AllocatorPolymorphic allocator,
+		const cgltf_node* nodes,
+		unsigned int node_index,
+		CapacityStream<char>* error_message
+	) {
+		unsigned int primitive_count = nodes[node_index].mesh->primitives_count;
+
+		for (size_t primitive_index = 0; primitive_index < primitive_count; primitive_index++) {
+			const cgltf_material* gltf_material = nodes[node_index].mesh->primitives[primitive_index].material;
+
+			// material name
+			Stream<char> material_name = ToStream(gltf_material->name);
+
+			ECS_TEMP_STRING(temp_texture_names, 1024);
+
+			PBRMaterialMapping mappings[ECS_PBR_MATERIAL_MAPPING_COUNT];
+			size_t mapping_count = 0;
+
+			auto add_mapping = [&](const char* name, PBRMaterialTextureIndex mapping) {
+				Stream<char> texture_name = ToStream(name);
+				function::ConvertASCIIToWide(temp_texture_names, texture_name);
+				mappings[mapping_count].texture = { temp_texture_names.buffer + temp_texture_names.size, texture_name.size };
+				mappings[mapping_count].index = mapping;
+				temp_texture_names.size += texture_name.size;
+				mapping_count++;
+			};
+
+			material.emissive_factor = gltf_material->emissive_factor;
+			if (gltf_material->has_pbr_metallic_roughness) {
+				material.tint = Color(gltf_material->pbr_metallic_roughness.base_color_factor);
+				material.metallic_factor = gltf_material->pbr_metallic_roughness.metallic_factor;
+				material.roughness_factor = gltf_material->pbr_metallic_roughness.roughness_factor;
+				if (gltf_material->pbr_metallic_roughness.base_color_texture.texture != nullptr) {
+					if (gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name != nullptr) {
+						add_mapping(gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name, ECS_PBR_MATERIAL_COLOR);
+					}
+				}
+				if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
+					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
+						add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_ROUGHNESS);
+					}
+				}
+			}
+			if (gltf_material->emissive_texture.texture != nullptr) {
+				if (gltf_material->emissive_texture.texture->image->name != nullptr) {
+					add_mapping(gltf_material->emissive_texture.texture->image->name, ECS_PBR_MATERIAL_EMISSIVE);
+				}
+			}
+			if (gltf_material->normal_texture.texture != nullptr) {
+				if (gltf_material->normal_texture.texture->image->name != nullptr) {
+					add_mapping(gltf_material->normal_texture.texture->image->name, ECS_PBR_MATERIAL_NORMAL);
+				}
+			}
+			if (gltf_material->occlusion_texture.texture != nullptr) {
+				if (gltf_material->occlusion_texture.texture->image->name != nullptr) {
+					add_mapping(gltf_material->occlusion_texture.texture->image->name, ECS_PBR_MATERIAL_OCCLUSION);
+				}
+			}
+
+			AllocatePBRMaterial(material, material_name, Stream<PBRMaterialMapping>(mappings, mapping_count), allocator);
+		}
+		return true;
 	}
-	
-	template<bool (*MeshFromAttributeFunction)(
-		GLTFMesh&,
-		const cgltf_attribute*,
-		const cgltf_skin*,
-		const cgltf_node*,
-		unsigned int, 
-		unsigned int, 
-		MemoryManager*, 
-		CapacityStream<char>*
-	), void* (*AllocateFunction)(MemoryManager*, size_t)>
-	bool LoadMeshFromGLTFFileImpl(GLTFData data, GLTFMesh& mesh, MemoryManager* allocator, unsigned int mesh_index, CapacityStream<char>* error_message) {
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadMeshFromGLTF(
+		GLTFData data,
+		GLTFMesh& mesh, 
+		AllocatorPolymorphic allocator,
+		unsigned int mesh_index, 
+		CapacityStream<char>* error_message
+	) {
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
 
 		unsigned int current_mesh_index = 0;
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
-				if (current_mesh_index == mesh_index) {
-					unsigned int primitive_count = nodes[index].mesh->primitives_count;
-
-					for (size_t primitive_index = 0; primitive_index < primitive_count; primitive_index++) {
-						const cgltf_primitive* primitive = &nodes[index].mesh->primitives[primitive_index];
-						unsigned int attribute_count = primitive->attributes_count;
-
-						for (unsigned int attribute_index = 0; attribute_index < attribute_count; attribute_index++) {
-							const cgltf_attribute* attribute = &primitive->attributes[attribute_index];
-							bool is_valid = MeshFromAttributeFunction(mesh, attribute, nodes[index].skin, nodes, index, node_count, allocator, error_message);
-							if (!is_valid) {
-								return false;
-							}
-						}
-
-						if (primitive->indices != nullptr) {
-							unsigned int index_count = primitive->indices->count;
-
-							mesh.indices = Stream<unsigned int>(AllocateFunction(allocator, (sizeof(unsigned int) * index_count)), index_count);
-							for (unsigned int index_index = 0; index_index < index_count; index_index++) {
-								mesh.indices[index_index] = cgltf_accessor_read_index(primitive->indices, index_index);
-							}
-						}
-					}
-					return true;
+				if (mesh_index == current_mesh_index) {
+					return LoadMeshFromGLTF(mesh, allocator, nodes, index, node_count, error_message);
 				}
 				current_mesh_index++;
 			}
@@ -452,57 +520,55 @@ namespace ECSEngine {
 		return false;
 	}
 
-	bool LoadMeshFromGLTFFile(GLTFData data, GLTFMesh& mesh, MemoryManager* allocator, unsigned int mesh_index, CapacityStream<char>* error_message) {
-		return LoadMeshFromGLTFFileImpl<MeshFromAttribute, Allocate>(data, mesh, allocator, mesh_index, error_message);
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadMaterialFromGLTF(GLTFData data, PBRMaterial& material, AllocatorPolymorphic allocator, unsigned int mesh_index, containers::CapacityStream<char>* error_message)
+	{
+		unsigned int node_count = data.data->nodes_count;
+		const cgltf_node* nodes = data.data->nodes;
+
+		unsigned int current_mesh_index = 0;
+		for (size_t index = 0; index < node_count; index++) {
+			if (nodes[index].mesh != nullptr) {
+				if (mesh_index == current_mesh_index) {
+					return LoadMaterialFromGLTF(material, allocator, nodes, index, error_message);
+				}
+				current_mesh_index++;
+			}
+		}
+
+		if (error_message != nullptr) {
+			ECS_FORMAT_STRING(*error_message, "No mesh with index {0} has been found. The file contains only {1}", mesh_index, current_mesh_index);
+		}
+		return false;
 	}
 
-	bool LoadMeshFromGLTFFileTs(GLTFData data, GLTFMesh& mesh, MemoryManager* allocator, unsigned int mesh_index, CapacityStream<char>* error_message) {
-		return LoadMeshFromGLTFFileImpl<MeshFromAttributeTs, AllocateTs>(data, mesh, allocator, mesh_index, error_message);
-	}
+	// -------------------------------------------------------------------------------------------------------------------------------
 
-	template<bool (*MeshFromAttributeFunction)(
-		GLTFMesh&,
-		const cgltf_attribute*,
-		const cgltf_skin*, 
-		const cgltf_node*, 
-		unsigned int,
-		unsigned int, 
-		MemoryManager*, 
-		CapacityStream<char>*
-	), void* (*AllocateFunction)(MemoryManager*, size_t)>
-	bool LoadMeshesFromGLTFFileImpl(GLTFData data, GLTFMesh* meshes, MemoryManager* allocator, CapacityStream<char>* error_message) {
+	bool LoadMeshesFromGLTF(
+		GLTFData data,
+		GLTFMesh* meshes,
+		AllocatorPolymorphic allocator,
+		containers::CapacityStream<char>* error_message
+	) {
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
 
 		unsigned int mesh_index = 0;
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
-				unsigned int primitive_count = nodes[index].mesh->primitives_count;
-
-				for (size_t primitive_index = 0; primitive_index < primitive_count; primitive_index++) {
-					const cgltf_primitive* primitive = &nodes[index].mesh->primitives[primitive_index];
-					unsigned int attribute_count = primitive->attributes_count;
-
-					for (unsigned int attribute_index = 0; attribute_index < attribute_count; attribute_index++) {
-						const cgltf_attribute* attribute = &primitive->attributes[attribute_index];
-						bool is_valid = MeshFromAttributeFunction(meshes[mesh_index], attribute, nodes[index].skin, nodes, index, node_count, allocator, error_message);
-						if (!is_valid) {
-							if (error_message != nullptr) {
-								ECS_FORMAT_TEMP_STRING(additional_info, "The mesh index is {0}.", mesh_index);
-								error_message->AddStreamSafe(additional_info);
-							}
-							return false;
-						}
-					}
-
-					if (primitive->indices != nullptr) {
-						unsigned int index_count = primitive->indices->count;
-
-						meshes[mesh_index].indices = Stream<unsigned int>(AllocateFunction(allocator, (sizeof(unsigned int) * index_count)), index_count);
-						for (unsigned int index_index = 0; index_index < index_count; index_index++) {
-							meshes[mesh_index].indices[index_index] = cgltf_accessor_read_index(primitive->indices, index_index);
-						}
-					}
+				bool success = LoadMeshFromGLTF(
+					meshes[mesh_index],
+					allocator,
+					nodes,
+					index,
+					node_count,
+					error_message
+				);
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(additional_info, "The mesh index is {0}", mesh_index);
+					error_message->AddStreamSafe(additional_info);
+					return false;
 				}
 				mesh_index++;
 			}
@@ -511,26 +577,110 @@ namespace ECSEngine {
 		return true;
 	}
 
-	bool LoadMeshesFromGLTFFile(
-		GLTFData data,
-		GLTFMesh* meshes,
-		MemoryManager* allocator,
-		containers::CapacityStream<char>* error_message
-	) {
-		return LoadMeshesFromGLTFFileImpl<MeshFromAttribute, Allocate>(data, meshes, allocator, error_message);
-	}
+	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadMeshesFromGLTFFileTs(
-		GLTFData data,
-		GLTFMesh* meshes,
-		MemoryManager* allocator,
-		containers::CapacityStream<char>* error_message
-	) {
-		return LoadMeshesFromGLTFFileImpl<MeshFromAttributeTs, AllocateTs>(data, meshes, allocator, error_message);
-	}
-
-	void GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, Mesh& mesh)
+	bool LoadMaterialsFromGLTF(GLTFData data, PBRMaterial* materials, AllocatorPolymorphic allocator, containers::CapacityStream<char>* error_message)
 	{
+		unsigned int node_count = data.data->nodes_count;
+		const cgltf_node* nodes = data.data->nodes;
+
+		size_t material_index = 0;
+		for (size_t index = 0; index < node_count; index++) {
+			if (nodes[index].mesh != nullptr) {
+				bool success = LoadMaterialFromGLTF(materials[material_index], allocator, nodes, index, error_message);
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", material_index);
+					error_message->AddStreamSafe(additional_info);
+					return false;
+				}
+				material_index++;
+			}
+		}
+
+		return true;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadDisjointMaterialsFromGLTF(GLTFData data, Stream<PBRMaterial>& materials, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	{
+		unsigned int node_count = data.data->nodes_count;
+		const cgltf_node* nodes = data.data->nodes;
+
+		for (size_t index = 0; index < node_count; index++) {
+			if (nodes[index].mesh != nullptr) {
+				// Get the name
+				Stream<char> material_name = GetMaterialName(nodes[index].mesh->primitives, 0);
+
+				// If it already exists - do no reload it
+				bool exists = false;
+				for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
+					if (function::CompareStrings(material_name, materials[subindex].name)) {
+						exists = true;
+					}
+				}
+
+				if (!exists) {
+					// Load the material as normally
+					bool success = LoadMaterialFromGLTF(materials[materials.size], allocator, nodes, index, error_message);
+					if (!success) {
+						ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", materials.size);
+						error_message->AddStreamSafe(additional_info);
+						return false;
+					}
+					materials.size++;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadMeshesAndMaterialsFromGLTF(GLTFData data, GLTFMesh* meshes, PBRMaterial* materials, AllocatorPolymorphic allocator, containers::CapacityStream<char>* error_message)
+	{
+		unsigned int node_count = data.data->nodes_count;
+		const cgltf_node* nodes = data.data->nodes;
+
+		size_t mesh_material_index = 0;
+		for (size_t index = 0; index < node_count; index++) {
+			if (nodes[index].mesh != nullptr) {
+				bool success = LoadMeshFromGLTF(
+					meshes[mesh_material_index],
+					allocator,
+					nodes,
+					index,
+					node_count,
+					error_message
+				);
+				success &= LoadMaterialFromGLTF(
+					materials[mesh_material_index],
+					allocator,
+					nodes,
+					index,
+					error_message
+				);
+
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", mesh_material_index);
+					error_message->AddStreamSafe(additional_info);
+					return false;
+				}
+
+				mesh_material_index++;
+			}
+		}
+
+		return true;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh)
+	{
+		Mesh mesh;
+
 		// Positions
 		if (gltf_mesh.positions.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_POSITION;
@@ -577,25 +727,21 @@ namespace ECSEngine {
 		if (gltf_mesh.indices.buffer != nullptr) {
 			mesh.index_buffer = graphics->CreateIndexBuffer(gltf_mesh.indices);
 		}
+
+		return mesh;
 	}
 
-	// Creates the appropriate vertex and index buffers
+	// -------------------------------------------------------------------------------------------------------------------------------
+
 	void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count) {
 		for (size_t index = 0; index < count; index++) {
-			GLTFMeshToMesh(graphics, gltf_meshes[index], meshes[index]);
+			meshes[index] = GLTFMeshToMesh(graphics, gltf_meshes[index]);
 		}
 	}
 
-	void Deallocate(MemoryManager* allocator, const void* buffer) {
-		allocator->Deallocate(buffer);
-	}
+	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void DeallocateTs(MemoryManager* allocator, const void* buffer) {
-		allocator->Deallocate_ts(buffer);
-	}
-
-	template<void (*Deallocate)(MemoryManager* allocator, const void* buffer)>
-	void FreeGLTFMeshImpl(const GLTFMesh& mesh, MemoryManager* allocator) {
+	void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator) {
 		if (mesh.positions.buffer != nullptr) {
 			Deallocate(allocator, mesh.positions.buffer);
 		}
@@ -616,25 +762,15 @@ namespace ECSEngine {
 		}
 	}
 
-	void FreeGLTFMesh(const GLTFMesh& mesh, MemoryManager* allocator) {
-		FreeGLTFMeshImpl<Deallocate>(mesh, allocator);
-	}
+	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void FreeGLTFMeshTs(const GLTFMesh& mesh, MemoryManager* allocator) {
-		FreeGLTFMeshImpl<DeallocateTs>(mesh, allocator);
-	}
-
-	void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, MemoryManager* allocator) {
+	void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, AllocatorPolymorphic allocator) {
 		for (size_t index = 0; index < count; index++) {
 			FreeGLTFMesh(meshes[index], allocator);
 		}
 	}
 
-	void FreeGLTFMeshesTs(const GLTFMesh* meshes, size_t count, MemoryManager* allocator) {
-		for (size_t index = 0; index < count; index++) {
-			FreeGLTFMeshTs(meshes[index], allocator);
-		}
-	}
+	// -------------------------------------------------------------------------------------------------------------------------------
 
 	void FreeGLTFFile(GLTFData data)
 	{

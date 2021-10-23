@@ -40,6 +40,10 @@ string_name.AssertCapacity();
 #define ECS_FORMAT_STRING(string, base_characters, ...) (string).size = function::FormatString((string).buffer, base_characters, __VA_ARGS__); \
 (string).AssertCapacity();
 
+#define ECS_FORMAT_ERROR_MESSAGE(error_message, base_characters, ...) if (error_message != nullptr) { \
+	error_message->size = function::FormatString(error_message->buffer, base_characters, __VA_ARGS__); \
+}
+
 namespace ECSEngine {
 
 	namespace function {

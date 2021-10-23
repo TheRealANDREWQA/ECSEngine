@@ -3,11 +3,11 @@
 #include "UIHelpers.h"
 #include "UIMacros.h"
 #include "UIDrawerDescriptor.h"
-#include "../Application.h"
-#include "../Utilities/Mouse.h"
-#include "../Utilities/Keyboard.h"
-#include "../Rendering/ColorMacros.h"
-#include "../Internal/Multithreading/ThreadTask.h"
+#include "../../Application.h"
+#include "../../Utilities/Mouse.h"
+#include "../../Utilities/Keyboard.h"
+#include "../../Rendering/ColorMacros.h"
+#include "../../Internal/Multithreading/ThreadTask.h"
 
 namespace ECSEngine {
 
@@ -581,8 +581,7 @@ namespace ECSEngine {
 				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING
 			);
 
-			template<bool get_dimensions = false>
-			UISpriteTexture CreateSpriteTexture(LPCWSTR filename) const;
+			void CreateSpriteTexture(const wchar_t* filename, ResourceView* sprite_view);
 
 			void CreateDockspaceBorder(
 				UIDockspace* dockspace, 
@@ -879,8 +878,6 @@ namespace ECSEngine {
 
 			void FillViewportBuffer(float2 viewport_position, float2 viewport_scale, float* buffer);
 
-			void FinalizeAtlasTexture(unsigned int window_index);
-
 			void FinalizeColorTheme();
 
 			void FinalizeLayout();
@@ -1175,7 +1172,8 @@ namespace ECSEngine {
 			
 			float4 GetUVForCharacter(char character) const;
 
-			float2 GetUVFromAtlas(LPCWSTR texture_name, unsigned int window_index, float2 texture_uv) const;
+			// Advances the next sprite texture
+			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id);
 
@@ -1442,42 +1440,12 @@ namespace ECSEngine {
 			void SetSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				UISpriteTexture* texture,
+				UISpriteTexture texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
 				size_t* counts,
-				float2 top_left_uv = float2(0.0f, 0.0f),
-				float2 bottom_right_uv = float2(1.0f, 1.0f),
-				UIDrawPhase phase = UIDrawPhase::Normal,
-				Color color = ECS_COLOR_WHITE
-			);
-
-			// capable of handling rotated rectangle
-			void SetVertexColorSprite(
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				UISpriteTexture* texture,
-				float2 position,
-				float2 scale,
-				void** buffers,
-				size_t* counts,
-				const Color* colors,
-				float2 top_left_uv = float2(0.0f, 0.0f),
-				float2 bottom_right_uv = float2(1.0f, 1.0f),
-				UIDrawPhase phase = UIDrawPhase::Normal
-			);
-
-			// capable of handling rotated rectangle
-			void SetVertexColorSprite(
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				UISpriteTexture* texture,
-				float2 position,
-				float2 scale,
-				void** buffers,
-				size_t* counts,
-				const ColorFloat* colors,
+				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = float2(0.0f, 0.0f),
 				float2 bottom_right_uv = float2(1.0f, 1.0f),
 				UIDrawPhase phase = UIDrawPhase::Normal
@@ -1487,22 +1455,22 @@ namespace ECSEngine {
 			void SetSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				LPCWSTR texture,
+				const wchar_t* texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
 				size_t* counts,
+				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = {0.0f, 0.0f},
 				float2 bottom_right_uv = {1.0f, 1.0f},
-				UIDrawPhase phase = UIDrawPhase::Normal,
-				Color color = ECS_COLOR_WHITE
+				UIDrawPhase phase = UIDrawPhase::Normal
 			);
 
 			// capable of handling rotated sprites
 			void SetVertexColorSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				LPCWSTR texture,
+				const wchar_t* texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
@@ -1517,7 +1485,7 @@ namespace ECSEngine {
 			void SetVertexColorSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				LPCWSTR texture,
+				const wchar_t* texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
@@ -1532,7 +1500,7 @@ namespace ECSEngine {
 			void SetSpriteCluster(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				LPCWSTR texture,
+				const wchar_t* texture,
 				unsigned int count,
 				UIDrawPhase phase = UIDrawPhase::Normal
 			);
@@ -1540,15 +1508,16 @@ namespace ECSEngine {
 			void SetSpriteTextureToDraw(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				LPCWSTR texture,
+				const wchar_t* texture,
 				UISpriteType type = UISpriteType::Normal,
 				UIDrawPhase phase = UIDrawPhase::Normal
 			);
 
+			// This method is used for sprites that are being loaded outside of the UISystem
 			void SetSpriteTextureToDraw(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				UISpriteTexture* texture,
+				UISpriteTexture texture,
 				UISpriteType type = UISpriteType::Normal,
 				UIDrawPhase phase = UIDrawPhase::Normal
 			);
