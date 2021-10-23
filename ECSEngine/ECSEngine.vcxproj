@@ -208,22 +208,21 @@
     <ClInclude Include="src\ECSEngine\Rendering\MeshRender.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflectionMacros.h" />
-    <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawConfigs.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawer.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerActions.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerActionsTemplates.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerActionStructures.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerDescriptor.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerStructures.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerWindows.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIHelpers.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIMacros.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIOSActions.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIReflection.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIResourcePaths.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIStructures.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UISystem.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawConfigs.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawer.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerActions.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerActionsTemplates.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerActionStructures.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerDescriptor.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerStructures.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIDrawerWindows.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIHelpers.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIMacros.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIOSActions.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIReflection.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIResourcePaths.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UIStructures.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UISystem.h" />
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
@@ -313,16 +312,15 @@
     <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\MeshRender.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerActions.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerActionStructures.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerStructures.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerWindows.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIHelpers.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIOSActions.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIReflection.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIStructures.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UISystem.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerActions.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerActionStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIDrawerWindows.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIOSActions.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIReflection.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UIStructures.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UISystem.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
@@ -362,19 +360,6 @@
     <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ColorMap.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
-    </FxCompile>
-    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLighting.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SimpleShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
@@ -390,19 +375,6 @@
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
-    </FxCompile>
-    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ColorMap.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
-    </FxCompile>
-    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ForwardLighting.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\SimpleShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
@@ -487,7 +459,6 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\ECSEngine\Rendering\Shaders\ForwardUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\UIViewportTransform.hlsli" />
   </ItemGroup>

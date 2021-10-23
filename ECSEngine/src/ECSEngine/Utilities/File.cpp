@@ -2,7 +2,6 @@
 #include "File.h"
 #include "Function.h"
 #include "FunctionInterfaces.h"
-#include "Path.h"
 
 ECS_CONTAINERS;
 
@@ -73,46 +72,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent)
+	bool FileCopy(const wchar_t* from, const wchar_t* to)
 	{
-		return FileCopy(ToStream(from), ToStream(to), overwrite_existent);
+		return FileCopy(ToStream(from), ToStream(to));
 	}
 
-	bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent)
+	bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to)
 	{
-		std::error_code error_code;
-		Stream<wchar_t> filename = function::PathFilename(from);
-
-		std::filesystem::path to_path(to.buffer, to.buffer + to.size);
-		to_path.append(filename.buffer, filename.buffer + filename.size);
-
-		std::filesystem::copy_options option = std::filesystem::copy_options::none;
-		if (overwrite_existent) {
-			option = std::filesystem::copy_options::overwrite_existing;
-		}
-		bool success = std::filesystem::copy_file(
-			std::filesystem::path(from.buffer, from.buffer + from.size), 
-			to_path,
-			option,
-			error_code
-		);
-		std::string message = error_code.message();
-		return success && error_code.value() == 0;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	bool FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent)
-	{
-		return FileCut(ToStream(from), ToStream(to), overwrite_existent);
-	}
-
-	bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent) {
-		bool success = FileCopy(from, to, overwrite_existent);
-		if (success) {
-			return RemoveFile(from);
-		}
-		return false;
+		return std::filesystem::copy_file(std::filesystem::path(from.buffer, from.buffer + from.size), std::filesystem::path(to.buffer, to.buffer + to.size));
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -124,32 +91,15 @@ namespace ECSEngine {
 
 	bool FolderCopy(Stream<wchar_t> from, Stream<wchar_t> to)
 	{
-		std::error_code error_code;
-		std::filesystem::copy_options copy_options = std::filesystem::copy_options::recursive;
-		std::filesystem::path to_path(to.buffer, to.buffer + to.size);
-
-		Path filename = function::PathFilename(from);
-		to_path.append(filename.buffer, filename.buffer + filename.size);
-		std::filesystem::copy(std::filesystem::path(from.buffer, from.buffer + from.size), to_path, copy_options, error_code);
-		return error_code.value() == 0;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	bool FolderCut(const wchar_t* from, const wchar_t* to)
-	{
-		return FolderCut(ToStream(from), ToStream(to));
-	}
-
-	bool FolderCut(Stream<wchar_t> from, Stream<wchar_t> to)
-	{
-		bool success = FolderCopy(from, to);
-		if (success) {
-			return RemoveFolder(from);
+		try {
+			std::filesystem::copy(std::filesystem::path(from.buffer, from.buffer + from.size), std::filesystem::path(to.buffer, to.buffer + to.size));
 		}
-		return false;
+		catch (const std::filesystem::filesystem_error& error) {
+			return false;
+		}
+		return true;
 	}
-	
+
 	// --------------------------------------------------------------------------------------------------
 
 	bool RenameFolder(const wchar_t* folder, const wchar_t* new_name) {
@@ -160,10 +110,13 @@ namespace ECSEngine {
 		std::filesystem::path path(folder.buffer, folder.buffer + folder.size);
 		std::filesystem::path new_path = path.parent_path();
 		new_path.append(new_name.buffer, new_name.buffer + new_name.size);
-
-		std::error_code error_code;
-		std::filesystem::rename(path, new_path, error_code);
-		return error_code.value() == 0;
+		try {
+			std::filesystem::rename(path, new_path);
+		}
+		catch (const std::filesystem::filesystem_error& error) {
+			return false;
+		}
+		return true;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -175,12 +128,15 @@ namespace ECSEngine {
 	bool RenameFile(Stream<wchar_t> file, Stream<wchar_t> new_name) {
 		std::filesystem::path path(file.buffer, file.buffer + file.size);
 		std::filesystem::path extension = path.extension();
-
-		std::error_code error_code;
-		auto old_path = path;
-		path.replace_filename(std::filesystem::path(new_name.buffer, new_name.buffer + new_name.size).concat(extension.c_str()));
-		std::filesystem::rename(old_path, path, error_code);
-		return error_code.value() == 0;
+		try {
+			auto old_path = path;
+			path.replace_filename(std::filesystem::path(new_name.buffer, new_name.buffer + new_name.size).concat(extension.c_str()));
+			std::filesystem::rename(old_path, path);
+		}
+		catch (const std::filesystem::filesystem_error& error) {
+			return false;
+		}
+		return true;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -190,9 +146,13 @@ namespace ECSEngine {
 	}
 
 	bool ResizeFile(Stream<wchar_t> path, size_t new_size) {
-		std::error_code error_code;
-		std::filesystem::resize_file(std::filesystem::path(path.buffer, path.buffer + path.size), new_size, error_code);
-		return error_code.value() == 0;
+		try {
+			std::filesystem::resize_file(std::filesystem::path(path.buffer, path.buffer + path.size), new_size);
+		}
+		catch (const std::filesystem::filesystem_error& error) {
+			return false;
+		}
+		return true;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -203,7 +163,12 @@ namespace ECSEngine {
 
 	bool ChangeFileExtension(Stream<wchar_t> file, Stream<wchar_t> extension) {
 		std::filesystem::path path(file.buffer, file.buffer + file.size);
-		path.replace_extension({ extension.buffer, extension.buffer + extension.size });
+		try {
+			path.replace_extension({ extension.buffer, extension.buffer + extension.size });
+		}
+		catch (const std::filesystem::filesystem_error& error) {
+			return false;
+		}
 		return true;
 	}
 

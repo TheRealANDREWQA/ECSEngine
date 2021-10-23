@@ -276,7 +276,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 		if (stream.good()) {
 			// Read the whole file
 			size_t byte_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(byte_size);
+			char* allocation = (char*)_malloca(byte_size);
 			stream.read(allocation, byte_size);
 
 			// Make sure to make \0 the last read character
@@ -304,7 +304,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					// make the end line character \0 for C functions
 					char* end_line = strchr(last_character, '\n');
 					if (end_line == nullptr) {
-						ECS_FREEA(allocation);
+						_freea(allocation);
 						return false;
 					}
 					*end_line = '\0';
@@ -313,7 +313,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					char* current_character = last_character;
 					current_character = strchr(current_character, ':');
 					if (current_character == nullptr) {
-						ECS_FREEA(allocation);
+						_freea(allocation);
 						return false;
 					}
 
@@ -334,7 +334,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 
 					current_character = strstr(current_character, STRING(ECS_REFLECT_FORMAT));
 					if (current_character == nullptr) {
-						ECS_FREEA(allocation);
+						_freea(allocation);
 						return false;
 					}
 
@@ -350,7 +350,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					DXGI_FORMAT format;
 					bool success = format_table.TryGetValue(hash, identifier, format);
 					if (!success) {
-						ECS_FREEA(allocation);
+						_freea(allocation);
 						return false;
 					}
 					elements[current_index].Format = format;
@@ -422,11 +422,11 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 				}
 				semantic_name_pool.AssertCapacity();
 
-				ECS_FREEA(allocation);
+				_freea(allocation);
 				return true;
 			}
 
-			ECS_FREEA(allocation);
+			_freea(allocation);
 			return false;
 		}
 		return false;
@@ -444,7 +444,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 		if (stream.good()) {
 			// Read the whole file
 			size_t file_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(file_size);
+			char* allocation = (char*)_malloca(file_size);
 			stream.read(allocation, file_size);
 
 			// Make sure to make \0 the last read character
@@ -503,7 +503,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					unsigned int hash = Hash::Hash(identifier);
 					size_t byte_size;
 					if (!type_table.TryGetValue(hash, identifier, byte_size)) {
-						ECS_FREEA(allocation);
+						_freea(allocation);
 						return false;
 					}
 					total_byte_size += byte_size;
@@ -539,7 +539,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 			}
 
 			name_pool.AssertCapacity();
-			ECS_FREEA(allocation);
+			_freea(allocation);
 			return true;
 		}
 		return false;
@@ -557,7 +557,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 		if (stream.good()) {
 			// Read the whole file
 			size_t file_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(file_size);
+			char* allocation = (char*)_malloca(file_size);
 			stream.read(allocation, file_size);
 
 			// Make sure to make \0 the last read character
@@ -587,7 +587,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 				}
 			}
 
-			ECS_FREEA(allocation);
+			_freea(allocation);
 			return true;
 		}
 		return false;
@@ -633,7 +633,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 		if (stream.good()) {
 			// Read the whole file
 			size_t file_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(file_size);
+			char* allocation = (char*)_malloca(file_size);
 			stream.read(allocation, file_size);
 
 			// Make sure to make \0 the last read character
@@ -646,14 +646,14 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 			bool success = KeywordLoop(struct_ptr, mapping, Stream<const char*>(VERTEX_BUFFER_MAPPINGS, std::size(VERTEX_BUFFER_MAPPINGS)));
 
 			if (!success) {
-				ECS_FREEA(allocation);
+				_freea(allocation);
 				return false;
 			}
 
 			// Check macros now
 			success = KeywordLoop(struct_ptr, mapping, Stream<const char*>((VERTEX_BUFFER_MACRO_MAPPINGS), std::size(VERTEX_BUFFER_MACRO_MAPPINGS)));	
 
-			ECS_FREEA(allocation);
+			_freea(allocation);
 			return success;
 		}
 		return false;

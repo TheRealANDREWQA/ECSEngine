@@ -40,10 +40,6 @@ namespace ECSEngine {
 #define ECS_NOINLINE __declspec(noinline)
 #define ECS_RESTRICT __restrict
 
-#define ECS_STACK_ALLOC(size) _alloca(size)
-#define ECS_MALLOCA(size) _malloca(size)
-#define ECS_FREEA(memory) _freea(memory)
-
 #define ECS_FORWARD_STRUCT_MEMBERS_1(struct_name, field) struct_name.field = field;
 #define ECS_FORWARD_STRUCT_MEMBERS_2(struct_name, field1, field2) ECS_FORWARD_STRUCT_MEMBERS_1(struct_name, field1); \
 struct_name.field2 = field2;

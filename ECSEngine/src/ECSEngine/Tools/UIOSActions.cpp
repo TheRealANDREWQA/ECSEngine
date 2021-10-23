@@ -1,9 +1,9 @@
 #include "ecspch.h"
-#include "../../Utilities/OSFunctions.h"
+#include "../Utilities/OSFunctions.h"
 #include "UIOSActions.h"
 #include "UIDrawerWindows.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../Utilities/Mouse.h"
+#include "../Utilities/Keyboard.h"
 
 constexpr const char* RENAME_FOLDER_WIZARD_NAME = "Rename Folder";
 constexpr const char* RENAME_FOLDER_WIZARD_INPUT_NAME = "New folder name";

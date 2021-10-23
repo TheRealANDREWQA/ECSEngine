@@ -1,5 +1,5 @@
 #pragma once
-#include "../../Rendering/ColorMacros.h"
+#include "../Rendering/ColorMacros.h"
 
 namespace ECSEngine {
 

@@ -1,60 +1,8 @@
 #include "ecspch.h"
 #include "RenderingStructures.h"
 #include "../Utilities/Function.h"
-#include "../Allocators/AllocatorPolymorphic.h"
-#include "../Utilities/File.h"
-
-ECS_CONTAINERS;
 
 namespace ECSEngine {
-
-	constexpr const wchar_t* PBR_MATERIAL_COLOR_TEXTURE_STRINGS[] = {
-		L"diff",
-		L"diffuse",
-		L"color",
-		L"Color",
-		L"Diff",
-		L"Diffuse",
-		L"albedo",
-		L"Albedo"
-	};
-
-	constexpr const wchar_t* PBR_MATERIAL_METALLIC_TEXTURE_STRINGS[] = {
-		L"Metallic",
-		L"metallic",
-		L"met",
-		L"Met"
-	};
-
-	constexpr const wchar_t* PBR_MATERIAL_ROUGHNESS_TEXTURE_STRINGS[] = {
-		L"roughness",
-		L"Roughness",
-		L"rough",
-		L"Rough"
-	};
-
-	constexpr const wchar_t* PBR_MATERIAL_OCCLUSION_TEXTURE_STRINGS[] = {
-		L"AO",
-		L"AmbientOcclusion",
-		L"Occlusion",
-		L"ao",
-		L"OCC",
-		L"occ"
-	};
-
-	constexpr const wchar_t* PBR_MATERIAL_NORMAL_TEXTURE_STRINGS[] = {
-		L"Normal",
-		L"normal",
-		L"Nor",
-		L"nor"
-	};
-
-	constexpr const wchar_t* PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS[] = {
-		L"Emissive",
-		L"emissive",
-		L"emiss",
-		L"Emiss"
-	};
 
 	VertexBuffer::VertexBuffer() : stride(0), buffer(nullptr) {}
 
@@ -111,7 +59,7 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
 		HRESULT result = ptr.As(&com_tex);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture2D failed!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture1D failed!", true);
 		tex = com_tex.Detach();
 	}
 
@@ -126,7 +74,7 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Texture3D> com_tex;
 		HRESULT result = ptr.As(&com_tex);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture3D failed!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture1D failed!", true);
 		tex = com_tex.Detach();
 	}
 
@@ -145,27 +93,23 @@ namespace ECSEngine {
 	Color::Color(unsigned char _red, unsigned char _green, unsigned char _blue, unsigned char _alpha)
 	 : red(_red), green(_green), blue(_blue), alpha(_alpha) {}
 
-	constexpr float COLOR_RANGE = 255;
-
 	Color::Color(float _red, float _green, float _blue, float _alpha)
 	{
-		red = _red * COLOR_RANGE;
-		green = _green * COLOR_RANGE;
-		blue = _blue * COLOR_RANGE;
-		alpha = _alpha * COLOR_RANGE;
+		constexpr float range = 255;
+		red = _red * range;
+		green = _green * range;
+		blue = _blue * range;
+		alpha = _alpha * range;
 	}
 
 	Color::Color(ColorFloat color)
 	{
-		red = color.red * COLOR_RANGE;
-		green = color.green * COLOR_RANGE;
-		blue = color.blue * COLOR_RANGE;
-		alpha = color.alpha * COLOR_RANGE;
+		constexpr float range = 255;
+		red = color.red * range;
+		green = color.green * range;
+		blue = color.blue * range;
+		alpha = color.alpha * range;
 	}
-
-	Color::Color(const unsigned char* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
- 
-	Color::Color(const float* values) : red(values[0] * COLOR_RANGE), green(values[1] * COLOR_RANGE), blue(values[2] * COLOR_RANGE), alpha(values[3] * COLOR_RANGE) {}
 
 	bool Color::operator==(const Color& other) const
 	{
@@ -220,6 +164,23 @@ namespace ECSEngine {
 		values[3] = (float)alpha * inverse;
 	}
 
+	ColorRGB::ColorRGB() : red(0), green(0), blue(0) {}
+
+	ColorRGB::ColorRGB(unsigned char _red) : red(_red), green(0), blue(0) {}
+
+	ColorRGB::ColorRGB(unsigned char _red, unsigned char _green) : red(_red), green(_green), blue(0) {}
+
+	ColorRGB::ColorRGB(unsigned char _red, unsigned char _green, unsigned char _blue)
+		: red(_red), green(_green), blue(_blue) {}
+
+	void ColorRGB::Normalize(float* values) const
+	{
+		float inverse = 1.0f / 255.0f;
+		values[0] = (float)red * inverse;
+		values[1] = (float)green * inverse;
+		values[2] = (float)blue * inverse;
+	}
+
 	ColorFloat::ColorFloat() : red(0.0f), green(0.0f), blue(0.0f), alpha(1.0f) {}
 
 	ColorFloat::ColorFloat(float _red) : red(_red), green(0.0f), blue(0.0f), alpha(1.0f) {}
@@ -240,8 +201,6 @@ namespace ECSEngine {
 		blue = static_cast<float>(color.blue) * inverse_range;
 		alpha = static_cast<float>(color.alpha) * inverse_range;
 	}
-
-	ColorFloat::ColorFloat(const float* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
 
 	ColorFloat ColorFloat::operator*(const ColorFloat& other) const
 	{
@@ -271,6 +230,22 @@ namespace ECSEngine {
 		values[3] = alpha;
 	}
 
+	ColorFloatRGB::ColorFloatRGB() : red(0.0f), green(0.0f), blue(0.0f) {}
+
+	ColorFloatRGB::ColorFloatRGB(float _red) : red(_red), green(0.0f), blue(0.0f) {}
+
+	ColorFloatRGB::ColorFloatRGB(float _red, float _green) : red(_red), green(_green), blue(0.0f) {}
+
+	ColorFloatRGB::ColorFloatRGB(float _red, float _green, float _blue)
+		: red(_red), green(_green), blue(_blue) {}
+
+	void ColorFloatRGB::Normalize(float* values) const
+	{
+		values[0] = red;
+		values[1] = green;
+		values[2] = blue;
+	}
+
 	Camera::Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f) {}
 
 	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation) {}
@@ -291,181 +266,6 @@ namespace ECSEngine {
 
 	Matrix Camera::GetProjectionViewMatrix() const {
 		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
-	}
-
-	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
-		void* base_address = (void*)function::align_pointer(
-			(uintptr_t)function::OffsetPointer(material, sizeof(Stream<char>) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
-			alignof(Stream<wchar_t>)
-		);
-
-		Stream<wchar_t>* texture_name = (Stream<wchar_t>*)function::OffsetPointer(
-			base_address,
-			sizeof(Stream<wchar_t>) * texture_index
-		);
-		texture_name->InitializeFromBuffer(memory, texture.size);
-		texture_name->Copy(texture);
-	}
-
-	void AllocatePBRMaterial(
-		PBRMaterial& material, 
-		containers::Stream<char> name, 
-		containers::Stream<PBRMaterialMapping> mappings,
-		AllocatorPolymorphic allocator
-	)
-	{
-		size_t total_allocation_size = name.size;
-
-		for (size_t index = 0; index < mappings.size; index++) {
-			total_allocation_size += mappings[index].texture.size * sizeof(wchar_t);
-		}
-
-		void* allocation = Allocate(allocator, total_allocation_size, alignof(wchar_t));
-
-		uintptr_t ptr = (uintptr_t)allocation;
-		material.name.InitializeFromBuffer(ptr, name.size);
-		material.name.Copy(name);
-
-		ptr = function::align_pointer(ptr, alignof(wchar_t));
-
-		for (size_t index = 0; index < mappings.size; index++) {
-			SetPBRMaterialTexture(&material, ptr, mappings[index].texture, mappings[index].index);
-		}
-	}
-
-	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
-	{
-		Deallocate(allocator, material.name.buffer);
-	}
-
-	PBRMaterial CreatePBRMaterialFromName(
-		Stream<char> material_name,
-		Stream<char> texture_base_name,
-		Stream<wchar_t> search_directory, 
-		AllocatorPolymorphic allocator, 
-		Stream<PBRMaterialTextureIndex>* texture_mask
-	)
-	{
-		ECS_TEMP_STRING(wide_base_name, 512);
-		ECS_ASSERT(texture_base_name.size < 512);
-		function::ConvertASCIIToWide(wide_base_name, texture_base_name);
-		wide_base_name.size = texture_base_name.size;
-
-		return CreatePBRMaterialFromName(material_name, wide_base_name, search_directory, allocator, texture_mask);
-	}
-
-	PBRMaterial CreatePBRMaterialFromName(
-		Stream<char> material_name,
-		Stream<wchar_t> texture_base_name,
-		Stream<wchar_t> search_directory,
-		AllocatorPolymorphic allocator,
-		Stream<PBRMaterialTextureIndex>* texture_mask
-	) {
-		PBRMaterial material;
-		memset(&material, 0, sizeof(PBRMaterial));
-
-		material.tint = Color((unsigned char)255, 255, 255, 255);
-		material.emissive_factor = { 0.0f, 0.0f, 0.0f };
-		material.metallic_factor = 0.0f;
-		material.roughness_factor = 1.0f;
-
-		Stream<const wchar_t*> material_strings[ECS_PBR_MATERIAL_MAPPING_COUNT];
-		material_strings[ECS_PBR_MATERIAL_COLOR] = { PBR_MATERIAL_COLOR_TEXTURE_STRINGS, std::size(PBR_MATERIAL_COLOR_TEXTURE_STRINGS) };
-		material_strings[ECS_PBR_MATERIAL_EMISSIVE] = { PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS, std::size(PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS) };
-		material_strings[ECS_PBR_MATERIAL_METALLIC] = { PBR_MATERIAL_METALLIC_TEXTURE_STRINGS, std::size(PBR_MATERIAL_METALLIC_TEXTURE_STRINGS) };
-		material_strings[ECS_PBR_MATERIAL_NORMAL] = { PBR_MATERIAL_NORMAL_TEXTURE_STRINGS, std::size(PBR_MATERIAL_NORMAL_TEXTURE_STRINGS) };
-		material_strings[ECS_PBR_MATERIAL_OCCLUSION] = { PBR_MATERIAL_OCCLUSION_TEXTURE_STRINGS, std::size(PBR_MATERIAL_OCCLUSION_TEXTURE_STRINGS) };
-		material_strings[ECS_PBR_MATERIAL_ROUGHNESS] = { PBR_MATERIAL_ROUGHNESS_TEXTURE_STRINGS, std::size(PBR_MATERIAL_ROUGHNESS_TEXTURE_STRINGS) };
-		material_strings[ECS_PBR_MATERIAL_EMISSIVE] = { PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS, std::size(PBR_MATERIAL_EMISSIVE_TEXTURE_STRINGS) };
-
-		PBRMaterialTextureIndex _default_mappings[ECS_PBR_MATERIAL_MAPPING_COUNT];
-		_default_mappings[0] = ECS_PBR_MATERIAL_COLOR;
-		_default_mappings[1] = ECS_PBR_MATERIAL_EMISSIVE;
-		_default_mappings[2] = ECS_PBR_MATERIAL_METALLIC;
-		_default_mappings[3] = ECS_PBR_MATERIAL_NORMAL;
-		_default_mappings[4] = ECS_PBR_MATERIAL_OCCLUSION;
-		_default_mappings[5] = ECS_PBR_MATERIAL_ROUGHNESS;
-
-		Stream<PBRMaterialTextureIndex> default_mappings(_default_mappings, ECS_PBR_MATERIAL_MAPPING_COUNT);
-		if (texture_mask == nullptr) {
-			texture_mask = &default_mappings;
-		}
-
-		ECS_TEMP_STRING(temp_memory, 2048);
-		ECS_TEMP_STRING(__base_name, 256);
-		__base_name.Copy(texture_base_name);
-		__base_name[texture_base_name.size] = L'\0';
-		texture_base_name.buffer = __base_name.buffer;
-
-		PBRMaterialMapping _valid_textures[ECS_PBR_MATERIAL_MAPPING_COUNT];
-		Stream<PBRMaterialMapping> valid_textures(_valid_textures, 0);
-
-		struct Data {
-			Stream<wchar_t> base_name;
-			Stream<PBRMaterialTextureIndex>* texture_mask;
-			Stream<PBRMaterialMapping>* valid_textures;
-			CapacityStream<wchar_t>* temp_memory;
-			Stream<Stream<const wchar_t*>> material_strings;
-		};
-
-		auto functor = [](const std::filesystem::path& path, void* _data) {
-			const wchar_t* c_path = path.c_str();
-			Stream<wchar_t> stream_path = ToStream(c_path);
-
-			Data* data = (Data*)_data;
-			// find the base part first
-			const wchar_t* base_start = wcsstr(c_path, data->base_name.buffer);
-			if (base_start != nullptr) {
-				base_start += data->base_name.size;
-				while (*base_start == '_') {
-					base_start++;
-				}
-				size_t mask_count = data->texture_mask->size;
-
-				unsigned int found_index = -1;
-				// linear search for every pbr material texture
-				for (size_t index = 0; index < mask_count && found_index == -1; index++) {
-					// linear search for every string in the material texture
-					Stream<const wchar_t*> material_strings = data->material_strings[data->texture_mask->buffer[index]];
-					for (size_t string_index = 0; string_index < material_strings.size && found_index == -1; string_index++) {
-						if (memcmp(base_start, material_strings[string_index], sizeof(wchar_t) * wcslen(material_strings[string_index])) == 0) {
-							found_index = index;
-						}
-					}
-				}
-
-				// The path is valid, a texture matches
-				if (found_index != -1) {
-					data->valid_textures->Add({ {data->temp_memory->buffer + data->temp_memory->size, stream_path.size}, data->texture_mask->buffer[found_index] });
-					data->texture_mask->RemoveSwapBack(found_index);
-					data->temp_memory->AddStreamSafe(stream_path);
-				}
-			}
-
-			return data->texture_mask->size > 0;
-		};
-
-		Data data;
-		data.base_name = texture_base_name;
-		data.material_strings = { material_strings, std::size(material_strings) };
-		data.temp_memory = &temp_memory;
-		data.texture_mask = texture_mask;
-		data.valid_textures = &valid_textures;
-		ForEachFileInDirectoryRecursive(search_directory, &data, functor);
-
-		size_t total_size = sizeof(wchar_t) * temp_memory.size + sizeof(char) * material_name.size;
-		void* allocation = Allocate(allocator, total_size, alignof(wchar_t));
-
-		uintptr_t buffer = (uintptr_t)allocation;
-		material.name.InitializeFromBuffer(buffer, material_name.size);
-		material.name.Copy(material_name);
-		
-		buffer = function::align_pointer(buffer, alignof(wchar_t));
-		for (size_t index = 0; index < valid_textures.size; index++) {
-			SetPBRMaterialTexture(&material, buffer, valid_textures[index].texture, valid_textures[index].index);
-		}
-
-		return material;
 	}
 
 }

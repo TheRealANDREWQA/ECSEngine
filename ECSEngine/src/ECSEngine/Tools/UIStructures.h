@@ -1,19 +1,19 @@
 #pragma once
-#include "../../Core.h"
-#include "../../Containers/Stream.h"
-#include "../../Containers/HashTable.h"
-#include "../../Containers/Stacks.h"
-#include "../../Allocators/MemoryArena.h"
-#include "../../Allocators/MemoryManager.h"
-#include "../../Allocators/LinearAllocator.h"
-#include "../../Rendering/Graphics.h"
-#include "../../Rendering/RenderingStructures.h"
-#include "../../Internal/InternalStructures.h"
+#include "../Core.h"
+#include "../Containers/Stream.h"
+#include "../Containers/HashTable.h"
+#include "../Containers/Stacks.h"
+#include "../Allocators/MemoryArena.h"
+#include "../Allocators/MemoryManager.h"
+#include "../Allocators/LinearAllocator.h"
+#include "../Rendering/Graphics.h"
+#include "../Rendering/RenderingStructures.h"
+#include "../Internal/InternalStructures.h"
 #include "UIMacros.h"
-#include "../../Application.h"
-#include "../../Utilities/Timer.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../Application.h"
+#include "../Utilities/Timer.h"
+#include "../Utilities/Mouse.h"
+#include "../Utilities/Keyboard.h"
 
 namespace ECSEngine {
 
@@ -153,7 +153,11 @@ namespace ECSEngine {
 			float2 scale;
 		};
 
-		using UISpriteTexture = ResourceView;
+		struct ECSENGINE_API UISpriteTexture {
+			ResourceView view;
+			unsigned short width;
+			unsigned short height;
+		};
 
 #pragma endregion
 
@@ -376,8 +380,6 @@ namespace ECSEngine {
 			CapacityStream<SamplerState> texture_samplers;
 			ResourceView font_texture;
 			UIDrawResources system_draw;
-			Semaphore texture_semaphore;
-			SpinLock texture_spinlock;
 			unsigned int texture_eviction_frame_target;
 			unsigned int texture_eviction_frame_count;
 		};
@@ -493,7 +495,6 @@ namespace ECSEngine {
 			size_t* system_count;
 			UIDockspaceRegion mouse_region;
 			float2 mouse_position;
-			Semaphore* texture_semaphore;
 			ID3D11CommandList** command_list;
 		};
 

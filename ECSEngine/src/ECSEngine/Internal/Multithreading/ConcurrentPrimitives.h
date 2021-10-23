@@ -29,33 +29,24 @@ namespace ECSEngine {
 		SpinLock& operator = (const SpinLock& other);
 
 		void lock();
-		
 		bool try_lock();
-		
 		void unlock();
 
 		std::atomic<bool> value = { 0 };
+
 	};
 
 	struct ECSENGINE_API Semaphore {
 		Semaphore();
-		Semaphore(unsigned int target);
+		Semaphore(unsigned int value);
 
-		Semaphore(const Semaphore& other) = default;
-		Semaphore& operator = (const Semaphore& other) = default;
+		Semaphore& operator = (const Semaphore& other);
 
 		void Enter();
-
 		void ClearTarget();
-
 		void ClearCount();
-
 		void Exit();
-
 		void SetTarget(unsigned int value);
-
-		// It will spin wait until the target is reached
-		void SpinWait();
 
 		std::atomic<unsigned int> count;
 		unsigned int target;

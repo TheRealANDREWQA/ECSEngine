@@ -1,5 +1,5 @@
 #pragma once
-#include "../../Core.h"
+#include "../Core.h"
 #include "UIStructures.h"
 
 namespace ECSEngine {

@@ -9,7 +9,7 @@ namespace ECSEngine {
 
 constexpr const wchar_t* PROJECT_MODULE_EXTENSION = L".ecsmodules";
 
-void GetProjectModuleFilePath(const EditorState* editor_state, ECSEngine::containers::CapacityStream<wchar_t>& path);
+void GetProjectModuleFilePath(EditorState* editor_state, ECSEngine::containers::CapacityStream<wchar_t>& path);
 
 // Uses the project file to determine the path
 bool LoadModuleFile(EditorState* editor_state);

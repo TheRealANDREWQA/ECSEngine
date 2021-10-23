@@ -1,6 +1,10 @@
 #pragma once
 #include "ECSEngineMultithreading.h"
 
+#define MODULE_FUNCTION_NAME "ModuleFunction"
+#define MODULE_DRAW_SCENE_NAME "ModuleDrawScene"
+constexpr const wchar_t* MODULE_EXTENSION = L".dll";
+
 constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {
 	L".dll",
 	L".pdb",
@@ -11,6 +15,9 @@ constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {
 namespace ECSEngine {
 	struct World;
 }
+
+using ModuleFunction = void (*)(ECSEngine::World* world, ECSEngine::containers::Stream<ECSEngine::TaskGraphElement>& module_stream);
+using ModuleDrawScene = void (*)(ECSEngine::World* world);
 
 constexpr const char* MODULE_CONFIGURATION_DEBUG = "Debug";
 constexpr const char* MODULE_CONFIGURATION_RELEASE = "Release";
@@ -29,18 +36,9 @@ enum class ModuleConfiguration : unsigned char {
 	Count
 };
 
-enum class ModuleLoadStatus : unsigned char {
-	Failed,
-	OutOfDate,
-	Good
-};
-
 struct Module {
 	ECSEngine::containers::Stream<wchar_t> solution_path;
 	ECSEngine::containers::Stream<wchar_t> library_name;
-	ECSEngine::containers::Stream<ECSEngine::TaskGraphElement> tasks;
 	ModuleConfiguration configuration;
-	ModuleLoadStatus load_status;
-	size_t solution_last_write_time;
-	size_t library_last_write_time;
+	size_t last_write_time;
 };

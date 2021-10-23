@@ -8,9 +8,7 @@ namespace ECSEngine {
 		// Pointer that can have packed data into the high order 2 bytes
 		struct ECSENGINE_API DataPointer {
 			DataPointer() : pointer(nullptr) {}
-			DataPointer(void* pointer) : pointer(pointer) {
-				SetData(0);
-			}
+			DataPointer(void* pointer) : pointer(pointer) {}
 
 			DataPointer(const DataPointer& other) = default;
 			DataPointer& operator = (const DataPointer& other) = default;
@@ -27,8 +25,6 @@ namespace ECSEngine {
 
 			// Sign extend the 47th bit then return it
 			void* GetPointer() const;
-
-			void SetPointer(void* new_pointer);
 
 			void* pointer;
 		};

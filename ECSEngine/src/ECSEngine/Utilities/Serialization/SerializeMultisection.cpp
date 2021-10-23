@@ -11,23 +11,17 @@ namespace ECSEngine {
 	template<typename StreamType>
 	bool SerializeMultisectionInternal(
 		StreamType& stream,
-		Stream<SerializeMultisectionData> multisections,
-		Stream<void> header
+		Stream<SerializeMultisectionData> multisections
 	) {
-		Write(stream, &header.size, sizeof(header.size));
-		if (header.buffer != nullptr && header.size > 0) {
-			Write(stream, header);
-		}
-
 		// Multi section count
-		Write(stream, &multisections.size, sizeof(multisections.size));
+		Write(stream, &multisections.size, sizeof(size_t));
 
 		// For each multi section copy every stream associated with the byte size
 		for (size_t index = 0; index < multisections.size; index++) {
 			Write(stream, &multisections[index].data.size, sizeof(size_t));
 			ECS_ASSERT(multisections[index].data.size > 0);
 			for (size_t stream_index = 0; stream_index < multisections[index].data.size; stream_index++) {
-				//ECS_ASSERT(multisections[index].data[stream_index].size > 0);
+				ECS_ASSERT(multisections[index].data[stream_index].size > 0);
 				Write(stream, &multisections[index].data[stream_index].size, sizeof(size_t));
 				Write(stream, multisections[index].data[stream_index].buffer, multisections[index].data[stream_index].size);
 			}
@@ -48,20 +42,8 @@ namespace ECSEngine {
 		StreamType& stream,
 		CapacityStream<SerializeMultisectionData>& data,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		CapacityStream<void>* header,
 		bool* ECS_RESTRICT success_status = nullptr
 	) {
-		size_t header_size = 0;
-		Read(stream, &header_size, sizeof(header_size));
-		if (header != nullptr) {
-			ECS_ASSERT(header_size <= header->capacity);
-			Read(stream, header->buffer, header_size);
-			header->size = header_size;
-		}
-		else {
-			Ignore(stream, header_size);
-		}
-
 		size_t multisection_count = 0;
 		Read(stream, &multisection_count, sizeof(size_t));
 
@@ -105,20 +87,8 @@ namespace ECSEngine {
 	size_t DeserializeMultisectionInternal(
 		StreamType& stream,
 		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>* header,
 		unsigned int* ECS_RESTRICT faulty_index = nullptr
 	) {
-		size_t header_size = 0;
-		Read(stream, &header_size, sizeof(header_size));
-		if (header != nullptr) {
-			ECS_ASSERT(header_size <= header->capacity);
-			Read(stream, header->buffer, header_size);
-			header->size = header_size;
-		}
-		else {
-			Ignore(stream, header_size);
-		}
-
 		size_t multisection_count = 0;
 		Read(stream, &multisection_count, sizeof(size_t));
 
@@ -171,20 +141,8 @@ namespace ECSEngine {
 		CapacityStream<SerializeMultisectionData>& ECS_RESTRICT data,
 		void* ECS_RESTRICT allocator,
 		AllocatorType allocator_type,
-		CapacityStream<void>* header,
 		bool* ECS_RESTRICT success
 	) {
-		size_t header_size = 0;
-		Read(stream, &header_size, sizeof(header_size));
-		if (header != nullptr) {
-			ECS_ASSERT(header_size <= header->capacity);
-			Read(stream, header->buffer, header_size);
-			header->size = header_size;
-		}
-		else {
-			Ignore(stream, header_size);
-		}
-
 		size_t multisection_count = 0;
 		Read(stream, &multisection_count, sizeof(size_t));
 
@@ -197,7 +155,7 @@ namespace ECSEngine {
 				size_t data_size = 0;
 				Read(stream, &data_size, sizeof(size_t));
 
-				//ECS_ASSERT(data_size > 0);
+				ECS_ASSERT(data_size > 0);
 				data[data.size].data[stream_index].buffer = Allocate(allocator, allocator_type, data_size);
 				Read(stream, data[data.size].data[stream_index].buffer, data_size);
 				data[data.size].data[stream_index].size = data_size;
@@ -217,14 +175,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	bool SerializeMultisection(std::ofstream& stream, Stream<SerializeMultisectionData> data, Stream<void> header) {
-		return SerializeMultisectionInternal(stream, data, header);
+	bool SerializeMultisection(std::ofstream& stream, Stream<SerializeMultisectionData> data) {
+		return SerializeMultisectionInternal(stream, data);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	void SerializeMultisection(CapacityStream<void>& stream, Stream<SerializeMultisectionData> data, Stream<void> header) {
-		SerializeMultisectionInternal(stream, data, header);
+	void SerializeMultisection(CapacityStream<void>& stream, Stream<SerializeMultisectionData> data) {
+		SerializeMultisectionInternal(stream, data);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
@@ -248,13 +206,12 @@ namespace ECSEngine {
 
 	// Returns the amount of pointer data bytes
 	size_t DeserializeMultisection(
-		std::ifstream& stream,
+		std::ifstream& ECS_RESTRICT stream,
 		CapacityStream<SerializeMultisectionData>& data,
 		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		CapacityStream<void>* ECS_RESTRICT header,
-		bool* success_status
+		bool* ECS_RESTRICT success_status
 	) {
-		return DeserializeMultisectionInternal(stream, data, memory_pool, header, success_status);
+		return DeserializeMultisectionInternal(stream, data, memory_pool, success_status);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
@@ -263,10 +220,9 @@ namespace ECSEngine {
 	size_t DeserializeMultisection(
 		std::ifstream& stream,
 		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>* header,
-		unsigned int* faulty_index
+		unsigned int* ECS_RESTRICT faulty_index
 	) {
-		return DeserializeMultisectionInternal(stream, data, header, faulty_index);
+		return DeserializeMultisectionInternal(stream, data, faulty_index);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
@@ -275,10 +231,9 @@ namespace ECSEngine {
 	size_t DeserializeMultisection(
 		uintptr_t& stream,
 		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		CapacityStream<void>* ECS_RESTRICT header
+		CapacityStream<void>& memory_pool
 	) {
-		return DeserializeMultisectionInternal(stream, data, memory_pool, header, nullptr);
+		return DeserializeMultisectionInternal(stream, data, memory_pool, nullptr);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
@@ -286,69 +241,47 @@ namespace ECSEngine {
 	size_t DeserializeMultisection(
 		uintptr_t& stream,
 		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>* header,
-		unsigned int* faulty_index
+		unsigned int* ECS_RESTRICT faulty_index
 	) {
-		return DeserializeMultisectionInternal(stream, data, header, nullptr);
+		return DeserializeMultisectionInternal(stream, data, nullptr);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisection(
-		std::ifstream& stream, 
-		CapacityStream<SerializeMultisectionData>& data,
-		void* ECS_RESTRICT allocator,
-		AllocatorType allocator_type,
-		CapacityStream<void>* header,
-		bool* success
-	)
+	size_t DeserializeMultisection(std::ifstream& stream, CapacityStream<SerializeMultisectionData>& data, void* allocator, AllocatorType allocator_type, bool* success)
 	{
-		return DeserializeMultisectionInternal(stream, data, allocator, allocator_type, header, success);
+		return DeserializeMultisectionInternal(stream, data, allocator, allocator_type, success);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisection(
-		uintptr_t& stream, 
-		CapacityStream<SerializeMultisectionData>& data,
-		void* ECS_RESTRICT allocator,
-		AllocatorType allocator_type, 
-		CapacityStream<void>* header
-	)
+	size_t DeserializeMultisection(uintptr_t& stream, CapacityStream<SerializeMultisectionData>& data, void* allocator, AllocatorType allocator_type)
 	{
-		return DeserializeMultisectionInternal(stream, data, allocator, allocator_type, header, nullptr);
+		return DeserializeMultisectionInternal(stream, data, allocator, allocator_type, nullptr);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisectionCount(uintptr_t stream, size_t header_size)
+	size_t DeserializeMultisectionCount(uintptr_t stream)
 	{
-		return *(size_t*)function::OffsetPointer((void*)stream, header_size);
+		return *(size_t*)stream;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisectionCount(std::ifstream& stream, size_t header_size)
+	size_t DeserializeMultisectionCount(std::ifstream& stream)
 	{
 		size_t count = 0;
-		Ignore(stream, header_size + sizeof(header_size));
 		stream.read((char*)&count, sizeof(count));
-		stream.seekg(0, std::ios_base::beg);
+		stream.seekg(-8, std::ios_base::cur);
 		ECS_ASSERT(stream.good());
 		return count;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisectionSize(uintptr_t stream, size_t* header_size) {
+	size_t DeserializeMultisectionSize(uintptr_t stream) {
 		size_t total_memory = 0;
-
-		size_t _header_size = 0;
-		Read(stream, &_header_size, sizeof(_header_size));
-		if (header_size != nullptr) {
-			*header_size = _header_size;
-		}
-		Ignore(stream, _header_size);
 
 		size_t multisection_count = 0;
 		Read(stream, &multisection_count, sizeof(size_t));
@@ -369,15 +302,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count, size_t* header_size) {
+	size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count) {
 		size_t total_memory = 0;
-
-		size_t _header_size = 0;
-		Read(stream, &_header_size, sizeof(_header_size));
-		if (header_size != nullptr) {
-			*header_size = _header_size;
-		}
-		Ignore(stream, _header_size);
 
 		size_t multisection_count = 0;
 		Read(stream, &multisection_count, sizeof(size_t));
@@ -401,41 +327,5 @@ namespace ECSEngine {
 
 		return total_memory;
 	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	size_t DeserializeMultisectionHeaderSize(uintptr_t stream) {
-		return *(size_t*)stream;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	size_t DeserializeMultisectionHeaderSize(std::ifstream& stream) {
-		size_t count = 0;
-		stream.read((char*)&count, sizeof(count));
-		stream.seekg(0, std::ios_base::beg);
-		ECS_ASSERT(stream.good());
-		return count;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	void DeserializeMultisectionHeader(uintptr_t stream, CapacityStream<void>& header) {
-		size_t header_size = 0;
-		Read(stream, &header_size, sizeof(header_size));
-		Read(stream, header, header_size);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	bool DeserializeMultisectionHeader(std::ifstream& stream, CapacityStream<void>& header) {
-		size_t header_size = 0;
-		Read(stream, &header_size, sizeof(header_size));
-		Read(stream, header, header_size);
-		stream.seekg(0, std::ios_base::beg);
-		return stream.good();
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------
 
 }
