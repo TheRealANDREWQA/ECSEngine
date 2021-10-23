@@ -96,7 +96,7 @@ namespace ECSEngine {
 	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); \
 \
 	ID3DBlob* blob; \
-	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, nullptr); \
+	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob); \
 	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling " TEXT(STRING(shader_type)) L" shader failed.", true); \
 	CreateShaderFromBlob(shader_type, blob); 
 
@@ -609,6 +609,28 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
+
+	IndexBuffer Graphics::CreateIndexBuffer(size_t int_size, size_t element_count, D3D11_USAGE usage, unsigned int cpu_access)
+	{
+		IndexBuffer component;
+		component.count = element_count;
+		component.int_size = int_size;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC index_buffer_descriptor = {};
+		index_buffer_descriptor.ByteWidth = UINT(component.count * int_size);
+		index_buffer_descriptor.Usage = usage;
+		index_buffer_descriptor.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		index_buffer_descriptor.CPUAccessFlags = cpu_access;
+		index_buffer_descriptor.MiscFlags = 0;
+		index_buffer_descriptor.StructureByteStride = int_size;
+
+		result = m_device->CreateBuffer(&index_buffer_descriptor, nullptr, &component.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
+		return component;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 	
 	PixelShader Graphics::CreatePixelShader(Stream<wchar_t> byte_code)
 	{
@@ -628,7 +650,11 @@ namespace ECSEngine {
 
 	PixelShader Graphics::CreatePixelShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options)
 	{
+		ID3DBlob* error_message_blob;
 		CreateShaderFromSourceCode(Pixel, ECS_SHADER_PIXEL);
+		if (error_message_blob != nullptr) {
+			error_message_blob->Release();
+		}
 		return shader;
 	}
 
@@ -710,8 +736,10 @@ namespace ECSEngine {
 		HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, nullptr); 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling Vertex shader failed.", true); 
 		
-		result = m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &shader.shader); \
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Vertex shader failed.", true); \
+		result = m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Vertex shader failed.", true);
+
+		shader.byte_code = blob;
 
 		return shader;
 	}
@@ -736,7 +764,11 @@ namespace ECSEngine {
 
 	DomainShader Graphics::CreateDomainShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options)
 	{
+		ID3DBlob* error_message_blob;
 		CreateShaderFromSourceCode(Domain, ECS_SHADER_DOMAIN);
+		if (error_message_blob != nullptr) {
+			error_message_blob->Release();
+		}
 		return shader;
 	}
 
@@ -757,7 +789,11 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	HullShader Graphics::CreateHullShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		ID3DBlob* error_message_blob;
 		CreateShaderFromSourceCode(Hull, ECS_SHADER_HULL);
+		if (error_message_blob != nullptr) {
+			error_message_blob->Release();
+		}
 		return shader;
 	}
 
@@ -778,7 +814,11 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	GeometryShader Graphics::CreateGeometryShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		ID3DBlob* error_message_blob;
 		CreateShaderFromSourceCode(Geometry, ECS_SHADER_GEOMETRY);
+		if (error_message_blob != nullptr) {
+			error_message_blob->Release();
+		}
 		return shader;
 	}
 
@@ -799,7 +839,11 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	ComputeShader Graphics::CreateComputeShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
+		ID3DBlob* error_message_blob;
 		CreateShaderFromSourceCode(Compute, ECS_SHADER_COMPUTE);
+		if (error_message_blob != nullptr) {
+			error_message_blob->Release();
+		}
 		return shader;
 	}
 
@@ -813,6 +857,10 @@ namespace ECSEngine {
 		InputLayout component;
 		HRESULT result;
 		auto byte_code = vertex_shader.byte_code;
+		
+		const void* byte_code_ptr = byte_code->GetBufferPointer();
+		size_t byte_code_size = byte_code->GetBufferSize();
+		
 		result = m_device->CreateInputLayout(
 			descriptor.buffer, 
 			descriptor.size, 
@@ -1566,7 +1614,7 @@ namespace ECSEngine {
 		descriptor.Format = texture_desc.Format;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Texture 1D failed.", true);
 
 		return view;
 	}
@@ -1585,7 +1633,7 @@ namespace ECSEngine {
 		descriptor.Format = texture_desc.Format;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Texture 2D failed.", true);
 
 		return view;
 	}
@@ -1604,7 +1652,7 @@ namespace ECSEngine {
 		descriptor.Format = texture_desc.Format;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Texture 3D failed.", true);
 
 		return view;
 	}
@@ -1615,10 +1663,20 @@ namespace ECSEngine {
 		constexpr size_t REFLECTED_TEXTURE_COUNT = 32;
 
 		ShaderReflectedBuffer _reflected_buffers[REFLECTED_BUFFER_COUNT];
-		ShaderReflectedTexture _reflected_textures[32];
+		ShaderReflectedTexture _reflected_textures[REFLECTED_TEXTURE_COUNT];
 
 		CapacityStream<ShaderReflectedBuffer> reflected_buffers(_reflected_buffers, 0, REFLECTED_BUFFER_COUNT);
 		CapacityStream<ShaderReflectedTexture> reflected_textures(_reflected_textures, 0, REFLECTED_TEXTURE_COUNT);
+
+		// Reflect the vertex shader
+		bool success = ReflectShaderBuffers(v_shader.path, reflected_buffers);
+		success &= ReflectShaderTextures(v_shader.path, reflected_textures);
+		if (!success) {
+			return Material();
+		}
+
+
+		return Material();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1936,16 +1994,16 @@ namespace ECSEngine {
 		CapacityStream<D3D11_INPUT_ELEMENT_DESC> element_descriptors(_element_descriptors, 0, MAX_INPUT_FIELDS);
 
 		constexpr size_t NAME_POOL_SIZE = 8192;
-		void* allocation = _malloca(NAME_POOL_SIZE);
+		void* allocation = ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(allocation, 0, NAME_POOL_SIZE);
 		bool success = m_shader_reflection.ReflectVertexShaderInput(path, element_descriptors, name_pool);
 
 		if (!success) {
-			_freea(allocation);
+			//_freea(allocation);
 			return {};
 		}
 		InputLayout layout = CreateInputLayout(element_descriptors, shader);
-		_freea(allocation);
+		//_freea(allocation);
 		return layout;
 	}
 
@@ -1960,12 +2018,12 @@ namespace ECSEngine {
 
 	bool Graphics::ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers) {
 		constexpr size_t NAME_POOL_SIZE = 8192;
-		char* name_allocation = (char*)_malloca(NAME_POOL_SIZE);
+		char* name_allocation = (char*)ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
 
 		bool success = m_shader_reflection.ReflectShaderBuffers(path, buffers, name_pool);
 		if (!success) {
-			_freea(name_allocation);
+			//_freea(name_allocation);
 			return false;
 		}
 
@@ -1979,7 +2037,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < buffers.size; index++) {
 			buffers[index].name.CopyTo(buffer);
 		}
-		_freea(name_allocation);
+		//_freea(name_allocation);
 		return true;
 	}
 
@@ -1995,12 +2053,12 @@ namespace ECSEngine {
 	bool Graphics::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures)
 	{
 		constexpr size_t NAME_POOL_SIZE = 8192;
-		char* name_allocation = (char*)_malloca(NAME_POOL_SIZE);
+		char* name_allocation = (char*)ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
 
 		bool success = m_shader_reflection.ReflectShaderTextures(path, textures, name_pool);
 		if (!success) {
-			_freea(name_allocation);
+			//_freea(name_allocation);
 			return false;
 		}
 
@@ -2014,7 +2072,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < textures.size; index++) {
 			textures[index].name.CopyTo(buffer);
 		}
-		_freea(name_allocation);
+		//_freea(name_allocation);
 		return true;
 	}
 
@@ -2057,13 +2115,11 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context) {
-		const UINT index_offset = 0u;
-
 		DXGI_FORMAT format = DXGI_FORMAT_R32_UINT;
 		format = (DXGI_FORMAT)function::PredicateValue<unsigned int>(index_buffer.int_size == 1, DXGI_FORMAT_R8_UINT, format);
 		format = (DXGI_FORMAT)function::PredicateValue<unsigned int>(index_buffer.int_size == 2, DXGI_FORMAT_R16_UINT, format);
 
-		context->IASetIndexBuffer(index_buffer.buffer, format, index_offset);
+		context->IASetIndexBuffer(index_buffer.buffer, format, 0);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2137,7 +2193,11 @@ namespace ECSEngine {
 		GraphicsContext* context,
 		UINT start_slot
 	) {
-		context->VSSetConstantBuffers(start_slot, buffers.size, (ID3D11Buffer**)buffers.buffer);
+		ID3D11Buffer* d_buffers[16];
+		for (size_t index = 0; index < buffers.size; index++) {
+			d_buffers[index] = buffers[index].buffer;
+		}
+		context->VSSetConstantBuffers(start_slot, buffers.size, d_buffers);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2489,6 +2549,148 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	template<typename Resource>
+	void CopyGraphicsResource(Resource destination, Resource source, GraphicsContext* context) {
+		context->CopyResource(destination.Resource(), source.Resource());
+	}
+
+#define EXPORT(type) template ECSENGINE_API void CopyGraphicsResource(type, type, GraphicsContext*);
+
+	ECS_GRAPHICS_RESOURCES(EXPORT);
+
+#undef EXPORT
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Buffer>
+	void CopyBufferSubresource(
+		Buffer destination,
+		unsigned int destination_offset,
+		Buffer source,
+		unsigned int source_offset,
+		unsigned int source_size,
+		GraphicsContext* context
+	) {
+		D3D11_BOX box;
+
+		box.top = box.bottom = box.back = box.front = 0;
+		if constexpr (std::is_same_v<Buffer, VertexBuffer>) {
+			box.left = source_offset * source.stride;
+			box.right = source_size * source.stride;
+
+			destination_offset *= destination.stride;
+		}
+		else if constexpr (std::is_same_v<Buffer, IndexBuffer>) {
+			box.left = source_offset * source.int_size;
+			box.right = source_size * source.int_size;
+
+			destination_offset *= destination.int_size;
+		}
+		else {
+			box.left = source_offset;
+			box.right = source_size;
+		}
+		box.right += box.left;
+
+		context->CopySubresourceRegion(destination.buffer, 0, destination_offset, 0, 0, source.buffer, 0, &box);
+	}
+
+#define EXPORT_COPY_GRAPHICS_SUBRESOURCE(type) template ECSENGINE_API void CopyBufferSubresource(type, unsigned int, type, unsigned int, unsigned int, GraphicsContext*);
+
+	EXPORT_COPY_GRAPHICS_SUBRESOURCE(VertexBuffer);
+	EXPORT_COPY_GRAPHICS_SUBRESOURCE(IndexBuffer);
+	EXPORT_COPY_GRAPHICS_SUBRESOURCE(StandardBuffer);
+	EXPORT_COPY_GRAPHICS_SUBRESOURCE(StructuredBuffer);
+	EXPORT_COPY_GRAPHICS_SUBRESOURCE(ConstantBuffer);
+	EXPORT_COPY_GRAPHICS_SUBRESOURCE(UABuffer);
+
+#undef EXPORT_COPY_GRAPHICS_SUBRESOURCE
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void CopyTextureSubresource(
+		Texture1D destination,
+		unsigned int destination_offset,
+		unsigned int destination_subresource_index,
+		Texture1D source,
+		unsigned int source_offset,
+		unsigned int source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	) {
+		D3D11_BOX box;
+
+		box.left = source_offset;
+		box.right = source_offset + source_size;
+		box.top = box.bottom = box.back = box.front = 0;
+		context->CopySubresourceRegion(destination.tex, destination_subresource_index, destination_offset, 0, 0, source.tex, source_subresource_index, &box);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void CopyTextureSubresource(
+		Texture2D destination,
+		uint2 destination_offset,
+		unsigned int destination_subresource_index,
+		Texture2D source,
+		uint2 source_offset,
+		uint2 source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	) {
+		D3D11_BOX box;
+
+		box.left = source_offset.x;
+		box.right = box.left + source_size.x;
+		box.top = source_offset.y;
+		box.bottom = box.top + source_size.y;
+		box.back = box.front = 0;
+		context->CopySubresourceRegion(
+			destination.tex, 
+			destination_subresource_index, 
+			destination_offset.x,
+			destination_offset.y, 
+			0, 
+			source.tex, 
+			source_subresource_index, 
+			&box
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void CopyTextureSubresource(
+		Texture3D destination,
+		uint3 destination_offset,
+		unsigned int destination_subresource_index,
+		Texture3D source,
+		uint3 source_offset,
+		uint3 source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	) {
+		D3D11_BOX box;
+
+		box.left = source_offset.x;
+		box.right = box.left + source_size.x;
+		box.top = source_offset.y;
+		box.bottom = box.top + source_size.y;
+		box.front = source_offset.z;
+		box.back = box.front + source_size.z;
+		context->CopySubresourceRegion(
+			destination.tex,
+			destination_subresource_index,
+			destination_offset.x,
+			destination_offset.y,
+			destination_offset.z,
+			source.tex,
+			source_subresource_index,
+			&box
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Draw(unsigned int vertex_count, GraphicsContext* context, UINT start_slot)
 	{
 		context->Draw(vertex_count, start_slot);
@@ -2496,8 +2698,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void DrawIndexed(unsigned int count, GraphicsContext* context, UINT start_vertex, INT base_vertex_location) {
-		context->DrawIndexed(count, start_vertex, base_vertex_location);
+	void DrawIndexed(unsigned int count, GraphicsContext* context, UINT start_index, INT base_vertex_location) {
+		context->DrawIndexed(count, start_index, base_vertex_location);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2550,6 +2752,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	template<typename Resource>
+	D3D11_MAPPED_SUBRESOURCE MapResourceInternal(Resource resource, GraphicsContext* context, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags, const wchar_t* error_string) {
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		if constexpr (std::is_same_v<Resource, Texture1D> || std::is_same_v<Resource, Texture2D> || std::is_same_v<Resource, Texture3D>) {
+			result = context->Map(resource.tex, subresource_index, map_type, map_flags, &mapped_subresource);
+		}
+		else {
+			result = context->Map(resource, subresource_index, map_type, map_flags, &mapped_subresource);
+		}
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_string, true);
+		return mapped_subresource;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void* MapBuffer(
 		ID3D11Buffer* buffer,
 		GraphicsContext* context,
@@ -2558,62 +2777,60 @@ namespace ECSEngine {
 		unsigned int map_flags
 	)
 	{
-		HRESULT result;
+		return MapResourceInternal(buffer, context, map_type, subresource_index, map_flags, L"Mapping a buffer failed.").pData;
+	}
 
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(buffer, subresource_index, map_type, map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Mapping constant buffer failed!", true);
-		return mapped_subresource.pData;
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_MAPPED_SUBRESOURCE MapBufferEx(
+		ID3D11Buffer* buffer,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int subresource_index,
+		unsigned int map_flags
+	) {
+		return MapResourceInternal(buffer, context, map_type, subresource_index, map_flags, L"Mapping a buffer failed.");
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Texture>
-	void* MapTextureImpl(Texture texture, GraphicsContext* context, D3D11_MAP map_type, unsigned int subresource_index, unsigned int map_flags, const wchar_t* error_string) {
-		HRESULT result;
-
-		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(texture.tex, subresource_index, map_type, map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_string, true);
-		return mapped_subresource.pData;
-	}
-
 	void* MapTexture(
-		Texture1D texture,
+		Texture texture,
 		GraphicsContext* context,
 		D3D11_MAP map_type,
 		unsigned int subresource_index,
 		unsigned int map_flags
 	)
 	{
-		return MapTextureImpl(texture, context, map_type, subresource_index, map_flags, L"Mapping texture 1D failed!");
+		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, L"Mapping a texture failed.").pData;
 	}
+
+	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
+	// be unrolled manually
+	ECS_TEMPLATE_FUNCTION(void*, MapTexture, Texture1D, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void*, MapTexture, Texture2D, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void*, MapTexture, Texture3D, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void* MapTexture(
-		Texture2D texture,
+	// It must be unmapped manually
+	template<typename Texture>
+	D3D11_MAPPED_SUBRESOURCE MapTextureEx(
+		Texture texture,
 		GraphicsContext* context,
 		D3D11_MAP map_type,
 		unsigned int subresource_index,
 		unsigned int map_flags
-	)
-	{
-		return MapTextureImpl(texture, context, map_type, subresource_index, map_flags, L"Mapping texture 2D failed!");
+	) {
+		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, L"Mapping a texture failed.");
 	}
 
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	void* MapTexture(
-		Texture3D texture,
-		GraphicsContext* context,
-		D3D11_MAP map_type,
-		unsigned int subresource_index,
-		unsigned int map_flags
-	)
-	{
-		return MapTextureImpl(texture, context, map_type, subresource_index, map_flags, L"Mapping texture 3D failed!");
-	}
+	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
+	// be unrolled manually
+	ECS_TEMPLATE_FUNCTION(D3D11_MAPPED_SUBRESOURCE, MapTextureEx, Texture1D, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(D3D11_MAPPED_SUBRESOURCE, MapTextureEx, Texture2D, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(D3D11_MAPPED_SUBRESOURCE, MapTextureEx, Texture3D, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
@@ -2664,23 +2881,85 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void UnmapTexture(Texture1D buffer, GraphicsContext* context, unsigned int resource_index)
+	template<typename Texture>
+	void UnmapTexture(Texture texture, GraphicsContext* context, unsigned int resource_index)
 	{
-		context->Unmap(buffer.tex, resource_index);
+		context->Unmap(texture.tex, resource_index);
 	}
+
+	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
+	// be unrolled manually
+	ECS_TEMPLATE_FUNCTION(void, UnmapTexture, Texture1D, GraphicsContext*, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void, UnmapTexture, Texture2D, GraphicsContext*, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void, UnmapTexture, Texture3D, GraphicsContext*, unsigned int);
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void UnmapTexture(Texture2D buffer, GraphicsContext* context, unsigned int resource_index)
+	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes)
 	{
-		context->Unmap(buffer.tex, resource_index);
+		unsigned int* mask = (unsigned int*)ECS_STACK_ALLOC(meshes.size * sizeof(unsigned int));
+		Stream<unsigned int> sequence(mask, meshes.size);
+		function::MakeSequence(Stream<unsigned int>(mask, meshes.size));
+
+		Mesh mesh = MeshesToSubmeshes(graphics, meshes, submeshes, sequence);
+		//_freea(mask);
+		return mesh;
 	}
 
-	// ------------------------------------------------------------------------------------------------------------------------
+	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, Stream<unsigned int> mesh_mask) {
+		Mesh result;
 
-	void UnmapTexture(Texture3D buffer, GraphicsContext* context, unsigned int resource_index)
-	{
-		context->Unmap(buffer.tex, resource_index);
+		// Accumulate the total vertex buffer size and index buffer size
+		size_t vertex_buffer_size = 0;
+		size_t index_buffer_size = 0;
+
+		for (size_t index = 0; index < mesh_mask.size; index++) {
+			vertex_buffer_size += meshes[mesh_mask[index]].vertex_buffers[0].size;
+			index_buffer_size += meshes[mesh_mask[index]].index_buffer.count;
+		}
+
+		for (size_t index = 0; index < meshes.size; index++) {
+			vertex_buffer_size += meshes[index].vertex_buffers[0].size;
+			index_buffer_size += meshes[index].index_buffer.count;
+		}
+
+		// Create the new vertex buffers and the index buffer
+		VertexBuffer new_vertex_buffers[ECS_MESH_BUFFER_COUNT];
+		for (size_t index = 0; index < meshes[0].mapping_count; index++) {
+			new_vertex_buffers[index] = graphics->CreateVertexBuffer(meshes[0].vertex_buffers[index].stride, vertex_buffer_size, D3D11_USAGE_DEFAULT, 0);
+		}
+
+		IndexBuffer new_index_buffer = graphics->CreateIndexBuffer(meshes[0].index_buffer.int_size, index_buffer_size);
+
+		size_t mapping_count = meshes[0].mapping_count;
+		// all vertex buffers must have the same size - so a single offset suffices
+		unsigned int vertex_buffer_offset = 0;
+		unsigned int index_buffer_offset = 0;
+
+		// Copy the vertex buffer and index buffer submeshes
+		for (size_t index = 0; index < meshes.size; index++) {
+			submeshes[index] = { vertex_buffer_offset, index_buffer_offset };
+
+			// Vertex buffers
+			for (size_t buffer_index = 0; buffer_index < mapping_count; buffer_index++) {
+				CopyBufferSubresource(
+					new_vertex_buffers[buffer_index],
+					vertex_buffer_offset,
+					meshes[index].vertex_buffers[buffer_index],
+					0,
+					meshes[index].vertex_buffers[buffer_index].size,
+					graphics->GetContext()
+				);
+			}
+			// all vertex buffers must have the same size
+			vertex_buffer_offset += meshes[index].vertex_buffers[0].size;
+
+			// Index buffer
+			CopyBufferSubresource(new_index_buffer, index_buffer_offset, meshes[index].index_buffer, 0, meshes[index].index_buffer.count, graphics->GetContext());
+			index_buffer_offset += meshes[index].index_buffer.count;
+		}
+
+		return result;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

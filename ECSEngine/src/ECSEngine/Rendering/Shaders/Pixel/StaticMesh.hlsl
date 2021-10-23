@@ -1,11 +1,10 @@
 Texture2D ColorMap : register(t0);
 SamplerState Sampler : register(s0);
 
-RWTexture2D<float4> ColoMap;
-
 cbuffer LightColor
 {
     float4 color;
+    //float strength;
 };
 
 struct PS_INPUT
@@ -18,12 +17,15 @@ struct PS_INPUT
 
 float4 main(in PS_INPUT input) : SV_TARGET
 {
-    //float3 normalized_normal = normalize(input.normal);
-    //float3 normalized_light_direction = normalize(input.light);
+    const float attenuance = 10.0f;
     
-    //float4 illumination = max(dot(normalized_normal, normalized_light_direction), 0.0f) + 0.2f;
-    //float4 surface_color = ColorMap.Sample(Sampler, input.uv);
+    float light_squared_distance = dot(input.light, input.light);
+    float3 normalized_normal = normalize(input.normal);
+    float3 normalized_light_direction = normalize(input.light);
     
-    //return surface_color * illumination;
-    return float4(1.0f, 1.0f, 1.0f, 1.0f);
+    float4 illumination = min(max(dot(normalized_normal, normalized_light_direction) / light_squared_distance * attenuance, 0.0f), 100.0f) + 0.2f;
+    float4 surface_color = ColorMap.Sample(Sampler, input.uv);
+    
+    return surface_color * illumination * color;
+    //return float4(1.0f, 1.0f, 1.0f, 1.0f);
 }

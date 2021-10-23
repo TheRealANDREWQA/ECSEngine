@@ -38,14 +38,15 @@ namespace ECSEngine {
 			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
 		}
 
-		inline size_t PowerOfTwoGreater(size_t number) {
+		// The x component contains the actual value and the y component the power
+		inline ulong2 PowerOfTwoGreater(size_t number) {
 			size_t count = 0;
 			size_t value = 1;
 			while (value <= number) {
 				value <<= 1;
 				count++;
 			}
-			return count;
+			return {value, count};
 		}
 
 		// pointers should be aligned preferably to 32 bytes at least
@@ -60,11 +61,11 @@ namespace ECSEngine {
 		}
 
 		inline void ConvertASCIIToWide(CapacityStream<wchar_t> wide_string, Stream<char> ascii_string) {
-			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer, wide_string.capacity);
+			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
 		}
 
 		inline void ConvertASCIIToWide(CapacityStream<wchar_t> wide_string, CapacityStream<char> ascii_string) {
-			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer, wide_string.capacity);
+			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
 		}
 
 		inline void ConcatenateCharPointers(

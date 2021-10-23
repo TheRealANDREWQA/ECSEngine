@@ -217,7 +217,11 @@ namespace ECSEngine {
 	}
 
 	ResourceIdentifier::ResourceIdentifier() : ptr(nullptr), size(0) {}
-	ResourceIdentifier::ResourceIdentifier(LPCWSTR _ptr) : ptr(_ptr), size(wcslen(_ptr) * sizeof(wchar_t)) {}
+
+	ResourceIdentifier::ResourceIdentifier(const char* _ptr) : ptr(_ptr), size(strlen(_ptr)) {}
+
+	ResourceIdentifier::ResourceIdentifier(const wchar_t* _ptr) : ptr(_ptr), size(wcslen(_ptr) * sizeof(wchar_t)) {}
+
 	ResourceIdentifier::ResourceIdentifier(const void* id, unsigned int size) : ptr(id), size(size) {}
 
 	ResourceIdentifier::ResourceIdentifier(Stream<void> identifier) : ptr(identifier.buffer), size(identifier.size) {}

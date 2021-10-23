@@ -1,8 +1,8 @@
 #include "ecspch.h"
 #include "UIHelpers.h"
-#include "../Utilities/FunctionInterfaces.h"
-#include "../Utilities/Mouse.h"
-#include "../Utilities/Keyboard.h"
+#include "../../Utilities/FunctionInterfaces.h"
+#include "../../Utilities/Mouse.h"
+#include "../../Utilities/Keyboard.h"
 
 namespace ECSEngine {
 

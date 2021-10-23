@@ -13,4 +13,15 @@ namespace ECSEngine {
 		ResizableMemoryArena
 	};
 
+	enum class AllocationType : unsigned char {
+		SingleThreaded,
+		MultiThreaded
+	};
+
+	struct AllocatorPolymorphic {
+		void* allocator;
+		AllocatorType allocator_type;
+		AllocationType allocation_type;
+	};
+
 }
