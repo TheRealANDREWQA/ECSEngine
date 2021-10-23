@@ -1,13 +1,12 @@
 #include "ecspch.h"
 #include "UISystem.h"
 #include "UIResourcePaths.h"
-#include "../../Rendering/GraphicsHelpers.h"
-#include "../../Rendering/Graphics.h"
-#include "../../Rendering/Compression/TextureCompression.h"
-#include "../../Rendering/ColorMacros.h"
-#include "../../Internal/Multithreading/TaskManager.h"
-#include "../../Internal/ResourceManager.h"
-#include "../../Internal/InternalStructures.h"
+#include "../Rendering/GraphicsHelpers.h"
+#include "../Rendering/Graphics.h"
+#include "../Rendering/ColorMacros.h"
+#include "../Internal/Multithreading/TaskManager.h"
+#include "../Internal/ResourceManager.h"
+#include "../Internal/InternalStructures.h"
 
 wchar_t* SOLID_COLOR_VERTEX_SHADER = L"Resources/CompiledShaders/Vertex/UIVertexColor.cso";
 wchar_t* SPRITE_VERTEX_SHADER = L"Resources/CompiledShaders/Vertex/UISpriteVertex.cso";
@@ -30,14 +29,6 @@ namespace ECSEngine {
 	//using namespace HID;
 
 	namespace Tools {
-
-		struct ProcessTextureData {
-			const wchar_t* filename;
-			UISpriteTexture* texture;
-			UISystem* system;
-		};
-
-		void ProcessTexture(unsigned int thread_index, World* world, void* data);
 
 		template<typename RollbackFunction>
 		bool ResizeDockspaceInternal(
@@ -270,8 +261,8 @@ namespace ECSEngine {
 			ResourceManagerTextureDesc texture_descriptor;
 			texture_descriptor.context = m_graphics->GetContext();
 			texture_descriptor.usage = D3D11_USAGE_DEFAULT;
-			ResourceView font_texture = m_resource_manager->LoadTexture(font_filename, texture_descriptor);
-			m_resources.font_texture = font_texture;
+			ID3D11ShaderResourceView* font_texture = m_resource_manager->LoadTexture(font_filename, texture_descriptor);
+			m_resources.font_texture.view = font_texture;
 
 			// loading and registering vertex and pixel shaders
 			RegisterPixelShaders();
@@ -1925,32 +1916,23 @@ namespace ECSEngine {
 			return dockspace_index;
 		}
 
-		void UISystem::CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_texture)
+		template<bool get_dimensions>
+		UISpriteTexture UISystem::CreateSpriteTexture(LPCWSTR filename) const
 		{
+			UISpriteTexture sprite_texture;
+
 			ResourceManagerTextureDesc descriptor;
-			descriptor.usage = D3D11_USAGE_DEFAULT;
-			descriptor.loader_flag = DirectX::WIC_LOADER_FORCE_RGBA32;
+			descriptor.usage = D3D11_USAGE_IMMUTABLE;
 			ResourceView view = m_resource_manager->LoadTexture<true>(filename, descriptor);
 
-			Texture2D texture(GetResource(view));
-			uint2 dimensions = GetTextureDimensions(texture);
-
-			if (dimensions.x > 512 || dimensions.y > 512) {
-				m_resources.texture_semaphore.Enter();
-
-				ThreadTask process_texture_task;
-				process_texture_task.function = ProcessTexture;
-
-				ProcessTextureData data;
-				data.filename = function::StringCopy(&m_resources.thread_resources[0].temp_allocator, filename).buffer;
-				data.system = this;
-				data.texture = sprite_texture;
-				
-				process_texture_task.data = &data;
-				m_task_manager->AddDynamicTaskAndWake(process_texture_task, sizeof(data));
+			if constexpr (get_dimensions) {
+				ID3D11Resource* resource = nullptr;
+				view.view->GetResource(&resource);
+				GetTextureDimensions(resource, sprite_texture.width, sprite_texture.height);
 			}
-			
-			*sprite_texture = view;
+			sprite_texture.view = view;
+
+			return sprite_texture;
 		}
 
 		unsigned int UISystem::Create_Window(const UIWindowDescriptor& descriptor, bool do_not_initialize_handler) {
@@ -3154,13 +3136,13 @@ namespace ECSEngine {
 				return task;
 			};
 			// if there are more windows to draw, add them to the queue
-			for (int64_t index = m_task_manager->GetThreadCount(); index < (int64_t)regions.size; index++) {
+			for (int64_t index = m_task_manager->GetThreadCount(); index < (int64_t)regions.size /*- 1*/; index++) {
 				ThreadTask task = initialize_thread_task(data_allocation + index, this, regions, index);
 				m_thread_tasks.PushNonAtomic(task);
 			}
 
 			// initializing threads with tasks
-			for (int64_t index = 0; index < m_task_manager->GetThreadCount() && index < (int64_t)regions.size; index++) {
+			for (int64_t index = 0; index < m_task_manager->GetThreadCount() && index < (int64_t)regions.size /*- 1*/; index++) {
 				ThreadTask task = initialize_thread_task(data_allocation + index, this, regions, index);
 
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
@@ -3256,7 +3238,7 @@ namespace ECSEngine {
 		unsigned int UISystem::DoFrame() {
 			m_texture_evict_count++;
 			if (m_texture_evict_count == m_texture_evict_target) {
-				m_resource_manager->DecrementReferenceCount(ResourceType::Texture, m_texture_evict_count);
+				m_resource_manager->DecrementReferenceCount(ResourceTypes::Texture, m_texture_evict_count - 1);
 				m_texture_evict_count = 0;
 			}
 
@@ -3419,10 +3401,10 @@ namespace ECSEngine {
 					expanded_scale,
 					buffers,
 					vertex_count,
-					m_descriptors.color_theme.collapse_triangle,
-					{0.0f, 0.0f},
-					{1.0f, 1.0f},
-					phase
+					{ 0.0f, 0.0f },
+					{ 1.0f, 1.0f },
+					phase,
+					m_descriptors.color_theme.collapse_triangle
 				);
 			}
 			else {			
@@ -3434,10 +3416,10 @@ namespace ECSEngine {
 					expanded_scale,
 					buffers,
 					vertex_count,
-					m_descriptors.color_theme.collapse_triangle,
 					{1.0f, 0.0f},
 					{0.0f, 1.0f},
-					phase
+					phase,
+					m_descriptors.color_theme.collapse_triangle
 				);
 			}
 
@@ -3723,10 +3705,6 @@ namespace ECSEngine {
 				}
 			}
 
-			// Stall until texture processing is finished
-			// Because all threads use the immediate context to issue commands
-			m_resources.texture_semaphore.SpinWait();
-
 			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 				m_resources.thread_resources[data->thread_id].deferred_context.Get()
@@ -3995,10 +3973,6 @@ namespace ECSEngine {
 			if (m_focused_window_data.general_handler.phase == UIDrawPhase::Normal && m_mouse_tracker->LeftButton() != MBPRESSED) {
 				HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 			}
-
-			// Stall until texture processing is finished
-			// Because all threads use the immediate context to issue commands
-			m_resources.texture_semaphore.SpinWait();
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(m_graphics->GetContext());
 
@@ -4354,8 +4328,7 @@ namespace ECSEngine {
 				solid_color,
 				vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
 			);
-			UIDragDockspaceData drag_dockspace_data;
-			drag_dockspace_data.floating_dockspace = nullptr;
+			UIDragDockspaceData drag_dockspace_data = { nullptr };
 			float normalized_margin = NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_margin);
 			AddClickableToDockspaceRegion(
 				thread_id,
@@ -6661,15 +6634,15 @@ namespace ECSEngine {
 				rectangle_scale,
 				system_buffers,
 				system_counts,
+				{ 0.0f, 0.0f },
+				{ 1.0f, 1.0f },
+				UIDrawPhase::System,
 				Color(
 					lightened_color.red,
 					lightened_color.green,
 					lightened_color.blue,
 					ECS_TOOLS_UI_DOCKING_GIZMO_TRANSPARENT_HOVER_ALPHA
-				),
-				{ 0.0f, 0.0f },
-				{ 1.0f, 1.0f },
-				UIDrawPhase::System
+				)
 			);
 		}
 
@@ -6795,22 +6768,6 @@ namespace ECSEngine {
 		{
 			unsigned int uv_index = FindCharacterUVFromAtlas(character);
 			return float4(m_font_character_uvs[uv_index * 2].x, m_font_character_uvs[uv_index * 2].y, m_font_character_uvs[uv_index * 2 + 1].x, m_font_character_uvs[uv_index * 2 + 1].y);
-		}
-
-		UISpriteTexture* UISystem::GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type)
-		{
-			if (phase == UIDrawPhase::System) {
-				auto stream = &m_resources.system_draw.sprite_textures[(unsigned int)type];
-				unsigned int before_size = stream->ReserveNewElement();
-				stream->size++;
-				return stream->buffer + before_size;
-			}
-			else {
-				auto stream = &dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type];
-				unsigned int before_size = stream->ReserveNewElement();
-				stream->size++;
-				return stream->buffer + before_size;
-			}
 		}
 
 		void UISystem::HandleDockingGizmoAdditionOfDockspace(
@@ -8368,21 +8325,50 @@ namespace ECSEngine {
 
 		void UISystem::SetSprite(
 			UIDockspace* dockspace,
-			unsigned int border_index,
-			UISpriteTexture texture,
-			float2 position,
-			float2 scale,
+			unsigned int border_index, 
+			UISpriteTexture* texture, 
+			float2 position, 
+			float2 scale, 
 			void** buffers,
 			size_t* counts,
-			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UIDrawPhase phase
-		) {
+			UIDrawPhase phase,
+			Color color
+		)
+		{
 			SetSpriteRectangle(
 				position,
 				scale,
 				color,
+				top_left_uv,
+				bottom_right_uv,
+				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
+				counts[ECS_TOOLS_UI_SPRITE]
+			);
+			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
+		}
+
+		void UISystem::SetVertexColorSprite(UIDockspace* dockspace, unsigned int border_index, UISpriteTexture* texture, float2 position, float2 scale, void** buffers, size_t* counts, const Color* colors, float2 top_left_uv, float2 bottom_right_uv, UIDrawPhase phase)
+		{
+			SetVertexColorSpriteRectangle(
+				position,
+				scale,
+				colors,
+				top_left_uv,
+				bottom_right_uv,
+				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
+				counts[ECS_TOOLS_UI_SPRITE]
+			);
+			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
+		}
+
+		void UISystem::SetVertexColorSprite(UIDockspace* dockspace, unsigned int border_index, UISpriteTexture* texture, float2 position, float2 scale, void** buffers, size_t* counts, const ColorFloat* colors, float2 top_left_uv, float2 bottom_right_uv, UIDrawPhase phase)
+		{
+			SetVertexColorSpriteRectangle(
+				position,
+				scale,
+				colors,
 				top_left_uv,
 				bottom_right_uv,
 				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
@@ -8394,85 +8380,73 @@ namespace ECSEngine {
 		void UISystem::SetSprite(
 			UIDockspace* dockspace,
 			unsigned int border_index,
-			const wchar_t* texture,
+			LPCWSTR _texture,
 			float2 position,
 			float2 scale,
 			void** buffers,
 			size_t* counts,
-			Color color,
 			float2 top_left_uv,
 			float2 bottom_right_uv,
-			UIDrawPhase phase
+			UIDrawPhase phase,
+			Color color
 		)
 		{
-			SetSpriteRectangle(
+			UISpriteTexture texture = CreateSpriteTexture(_texture);
+			SetSprite(
+				dockspace,
+				border_index,
+				&texture,
 				position,
 				scale,
-				color,
+				buffers,
+				counts,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				phase,
+				color
 			);
-			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
 
-		void UISystem::SetVertexColorSprite(
-			UIDockspace* dockspace, 
-			unsigned int border_index, 
-			const wchar_t* texture, 
-			float2 position,
-			float2 scale, 
-			void** buffers, 
-			size_t* counts, 
-			const Color* colors,
-			float2 top_left_uv, 
-			float2 bottom_right_uv,
-			UIDrawPhase phase
-		)
+		void UISystem::SetVertexColorSprite(UIDockspace* dockspace, unsigned int border_index, LPCWSTR _texture, float2 position, float2 scale, void** buffers, size_t* counts, const Color* colors, float2 top_left_uv, float2 bottom_right_uv, UIDrawPhase phase)
 		{
-			SetVertexColorSpriteRectangle(
+			UISpriteTexture texture = CreateSpriteTexture(_texture);
+			SetVertexColorSprite(
+				dockspace,
+				border_index,
+				&texture,
 				position,
 				scale,
+				buffers,
+				counts,
 				colors,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				phase
 			);
-			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
 
-		void UISystem::SetVertexColorSprite(
-			UIDockspace* dockspace, 
-			unsigned int border_index, 
-			const wchar_t* texture, 
-			float2 position, 
-			float2 scale, 
-			void** buffers, 
-			size_t* counts,
-			const ColorFloat* colors, 
-			float2 top_left_uv, 
-			float2 bottom_right_uv, 
-			UIDrawPhase phase
-		)
+		void UISystem::SetVertexColorSprite(UIDockspace* dockspace, unsigned int border_index, LPCWSTR _texture, float2 position, float2 scale, void** buffers, size_t* counts, const ColorFloat* colors, float2 top_left_uv, float2 bottom_right_uv, UIDrawPhase phase)
 		{
-			SetVertexColorSpriteRectangle(
+			UISpriteTexture texture = CreateSpriteTexture(_texture);
+			SetVertexColorSprite(
+				dockspace,
+				border_index,
+				&texture,
 				position,
 				scale,
+				buffers,
+				counts,
 				colors,
 				top_left_uv,
 				bottom_right_uv,
-				(UISpriteVertex*)buffers[ECS_TOOLS_UI_SPRITE],
-				counts[ECS_TOOLS_UI_SPRITE]
+				phase
 			);
-			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
 
 		void UISystem::SetSpriteCluster(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
-			const wchar_t* texture, 
+			LPCWSTR texture, 
 			unsigned int count,
 			UIDrawPhase phase
 		)
@@ -8490,25 +8464,30 @@ namespace ECSEngine {
 		void UISystem::SetSpriteTextureToDraw(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
-			const wchar_t* _texture,
+			LPCWSTR _texture,
 			UISpriteType type,
 			UIDrawPhase phase
 		)
 		{
-			UISpriteTexture* next_texture = GetNextSpriteTextureToDraw(dockspace, border_index, phase, type);
-			CreateSpriteTexture(_texture, next_texture);
+			UISpriteTexture texture = CreateSpriteTexture(_texture);
+
+			SetSpriteTextureToDraw(dockspace, border_index, &texture, type, phase);
 		}
 
 		void UISystem::SetSpriteTextureToDraw(
 			UIDockspace* dockspace,
 			unsigned int border_index,
-			UISpriteTexture texture,
+			UISpriteTexture* texture, 
 			UISpriteType type,
 			UIDrawPhase phase
 		)
 		{
-			UISpriteTexture* next_texture = GetNextSpriteTextureToDraw(dockspace, border_index, phase, type);
-			*next_texture = texture;
+			if (phase == UIDrawPhase::System) {
+				m_resources.system_draw.sprite_textures[(unsigned int)type].Add(texture);
+			}
+			else {
+				dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type].Add(texture);
+			}
 		}
 
 		void UISystem::SetPopUpWindowPosition(unsigned int window_index, float2 new_position)
@@ -10634,36 +10613,6 @@ namespace ECSEngine {
 				DrawDockspaceRegionThreadTask(thread_id, new_task.data);
 			}
 #endif
-		}
-
-		void ProcessTexture(unsigned int thread_index, World* world, void* _data) {
-			ProcessTextureData* data = (ProcessTextureData*)_data;
-
-			Texture2D old_texture(GetResource(*data->texture));
-
-			data->system->m_resources.texture_spinlock.lock();
-			Texture2D new_texture = ResizeTextureWithStaging(old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX, data->system->m_graphics->GetContext());
-			data->system->m_resources.texture_spinlock.unlock();
-			if (new_texture.tex != nullptr) {
-				// Compress the texture
-				bool success = CompressTexture(new_texture, TextureCompressionExplicit::ColorMap, &data->system->m_resources.texture_spinlock);
-
-				if (success) {
-					// Create a shader resource view
-					ResourceView new_view = data->system->m_graphics->CreateTextureShaderViewResource(new_texture);
-
-					// If it not failed				
-					if (new_view.view != nullptr) {
-						// Rebind the pointer in the resource manager; the old texture will be automatically deleted
-						// and remove the reference count since it will bottleneck the file explorer when many textures are loaded
-						// at the same time
-						data->system->m_resource_manager->RebindResource(data->filename, ResourceType::Texture, new_view.view);
-						data->system->m_resource_manager->RemoveReferenceCountForResource(data->filename, ResourceType::Texture);
-						*data->texture = new_view;
-					}
-				}
-			}
-			data->system->m_resources.texture_semaphore.Exit();
 		}
 
 #pragma region Actions

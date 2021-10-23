@@ -953,7 +953,6 @@ namespace ECSEngine {
 
 				UIConfigRelativeTransform transform;
 				transform.scale.x = region_scale.x / default_element_scale.x;
-				transform.offset.y = 0.001f;
 				config.AddFlag(transform);
 
 				// Must be replicated inside lambdas
@@ -1075,7 +1074,7 @@ namespace ECSEngine {
 
 						draw_label(index, data->state->left_row_substreams, data->state->left_characters);
 
-						drawer.Rectangle<UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_CLICKABLE_ACTION
+							drawer.Rectangle<UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_CLICKABLE_ACTION
 								| UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION>(
 									config
 									);
@@ -1415,7 +1414,7 @@ namespace ECSEngine {
 					else {
 						window_dimensions = system->DrawToolTipSentenceWithTextToRightSize(menu->state.left_characters, menu->state.right_characters, &tool_tip_data);
 					}
-					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset * 0.5f;
+					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset;
 					window_dimensions.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_horizontal_padd - system->m_descriptors.misc.menu_x_padd;
 
 					float arrow_span = system->GetTextSpan(">", 1, system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;

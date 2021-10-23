@@ -146,17 +146,11 @@ namespace ECSEngine {
 				size = _size;
 			}
 
-			void InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
-				InitializeFromBuffer(buffer, other.size);
-				Copy(other);
-			}
-
 			template<typename Allocator>
 			void Initialize(Allocator* allocator, size_t _size) {
 				size_t memory_size = MemoryOf(_size);
 				void* allocation = allocator->Allocate(memory_size, alignof(T));
-				buffer = (T*)allocation;
-				size = _size;
+				InitializeFromBuffer(allocation, _size);
 			}
 
 			T* buffer;
@@ -338,12 +332,6 @@ namespace ECSEngine {
 				_buffer += sizeof(T) * _capacity;
 				size = _size;
 				capacity = _capacity;
-			}
-
-			// Helpful for temp memory copy and initialization
-			void InitializeAndCopy(uintptr_t& buffer, CapacityStream<T> other) {
-				InitializeFromBuffer(buffer, other.size);
-				Copy(other);
 			}
 
 			template<typename Allocator>

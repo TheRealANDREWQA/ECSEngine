@@ -25,5 +25,3 @@ void ChangeInspectorToFolder(EditorState* editor_state, Stream<wchar_t> path);
 void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path);
 
 void ChangeInspectorToModule(EditorState* editor_state, unsigned int index);
-
-void ChangeInspectorToGraphicsModule(EditorState* editor_state);

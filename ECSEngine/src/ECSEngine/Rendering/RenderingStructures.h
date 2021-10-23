@@ -3,21 +3,13 @@
 #include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "../Math/Matrix.h"
-#include "../Allocators/AllocatorTypes.h"
 
-#define ECS_GRAPHICS_BUFFERS(function) /* Useful for macro expansion */ function(VertexBuffer); \
+#define ECS_GRAPHICS_RESOURCES(function) function(VertexBuffer); \
 function(IndexBuffer); \
 function(ConstantBuffer); \
-function(StandardBuffer); \
-function(StructuredBuffer); \
-function(UABuffer); 
-
-#define ECS_GRAPHICS_TEXTURES(function) /* Useful for macro expansion */ function(Texture1D); \
+function(Texture1D); \
 function(Texture2D); \
-function(Texture3D); 
-
-#define ECS_GRAPHICS_RESOURCES(function) /* Useful for macro expansion */ ECS_GRAPHICS_TEXTURES(function); \
-ECS_GRAPHICS_BUFFERS(function); 
+function(Texture3D);
 
 #define ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT 4
 #define ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT 4
@@ -52,21 +44,12 @@ namespace ECSEngine {
 	struct ECSENGINE_API Color {
 		Color();
 		Color(unsigned char red);
-
 		Color(unsigned char red, unsigned char green);
-
 		Color(unsigned char red, unsigned char green, unsigned char blue);
-
 		Color(unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha);
-
 		// normalized values
 		Color(float red, float green, float blue, float alpha);
-
 		Color(ColorFloat color);
-
-		Color(const unsigned char* values);
-
-		Color(const float* values);
 
 		Color(const Color& other) = default;
 		Color& operator = (const Color& other) = default;
@@ -82,7 +65,6 @@ namespace ECSEngine {
 		static constexpr float GetRange() {
 			return (float)255;
 		}
-
 		void Normalize(float* values) const;
 
 		union {
@@ -100,20 +82,41 @@ namespace ECSEngine {
 		unsigned char alpha;
 	};
 
+	struct ECSENGINE_API ColorRGB {
+		ColorRGB();
+		ColorRGB(unsigned char red);
+		ColorRGB(unsigned char red, unsigned char green);
+		ColorRGB(unsigned char red, unsigned char green, unsigned char blue);
+
+		ColorRGB(const ColorRGB& other) = default;
+		ColorRGB& operator = (const ColorRGB& other) = default;
+
+		static constexpr float GetRange() {
+			return (float)255;
+		}
+		void Normalize(float* values) const;
+
+		union {
+			struct {
+				unsigned char red;
+				unsigned char green;
+				unsigned char blue;
+			};
+			struct {
+				unsigned char hue;
+				unsigned char saturation;
+				unsigned char value;
+			};
+		};
+	};
+
 	struct ECSENGINE_API ColorFloat {
 		ColorFloat();
-
 		ColorFloat(float red);
-
 		ColorFloat(float red, float green);
-
 		ColorFloat(float red, float green, float blue);
-
 		ColorFloat(float red, float green, float blue, float alpha);
-
 		ColorFloat(Color color);
-
-		ColorFloat(const float* values);
 
 		ColorFloat(const ColorFloat& other) = default;
 		ColorFloat& operator = (const ColorFloat& other) = default;
@@ -142,6 +145,34 @@ namespace ECSEngine {
 		};
 		float alpha;
 	};
+
+	struct ECSENGINE_API ColorFloatRGB {
+		ColorFloatRGB();
+		ColorFloatRGB(float red);
+		ColorFloatRGB(float red, float green);
+		ColorFloatRGB(float red, float green, float blue);
+
+		ColorFloatRGB(const ColorFloatRGB& other) = default;
+		ColorFloatRGB& operator = (const ColorFloatRGB& other) = default;
+
+		static constexpr float GetRange() {
+			return 1.0f;
+		}
+		void Normalize(float* values) const;
+
+		union {
+			struct {
+				float red;
+				float green;
+				float blue;
+			};
+			struct {
+				float hue;
+				float saturation;
+				float value;
+			};
+		};
+	};
 		
 #define VERTEX_BUFFER 0
 	struct ECSENGINE_API VertexBuffer {
@@ -163,8 +194,8 @@ namespace ECSEngine {
 
 		//void Release();
 
-		unsigned int stride;
-		unsigned int size;
+		UINT stride;
+		UINT size;
 		ID3D11Buffer* buffer;
 	};
 
@@ -206,7 +237,6 @@ namespace ECSEngine {
 			shader->GetDevice(&device);
 			return device;
 		}
-
 		void ReleaseByteCode() {
 			byte_code->Release();
 		}
@@ -507,10 +537,6 @@ namespace ECSEngine {
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
-			return buffer;
-		}
-
 		ID3D11Buffer* buffer;
 	};
 
@@ -525,10 +551,6 @@ namespace ECSEngine {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			return device;
-		}
-
-		inline ID3D11Buffer* Resource() {
-			return buffer;
 		}
 
 		ID3D11Buffer* buffer;
@@ -547,16 +569,12 @@ namespace ECSEngine {
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
-			return buffer;
-		}
-
 		ID3D11Buffer* buffer;
 	};
 
 	struct ECSENGINE_API UABuffer {
-		UABuffer() : buffer(nullptr), element_count(0) {}
-		UABuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
+		UABuffer() : buffer(nullptr) {}
+		UABuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
 		UABuffer(const UABuffer& other) = default;
 		UABuffer& operator = (const UABuffer& other) = default;
@@ -567,17 +585,13 @@ namespace ECSEngine {
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
-			return buffer;
-		}
-
 		size_t element_count;
 		ID3D11Buffer* buffer;
 	};
 
 	struct ECSENGINE_API AppendStructuredBuffer {
-		AppendStructuredBuffer() : buffer(nullptr), element_count(0) {}
-		AppendStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
+		AppendStructuredBuffer() : buffer(nullptr) {}
+		AppendStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
 		AppendStructuredBuffer(const AppendStructuredBuffer& other) = default;
 		AppendStructuredBuffer& operator = (const AppendStructuredBuffer& other) = default;
@@ -588,17 +602,13 @@ namespace ECSEngine {
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
-			return buffer;
-		}
-
 		size_t element_count;
 		ID3D11Buffer* buffer;
 	};
 
 	struct ECSENGINE_API ConsumeStructuredBuffer {
-		ConsumeStructuredBuffer() : buffer(nullptr), element_count(0) {}
-		ConsumeStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
+		ConsumeStructuredBuffer() : buffer(nullptr) {}
+		ConsumeStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
 		ConsumeStructuredBuffer(const ConsumeStructuredBuffer& other) = default;
 		ConsumeStructuredBuffer& operator = (const ConsumeStructuredBuffer& other) = default;
@@ -607,10 +617,6 @@ namespace ECSEngine {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			return device;
-		}
-
-		inline ID3D11Buffer* Resource() {
-			return buffer;
 		}
 
 		size_t element_count;
@@ -679,20 +685,6 @@ namespace ECSEngine {
 		unsigned char mapping_count;
 	};
 
-	struct ECSENGINE_API Submesh {
-		Submesh() : index_buffer_offset(0), vertex_buffer_offset(0) {}
-		Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset) : index_buffer_offset(_index_buffer_offset),
-			vertex_buffer_offset(_vertex_buffer_offset) {}
-
-		Submesh(const Submesh& other) = default;
-		Submesh& operator = (const Submesh& other) = default;
-
-		unsigned int index_buffer_offset;
-		unsigned int vertex_buffer_offset;
-	};
-
-	// Contains the actual pipeline objects that can be bound to the 
-	// graphics context
 	struct ECSENGINE_API Material {
 		Material() : vertex_buffer_mapping_count(0), vc_buffer_count(0), pc_buffer_count(0), dc_buffer_count(0), hc_buffer_count(0), 
 		gc_buffer_count(0), vertex_texture_count(0), pixel_texture_count(0), domain_texture_count(0), hull_texture_count(0),
@@ -732,72 +724,5 @@ namespace ECSEngine {
 		unsigned char geometry_texture_count;
 		unsigned char unordered_view_count;
 	};
-
-
-	struct ECSENGINE_API PBRMaterial {
-		containers::Stream<char> name;
-		float metallic_factor;
-		float roughness_factor;
-		Color tint;
-		float3 emissive_factor;
-		containers::Stream<wchar_t> color_texture;
-		containers::Stream<wchar_t> normal_texture;
-		containers::Stream<wchar_t> metallic_texture;
-		containers::Stream<wchar_t> roughness_texture;
-		containers::Stream<wchar_t> emissive_texture;
-		containers::Stream<wchar_t> occlusion_texture;
-	};
-
-	enum PBRMaterialTextureIndex : unsigned char {
-		ECS_PBR_MATERIAL_COLOR,
-		ECS_PBR_MATERIAL_NORMAL,
-		ECS_PBR_MATERIAL_METALLIC,
-		ECS_PBR_MATERIAL_ROUGHNESS,
-		ECS_PBR_MATERIAL_EMISSIVE,
-		ECS_PBR_MATERIAL_OCCLUSION,
-		ECS_PBR_MATERIAL_MAPPING_COUNT
-	};
-
-	struct ECSENGINE_API PBRMaterialMapping {
-		containers::Stream<wchar_t> texture;
-		PBRMaterialTextureIndex index;
-	};
-
-	ECSENGINE_API void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, containers::Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index);
-
-	ECSENGINE_API void AllocatePBRMaterial(
-		PBRMaterial& material, 
-		containers::Stream<char> name, 
-		containers::Stream<PBRMaterialMapping> mappings,
-		AllocatorPolymorphic allocator
-	);
-
-	// Releases the memory used for the texture names and the material name - it's coallesced
-	// in the name buffer
-	ECSENGINE_API void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator);
-
-	// It will search every directory in order to find each texture - they can be situated
-	// in different folders; the texture mask can be used to tell the function which textures
-	// to look for, by default it will search for all
-	// Might change the texture mask 
-	ECSENGINE_API PBRMaterial CreatePBRMaterialFromName(
-		containers::Stream<char> material_name,
-		containers::Stream<char> texture_base_name, 
-		containers::Stream<wchar_t> search_directory, 
-		AllocatorPolymorphic allocator,
-		containers::Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
-	);
-
-	// It will search every directory in order to find each texture - they can be situated
-	// in different folders; the texture mask can be used to tell the function which textures
-	// to look for, by default it will search for all
-	// Might change the texture mask 
-	ECSENGINE_API PBRMaterial CreatePBRMaterialFromName(
-		containers::Stream<char> material_name,
-		containers::Stream<wchar_t> texture_base_name,
-		containers::Stream<wchar_t> search_directory,
-		AllocatorPolymorphic allocator,
-		containers::Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
-	);
 
 }

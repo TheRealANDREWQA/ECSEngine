@@ -4,7 +4,6 @@
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
 #include "../Rendering/RenderingStructures.h"
-#include "../Allocators/AllocatorTypes.h"
 
 namespace ECSEngine {
 
@@ -41,64 +40,61 @@ namespace ECSEngine {
 
 	ECSENGINE_API GLTFData LoadGLTFFile(containers::Stream<char> path, containers::CapacityStream<char>* error_message = nullptr);
 
-	ECSENGINE_API bool LoadMeshFromGLTF(
+	// Assumes that no other thread is using the same allocator;
+	// The allocator must be thread local
+	ECSENGINE_API bool LoadMeshFromGLTFFile(
 		GLTFData data, 
 		GLTFMesh& mesh, 
-		AllocatorPolymorphic allocator,
+		MemoryManager* allocator, 
 		unsigned int mesh_index = 0, 
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
-	ECSENGINE_API bool LoadMaterialFromGLTF(
-		GLTFData data,
-		PBRMaterial& material,
-		AllocatorPolymorphic allocator,
-		unsigned int mesh_index = 0,
+	// Thread safe allocations
+	ECSENGINE_API bool LoadMeshFromGLTFFileTs(
+		GLTFData data, 
+		GLTFMesh& mesh, 
+		MemoryManager* allocator, 
+		unsigned int mesh_index = 0, 
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
-	ECSENGINE_API bool LoadMeshesFromGLTF(
+	// Assumes that no other thread is using the same allocator;
+	// The allocator must be thread local; GLTFData contains the mesh count
+	// that can be used to determine the size of the GLTFMesh strean
+	ECSENGINE_API bool LoadMeshesFromGLTFFile(
 		GLTFData data,
 		GLTFMesh* meshes,
-		AllocatorPolymorphic allocator,
+		MemoryManager* allocator,
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
-	// For each mesh it will create a separate material
-	ECSENGINE_API bool LoadMaterialsFromGLTF(
-		GLTFData data,
-		PBRMaterial* materials,
-		AllocatorPolymorphic allocator,
-		containers::CapacityStream<char>* error_message = nullptr
-	);
-
-	// It will discard materials that repeat - at most
-	// data.count materials can be created
-	ECSENGINE_API bool LoadDisjointMaterialsFromGLTF(
-		GLTFData data,
-		containers::Stream<PBRMaterial>& materials,
-		AllocatorPolymorphic allocator,
-		containers::CapacityStream<char>* error_message = nullptr
-	);
-
-	// GLTFData contains the mesh count that can be used to determine the size of the GLTFMesh strean
-	ECSENGINE_API bool LoadMeshesAndMaterialsFromGLTF(
+	// Thread safe allocations; GLTFData contains the mesh count
+	// that can be used to determine the size of the GLTFMesh strean
+	ECSENGINE_API bool LoadMeshesFromGLTFFileTs(
 		GLTFData data,
 		GLTFMesh* meshes,
-		PBRMaterial* materials,
-		AllocatorPolymorphic allocator,
+		MemoryManager* allocator,
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
 	// Creates the appropriate vertex and index buffers
-	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh);
+	ECSENGINE_API void GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, Mesh& mesh);
 
 	// Creates the appropriate vertex and index buffers
 	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count);
 
-	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);
+	// Not thread safe
+	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, MemoryManager* allocator);
 
-	ECSENGINE_API void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, AllocatorPolymorphic allocator);
+	// Thread safe
+	ECSENGINE_API void FreeGLTFMeshTs(const GLTFMesh& mesh, MemoryManager* allocator);
+
+	// Not thread safe
+	ECSENGINE_API void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, MemoryManager* allocator);
+
+	// Thread safe
+	ECSENGINE_API void FreeGLTFMeshesTs(const GLTFMesh* meshes, size_t count, MemoryManager* allocator);
 
 	ECSENGINE_API void FreeGLTFFile(GLTFData data);
 }

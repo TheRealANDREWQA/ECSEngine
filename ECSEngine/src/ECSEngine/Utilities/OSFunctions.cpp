@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "OSFunctions.h"
 #include "Function.h"
-#include "../Tools/UI/UIDrawerWindows.h"
+#include "../Tools/UIDrawerWindows.h"
 #include "File.h"
 
 ECS_CONTAINERS;
@@ -20,9 +20,9 @@ namespace ECSEngine {
 		bool LaunchFileExplorer(Stream<wchar_t> folder) {
 			wchar_t temp_characters[1024];
 			CapacityStream<wchar_t> temp_stream(temp_characters, 0, 1024);
-			temp_stream.AddStream(Stream<wchar_t>(L"explorer.exe /select,\"", std::size(L"explorer.exe /select,\"") - 1));
-			temp_stream.AddStream(folder);
-			temp_stream.Add(L'\"');
+			temp_stream.AddStreamSafe(Stream<wchar_t>(L"explorer.exe /select,\"", std::size(L"explorer.exe /select,\"") - 1));
+			temp_stream.AddStreamSafe(folder);
+			temp_stream.AddSafe(L'\"');
 			temp_stream.AddSafe(L'\0');
 
 			STARTUPINFO startup_info;
@@ -137,7 +137,7 @@ namespace ECSEngine {
 
 			char* ptr1 = (char*)function::PredicateValue<uintptr_t>(creation_time == nullptr, 0, (uintptr_t)_creation_time);
 			char* ptr2 = (char*)function::PredicateValue<uintptr_t>(access_time == nullptr, 0, (uintptr_t)_access_time);
-			char* ptr3 = (char*)function::PredicateValue<uintptr_t>(last_write_time == nullptr, 0, (uintptr_t)_last_write_time);
+			char* ptr3 = (char*)function::PredicateValue<uintptr_t>(last_write_time == nullptr, 0, (uintptr_t)last_write_time);
 
 			bool success = GetFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
@@ -149,48 +149,6 @@ namespace ECSEngine {
 				}
 				if (ptr3 != nullptr) {
 					function::ConvertASCIIToWide(last_write_time, ptr3, 256);
-				}
-				return true;
-			}
-			return false;
-		}
-
-		bool GetFileTimes(const wchar_t* ECS_RESTRICT path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
-		{
-			FILETIME os_creation_time, os_access_time, os_last_write_time;
-			bool success = GetFileTimesInternal(path, &os_creation_time, &os_access_time, &os_last_write_time);
-
-			if (success) {
-				// use as per MSDN ULARGE_INTEGER in order to convert to normal integers and perform substraction
-				ULARGE_INTEGER large_integer;
-				if (creation_time != nullptr) {
-					large_integer.LowPart = os_creation_time.dwLowDateTime;
-					large_integer.HighPart = os_creation_time.dwHighDateTime;
-					uint64_t value = large_integer.QuadPart;
-
-					// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
-					// Divide by 10'000 to get milliseconds
-					*creation_time = value / 10'000;
-				}
-
-				if (access_time != nullptr) {
-					large_integer.LowPart = os_access_time.dwLowDateTime;
-					large_integer.HighPart = os_access_time.dwHighDateTime;
-					uint64_t value = large_integer.QuadPart;
-
-					// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
-					// Divide by 10'000 to get milliseconds
-					*access_time = value / 10'000;
-				}
-
-				if (last_write_time != nullptr) {
-					large_integer.LowPart = os_last_write_time.dwLowDateTime;
-					large_integer.HighPart = os_last_write_time.dwHighDateTime;
-					uint64_t value = large_integer.QuadPart;
-
-					// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
-					// Divide by 10'000 to get milliseconds
-					*last_write_time = value / 10'000;
 				}
 				return true;
 			}

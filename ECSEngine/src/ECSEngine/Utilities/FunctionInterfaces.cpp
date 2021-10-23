@@ -11,8 +11,6 @@ namespace ECSEngine {
 
 	namespace function {
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		float ConvertCharactersToFloat(Stream characters) {
 			return ConvertCharactersToFloatingPoint<float>(characters);
@@ -20,17 +18,12 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, ConvertCharactersToFloat, Stream<char>, CapacityStream<char>);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		double ConvertCharactersToDouble(Stream characters) {
 			return ConvertCharactersToFloatingPoint<double>(characters);
 		}
 
-
 		ECS_TEMPLATE_FUNCTION_2_BEFORE(double, ConvertCharactersToDouble, Stream<char>, CapacityStream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 #define CONVERT_TYPE_TO_CHARS_FROM_ASCII_TO_WIDE(convert_function, chars, ...) char characters[512]; \
 		containers::Stream<char> ascii(characters, 0); \
@@ -90,8 +83,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertIntToCharsFormatted, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, int64_t);
 		
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		size_t ConvertIntToChars(Stream& chars, int64_t value) {
 			static_assert(std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>> ||
@@ -136,8 +127,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertIntToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, int64_t);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<bool unaligned = false>
 		void avx2_copy_32multiple(void* destination, const void* source, size_t bytes) {
 			// destination, source -> alignment 32 bytes 
@@ -160,8 +149,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, avx2_copy_32multiple, void*, const void*, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<bool unaligned = false>
 		void avx2_copy_128multiple(void* destination, const void* source, size_t bytes) {
@@ -190,8 +177,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, avx2_copy_128multiple, void*, const void*, size_t);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<bool exact_length>
 		wchar_t* ConvertASCIIToWide(const char* pointer) {
 			if constexpr (!exact_length) {
@@ -208,8 +193,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(wchar_t*, ConvertASCIIToWide, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		size_t FindWhitespaceCharactersCount(const char* string, CapacityStream<unsigned int>* stack_buffer)
 		{
@@ -237,8 +220,6 @@ namespace ECSEngine {
 			return count;
 		}
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		// it searches for spaces and next line characters
 		template<typename Stream>
 		void FindWhitespaceCharacters(const char* string, Stream& spaces) {
@@ -255,8 +236,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, FindWhitespaceCharacters, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char*);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		// finds the tokens that appear in the current string
 		template<typename Stream>
 		void FindToken(const char* string, char token, Stream& tokens) {
@@ -272,8 +251,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, FindToken, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char*, char);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		// finds the tokens that appear in the current string
 		template<typename Stream>
@@ -292,16 +269,12 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, FindToken, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char* ECS_RESTRICT, const char* ECS_RESTRICT);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		void ParseWordsFromSentence(const char* sentence, Stream& words) {
 			ParseWordsFromSentence(sentence, " \n", words);
 		}
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
 		void ParseWordsFromSentence(const char* ECS_RESTRICT sentence, const char* ECS_RESTRICT tokens, Stream& words) {
@@ -322,8 +295,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, const char* ECS_RESTRICT, const char* ECS_RESTRICT);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		void ParseWordsFromSentence(const char* sentence, char token, Stream& words) {
 			size_t length = strlen(sentence);
@@ -343,8 +314,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, const char*, char);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Type>
 		Type PredicateValue(bool condition, Type first_value, Type second_value) {
 			return first_value * condition + second_value * (1 - condition);
@@ -356,8 +325,6 @@ namespace ECSEngine {
 		ECS_TEMPLATE_FUNCTION(unsigned short, PredicateValue, bool, unsigned short, unsigned short);
 		ECS_TEMPLATE_FUNCTION(int64_t, PredicateValue, bool, int64_t, int64_t);
 		ECS_TEMPLATE_FUNCTION(size_t, PredicateValue, bool, size_t, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
 		size_t ConvertFloatingPointIntegerToChars(Stream& chars, int64_t integer, size_t precision) {
@@ -413,8 +380,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertFloatingPointIntegerToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, int64_t, size_t);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		size_t ConvertFloatToChars(Stream& chars, float value, size_t precision) {
 			ECS_ASSERT(precision < 16);
@@ -431,8 +396,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertFloatToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, float, size_t);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		size_t ConvertDoubleToChars(Stream& chars, double value, size_t precision) {
 			ECS_ASSERT(precision < 16);
@@ -447,8 +410,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertDoubleToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, double, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		// non digit characters are discarded
 		template<typename Integer, typename Stream>
@@ -470,8 +431,6 @@ namespace ECSEngine {
 		template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>);
 		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>);
 		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		// non digit characters are discarded
 		template<typename Integer, typename Stream>
@@ -495,8 +454,6 @@ namespace ECSEngine {
 		template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>, size_t&);
 		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>, size_t&);
 		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>, size_t&);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename FloatingPoint, typename Stream>
 		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream) {
@@ -546,8 +503,6 @@ namespace ECSEngine {
 		template ECSENGINE_API double ConvertCharactersToFloatingPoint<double>(Stream<char>);
 		template ECSENGINE_API double ConvertCharactersToFloatingPoint<double>(CapacityStream<char>);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		void GetRecursiveDirectories(Allocator* allocator, const wchar_t* root, CapacityStream<const wchar_t*>& directories_paths)
 		{
@@ -564,8 +519,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetRecursiveDirectories, const wchar_t*, CapacityStream<const wchar_t*>&);
 		
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		void GetRecursiveDirectoriesBatchedAllocation(Allocator* allocator, const wchar_t* root, CapacityStream<const wchar_t*>& directories_paths)
 		{
@@ -597,8 +550,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetRecursiveDirectoriesBatchedAllocation, const wchar_t*, CapacityStream<const wchar_t*>&);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		void GetRecursiveDirectories(Allocator* allocator, const wchar_t* root, ResizableStream<const wchar_t*, Allocator>& directories_paths)
 		{
@@ -625,8 +576,6 @@ namespace ECSEngine {
 		INSTANTIATE_RECURSIVE_DIRECTORY(ResizableMemoryArena);
 
 #undef INSTANTIATE_RECUSIVE_DIRECTORY
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Allocator>
 		void GetRecursiveDirectoriesBatchedAllocation(Allocator* allocator, const wchar_t* root, ResizableStream<const wchar_t*, Allocator>& directories_paths)
@@ -670,8 +619,6 @@ namespace ECSEngine {
 
 #undef INSTANTIATE_RECUSIVE_DIRECTORY
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		void GetDirectoryFiles(Allocator* allocator, const wchar_t* directory, CapacityStream<const wchar_t*>& files) {
 			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
@@ -684,8 +631,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetDirectoryFiles, const wchar_t*, CapacityStream<const wchar_t*>&);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Allocator>
 		void GetDirectoryFilesBatchedAllocation(Allocator* allocator, const wchar_t* directory, CapacityStream<const wchar_t*>& files) {
@@ -712,8 +657,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetDirectoryFilesBatchedAllocation, const wchar_t*, CapacityStream<const wchar_t*>&);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		void GetDirectoryFiles(Allocator* allocator, const wchar_t* directory, ResizableStream<const wchar_t*, Allocator>& files) {
 			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
@@ -737,8 +680,6 @@ namespace ECSEngine {
 		INSTANTIATE_RECURSIVE_DIRECTORY(ResizableMemoryArena);
 
 #undef INSTANTIATE_RECUSIVE_DIRECTORY
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Allocator>
 		void GetDirectoryFilesBatchedAllocation(Allocator* allocator, const wchar_t* directory, ResizableStream<const wchar_t*, Allocator>& files) {
@@ -776,8 +717,6 @@ namespace ECSEngine {
 
 #undef INSTANTIATE_RECUSIVE_DIRECTORY
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment) {
 			void* allocation = allocator->Allocate(data_size, alignment);
@@ -786,8 +725,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void*, Copy, const void*, size_t, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Allocator>
 		void* CopyTs(Allocator* allocator, const void* data, size_t data_size, size_t alignment) {
@@ -798,109 +735,37 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void*, CopyTs, const void*, size_t, size_t);
 
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<void> Copy(Allocator* allocator, Stream<void> data, size_t alignment) {
-			void* allocation = allocator->Allocate(data.size, alignment);
-			memcpy(allocation, data.buffer, data.size);
-			return { allocation, data.size };
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<void>, Copy, Stream<void>, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<void> CopyTs(Allocator* allocator, Stream<void> data, size_t alignment) {
-			void* allocation = allocator->Allocate_ts(data.size, alignment);
-			memcpy(allocation, data.buffer, data.size);
-			return { allocation, data.size };
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<void>, CopyTs, Stream<void>, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		Stream<char> StringCopy(Allocator* allocator, const char* string) {
-			return StringCopy(allocator, ToStream(string));
+			size_t string_size = strlen(string);
+			return Stream<char>(Copy(allocator, string, (string_size + 1) * sizeof(char), alignof(char)), string_size);
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopy, const char*);
 
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<char> StringCopy(Allocator* allocator, Stream<char> string) {
-			Stream<char> result = Stream<char>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
-			result[result.size] = '\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopy, Stream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		Stream<char> StringCopyTs(Allocator* allocator, const char* string) {
-			return StringCopyTs(allocator, ToStream(string));
+			size_t string_size = strlen(string);
+			return Stream<char>(CopyTs(allocator, string, (string_size + 1) * sizeof(char), alignof(char)), string_size);
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopyTs, const char*);
 
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<char> StringCopyTs(Allocator* allocator, Stream<char> string) {
-			Stream<char> result = Stream<char>(CopyTs(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
-			result[result.size] = '\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopyTs, Stream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		Stream<wchar_t> StringCopy(Allocator* allocator, const wchar_t* string) {
-			return StringCopy(allocator, ToStream(string));
+			size_t string_size = wcslen(string);
+			return Stream<wchar_t>(Copy(allocator, string, (string_size + 1) * sizeof(wchar_t), alignof(wchar_t)), string_size);
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopy, const wchar_t*);
 
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<wchar_t> StringCopy(Allocator* allocator, Stream<wchar_t> string) {
-			Stream<wchar_t> result = Stream<wchar_t>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(wchar_t), alignof(wchar_t)), string.size);
-			result[string.size] = L'\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopy, Stream<wchar_t>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Allocator>
 		Stream<wchar_t> StringCopyTs(Allocator* allocator, const wchar_t* string) {
-			return StringCopyTs(allocator, ToStream(string));
+			size_t string_size = wcslen(string);
+			return Stream<wchar_t>(CopyTs(allocator, string, (string_size + 1) * sizeof(wchar_t), alignof(wchar_t)), string_size);
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopyTs, const wchar_t*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<wchar_t> StringCopyTs(Allocator* allocator, Stream<wchar_t> string) {
-			Stream<wchar_t> result = Stream<wchar_t>(CopyTs(allocator, string.buffer, (string.size + 1) * sizeof(wchar_t), alignof(wchar_t)), string.size);
-			result[string.size] = L'\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopyTs, Stream<wchar_t>);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
 		unsigned int IsStringInStream(const char* string, Stream stream)
@@ -909,8 +774,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<char>>, CapacityStream<Stream<char>>, Stream<CapacityStream<char>>, CapacityStream<CapacityStream<char>>, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename StreamType>
 		unsigned int IsStringInStream(Stream<char> string, StreamType stream) {
@@ -926,16 +789,12 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<char>>, CapacityStream<Stream<char>>, Stream<CapacityStream<char>>, CapacityStream<CapacityStream<char>>, Stream<char>);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		unsigned int IsStringInStream(const wchar_t* string, Stream stream) {
 			return IsStringInStream(ToStream(string), stream);
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<wchar_t>>, CapacityStream<Stream<wchar_t>>, Stream<CapacityStream<wchar_t>>, CapacityStream<CapacityStream<wchar_t>>, const wchar_t*);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename StreamType>
 		unsigned int IsStringInStream(Stream<wchar_t> string, StreamType stream) {
@@ -952,8 +811,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<wchar_t>>, CapacityStream<Stream<wchar_t>>, Stream<CapacityStream<wchar_t>>, CapacityStream<CapacityStream<wchar_t>>, Stream<wchar_t>);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		void MakeSequence(Stream stream)
 		{
@@ -964,8 +821,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>);
 		
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		void MakeDescendingSequence(Stream stream) {
 			for (size_t index = 0; index < stream.size; index++) {
@@ -975,7 +830,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>);
 
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename IndexStream>
 		void CopyStreamWithMask(void* ECS_RESTRICT buffer, const void* ECS_RESTRICT data, size_t data_element_size, IndexStream indices)
@@ -990,8 +844,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, void* ECS_RESTRICT, const void* ECS_RESTRICT, size_t);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename IndexStream>
 		void CopyStreamWithMask(void* ECS_RESTRICT buffer, Stream<void> data, IndexStream indices)
 		{
@@ -1005,8 +857,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, void* ECS_RESTRICT, Stream<void>);
 
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename IndexStream>
 		void CopyStreamWithMask(std::ofstream& stream, const void* ECS_RESTRICT data, size_t data_element_size, IndexStream indices)
 		{
@@ -1016,8 +866,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, std::ofstream&, const void* ECS_RESTRICT, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename IndexStream>
 		void CopyStreamWithMask(std::ofstream& stream, Stream<void> data, IndexStream indices)
@@ -1029,13 +877,6 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, std::ofstream&, Stream<void>);
 
-		// ----------------------------------------------------------------------------------------------------------
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		// ----------------------------------------------------------------------------------------------------------
 	}
 
 }

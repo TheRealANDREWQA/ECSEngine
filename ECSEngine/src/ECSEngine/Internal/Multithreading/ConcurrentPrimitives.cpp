@@ -34,7 +34,13 @@ namespace ECSEngine {
 
 	Semaphore::Semaphore() : count(0), target(0) {}
 
-	Semaphore::Semaphore(unsigned int _target) : count(0), target(_target) {}
+	Semaphore::Semaphore(unsigned int value) : count(0), target(value) {}
+
+	Semaphore& Semaphore::operator = (const Semaphore& other) {
+		target = other.target;
+		count.store(other.count.load(ECS_ACQUIRE), ECS_RELEASE);
+		return *this;
+	}
 
 	void Semaphore::Exit() {
 		count.fetch_sub(1, ECS_ACQ_REL);
@@ -54,13 +60,6 @@ namespace ECSEngine {
 
 	void Semaphore::SetTarget(unsigned int value) {
 		target = value;
-	}
-
-	void Semaphore::SpinWait()
-	{
-		while (count.load(ECS_ACQUIRE) != target) {
-			_mm_pause();
-		}
 	}
 
 	ConditionVariable::ConditionVariable() : signal_count(0) {}

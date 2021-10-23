@@ -4,7 +4,7 @@
 #include "UIDrawerStructures.h"
 #include "UIDrawerActionsTemplates.h"
 #include "UIResourcePaths.h"
-#include "../../Utilities/Path.h"
+#include "../Utilities/Path.h"
 
 #define ECS_TOOLS_UI_DRAWER_FILL_ARGUMENTS thread_id, dockspace, border_index
 #define ECS_TOOLS_UI_DRAWER_CURRENT_POSITION {current_x, current_y}
@@ -7669,10 +7669,10 @@ namespace ECSEngine {
 							scale,
 							buffers + ECS_TOOLS_UI_MATERIALS,
 							counts + ECS_TOOLS_UI_MATERIALS,
-							color,
 							top_left_uv,
 							bottom_right_uv,
-							UIDrawPhase::Late
+							UIDrawPhase::Late,
+							color
 						);
 					}
 					else if constexpr (configuration & UI_CONFIG_SYSTEM_DRAW) {
@@ -7684,10 +7684,10 @@ namespace ECSEngine {
 							scale,
 							system_buffers,
 							system_counts,
-							color,
 							top_left_uv,
 							bottom_right_uv,
-							UIDrawPhase::System
+							UIDrawPhase::System,
+							color
 						);
 					}
 					else {
@@ -7699,10 +7699,10 @@ namespace ECSEngine {
 							scale,
 							buffers,
 							counts,
-							color,
 							top_left_uv,
 							bottom_right_uv,
-							UIDrawPhase::Normal
+							UIDrawPhase::Normal,
+							color
 						);
 					}
 				}
@@ -10365,7 +10365,7 @@ namespace ECSEngine {
 				config.AddFlag(text_alignment);
 
 				IdentifierHashTable<unsigned int, ResourceIdentifier, HashFunctionPowerOfTwo> parent_hash_table;
-				size_t table_count = function::PowerOfTwoGreater(labels.size).x * 2;
+				size_t table_count = function::PowerOfTwoGreater(labels.size) * 2;
 				parent_hash_table.InitializeFromBuffer(GetTempBuffer(parent_hash_table.MemoryOf(table_count)), table_count);
 
 				constexpr size_t label_configuration = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE |

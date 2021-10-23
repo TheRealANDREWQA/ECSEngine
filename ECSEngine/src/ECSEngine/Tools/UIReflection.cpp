@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "UIReflection.h"
-#include "../../Utilities/Mouse.h"
-#include "../../Utilities/Keyboard.h"
+#include "../Utilities/Mouse.h"
+#include "../Utilities/Keyboard.h"
 
 namespace ECSEngine {
 

@@ -143,43 +143,21 @@ namespace ECSEngine {
 		template<typename Allocator>
 		ECSENGINE_API void* CopyTs(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8);
 
-		template<typename Allocator>
-		ECSENGINE_API Stream<void> Copy(Allocator* allocator, Stream<void> data, size_t alignment = 8);
-
-		template<typename Allocator>
-		ECSENGINE_API Stream<void> CopyTs(Allocator* allocator, Stream<void> data, size_t alignment = 8);
-
-		// It will copy the null termination character
+		// It will copy the null terminated character
 		template<typename Allocator>
 		ECSENGINE_API Stream<char> StringCopy(Allocator* allocator, const char* string);
 
-		// It will copy the null termination character
-		template<typename Allocator>
-		ECSENGINE_API Stream<char> StringCopy(Allocator* allocator, Stream<char> string);
-
-		// It will copy the null termination characters
+		// It will copy the null terminated characters
 		template<typename Allocator>
 		ECSENGINE_API Stream<char> StringCopyTs(Allocator* allocator, const char* string);
 
-		// It will copy the null termination characters
-		template<typename Allocator>
-		ECSENGINE_API Stream<char> StringCopyTs(Allocator* allocator, Stream<char> string);
-
-		// It will copy the null termination character
+		// It will copy the null terminated character
 		template<typename Allocator>
 		ECSENGINE_API Stream<wchar_t> StringCopy(Allocator* allocator, const wchar_t* string);
 
-		// It will copy the null termination characters
+		// It will copy the null terminated characters
 		template<typename Allocator>
 		ECSENGINE_API Stream<wchar_t> StringCopyTs(Allocator* allocator, const wchar_t* string);
-
-		// It will copy the null termination character
-		template<typename Allocator>
-		ECSENGINE_API Stream<wchar_t> StringCopy(Allocator* allocator, Stream<wchar_t> string);
-
-		// It will copy the null termination characters
-		template<typename Allocator>
-		ECSENGINE_API Stream<wchar_t> StringCopyTs(Allocator* allocator, Stream<wchar_t> string);
 
 		// Stream should contain as elements Stream<char> or CapacityStream<char>, Stream cannot be ResizableStream
 		// But can be easily converted into a normal Stream; returns the index at which the string was found

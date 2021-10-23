@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "UIDrawerStructures.h"
-#include "../../Utilities/FunctionInterfaces.h"
+#include "../Utilities/FunctionInterfaces.h"
 #include "UIHelpers.h"
 
 namespace ECSEngine {

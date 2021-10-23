@@ -46,15 +46,6 @@ namespace ECSEngine {
 			wchar_t* ECS_RESTRICT last_write_time = nullptr
 		);
 
-		// A pointer null means I don't care; returns whether or not it succeeded
-		// Works for directories too; It will conver the dates into a number;
-		ECSENGINE_API bool GetFileTimes(
-			const wchar_t* ECS_RESTRICT path,
-			size_t* ECS_RESTRICT creation_time = nullptr,
-			size_t* ECS_RESTRICT access_time = nullptr,
-			size_t* ECS_RESTRICT last_write_time = nullptr
-		);
-
 		// A pointer null means I don't care; returns whether or not succeeded; output is in milliseconds
 		// Works for directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
