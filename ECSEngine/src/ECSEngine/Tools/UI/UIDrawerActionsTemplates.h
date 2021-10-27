@@ -153,8 +153,8 @@ namespace ECSEngine {
 
 					data->filter_characters_start = 0;
 					data->filter_character_count = 0;
-					data->current_selection = function::PredicateValue<unsigned int>(data->current_selection > data->text->size, data->text->size, data->current_selection);
-					data->current_sprite_position = function::PredicateValue<unsigned int>(data->current_sprite_position > data->text->size, data->text->size, data->current_sprite_position);
+					data->current_selection = function::Select<unsigned int>(data->current_selection > data->text->size, data->text->size, data->current_selection);
+					data->current_sprite_position = function::Select<unsigned int>(data->current_sprite_position > data->text->size, data->text->size, data->current_sprite_position);
 				}
 
 				if (keyboard->IsKeyUp(HID::Key::LeftControl) && keyboard->IsKeyUp(HID::Key::RightControl)) {
@@ -167,7 +167,7 @@ namespace ECSEngine {
 							character_count--;
 						}
 						else {
-							character_count -= function::PredicateValue(Filter::Filter(characters[character_count - 1], type), 0, 1);
+							character_count -= function::Select(Filter::Filter(characters[character_count - 1], type), 0, 1);
 						}
 					}
 					character_count--;
@@ -481,12 +481,12 @@ namespace ECSEngine {
 
 			ColorInputHSVGradientInfo* data = (ColorInputHSVGradientInfo*)_data;
 			float x_factor = function::InverseLerp(position.x, position.x + scale.x, mouse_position.x);
-			x_factor = function::PredicateValue(x_factor > 1.0f, 1.0f, x_factor);
-			x_factor = function::PredicateValue(x_factor < 0.0f, 0.0f, x_factor);
+			x_factor = function::Select(x_factor > 1.0f, 1.0f, x_factor);
+			x_factor = function::Select(x_factor < 0.0f, 0.0f, x_factor);
 
 			float y_factor = function::InverseLerp(position.y, position.y + scale.y, mouse_position.y);
-			y_factor = function::PredicateValue(y_factor > 1.0f, 1.0f, y_factor);
-			y_factor = function::PredicateValue(y_factor < 0.0f, 0.0f, y_factor);
+			y_factor = function::Select(y_factor > 1.0f, 1.0f, y_factor);
+			y_factor = function::Select(y_factor < 0.0f, 0.0f, y_factor);
 
 			data->input->hsv.saturation = x_factor * Color::GetRange();
 			data->input->hsv.value = (1.0f - y_factor) * Color::GetRange();
@@ -504,8 +504,8 @@ namespace ECSEngine {
 			ColorInputHSVGradientInfo* info = (ColorInputHSVGradientInfo*)_data;
 
 			float factor = function::InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
-			factor = function::PredicateValue(factor > 1.0f, 1.0f, factor);
-			factor = function::PredicateValue(factor < 0.0f, 0.0f, factor);
+			factor = function::Select(factor > 1.0f, 1.0f, factor);
+			factor = function::Select(factor < 0.0f, 0.0f, factor);
 
 			info->input->hsv.hue = factor * Color::GetRange();
 			*info->input->rgb = HSVToRGB(info->input->hsv);
@@ -522,8 +522,8 @@ namespace ECSEngine {
 			ColorInputHSVGradientInfo* info = (ColorInputHSVGradientInfo*)_data;
 
 			float factor = function::InverseLerp(info->gradient_position.y, info->gradient_position.y + info->gradient_scale.y, mouse_position.y);
-			factor = function::PredicateValue(factor > 1.0f, 1.0f, factor);
-			factor = function::PredicateValue(factor < 0.0f, 0.0f, factor);
+			factor = function::Select(factor > 1.0f, 1.0f, factor);
+			factor = function::Select(factor < 0.0f, 0.0f, factor);
 
 			info->input->rgb->alpha = (1.0f - factor) * Color::GetRange();
 			info->input->hsv.alpha = info->input->rgb->alpha;

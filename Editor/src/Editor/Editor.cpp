@@ -66,7 +66,7 @@ public:
 			HANDLE global_handle = GetClipboardData(CF_TEXT);
 			HANDLE data_handle = GlobalLock(global_handle);
 			unsigned int copy_count = strlen((const char*)data_handle);
-			copy_count = ECSEngine::function::PredicateValue(copy_count > max_size - 1, max_size - 1, copy_count);
+			copy_count = ECSEngine::function::Select(copy_count > max_size - 1, max_size - 1, copy_count);
 			memcpy(text, data_handle, copy_count);
 			GlobalUnlock(global_handle);
 			assert(CloseClipboard() == TRUE);
@@ -278,7 +278,7 @@ public:
 		EditorEvent editor_events[EDITOR_EVENT_QUEUE_CAPACITY];
 		editor_state.event_queue.InitializeFromBuffer(editor_events, EDITOR_EVENT_QUEUE_CAPACITY);
 
-		ProjectModules project_modules(&memory_manager, 0);
+		ProjectModules project_modules(&memory_manager, 1);
 		editor_state.project_modules = &project_modules;
 
 		TaskGraph project_task_graph(&memory_manager);
@@ -291,7 +291,8 @@ public:
 
 		editor_state.active_world = 0;
 		editor_state.worlds.InitializeFromBuffer(scene_worlds, 3, 3);
-		editor_state.graphics_module_data = { ECS_GET_MODULE_FUNCTION_MISSING, nullptr, nullptr, nullptr, nullptr, nullptr };
+
+		ResetProjectGraphicsModule(&editor_state);
 
 		Hub(&editor_state);
 
@@ -328,42 +329,31 @@ public:
 		VertexShader forward_lighting_v_shader = graphics.CreateVertexShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\ForwardLighting.hlsl"), compile_options);
 		PixelShader forward_lighting_p_shader = graphics.CreatePixelShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\ForwardLighting.hlsl"), compile_options);
 		InputLayout forward_lighting_layout = graphics.ReflectVertexShaderInput(forward_lighting_v_shader, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\ForwardLighting.hlsl");
+		
+		VertexShader debug_v_shader = graphics.CreateVertexShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\DebugDraw.hlsl"), compile_options);
+		InputLayout debug_layout = graphics.ReflectVertexShaderInput(debug_v_shader, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\DebugDraw.hlsl");
 
 		ConstantBuffer obj_buffer = graphics.CreateConstantBuffer(sizeof(float) * 32);
-		ConstantBuffer light_buffer = graphics.CreateConstantBuffer(sizeof(float) * 4);
-		ConstantBuffer light_color = graphics.CreateConstantBuffer(sizeof(ColorFloat) * 2);
-		ConstantBuffer hemispheric_ambient_light = graphics.CreateConstantBuffer(sizeof(ColorFloat) * 2);
 
 		ConstantBuffer specular_factors = graphics.CreateConstantBuffer(sizeof(float) * 2);
-		ConstantBuffer camera_position_buffer = graphics.CreateConstantBuffer(sizeof(float3));
-		ConstantBuffer point_light = graphics.CreateConstantBuffer(sizeof(ColorFloat) * 2);
-		ConstantBuffer spot_light = graphics.CreateConstantBuffer(sizeof(float) * 128);
 
-		float3* light_direction = (float3*)graphics.MapBuffer(light_buffer.buffer);
-		light_direction[0] = { 0.0f, -1.0f, 0.0f };
-		graphics.UnmapBuffer(light_buffer.buffer);
+		ConstantBuffer hemispheric_ambient_light = Shaders::CreateHemisphericConstantBuffer(&graphics);
+		ConstantBuffer directional_light = Shaders::CreateDirectionalLightBuffer(&graphics);
+		ConstantBuffer camera_position_buffer = Shaders::CreateCameraPositionBuffer(&graphics);
+		ConstantBuffer point_light = Shaders::CreatePointLightBuffer(&graphics);
+		ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(&graphics);
+		ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(&graphics);
 
-		ColorFloat* _light_color = (ColorFloat*)graphics.MapBuffer(light_color.buffer);
-		_light_color[0] = { 0.0f, -1.0f, 0.0f, 0.0f };
-		_light_color[1] = { 0.5f, 0.5f, 0.5f, 1.0f };
-		graphics.UnmapBuffer(light_color.buffer);
+		Shaders::SetDirectionalLight(directional_light, &graphics, { 0.0f, -1.0f, 0.0f }, ColorFloat(0.5f, 0.5f, 0.5f, 1.0f));
 
 		float* _specular_factors = (float*)graphics.MapBuffer(specular_factors.buffer);
 		_specular_factors[0] = 100.0f;
 		_specular_factors[1] = 1.25f;
 		graphics.UnmapBuffer(specular_factors.buffer);
 
-		ColorFloat* _hemispheric_ambient_light = (ColorFloat*)graphics.MapBuffer(hemispheric_ambient_light.buffer);
-		_hemispheric_ambient_light[0] = Color(0, 0, 0);
-		_hemispheric_ambient_light[1] = Color(50, 50, 50);
-		graphics.UnmapBuffer(hemispheric_ambient_light.buffer);
+		Shaders::SetHemisphericConstants(hemispheric_ambient_light, &graphics, ColorFloat(0.0f, 0.0f, 0.0f), ColorFloat(0.25f, 0.25f, 0.25f));
 
-		float4* _spot_light = (float4*)graphics.MapBuffer(spot_light.buffer);
-		_spot_light[0] = { 0.0f, 8.0f, 20.0f, 1.0f / 15.0f };
-		_spot_light[1] = { 0.0f, -1.0f, 0.0f, cos(DegToRad(22.0f)) };
-		_spot_light[2] = { 11.0f, 11.0f, 11.0f, 1.0f / (cos(DegToRad(15.0f)) - cos(DegToRad(22.0f))) };
-		_spot_light[3] = { 2.0f, 2.0f, 0.0f, 0.0f };
-		graphics.UnmapBuffer(spot_light.buffer);
+		Shaders::SetCapsuleLight(capsule_light, &graphics, float3(0.0f, 0.0f, 20.0f), float3(0.0f, 1.0f, 0.0f), 10.0f, 1.0f, 2.0f, ColorFloat(50.0f, 50.0f, 50.0f));
 
 		const ColorFloat COLORS[] = {
 			{1.0f, 0, 0},
@@ -510,35 +500,23 @@ public:
 				*light_pos_data = { sin(timer.GetDuration_ms() * 0.0005f) * 0.0f, 1.0f, 20.0f };
 				graphics.UnmapBuffer(light_buffer.buffer);*/
 
-				float3* camera_position = (float3*)graphics.MapBuffer(camera_position_buffer.buffer);
-				camera_position[0] = camera.translation;
-				graphics.UnmapBuffer(camera_position_buffer.buffer);
+				Shaders::SetCameraPosition(camera_position_buffer, &graphics, camera.translation);
 
-				ConstantBuffer vertex_constant_buffers[3];
+				ConstantBuffer vertex_constant_buffers[2];
 				vertex_constant_buffers[0] = obj_buffer;
-				/*vertex_constant_buffers[1] = light_buffer;
-				vertex_constant_buffers[2] = camera_position_buffer;*/
-				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, 1));
+				vertex_constant_buffers[1] = camera_position_buffer;
+				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
 
-				/*float4* light_color_data = (float4*)graphics.MapBuffer(light_color.buffer);
-				*light_color_data = { 1.0f, 1.0f, 1.0f, 1.0f };
-				light_color_data[1] = { abs(sin(timer.GetDurationSinceMarker_ms() * 0.005f) * 10.0f), 0.0f, 0.0f, 0.0f };
-				graphics.UnmapBuffer(light_color.buffer);
-
-				graphics.BindPixelConstantBuffer(light_color);*/
-
-				float4* _point_light = (float4*)graphics.MapBuffer(point_light.buffer);
-				_point_light[0] = { sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f, 1.0f / 2.5f };
-				_point_light[1] = { 1.0f, 1.0f, 1.0f, 1.5f };
-				graphics.UnmapBuffer(point_light.buffer);
+				Shaders::SetPointLight(point_light, &graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
+				Shaders::SetSpotLight(spot_light, &graphics, float3(0.0f, 8.0f, 20.0f), float3(0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, ColorFloat(11.0f, 11.0f, 11.0f));
 
 				ConstantBuffer pixel_constant_buffers[6];
 				pixel_constant_buffers[0] = hemispheric_ambient_light;
-				pixel_constant_buffers[1] = light_color;
+				pixel_constant_buffers[1] = directional_light;
 				pixel_constant_buffers[2] = specular_factors;
-				pixel_constant_buffers[3] = camera_position_buffer;
-				pixel_constant_buffers[4] = point_light;
-				pixel_constant_buffers[5] = spot_light;
+				pixel_constant_buffers[3] = point_light;
+				pixel_constant_buffers[4] = spot_light;
+				pixel_constant_buffers[5] = capsule_light;
 
 				graphics.BindPixelConstantBuffers(Stream<ConstantBuffer>(pixel_constant_buffers, std::size(pixel_constant_buffers)));
 

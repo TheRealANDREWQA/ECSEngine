@@ -196,6 +196,9 @@
   <ItemGroup>
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
+    <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Deque.h" />
+    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
     <ClInclude Include="src\ECSEngine\GLTFLoader\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
@@ -206,8 +209,9 @@
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompression.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompressionTypes.h" />
     <ClInclude Include="src\ECSEngine\Rendering\MeshRender.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
-    <ClInclude Include="src\ECSEngine\Rendering\ShaderReflectionMacros.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawConfigs.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawer.h" />
@@ -255,7 +259,6 @@
     <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
     <ClInclude Include="src\ECSEngine\Internal\ResourceManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\Archetype.h" />
-    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ColorMacros.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Graphics.h" />
@@ -312,7 +315,9 @@
     <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\MeshRender.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerActions.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerActionStructures.cpp" />
@@ -367,6 +372,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugDraw.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLighting.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
@@ -392,6 +402,11 @@
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ColorMap.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugDraw.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
@@ -487,7 +502,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\ECSEngine\Rendering\Shaders\ForwardUtilities.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\UIViewportTransform.hlsli" />
   </ItemGroup>

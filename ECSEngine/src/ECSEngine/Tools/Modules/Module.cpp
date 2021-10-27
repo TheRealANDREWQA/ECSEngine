@@ -11,9 +11,21 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	GetModuleFunctionData GetModuleFunction(Stream<wchar_t> path)
+	bool IsModule(Stream<wchar_t> path)
 	{
-		GetModuleFunctionData data;
+		auto data = LoadModule(path);
+		if (data.code == ECS_GET_MODULE_OK) {
+			ReleaseModule(data);
+			return true;
+		}
+		return false;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	Module LoadModule(Stream<wchar_t> path)
+	{
+		Module data;
 
 		ECS_TEMP_STRING(library_path, 256);
 		library_path.Copy(path);
@@ -40,75 +52,31 @@ namespace ECSEngine {
 
 		data.code = ECS_GET_MODULE_OK;
 		data.os_module_handle = module_handle;
+		data.tasks = { nullptr, 0 };
+
 		return data;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	GetModuleGraphicsFunctionData GetModuleGraphicsFunction(Stream<wchar_t> path) {
-		GetModuleGraphicsFunctionData data;
-
-		ECS_TEMP_STRING(library_path, 256);
-		library_path.Copy(path);
-		library_path[library_path.size] = L'\0';
-
-		HMODULE module_handle = LoadLibrary(library_path.buffer);
-
-		if (module_handle == nullptr) {
-			data.code = ECS_GET_MODULE_FAULTY_PATH;
-			data.draw = nullptr;
-			data.initialize = nullptr;
-			data.release = nullptr;
-			data.os_module_handle = nullptr;
-
-			return data;
+	Module LoadModule(containers::Stream<wchar_t> path, World* world, AllocatorPolymorphic allocator) {
+		Module module = LoadModule(path);
+		if (module.code == ECS_GET_MODULE_OK) {
+			LoadModuleTasks(world, module, allocator);
 		}
-
-		data.draw = (ModuleGraphicsDraw)GetProcAddress(module_handle, ECS_MODULE_GRAPHICS_DRAW_FUNCTION_NAME);
-		data.initialize = (ModuleGraphicsInitialize)GetProcAddress(module_handle, ECS_MODULE_GRAPHICS_INITIALIZE_FUNCTION_NAME);
-		data.release = (ModuleGraphicsRelease)GetProcAddress(module_handle, ECS_MODULE_GRAPHICS_RELEASE_FUNCTION_NAME);
-
-		if (data.draw == nullptr || data.initialize == nullptr || data.release == nullptr) {
-			FreeLibrary(module_handle);
-			data.code = ECS_GET_MODULE_FUNCTION_MISSING;
-			data.draw = nullptr;
-			data.initialize = nullptr;
-			data.release = nullptr;
-			data.os_module_handle = nullptr;
-			return data;
-		}
-
-		data.code = ECS_GET_MODULE_OK;
-		data.os_module_handle = module_handle;
-		return data;
+		return module;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	bool HasModuleFunction(Stream<wchar_t> path)
+	void LoadModuleTasks(World* world, Module* module, AllocatorPolymorphic allocator)
 	{
-		auto data = GetModuleFunction(path);
-		if (data.code == ECS_GET_MODULE_OK) {
-			FreeModuleFunction(data);
-			return true;
-		}
-		return false;
+		module->tasks = LoadModuleTasks(world, *module, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	bool HasModuleGraphicsFunction(Stream<wchar_t> path) {
-		auto data = GetModuleGraphicsFunction(path);
-		if (data.code == ECS_GET_MODULE_OK) {
-			FreeModuleGraphicsFunction(data);
-			return true;
-		}
-		return false;
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	Stream<TaskGraphElement> GetModuleTasks(World* world, GetModuleFunctionData function_data, AllocatorPolymorphic allocator)
+	Stream<TaskGraphElement> LoadModuleTasks(World* world, Module module, AllocatorPolymorphic allocator)
 	{
 		constexpr size_t MAX_TASKS = 32;
 		constexpr size_t MAX_DEPENDENCIES_PER_TASK = 8;
@@ -120,7 +88,7 @@ namespace ECSEngine {
 			stream[index].task.name = nullptr;
 		}
 
-		function_data.function(world, stream);
+		module.function(world, stream);
 
 		size_t total_size = sizeof(TaskGraphElement) * stream.size;
 		for (size_t index = 0; index < stream.size; index++) {
@@ -158,64 +126,23 @@ namespace ECSEngine {
 			}
 		}
 
-		FreeModuleFunction(function_data);
-
 		return stream;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<TaskGraphElement> GetModuleTasks(
-		World* world,
-		Stream<wchar_t> module_path,
-		AllocatorPolymorphic allocator,
-		CapacityStream<char>* error_message
-	) {
-		GetModuleFunctionData function_data = GetModuleFunction(module_path);
-		if (function_data.code == ECS_GET_MODULE_FAULTY_PATH) {
-			ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not load module at {0}. The path does not exist or access denied.", module_path);
-			return { nullptr, 0 };
+	void ReleaseModule(Module module) {
+		BOOL success = FreeLibrary(module.os_module_handle);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void ReleaseModule(Module module, AllocatorPolymorphic allocator) {
+		ReleaseModule(module);
+		if (module.tasks.buffer != nullptr && module.tasks.size > 0) {
+			Deallocate(allocator, module.tasks.buffer);
 		}
-		else if (function_data.code == ECS_GET_MODULE_FAULTY_PATH) {
-			ECS_FORMAT_ERROR_MESSAGE(error_message, "Could not retrieve module function at {0}.", module_path);
-			return  { nullptr, 0 };
-		}
-
-		return GetModuleTasks(world, function_data, allocator);
 	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void DeallocateModuleTasks(containers::Stream<TaskGraphElement> tasks, AllocatorPolymorphic allocator) {
-		Deallocate(allocator, tasks.buffer);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void FreeModuleFunction(GetModuleFunctionData data) {
-		BOOL success = FreeLibrary(data.os_module_handle);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void FreeModuleGraphicsFunction(const GetModuleGraphicsFunctionData& data) {
-		BOOL success = FreeLibrary(data.os_module_handle);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void InitializeGraphicsModule(GetModuleGraphicsFunctionData& data, World* world, void* data_reflection) {
-		data.initialized_data = data.initialize(world, data_reflection);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
-
-	void ReleaseGraphicsModule(GetModuleGraphicsFunctionData& data, World* world) {
-		data.release(world, data.initialized_data);
-		FreeModuleGraphicsFunction(data);
-	}
-
-	// -----------------------------------------------------------------------------------------------------------
 
 	// -----------------------------------------------------------------------------------------------------------
 

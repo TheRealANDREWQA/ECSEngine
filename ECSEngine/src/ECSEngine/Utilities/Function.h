@@ -280,6 +280,27 @@ namespace ECSEngine {
 			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == '_';
 		}
 
+		inline const char* SkipSpace(const char* pointer) {
+			while (*pointer == ' ') {
+				pointer++;
+			}
+			return pointer;
+		}
+
+		// Tabs and spaces
+		inline const char* SkipWhitespace(const char* pointer) {
+			while (*pointer == ' ' || *pointer == '\t') {
+				pointer++;
+			}
+			return pointer;
+		}
+		
+		inline const char* SkipCodeIdentifier(const char* pointer) {
+			while (IsCodeIdentifierCharacter(*pointer)) {
+				pointer++;
+			}
+			return pointer;
+		}
 	}
 
 }

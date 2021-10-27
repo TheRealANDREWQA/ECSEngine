@@ -11,6 +11,7 @@
 #include "..\UI\ModuleExplorer.h"
 #include "ProjectUITemplate.h"
 #include "..\Modules\ModuleFile.h"
+#include "..\Modules\Module.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -666,6 +667,10 @@ bool OpenProject(ProjectOperationData data)
 		if (!success) {
 			EditorSetConsoleError(data.editor_state, ToStream("An error occured during loading module file. No modules have been imported"));
 		}
+	}
+	else {
+		ResetProjectModules(data.editor_state);
+		ResetProjectGraphicsModule(data.editor_state);
 	}
 
 	SaveProjectUIAutomaticallyData save_automatically_data;

@@ -100,11 +100,11 @@ namespace ECSEngine {
 
 		ECSENGINE_API void LaunchFileExplorerWithError(containers::Stream<wchar_t> path, Console* console);
 
-		// Char* or wchar_t*
+		// Char*, wchar_t* or size_t*
 		template<typename PointerType>
 		ECSENGINE_API void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			UISystem* ECS_RESTRICT system,
+			UISystem* system,
 			PointerType* ECS_RESTRICT creation_time = nullptr,
 			PointerType* ECS_RESTRICT access_time = nullptr,
 			PointerType* ECS_RESTRICT last_write_time = nullptr
@@ -114,17 +114,17 @@ namespace ECSEngine {
 		template<typename PointerType>
 		ECSENGINE_API void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			UISystem* ECS_RESTRICT system,
+			UISystem* system,
 			PointerType* ECS_RESTRICT creation_time = nullptr,
 			PointerType* ECS_RESTRICT access_time = nullptr,
 			PointerType* ECS_RESTRICT last_write_time = nullptr
 		);
 
-		// Char* or wchar_t*
+		// Char*, wchar_t* or size_t*
 		template<typename PointerType>
 		ECSENGINE_API void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			Console* ECS_RESTRICT console,
+			Console* console,
 			PointerType* ECS_RESTRICT creation_time = nullptr,
 			PointerType* ECS_RESTRICT access_time = nullptr,
 			PointerType* ECS_RESTRICT last_write_time = nullptr
@@ -134,7 +134,7 @@ namespace ECSEngine {
 		template<typename PointerType>
 		ECSENGINE_API void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			Console* ECS_RESTRICT console,
+			Console* console,
 			PointerType* ECS_RESTRICT creation_time = nullptr,
 			PointerType* ECS_RESTRICT access_time = nullptr,
 			PointerType* ECS_RESTRICT last_write_time = nullptr

@@ -7,8 +7,8 @@ cbuffer Transform
 
 struct VS_INPUT ECS_REFLECT_INCREMENT_INPUT_SLOT
 {
-    float3 position : POSITION; ECS_REFLECT_FORMAT(DXGI_FORMAT_R32G32B32_FLOAT) 
-    float2 uv : UV; ECS_REFLECT_FORMAT(DXGI_FORMAT_R32G32_FLOAT)
+    float3 position : POSITION;
+    float2 uv : UV;
 };
 
 struct VS_OUTPUT

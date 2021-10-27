@@ -582,7 +582,7 @@ namespace ECSEngine {
 
 	char* ResourceManager::LoadTextFileTemporary(const char* filename, size_t& size, unsigned int& handle, unsigned int thread_index, bool use_path)
 	{
-		unsigned int resource_folder_path_index = function::PredicateValue(use_path, thread_index, (unsigned int)-1);
+		unsigned int resource_folder_path_index = function::Select(use_path, thread_index, (unsigned int)-1);
 		std::ifstream input;
 		OpenFile(filename, input, resource_folder_path_index);
 
@@ -597,7 +597,7 @@ namespace ECSEngine {
 
 	char* ResourceManager::LoadTextFileTemporary(const wchar_t* filename, size_t& size, unsigned int& handle, unsigned int thread_index, bool use_path)
 	{
-		unsigned int resource_folder_path_index = function::PredicateValue(use_path, thread_index, (unsigned int)-1);
+		unsigned int resource_folder_path_index = function::Select(use_path, thread_index, (unsigned int)-1);
 		std::ifstream input;
 		OpenFile(filename, input, resource_folder_path_index);
 
@@ -700,7 +700,7 @@ namespace ECSEngine {
 		bool use_path
 	)
 	{
-		unsigned int resource_folder_path_index = function::PredicateValue(use_path, thread_index, (unsigned int)-1);
+		unsigned int resource_folder_path_index = function::Select(use_path, thread_index, (unsigned int)-1);
 		void* data = LoadTextureImplementation(filename, &descriptor, resource_folder_path_index).view;
 
 		AddTemporaryResource(this, handle, data, thread_index);

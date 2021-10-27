@@ -135,9 +135,9 @@ namespace ECSEngine {
 			char _access_time[256];
 			char _last_write_time[256];
 
-			char* ptr1 = (char*)function::PredicateValue<uintptr_t>(creation_time == nullptr, 0, (uintptr_t)_creation_time);
-			char* ptr2 = (char*)function::PredicateValue<uintptr_t>(access_time == nullptr, 0, (uintptr_t)_access_time);
-			char* ptr3 = (char*)function::PredicateValue<uintptr_t>(last_write_time == nullptr, 0, (uintptr_t)_last_write_time);
+			char* ptr1 = (char*)function::Select<uintptr_t>(creation_time == nullptr, 0, (uintptr_t)_creation_time);
+			char* ptr2 = (char*)function::Select<uintptr_t>(access_time == nullptr, 0, (uintptr_t)_access_time);
+			char* ptr3 = (char*)function::Select<uintptr_t>(last_write_time == nullptr, 0, (uintptr_t)_last_write_time);
 
 			bool success = GetFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
@@ -268,9 +268,9 @@ namespace ECSEngine {
 			size_t* ptr2 = nullptr;
 			size_t* ptr3 = nullptr;
 
-			ptr1 = (size_t*)function::PredicateValue<uintptr_t>(creation_time != nullptr, (uintptr_t)&creation_time_int, (uintptr_t)nullptr);
-			ptr2 = (size_t*)function::PredicateValue<uintptr_t>(access_time != nullptr, (uintptr_t)&access_time_int, (uintptr_t)nullptr);
-			ptr3 = (size_t*)function::PredicateValue<uintptr_t>(last_write_time != nullptr, (uintptr_t)&last_write_time_int, (uintptr_t)nullptr);
+			ptr1 = (size_t*)function::Select<uintptr_t>(creation_time != nullptr, (uintptr_t)&creation_time_int, (uintptr_t)nullptr);
+			ptr2 = (size_t*)function::Select<uintptr_t>(access_time != nullptr, (uintptr_t)&access_time_int, (uintptr_t)nullptr);
+			ptr3 = (size_t*)function::Select<uintptr_t>(last_write_time != nullptr, (uintptr_t)&last_write_time_int, (uintptr_t)nullptr);
 
 			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
@@ -299,9 +299,9 @@ namespace ECSEngine {
 			char temp_characters2[256];
 			char temp_characters3[256];
 
-			char* ptr1 = (char*)function::PredicateValue<uintptr_t>(creation_time != nullptr, (uintptr_t)temp_characters1, (uintptr_t)nullptr);
-			char* ptr2 = (char*)function::PredicateValue<uintptr_t>(access_time != nullptr, (uintptr_t)temp_characters2, (uintptr_t)nullptr);
-			char* ptr3 = (char*)function::PredicateValue<uintptr_t>(last_write_time != nullptr, (uintptr_t)temp_characters3, (uintptr_t)nullptr);
+			char* ptr1 = (char*)function::Select<uintptr_t>(creation_time != nullptr, (uintptr_t)temp_characters1, (uintptr_t)nullptr);
+			char* ptr2 = (char*)function::Select<uintptr_t>(access_time != nullptr, (uintptr_t)temp_characters2, (uintptr_t)nullptr);
+			char* ptr3 = (char*)function::Select<uintptr_t>(last_write_time != nullptr, (uintptr_t)temp_characters3, (uintptr_t)nullptr);
 			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
 
 			if (success) {
@@ -427,7 +427,7 @@ namespace ECSEngine {
 		template<typename PointerType>
 		void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			UISystem* ECS_RESTRICT system,
+			UISystem* system,
 			PointerType* ECS_RESTRICT creation_time,
 			PointerType* ECS_RESTRICT access_time,
 			PointerType* ECS_RESTRICT last_write_time
@@ -450,7 +450,7 @@ namespace ECSEngine {
 		template<typename PointerType>
 		void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path, 
-			UISystem* ECS_RESTRICT system, 
+			UISystem* system, 
 			PointerType* ECS_RESTRICT creation_time,
 			PointerType* ECS_RESTRICT access_time, 
 			PointerType* ECS_RESTRICT last_write_time
@@ -470,17 +470,18 @@ namespace ECSEngine {
 			}
 		}
 
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, UISystem*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
 		template<typename PointerType>
 		void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			Console* ECS_RESTRICT console,
+			Console* console,
 			PointerType* ECS_RESTRICT creation_time,
 			PointerType* ECS_RESTRICT access_time,
 			PointerType* ECS_RESTRICT last_write_time
@@ -500,13 +501,14 @@ namespace ECSEngine {
 			}
 		}
 
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
 		template<typename PointerType>
 		void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			Console* ECS_RESTRICT console,
+			Console* console,
 			PointerType* ECS_RESTRICT creation_time,
 			PointerType* ECS_RESTRICT access_time,
 			PointerType* ECS_RESTRICT last_write_time
@@ -526,9 +528,9 @@ namespace ECSEngine {
 			}
 		}
 
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
 
 #define CLEAR_FILE_ERROR_STRING "Clearing file {0} failed. Incorrect path or access denied."

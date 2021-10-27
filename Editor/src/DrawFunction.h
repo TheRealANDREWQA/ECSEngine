@@ -85,7 +85,7 @@
 //	ECSEngine::Tools::UIConfigRelativeTransform transform;
 //	transform.scale.y = 0.0f;
 //	transform.scale.x = 0.0f;
-//	//transform.scale.x = ECSEngine::function::PredicateValue(true, 0.0f, 1.0f);
+//	//transform.scale.x = ECSEngine::function::Select(true, 0.0f, 1.0f);
 //	ECSEngine::Tools::UIDrawConfig config3;
 //	config3.AddFlag(transform);
 //	drawer.TextLabel<configuration3>(config3, "Demo Window");

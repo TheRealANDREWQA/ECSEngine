@@ -1027,7 +1027,7 @@ namespace ECSEngine {
 			new_name[total_name_size] = '\0';
 
 			unsigned int parameter_window_index = system->GetWindowFromName(new_name);
-			data->is_parameter_window_opened = function::PredicateValue(parameter_window_index == 0xFFFFFFFF, false, true);
+			data->is_parameter_window_opened = function::Select(parameter_window_index == 0xFFFFFFFF, false, true);
 
 			int scroll_amount = mouse->MouseWheelScroll() - data->scroll;
 			float total_scroll = 0.0f;
@@ -1080,8 +1080,8 @@ namespace ECSEngine {
 			else {
 				if (data->last_frame == system->GetFrameIndex() - 1 && IsPointInRectangle(mouse_position, position, scale)) {
 					float dimming_value = 1.0f;
-					dimming_value = function::PredicateValue(keyboard->IsKeyDown(HID::Key::LeftShift), 0.2f, 1.0f);
-					dimming_value = function::PredicateValue(keyboard->IsKeyDown(HID::Key::RightShift), 0.02f, dimming_value);
+					dimming_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 0.2f, 1.0f);
+					dimming_value = function::Select(keyboard->IsKeyDown(HID::Key::RightShift), 0.02f, dimming_value);
 
 					if (scroll_amount != 0.0f) {
 						total_scroll = data->scroll_factor * ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_FACTOR * scroll_amount * dimming_value;
@@ -1089,8 +1089,8 @@ namespace ECSEngine {
 						vertical_slider->interpolate_value = true;
 						vertical_slider->slider_position -= total_scroll;
 
-						vertical_slider->slider_position = function::PredicateValue(vertical_slider->slider_position > 1.0f, 1.0f, vertical_slider->slider_position);
-						vertical_slider->slider_position = function::PredicateValue(vertical_slider->slider_position < 0.0f, 0.0f, vertical_slider->slider_position);
+						vertical_slider->slider_position = function::Select(vertical_slider->slider_position > 1.0f, 1.0f, vertical_slider->slider_position);
+						vertical_slider->slider_position = function::Select(vertical_slider->slider_position < 0.0f, 0.0f, vertical_slider->slider_position);
 					}
 				}
 			}
@@ -2296,13 +2296,13 @@ namespace ECSEngine {
 		size_t Console::GetFormatCharacterCount() const
 		{
 			size_t count = 0;
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_MILLISECONDS), 4, 0);
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_SECONDS), 3, 0);
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_MINUTES), 3, 0);
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_HOUR), 2, 0);
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_DAY), 3, 0);
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_MONTH), 3, 0);
-			count += function::PredicateValue(function::HasFlag(format, CONSOLE_YEAR), 5, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_MILLISECONDS), 4, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_SECONDS), 3, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_MINUTES), 3, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_HOUR), 2, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_DAY), 3, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_MONTH), 3, 0);
+			count += function::Select(function::HasFlag(format, CONSOLE_YEAR), 5, 0);
 
 			count += 3;
 			return count;

@@ -7,6 +7,8 @@
 #include <math.h>
 #include "../Utilities/Assert.h"
 
+#define ECS_MATRIX_EPSILON 0.001f
+
 namespace ECSEngine {
 
 	struct Matrix;
@@ -54,11 +56,12 @@ namespace ECSEngine {
 		ECS_INLINE Matrix& ECS_VECTORCALL operator = (const Matrix& other) = default;
 
 		ECS_INLINE bool ECS_VECTORCALL operator == (Matrix other) {
-			return v[0] == other.v[0] && v[1] == other.v[1];
+			Vec8f epsilon(ECS_MATRIX_EPSILON);
+			return horizontal_and(abs(v[0] - other.v[0]) < epsilon && abs(v[1] - other.v[1]) < epsilon);
 		}
 
 		ECS_INLINE bool ECS_VECTORCALL operator != (Matrix other) {
-			return v[0] != other.v[0] || v[1] != other.v[0];
+			return !(*this == other);
 		}
 
 		ECS_INLINE Matrix ECS_VECTORCALL operator + (Matrix other) const {

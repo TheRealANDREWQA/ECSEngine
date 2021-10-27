@@ -7,7 +7,7 @@ cbuffer Transform
 
 struct VS_INPUT
 {
-    float3 position : POSITION; ECS_REFLECT_FORMAT(DXGI_FORMAT_R32G32B32_FLOAT)
+    float3 position : POSITION;
 };
 
 float4 main( in VS_INPUT input ) : SV_Position

@@ -135,7 +135,7 @@
 //			HANDLE global_handle = GetClipboardData(CF_TEXT);
 //			HANDLE data_handle = GlobalLock(global_handle);
 //			unsigned int copy_count = strlen((const char*)data_handle);
-//			copy_count = ECSEngine::function::PredicateValue(copy_count > max_size - 1, max_size - 1, copy_count);
+//			copy_count = ECSEngine::function::Select(copy_count > max_size - 1, max_size - 1, copy_count);
 //			memcpy(text, data_handle, copy_count);
 //			GlobalUnlock(global_handle);
 //			assert(CloseClipboard() == TRUE);

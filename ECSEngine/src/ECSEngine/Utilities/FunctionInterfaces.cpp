@@ -346,16 +346,16 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Type>
-		Type PredicateValue(bool condition, Type first_value, Type second_value) {
-			return first_value * condition + second_value * (1 - condition);
+		Type Select(bool condition, Type first_value, Type second_value) {
+			return condition ? first_value : second_value;
 		}
 
-		ECS_TEMPLATE_FUNCTION(float, PredicateValue, bool, float, float);
-		ECS_TEMPLATE_FUNCTION(double, PredicateValue, bool, double, double);
-		ECS_TEMPLATE_FUNCTION(unsigned int, PredicateValue, bool, unsigned int, unsigned int);
-		ECS_TEMPLATE_FUNCTION(unsigned short, PredicateValue, bool, unsigned short, unsigned short);
-		ECS_TEMPLATE_FUNCTION(int64_t, PredicateValue, bool, int64_t, int64_t);
-		ECS_TEMPLATE_FUNCTION(size_t, PredicateValue, bool, size_t, size_t);
+		ECS_TEMPLATE_FUNCTION(float, Select, bool, float, float);
+		ECS_TEMPLATE_FUNCTION(double, Select, bool, double, double);
+		ECS_TEMPLATE_FUNCTION(unsigned int, Select, bool, unsigned int, unsigned int);
+		ECS_TEMPLATE_FUNCTION(unsigned short, Select, bool, unsigned short, unsigned short);
+		ECS_TEMPLATE_FUNCTION(int64_t, Select, bool, int64_t, int64_t);
+		ECS_TEMPLATE_FUNCTION(size_t, Select, bool, size_t, size_t);
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -369,7 +369,7 @@ namespace ECSEngine {
 				size_t initial_size = chars.size;
 				ConvertIntToChars(chars, integer);
 
-				size_t starting_swap_index = function::PredicateValue(integer < 0, 1, 0) + initial_size;
+				size_t starting_swap_index = function::Select(integer < 0, 1, 0) + initial_size;
 
 				if (precision > 0) {
 					if (chars.size - starting_swap_index <= precision) {
@@ -454,14 +454,14 @@ namespace ECSEngine {
 		template<typename Integer, typename Stream>
 		Integer ConvertCharactersToInt(Stream stream) {
 			Integer integer = Integer(0);
-			size_t starting_index = PredicateValue(stream[0] == '-', 1, 0);
+			size_t starting_index = Select(stream[0] == '-', 1, 0);
 
 			for (size_t index = starting_index; index < stream.size; index++) {
 				if (stream[index] >= '0' && stream[index] <= '9') {
 					integer = integer * 10 + stream[index] - '0';
 				}
 			}
-			integer = PredicateValue<Integer>(starting_index == 1, -integer, integer);
+			integer = Select<Integer>(starting_index == 1, -integer, integer);
 
 			return integer;
 		}
@@ -477,7 +477,7 @@ namespace ECSEngine {
 		template<typename Integer, typename Stream>
 		Integer ConvertCharactersToInt(Stream stream, size_t& digit_count) {
 			Integer integer = Integer(0);
-			size_t starting_index = PredicateValue(stream[0] == '-', 1, 0);
+			size_t starting_index = Select(stream[0] == '-', 1, 0);
 			digit_count = 0;
 
 			for (size_t index = starting_index; index < stream.size; index++) {
@@ -486,7 +486,7 @@ namespace ECSEngine {
 					digit_count++;
 				}
 			}
-			integer = PredicateValue(starting_index == 1, -integer, integer);
+			integer = Select(starting_index == 1, -integer, integer);
 
 			return integer;
 		}
@@ -501,7 +501,7 @@ namespace ECSEngine {
 		template<typename FloatingPoint, typename Stream>
 		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream) {
 			FloatingPoint value = 0;
-			size_t starting_index = PredicateValue(stream[0] == '-' || stream[0] == '+', 1, 0);
+			size_t starting_index = Select(stream[0] == '-' || stream[0] == '+', 1, 0);
 
 			size_t dot_index = stream.size;
 			for (size_t index = 0; index < stream.size; index++) {

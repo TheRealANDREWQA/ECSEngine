@@ -1730,8 +1730,8 @@ namespace ECSEngine {
 						}
 						
 						if constexpr (((configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X) != 0) && ((configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y) != 0)) {
-							scale.x = function::PredicateValue(scale.x < element->scale.x, element->scale.x, scale.x);
-							scale.y = function::PredicateValue(scale.y < element->scale.y, element->scale.y, scale.y);
+							scale.x = function::Select(scale.x < element->scale.x, element->scale.x, scale.x);
+							scale.y = function::Select(scale.y < element->scale.y, element->scale.y, scale.y);
 							/*scale.x += 2 * element_descriptor.label_horizontal_padd;
 							scale.y += 2 * element_descriptor.label_vertical_padd;*/
 						}
@@ -3966,7 +3966,7 @@ namespace ECSEngine {
 
 						float label_scale = scale.x - triangle_scale.x;
 						float2 name_scale = GetLabelScale(name);
-						label_scale = function::PredicateValue(label_scale < name_scale.x, name_scale.x, label_scale);
+						label_scale = function::Select(label_scale < name_scale.x, name_scale.x, label_scale);
 
 #define LABEL_CONFIGURATION configuration | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X \
 						| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_CACHE
@@ -5144,7 +5144,7 @@ namespace ECSEngine {
 						}
 
 						float element_scale = data->nodes[index].name_element.scale.x + 2 * element_descriptor.label_horizontal_padd + sprite_scale.x;
-						label_scale = function::PredicateValue(label_scale < element_scale, element_scale, label_scale);
+						label_scale = function::Select(label_scale < element_scale, element_scale, label_scale);
 
 						UIDrawerBoolClickableWithPinData click_data;
 						click_data.pointer = &data->nodes[index].state;
@@ -5179,7 +5179,7 @@ namespace ECSEngine {
 						else {
 							AddDefaultClickableHoverable(position, hoverable_scale, { BoolClickableWithPin, &click_data, sizeof(click_data) }, hover_color);
 						}
-						max_label_scale = function::PredicateValue(max_label_scale < label_scale, label_scale, max_label_scale);
+						max_label_scale = function::Select(max_label_scale < label_scale, label_scale, max_label_scale);
 						position = { GetNextRowXPosition() - region_render_offset.x, current_y - region_render_offset.y };
 					}
 					// list implementation is here
@@ -5288,9 +5288,9 @@ namespace ECSEngine {
 					Stream<char> stack_stream = Stream<char>(stack_characters, 0);
 
 					int64_t starting_index = (region_position.x - histogram_position.x) / bar_scale;
-					starting_index = function::PredicateValue(starting_index < 0, (int64_t)0, starting_index);
+					starting_index = function::Select(starting_index < 0, (int64_t)0, starting_index);
 					int64_t end_index = (region_position.x + region_scale.x - histogram_position.x) / bar_scale + 1;
-					end_index = function::PredicateValue(end_index > samples.size, (int64_t)samples.size, end_index);
+					end_index = function::Select(end_index > samples.size, (int64_t)samples.size, end_index);
 					histogram_position.x += starting_index * (bar_scale + element_descriptor.histogram_bar_spacing);
 					for (int64_t index = starting_index; index < end_index; index++) {
 						stack_stream.size = 0;
@@ -5693,10 +5693,10 @@ namespace ECSEngine {
 						for (size_t sample_index = 0; sample_index < y_sample_count; sample_index++) {
 							float sample_value = samples[index].GetY(sample_index);
 							if constexpr (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-								min_y = function::PredicateValue(min_y > sample_value, sample_value, min_y);
+								min_y = function::Select(min_y > sample_value, sample_value, min_y);
 							}
 							if constexpr (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-								max_y = function::PredicateValue(max_y < sample_value, sample_value, max_y);
+								max_y = function::Select(max_y < sample_value, sample_value, max_y);
 							}
 						}
 					}
@@ -5783,11 +5783,11 @@ namespace ECSEngine {
 					while ((samples[index].GetX() - min_x) * x_space_factor + graph_position.x < region_position.x && index < samples.size) {
 						index++;
 					}
-					starting_index = function::PredicateValue(index <= 0, (int64_t)0, index - 1);
+					starting_index = function::Select(index <= 0, (int64_t)0, index - 1);
 					while ((samples[index].GetX() - min_x) * x_space_factor + graph_position.x < region_limit.x && index < samples.size) {
 						index++;
 					}
-					end_index = function::PredicateValue(index >= samples.size - 2, (int64_t)samples.size, index + 3);
+					end_index = function::Select(index >= samples.size - 2, (int64_t)samples.size, index + 3);
 
 					SolidColorRectangle<configuration>(config, position, scale);
 
@@ -6501,7 +6501,7 @@ namespace ECSEngine {
 							);
 							float2 text_span = GetTextSpan(cells[index]);
 							float current_x_scale = text_span.x + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_horizontal_padd;
-							column_biggest_scale[column] = function::PredicateValue(current_x_scale > column_biggest_scale[column], current_x_scale, column_biggest_scale[column]);
+							column_biggest_scale[column] = function::Select(current_x_scale > column_biggest_scale[column], current_x_scale, column_biggest_scale[column]);
 							cell_scales[index] = text_span.x;
 							y_text_span = text_span.y;
 							scale.y = text_span.y + ECS_TOOLS_UI_TEXT_TABLE_ENLARGE_CELL_FACTOR * element_descriptor.label_vertical_padd;
@@ -6602,7 +6602,7 @@ namespace ECSEngine {
 
 				auto top_vertices_stream = GetTextStream<configuration>(temp_float_stream.size * 6);
 				float2 text_span = GetTextSpan(top_vertices_stream);
-				max_x_scale = function::PredicateValue(max_x_scale < text_span.x, text_span.x, max_x_scale);
+				max_x_scale = function::Select(max_x_scale < text_span.x, text_span.x, max_x_scale);
 				*text_count += 6 * temp_float_stream.size;
 
 				float2 bottom_text_position = { top_text_position.x, position.y + scale.y - y_sprite_scale - element_descriptor.graph_padding.y };
@@ -6791,8 +6791,8 @@ namespace ECSEngine {
 				int64_t min_sprite_count = static_cast<int64_t>((remaining_x_scale) / (right_span.x + element_descriptor.graph_x_axis_space));
 				
 				int64_t min_copy = min_sprite_count;
-				min_sprite_count = function::PredicateValue(min_sprite_count > max_sprite_count, max_sprite_count, min_sprite_count);
-				max_sprite_count = function::PredicateValue(max_sprite_count < min_copy, min_copy, max_sprite_count);
+				min_sprite_count = function::Select(min_sprite_count > max_sprite_count, max_sprite_count, min_sprite_count);
+				max_sprite_count = function::Select(max_sprite_count < min_copy, min_copy, max_sprite_count);
 				int64_t index = min_sprite_count;
 				float total_sprite_length = 0.0f;
 
@@ -6897,10 +6897,10 @@ namespace ECSEngine {
 					}
 					for (size_t index = 0; index < samples.size; index++) {
 						if constexpr (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-							min_y = function::PredicateValue(min_y > samples[index].y, samples[index].y, min_y);
+							min_y = function::Select(min_y > samples[index].y, samples[index].y, min_y);
 						}
 						if constexpr (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-							max_y = function::PredicateValue(max_y < samples[index].y, samples[index].y, max_y);
+							max_y = function::Select(max_y < samples[index].y, samples[index].y, max_y);
 						}
 					}
 
@@ -6908,8 +6908,8 @@ namespace ECSEngine {
 					float ratio = difference.y / difference.x;
 					scale.y = scale.x * ratio;
 					scale.y = system->NormalizeVerticalToWindowDimensions(scale.y);
-					scale.y = function::PredicateValue(scale.y > data->max_y_scale, data->max_y_scale, scale.y);
-					scale.y = function::PredicateValue(scale.y < data->min_y_scale, data->min_y_scale, scale.y);
+					scale.y = function::Select(scale.y > data->max_y_scale, data->max_y_scale, scale.y);
+					scale.y = function::Select(scale.y < data->min_y_scale, data->min_y_scale, scale.y);
 				}
 				else if constexpr (configuration & UI_CONFIG_GRAPH_KEEP_RESOLUTION_Y) {
 					const UIConfigGraphKeepResolutionY* data = (const UIConfigGraphKeepResolutionY*)config.GetParameter(UI_CONFIG_GRAPH_KEEP_RESOLUTION_Y);
@@ -6930,10 +6930,10 @@ namespace ECSEngine {
 					}
 					for (size_t index = 0; index < samples.size; index++) {
 						if constexpr (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-							min_y = function::PredicateValue(min_y > samples[index].y, samples[index].y, min_y);
+							min_y = function::Select(min_y > samples[index].y, samples[index].y, min_y);
 						}
 						if constexpr (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-							max_y = function::PredicateValue(max_y < samples[index].y, samples[index].y, max_y);
+							max_y = function::Select(max_y < samples[index].y, samples[index].y, max_y);
 						}
 					}
 
@@ -6941,8 +6941,8 @@ namespace ECSEngine {
 					float ratio = difference.x / difference.y;
 					scale.x = scale.y * ratio;
 					scale.x = system->NormalizeHorizontalToWindowDimensions(scale.x);
-					scale.x = function::PredicateValue(scale.x > data->max_x_scale, data->max_x_scale, scale.x);
-					scale.x = function::PredicateValue(scale.x < data->min_x_scale, data->min_x_scale, scale.x);
+					scale.x = function::Select(scale.x > data->max_x_scale, data->max_x_scale, scale.x);
+					scale.x = function::Select(scale.x < data->min_x_scale, data->min_x_scale, scale.x);
 				}
 
 				constexpr size_t label_configuration = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT
@@ -6990,10 +6990,10 @@ namespace ECSEngine {
 					}
 					for (size_t index = 0; index < samples.size; index++) {
 						if constexpr (~configuration & UI_CONFIG_GRAPH_MIN_Y) {
-							min_y = function::PredicateValue(min_y > samples[index].y, samples[index].y, min_y);
+							min_y = function::Select(min_y > samples[index].y, samples[index].y, min_y);
 						}
 						if constexpr (~configuration & UI_CONFIG_GRAPH_MAX_Y) {
-							max_y = function::PredicateValue(max_y < samples[index].y, samples[index].y, max_y);
+							max_y = function::Select(max_y < samples[index].y, samples[index].y, max_y);
 						}
 					}
 
@@ -7079,11 +7079,11 @@ namespace ECSEngine {
 					while ((samples[index].x - min_x) * x_space_factor + graph_position.x < region_position.x && index < samples.size) {
 						index++;
 					}
-					starting_index = function::PredicateValue(index <= 2, (int64_t)0, index - 2);
+					starting_index = function::Select(index <= 2, (int64_t)0, index - 2);
 					while ((samples[index].x - min_x) * x_space_factor + graph_position.x < region_limit.x && index < samples.size) {
 						index++;
 					}
-					end_index = function::PredicateValue(index >= samples.size - 2, (int64_t)samples.size, index + 3);
+					end_index = function::Select(index >= samples.size - 2, (int64_t)samples.size, index + 3);
 
 					SolidColorRectangle<configuration>(config, position, scale);
 
@@ -7911,11 +7911,11 @@ namespace ECSEngine {
 			}
 
 			void UpdateCurrentColumnScale(float value) {
-				current_column_x_scale = function::PredicateValue(value > current_column_x_scale, value, current_column_x_scale);
+				current_column_x_scale = function::Select(value > current_column_x_scale, value, current_column_x_scale);
 			}
 
 			void UpdateCurrentRowScale(float value) {
-				current_row_y_scale = function::PredicateValue(value > current_row_y_scale, value, current_row_y_scale);
+				current_row_y_scale = function::Select(value > current_row_y_scale, value, current_row_y_scale);
 			}
 
 			void UpdateCurrentScale(float2 position, float2 value) {
@@ -7928,13 +7928,13 @@ namespace ECSEngine {
 			}
 
 			void UpdateMaxRenderBoundsRectangle(float2 limits) {
-				max_render_bounds.x = function::PredicateValue(max_render_bounds.x < limits.x, limits.x, max_render_bounds.x);
-				max_render_bounds.y = function::PredicateValue(max_render_bounds.y < limits.y, limits.y, max_render_bounds.y);
+				max_render_bounds.x = function::Select(max_render_bounds.x < limits.x, limits.x, max_render_bounds.x);
+				max_render_bounds.y = function::Select(max_render_bounds.y < limits.y, limits.y, max_render_bounds.y);
 			}
 
 			void UpdateMinRenderBoundsRectangle(float2 position) {
-				min_render_bounds.x = function::PredicateValue(min_render_bounds.x > position.x, position.x, min_render_bounds.x);
-				min_render_bounds.y = function::PredicateValue(min_render_bounds.y > position.y, position.y, min_render_bounds.y);
+				min_render_bounds.x = function::Select(min_render_bounds.x > position.x, position.x, min_render_bounds.x);
+				min_render_bounds.y = function::Select(min_render_bounds.y > position.y, position.y, min_render_bounds.y);
 			}
 
 			void UpdateRenderBoundsRectangle(float2 position, float2 scale) {
@@ -7997,7 +7997,7 @@ namespace ECSEngine {
 						current_row_y_scale += draw_mode_extra_float.z + draw_mode_extra_float.x;
 					}
 					else {
-						current_row_y_scale = function::PredicateValue(draw_mode_count == 0, -draw_mode_extra_float.x, current_row_y_scale);
+						current_row_y_scale = function::Select(draw_mode_count == 0, -draw_mode_extra_float.x, current_row_y_scale);
 						current_y += draw_mode_extra_float.z + draw_mode_extra_float.x;
 						draw_mode_count++;
 						current_row_y_scale += draw_mode_extra_float.z + draw_mode_extra_float.x;
@@ -8225,8 +8225,8 @@ namespace ECSEngine {
 
 					constexpr float2 STABILIZE_EPSILON = { 0.5f, 0.5f };
 
-					render_span.x = function::PredicateValue(fabsf(stabilized_render_span.x - render_span.x) < STABILIZE_EPSILON.x && stabilized_render_span.x > 0.0f, stabilized_render_span.x, render_span.x);
-					render_span.y = function::PredicateValue(fabsf(stabilized_render_span.y - render_span.y) < STABILIZE_EPSILON.y && stabilized_render_span.y > 0.0f, stabilized_render_span.y, render_span.y);
+					render_span.x = function::Select(fabsf(stabilized_render_span.x - render_span.x) < STABILIZE_EPSILON.x && stabilized_render_span.x > 0.0f, stabilized_render_span.x, render_span.x);
+					render_span.y = function::Select(fabsf(stabilized_render_span.y - render_span.y) < STABILIZE_EPSILON.y && stabilized_render_span.y > 0.0f, stabilized_render_span.y, render_span.y);
 
 					if (export_scale != nullptr) {
 						float y_offset = dockspace->borders[border_index].draw_region_header * system->m_descriptors.misc.title_y_scale;
@@ -8900,7 +8900,7 @@ namespace ECSEngine {
 					else {
 						const UIConfigMenuButtonSprite* sprite_definition = (const UIConfigMenuButtonSprite*)config.GetParameter(UI_CONFIG_MENU_BUTTON_SPRITE);
 						Color sprite_color = sprite_definition->color;
-						sprite_color.alpha = function::PredicateValue(is_active, sprite_color.alpha, sprite_color.alpha * color_theme.alpha_inactive_item);
+						sprite_color.alpha = function::Select(is_active, sprite_color.alpha, sprite_color.alpha * color_theme.alpha_inactive_item);
 						SpriteRectangle<configuration>(
 							position, 
 							scale, 
@@ -8997,7 +8997,7 @@ namespace ECSEngine {
 						float min_value = data->labels[data->biggest_label_x_index].scale.x * data->labels[data->biggest_label_x_index].GetInverseZoomX() * zoom_ptr->x 
 							+ system->NormalizeHorizontalToWindowDimensions(scale.y) + 2 * element_descriptor.label_horizontal_padd;
 						min_value += data->prefix_x_scale * zoom_ptr->x;
-						scale.x = function::PredicateValue(min_value > scale.x, min_value, scale.x);
+						scale.x = function::Select(min_value > scale.x, min_value, scale.x);
 
 						ComboBoxDrawer<configuration | UI_CONFIG_DO_NOT_VALIDATE_POSITION>(config, data, active_label, position, scale);
 						HandleDynamicResource<configuration>(name);
@@ -9813,23 +9813,23 @@ namespace ECSEngine {
 						scale_factors.x * (region_limit.x - region_fit_space_horizontal_offset),
 						layout.default_element_y * scale_factors.y
 					};
-					scale.x = function::PredicateValue(scale.x == 0.0f, region_limit.x - current_x, scale.x);
-					//scale.x = function::PredicateValue(scale.x < 0.0f, 0.0f, scale.x);
+					scale.x = function::Select(scale.x == 0.0f, region_limit.x - current_x, scale.x);
+					//scale.x = function::Select(scale.x < 0.0f, 0.0f, scale.x);
 					break;
 				case WindowSizeTransformType::Vertical:
 					scale = {
 						scale_factors.x * layout.default_element_x,
 						scale_factors.y * (region_limit.y - region_fit_space_vertical_offset)
 					};
-					scale.y = function::PredicateValue(scale.y == 0.0f, region_limit.y - current_y, scale.y);
-					//scale.y = function::PredicateValue(scale.y < 0.0f, 0.0f, scale.y);
+					scale.y = function::Select(scale.y == 0.0f, region_limit.y - current_y, scale.y);
+					//scale.y = function::Select(scale.y < 0.0f, 0.0f, scale.y);
 					break;
 				case WindowSizeTransformType::Both:
 					scale = { scale_factors.x * (region_limit.x - region_fit_space_horizontal_offset), scale_factors.y * (region_limit.y - region_fit_space_vertical_offset) };
-					scale.x = function::PredicateValue(scale.x == 0.0f, region_limit.x - current_x, scale.x);
-					scale.y = function::PredicateValue(scale.y == 0.0f, region_limit.y - current_y, scale.y);
-					//scale.x = function::PredicateValue(scale.x < 0.0f, 0.0f, scale.x);
-					//scale.y = function::PredicateValue(scale.y < 0.0f, 0.0f, scale.y);
+					scale.x = function::Select(scale.x == 0.0f, region_limit.x - current_x, scale.x);
+					scale.y = function::Select(scale.y == 0.0f, region_limit.y - current_y, scale.y);
+					//scale.x = function::Select(scale.x < 0.0f, 0.0f, scale.x);
+					//scale.y = function::Select(scale.y < 0.0f, 0.0f, scale.y);
 					break;
 				}
 				return scale;
@@ -9880,13 +9880,13 @@ namespace ECSEngine {
 			float2 GetRenderZone() const {
 				float horizontal_region_difference;
 				horizontal_region_difference = region_scale.x - 2 * layout.next_row_padding - system->m_descriptors.misc.render_slider_vertical_size + 0.001f;
-				horizontal_region_difference += function::PredicateValue(no_padding_for_render_sliders, system->m_descriptors.misc.render_slider_vertical_size, 0.0f);
-				horizontal_region_difference += function::PredicateValue(no_padding_render_region, 2 * layout.next_row_padding, 0.0f);
+				horizontal_region_difference += function::Select(no_padding_for_render_sliders, system->m_descriptors.misc.render_slider_vertical_size, 0.0f);
+				horizontal_region_difference += function::Select(no_padding_render_region, 2 * layout.next_row_padding, 0.0f);
 				
 				float vertical_region_difference;
 				vertical_region_difference = region_scale.y - 2 * layout.next_row_y_offset - system->m_descriptors.misc.render_slider_horizontal_size + 0.001f;
-				vertical_region_difference += function::PredicateValue(no_padding_for_render_sliders, system->m_descriptors.misc.render_slider_horizontal_size, 0.0f);
-				vertical_region_difference += function::PredicateValue(no_padding_render_region, 2 * layout.next_row_y_offset, 0.0f);
+				vertical_region_difference += function::Select(no_padding_for_render_sliders, system->m_descriptors.misc.render_slider_horizontal_size, 0.0f);
+				vertical_region_difference += function::Select(no_padding_render_region, 2 * layout.next_row_y_offset, 0.0f);
 
 				if (dockspace->borders[border_index].draw_elements) {
 					vertical_region_difference -= system->m_descriptors.misc.title_y_scale;
@@ -10008,14 +10008,14 @@ namespace ECSEngine {
 			}
 
 			float GetAlignedToCenterX(float x_scale) const {
-				float position = function::PredicateValue(export_scale != nullptr, current_x, region_position.x);
-				float _region_scale = function::PredicateValue(export_scale != nullptr, x_scale, region_scale.x);
+				float position = function::Select(export_scale != nullptr, current_x, region_position.x);
+				float _region_scale = function::Select(export_scale != nullptr, x_scale, region_scale.x);
 				return AlignMiddle(position, _region_scale, x_scale);
 			}
 
 			float GetAlignedToCenterY(float y_scale) const {
-				float position = function::PredicateValue(export_scale != nullptr, current_y, region_position.y);
-				float _region_scale = function::PredicateValue(export_scale != nullptr, y_scale, region_scale.y);
+				float position = function::Select(export_scale != nullptr, current_y, region_position.y);
+				float _region_scale = function::Select(export_scale != nullptr, y_scale, region_scale.y);
 				return AlignMiddle(position, _region_scale, y_scale);
 			}
 
@@ -10024,8 +10024,8 @@ namespace ECSEngine {
 			}
 			
 			float2 GetAlignedToRight(float x_scale, float target_position = -5.0f) const {
-				target_position = function::PredicateValue(target_position == -5.0f, region_limit.x, target_position);
-				target_position = function::PredicateValue(export_scale != nullptr, current_x + x_scale, target_position);
+				target_position = function::Select(target_position == -5.0f, region_limit.x, target_position);
+				target_position = function::Select(export_scale != nullptr, current_x + x_scale, target_position);
 				return { function::ClampMin(target_position - x_scale, current_x), current_y /*+ region_render_offset.y*/ };
 			}
 
@@ -10035,8 +10035,8 @@ namespace ECSEngine {
 			}
 
 			float2 GetAlignedToBottom(float y_scale, float target_position = -5.0f) const {
-				target_position = function::PredicateValue(target_position == -5.0f, region_limit.y, target_position);
-				target_position = function::PredicateValue(export_scale != nullptr, current_y + y_scale, target_position);
+				target_position = function::Select(target_position == -5.0f, region_limit.y, target_position);
+				target_position = function::Select(export_scale != nullptr, current_y + y_scale, target_position);
 				return { current_x, function::ClampMin(target_position - y_scale, current_y) };
 			}
 
@@ -10168,16 +10168,16 @@ namespace ECSEngine {
 			}
 
 			void Indent() {
-				min_render_bounds.x = function::PredicateValue(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
+				min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
 				current_x += layout.element_indentation + current_column_x_scale;
 				current_column_x_scale = 0.0f;
 			}
 
 			void Indent(float count) {
-				min_render_bounds.x = function::PredicateValue(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
+				min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
 				current_x += count * layout.element_indentation + current_column_x_scale;
 				current_column_x_scale = 0.0f;
-				//max_render_bounds.x = function::PredicateValue(max_render_bounds.x < current_x - region_render_offset.x, current_x - region_render_offset.x, max_render_bounds.x);
+				//max_render_bounds.x = function::Select(max_render_bounds.x < current_x - region_render_offset.x, current_x - region_render_offset.x, max_render_bounds.x);
 			}
 
 #pragma region Label hierarchy
@@ -11035,7 +11035,7 @@ namespace ECSEngine {
 #pragma endregion
 
 			void NextRow() {
-				min_render_bounds.y = function::PredicateValue(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
+				min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
 				current_y += layout.next_row_y_offset + current_row_y_scale;
 				current_x = GetNextRowXPosition();
 				current_row_y_scale = 0.0f;
@@ -11044,7 +11044,7 @@ namespace ECSEngine {
 			}
 
 			void NextRow(float count) {
-				min_render_bounds.y = function::PredicateValue(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
+				min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
 				current_y += count * layout.next_row_y_offset + current_row_y_scale;
 				current_x = GetNextRowXPosition();
 				current_row_y_scale = 0.0f;

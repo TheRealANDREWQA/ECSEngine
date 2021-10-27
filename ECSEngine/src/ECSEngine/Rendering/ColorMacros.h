@@ -46,9 +46,9 @@ namespace ECSEngine {
 		float new_green = static_cast<float>(color.green) * percentage;
 		float new_blue = static_cast<float>(color.blue) * percentage;
 		return Color(
-			function::PredicateValue(new_red > Color::GetRange(), Color::GetRange(), new_red),
-			function::PredicateValue(new_green > Color::GetRange(), Color::GetRange(), new_green),
-			function::PredicateValue(new_blue > Color::GetRange(), Color::GetRange(), new_blue)
+			function::Select(new_red > Color::GetRange(), Color::GetRange(), new_red),
+			function::Select(new_green > Color::GetRange(), Color::GetRange(), new_green),
+			function::Select(new_blue > Color::GetRange(), Color::GetRange(), new_blue)
 		);
 	}
 
@@ -68,10 +68,10 @@ namespace ECSEngine {
 		float new_red = normalized_values[0];
 		float new_green = normalized_values[1];
 		float new_blue = normalized_values[2];
-		max = function::PredicateValue(max < new_green, new_green, max);
-		max = function::PredicateValue(max < new_blue, new_blue, max);
-		min = function::PredicateValue(min > new_green, new_green, min);
-		min = function::PredicateValue(min > new_blue, new_blue, min);
+		max = function::Select(max < new_green, new_green, max);
+		max = function::Select(max < new_blue, new_blue, max);
+		min = function::Select(min > new_green, new_green, min);
+		min = function::Select(min > new_blue, new_blue, min);
 		float delta = max - min;
 
 		Color new_color;
@@ -97,7 +97,7 @@ namespace ECSEngine {
 		new_color.hue = hue;
 
 		// saturation
-		new_color.saturation = (float)function::PredicateValue(max == 0.0f, 0.0f, delta / max) * color_range;
+		new_color.saturation = (float)function::Select(max == 0.0f, 0.0f, delta / max) * color_range;
 		new_color.alpha = color.alpha;
 		return new_color;
 	}
@@ -114,7 +114,7 @@ namespace ECSEngine {
 		float Cfactor = saturation * value;
 		float x_factor_temp = hue / 60.0f;
 		float mod = fmod(x_factor_temp, 2) - 1;
-		mod = function::PredicateValue(mod < 0, -mod, mod);
+		mod = function::Select(mod < 0, -mod, mod);
 		float Xfactor = Cfactor * (1 - mod);
 		float m_factor = value - Cfactor;
 

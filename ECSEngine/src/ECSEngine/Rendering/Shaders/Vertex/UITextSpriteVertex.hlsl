@@ -9,9 +9,9 @@ cbuffer DrawRegionSize : register(b0)
 
 struct VS_INPUT 
 {
-    float2 position : Position; ECS_REFLECT_FORMAT(DXGI_FORMAT_R32G32_FLOAT)
-    float2 uv : UV; ECS_REFLECT_FORMAT(DXGI_FORMAT_R32G32_FLOAT) 
-    float4 color : Color; ECS_REFLECT_FORMAT(DXGI_FORMAT_R8G8B8A8_UNORM) 
+    float2 position : Position;
+    float2 uv : UV;
+    float4 color : Color; ECS_REFLECT_UNORM_8
 };
 
 struct VS_OUTPUT 

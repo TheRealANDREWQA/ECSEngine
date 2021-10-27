@@ -67,8 +67,11 @@ namespace ECSEngine {
 		ConditionVariable(unsigned int signal_count);
 
 		void Wait(unsigned int count = 1);
+
 		void Reset();
+
 		void NotifyAll(unsigned int count = 1);
+
 		void Notify(unsigned int count = 1);
 
 		SpinLock lock;

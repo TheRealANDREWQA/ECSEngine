@@ -1620,7 +1620,7 @@ namespace ECSEngine {
 					if (position.x < parent_position.x) {
 						float difference = parent_position.x - position.x;
 						dockspace->transform.position.x = parent_position.x;
-						difference = function::PredicateValue(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
+						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
 							ResizeDockspace(dockspace_index, -difference, BorderType::Right, type);
 						}
@@ -1638,7 +1638,7 @@ namespace ECSEngine {
 
 					if (position.x + scale.x > right_border) {
 						float difference = position.x + scale.x - right_border;
-						difference = function::PredicateValue(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
+						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
 							ResizeDockspace(dockspace_index, -difference, BorderType::Right, type);
 						}
@@ -1657,7 +1657,7 @@ namespace ECSEngine {
 					if (position.y < top_border) {
 						float difference = top_border - position.y;
 						dockspace->transform.position.y = top_border;
-						difference = function::PredicateValue(difference > dockspace->transform.scale.y, dockspace->transform.scale.y, difference);
+						difference = function::Select(difference > dockspace->transform.scale.y, dockspace->transform.scale.y, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
 							dockspace->transform.scale.y -= difference;
 						}
@@ -1675,7 +1675,7 @@ namespace ECSEngine {
 
 					if (position.y + scale.y > bottom_border) {
 						float difference = position.y + scale.y - bottom_border;
-						difference = function::PredicateValue(difference > dockspace->transform.scale.y, dockspace->transform.scale.y, difference);
+						difference = function::Select(difference > dockspace->transform.scale.y, dockspace->transform.scale.y, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
 							dockspace->transform.scale.y -= difference;
 						}

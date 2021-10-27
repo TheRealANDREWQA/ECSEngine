@@ -55,7 +55,6 @@
     <ClInclude Include="src\ECSEngine\Internal\System\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\World.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskManager.h" />
-    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\StaticSequentialTable.h" />
     <ClInclude Include="src\ECSEngine\Internal\ArchetypeBase.h" />
     <ClInclude Include="src\ECSEngine\Internal\StaticArchetypeBase.h" />
@@ -126,7 +125,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Rendering\MeshRender.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
-    <ClInclude Include="src\ECSEngine\Rendering\ShaderReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\GLTFLoader\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\Math\Quaternion.h" />
     <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
@@ -134,6 +132,11 @@
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Deque.h" />
+    <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
@@ -212,6 +215,8 @@
     <ClCompile Include="src\ECSEngine\GLTFLoader\cgtlf.c" />
     <ClCompile Include="src\ECSEngine\GLTFLoader\GLTFLoader.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />
@@ -228,6 +233,8 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ColorMap.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ForwardLighting.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLighting.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugDraw.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugDraw.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />
@@ -235,6 +242,6 @@
   <ItemGroup>
     <None Include="src\ECSEngine\Rendering\Shaders\UIViewportTransform.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
-    <None Include="src\ECSEngine\Rendering\Shaders\ForwardUtilities.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
   </ItemGroup>
 </Project>

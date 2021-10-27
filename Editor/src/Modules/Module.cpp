@@ -28,28 +28,9 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 	L"source"
 };
 
-void DefaultInitializeGraphicsModule(EditorState* editor_state) {
-	editor_state->graphics_module.configuration = ModuleConfiguration::Debug;
-	editor_state->graphics_module.solution_last_write_time = 0;
-	editor_state->graphics_module.library_last_write_time = 0;
-	editor_state->graphics_module.load_status = ModuleLoadStatus::Failed;
-	// Tasks is unused
-	editor_state->graphics_module.tasks = { nullptr, 0 };
-	editor_state->graphics_module.library_name.size = 0;
-	editor_state->graphics_module.solution_path.size = 0;
-
-	editor_state->graphics_module_data.code = ECS_GET_MODULE_FAULTY_PATH;
-	editor_state->graphics_module_data.draw = nullptr;
-	editor_state->graphics_module_data.initialize = nullptr;
-	editor_state->graphics_module_data.initialized_data = nullptr;
-	editor_state->graphics_module_data.os_module_handle = nullptr;
-	editor_state->graphics_module_data.release = nullptr;
-
-	editor_state->graphics_module_reflected_data = nullptr;
-}
-
-bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, ModuleConfiguration configuration) {
+bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, EditorModuleConfiguration configuration) {
 	EDITOR_STATE(editor_state);
+	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 
 	if (!ExistsFileOrFolder(solution_path)) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
@@ -68,31 +49,30 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 		return false;
 	}
 
-	if ((unsigned int)configuration >= (unsigned int)ModuleConfiguration::Count) {
+	if ((unsigned int)configuration >= (unsigned int)EditorModuleConfiguration::Count) {
 		ECS_FORMAT_TEMP_STRING(
 			error_message,
 			"Project module {0} has configuration {1} which is invalid. Expected {2}, {3} or {4}.",
 			solution_path,
 			(unsigned char)configuration,
-			STRING(ModuleConfiguration::Debug),
-			STRING(ModuleConfiguration::Release),
-			STRING(ModuleConfiguration::Distribution)
+			STRING(EditorModuleConfiguration::Debug),
+			STRING(EditorModuleConfiguration::Release),
+			STRING(EditorModuleConfiguration::Distribution)
 		);
 		EditorSetConsoleError(editor_state, error_message);
 		return false;
 	}
 
-	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 	project_modules->ReserveNewElements(1);
-	Module* module = project_modules->buffer + project_modules->size;
-	
+	EditorModule* module = project_modules->buffer + project_modules->size;
+
 	size_t total_size = (solution_path.size + library_name.size) * sizeof(wchar_t);
 	void* allocation = editor_allocator->Allocate(total_size, alignof(wchar_t));
 	uintptr_t buffer = (uintptr_t)allocation;
 	module->solution_path.InitializeFromBuffer(buffer, solution_path.size);
 	module->library_name.InitializeFromBuffer(buffer, library_name.size);
 	module->configuration = configuration;
-	module->load_status = ModuleLoadStatus::Failed;
+	module->load_status = EditorModuleLoadStatus::Failed;
 
 	module->solution_path.Copy(solution_path);
 	module->library_name.Copy(library_name);
@@ -192,7 +172,7 @@ void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
 	Stream<wchar_t> thread_log_path(_thread_log_path, 0);
 
 	unsigned int thread_count = task_manager->GetThreadCount();
-	unsigned int iteration_count = function::PredicateValue<unsigned int>(module_count > thread_count, thread_count, module_count);
+	unsigned int iteration_count = function::Select<unsigned int>(module_count > thread_count, thread_count, module_count);
 	for (size_t index = 0; index < iteration_count; index++) {
 		thread_log_path.size = 0;
 		GetProjectModuleThreadBuildLogPath(editor_state, thread_log_path, thread_indices[index]);
@@ -320,16 +300,9 @@ bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> c
 	Stream<wchar_t> library_name;
 	Stream<char> configuration;
 
-	if (index != GRAPHICS_MODULE_INDEX) {
-		solution_path = modules->buffer[index].solution_path;
-		library_name = modules->buffer[index].library_name;
-		configuration = editor_state->module_configurations[(unsigned int)modules->buffer[index].configuration];
-	}
-	else {
-		solution_path = editor_state->graphics_module.solution_path;
-		library_name = editor_state->graphics_module.library_name;
-		configuration = editor_state->module_configurations[(unsigned char)editor_state->graphics_module.configuration];
-	}
+	solution_path = modules->buffer[index].solution_path;
+	library_name = modules->buffer[index].library_name;
+	configuration = editor_state->module_configurations[(unsigned int)modules->buffer[index].configuration];
 
 	// Construct the system string
 	ECS_TEMP_ASCII_STRING(command_string, 512);
@@ -363,7 +336,8 @@ bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> c
 }
 
 bool BuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
-	if (UpdateProjectModuleLastWrite(editor_state, index) || !HasModuleFunction(editor_state, index)) {
+	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
+	if (UpdateProjectModuleLastWrite(editor_state, index) || modules->buffer[index].load_status != EditorModuleLoadStatus::Good) {
 		return RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING), thread_index);
 	}
 	return true;
@@ -374,25 +348,12 @@ void BuildProjectModules(EditorState* editor_state)
 	ForEachProjectModule(editor_state, BuildThreadTask<BuildProjectModule>);
 }
 
-// Runs on a single thread
-bool BuildProjectModuleGraphics(EditorState* editor_state) {
-	if (UpdateProjectModuleGraphicsSolutionLastWrite(editor_state) || editor_state->graphics_module.load_status != ModuleLoadStatus::Good) {
-		return RunCmdCommand(editor_state, GRAPHICS_MODULE_INDEX, ToStream(BUILD_PROJECT_STRING), -1);
-	}
-	return true;
-}
-
 bool CleanProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
 	return RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING), thread_index);
 }
 
 void CleanProjectModules(EditorState* editor_state) {
 	ForEachProjectModule(editor_state, BuildThreadTask<CleanProjectModule>);
-}
-
-bool CleanProjectModuleGraphics(EditorState* editor_state) {
-	ResetProjectGraphicsModuleData(editor_state);
-	return RunCmdCommand(editor_state, GRAPHICS_MODULE_INDEX, ToStream(CLEAN_PROJECT_STRING), -1);
 }
 
 bool RebuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
@@ -403,37 +364,23 @@ void RebuildProjectModules(EditorState* editor_state) {
 	ForEachProjectModule(editor_state, BuildThreadTask<RebuildProjectModule>);
 }
 
-bool RebuildProjectModuleGraphics(EditorState* editor_state) {
-	ResetProjectGraphicsModuleData(editor_state);
-	bool success = RunCmdCommand(editor_state, GRAPHICS_MODULE_INDEX, ToStream(REBUILD_PROJECT_STRING), -1);
-	if (success) {
-		LoadModuleGraphics(editor_state);
-		return true;
-	}
-	return false;
-}
-
-void ChangeProjectModuleConfiguration(EditorState* editor_state, unsigned int index, ModuleConfiguration new_configuration)
+void ChangeProjectModuleConfiguration(EditorState* editor_state, unsigned int index, EditorModuleConfiguration new_configuration)
 {
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 	project_modules->buffer[index].configuration = new_configuration;
-}
-
-void ChangeProjectModuleGraphicsConfiguration(EditorState* editor_state, ModuleConfiguration new_configuration) {
-	editor_state->graphics_module.configuration = new_configuration;
 }
 
 void InitializeModuleConfigurations(EditorState* editor_state)
 {
 	EDITOR_STATE(editor_state);
 	
-	constexpr size_t count = (unsigned int)ModuleConfiguration::Count;
+	constexpr size_t count = (unsigned int)EditorModuleConfiguration::Count;
 	size_t total_memory = sizeof(Stream<char>) * count;
 
 	size_t string_sizes[count];
-	string_sizes[(unsigned int)ModuleConfiguration::Debug] = strlen(MODULE_CONFIGURATION_DEBUG);
-	string_sizes[(unsigned int)ModuleConfiguration::Release] = strlen(MODULE_CONFIGURATION_RELEASE);
-	string_sizes[(unsigned int)ModuleConfiguration::Distribution] = strlen(MODULE_CONFIGURATION_DISTRIBUTION);
+	string_sizes[(unsigned int)EditorModuleConfiguration::Debug] = strlen(MODULE_CONFIGURATION_DEBUG);
+	string_sizes[(unsigned int)EditorModuleConfiguration::Release] = strlen(MODULE_CONFIGURATION_RELEASE);
+	string_sizes[(unsigned int)EditorModuleConfiguration::Distribution] = strlen(MODULE_CONFIGURATION_DISTRIBUTION);
 
 	for (size_t index = 0; index < count; index++) {
 		total_memory += string_sizes[index];
@@ -447,11 +394,6 @@ void InitializeModuleConfigurations(EditorState* editor_state)
 		editor_state->module_configurations[index].InitializeFromBuffer(buffer, string_sizes[index]);
 		editor_state->module_configurations[index].Copy(Stream<char>(MODULE_CONFIGURATIONS[index], string_sizes[index]));
 	}
-
-	// Default initialize the graphics module
-	DefaultInitializeGraphicsModule(editor_state);
-	editor_state->graphics_module.library_name = { editor_allocator->Allocate(sizeof(wchar_t) * 64, alignof(wchar_t)), 0 };
-	editor_state->graphics_module.solution_path = { editor_allocator->Allocate(sizeof(wchar_t) * 256, alignof(wchar_t)), 0 };
 }
 
 unsigned int ProjectModuleIndex(const EditorState* editor_state, Stream<wchar_t> solution_path)
@@ -519,10 +461,6 @@ void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name
 	module_path[module_path.size] = L'\0';
 }
 
-void GetModuleGraphicsPath(const EditorState* editor_state, CapacityStream<wchar_t>& module_path) {
-	GetModulePath(editor_state, editor_state->graphics_module.library_name, module_path);
-}
-
 size_t GetProjectModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 {
 	Stream<wchar_t> parent_folder = function::PathParent(solution_path);
@@ -585,14 +523,6 @@ size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, unsigne
 	return modules->buffer[index].library_last_write_time;
 }
 
-unsigned char* GetModuleGraphicsConfigurationPtr(EditorState* editor_state) {
-	return (unsigned char*)&editor_state->graphics_module.configuration;
-}
-
-unsigned char GetModuleGraphicsConfigurationChar(const EditorState* editor_state) {
-	return (unsigned char)editor_state->graphics_module.configuration;
-}
-
 unsigned char* GetModuleConfigurationPtr(EditorState* editor_state, unsigned int index)
 {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
@@ -605,27 +535,29 @@ unsigned char GetModuleConfigurationChar(const EditorState* editor_state, unsign
 	return (unsigned char)modules->buffer[index].configuration;
 }
 
-GetModuleFunctionData GetModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name) {
-	ECS_TEMP_STRING(library_path, 256);
-	GetModulePath(editor_state, library_name, library_path);
-	return GetModuleFunction(library_path);
-}
-
-GetModuleFunctionData GetModuleFunction(const EditorState* editor_state, unsigned int index) {
+void LoadEditorModule( EditorState* editor_state, unsigned int index) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	return GetModuleFunction(editor_state, modules->buffer[index].library_name);
+	ECS_TEMP_STRING(library_path, 256);
+	GetModulePath(editor_state, modules->buffer[index].library_name, library_path);
+	modules->buffer[index].ecs_module = LoadModule(library_path);
 }
 
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name)
 {
 	ECS_TEMP_STRING(library_path, 256);
 	GetModulePath(editor_state, library_name, library_path);
-	return HasModuleFunction(library_path);
+	return IsModule(library_path);
 }
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	return HasModuleFunction(editor_state, modules->buffer[index].library_name);
+}
+
+bool HasGraphicsModule(const EditorState* editor_state)
+{
+	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
+	return project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name.size > 0 && project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size > 0;
 }
 
 bool ProjectModulesNeedsBuild(const EditorState* editor_state, unsigned int index)
@@ -635,50 +567,29 @@ bool ProjectModulesNeedsBuild(const EditorState* editor_state, unsigned int inde
 	return modules->buffer[index].solution_last_write_time > new_last_write || modules->buffer[index].library_last_write_time == 0;
 }
 
-Stream<TaskGraphElement> GetModuleTasks(EditorState* editor_state, containers::Stream<wchar_t> library_name, containers::CapacityStream<char>* error_message) {
-	ECS_TEMP_STRING(library_path, 256);
-	GetModulePath(editor_state, library_name, library_path);
-	return GetModuleTasks(
-		editor_state->ActiveWorld(), 
-		library_path,
-		{ editor_state->editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded }, 
-		error_message
-	);
-}
-
-void InitializeGraphicsModule(EditorState* editor_state)
-{
-	InitializeGraphicsModule(editor_state->graphics_module_data, editor_state->ActiveWorld(), editor_state->graphics_module_reflected_data);
-}
-
-bool LoadModuleTasks(EditorState* editor_state, unsigned int index, CapacityStream<char>* error_message) {
+bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, CapacityStream<char>* error_message) {
 	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
-	Stream<TaskGraphElement> task_elements = GetModuleTasks(editor_state, project_modules->buffer[index].library_name, error_message);
 
-	if (task_elements.buffer != nullptr) {
+	if (project_modules->buffer[index].ecs_module.code != ECS_GET_MODULE_OK) {
+		ECS_TEMP_STRING(module_path, 256);
+		GetModulePath(editor_state, project_modules->buffer[index].library_name, module_path);
+		project_modules->buffer[index].ecs_module = LoadModule(module_path, editor_state->ActiveWorld(), { editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded });
+	}
+
+	if (project_modules->buffer[index].ecs_module.tasks.buffer != nullptr) {
 		if (project_modules->buffer[index].library_last_write_time >= project_modules->buffer[index].solution_last_write_time) {
-			project_modules->buffer[index].load_status = ModuleLoadStatus::Good;
+			project_modules->buffer[index].load_status = EditorModuleLoadStatus::Good;
 		}
 		else {
-			project_modules->buffer[index].load_status = ModuleLoadStatus::OutOfDate;
+			project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
 		}
-		project_modules->buffer[index].tasks = task_elements;
-		project_task_graph->Add(task_elements);
+		project_task_graph->Add(project_modules->buffer[index].ecs_module.tasks);
 		return true;
 	}
-	project_modules->buffer[index].load_status = ModuleLoadStatus::Failed;
-	project_modules->buffer[index].tasks = { nullptr, 0 };
+	project_modules->buffer[index].load_status = EditorModuleLoadStatus::Failed;
+	project_modules->buffer[index].ecs_module.tasks = { nullptr, 0 };
 	return false;
-}
-
-bool LoadModuleGraphics(EditorState* editor_state) {
-	ECS_TEMP_STRING(path, 256);
-	GetModuleGraphicsPath(editor_state, path);
-	editor_state->graphics_module_data = GetModuleGraphicsFunction(path);
-	bool success = editor_state->graphics_module_data.code == ECS_GET_MODULE_OK;
-	SetModuleLoadStatus(&editor_state->graphics_module, success);
-	return success;
 }
 
 bool UpdateProjectModuleLastWrite(EditorState* editor_state, unsigned int index)
@@ -712,34 +623,43 @@ bool UpdateProjectModuleLibraryLastWrite(EditorState* editor_state, unsigned int
 	return library_last_write < modules->buffer[index].library_last_write_time || modules->buffer[index].library_last_write_time == 0;
 }
 
-bool UpdateProjectModuleGraphicsLastWrite(EditorState* editor_state) {
-	bool is_solution_updated = UpdateProjectModuleGraphicsSolutionLastWrite(editor_state);
-	bool is_library_updated = UpdateProjectModuleGraphicsLibraryLastWrite(editor_state);
-	return is_solution_updated || is_library_updated;
-}
+void ReleaseProjectModule(EditorState* editor_state, unsigned int index) {
+	EDITOR_STATE(editor_state);
 
-bool UpdateProjectModuleGraphicsSolutionLastWrite(EditorState* editor_state)
-{
-	size_t solution_last_write = GetProjectModuleSolutionLastWrite(editor_state->graphics_module.solution_path);
-	bool is_changed = editor_state->graphics_module.solution_last_write_time < solution_last_write || solution_last_write == 0;
-	editor_state->graphics_module.solution_last_write_time = solution_last_write;
-	return is_changed;
-}
+	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
+	editor_allocator->Deallocate(modules->buffer[index].solution_path.buffer);
+	if (modules->buffer[index].load_status != EditorModuleLoadStatus::Failed) {
+		ReleaseModule(modules->buffer[index].ecs_module, { editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded });
 
-bool UpdateProjectModuleGraphicsLibraryLastWrite(EditorState* editor_state) {
-	size_t library_last_write = GetProjectModuleLibraryLastWrite(editor_state, editor_state->graphics_module.library_name);
-	bool is_changed = editor_state->graphics_module.library_last_write_time < library_last_write || library_last_write == 0;
-	editor_state->graphics_module.library_last_write_time = library_last_write;
-	return is_changed;
+		// Delete the associated files
+		Stream<const wchar_t*> associated_file_extensions(MODULE_ASSOCIATED_FILES, std::size(MODULE_ASSOCIATED_FILES));
+
+		ECS_TEMP_STRING(path, 256);
+		GetModulePath(editor_state, modules->buffer[index].library_name, path);
+		size_t path_size = path.size;
+
+		for (size_t index = 0; index < std::size(MODULE_ASSOCIATED_FILES); index++) {
+			path.size = path_size;
+			path.AddStreamSafe(ToStream(MODULE_ASSOCIATED_FILES[index]));
+			if (ExistsFileOrFolder(path)) {
+				OS::DeleteFileWithError(path, console);
+			}
+		}
+	}
 }
 
 void RemoveProjectModule(EditorState* editor_state, unsigned int index) {
 	EDITOR_STATE(editor_state);
 
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
-	editor_allocator->Deallocate(modules->buffer[index].solution_path.buffer);
-	DeallocateModuleTasks(modules->buffer[index].tasks, { editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded });
-	modules->Remove(index);
+	ReleaseProjectModule(editor_state, index);
+	if (index != GRAPHICS_MODULE_INDEX) {
+		modules->Remove(index);
+	}
+	else {
+		// Reset the graphics module
+		ResetProjectGraphicsModule(editor_state);
+	}
 }
 
 void RemoveProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path)
@@ -765,50 +685,83 @@ void ResetProjectModules(EditorState* editor_state)
 
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 	for (size_t index = 0; index < project_modules->size; index++) {
-		editor_allocator->Deallocate(project_modules->buffer[index].solution_path.buffer);
-		DeallocateModuleTasks(project_modules->buffer[index].tasks, { editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded });
+		ReleaseProjectModule(editor_state, index);
 	}
-	project_modules->Reset();
+	project_modules->size = 1;
 }
 
-void ResetProjectGraphicsModule(EditorState* editor_state) {
-	editor_state->graphics_module.configuration = ModuleConfiguration::Debug;
-	editor_state->graphics_module.solution_last_write_time = 0;
-	editor_state->graphics_module.library_last_write_time = 0;
-	editor_state->graphics_module.load_status = ModuleLoadStatus::Failed;
-	editor_state->graphics_module.library_name.size = 0;
-	editor_state->graphics_module.solution_path.size = 0;
+void ResetProjectGraphicsModule(EditorState* editor_state)
+{
+	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
 
-	ResetProjectGraphicsModuleData(editor_state);
+	modules->buffer[GRAPHICS_MODULE_INDEX].library_last_write_time = 0;
+	modules->buffer[GRAPHICS_MODULE_INDEX].solution_last_write_time = 0;
+	modules->buffer[GRAPHICS_MODULE_INDEX].library_name = { nullptr, 0 };
+	modules->buffer[GRAPHICS_MODULE_INDEX].solution_path = { nullptr, 0 };
+	modules->buffer[GRAPHICS_MODULE_INDEX].load_status = EditorModuleLoadStatus::Failed;
+	modules->buffer[GRAPHICS_MODULE_INDEX].configuration = EditorModuleConfiguration::Debug;
+	modules->buffer[GRAPHICS_MODULE_INDEX].ecs_module.tasks = { nullptr, 0 };
+	modules->buffer[GRAPHICS_MODULE_INDEX].ecs_module.code = ECS_GET_MODULE_FAULTY_PATH;
+	modules->buffer[GRAPHICS_MODULE_INDEX].ecs_module.function = nullptr;
+	modules->buffer[GRAPHICS_MODULE_INDEX].ecs_module.os_module_handle = nullptr;
 }
 
-void ResetProjectGraphicsModuleData(EditorState* editor_state) {
-	if (editor_state->graphics_module_data.code == ECS_GET_MODULE_OK) {
-		ReleaseGraphicsModule(editor_state->graphics_module_data, editor_state->ActiveWorld());
-	}
-	editor_state->graphics_module_data.code = ECS_GET_MODULE_FAULTY_PATH;
-	editor_state->graphics_module_data.draw = nullptr;
-	editor_state->graphics_module_data.initialize = nullptr;
-	editor_state->graphics_module_data.initialized_data = nullptr;
-	editor_state->graphics_module_data.os_module_handle = nullptr;
-	editor_state->graphics_module_data.release = nullptr;
-}
-
-void SetModuleLoadStatus(Module* module, bool has_functions)
+void SetModuleLoadStatus(EditorModule* module, bool has_functions)
 {
 	bool library_write_greater_than_solution = module->library_last_write_time >= module->solution_last_write_time;
-	module->load_status = (ModuleLoadStatus)((has_functions + library_write_greater_than_solution) * has_functions);
+	module->load_status = (EditorModuleLoadStatus)((has_functions + library_write_greater_than_solution) * has_functions);
 }
 
-void SetGraphicsModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, ModuleConfiguration configuration) {
-	ResetProjectGraphicsModule(editor_state);
+bool SetProjectGraphicsModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, EditorModuleConfiguration configuration)
+{
+	EDITOR_STATE(editor_state);
+	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 
-	editor_state->graphics_module.library_name.Copy(library_name);
-	editor_state->graphics_module.solution_path.Copy(solution_path);
-	editor_state->graphics_module.configuration = configuration;
-	
-	UpdateProjectModuleGraphicsLastWrite(editor_state);
-	LoadModuleGraphics(editor_state);	
+	if (!ExistsFileOrFolder(solution_path)) {
+		ECS_TEMP_ASCII_STRING(error_message, 256);
+		error_message.size = function::FormatString(error_message.buffer, "Graphics module {0} solution does not exist.", solution_path);
+		error_message.AssertCapacity();
+		EditorSetConsoleError(editor_state, error_message);
+		return false;
+	}
+
+	unsigned int module_index = ProjectModuleIndex(editor_state, solution_path);
+	if (module_index != -1) {
+		ECS_TEMP_ASCII_STRING(error_message, 256);
+		error_message.size = function::FormatString(error_message.buffer, "Graphics module {0} already exists.", solution_path);
+		error_message.AssertCapacity();
+		EditorSetConsoleError(editor_state, error_message);
+		return false;
+	}
+
+	if ((unsigned int)configuration >= (unsigned int)EditorModuleConfiguration::Count) {
+		ECS_FORMAT_TEMP_STRING(
+			error_message,
+			"Graphics module {0} has configuration {1} which is invalid. Expected {2}, {3} or {4}.",
+			solution_path,
+			(unsigned char)configuration,
+			STRING(EditorModuleConfiguration::Debug),
+			STRING(EditorModuleConfiguration::Release),
+			STRING(EditorModuleConfiguration::Distribution)
+		);
+		EditorSetConsoleError(editor_state, error_message);
+		return false;
+	}
+
+	ReleaseProjectModule(editor_state, GRAPHICS_MODULE_INDEX);
+	EditorModule* module = project_modules->buffer + GRAPHICS_MODULE_INDEX;
+
+	size_t total_size = (solution_path.size + library_name.size) * sizeof(wchar_t);
+	void* allocation = editor_allocator->Allocate(total_size, alignof(wchar_t));
+	uintptr_t buffer = (uintptr_t)allocation;
+	module->solution_path.InitializeFromBuffer(buffer, solution_path.size);
+	module->library_name.InitializeFromBuffer(buffer, library_name.size);
+	module->configuration = configuration;
+	module->load_status = EditorModuleLoadStatus::Failed;
+
+	module->solution_path.Copy(solution_path);
+	module->library_name.Copy(library_name);
+	return true;
 }
 
 size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)

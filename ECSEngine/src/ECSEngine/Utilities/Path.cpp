@@ -15,7 +15,7 @@ namespace ECSEngine {
 			while (path.size > 0 && path[path.size - 1] != ECS_OS_PATH_SEPARATOR) {
 				path.size--;
 			}
-			return Path(path.buffer, function::PredicateValue<size_t>(path.size == 0, 0, path.size - 1));
+			return Path(path.buffer, function::Select<size_t>(path.size == 0, 0, path.size - 1));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -24,7 +24,7 @@ namespace ECSEngine {
 			while (path.size > 0 && path[path.size - 1] != ECS_OS_PATH_SEPARATOR_ASCII) {
 				path.size--;
 			}
-			return ASCIIPath(path.buffer, function::PredicateValue<size_t>(path.size == 0, 0, path.size - 1));
+			return ASCIIPath(path.buffer, function::Select<size_t>(path.size == 0, 0, path.size - 1));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ namespace ECSEngine {
 			while (path.size > 0 && path[path.size - 1] != ECS_OS_PATH_SEPARATOR) {
 				path.size--;
 			}
-			return PredicateValue<size_t>(path.size == 0, 0, path.size - 1);
+			return Select<size_t>(path.size == 0, 0, path.size - 1);
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ namespace ECSEngine {
 			while (path.size > 0 && path[path.size - 1] != ECS_OS_PATH_SEPARATOR_ASCII) {
 				path.size--;
 			}
-			return PredicateValue<size_t>(path.size == 0, 0, path.size - 1);
+			return Select<size_t>(path.size == 0, 0, path.size - 1);
 		}
 
 		// --------------------------------------------------------------------------------------------------

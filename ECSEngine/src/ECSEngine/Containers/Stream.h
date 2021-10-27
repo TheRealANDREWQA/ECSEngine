@@ -41,14 +41,6 @@ namespace ECSEngine {
 				return previous_size;
 			}
 
-			// Returns the first index
-			unsigned int AddStream(CapacityStream<T> other) {
-				CopySlice(size, other);
-				unsigned int previous_size = size;
-				size += other.size;
-				return previous_size;
-			}
-
 			// it will set the size
 			void Copy(const void* memory, size_t count) {
 				memcpy(buffer, memory, count * sizeof(T));
@@ -60,11 +52,6 @@ namespace ECSEngine {
 				Copy(other.buffer, other.size);
 			}
 
-			// it will set the size
-			void Copy(CapacityStream<T> other) {
-				Copy(other.buffer, other.size);
-			}
-
 			// it will not set the size
 			void CopySlice(size_t starting_index, const void* memory, size_t count) {
 				memcpy(buffer + starting_index, memory, sizeof(T) * count);
@@ -72,11 +59,6 @@ namespace ECSEngine {
 
 			// it will not set the size
 			void CopySlice(size_t starting_index, Stream<T> other) {
-				CopySlice(starting_index, other.buffer, other.size);
-			}
-			
-			// it will not set the size
-			void CopySlice(size_t starting_index, CapacityStream<T> other) {
 				CopySlice(starting_index, other.buffer, other.size);
 			}
 
@@ -274,6 +256,10 @@ namespace ECSEngine {
 			void CopyTo(uintptr_t& memory) const {
 				memcpy((void*)memory, buffer, sizeof(T) * size);
 				memory += sizeof(T) * size;
+			}
+
+			bool IsFull() const {
+				return size == capacity;
 			}
 
 			void PushDownElements(unsigned int starting_index, unsigned int count) {

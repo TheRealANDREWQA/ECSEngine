@@ -123,13 +123,17 @@ namespace ECSEngine {
 				mesh.normals = Stream<float3>(values.buffer, accessor_count);
 				float matrix[16];
 				cgltf_node_transform_world(nodes + current_nodex_index, matrix);
+				Vector4 last_row = VectorGlobals::QUATERNION_IDENTITY_4;
+				Vector8 extended_last_row(last_row, ZeroVector4());
 
 				Matrix ecs_matrix(matrix);
+				ecs_matrix.v[1].value = blend8<0, 1, 2, 3, 8, 9, 10, 11>(ecs_matrix.v[1].value, extended_last_row);
 
 				Vector4 tolerance(0.000001f);
 				if (ecs_matrix != MatrixIdentity()) {
 					for (size_t index = 0; index < accessor_count; index++) {
 						Vector4 normal(mesh.normals[index]);
+						//normal = permute4<0, 2, 1, V_DC>(normal);
 						if (horizontal_and((SquareLength3(normal) < tolerance))) {
 							normal = VectorGlobals::UP_4;
 							/*if (error_message != nullptr) {
@@ -148,6 +152,7 @@ namespace ECSEngine {
 				else {
 					for (size_t index = 0; index < accessor_count; index++) {
 						Vector4 normal(mesh.normals[index]);
+						//normal = permute4<0, 2, 1, V_DC>(normal);
 						if (horizontal_and((SquareLength3(normal) < tolerance))) {
 							normal = VectorGlobals::UP_4;
 							/*if (error_message != nullptr) {
@@ -438,56 +443,58 @@ namespace ECSEngine {
 		for (size_t primitive_index = 0; primitive_index < primitive_count; primitive_index++) {
 			const cgltf_material* gltf_material = nodes[node_index].mesh->primitives[primitive_index].material;
 
-			// material name
-			Stream<char> material_name = ToStream(gltf_material->name);
+			if (gltf_material != nullptr) {
+				// material name
+				Stream<char> material_name = ToStream(gltf_material->name);
 
-			ECS_TEMP_STRING(temp_texture_names, 1024);
+				ECS_TEMP_STRING(temp_texture_names, 1024);
 
-			PBRMaterialMapping mappings[ECS_PBR_MATERIAL_MAPPING_COUNT];
-			size_t mapping_count = 0;
+				PBRMaterialMapping mappings[ECS_PBR_MATERIAL_MAPPING_COUNT];
+				size_t mapping_count = 0;
 
-			auto add_mapping = [&](const char* name, PBRMaterialTextureIndex mapping) {
-				Stream<char> texture_name = ToStream(name);
-				function::ConvertASCIIToWide(temp_texture_names, texture_name);
-				mappings[mapping_count].texture = { temp_texture_names.buffer + temp_texture_names.size, texture_name.size };
-				mappings[mapping_count].index = mapping;
-				temp_texture_names.size += texture_name.size;
-				mapping_count++;
-			};
+				auto add_mapping = [&](const char* name, PBRMaterialTextureIndex mapping) {
+					Stream<char> texture_name = ToStream(name);
+					function::ConvertASCIIToWide(temp_texture_names, texture_name);
+					mappings[mapping_count].texture = { temp_texture_names.buffer + temp_texture_names.size, texture_name.size };
+					mappings[mapping_count].index = mapping;
+					temp_texture_names.size += texture_name.size;
+					mapping_count++;
+				};
 
-			material.emissive_factor = gltf_material->emissive_factor;
-			if (gltf_material->has_pbr_metallic_roughness) {
-				material.tint = Color(gltf_material->pbr_metallic_roughness.base_color_factor);
-				material.metallic_factor = gltf_material->pbr_metallic_roughness.metallic_factor;
-				material.roughness_factor = gltf_material->pbr_metallic_roughness.roughness_factor;
-				if (gltf_material->pbr_metallic_roughness.base_color_texture.texture != nullptr) {
-					if (gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name != nullptr) {
-						add_mapping(gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name, ECS_PBR_MATERIAL_COLOR);
+				material.emissive_factor = gltf_material->emissive_factor;
+				if (gltf_material->has_pbr_metallic_roughness) {
+					material.tint = Color(gltf_material->pbr_metallic_roughness.base_color_factor);
+					material.metallic_factor = gltf_material->pbr_metallic_roughness.metallic_factor;
+					material.roughness_factor = gltf_material->pbr_metallic_roughness.roughness_factor;
+					if (gltf_material->pbr_metallic_roughness.base_color_texture.texture != nullptr) {
+						if (gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name != nullptr) {
+							add_mapping(gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name, ECS_PBR_MATERIAL_COLOR);
+						}
+					}
+					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
+						if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
+							add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_ROUGHNESS);
+						}
 					}
 				}
-				if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
-					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
-						add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_ROUGHNESS);
+				if (gltf_material->emissive_texture.texture != nullptr) {
+					if (gltf_material->emissive_texture.texture->image->name != nullptr) {
+						add_mapping(gltf_material->emissive_texture.texture->image->name, ECS_PBR_MATERIAL_EMISSIVE);
 					}
 				}
-			}
-			if (gltf_material->emissive_texture.texture != nullptr) {
-				if (gltf_material->emissive_texture.texture->image->name != nullptr) {
-					add_mapping(gltf_material->emissive_texture.texture->image->name, ECS_PBR_MATERIAL_EMISSIVE);
+				if (gltf_material->normal_texture.texture != nullptr) {
+					if (gltf_material->normal_texture.texture->image->name != nullptr) {
+						add_mapping(gltf_material->normal_texture.texture->image->name, ECS_PBR_MATERIAL_NORMAL);
+					}
 				}
-			}
-			if (gltf_material->normal_texture.texture != nullptr) {
-				if (gltf_material->normal_texture.texture->image->name != nullptr) {
-					add_mapping(gltf_material->normal_texture.texture->image->name, ECS_PBR_MATERIAL_NORMAL);
+				if (gltf_material->occlusion_texture.texture != nullptr) {
+					if (gltf_material->occlusion_texture.texture->image->name != nullptr) {
+						add_mapping(gltf_material->occlusion_texture.texture->image->name, ECS_PBR_MATERIAL_OCCLUSION);
+					}
 				}
-			}
-			if (gltf_material->occlusion_texture.texture != nullptr) {
-				if (gltf_material->occlusion_texture.texture->image->name != nullptr) {
-					add_mapping(gltf_material->occlusion_texture.texture->image->name, ECS_PBR_MATERIAL_OCCLUSION);
-				}
-			}
 
-			AllocatePBRMaterial(material, material_name, Stream<PBRMaterialMapping>(mappings, mapping_count), allocator);
+				AllocatePBRMaterial(material, material_name, Stream<PBRMaterialMapping>(mappings, mapping_count), allocator);
+			}
 		}
 		return true;
 	}
@@ -609,26 +616,28 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
-				// Get the name
-				Stream<char> material_name = GetMaterialName(nodes[index].mesh->primitives, 0);
+				if (nodes[index].mesh->primitives->material != nullptr) {
+					// Get the name
+					Stream<char> material_name = GetMaterialName(nodes[index].mesh->primitives, 0);
 
-				// If it already exists - do no reload it
-				bool exists = false;
-				for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
-					if (function::CompareStrings(material_name, materials[subindex].name)) {
-						exists = true;
+					// If it already exists - do no reload it
+					bool exists = false;
+					for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
+						if (function::CompareStrings(material_name, materials[subindex].name)) {
+							exists = true;
+						}
 					}
-				}
 
-				if (!exists) {
-					// Load the material as normally
-					bool success = LoadMaterialFromGLTF(materials[materials.size], allocator, nodes, index, error_message);
-					if (!success) {
-						ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", materials.size);
-						error_message->AddStreamSafe(additional_info);
-						return false;
+					if (!exists) {
+						// Load the material as normally
+						bool success = LoadMaterialFromGLTF(materials[materials.size], allocator, nodes, index, error_message);
+						if (!success) {
+							ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", materials.size);
+							error_message->AddStreamSafe(additional_info);
+							return false;
+						}
+						materials.size++;
 					}
-					materials.size++;
 				}
 			}
 		}

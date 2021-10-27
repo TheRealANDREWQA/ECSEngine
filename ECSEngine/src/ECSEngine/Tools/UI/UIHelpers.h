@@ -482,7 +482,7 @@ namespace ECSEngine {
 			float total_spacing_count = spacing * (line_count - 1);
 			if constexpr (horizontal) {
 				float line_total_length = end_point - starting_point.x - total_spacing_count;
-				line_total_length = function::PredicateValue(line_total_length < 0.0f, 0.0f, line_total_length);
+				line_total_length = function::Select(line_total_length < 0.0f, 0.0f, line_total_length);
 				float2 scale = { line_total_length / line_count, width };
 				float position_offset = 0.0f;
 				for (size_t index = 0; index < line_count; index++) {
@@ -503,7 +503,7 @@ namespace ECSEngine {
 			}
 			else {
 				float line_total_length = end_point - starting_point.y - total_spacing_count;
-				line_total_length = function::PredicateValue(line_total_length < 0.0f, 0.0f, line_total_length);
+				line_total_length = function::Select(line_total_length < 0.0f, 0.0f, line_total_length);
 				float2 scale = { width, line_total_length / line_count };
 				float position_offset = 0.0f;
 				for (size_t index = 0; index < line_count; index++) {
@@ -562,8 +562,8 @@ namespace ECSEngine {
 					float smallest = 2.0f;
 					float biggest = -2.0f;
 					for (size_t index = 0; index < texts.size; index += 6) {
-						smallest = function::PredicateValue(smallest > texts[index].position.x, texts[index].position.x, smallest);
-						biggest = function::PredicateValue(biggest < texts[index + 1].position.x, texts[index + 1].position.x, biggest);
+						smallest = function::Select(smallest > texts[index].position.x, texts[index].position.x, smallest);
+						biggest = function::Select(biggest < texts[index + 1].position.x, texts[index + 1].position.x, biggest);
 					}
 					if constexpr (!inverted_order) {
 						return {

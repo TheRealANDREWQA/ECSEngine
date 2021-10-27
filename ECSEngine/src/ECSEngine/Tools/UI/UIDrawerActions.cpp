@@ -106,7 +106,7 @@ namespace ECSEngine {
 			}
 
 			float2 previous_mouse = system->m_previous_mouse_position;
-			float dimming_factor = function::PredicateValue(keyboard->IsKeyDown(HID::Key::LeftShift), 0.1f, 1.0f);
+			float dimming_factor = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 0.1f, 1.0f);
 
 			if (slider->is_vertical) {
 				if (mouse_delta.y > 0.0f) {
@@ -128,8 +128,8 @@ namespace ECSEngine {
 					slider->slider_position += mouse_delta.x / slider->current_scale.x * dimming_factor;
 				}
 			}
-			slider->slider_position = function::PredicateValue(slider->slider_position < 0.0f, 0.0f, slider->slider_position);
-			slider->slider_position = function::PredicateValue(slider->slider_position > 1.0f, 1.0f, slider->slider_position);
+			slider->slider_position = function::Select(slider->slider_position < 0.0f, 0.0f, slider->slider_position);
+			slider->slider_position = function::Select(slider->slider_position > 1.0f, 1.0f, slider->slider_position);
 
 			slider->changed_value = initial_value != slider->slider_position;
 		}
@@ -291,8 +291,8 @@ namespace ECSEngine {
 			else {
 				slider->slider_position += mouse_delta.x / slider->current_scale.x * dimming_factor;
 			}
-			slider->slider_position = function::PredicateValue(slider->slider_position < 0.0f, 0.0f, slider->slider_position);
-			slider->slider_position = function::PredicateValue(slider->slider_position > 1.0f, 1.0f, slider->slider_position);
+			slider->slider_position = function::Select(slider->slider_position < 0.0f, 0.0f, slider->slider_position);
+			slider->slider_position = function::Select(slider->slider_position > 1.0f, 1.0f, slider->slider_position);
 
 			slider->changed_value = initial_position != slider->slider_position;
 		}
@@ -492,8 +492,8 @@ namespace ECSEngine {
 			}
 
 			unsigned int visible_sprites = input->GetVisibleSpriteCount(input->bound);
-			input->current_sprite_position = function::PredicateValue(input->current_sprite_position < input->sprite_render_offset, input->sprite_render_offset, input->current_sprite_position);
-			input->current_sprite_position = function::PredicateValue(input->current_sprite_position > input->sprite_render_offset + visible_sprites, input->sprite_render_offset + visible_sprites, input->current_sprite_position);
+			input->current_sprite_position = function::Select(input->current_sprite_position < input->sprite_render_offset, input->sprite_render_offset, input->current_sprite_position);
+			input->current_sprite_position = function::Select(input->current_sprite_position > input->sprite_render_offset + visible_sprites, input->sprite_render_offset + visible_sprites, input->current_sprite_position);
 
 			auto right_action = [&]() {
 				if (input->current_sprite_position < input->text->size) {
@@ -584,7 +584,7 @@ namespace ECSEngine {
 					else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
 						char characters[256];
 						unsigned int count = system->m_application->CopyTextFromClipboard(characters, 256);
-						count = function::PredicateValue(count > data->text->capacity, data->text->capacity, count);
+						count = function::Select(count > data->text->capacity, data->text->capacity, count);
 						data->DeleteAllCharacters();
 						data->InsertCharacters(characters, count, 0, system);
 					}
@@ -925,7 +925,7 @@ namespace ECSEngine {
 
 			if (mouse_tracker->LeftButton() == MBHELD) {
 				UIDrawerDoubleInputDragData* data = (UIDrawerDoubleInputDragData*)_data;
-				double shift_value = function::PredicateValue(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0, 1.0);
+				double shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0, 1.0);
 				double amount = (double)mouse_delta.x * (double)data->difference_factor * shift_value;
 				*data->data.number += amount;
 				*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
@@ -939,7 +939,7 @@ namespace ECSEngine {
 
 			if (mouse_tracker->LeftButton() == MBHELD) {
 				UIDrawerFloatInputDragData* data = (UIDrawerFloatInputDragData*)_data;
-				float shift_value = function::PredicateValue(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0f, 1.0f);
+				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0f, 1.0f);
 				float amount = mouse_delta.x * data->difference_factor * shift_value;
 				*data->data.number += amount;
 				*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
@@ -973,7 +973,7 @@ namespace ECSEngine {
 
 			if (mouse_tracker->LeftButton() == MBHELD) {
 				UIDrawerIntInputDragData<Integer>* data = (UIDrawerIntInputDragData<Integer>*)_data;
-				float shift_value = function::PredicateValue(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0f, 1.0f);
+				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0f, 1.0f);
 				float amount = mouse_delta.x * data->difference_factor * shift_value;
 				bool is_negative = amount < 0.0f;
 				Integer value_before = *data->data.number;
