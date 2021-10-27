@@ -811,13 +811,13 @@ namespace ECSEngine {
 		Vector4 vector_max = Vector4(max);
 		auto is_smaller = value < vector_min;
 		auto is_greater = value > vector_max;
-		return select(is_greater, vector_max, Vector4(select(is_smaller, vector_min, value)));
+		return select(is_greater, vector_max, Vec4f(select(is_smaller, vector_min, value)));
 	}
 
 	ECS_INLINE Vector4 ECS_VECTORCALL Clamp(Vector4 value, Vector4 min, Vector4 max) {
 		auto is_smaller = value < min;
 		auto is_greater = value > max;
-		return select(is_greater, max, Vector4(select(is_smaller, min, value)));
+		return select(is_greater, max, Vec4f(select(is_smaller, min, value)));
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL Clamp(Vector8 value, float min, float max) {
@@ -825,13 +825,13 @@ namespace ECSEngine {
 		Vector8 vector_max = Vector8(max);
 		auto is_smaller = value < vector_min;
 		auto is_greater = value > vector_max;
-		return select(is_greater, vector_max, Vector8(select(is_smaller, vector_min, value)));
+		return select(is_greater, vector_max, Vec8f(select(is_smaller, vector_min, value)));
 	}
 
 	ECS_INLINE Vector8 ECS_VECTORCALL Clamp(Vector8 value, Vector8 min, Vector8 max) {
 		auto is_smaller = value < min;
 		auto is_greater = value > max;
-		return select(is_greater, max, Vector8(select(is_smaller, min, value)));
+		return select(is_greater, max, Vec8f(select(is_smaller, min, value)));
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

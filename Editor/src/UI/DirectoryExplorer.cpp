@@ -248,6 +248,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 		| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
 
 	if constexpr (initialize) {
+		drawer.layout.next_row_y_offset *= 0.5f;
 		EDITOR_STATE(data->editor_state);
 		EditorState* editor_state = data->editor_state;
 		FileExplorerData* file_explorer_data = (FileExplorerData*)editor_state->file_explorer_data;

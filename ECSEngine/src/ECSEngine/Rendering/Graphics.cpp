@@ -89,11 +89,11 @@ namespace ECSEngine {
 	const char* target = SHADER_COMPILE_TARGET[shader_order + options.target]; \
 \
 	unsigned int compile_flags = 0; \
-	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); \
-	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); \
-	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); \
-	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); \
-	compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); \
+	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); \
+	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); \
+	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); \
+	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); \
+	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); \
 \
 	ID3DBlob* blob; \
 	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob); \
@@ -726,11 +726,11 @@ namespace ECSEngine {
 		const char* target = SHADER_COMPILE_TARGET[ECS_SHADER_VERTEX + options.target]; 
 			
 		unsigned int compile_flags = 0; 
-		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); 
-		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); 
-		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); 
-		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); 
-		compile_flags |= function::PredicateValue(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); 
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); 
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); 
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); 
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); 
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); 
 			
 		ID3DBlob* blob; 
 		HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, nullptr); 
@@ -2102,9 +2102,9 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, UINT start_slot) {
-		ID3D11Buffer* v_buffers[256];
-		UINT strides[256];
-		UINT offsets[256] = { 0 };
+		ID3D11Buffer* v_buffers[16];
+		UINT strides[16];
+		UINT offsets[16] = { 0 };
 		for (size_t index = 0; index < buffers.size; index++) {
 			v_buffers[index] = buffers[index].buffer;
 			strides[index] = buffers[index].stride;
@@ -2116,8 +2116,8 @@ namespace ECSEngine {
 
 	void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context) {
 		DXGI_FORMAT format = DXGI_FORMAT_R32_UINT;
-		format = (DXGI_FORMAT)function::PredicateValue<unsigned int>(index_buffer.int_size == 1, DXGI_FORMAT_R8_UINT, format);
-		format = (DXGI_FORMAT)function::PredicateValue<unsigned int>(index_buffer.int_size == 2, DXGI_FORMAT_R16_UINT, format);
+		format = (DXGI_FORMAT)function::Select<unsigned int>(index_buffer.int_size == 1, DXGI_FORMAT_R8_UINT, format);
+		format = (DXGI_FORMAT)function::Select<unsigned int>(index_buffer.int_size == 2, DXGI_FORMAT_R16_UINT, format);
 
 		context->IASetIndexBuffer(index_buffer.buffer, format, 0);
 	}

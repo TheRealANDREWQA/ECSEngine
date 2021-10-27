@@ -109,7 +109,7 @@ namespace ECSEngine {
 	unsigned int TaskManager::AddDynamicTask(ThreadTask task, size_t task_data_size) {
 		AddDynamicTask(task, m_last_thread_index, task_data_size);
 		unsigned int thread_index = m_last_thread_index;
-		m_last_thread_index = function::PredicateValue(m_last_thread_index == m_thread_queue.size - 1, (unsigned int)0, m_last_thread_index + 1);
+		m_last_thread_index = function::Select(m_last_thread_index == m_thread_queue.size - 1, (unsigned int)0, m_last_thread_index + 1);
 		return thread_index;
 	}
 

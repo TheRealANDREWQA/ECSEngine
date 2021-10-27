@@ -53,34 +53,37 @@ bool LoadModuleFile(EditorState* editor_state) {
 			ResetProjectModules(editor_state);
 			ResetProjectGraphicsModule(editor_state);
 
-			// First module is the graphics module
-			Stream<wchar_t> graphics_solution_path(serialize_data[0].data[0].buffer, serialize_data[0].data[0].size / sizeof(wchar_t));
-			Stream<wchar_t> graphics_library_name(serialize_data[0].data[1].buffer, serialize_data[0].data[1].size / sizeof(wchar_t));
-			Stream<void> graphics_configuration(serialize_data[0].data[2]);
-
-			// NO_GRAPHICS_MODULE is placed instead of 0 sized streams
-			//size_t no_graphics_module_size = wcslen(NO_GRAPHICS_MODULE);
-			//if (memcmp(graphics_solution_path.buffer, NO_GRAPHICS_MODULE, sizeof(wchar_t) * no_graphics_module_size) != 0) {
-			if (graphics_solution_path.size > 0 && graphics_library_name.size > 0) {
-				SetGraphicsModule(editor_state, graphics_solution_path, graphics_library_name, (ModuleConfiguration)*(unsigned char*)(graphics_configuration.buffer));
-			}
-			else {
-				EditorSetConsoleWarn(editor_state, ToStream("The graphics module is missing from this project."));
-			}
-
 			unsigned int valid_projects = 0;
-			const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
+			ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
+
+			Stream<wchar_t> solution_path(serialize_data[0].data[0].buffer, serialize_data[0].data[0].size / sizeof(wchar_t));
+			Stream<wchar_t> library_name(serialize_data[0].data[1].buffer, serialize_data[0].data[1].size / sizeof(wchar_t));
+			Stream<void> configuration(serialize_data[0].data[2]);
+
+			SetProjectGraphicsModule(editor_state, solution_path, library_name, (EditorModuleConfiguration)(*(unsigned char*)configuration.buffer));
+			project_modules->size = 1;
+
 			for (size_t index = 1; index < serialize_data.size; index++) {
 				Stream<wchar_t> solution_path(serialize_data[index].data[0].buffer, serialize_data[index].data[0].size / sizeof(wchar_t));
 				Stream<wchar_t> library_name(serialize_data[index].data[1].buffer, serialize_data[index].data[1].size / sizeof(wchar_t));
 				Stream<void> configuration(serialize_data[index].data[2]);
 
-				if (AddProjectModule(editor_state, solution_path, library_name, (ModuleConfiguration)(*(unsigned char*)configuration.buffer))) {
-					UpdateProjectModuleLastWrite(editor_state, valid_projects++);
-					ECS_TEMP_ASCII_STRING(error_message, 256);
-					bool success = LoadModuleTasks(editor_state, project_modules->size - 1, &error_message);
+				if (AddProjectModule(editor_state, solution_path, library_name, (EditorModuleConfiguration)(*(unsigned char*)configuration.buffer))) {
+					UpdateProjectModuleLastWrite(editor_state, 1 + valid_projects);
+					valid_projects++;
+					bool success = HasModuleFunction(editor_state, project_modules->size - 1);
 					if (!success) {
-						EditorSetConsoleError(editor_state, error_message);
+						ECS_FORMAT_TEMP_STRING(error_message, "Module with solution path {0} and library name {1} does not have a module function.", solution_path, library_name);
+						EditorSetConsoleWarn(editor_state, error_message);
+						project_modules->buffer[valid_projects].load_status = EditorModuleLoadStatus::Failed;
+					}
+					else {
+						if (project_modules->buffer[valid_projects].solution_last_write_time > project_modules->buffer[valid_projects].library_last_write_time) {
+							project_modules->buffer[valid_projects].load_status = EditorModuleLoadStatus::OutOfDate;
+						}
+						else {
+							project_modules->buffer[valid_projects].load_status = EditorModuleLoadStatus::Good;
+						}
 					}
 				}
 				
@@ -88,7 +91,8 @@ bool LoadModuleFile(EditorState* editor_state) {
 				editor_allocator->Deallocate(library_name.buffer);
 			}
 			if (valid_projects < serialize_data.size - 1) {
-				auto error_message = ToStream("One or more modules failed to load. They were removed from the current project's module list.");
+				auto error_message = ToStream("One or more modules failed to load. Their paths were corrupted or deleted from outside ECSEngine."
+					" They were removed from the current project's module list.");
 				EditorSetConsoleError(editor_state, error_message);
 				ThreadTask rewrite_module_file = { SaveProjectModuleFileThreadTask, editor_state };
 				editor_state->task_manager->AddDynamicTaskAndWake(rewrite_module_file);
@@ -112,14 +116,14 @@ bool SaveModuleFile(EditorState* editor_state) {
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 
 	ECS_ASSERT(project_modules->size < 64);
-	unsigned int total_module_count = project_modules->size + 1;
+	unsigned int total_module_count = project_modules->size;
 	SerializeMultisectionData* multisection_datas = (SerializeMultisectionData*)ECS_STACK_ALLOC(sizeof(SerializeMultisectionData) * total_module_count);
 	Stream<SerializeMultisectionData> serialize_data(multisection_datas, total_module_count);
 	unsigned int current_void_stream = 0;
 	Stream<void>* void_streams = (Stream<void>*)ECS_STACK_ALLOC(sizeof(Stream<void>) * total_module_count * 3);
 
 	auto loop_function = [](Stream<SerializeMultisectionData> serialize_data, Stream<void>* void_streams, unsigned int& current_void_stream,
-		Stream<wchar_t> solution_path, Stream<wchar_t> library_name, ModuleConfiguration configuration, unsigned int index) {
+		Stream<wchar_t> solution_path, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, unsigned int index) {
 		serialize_data[index].data.buffer = void_streams + current_void_stream;
 		serialize_data[index].data.size = 3;
 		serialize_data[index].data[0] = solution_path;
@@ -127,18 +131,7 @@ bool SaveModuleFile(EditorState* editor_state) {
 		serialize_data[index].data[2].buffer = &configuration;
 		serialize_data[index].data[2].size = sizeof(configuration);
 		current_void_stream += 3;
-	};
-
-	loop_function(
-		serialize_data,
-		void_streams,
-		current_void_stream,
-		editor_state->graphics_module.solution_path,
-		editor_state->graphics_module.library_name,
-		editor_state->graphics_module.configuration,
-		0
-	);
-	
+	};	
 
 	for (size_t index = 0; index < project_modules->size; index++) {
 		loop_function(
@@ -148,7 +141,7 @@ bool SaveModuleFile(EditorState* editor_state) {
 			project_modules->buffer[index].solution_path,
 			project_modules->buffer[index].library_name,
 			project_modules->buffer[index].configuration,
-			index + 1
+			index
 		);
 	}
 

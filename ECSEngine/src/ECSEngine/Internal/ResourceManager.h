@@ -184,14 +184,6 @@ namespace ECSEngine {
 
 		void UnloadTextureTemporary(unsigned int handle, unsigned int thread_index = 0);
 
-		template<bool reference_counted = false>
-		void UnloadTextureResource(const wchar_t* filename, size_t flags = 1);
-
-		template<bool reference_counted = false>
-		void UnloadTextureResource(unsigned int index, size_t flags = 1);
-
-		void UnloadTextureResourceTemporary(unsigned int handle, unsigned int thread_index = 0);
-
 	//private:
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;

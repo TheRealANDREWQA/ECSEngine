@@ -4,7 +4,6 @@
 #include "../../Utilities/Timer.h"
 #include "../../Containers/Stream.h"
 #include "../../Containers/Queues.h"
-#include "../../Containers/StaticLockFreeStream.h"
 #include "TaskAllocator.h"
 #include "ThreadTask.h"
 

@@ -328,14 +328,14 @@ namespace ECSEngine {
 		template<typename Integer, typename Stream>
 		Integer ConvertCharactersToInt(Stream stream) {
 			Integer integer = Integer(0);
-			size_t starting_index = PredicateValue(stream[0] == '-', 1, 0);
+			size_t starting_index = Select(stream[0] == '-', 1, 0);
 
 			for (size_t index = starting_index; index < stream.size; index++) {
 				if (stream[index] >= '0' && stream[index] <= '9') {
 					integer = integer * 10 + stream[index] - '0';
 				}
 			}
-			integer = PredicateValue<Integer>(starting_index == 1, -integer, integer);
+			integer = Select<Integer>(starting_index == 1, -integer, integer);
 
 			return integer;
 		}
@@ -344,7 +344,7 @@ namespace ECSEngine {
 		template<typename Integer, typename Stream>
 		Integer ConvertCharactersToInt(Stream stream, size_t& digit_count) {
 			Integer integer = Integer(0);
-			size_t starting_index = PredicateValue(stream[0] == '-', 1, 0);
+			size_t starting_index = Select(stream[0] == '-', 1, 0);
 			digit_count = 0;
 
 			for (size_t index = starting_index; index < stream.size; index++) {
@@ -353,7 +353,7 @@ namespace ECSEngine {
 					digit_count++;
 				}
 			}
-			integer = PredicateValue(starting_index == 1, -integer, integer);
+			integer = Select(starting_index == 1, -integer, integer);
 
 			return integer;
 		}
@@ -361,7 +361,7 @@ namespace ECSEngine {
 		template<typename FloatingPoint, typename Stream>
 		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream) {
 			FloatingPoint value = 0;
-			size_t starting_index = PredicateValue(stream[0] == '-' || stream[0] == '+', 1, 0);
+			size_t starting_index = Select(stream[0] == '-' || stream[0] == '+', 1, 0);
 
 			size_t dot_index = stream.size;
 			for (size_t index = 0; index < stream.size; index++) {
@@ -443,19 +443,19 @@ namespace ECSEngine {
 
 		template<typename Value>
 		Value ClampMin(Value value, Value min) {
-			return PredicateValue(value < min, min, value);
+			return Select(value < min, min, value);
 		}
 
 		template<typename Value>
 		Value ClampMax(Value value, Value max) {
-			return PredicateValue(value > max, max, value);
+			return Select(value > max, max, value);
 		}
 
 		template<typename Stream, typename Value, typename Function>
 		void GetMinFromStream(const Stream& input, Value& value, Function&& function) {
 			for (size_t index = 0; index < input.size; index++) {
 				Value current_value = function(input[index]);
-				value = PredicateValue(value > current_value, current_value, value);
+				value = Select(value > current_value, current_value, value);
 			}
 		}
 
@@ -463,7 +463,7 @@ namespace ECSEngine {
 		void GetMaxFromStream(const Stream& input, Value& value, Function&& function) {
 			for (size_t index = 0; index < input.size; index++) {
 				Value current_value = function(input[index]);
-				value = PredicateValue(value < current_value, current_value, value);
+				value = Select(value < current_value, current_value, value);
 			}
 		}
 
@@ -471,14 +471,14 @@ namespace ECSEngine {
 		void GetExtremesFromStream(const Stream& input, Value& min, Value& max, Function&& accessor) {
 			for (size_t index = 0; index < input.size; index++) {
 				Value current_value = accessor(input[index]);
-				min = PredicateValue(min > current_value, current_value, min);
-				max = PredicateValue(max < current_value, current_value, max);
+				min = Select(min > current_value, current_value, min);
+				max = Select(max < current_value, current_value, max);
 			}
 		}
 
 		template<typename Type>
-		Type PredicateValue(bool condition, Type first_value, Type second_value) {
-			return first_value * condition + second_value * (1 - condition);
+		Type Select(bool condition, Type first_value, Type second_value) {
+			return condition ? first_value : second_value;
 		}
 
 		// the functions provided must take as parameter the pointer to the buffer element to act on

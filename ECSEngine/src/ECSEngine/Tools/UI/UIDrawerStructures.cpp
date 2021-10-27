@@ -66,7 +66,7 @@ namespace ECSEngine {
 		{
 			float min = text_vertices[0].position.x;
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min = function::PredicateValue(min > text_vertices[index].position.x, text_vertices[index].position.x, min);
+				min = function::Select(min > text_vertices[index].position.x, text_vertices[index].position.x, min);
 			}
 			return min;
 		}
@@ -74,7 +74,7 @@ namespace ECSEngine {
 		float UIDrawerTextElement::GetLowestY() const {
 			float min = text_vertices[0].position.y;
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min = function::PredicateValue(min > text_vertices[index].position.y, text_vertices[index].position.y, min);
+				min = function::Select(min > text_vertices[index].position.y, text_vertices[index].position.y, min);
 			}
 			return min;
 		}
@@ -82,8 +82,8 @@ namespace ECSEngine {
 		float2 UIDrawerTextElement::GetLowest() const {
 			float2 min = { text_vertices[0].position.x, text_vertices[0].position.y };
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min.x = function::PredicateValue(min.x > text_vertices[index].position.x, text_vertices[index].position.x, min.x);
-				min.y = function::PredicateValue(min.y > text_vertices[index].position.y, text_vertices[index].position.y, min.y);
+				min.x = function::Select(min.x > text_vertices[index].position.x, text_vertices[index].position.x, min.x);
+				min.y = function::Select(min.y > text_vertices[index].position.y, text_vertices[index].position.y, min.y);
 			}
 			return min;
 		}
@@ -258,10 +258,10 @@ namespace ECSEngine {
 			float2 sprites_bounds = GetRectangleSectionYBounds(sprites, counts[ECS_TOOLS_UI_SPRITE], _counts[ECS_TOOLS_UI_SPRITE]);
 
 			float2 bounds = solid_color_bounds;
-			bounds.x = function::PredicateValue(text_sprites_bounds.x < bounds.x, text_sprites_bounds.x, bounds.x);
-			bounds.x = function::PredicateValue(sprites_bounds.x < bounds.x, sprites_bounds.x, bounds.x);
-			bounds.y = function::PredicateValue(text_sprites_bounds.y > bounds.y, text_sprites_bounds.y, bounds.y);
-			bounds.y = function::PredicateValue(sprites_bounds.y > bounds.y, sprites_bounds.y, bounds.y);
+			bounds.x = function::Select(text_sprites_bounds.x < bounds.x, text_sprites_bounds.x, bounds.x);
+			bounds.x = function::Select(sprites_bounds.x < bounds.x, sprites_bounds.x, bounds.x);
+			bounds.y = function::Select(text_sprites_bounds.y > bounds.y, text_sprites_bounds.y, bounds.y);
+			bounds.y = function::Select(sprites_bounds.y > bounds.y, sprites_bounds.y, bounds.y);
 
 			hierarchy_extra->row_y_scale = bounds.y - bounds.x;
 		}

@@ -1,3 +1,5 @@
+// CURRENTLY NOT USED BY ANYTHING - Consider removing it
+
 #pragma once
 #include "../Core.h"
 #include "../Internal/Multithreading/ConcurrentPrimitives.h"
@@ -109,10 +111,9 @@ namespace ECSEngine {
 			InitializeFromBuffer(allocation, capacity);
 		}
 
-	//private:
+		//private:
 		CapacityStream<T> m_stream;
 		std::atomic<unsigned int> m_index;
 	};
 
 }
-

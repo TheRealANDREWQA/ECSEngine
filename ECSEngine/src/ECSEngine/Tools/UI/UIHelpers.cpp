@@ -498,8 +498,8 @@ namespace ECSEngine {
 			float left_x = vertices[0].position.x;
 			float right_x = vertices[1].position.x;
 			for (size_t index = 7; index < vertices.size; index += 6) {
-				//left_x = function::PredicateValue(left_x > vertices[index - 1].position.x, vertices[index - 1].position.x, left_x);
-				right_x = function::PredicateValue(right_x < vertices[index].position.x, vertices[index].position.x, right_x);
+				//left_x = function::Select(left_x > vertices[index - 1].position.x, vertices[index - 1].position.x, left_x);
+				right_x = function::Select(right_x < vertices[index].position.x, vertices[index].position.x, right_x);
 			}
 			float x_span = right_x - left_x;
 			for (size_t index = 0; index < vertices.size; index += 6) {
@@ -523,7 +523,7 @@ namespace ECSEngine {
 		float GetMinX(const Element* element, size_t size) {
 			float min = element[0].position.x;
 			for (size_t index = 1; index < size; index++) {
-				min = function::PredicateValue(min > element[index].position.x, element[index].position.x, min);
+				min = function::Select(min > element[index].position.x, element[index].position.x, min);
 			}
 			return min;
 		}
@@ -534,7 +534,7 @@ namespace ECSEngine {
 		float GetMinXRectangle(const Element* element, size_t size) {
 			float min = element[0].position.x;
 			for (size_t index = 6; index < size; index += 6) {
-				min = function::PredicateValue(min > element[index].position.x, element[index].position.x, min);
+				min = function::Select(min > element[index].position.x, element[index].position.x, min);
 			}
 			return min;
 		}
@@ -545,7 +545,7 @@ namespace ECSEngine {
 		float GetMaxX(const Element* element, size_t size) {
 			float max = element[0].position.x;
 			for (size_t index = 1; index < size; index++) {
-				max = function::PredicateValue(max < element[index].position.x, element[index].position.x, max);
+				max = function::Select(max < element[index].position.x, element[index].position.x, max);
 			}
 			return max;
 		}
@@ -556,7 +556,7 @@ namespace ECSEngine {
 		float GetMaxXRectangle(const Element* element, size_t size) {
 			float max = element[1].position.x;
 			for (size_t index = 7; index < size; index += 6) {
-				max = function::PredicateValue(max < element[index].position.x, element[index].position.x, max);
+				max = function::Select(max < element[index].position.x, element[index].position.x, max);
 			}
 			return max;
 		}
@@ -567,7 +567,7 @@ namespace ECSEngine {
 		float GetMinY(const Element* element, size_t size) {
 			float min = element[0].position.y;
 			for (size_t index = 1; index < size; index++) {
-				min = function::PredicateValue(min > element[index].position.y, element[index].position.y, min);
+				min = function::Select(min > element[index].position.y, element[index].position.y, min);
 			}
 			return min;
 		}
@@ -578,7 +578,7 @@ namespace ECSEngine {
 		float GetMinYRectangle(const Element* element, size_t size) {
 			float min = element[0].position.y;
 			for (size_t index = 6; index < size; index += 6) {
-				min = function::PredicateValue(min > element[index].position.y, element[index].position.y, min);
+				min = function::Select(min > element[index].position.y, element[index].position.y, min);
 			}
 			return min;
 		}
@@ -589,7 +589,7 @@ namespace ECSEngine {
 		float GetMaxY(const Element* element, size_t size) {
 			float max = element[0].position.y;
 			for (size_t index = 1; index < size; index++) {
-				max = function::PredicateValue(max > element[index].position.y, element[index].position.y, max);
+				max = function::Select(max > element[index].position.y, element[index].position.y, max);
 			}
 			return max;
 		}
@@ -600,7 +600,7 @@ namespace ECSEngine {
 		float GetMaxYRectangle(const Element* element, size_t size) {
 			float max = element[2].position.y;
 			for (size_t index = 8; index < size; index += 6) {
-				max = function::PredicateValue(max > element[index].position.y, element[index].position.y, max);
+				max = function::Select(max > element[index].position.y, element[index].position.y, max);
 			}
 			return max;
 		}
@@ -676,10 +676,10 @@ namespace ECSEngine {
 		void GetEncompassingRectangle(Stream<float2> values, float2* results) {
 			float min_x = 5.0f, min_y = 5.0f, max_x = -5.0f, max_y = -5.0f;
 			for (size_t index = 0; index < values.size; index++) {
-				min_x = function::PredicateValue(values[index].x < min_x, values[index].x, min_x);
-				min_y = function::PredicateValue(values[index].y < min_y, values[index].y, min_y);
-				max_x = function::PredicateValue(values[index].x > max_x, values[index].x, max_x);
-				max_y = function::PredicateValue(values[index].y > max_y, values[index].y, max_y);
+				min_x = function::Select(values[index].x < min_x, values[index].x, min_x);
+				min_y = function::Select(values[index].y < min_y, values[index].y, min_y);
+				max_x = function::Select(values[index].x > max_x, values[index].x, max_x);
+				max_y = function::Select(values[index].y > max_y, values[index].y, max_y);
 			}
 			results[0] = float2(min_x, min_y);
 			results[1] = float2(max_x - min_x, max_y - min_y);
@@ -935,7 +935,7 @@ namespace ECSEngine {
 			float character_spacing
 		) {
 			if (!is_vertical) {
-				float x_position = function::PredicateValue(
+				float x_position = function::Select(
 					is_inverted,
 					input[input.size - 1].position.x,
 					input[0].position.x
@@ -1021,7 +1021,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				float y_position = -function::PredicateValue(
+				float y_position = -function::Select(
 					is_inverted,
 					input[input.size - 3].position.y,
 					input[0].position.y
@@ -1072,7 +1072,7 @@ namespace ECSEngine {
 			float new_y_scale = y_scale * new_scale.y * inverted_current_scale.y;
 
 			if (!is_vertical) {
-				float x_position = function::PredicateValue(
+				float x_position = function::Select(
 					is_inverted,
 					input[input.size - 1].position.x,
 					input[0].position.x
@@ -1106,7 +1106,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				float y_position = -function::PredicateValue(
+				float y_position = -function::Select(
 					is_inverted,
 					input[input.size - 3].position.y,
 					input[0].position.y
@@ -1200,8 +1200,8 @@ namespace ECSEngine {
 		float2 GetSectionYBounds(const Buffer* buffer, size_t starting_index, size_t end_index) {
 			float2 bounds = { -10.0f, 10.0f };
 			for (size_t index = starting_index; index < end_index; index++) {
-				bounds.x = function::PredicateValue(bounds.x < buffer[index].position.y, buffer[index].position.y, bounds.x);
-				bounds.y = function::PredicateValue(bounds.y > buffer[index].position.y, buffer[index].position.y, bounds.y);
+				bounds.x = function::Select(bounds.x < buffer[index].position.y, buffer[index].position.y, bounds.x);
+				bounds.y = function::Select(bounds.y > buffer[index].position.y, buffer[index].position.y, bounds.y);
 			}
 
 			bounds.x = -bounds.x;
@@ -1215,8 +1215,8 @@ namespace ECSEngine {
 		float2 GetRectangleSectionYBounds(const Buffer* buffer, size_t starting_index, size_t end_index) {
 			float2 bounds = { -10.0f, 10.0f };
 			for (size_t index = starting_index; index < end_index; index += 6) {
-				bounds.x = function::PredicateValue(bounds.x < buffer[index].position.y, buffer[index].position.y, bounds.x);
-				bounds.y = function::PredicateValue(bounds.y > buffer[index + 2].position.y, buffer[index + 2].position.y, bounds.y);
+				bounds.x = function::Select(bounds.x < buffer[index].position.y, buffer[index].position.y, bounds.x);
+				bounds.y = function::Select(bounds.y > buffer[index + 2].position.y, buffer[index + 2].position.y, bounds.y);
 			}
 
 			bounds.x = -bounds.x;

@@ -589,10 +589,10 @@ namespace ECSEngine {
 		void UITooltipDrawData::FinalizeRectangle(float2 position, float2 scale)
 		{
 			position.x += scale.x;
-			max_bounds.x = function::PredicateValue(position.x > max_bounds.x, position.x, max_bounds.x);
-			max_bounds.y = function::PredicateValue(position.y > max_bounds.y, position.y, max_bounds.y);
+			max_bounds.x = function::Select(position.x > max_bounds.x, position.x, max_bounds.x);
+			max_bounds.y = function::Select(position.y > max_bounds.y, position.y, max_bounds.y);
 			current_scale.x = 0.0f;
-			current_scale.y = function::PredicateValue(current_scale.y < scale.y, scale.y, current_scale.y);
+			current_scale.y = function::Select(current_scale.y < scale.y, scale.y, current_scale.y);
 		}
 
 		void UIWindowDrawerDescriptor::UpdateZoom(float2 before_zoom, float2 current_zoom)

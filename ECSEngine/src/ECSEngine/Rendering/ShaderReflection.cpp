@@ -1,14 +1,16 @@
 #include "ecspch.h"
 #include "ShaderReflection.h"
 #include "../Utilities/FunctionInterfaces.h"
+#include "Shaders\Macros.hlsli"
 
-constexpr size_t FORMAT_TABLE_CAPACITY = 128;
-constexpr size_t TYPE_TABLE_CAPACITY = 256;
+constexpr size_t STRING_FORMAT_TABLE_CAPACITY = 128;
+constexpr size_t FLOAT_FORMAT_TABLE_CAPACITY = 256;
+constexpr size_t INTEGER_FORMAT_TABLE_CAPACITY = 256;
 
-constexpr const char* VERTEX_SHADER_INPUT_STRUCTURE_NAME = "VS_INPUT";
-constexpr const char* REGISTER_STRING = "register";
+const char* VERTEX_SHADER_INPUT_STRUCTURE_NAME = "VS_INPUT";
+const char* REGISTER_STRING = "register";
 
-constexpr const char* BUFFER_KEYWORDS[] = {
+const char* BUFFER_KEYWORDS[] = {
 	"cbuffer",
 	"tbuffer",
 	"Buffer",
@@ -21,7 +23,7 @@ constexpr const char* BUFFER_KEYWORDS[] = {
 	"ConsumeStructuredBuffer"
 };
 
-constexpr const char* TEXTURE_KEYWORDS[] = {
+const char* TEXTURE_KEYWORDS[] = {
 	"Texture1D",
 	"Texture2D",
 	"Texture3D",
@@ -34,7 +36,7 @@ constexpr const char* TEXTURE_KEYWORDS[] = {
 	"TextureCube"
 };
 
-constexpr const char* VERTEX_BUFFER_MAPPINGS[] = {
+const char* VERTEX_BUFFER_MAPPINGS[] = {
 	"POSITION",
 	"NORMAL",
 	"UV",
@@ -44,7 +46,7 @@ constexpr const char* VERTEX_BUFFER_MAPPINGS[] = {
 	"BONE_INFLUENCE"
 };
 
-constexpr const char* VERTEX_BUFFER_MACRO_MAPPINGS[] = {
+const char* VERTEX_BUFFER_MACRO_MAPPINGS[] = {
 	STRING(ECS_REFLECT_POSITION),
 	STRING(ECS_REFLECT_NORMAL),
 	STRING(ECS_REFLECT_UV),
@@ -54,39 +56,138 @@ constexpr const char* VERTEX_BUFFER_MACRO_MAPPINGS[] = {
 	STRING(ECS_REFLECT_BONE_INFLUENCE)
 };
 
+const char* DXGI_FLOAT_FORMAT_MAPPINGS[] = {
+	STRING(ECS_REFLECT_UNORM_8),
+	STRING(ECS_REFLECT_SNORM_8),
+	STRING(ECS_REFLECT_UNORM_16),
+	STRING(ECS_REFLECT_SNORM_16)
+};
+
+const char* DXGI_UINT_FORMAT_MAPPINGS[] = {
+	STRING(ECS_REFLECT_UINT_8),
+	STRING(ECS_REFLECT_UINT_16),
+	STRING(ECS_REFLECT_UINT_32)
+};
+
+const char* DXGI_SINT_FORMAT_MAPPINGS[] = {
+	STRING(ECS_REFLECT_SINT_8),
+	STRING(ECS_REFLECT_SINT_16),
+	STRING(ECS_REFLECT_SINT_32)
+};
+
 using Hash = ECSEngine::HashFunctionAdditiveString;
 
 namespace ECSEngine {
 
-#define ADD_TO_FORMAT_TABLE(format) identifier.ptr = #format; identifier.size = strlen(#format); \
+#define ADD_TO_FORMAT_TABLE(name, format, table) identifier.ptr = #name; identifier.size = strlen(#name); \
 hash = Hash::Hash(identifier); \
-ECS_ASSERT(!format_table.Insert(hash, format, identifier));
+ECS_ASSERT(!table.Insert(hash, format, identifier));
 
-#define ADD_TO_TYPE_TABLE(type, byte_size) identifier.ptr = #type; identifier.size = strlen(#type); \
-hash = Hash::Hash(identifier); \
-ECS_ASSERT(!type_table.Insert(hash, byte_size, identifier));
+#define ADD_TO_STRING_FORMAT_TABLE(format, table) ADD_TO_FORMAT_TABLE(format, format, table);
 
-#define ADD_BASIC_TYPE(type, byte_size) ADD_TO_TYPE_TABLE(type, byte_size); \
-ADD_TO_TYPE_TABLE(type##1, byte_size); \
-ADD_TO_TYPE_TABLE(type##2, byte_size * 2); \
-ADD_TO_TYPE_TABLE(type##3, byte_size * 3); \
-ADD_TO_TYPE_TABLE(type##4, byte_size * 4); \
-ADD_TO_TYPE_TABLE(type##1x1, byte_size); \
-ADD_TO_TYPE_TABLE(type##1x2, byte_size * 2); \
-ADD_TO_TYPE_TABLE(type##1x3, byte_size * 3); \
-ADD_TO_TYPE_TABLE(type##1x4, byte_size * 4); \
-ADD_TO_TYPE_TABLE(type##2x1, byte_size * 2); \
-ADD_TO_TYPE_TABLE(type##2x2, byte_size * 4); \
-ADD_TO_TYPE_TABLE(type##2x3, byte_size * 6); \
-ADD_TO_TYPE_TABLE(type##2x4, byte_size * 8); \
-ADD_TO_TYPE_TABLE(type##3x1, byte_size * 3); \
-ADD_TO_TYPE_TABLE(type##3x2, byte_size * 6); \
-ADD_TO_TYPE_TABLE(type##3x3, byte_size * 9); \
-ADD_TO_TYPE_TABLE(type##3x4, byte_size * 12); \
-ADD_TO_TYPE_TABLE(type##4x1, byte_size * 4); \
-ADD_TO_TYPE_TABLE(type##4x2, byte_size * 8); \
-ADD_TO_TYPE_TABLE(type##4x3, byte_size * 12); \
-ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16); 
+
+#define INITIALIZE_STRING_FORMAT_TABLE(table) ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_UNKNOWN, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G32_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32G8X24_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_D32_FLOAT_S8X24_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_X32_TYPELESS_G8X24_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R10G10B10A2_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R10G10B10A2_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R10G10B10A2_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R11G11B10_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16G16_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_D32_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R32_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R24G8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_D24_UNORM_S8_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R24_UNORM_X8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_X24_TYPELESS_G8_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16_FLOAT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_D16_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R16_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8_UINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8_SINT, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_A8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R1_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R9G9B9E5_SHAREDEXP, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R8G8_B8G8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_G8R8_G8B8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC1_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC1_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC1_UNORM_SRGB, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC2_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC2_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC2_UNORM_SRGB, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC3_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC3_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC3_UNORM_SRGB, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC4_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC4_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC4_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC5_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC5_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC5_SNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B5G6R5_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B5G5R5A1_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B8G8R8A8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B8G8R8X8_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B8G8R8A8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B8G8R8X8_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_B8G8R8X8_UNORM_SRGB, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC6H_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC6H_UF16, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC6H_SF16, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC7_TYPELESS, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC7_UNORM, table); \
+	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC7_UNORM_SRGB, table);
+
+#define ADD_BASIC_TYPE_TO_TABLE(type, table) 
 
 
 	Stream<char> SetName(char* starting_ptr, char* ending_ptr, CapacityStream<char>& name_pool) {
@@ -145,123 +246,227 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 		return true;
 	}
 
+	size_t GetBasicTypeByteSize(const char* type_start, const char* type_end) {
+		// Get the number of components 
+		const char* current_character = type_start;
+		while (!function::IsNumberCharacter(*current_character) && current_character < type_end) {
+			current_character++;
+		}
+
+		// No number character has been found - only a component - 4 bytes sized
+		if (current_character == type_end) {
+			return 4;
+		}
+
+		// A number character has been found
+		size_t component_count = 0;
+		while (function::IsNumberCharacter(*current_character) && current_character < type_end) {
+			component_count *= 10;
+			component_count += *current_character - '0';
+			current_character++;
+		}
+
+		// If component count is 0 or greater than 4 - error - return -1
+		if (component_count == 0 || component_count > 4) {
+			return -1;
+		}
+
+		// Matrix types must be followed by 'x'
+		if (*current_character == 'x') {
+			size_t row_count = 0;
+			current_character++;
+			while (function::IsNumberCharacter(*current_character) && current_character < type_end) {
+				row_count *= 10;
+				row_count += *current_character - '0';
+				current_character++;
+			}
+
+			// If row count is 0 or greater than 4 - error - return -1
+			if (row_count == 0 || row_count > 4) {
+				return -1;
+			}
+
+			return row_count * component_count * 4;
+		}
+	
+		// No matrix type
+		return component_count * 4;
+	}
+
+	size_t GetBasicTypeSemanticCount(const char* type_start, const char* type_end) {
+		// Get the number of components 
+		const char* current_character = type_start;
+		while (!function::IsNumberCharacter(*current_character) && current_character < type_end) {
+			current_character++;
+		}
+
+		// No number character has been found - only a component - semantic count is 1
+		if (current_character == type_end) {
+			return 1;
+		}
+
+		// A number character has been found
+		size_t component_count = 0;
+		while (function::IsNumberCharacter(*current_character) && current_character < type_end) {
+			component_count *= 10;
+			component_count += *current_character - '0';
+			current_character++;
+		}
+
+		// If component count is 0 or greater than 4 - error - return -1
+		if (component_count == 0 || component_count > 4) {
+			return -1;
+		}
+
+		// Matrix types must be followed by 'x'
+		if (*current_character == 'x') {
+			size_t row_count = 0;
+			current_character++;
+			while (function::IsNumberCharacter(*current_character) && current_character < type_end) {
+				row_count *= 10;
+				row_count += *current_character - '0';
+				current_character++;
+			}
+
+			// If row count is 0 or greater than 4 - error - return -1
+			if (row_count == 0 || row_count > 4) {
+				return -1;
+			}
+
+			// Semantic count will be the component count - which is the count of rows
+			return row_count;
+		}
+
+		// No matrix type - a single semantic instance
+		return 1;
+	}
+
+	DXGI_FORMAT GetModifiedIntegerFormat(
+		Stream<const char*> mappings, 
+		const char* colon_character, 
+		const char* type_start, 
+		const char* basic_type_end, 
+		const ShaderReflectionIntegerFormatTable& integer_table
+	) {
+		unsigned int modifier_index = ECS_SHADER_REFLECTION_SINT_32;
+
+		// Look for uint modifiers
+		for (size_t index = 0; index < mappings.size; index++) {
+			const char* modifier = strstr(colon_character, mappings[index]);
+			if (modifier != nullptr) {
+				modifier_index = index;
+				break;
+			}
+		}
+
+		ResourceIdentifier identifier(type_start, basic_type_end - type_start);
+		unsigned int hash = Hash::Hash(identifier);
+		ShaderReflectionIntegerExtendedFormat extended_format;
+		bool success = integer_table.TryGetValue(hash, identifier, extended_format);
+		if (!success) {
+			return DXGI_FORMAT_FORCE_UINT;
+		}
+		return extended_format.formats[modifier_index];
+	}
+
 	ShaderReflection::ShaderReflection() {}
 
 	ShaderReflection::ShaderReflection(void* allocation)
 	{
 		uintptr_t buffer = (uintptr_t)allocation;
-		format_table.InitializeFromBuffer(buffer, FORMAT_TABLE_CAPACITY);
-		type_table.InitializeFromBuffer(buffer, TYPE_TABLE_CAPACITY);
+		string_table.InitializeFromBuffer(buffer, STRING_FORMAT_TABLE_CAPACITY);
+		float_table.InitializeFromBuffer(buffer, FLOAT_FORMAT_TABLE_CAPACITY);
+		unsigned_table.InitializeFromBuffer(buffer, INTEGER_FORMAT_TABLE_CAPACITY);
+		signed_table.InitializeFromBuffer(buffer, INTEGER_FORMAT_TABLE_CAPACITY);
 
 		ResourceIdentifier identifier;
 		unsigned int hash;
 
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_UNKNOWN);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32A32_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32B32_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16B16A16_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G32_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32G8X24_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_D32_FLOAT_S8X24_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_X32_TYPELESS_G8X24_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R10G10B10A2_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R10G10B10A2_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R10G10B10A2_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R11G11B10_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8B8A8_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16G16_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_D32_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R32_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R24G8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_D24_UNORM_S8_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R24_UNORM_X8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_X24_TYPELESS_G8_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16_FLOAT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_D16_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R16_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8_UINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8_SINT);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_A8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R1_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R9G9B9E5_SHAREDEXP);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R8G8_B8G8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_G8R8_G8B8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC1_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC1_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC1_UNORM_SRGB);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC2_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC2_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC2_UNORM_SRGB);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC3_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC3_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC3_UNORM_SRGB);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC4_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC4_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC4_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC5_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC5_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC5_SNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B5G6R5_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B5G5R5A1_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B8G8R8A8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B8G8R8X8_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B8G8R8A8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B8G8R8X8_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_B8G8R8X8_UNORM_SRGB);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC6H_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC6H_UF16);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC6H_SF16);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC7_TYPELESS);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC7_UNORM);
-		ADD_TO_FORMAT_TABLE(DXGI_FORMAT_BC7_UNORM_SRGB);
+		INITIALIZE_STRING_FORMAT_TABLE(string_table);
 
-		ADD_BASIC_TYPE(float, 4);
-		ADD_BASIC_TYPE(bool, 4);
-		ADD_BASIC_TYPE(int, 4);
-		ADD_BASIC_TYPE(uint, 4);
-		ADD_BASIC_TYPE(double, 8)
+		ShaderReflectionFloatExtendedFormat float_format;
+		ShaderReflectionIntegerExtendedFormat integer_format;
+
+		// 1 component float
+		float_format.formats[ECS_SHADER_REFLECTION_FLOAT] = DXGI_FORMAT_R32_FLOAT;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_8] = DXGI_FORMAT_R8_UNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_8] = DXGI_FORMAT_R8_SNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_16] = DXGI_FORMAT_R16_UNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_16] = DXGI_FORMAT_R16_SNORM;
+		ADD_TO_FORMAT_TABLE(float, float_format, float_table);
+
+		// 2 component float
+		float_format.formats[ECS_SHADER_REFLECTION_FLOAT] = DXGI_FORMAT_R32G32_FLOAT;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_8] = DXGI_FORMAT_R8G8_UNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_8] = DXGI_FORMAT_R8G8_SNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_16] = DXGI_FORMAT_R16G16_UNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_16] = DXGI_FORMAT_R16G16_SNORM;
+		ADD_TO_FORMAT_TABLE(float2, float_format, float_table);
+
+		// 3 component float
+		float_format.formats[ECS_SHADER_REFLECTION_FLOAT] = DXGI_FORMAT_R32G32B32_FLOAT;
+
+		// There are no equivalent formats for the 3 component width - error if asked for
+		// this type of format
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_8] = DXGI_FORMAT_FORCE_UINT;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_8] = DXGI_FORMAT_FORCE_UINT;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_16] = DXGI_FORMAT_FORCE_UINT;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_16] = DXGI_FORMAT_FORCE_UINT;
+		ADD_TO_FORMAT_TABLE(float3, float_format, float_table);
+
+		// 4 component float
+		float_format.formats[ECS_SHADER_REFLECTION_FLOAT] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_8] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_8] = DXGI_FORMAT_R8G8B8A8_SNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_UNORM_16] = DXGI_FORMAT_R16G16B16A16_UNORM;
+		float_format.formats[ECS_SHADER_REFLECTION_SNORM_16] = DXGI_FORMAT_R16G16B16A16_SNORM;
+		ADD_TO_FORMAT_TABLE(float4, float_format, float_table);
+
+		// 1 component integer
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_8] = DXGI_FORMAT_R8_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_16] = DXGI_FORMAT_R16_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_32] = DXGI_FORMAT_R32_UINT;
+		ADD_TO_FORMAT_TABLE(uint, integer_format, unsigned_table);
+
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_8] = DXGI_FORMAT_R8_SINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_16] = DXGI_FORMAT_R16_SINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_32] = DXGI_FORMAT_R32_SINT;
+		ADD_TO_FORMAT_TABLE(int, integer_format, signed_table);
+
+		// 2 component integer
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_8] = DXGI_FORMAT_R8G8_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_16] = DXGI_FORMAT_R16G16_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_32] = DXGI_FORMAT_R32G32_UINT;
+		ADD_TO_FORMAT_TABLE(uint2, integer_format, unsigned_table);
+
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_8] = DXGI_FORMAT_R8G8_SINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_16] = DXGI_FORMAT_R16G16_SINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_32] = DXGI_FORMAT_R32G32_SINT;
+		ADD_TO_FORMAT_TABLE(int2, integer_format, signed_table);
+
+		// 3 component integer
+
+		// There are no 3 component 8 or 16 bit formats - only 32 bit
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_8] = DXGI_FORMAT_FORCE_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_16] = DXGI_FORMAT_FORCE_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_32] = DXGI_FORMAT_R32G32B32_UINT;
+		ADD_TO_FORMAT_TABLE(uint3, integer_format, unsigned_table);
+
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_8] = DXGI_FORMAT_FORCE_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_16] = DXGI_FORMAT_FORCE_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_32] = DXGI_FORMAT_R32G32B32_SINT;
+		ADD_TO_FORMAT_TABLE(int3, integer_format, signed_table);
+
+		// 4 component integer
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_8] = DXGI_FORMAT_R8G8B8A8_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_16] = DXGI_FORMAT_R16G16B16A16_UINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_UINT_32] = DXGI_FORMAT_R32G32B32A32_UINT;
+		ADD_TO_FORMAT_TABLE(uint4, integer_format, unsigned_table);
+
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_8] = DXGI_FORMAT_R8G8B8A8_SINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_16] = DXGI_FORMAT_R16G16B16A16_SINT;
+		integer_format.formats[ECS_SHADER_REFLECTION_SINT_32] = DXGI_FORMAT_R32G32B32A32_SINT;
+		ADD_TO_FORMAT_TABLE(int4, integer_format, signed_table);
 	}
 
 	bool ShaderReflection::ReflectVertexShaderInput(const wchar_t* path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool)
@@ -297,9 +502,12 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 				structure_name++;
 
 				char* last_character = structure_name;
-				last_character = (char*)function::PredicateValue<uintptr_t>(*last_character == '{', (uintptr_t)last_character + 2, (uintptr_t)last_character);
+				last_character = (char*)function::Select<uintptr_t>(*last_character == '{', (uintptr_t)last_character + 2, (uintptr_t)last_character);
 				while (*last_character != '}') {
 					size_t current_index = elements.size;
+
+					const char* type_start = function::SkipWhitespace(last_character);
+					const char* type_end = function::SkipCodeIdentifier(type_start);
 
 					// make the end line character \0 for C functions
 					char* end_line = strchr(last_character, '\n');
@@ -309,13 +517,19 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					}
 					*end_line = '\0';
 
-					// advance till the colon : to get the semantic
-					char* current_character = last_character;
-					current_character = strchr(current_character, ':');
-					if (current_character == nullptr) {
+					if (type_start > end_line || type_end > end_line) {
 						ECS_FREEA(allocation);
 						return false;
 					}
+
+					// advance till the colon : to get the semantic
+					char* current_character = last_character;
+					const char* colon_character = strchr(current_character, ':');
+					if (colon_character == nullptr) {
+						ECS_FREEA(allocation);
+						return false;
+					}
+					current_character = (char*)colon_character;
 
 					current_character++;
 					while (*current_character == ' ' || *current_character == '\t') {
@@ -327,32 +541,103 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					}
 					size_t semantic_name_size = current_character - semantic_name;
 
-					// Get the format
+					// Get the format - if there is any
 					while (*current_character == '\t' || *current_character == ' ') {
 						current_character++;
 					}
 
-					current_character = strstr(current_character, STRING(ECS_REFLECT_FORMAT));
-					if (current_character == nullptr) {
-						ECS_FREEA(allocation);
-						return false;
-					}
-
-					current_character += strlen(STRING(ECS_REFLECT_FORMAT)) + 1;
-					char* parenthese = current_character + 1;
-					while (*parenthese != ')') {
-						parenthese++;
-					}
-
-					// Format
-					ResourceIdentifier identifier(current_character, parenthese - current_character);
-					unsigned int hash = Hash::Hash(identifier);
 					DXGI_FORMAT format;
-					bool success = format_table.TryGetValue(hash, identifier, format);
-					if (!success) {
+					const char* reflect_format = strstr(current_character, STRING(ECS_REFLECT_FORMAT));
+					// Inferred format 
+					if (reflect_format == nullptr) {
+						// Get the basic type - the "row" of the matrix
+						char* x_character = (char*)strchr(type_start, 'x');
+						const char* basic_type_end = type_end;
+						if (x_character != nullptr) {
+							basic_type_end = x_character;
+						}
+
+						// Make end \0 for strstr
+						char* mutable_type_end = (char*)type_end;
+						*mutable_type_end = '\0';
+
+						// Check for modifiers 
+						const char* has_float = strstr(type_start, "float");
+						if (has_float != nullptr) {
+							unsigned int modifier_index = 0;
+
+							// Look for float modifiers
+							for (size_t index = 0; index < std::size(DXGI_FLOAT_FORMAT_MAPPINGS); index++) {
+								const char* modifier = strstr(colon_character, DXGI_FLOAT_FORMAT_MAPPINGS[index]);
+								if (modifier != nullptr) {
+									modifier_index = index + 1;
+									break;
+								}
+							}
+
+							ResourceIdentifier identifier(type_start, basic_type_end - type_start);
+							unsigned int hash = Hash::Hash(identifier);
+							ShaderReflectionFloatExtendedFormat extended_format;
+							bool success = float_table.TryGetValue(hash, identifier, extended_format);
+							if (!success) {
+								ECS_FREEA(allocation);
+								return false;
+							}
+
+							format = extended_format.formats[modifier_index];
+						}
+						else {
+							// UINT
+							const char* has_uint = strstr(type_start, "uint");
+							if (has_uint != nullptr) {
+								format = GetModifiedIntegerFormat(
+									Stream<const char*>(DXGI_UINT_FORMAT_MAPPINGS, std::size(DXGI_UINT_FORMAT_MAPPINGS)), 
+									colon_character, 
+									type_start, 
+									basic_type_end, 
+									unsigned_table
+								);
+							}
+							else {
+								// SINT
+								const char* has_sint = strstr(type_start, "int");
+								if (has_sint != nullptr) {
+									format = GetModifiedIntegerFormat(
+										Stream<const char*>(DXGI_UINT_FORMAT_MAPPINGS, std::size(DXGI_UINT_FORMAT_MAPPINGS)),
+										colon_character,
+										type_start,
+										basic_type_end,
+										signed_table
+									);
+								}
+							}
+						}
+					}
+					else {
+						current_character = (char*)reflect_format + strlen(STRING(ECS_REFLECT_FORMAT)) + 1;
+						char* parenthese = current_character + 1;
+						while (*parenthese != ')') {
+							parenthese++;
+						}
+
+						// Format
+						ResourceIdentifier identifier(current_character, parenthese - current_character);
+						unsigned int hash = Hash::Hash(identifier);
+						bool success = string_table.TryGetValue(hash, identifier, format);
+						if (!success) {
+							ECS_FREEA(allocation);
+							return false;
+						}
+
+						current_character = parenthese;
+					}
+
+					// Check for incorrect formats
+					if (format == DXGI_FORMAT_FORCE_UINT) {
 						ECS_FREEA(allocation);
 						return false;
 					}
+
 					elements[current_index].Format = format;
 					// Aligned offset
 					elements[current_index].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
@@ -362,7 +647,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 
 					// Input slot - only do the check if increment input slot has not been specified
 					if (!is_increment_input_slot) {
-						char* input_slot = strstr(parenthese, STRING(ECS_REFLECT_INPUT_SLOT));
+						char* input_slot = strstr(current_character, STRING(ECS_REFLECT_INPUT_SLOT));
 						if (input_slot != nullptr) {
 							input_slot += strlen(STRING(ECS_REFLECT_INPUT_SLOT)) + 2;
 							char* starting_input_slot = input_slot;
@@ -380,7 +665,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					}
 
 					// Instance
-					char* instance = strstr(parenthese, STRING(ECS_REFLECT_INSTANCE));
+					char* instance = strstr(current_character, STRING(ECS_REFLECT_INSTANCE));
 					if (instance == nullptr) {
 						elements[current_index].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 						elements[current_index].InstanceDataStepRate = 0;
@@ -396,11 +681,16 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					}
 
 					// Semantic count
-					char* semantic_count = strstr(parenthese, STRING(ECS_REFLECT_SEMANTIC_COUNT));
+					char* semantic_count = strstr(current_character, STRING(ECS_REFLECT_SEMANTIC_COUNT));
+					size_t integer_semantic_count = 0;
 					if (semantic_count == nullptr) {
-						elements[current_index].SemanticIndex = 0;
-						elements.size++;
-						elements.AssertCapacity();
+						// Deduce the semantic count - for matrix types the second number gives the semantic count
+						integer_semantic_count = GetBasicTypeSemanticCount(type_start, type_end);
+						// Incorrect type
+						if (integer_semantic_count == -1) {
+							ECS_FREEA(allocation);
+							return false;
+						}
 					}
 					else {
 						semantic_count += strlen(STRING(ECS_REFLECT_SEMANTIC_COUNT)) + 2;
@@ -408,14 +698,15 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 						while (function::IsNumberCharacter(*semantic_count)) {
 							semantic_count++;
 						}
-						size_t count = function::ConvertCharactersToInt<size_t>(Stream<char>(semantic_count_start, semantic_count - semantic_count_start));
-						elements.size += count;
-						elements.AssertCapacity();
-						elements[current_index].SemanticIndex = 0;
-						for (size_t index = 1; index < count; index++) {
-							memcpy(elements.buffer + current_index + index, elements.buffer + current_index, sizeof(D3D11_INPUT_ELEMENT_DESC));
-							elements[current_index + index].SemanticIndex = index;
-						}
+						integer_semantic_count = function::ConvertCharactersToInt<size_t>(Stream<char>(semantic_count_start, semantic_count - semantic_count_start));
+					}
+
+					elements[current_index].SemanticIndex = 0;
+					elements.size += integer_semantic_count;
+					elements.AssertCapacity();
+					for (size_t index = 1; index < integer_semantic_count; index++) {
+						memcpy(elements.buffer + current_index + index, elements.buffer + current_index, sizeof(D3D11_INPUT_ELEMENT_DESC));
+						elements[current_index + index].SemanticIndex = index;
 					}
 
 					last_character = end_line + 1;
@@ -501,8 +792,8 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 
 					ResourceIdentifier identifier(start_type_ptr, current_character - start_type_ptr);
 					unsigned int hash = Hash::Hash(identifier);
-					size_t byte_size;
-					if (!type_table.TryGetValue(hash, identifier, byte_size)) {
+					size_t byte_size = GetBasicTypeByteSize(start_type_ptr, current_character);
+					if (byte_size == -1) {
 						ECS_FREEA(allocation);
 						return false;
 					}
@@ -530,7 +821,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					unsigned short register_index;
 					bool default_register = ParseNameAndRegister(current_buffer, name_pool, name, register_index);
 					buffers[current_index].name = name;
-					buffers[current_index].register_index = function::PredicateValue<unsigned int>(default_register, current_index - constant_buffer_count, register_index);
+					buffers[current_index].register_index = function::Select<unsigned int>(default_register, current_index - constant_buffer_count, register_index);
 
 					buffers.size++;
 					*end_line = '\n';
@@ -579,7 +870,7 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 					size_t current_index = textures.size;
 					textures[current_index].name = name;
 					textures[current_index].type = (ShaderTextureType)index;
-					textures[current_index].register_index = function::PredicateValue<unsigned short>(default_value, current_index, register_index);
+					textures[current_index].register_index = function::Select<unsigned short>(default_value, current_index, register_index);
 
 					*end_line = '\n';
 					texture_ptr = strstr(end_line + 1, TEXTURE_KEYWORDS[index]);
@@ -661,7 +952,8 @@ ADD_TO_TYPE_TABLE(type##4x4, byte_size * 16);
 
 	size_t ShaderReflection::MemoryOf()
 	{
-		return ShaderReflectionFormatTable::MemoryOf(FORMAT_TABLE_CAPACITY) + ShaderReflectionTypeTable::MemoryOf(TYPE_TABLE_CAPACITY);
+		return ShaderReflectionFormatTable::MemoryOf(STRING_FORMAT_TABLE_CAPACITY) + ShaderReflectionFloatFormatTable::MemoryOf(FLOAT_FORMAT_TABLE_CAPACITY) +
+			ShaderReflectionIntegerFormatTable::MemoryOf(INTEGER_FORMAT_TABLE_CAPACITY) * 2;
 	}
 
 }

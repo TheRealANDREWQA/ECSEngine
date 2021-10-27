@@ -1,6 +1,5 @@
 #pragma once
 #include "../Core.h"
-#include "ShaderReflectionMacros.h"
 #include "../Containers/Stream.h"
 #include "../Containers/HashTable.h"
 #include "../Internal/InternalStructures.h"
@@ -9,8 +8,39 @@
 
 namespace ECSEngine {
 
+	enum ShaderReflectionFloatFormatTableType : unsigned char {
+		ECS_SHADER_REFLECTION_FLOAT,
+		ECS_SHADER_REFLECTION_UNORM_8,
+		ECS_SHADER_REFLECTION_SNORM_8,
+		ECS_SHADER_REFLECTION_UNORM_16,
+		ECS_SHADER_REFLECTION_SNORM_16,
+		ECS_SHADER_REFLECTION_FLOAT_TABLE_COUNT
+	};
+
+	enum ShaderReflectionSignedIntegerFormatTableType : unsigned char {
+		ECS_SHADER_REFLECTION_SINT_8,
+		ECS_SHADER_REFLECTION_SINT_16,
+		ECS_SHADER_REFLECTION_SINT_32
+	};
+
+	enum ShaderReflectionUnsignedIntegerFormatTableType : unsigned char {
+		ECS_SHADER_REFLECTION_UINT_8,
+		ECS_SHADER_REFLECTION_UINT_16,
+		ECS_SHADER_REFLECTION_UINT_32,
+		ECS_SHADER_REFLECTION_INTEGER_TABLE_COUNT
+	};
+
+	struct ShaderReflectionFloatExtendedFormat {
+		DXGI_FORMAT formats[ECS_SHADER_REFLECTION_FLOAT_TABLE_COUNT];
+	};
+
+	struct ShaderReflectionIntegerExtendedFormat {
+		DXGI_FORMAT formats[ECS_SHADER_REFLECTION_INTEGER_TABLE_COUNT];
+	};
+
 	using ShaderReflectionFormatTable = containers::IdentifierHashTable<DXGI_FORMAT, ResourceIdentifier, HashFunctionPowerOfTwo>;
-	using ShaderReflectionTypeTable = containers::IdentifierHashTable<size_t, ResourceIdentifier, HashFunctionPowerOfTwo>;
+	using ShaderReflectionFloatFormatTable = containers::IdentifierHashTable<ShaderReflectionFloatExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo>;
+	using ShaderReflectionIntegerFormatTable = containers::IdentifierHashTable<ShaderReflectionIntegerExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo>;
 
 	enum class ShaderBufferType {
 		Constant,
@@ -87,8 +117,10 @@ namespace ECSEngine {
 		// Returns the amount of bytes necessary to create an instance of this class
 		static size_t MemoryOf();
 
-		ShaderReflectionFormatTable format_table;
-		ShaderReflectionTypeTable type_table;
+		ShaderReflectionFormatTable string_table;
+		ShaderReflectionFloatFormatTable float_table;
+		ShaderReflectionIntegerFormatTable unsigned_table;
+		ShaderReflectionIntegerFormatTable signed_table;
 	};
 
 }

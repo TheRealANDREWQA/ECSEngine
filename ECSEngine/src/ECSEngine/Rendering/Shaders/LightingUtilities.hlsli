@@ -76,7 +76,41 @@ cbuffer SpotLightBuffer
     float SpotLightRangeAttenuation : packoffset(c3.y);
 }
 
+struct CapsuleLight 
+{
+    // Direction must be normalized
+    float3 position : packoffset(c0);
+    float range_reciprocal : packoffset(c0.w);
+    float3 direction : packoffset(c1);
+    float length : packoffset(c1.w);
+    float3 color : packoffset(c2);
+    float attenuation_power : packoffset(c2.w);
+}
+
+cbuffer CapsuleLightBuffer 
+{
+    // Direction must be normalized
+    float3 CapsuleLightPosition : packoffset(c0);
+    float CapsuleLightRangeReciprocal : packoffset(c0.w);
+    float3 CapsuleLightDirection : packoffset(c1);
+    float CapsuleLightLength : packoffset(c1.w);
+    float3 CapsuleLightColor : packoffset(c2);
+    float CapsuleLightAttenuation : packoffset(c2.w);
+}
+
 */
+
+float3 GetClosestPointToSegment(float3 original_point, float3 segment_point, float3 segment_normalized_direction, float segment_length)
+{
+    // Calculate the closest point from the line segment to the point
+    float3 point_to_segment = original_point - segment_point;
+    
+    // The percentage of the line segment size
+    float line_segment_size = dot(point_to_segment, segment_normalized_direction) / segment_length;
+    
+    // Saturate the segment size and multiply again with the light direction length
+    return segment_point + segment_normalized_direction * (saturate(line_segment_size) * segment_length);
+}
 
 float3 CalculateAmbient(float3 normal, float3 color, float3 ambient_down_color, float3 ambient_up_color)
 {
@@ -223,4 +257,38 @@ float3 CalculateSpotLight(
     // Attenuation
     float range_attenuation = CalculateLightRangeAttenuation(distance_to_light, light_range_reciprocal, light_range_attenuation);
     return blinn_phong * cone_attenuation * range_attenuation;
+}
+
+// Light direction must be normalized
+float3 CalculateCapsuleLight(
+    float3 normalized_normal,
+    float3 normalized_view_direction,
+    float3 world_position,
+    float3 pixel_color,
+    float3 light_position,
+    float3 light_direction,
+    float3 light_color,
+    float light_range_reciprocal,
+    float light_length,
+    float light_attenuation,
+    float specular_exponent,
+    float specular_intensity
+)
+{
+    // Get the closest point from the pixel to the capsule line segment
+    float3 closest_point = GetClosestPointToSegment(world_position, light_position, light_direction, light_length);
+
+    // Once the closest point has been calculated, it can simply be treated as a point light
+    return CalculatePointLight(
+        normalized_normal,
+        normalized_view_direction,
+        world_position,
+        pixel_color,
+        closest_point,
+        light_color,
+        light_range_reciprocal,
+        light_attenuation,
+        specular_exponent,
+        specular_intensity
+    );
 }

@@ -196,10 +196,10 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor) {
 			data->solution_path_wide->size = wcslen(data->solution_path_wide->buffer);
 
 			if (data->graphics_module) {
-				SetGraphicsModule(data->editor_state, *data->solution_path_wide, library_name);
+				SetProjectGraphicsModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
 			}
 			else {
-				AddProjectModule(data->editor_state, *data->solution_path_wide, library_name, ModuleConfiguration::Debug);
+				AddProjectModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
 			}
 
 			EDITOR_STATE(data->editor_state);
@@ -260,12 +260,7 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 
 	ModuleExplorerData* data = (ModuleExplorerData*)_data;
 	if (data->selected_module != -1) {
-		if (data->selected_module == GRAPHICS_MODULE_INDEX) {
-			ResetProjectGraphicsModule(data->editor_state);
-		}
-		else {
-			RemoveProjectModule(data->editor_state, data->selected_module);
-		}
+		RemoveProjectModule(data->editor_state, data->selected_module);
 		data->selected_module = -1;
 		bool success = SaveModuleFile(data->editor_state);
 		if (!success) {
@@ -321,7 +316,6 @@ void ModuleExplorerReset(ActionData* action_data) {
 
 	ModuleExplorerData* data = (ModuleExplorerData*)_data;
 	ResetProjectModules(data->editor_state);
-	ResetProjectGraphicsModule(data->editor_state);
 	data->selected_module = -1;
 	bool success = SaveModuleFile(data->editor_state);
 	if (!success) {
@@ -418,7 +412,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 		is_selected_state.state = explorer_data->selected_module != -1;
 	}
 	else {
-		is_selected_state.state = editor_state->graphics_module.library_name.size > 0 && editor_state->graphics_module.solution_path.size > 0;
+		is_selected_state.state = HasGraphicsModule(editor_state);
 	}
 	config.AddFlag(is_selected_state);
 
@@ -457,10 +451,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 	
 	unsigned char default_value = 0;
 	unsigned char* configuration_ptr = &default_value;
-	if (explorer_data->selected_module == GRAPHICS_MODULE_INDEX) {
-		configuration_ptr = GetModuleGraphicsConfigurationPtr(editor_state);
-	}
-	else if (explorer_data->selected_module != -1) {
+	if (explorer_data->selected_module != -1) {
 		configuration_ptr = GetModuleConfigurationPtr(editor_state, explorer_data->selected_module);
 	}
 
@@ -488,12 +479,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 		ECS_TEMP_STRING(path, 256);
 		GetBaseModulePath(data->editor_state, path);
 		path.Add(ECS_OS_PATH_SEPARATOR);
-		if (data->selected_module == GRAPHICS_MODULE_INDEX) {
-			path.AddStream(data->editor_state->graphics_module.library_name);
-		}
-		else {
-			path.AddStream(modules->buffer[data->selected_module].library_name);
-		}
+		path.AddStream(modules->buffer[data->selected_module].library_name);
 		size_t path_size = path.size;
 
 		for (size_t index = 0; index < std::size(MODULE_ASSOCIATED_FILES); index++) {
@@ -581,7 +567,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 #pragma region Module draw base
 
 	// index GRAPHICS_MODULE_INDEX is used to signal the graphics module
-	auto module_draw_base = [&](Stream<wchar_t> module_name, ModuleLoadStatus load_status, unsigned int index) {
+	auto module_draw_base = [&](Stream<wchar_t> module_name, EditorModuleLoadStatus load_status, unsigned int index) {
 		constexpr size_t MODULE_SPRITE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM;
 		constexpr size_t BUTTON_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X |
 			UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE | UI_CONFIG_TEXT_PARAMETERS;
@@ -593,19 +579,19 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 		config.AddFlag(transform);
 
 		switch (load_status) {
-			case ModuleLoadStatus::Good:
+			case EditorModuleLoadStatus::Good:
 					drawer.SpriteRectangle<MODULE_SPRITE_CONFIGURATION>(config, ECS_TOOLS_UI_TEXTURE_MODULE, EDITOR_GREEN_COLOR);
 					drawer.Indent();
 					drawer.SpriteRectangle<MODULE_SPRITE_CONFIGURATION>(config, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, EDITOR_GREEN_COLOR);
 					drawer.Indent();
 					break;		
-			case ModuleLoadStatus::OutOfDate:
+			case EditorModuleLoadStatus::OutOfDate:
 					drawer.SpriteRectangle<MODULE_SPRITE_CONFIGURATION>(config, ECS_TOOLS_UI_TEXTURE_MODULE, EDITOR_YELLOW_COLOR);
 					drawer.Indent();
 					drawer.SpriteRectangle<MODULE_SPRITE_CONFIGURATION>(config, ECS_TOOLS_UI_TEXTURE_CLOCK, EDITOR_YELLOW_COLOR);
 					drawer.Indent();
 					break;
-			case ModuleLoadStatus::Failed:
+			case EditorModuleLoadStatus::Failed:
 					drawer.SpriteRectangle<MODULE_SPRITE_CONFIGURATION>(config, ECS_TOOLS_UI_TEXTURE_MODULE, EDITOR_RED_COLOR);
 					drawer.Indent();
 					drawer.SpriteRectangle<MODULE_SPRITE_CONFIGURATION>(config, ECS_TOOLS_UI_TEXTURE_X, EDITOR_RED_COLOR);
@@ -653,12 +639,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 		UIConfigTextParameters text_parameters;
 		text_parameters.size = drawer.GetFontSize();
 		text_parameters.character_spacing = drawer.font.character_spacing;
-		if (index == GRAPHICS_MODULE_INDEX) {
-			text_parameters.color = MODULE_COLORS[GetModuleGraphicsConfigurationChar(editor_state)];
-		}
-		else {
-			text_parameters.color = MODULE_COLORS[GetModuleConfigurationChar(editor_state, index)];
-		}
+		text_parameters.color = MODULE_COLORS[GetModuleConfigurationChar(editor_state, index)];
 		config.AddFlag(text_parameters);
 
 		if (index == explorer_data->selected_module) {
@@ -689,21 +670,23 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 
 	size_t lazy_solution_duration = explorer_data->lazy_solution_last_write_timer.GetDurationSinceMarker_ms();
 
-	if (UpdateProjectModuleGraphicsLibraryLastWrite(editor_state)) {
-		LoadModuleGraphics(editor_state);
-	}
-	if (lazy_solution_duration > LAZY_SOLUTION_LAST_WRITE_TARGET_MILLISECONDS) {
-		bool is_updated = UpdateProjectModuleGraphicsSolutionLastWrite(editor_state);
-		if (is_updated && editor_state->graphics_module.load_status == ModuleLoadStatus::Good) {
-			editor_state->graphics_module.load_status = ModuleLoadStatus::OutOfDate;
+	if (HasGraphicsModule(editor_state)) {
+		if (UpdateProjectModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
+			LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX);
+		}
+		if (lazy_solution_duration > LAZY_SOLUTION_LAST_WRITE_TARGET_MILLISECONDS) {
+			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
+			if (is_updated && project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status == EditorModuleLoadStatus::Good) {
+				project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status = EditorModuleLoadStatus::OutOfDate;
+			}
 		}
 	}
 
-	if (editor_state->graphics_module.library_name.size == 0) {
-		module_draw_base(ToStream(L"No graphics module is selected."), ModuleLoadStatus::Failed, GRAPHICS_MODULE_INDEX);
+	if (project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name.size == 0 || project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size == 0) {
+		module_draw_base(ToStream(L"No graphics module is selected."), EditorModuleLoadStatus::Failed, GRAPHICS_MODULE_INDEX);
 	}
 	else {
-		module_draw_base(editor_state->graphics_module.library_name, editor_state->graphics_module.load_status, GRAPHICS_MODULE_INDEX);
+		module_draw_base(project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name, project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status, GRAPHICS_MODULE_INDEX);
 	}
 
 #pragma endregion
@@ -718,7 +701,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 	header_config.flag_count--;
 
 	if (lazy_solution_duration > LAZY_SOLUTION_LAST_WRITE_TARGET_MILLISECONDS) {
-		for (size_t index = 0; index < project_modules->size; index++) {
+		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
 			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
 				bool success = false;
 				if (project_modules->buffer[index].library_last_write_time != 0) {
@@ -727,15 +710,15 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 				SetModuleLoadStatus(project_modules->buffer + index, success);
 			}
 			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, index);
-			if (is_updated && project_modules->buffer[index].load_status == ModuleLoadStatus::Good) {
-				project_modules->buffer[index].load_status = ModuleLoadStatus::OutOfDate;
+			if (is_updated && project_modules->buffer[index].load_status == EditorModuleLoadStatus::Good) {
+				project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
 			}
 			module_draw_base(project_modules->buffer[index].library_name, project_modules->buffer[index].load_status, index);
 		}
 		explorer_data->lazy_solution_last_write_timer.SetMarker();
 	}
 	else {
-		for (size_t index = 0; index < project_modules->size; index++) {
+		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
 			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
 				bool success = false;
 				if (project_modules->buffer[index].library_last_write_time != 0) {

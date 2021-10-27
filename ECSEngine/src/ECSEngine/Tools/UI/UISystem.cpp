@@ -402,7 +402,7 @@ namespace ECSEngine {
 			// making this nullptr in order for the write argument to copy correctly
 			default_click.hoverable_handler.data = nullptr;
 			default_click.click_handler = data.clickable_handler;
-			void* clickable_data = (void*)function::PredicateValue(data.clickable_handler.data == nullptr, (uintptr_t)&default_click, (uintptr_t)data.clickable_handler.data);
+			void* clickable_data = (void*)function::Select(data.clickable_handler.data == nullptr, (uintptr_t)&default_click, (uintptr_t)data.clickable_handler.data);
 			
 			AddHoverableToDockspaceRegion(
 				data.thread_id,
@@ -442,7 +442,7 @@ namespace ECSEngine {
 			default_click.click_handler = data.clickable_handler;
 			default_click.hoverable_handler.action = data.hoverable_handler.action;
 			default_click.hoverable_handler.data = nullptr;
-			void* clickable_data = (void*)function::PredicateValue(data.clickable_handler.data == nullptr, (uintptr_t)&default_click, (uintptr_t)data.clickable_handler.data);
+			void* clickable_data = (void*)function::Select(data.clickable_handler.data == nullptr, (uintptr_t)&default_click, (uintptr_t)data.clickable_handler.data);
 			AddActionHandler(
 				allocator,
 				hoverable,
@@ -555,9 +555,9 @@ namespace ECSEngine {
 			click_data.max_duration_between_clicks = duration_between_clicks;
 			click_data.first_click_handler.data = nullptr;
 			click_data.identifier = identifier;
-			void* first_click_data = (void*)function::PredicateValue(first_click_handler.data == nullptr, (uintptr_t)&click_data, (uintptr_t)first_click_handler.data);
-			void* second_click_data = (void*)function::PredicateValue(second_click_handler.data == nullptr, (uintptr_t)&click_data, (uintptr_t)second_click_handler.data);
-			UIDrawPhase phase = (UIDrawPhase)function::PredicateValue(
+			void* first_click_data = (void*)function::Select(first_click_handler.data == nullptr, (uintptr_t)&click_data, (uintptr_t)first_click_handler.data);
+			void* second_click_data = (void*)function::Select(second_click_handler.data == nullptr, (uintptr_t)&click_data, (uintptr_t)second_click_handler.data);
+			UIDrawPhase phase = (UIDrawPhase)function::Select(
 				(unsigned int)first_click_handler.phase > (unsigned int)second_click_handler.phase,
 				(unsigned int)first_click_handler.phase, 
 				(unsigned int)second_click_handler.phase
@@ -1992,7 +1992,7 @@ namespace ECSEngine {
 
 			m_windows[window_index].private_handler.action = descriptor.private_action;
 			if (descriptor.private_action_data_size != 0) {
-				m_windows[window_index].private_handler.data_size = function::PredicateValue(descriptor.private_action_data_size == 0, 8ull, descriptor.private_action_data_size);
+				m_windows[window_index].private_handler.data_size = function::Select(descriptor.private_action_data_size == 0, 8ull, descriptor.private_action_data_size);
 				m_windows[window_index].private_handler.data = m_memory->Allocate(m_windows[window_index].private_handler.data_size);
 				memcpy(m_windows[window_index].private_handler.data, descriptor.private_action_data, descriptor.private_action_data_size);
 			}
@@ -2014,7 +2014,7 @@ namespace ECSEngine {
 			}
 
 			// resource table
-			unsigned short resource_count = function::PredicateValue(descriptor.resource_count == 0, m_descriptors.misc.window_table_default_count, descriptor.resource_count);
+			unsigned short resource_count = function::Select(descriptor.resource_count == 0, m_descriptors.misc.window_table_default_count, descriptor.resource_count);
 			void* table_allocation = m_memory->Allocate(WindowTable::MemoryOf(resource_count), 8);
 			memset(table_allocation, 0, WindowTable::MemoryOf(resource_count));
 			m_windows[window_index].table = WindowTable(table_allocation, resource_count);
@@ -2235,10 +2235,10 @@ namespace ECSEngine {
 				second_y.store(handler->scale_y + index);
 			}
 			for (; index < handler->position_x.size; index++) {
-				handler->position_x[index] = function::PredicateValue(handler->position_x[index] < left, left, handler->position_x[index]);
-				handler->position_y[index] = function::PredicateValue(handler->position_y[index] < top, top, handler->position_y[index]);
-				handler->scale_x[index] = function::PredicateValue(handler->scale_x[index] + handler->position_x[index] > right, right - handler->position_x[index], handler->scale_x[index]);
-				handler->scale_y[index] = function::PredicateValue(handler->scale_y[index] + handler->position_y[index] > bottom, bottom - handler->position_y[index], handler->scale_y[index]);
+				handler->position_x[index] = function::Select(handler->position_x[index] < left, left, handler->position_x[index]);
+				handler->position_y[index] = function::Select(handler->position_y[index] < top, top, handler->position_y[index]);
+				handler->scale_x[index] = function::Select(handler->scale_x[index] + handler->position_x[index] > right, right - handler->position_x[index], handler->scale_x[index]);
+				handler->scale_y[index] = function::Select(handler->scale_y[index] + handler->position_y[index] > bottom, bottom - handler->position_y[index], handler->scale_y[index]);
 			}
 		}
 
@@ -3298,7 +3298,7 @@ namespace ECSEngine {
 				auto phase_copy = m_resources.thread_resources[0].phase;
 				HandleHoverable(mouse_position, 0, buffers, counts);
 				m_resources.thread_resources[0].phase = phase_copy;
-				m_frame_pacing = function::PredicateValue<unsigned int>(m_frame_pacing < 1, 1, m_frame_pacing);
+				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < 1, 1, m_frame_pacing);
 			}
 			if (m_focused_window_data.clickable_handler.phase == UIDrawPhase::System) {
 				if (m_mouse_tracker->LeftButton() == MBHELD || m_mouse_tracker->LeftButton() == MBPRESSED) {
@@ -3318,13 +3318,13 @@ namespace ECSEngine {
 					m_focused_window_data.clickable_handler.phase = UIDrawPhase::Normal;
 					m_resources.thread_resources[0].phase = phase_copy;
 				}
-				m_frame_pacing = function::PredicateValue<unsigned int>(m_frame_pacing < 2, 2, m_frame_pacing);
+				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < 2, 2, m_frame_pacing);
 			}
 			if (m_focused_window_data.general_handler.phase == UIDrawPhase::System) {
 				auto phase_copy = m_resources.thread_resources[0].phase;
 				HandleFocusedWindowGeneral(mouse_position, 0);
 				m_resources.thread_resources[0].phase = phase_copy;
-				m_frame_pacing = function::PredicateValue<unsigned int>(m_frame_pacing < 2, 2, m_frame_pacing);
+				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < 2, 2, m_frame_pacing);
 			}
 
 			if (m_focused_window_data.additional_general_data != nullptr && m_focused_window_data.general_handler.data_size > 0) {
@@ -3685,7 +3685,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::PredicateValue<unsigned int>(is_hoverable && m_frame_pacing < 1, 1, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < 1, 1, m_frame_pacing);
 				}
 
 				if (m_mouse_tracker->LeftButton() == MBPRESSED) {
@@ -3719,7 +3719,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::PredicateValue<unsigned int>(is_clicked || is_general && m_frame_pacing < 2, 2, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_clicked || is_general && m_frame_pacing < 2, 2, m_frame_pacing);
 				}
 			}
 
@@ -3940,7 +3940,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::PredicateValue<unsigned int>(is_hoverable && m_frame_pacing < 1, 1, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < 1, 1, m_frame_pacing);
 				}
 				if (m_mouse_tracker->LeftButton() == MBPRESSED) {
 					DockspaceType floating_type;
@@ -3971,7 +3971,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::PredicateValue<unsigned int>(is_clickable && is_general && m_frame_pacing < 2, 2, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_clickable && is_general && m_frame_pacing < 2, 2, m_frame_pacing);
 				}
 			}
 
@@ -4411,8 +4411,8 @@ namespace ECSEngine {
 			size_t* counts = action_data->counts;
 			float2 mouse_position = action_data->mouse_position;
 			position += data->offset;
-			position.x += function::PredicateValue(data->offset_scale.x, scale.x, 0.0f);
-			position.y += function::PredicateValue(data->offset_scale.y, scale.y, 0.0f);
+			position.x += function::Select(data->offset_scale.x, scale.x, 0.0f);
+			position.y += function::Select(data->offset_scale.y, scale.y, 0.0f);
 
 			size_t character_count = strlen(characters);
 			unsigned int new_line_characters[256];
@@ -4432,8 +4432,8 @@ namespace ECSEngine {
 			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
-			position.x = function::PredicateValue(position.x < -0.99f, -0.99f, position.x);
-			position.y = function::PredicateValue(position.y < -0.99f, -0.99f, position.y);
+			position.x = function::Select(position.x < -0.99f, -0.99f, position.x);
+			position.y = function::Select(position.y < -0.99f, -0.99f, position.y);
 			float2 initial_position = position;
 
 			position.x += m_descriptors.misc.tool_tip_padding.x;
@@ -4490,13 +4490,13 @@ namespace ECSEngine {
 
 				while (temp_stream[index] == temp_stream[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-					max_bounds.x = function::PredicateValue(max_bounds.x < position.x, position.x, max_bounds.x);
-					max_bounds.y = function::PredicateValue(max_bounds.y < position.y, position.y, max_bounds.y);
+					max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
+					max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
 					index++;
 				}
 
 				// last character will cause a next row jump and invalidate last recorded position on the x axis
-				max_bounds.x = function::PredicateValue(max_bounds.x < position.x, position.x, max_bounds.x);
+				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
 				bool is_available = true;
 				if (data->unavailable_rows != nullptr && data->unavailable_rows[row_index] == true) {
 					current_color = data->unavailable_font_color;
@@ -4525,8 +4525,8 @@ namespace ECSEngine {
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.x = function::PredicateValue(max_bounds.x < position.x, position.x, max_bounds.x);
-				max_bounds.y = function::PredicateValue(max_bounds.y < position.y, position.y, max_bounds.y);
+				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
+				max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
 				word_start_index = temp_stream[index] + 1;
 			}
 
@@ -4534,8 +4534,8 @@ namespace ECSEngine {
 			max_bounds.x += m_descriptors.misc.tool_tip_padding.x;
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = function::PredicateValue(max_bounds.x > 0.99f, max_bounds.x - 0.99f, 0.0f);
-			translation.y = function::PredicateValue(max_bounds.y > 0.99f, max_bounds.y - 0.99f, 0.0f);
+			translation.x = function::Select(max_bounds.x > 0.99f, max_bounds.x - 0.99f, 0.0f);
+			translation.y = function::Select(max_bounds.y > 0.99f, max_bounds.y - 0.99f, 0.0f);
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t index = initial_vertex_count; index < *count; index++) {
@@ -4592,8 +4592,8 @@ namespace ECSEngine {
 			size_t* counts = action_data->counts;
 			float2 mouse_position = action_data->mouse_position;
 			position += data->offset;
-			position.x += function::PredicateValue(data->offset_scale.x, scale.x, 0.0f);
-			position.y += function::PredicateValue(data->offset_scale.y, scale.y, 0.0f);
+			position.x += function::Select(data->offset_scale.x, scale.x, 0.0f);
+			position.y += function::Select(data->offset_scale.y, scale.y, 0.0f);
 			size_t word_start_index = 0;
 			size_t word_end_index = 0;
 
@@ -4602,8 +4602,8 @@ namespace ECSEngine {
 			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
-			position.x = function::PredicateValue(position.x < -0.99f, -0.99f, position.x);
-			position.y = function::PredicateValue(position.y < -0.99f, -0.99f, position.y);
+			position.x = function::Select(position.x < -0.99f, -0.99f, position.x);
+			position.y = function::Select(position.y < -0.99f, -0.99f, position.y);
 			float2 initial_position = position;
 
 			position.x += m_descriptors.misc.tool_tip_padding.x;
@@ -4646,7 +4646,7 @@ namespace ECSEngine {
 					);
 
 					text_span = ECSEngine::Tools::GetTextSpan(temp_vertex_stream);
-					max_left_scale = function::PredicateValue(max_left_scale < text_span.x, text_span.x, max_left_scale);
+					max_left_scale = function::Select(max_left_scale < text_span.x, text_span.x, max_left_scale);
 					position.x += text_span.x;
 					*count += temp_vertex_stream.size;
 				}
@@ -4661,7 +4661,7 @@ namespace ECSEngine {
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.y = function::PredicateValue(max_bounds.y < position.y, position.y, max_bounds.y);
+				max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
 				word_start_index = left_new_lines[index] + 1;
 			}
 
@@ -4683,7 +4683,7 @@ namespace ECSEngine {
 						data->font_size.y,
 						data->character_spacing
 					);
-					max_scale = function::PredicateValue(max_scale < text_span.x, text_span.x, max_scale);
+					max_scale = function::Select(max_scale < text_span.x, text_span.x, max_scale);
 					text_x_scale = text_span.x;
 				}
 				else {
@@ -4734,8 +4734,8 @@ namespace ECSEngine {
 #pragma region Translation if needed
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = function::PredicateValue(max_bounds.x > 0.99f, max_bounds.x - 0.99f, 0.0f);
-			translation.y = function::PredicateValue(max_bounds.y > 0.99f, max_bounds.y - 0.99f, 0.0f);
+			translation.x = function::Select(max_bounds.x > 0.99f, max_bounds.x - 0.99f, 0.0f);
+			translation.y = function::Select(max_bounds.y > 0.99f, max_bounds.y - 0.99f, 0.0f);
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t index = initial_vertex_count; index < *count; index++) {
@@ -4792,16 +4792,16 @@ namespace ECSEngine {
 
 				while (temp_stream[index] == temp_stream[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-					max_bounds.x = function::PredicateValue(max_bounds.x < position.x, position.x, max_bounds.x);
-					max_bounds.y = function::PredicateValue(max_bounds.y < position.y, position.y, max_bounds.y);
+					max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
+					max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
 					index++;
 				}
 
 				// last character will cause a next row jump and invalidate last recorded position on the x axis
-				max_bounds.x = function::PredicateValue(max_bounds.x < position.x, position.x, max_bounds.x);
+				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-				max_bounds.x = function::PredicateValue(max_bounds.x < position.x, position.x, max_bounds.x);
-				max_bounds.y = function::PredicateValue(max_bounds.y < position.y, position.y, max_bounds.y);
+				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
+				max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
 				word_start_index = temp_stream[index] + 1;
 			}
 
@@ -4846,7 +4846,7 @@ namespace ECSEngine {
 					data->font_size.y,
 					data->character_spacing
 				);
-				max_left_scale = function::PredicateValue(max_left_scale < text_span.x, text_span.x, max_left_scale);
+				max_left_scale = function::Select(max_left_scale < text_span.x, text_span.x, max_left_scale);
 				current_position = left_new_lines[index] + 1;
 			}
 
@@ -4859,7 +4859,7 @@ namespace ECSEngine {
 					data->font_size.y,
 					data->character_spacing
 				);
-				max_right_scale = function::PredicateValue(max_right_scale < text_span.x, text_span.x, max_right_scale);
+				max_right_scale = function::Select(max_right_scale < text_span.x, text_span.x, max_right_scale);
 				current_position = right_new_lines[index] + 1;
 			}
 
@@ -5762,7 +5762,7 @@ namespace ECSEngine {
 				}
 				else {
 					text_span.y += scale.y + new_character_spacing;
-					text_span.x = function::PredicateValue(text_span.x < scale.x, scale.x, text_span.x);
+					text_span.x = function::Select(text_span.x < scale.x, scale.x, text_span.x);
 				}
 			}
 			if constexpr (horizontal) {
@@ -6535,7 +6535,7 @@ namespace ECSEngine {
 			
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler.phase;
 			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data);
-			m_frame_pacing = function::PredicateValue<unsigned int>(!m_execute_events && m_frame_pacing < 2, 2, m_frame_pacing);
+			m_frame_pacing = function::Select<unsigned int>(!m_execute_events && m_frame_pacing < 2, 2, m_frame_pacing);
 		}
 
 		void UISystem::HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts)
@@ -6559,7 +6559,7 @@ namespace ECSEngine {
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.hoverable_handler.phase;
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
-			m_frame_pacing = function::PredicateValue<unsigned int>(executed && m_frame_pacing < 1, 1, m_frame_pacing);
+			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < 1, 1, m_frame_pacing);
 		}
 
 		void UISystem::HandleFocusedWindowGeneral(float2 mouse_position, unsigned int thread_id) {
@@ -6581,7 +6581,7 @@ namespace ECSEngine {
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.general_handler.phase;
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
-			m_frame_pacing = function::PredicateValue<unsigned int>(executed && m_frame_pacing < 2, 2, m_frame_pacing);
+			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < 2, 2, m_frame_pacing);
 		}
 
 		void UISystem::HandleFocusedWindowCleanupGeneral(
@@ -8526,8 +8526,8 @@ namespace ECSEngine {
 			DockspaceType type;
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 
-			new_scale.x = function::PredicateValue(new_scale.x > 0.0f, new_scale.x, 0.0f);
-			new_scale.y = function::PredicateValue(new_scale.y > 0.0f, new_scale.y, 0.0f);
+			new_scale.x = function::Select(new_scale.x > 0.0f, new_scale.x, 0.0f);
+			new_scale.y = function::Select(new_scale.y > 0.0f, new_scale.y, 0.0f);
 			dockspace->transform.scale = new_scale;
 		}
 
@@ -10031,7 +10031,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				UIDockspaceBorder* border = (UIDockspaceBorder*)function::PredicateValue(border_index == 0, (uintptr_t)&dockspace->borders[1], (uintptr_t)&dockspace->borders[0]);
+				UIDockspaceBorder* border = (UIDockspaceBorder*)function::Select(border_index == 0, (uintptr_t)&dockspace->borders[1], (uintptr_t)&dockspace->borders[0]);
 				
 				// not assigning because the draw resources and border ones must be separate
 				parent_dockspace->borders[parent_border_index].is_dock = border->is_dock;
@@ -11237,7 +11237,7 @@ namespace ECSEngine {
 						break;
 					}
 				}
-				system->m_frame_pacing = function::PredicateValue<unsigned int>(system->m_frame_pacing < 3, 3, system->m_frame_pacing);
+				system->m_frame_pacing = function::Select<unsigned int>(system->m_frame_pacing < 3, 3, system->m_frame_pacing);
 			}
 
 			bool is_null = data->floating_dockspace == nullptr;
@@ -11435,13 +11435,13 @@ namespace ECSEngine {
 			UITooltipHoverableData* data = (UITooltipHoverableData*)_data;
 			system->m_focused_window_data.always_hoverable = true;
 			position += data->base.offset;
-			position.x += function::PredicateValue(data->base.offset_scale.x, scale.x, 0.0f);
-			position.y += function::PredicateValue(data->base.offset_scale.y, scale.y, 0.0f);
+			position.x += function::Select(data->base.offset_scale.x, scale.x, 0.0f);
+			position.y += function::Select(data->base.offset_scale.y, scale.y, 0.0f);
 
 			system->ConfigureToolTipBase(&data->base);
 
-			position.x = function::PredicateValue(position.x < -0.99f, -0.99f, position.x);
-			position.y = function::PredicateValue(position.y < -0.99f, -0.99f, position.y);
+			position.x = function::Select(position.x < -0.99f, -0.99f, position.x);
+			position.y = function::Select(position.y < -0.99f, -0.99f, position.y);
 
 			size_t initial_counts[ECS_TOOLS_UI_MATERIALS];
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
@@ -11467,8 +11467,8 @@ namespace ECSEngine {
 			draw_data.max_bounds.x += system->m_descriptors.misc.tool_tip_padding.x;
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = function::PredicateValue(draw_data.max_bounds.x > 0.99f, draw_data.max_bounds.x - 0.99f, 0.0f);
-			translation.y = function::PredicateValue(draw_data.max_bounds.y > 0.99f, draw_data.max_bounds.y - 0.99f, 0.0f);
+			translation.x = function::Select(draw_data.max_bounds.x > 0.99f, draw_data.max_bounds.x - 0.99f, 0.0f);
+			translation.y = function::Select(draw_data.max_bounds.y > 0.99f, draw_data.max_bounds.y - 0.99f, 0.0f);
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t material = 0; material < ECS_TOOLS_UI_MATERIALS; material++) {
@@ -11577,7 +11577,7 @@ namespace ECSEngine {
 			float delta_y = mouse_delta.y * data->move_y;
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.dockspace == data->dockspace && system->m_focused_window_data.border_index == data->border_index)) {
-				system->m_frame_pacing = function::PredicateValue<unsigned int>(system->m_frame_pacing < 2, 2, system->m_frame_pacing);
+				system->m_frame_pacing = function::Select<unsigned int>(system->m_frame_pacing < 2, 2, system->m_frame_pacing);
 				
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					if (system->m_focused_window_data.general_handler.action != nullptr) {
@@ -11659,7 +11659,7 @@ namespace ECSEngine {
 			UIDockspace* dockspace = &dockspaces[(unsigned int)data->dockspace_type][data->dockspace_index];
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.dockspace == dockspace)) {
-				system->m_frame_pacing = function::PredicateValue<unsigned int>(system->m_frame_pacing < 2, 2, system->m_frame_pacing);
+				system->m_frame_pacing = function::Select<unsigned int>(system->m_frame_pacing < 2, 2, system->m_frame_pacing);
 				
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					// cleaning up the last action; signaling clean up call by marking the buffers and the counts as nullptr

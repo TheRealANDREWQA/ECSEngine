@@ -62,7 +62,7 @@ namespace ECSEngine {
 
 		// first_value * condition + (1 - condition) * second_value;
 		template<typename Type>
-		Type PredicateValue(bool condition, Type first_value, Type second_value);
+		Type Select(bool condition, Type first_value, Type second_value);
 
 		// Calculates the integral and fractional parts and then commits them into a floating point type each that then get summed up 
 		// Returns the count of characters written

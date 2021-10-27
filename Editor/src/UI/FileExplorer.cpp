@@ -565,7 +565,7 @@ void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, Select
 
 	config->flag_count--;
 
-	ascii_stream[path_filename.size] = function::PredicateValue<char>(extension_size > 0, '.', '\0');
+	ascii_stream[path_filename.size] = function::Select<char>(extension_size > 0, '.', '\0');
 	ascii_stream.size = path_filename.size + extension_size;
 
 	float2 font_size = drawer->GetFontSize();
@@ -898,7 +898,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
 		size_t total_path_size = project_file->path.size + 1;
 		char* delimiter = strchr(ascii_path.buffer, ECS_OS_PATH_SEPARATOR_ASCII);
-		delimiter = (char*)function::PredicateValue<uintptr_t>(delimiter == nullptr, (uintptr_t)ascii_path.buffer, (uintptr_t)delimiter);
+		delimiter = (char*)function::Select<uintptr_t>(delimiter == nullptr, (uintptr_t)ascii_path.buffer, (uintptr_t)delimiter);
 		ASCIIPath current_path(ascii_path.buffer, delimiter - ascii_path.buffer);
 
 		const auto mouse_state = drawer.system->m_mouse_tracker->LeftButton();
@@ -942,7 +942,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
 			current_path.buffer = current_path.buffer + current_path.size + 1;
 			delimiter = strchr(current_path.buffer, ECS_OS_PATH_SEPARATOR_ASCII);
-			delimiter = (char*)function::PredicateValue<uintptr_t>(delimiter == nullptr, (uintptr_t)current_path.buffer, (uintptr_t)delimiter);
+			delimiter = (char*)function::Select<uintptr_t>(delimiter == nullptr, (uintptr_t)current_path.buffer, (uintptr_t)delimiter);
 			current_path.size = (uintptr_t)delimiter - (uintptr_t)current_path.buffer;
 		}
 
@@ -1029,7 +1029,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
 			if (is_valid) {
 				bool is_selected = FileExplorerIsElementSelected(data, path);
-				unsigned char color_alpha = function::PredicateValue(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
+				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
 
 				Color white_color = ECS_COLOR_WHITE;
 				white_color.alpha = color_alpha;
@@ -1132,7 +1132,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
 			if (is_valid && extension.size > 0) {
 				bool is_selected = FileExplorerIsElementSelected(data, path);
-				unsigned char color_alpha = function::PredicateValue(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
+				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
 
 				FileFunctorData functor_data;
 				functor_data.for_each_data = _data;

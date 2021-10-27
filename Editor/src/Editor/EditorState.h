@@ -34,8 +34,6 @@ struct EditorState {
 	ECSEngine::containers::Stream<ECSEngine::containers::Stream<char>> module_configurations;
 	ECSEngine::containers::CapacityStream<ECSEngine::World> worlds;
 	unsigned int active_world;
-	ECSEngine::GetModuleGraphicsFunctionData graphics_module_data;
-	Module graphics_module;
 	void* graphics_module_reflected_data;
 };
 

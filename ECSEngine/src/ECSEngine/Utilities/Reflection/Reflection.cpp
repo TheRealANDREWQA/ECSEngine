@@ -748,7 +748,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 							const char* last_new_line = strrchr(data->thread_memory.buffer + before_size + last_position, '\n');
 
 							// if it failed, set it to the start of the processing block
-							last_new_line = (const char*)function::PredicateValue<uintptr_t>(last_new_line == nullptr, (uintptr_t)data->thread_memory.buffer + last_position, (uintptr_t)last_new_line);
+							last_new_line = (const char*)function::Select<uintptr_t>(last_new_line == nullptr, (uintptr_t)data->thread_memory.buffer + last_position, (uintptr_t)last_new_line);
 
 							const char* opening_parenthese = strchr(second_space + 1, '{');
 							// if no opening curly brace was found, fail

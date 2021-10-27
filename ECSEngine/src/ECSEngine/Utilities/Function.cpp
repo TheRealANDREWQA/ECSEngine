@@ -173,7 +173,7 @@ namespace ECSEngine {
 			// if the ab_slope is positive, than the first one is to the left so it is smaller so it must be substracted
 			// equivalent perpendicular slope is to be negative
 			bool is_negative_slope = perpendicular_slope < 0.0f;
-			float2 difference = { function::PredicateValue(is_negative_slope, x_difference, -x_difference), function::PredicateValue(is_negative_slope, y_difference, -y_difference) };
+			float2 difference = { function::Select(is_negative_slope, x_difference, -x_difference), function::Select(is_negative_slope, y_difference, -y_difference) };
 			positions[0] = { a.x - difference.x, a.y - difference.y };
 			// for the correlated point, swap the signs
 			positions[2] = { a.x + difference.x, a.y + difference.y };

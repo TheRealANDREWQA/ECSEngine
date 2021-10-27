@@ -49,7 +49,7 @@ namespace ECSEngine {
 			bool Pop(T& element) {
 				if (m_queue.size > 0) {
 					unsigned int element_index = m_first_item;
-					m_first_item = function::PredicateValue<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
+					m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
 					m_queue.size--;
 					element = m_queue[element_index];
 					return true;
@@ -61,13 +61,13 @@ namespace ECSEngine {
 				if (m_queue.size == m_queue.capacity) {
 					unsigned int index = m_first_item + m_queue.size;
 					bool is_greater = index >= m_queue.capacity;
-					m_queue[function::PredicateValue(is_greater, index - m_queue.capacity, index)] = element;
-					m_first_item = function::PredicateValue<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
+					m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = element;
+					m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
 				}
 				else {
 					unsigned int index = m_first_item + m_queue.size;
 					bool is_greater = index >= m_queue.capacity;
-					m_queue[function::PredicateValue(is_greater, index - m_queue.capacity, index)] = element;
+					m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = element;
 					m_queue.size++;
 				}
 			}
@@ -76,13 +76,13 @@ namespace ECSEngine {
 				if (m_queue.size == m_queue.capacity) {
 					unsigned int index = m_first_item + m_queue.size;
 					bool is_greater = index >= m_queue.capacity;
-					m_queue[function::PredicateValue(is_greater, index - m_queue.capacity, index)] = *element;
-					m_first_item = function::PredicateValue<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
+					m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = *element;
+					m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
 				}
 				else {
 					unsigned int index = m_first_item + m_queue.size;
 					bool is_greater = index >= m_queue.capacity;
-					m_queue[function::PredicateValue(is_greater, index - m_queue.capacity, index)] = *element;
+					m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = *element;
 					m_queue.size++;
 				}
 			}
@@ -173,7 +173,7 @@ namespace ECSEngine {
 				else {
 					unsigned int index = m_first_item + m_queue.size;
 					bool is_greater = index >= m_queue.capacity;
-					m_queue[function::PredicateValue(is_greater, index - m_queue.capacity, index)] = element;
+					m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = element;
 					m_queue.size++;
 				}
 			}
@@ -192,7 +192,7 @@ namespace ECSEngine {
 				else {
 					unsigned int index = m_first_item + m_queue.size;
 					bool is_greater = index >= m_queue.capacity;
-					m_queue[function::PredicateValue(is_greater, index - m_queue.capacity, index)] = *element;
+					m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = *element;
 					m_queue.size++;
 				}
 			}
