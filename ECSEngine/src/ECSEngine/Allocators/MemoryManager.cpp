@@ -2,10 +2,6 @@
 #include "MemoryManager.h"
 #include "../Utilities/Assert.h"
 
-#ifndef ECS_SHOW_LOGS_MEMORYMANAGER
-#define ECS_SHOW_LOGS_MEMORYMANAGER 0
-#endif
-
 #ifndef ECS_GLOBAL_MANAGER_SIZE
 #define ECS_GLOBAL_MANAGER_SIZE 8
 #endif
@@ -27,12 +23,6 @@ namespace ECSEngine {
 		CreateAllocator(size, maximum_pool_count);
 	}
 
-	GlobalMemoryManager::~GlobalMemoryManager() {
-		delete[] m_allocators;
-		delete[] m_buffers_capacity;
-		delete[] m_buffers;
-	}
-
 	void GlobalMemoryManager::CreateAllocator(size_t size, size_t maximum_pool_count) {
 		ECS_ASSERT(m_allocator_count < ECS_GLOBAL_MANAGER_SIZE);
 		m_buffers[m_allocator_count] = (void*) (new unsigned char[MultipoolAllocator::MemoryOf(maximum_pool_count, size)]);
@@ -41,15 +31,20 @@ namespace ECSEngine {
 		m_allocator_count++;
 	}
 
+	void GlobalMemoryManager::ReleaseResources()
+	{
+		delete[] m_allocators;
+		delete[] m_buffers_capacity;
+		delete[] m_buffers;
+	}
+
 	void* GlobalMemoryManager::Allocate(size_t size, size_t alignment) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			void* allocation = m_allocators[index].Allocate(size, alignment);
 			if ( allocation != nullptr )
 				return allocation;
 		}
-#if ECS_SHOW_LOGS_MEMORYMANAGER
-		ECSENGINE_CORE_INFO("New allocator created! Number: {0}", m_allocator_count - 1);
-#endif
+
 		CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
 		return m_allocators[m_allocator_count - 1].Allocate(size, alignment);
 	}
@@ -77,10 +72,10 @@ namespace ECSEngine {
 			if ( allocation != nullptr )
 				return allocation;
 		}
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
 		void* allocation = m_allocators[m_allocator_count - 1].Allocate(size, alignment);
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 		return allocation;
 	}
 
@@ -133,9 +128,7 @@ namespace ECSEngine {
 			if (allocation != nullptr)
 				return allocation;
 		}
-#if ECS_SHOW_LOGS_MEMORYMANAGER
-		ECSENGINE_CORE_INFO("New allocator created! Number: {0}", m_allocator_count - 1);
-#endif
+
 		CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
 		return m_allocators[m_allocator_count - 1].Allocate(size, alignment);
 	}
@@ -159,6 +152,16 @@ namespace ECSEngine {
 		m_allocators[group_count].SetDebugBuffer((unsigned int*)buffer);
 	}
 
+	void MemoryManager::Lock()
+	{
+		m_spin_lock.lock();
+	}
+
+	void MemoryManager::Unlock()
+	{
+		m_spin_lock.unlock();
+	}
+
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* MemoryManager::Allocate_ts(size_t size, size_t alignment) {
@@ -167,10 +170,10 @@ namespace ECSEngine {
 			if (allocation != nullptr)
 				return allocation;
 		}
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		CreateAllocator(m_new_allocation_size, m_maximum_pool_count);
 		void* allocation = m_allocators[m_allocator_count - 1].Allocate(size, alignment);
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 		return allocation;
 	}
 

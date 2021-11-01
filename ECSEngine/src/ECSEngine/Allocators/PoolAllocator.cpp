@@ -45,18 +45,18 @@ namespace ECSEngine {
 
 	void* PoolAllocator::Allocate_ts(size_t size, size_t alignment) {
 		
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		void* buffer = Allocate(size, alignment);
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 
 		return buffer;
 	}
 
 	template<bool trigger_error_if_not_found>
 	void PoolAllocator::Deallocate_ts(const void* block) {
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		Deallocate<trigger_error_if_not_found>(block);
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, PoolAllocator::Deallocate_ts, const void*);

@@ -9,5 +9,5 @@
 #include "..\ECSEngine\Containers\Stacks.h"
 #include "..\ECSEngine\Containers\StaticSequentialTable.h"
 #include "..\ECSEngine\Containers\Stream.h"
-#include "..\ECSEngine\Containers\Deque.h"
+#include "..\ECSEngine\Containers\Deck.h"
 #include "..\ECSEngine\Containers\AtomicStream.h"

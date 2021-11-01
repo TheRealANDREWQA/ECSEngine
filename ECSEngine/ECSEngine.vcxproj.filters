@@ -134,9 +134,10 @@
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
-    <ClInclude Include="src\ECSEngine\Containers\Deque.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Deck.h" />
     <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
+    <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
@@ -233,8 +234,10 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ColorMap.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ForwardLighting.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLighting.hlsl" />
-    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugDraw.hlsl" />
-    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugDraw.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugTransform.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugTransform.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugStructured.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugStructured.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />

@@ -39,21 +39,21 @@ namespace ECSEngine {
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* LinearAllocator::Allocate_ts(size_t size, size_t alignment) {
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		void* pointer = Allocate(size, alignment);
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 		return pointer;
 	}
 
 	void LinearAllocator::Deallocate_ts(const void* block) {
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		Deallocate(block);
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 	}
 
 	void LinearAllocator::SetMarker_ts() {
-		m_spinLock.lock();
+		m_spin_lock.lock();
 		SetMarker();
-		m_spinLock.unlock();
+		m_spin_lock.unlock();
 	}
 }

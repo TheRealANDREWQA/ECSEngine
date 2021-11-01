@@ -293,6 +293,17 @@ namespace ECSEngine {
 		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	void FreeMesh(const Mesh& mesh) {
+		mesh.index_buffer.buffer->Release();
+		for (size_t subindex = 0; subindex < mesh.mapping_count; subindex++) {
+			mesh.vertex_buffers[subindex].buffer->Release();
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
 		void* base_address = (void*)function::align_pointer(
 			(uintptr_t)function::OffsetPointer(material, sizeof(Stream<char>) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
@@ -306,6 +317,8 @@ namespace ECSEngine {
 		texture_name->InitializeFromBuffer(memory, texture.size);
 		texture_name->Copy(texture);
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	void AllocatePBRMaterial(
 		PBRMaterial& material, 
@@ -333,10 +346,14 @@ namespace ECSEngine {
 		}
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
 	{
 		Deallocate(allocator, material.name.buffer);
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	PBRMaterial CreatePBRMaterialFromName(
 		Stream<char> material_name,
@@ -353,6 +370,8 @@ namespace ECSEngine {
 
 		return CreatePBRMaterialFromName(material_name, wide_base_name, search_directory, allocator, texture_mask);
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	PBRMaterial CreatePBRMaterialFromName(
 		Stream<char> material_name,
@@ -467,5 +486,17 @@ namespace ECSEngine {
 
 		return material;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	Material::Material() : vertex_buffer_mapping_count(0), vc_buffer_count(0), pc_buffer_count(0), dc_buffer_count(0), hc_buffer_count(0),
+		gc_buffer_count(0), vertex_texture_count(0), pixel_texture_count(0), domain_texture_count(0), hull_texture_count(0),
+		geometry_texture_count(0), unordered_view_count(0), domain_shader(nullptr), hull_shader(nullptr), geometry_shader(nullptr) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 }

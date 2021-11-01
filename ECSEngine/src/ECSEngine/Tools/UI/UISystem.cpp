@@ -8730,12 +8730,12 @@ namespace ECSEngine {
 		void UISystem::RegisterInputLayouts() {
 			m_resources.input_layouts[ECS_TOOLS_UI_SOLID_COLOR] = m_graphics->ReflectVertexShaderInput(
 				m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], 
-				SOLID_COLOR_VERTEX_SHADER_SOURCE
+				ToStream(SOLID_COLOR_VERTEX_SHADER_SOURCE)
 			);
 
 			m_resources.input_layouts[ECS_TOOLS_UI_TEXT_SPRITE] = m_graphics->ReflectVertexShaderInput(
 				m_resources.vertex_shaders[ECS_TOOLS_UI_TEXT_SPRITE],
-				TEXT_SPRITE_VERTEX_SHADER_SOURCE
+				ToStream(TEXT_SPRITE_VERTEX_SHADER_SOURCE)
 			);
 			// copy this layout to the sprite one
 			m_resources.input_layouts[ECS_TOOLS_UI_SPRITE] = m_resources.input_layouts[ECS_TOOLS_UI_TEXT_SPRITE];

@@ -56,7 +56,6 @@ cbuffer CapsuleLightBuffer : register(b5)
 
 struct PS_INPUT
 {
-    float4 position : SV_Position;
     float2 uv : TEXCOORD0;
     float3 normal : NORMAL;
     float3 world_position : WORLD_POSITION;
@@ -129,5 +128,5 @@ float4 main(in PS_INPUT input) : SV_TARGET
         SpecularIntensity
     );
     
-    return float4(ambient_color + /*directional_color + point_light + spot_light +*/ capsule_light, 1.0f);
+    return float4(ambient_color /*+ directional_color*/ /*+ point_light*/ + spot_light /*+ capsule_light*/, 1.0f);
 }

@@ -681,22 +681,21 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API Submesh {
 		Submesh() : index_buffer_offset(0), vertex_buffer_offset(0) {}
-		Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset) : index_buffer_offset(_index_buffer_offset),
-			vertex_buffer_offset(_vertex_buffer_offset) {}
+		Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset, unsigned int _index_count) : index_buffer_offset(_index_buffer_offset),
+			vertex_buffer_offset(_vertex_buffer_offset), index_count(_index_count) {}
 
 		Submesh(const Submesh& other) = default;
 		Submesh& operator = (const Submesh& other) = default;
 
 		unsigned int index_buffer_offset;
 		unsigned int vertex_buffer_offset;
+		unsigned int index_count;
 	};
 
 	// Contains the actual pipeline objects that can be bound to the 
 	// graphics context
 	struct ECSENGINE_API Material {
-		Material() : vertex_buffer_mapping_count(0), vc_buffer_count(0), pc_buffer_count(0), dc_buffer_count(0), hc_buffer_count(0), 
-		gc_buffer_count(0), vertex_texture_count(0), pixel_texture_count(0), domain_texture_count(0), hull_texture_count(0),
-		geometry_texture_count(0), unordered_view_count(0), domain_shader(nullptr), hull_shader(nullptr), geometry_shader(nullptr) {}
+		Material();
 
 		Material(const Material& other) = default;
 		Material& operator = (const Material& other) = default;
@@ -733,7 +732,6 @@ namespace ECSEngine {
 		unsigned char unordered_view_count;
 	};
 
-
 	struct ECSENGINE_API PBRMaterial {
 		containers::Stream<char> name;
 		float metallic_factor;
@@ -762,6 +760,17 @@ namespace ECSEngine {
 		containers::Stream<wchar_t> texture;
 		PBRMaterialTextureIndex index;
 	};
+
+	// Each submesh has associated a material
+	struct PBRMesh {
+		Mesh mesh;
+		Submesh* submeshes;
+		PBRMaterial* materials;
+		size_t submesh_count;
+	};
+
+	// Releases the graphics resources of this mesh
+	ECSENGINE_API void FreeMesh(const Mesh& mesh);
 
 	ECSENGINE_API void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, containers::Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index);
 
