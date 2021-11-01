@@ -8,7 +8,7 @@ namespace ECSEngine {
 	{
 	public:
 		StackAllocator(unsigned char* buffer, size_t capacity) : m_buffer(buffer), m_capacity(capacity), m_top(0), m_marker(0),
-			m_last_top(0), m_spinLock() {}
+			m_last_top(0), m_spin_lock() {}
 
 		void* Allocate(size_t size, size_t alignment = 8);
 		
@@ -37,7 +37,7 @@ namespace ECSEngine {
 		size_t m_top;
 		size_t m_marker;
 		size_t m_last_top;
-		SpinLock m_spinLock;
+		SpinLock m_spin_lock;
 	};
 }
 

@@ -321,6 +321,7 @@ namespace ECSEngine {
 	GLTFData LoadGLTFFile(const char* path, CapacityStream<char>* error_message)
 	{
 		GLTFData data;
+		data.mesh_count = 0;
 
 		cgltf_options options;
 		memset(&options, 0, sizeof(cgltf_options));
@@ -609,7 +610,48 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadDisjointMaterialsFromGLTF(GLTFData data, Stream<PBRMaterial>& materials, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	bool LoadDisjointMaterial(
+		const cgltf_node* nodes,
+		unsigned int index,
+		Stream<PBRMaterial>& materials,
+		Stream<unsigned int>& submesh_material_index, 
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message
+	) {
+		// Get the name
+		Stream<char> material_name = GetMaterialName(nodes[index].mesh->primitives, 0);
+
+		// If it already exists - do no reload it
+		bool exists = false;
+		for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
+			if (function::CompareStrings(material_name, materials[subindex].name)) {
+				submesh_material_index.Add(subindex);
+				exists = true;
+			}
+		}
+
+		if (!exists) {
+			submesh_material_index.Add(materials.size);
+
+			// Load the material as normally
+			bool success = LoadMaterialFromGLTF(materials[materials.size], allocator, nodes, index, error_message);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", materials.size);
+				error_message->AddStreamSafe(additional_info);
+				return false;
+			}
+			materials.size++;
+		}
+		return true;
+	}
+
+	bool LoadDisjointMaterialsFromGLTF(
+		GLTFData data, 
+		Stream<PBRMaterial>& materials, 
+		Stream<unsigned int>& submesh_material_index, 
+		AllocatorPolymorphic allocator, 
+		CapacityStream<char>* error_message
+	)
 	{
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
@@ -617,26 +659,9 @@ namespace ECSEngine {
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
 				if (nodes[index].mesh->primitives->material != nullptr) {
-					// Get the name
-					Stream<char> material_name = GetMaterialName(nodes[index].mesh->primitives, 0);
-
-					// If it already exists - do no reload it
-					bool exists = false;
-					for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
-						if (function::CompareStrings(material_name, materials[subindex].name)) {
-							exists = true;
-						}
-					}
-
-					if (!exists) {
-						// Load the material as normally
-						bool success = LoadMaterialFromGLTF(materials[materials.size], allocator, nodes, index, error_message);
-						if (!success) {
-							ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", materials.size);
-							error_message->AddStreamSafe(additional_info);
-							return false;
-						}
-						materials.size++;
+					bool success = LoadDisjointMaterial(nodes, index, materials, submesh_material_index, allocator, error_message);
+					if (!success) {
+						return false;
 					}
 				}
 			}
@@ -647,7 +672,13 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadMeshesAndMaterialsFromGLTF(GLTFData data, GLTFMesh* meshes, PBRMaterial* materials, AllocatorPolymorphic allocator, containers::CapacityStream<char>* error_message)
+	bool LoadMeshesAndMaterialsFromGLTF(
+		GLTFData data,
+		GLTFMesh* meshes, 
+		PBRMaterial* materials,
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message
+	)
 	{
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
@@ -663,6 +694,7 @@ namespace ECSEngine {
 					node_count,
 					error_message
 				);
+
 				success &= LoadMaterialFromGLTF(
 					materials[mesh_material_index],
 					allocator,
@@ -678,6 +710,50 @@ namespace ECSEngine {
 				}
 
 				mesh_material_index++;
+			}
+		}
+
+		return true;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	bool LoadMeshesAndDisjointMaterialsFromGLTF(
+		GLTFData data,
+		GLTFMesh* meshes,
+		Stream<PBRMaterial>& materials,
+		unsigned int* _submesh_material_index,
+		AllocatorPolymorphic allocator,
+		CapacityStream<char>* error_message
+	)
+	{
+		unsigned int node_count = data.data->nodes_count;
+		const cgltf_node* nodes = data.data->nodes;
+		Stream<unsigned int> submesh_material_index(_submesh_material_index, 0);
+
+		size_t mesh_index = 0;
+		for (size_t index = 0; index < node_count; index++) {
+			if (nodes[index].mesh != nullptr) {
+				bool success = LoadMeshFromGLTF(
+					meshes[mesh_index],
+					allocator,
+					nodes,
+					index,
+					node_count,
+					error_message
+				);
+
+				if (nodes[index].mesh->primitives->material != nullptr) {
+					success &= LoadDisjointMaterial(nodes, index, materials, submesh_material_index, allocator, error_message);
+				}
+
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", mesh_index);
+					error_message->AddStreamSafe(additional_info);
+					return false;
+				}
+
+				mesh_index++;
 			}
 		}
 
@@ -746,6 +822,242 @@ namespace ECSEngine {
 		for (size_t index = 0; index < count; index++) {
 			meshes[index] = GLTFMeshToMesh(graphics, gltf_meshes[index]);
 		}
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	Mesh GLTFMeshesToMergedMesh(
+		Graphics* graphics, 
+		GLTFMesh* gltf_meshes, 
+		Submesh* submeshes,
+		unsigned int* submesh_material_index, 
+		size_t material_count, 
+		size_t count
+	) {
+		constexpr size_t COUNT_MAX = 2048;
+
+		Mesh mesh;
+
+		size_t total_vertex_buffer_count = 0;
+		size_t total_index_buffer_count = 0;
+
+		ECS_ASSERT(count <= COUNT_MAX);
+		unsigned int* sorted_indices = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * count);
+
+		// The x component will hold the total vertex count
+		// The y component will hold the total index count
+		uint2* material_counts = (uint2*)ECS_STACK_ALLOC(sizeof(uint2) * material_count);
+		memset(material_counts, 0, sizeof(uint2) * material_count);
+
+		size_t submesh_offset = 0;
+		// For every material run through the submeshes to combine those that have the same material
+		for (size_t index = 0; index < material_count; index++) {
+			for (size_t subindex = 0; subindex < count; subindex++) {
+				if (submesh_material_index[subindex] == index) {
+					// Indices must be adjusted per material
+					for (size_t indices_index = 0; indices_index < gltf_meshes[subindex].indices.size; indices_index++) {
+						gltf_meshes[subindex].indices[indices_index] += material_counts[index].x;
+					}
+
+					total_vertex_buffer_count += gltf_meshes[subindex].positions.size;
+					total_index_buffer_count += gltf_meshes[subindex].indices.size;
+
+					material_counts[index].x += gltf_meshes[subindex].positions.size;
+					material_counts[index].y += gltf_meshes[subindex].indices.size;
+
+					// Keep a sorted list of the indices for every material
+					sorted_indices[submesh_offset++] = subindex;
+				}
+			}
+		}
+
+		// Create the aggregate mesh
+		
+		// Positions
+		if (gltf_meshes[0].positions.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_POSITION;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].positions.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(float3),
+					buffer_size, 
+					gltf_meshes[sorted_indices[index]].positions.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// Normals
+		if (gltf_meshes[0].normals.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_NORMAL;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].normals.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(float3),
+					buffer_size,
+					gltf_meshes[sorted_indices[index]].normals.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// UVs
+		if (gltf_meshes[0].uvs.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_UV;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float2), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].uvs.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(float2),
+					buffer_size,
+					gltf_meshes[sorted_indices[index]].uvs.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// Vertex Colors
+		if (gltf_meshes[0].colors.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_COLOR;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(Color), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].colors.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(Color),
+					buffer_size,
+					gltf_meshes[sorted_indices[index]].colors.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// Tangents
+		if (gltf_meshes[0].tangents.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_TANGENT;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].tangents.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(float3),
+					buffer_size,
+					gltf_meshes[sorted_indices[index]].tangents.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// Bone weights
+		if (gltf_meshes[0].skin_weights.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_WEIGHT;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float4), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].skin_weights.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(float4),
+					buffer_size,
+					gltf_meshes[sorted_indices[index]].skin_weights.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// Bone influences
+		if (gltf_meshes[0].skin_influences.buffer != nullptr) {
+			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_INFLUENCE;
+			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(uint4), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			size_t vertex_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].skin_influences.size;
+				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
+					sizeof(uint4),
+					buffer_size,
+					gltf_meshes[sorted_indices[index]].skin_influences.buffer
+				);
+				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				vertex_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		}
+
+		// Indices
+		if (gltf_meshes[0].indices.buffer != nullptr) {
+			// Create a main index buffer that is DEFAULT usage and then copy into it the smaller index buffers
+			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count);
+			size_t index_buffer_offset = 0;
+
+			for (size_t index = 0; index < count; index++) {
+				// Create a staging buffer that can be copied to the main buffer
+				size_t buffer_size = gltf_meshes[sorted_indices[index]].indices.size;
+				IndexBuffer current_buffer = graphics->CreateIndexBuffer(gltf_meshes[sorted_indices[index]].indices);
+				CopyBufferSubresource(mesh.index_buffer, index_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
+				index_buffer_offset += buffer_size;
+				unsigned int reference_count = current_buffer.buffer->Release();
+			}
+		}
+
+
+		size_t submesh_vertex_offset = 0;
+		size_t submesh_index_offset = 0;
+		// Submeshes
+		for (size_t index = 0; index < material_count; index++) {
+			submeshes[index].index_buffer_offset = submesh_index_offset;
+			submeshes[index].vertex_buffer_offset = submesh_vertex_offset;
+			submeshes[index].index_count = material_counts[index].y;
+			submesh_vertex_offset += material_counts[index].x;
+			submesh_index_offset += material_counts[index].y;
+		}
+		submeshes[material_count].index_buffer_offset = total_index_buffer_count;
+		submeshes[material_count].vertex_buffer_offset = total_vertex_buffer_count;
+
+		return mesh;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------

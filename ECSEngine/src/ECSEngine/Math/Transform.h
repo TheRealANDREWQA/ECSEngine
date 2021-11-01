@@ -8,7 +8,7 @@ namespace ECSEngine {
 
 	struct Transform {
 		ECS_INLINE Transform() {}
-		ECS_INLINE ECS_VECTORCALL Transform(float3 _position, float3 _scale, Quaternion _rotation) : position(_position),
+		ECS_INLINE ECS_VECTORCALL Transform(float3 _position, Quaternion _rotation, float3 _scale) : position(_position),
 			scale(_scale), rotation(_rotation) {}
 
 		// Translation - 0.0f, 0.0f, 0.0f

@@ -84,10 +84,10 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ID3D11Resource* GetResource(ResourceView ps_view)
+	ID3D11Resource* GetResource(ResourceView view)
 	{
 		ID3D11Resource* resource;
-		ps_view.view->GetResource(&resource);
+		view.view->GetResource(&resource);
 		unsigned int count = resource->Release();
 		return resource;
 	}
@@ -171,6 +171,37 @@ namespace ECSEngine {
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting UA Buffer to resource failed!", true);
 
 		return _resource.Detach();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* GetResource(UAView view) {
+		ID3D11Resource* resource;
+		view.view->GetResource(&resource);
+		unsigned int count = resource->Release();
+		return resource;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ReleaseShaderView(ResourceView view) {
+		ID3D11Resource* resource = GetResource(view);
+		// Release the view
+		unsigned int view_count = view.view->Release();
+
+		// Release the resource
+		unsigned int resource_count = resource->Release();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ReleaseUAView(UAView view) {
+		ID3D11Resource* resource = GetResource(view);
+		// Release the view
+		unsigned int view_count = view.view->Release();
+
+		// Release the resource
+		unsigned int resource_count = resource->Release();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

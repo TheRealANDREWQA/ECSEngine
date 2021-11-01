@@ -16,13 +16,13 @@ namespace ECSEngine {
 		MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0) {}
 		MultipoolAllocator(unsigned char* buffer, size_t size, size_t pool_count)
 			: m_buffer((unsigned char*)((uintptr_t)buffer + containers::BlockRange::MemoryOf(pool_count))),
-			m_spinLock(), m_size(size), m_range((unsigned int*)buffer, pool_count, size) {
+			m_spin_lock(), m_size(size), m_range((unsigned int*)buffer, pool_count, size) {
 #ifdef ECSENGINE_DEBUG
 			m_initial_buffer = m_buffer;
 #endif
 		}
 		MultipoolAllocator(unsigned char* buffer, void* block_range_buffer, size_t size, size_t pool_count)
-			: m_buffer(buffer), m_spinLock(), m_size(size),
+			: m_buffer(buffer), m_spin_lock(), m_size(size),
 			m_range((unsigned int*)block_range_buffer, pool_count, size) {
 #ifdef ECSENGINE_DEBUG
 			m_initial_buffer = m_buffer;
@@ -57,7 +57,7 @@ namespace ECSEngine {
 		void* m_initial_buffer;
 #endif
 		size_t m_size;
-		SpinLock m_spinLock;
+		SpinLock m_spin_lock;
 		containers::BlockRange m_range;
 	};
 

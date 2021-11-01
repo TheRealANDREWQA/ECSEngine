@@ -12,6 +12,7 @@
 #include "EditorEvent.h"
 #include "../Modules/Module.h"
 #include "../UI/InspectorData.h"
+#include "EditorPalette.h"
 #include "EntryPoint.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
@@ -307,13 +308,18 @@ public:
 		GLTFMesh gltf_meshes[128];
 		Mesh meshes[128];
 		PBRMaterial _materials[128];
+		unsigned int _submesh_material_index[128];
+		Submesh _submeshes[128];
 
 		AllocatorPolymorphic allocator = { &memory_manager, AllocatorType::MemoryManager, AllocationType::SingleThreaded };
 		success = LoadMeshesFromGLTF(gltf_data, gltf_meshes, allocator, &ERROR_MESSAGE);
-		GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);
+		/*GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);*/
 
 		Stream<PBRMaterial> materials(_materials, 0);
-		success = LoadDisjointMaterialsFromGLTF(gltf_data, materials, allocator, &ERROR_MESSAGE);
+		Stream<unsigned int> submesh_material_index(_submesh_material_index, 0);
+		success = LoadDisjointMaterialsFromGLTF(gltf_data, materials, submesh_material_index, allocator, &ERROR_MESSAGE);
+		GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);
+		Mesh merged_mesh = GLTFMeshesToMergedMesh(&graphics, gltf_meshes, _submeshes, _submesh_material_index, materials.size, gltf_data.mesh_count);
 		FreeGLTFMeshes(gltf_meshes, gltf_data.mesh_count, allocator);
 		FreeGLTFFile(gltf_data);
 
@@ -322,16 +328,16 @@ public:
 		CreateCubeVertexBuffer(&graphics, 0.25f, vertex_buffer, index_buffer);
 
 		ShaderFromSourceOptions compile_options;
-		VertexShader cube_shader = graphics.CreateVertexShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\StaticMesh.hlsl"), compile_options);
-		PixelShader pixel_shader = graphics.CreatePixelShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\StaticMesh.hlsl"), compile_options);
-		InputLayout layout = graphics.ReflectVertexShaderInput(cube_shader, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\StaticMesh.hlsl");
+		VertexShader cube_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(StaticMesh)), compile_options);
+		PixelShader pixel_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(StaticMesh)), compile_options);
+		InputLayout layout = graphics.ReflectVertexShaderInput(cube_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(StaticMesh)));
 
-		VertexShader forward_lighting_v_shader = graphics.CreateVertexShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\ForwardLighting.hlsl"), compile_options);
-		PixelShader forward_lighting_p_shader = graphics.CreatePixelShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\ForwardLighting.hlsl"), compile_options);
-		InputLayout forward_lighting_layout = graphics.ReflectVertexShaderInput(forward_lighting_v_shader, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\ForwardLighting.hlsl");
+		VertexShader forward_lighting_v_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(ForwardLighting)), compile_options);
+		PixelShader forward_lighting_p_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(ForwardLighting)), compile_options);
+		InputLayout forward_lighting_layout = graphics.ReflectVertexShaderInput(forward_lighting_v_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(ForwardLighting)));
 		
-		VertexShader debug_v_shader = graphics.CreateVertexShaderFromSource(ToStream(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\DebugDraw.hlsl"), compile_options);
-		InputLayout debug_layout = graphics.ReflectVertexShaderInput(debug_v_shader, L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\DebugDraw.hlsl");
+		VertexShader debug_v_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)), compile_options);
+		InputLayout debug_layout = graphics.ReflectVertexShaderInput(debug_v_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)));
 
 		ConstantBuffer obj_buffer = graphics.CreateConstantBuffer(sizeof(float) * 32);
 
@@ -344,7 +350,7 @@ public:
 		ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(&graphics);
 		ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(&graphics);
 
-		Shaders::SetDirectionalLight(directional_light, &graphics, { 0.0f, -1.0f, 0.0f }, ColorFloat(0.5f, 0.5f, 0.5f, 1.0f));
+		Shaders::SetDirectionalLight(directional_light, &graphics, { 0.0f, -1.0f, 0.0f }, ColorFloat(10.0f, 1.0f, 1.0f, 1.0f));
 
 		float* _specular_factors = (float*)graphics.MapBuffer(specular_factors.buffer);
 		_specular_factors[0] = 100.0f;
@@ -380,6 +386,9 @@ public:
 		plank_descriptor.context = graphics.m_context.Get();
 		plank_descriptor.usage = D3D11_USAGE_DEFAULT;
 		ResourceView plank_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\Blender\\BlenderTextures\\Trireme\\textures\\brown_planks_03_diff_1k.jpg", plank_descriptor);
+
+		MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, &global_memory_manager);
+		DebugDrawer debug_drawer(&debug_drawer_memory, &graphics, 1);
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -508,7 +517,8 @@ public:
 				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
 
 				Shaders::SetPointLight(point_light, &graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
-				Shaders::SetSpotLight(spot_light, &graphics, float3(0.0f, 8.0f, 20.0f), float3(0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, ColorFloat(11.0f, 11.0f, 11.0f));
+				ColorFloat spot_light_color = ColorFloat(11.0f, 11.0f, 11.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
+				Shaders::SetSpotLight(spot_light, &graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
 
 				ConstantBuffer pixel_constant_buffers[6];
 				pixel_constant_buffers[0] = hemispheric_ambient_light;
@@ -524,7 +534,9 @@ public:
 				graphics.BindIndexBuffer(index_buffer);
 				graphics.BindTopology({ D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST });*/
 
+				graphics.EnableDepth();
 				graphics.BindSamplerState(sampler);
+				//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME]);
 				for (size_t index = 0; index < gltf_data.mesh_count; index++) {
 					ECS_MESH_INDEX mapping[3];
 					mapping[0] = ECS_MESH_POSITION;
@@ -534,6 +546,23 @@ public:
 
 					graphics.DrawIndexed(meshes[index].index_buffer.count);
 				}
+				//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL]);
+
+				/*debug_drawer.SetPreviousRenderState();
+				debug_drawer.UpdateCameraMatrix(camera.GetProjectionViewMatrix());
+				debug_drawer.DrawLine({ 0.0f, 0.0f, 10.0f }, { 0.0f, 100.0f, 10.0f }, EDITOR_GREEN_COLOR, {true});
+				debug_drawer.DrawRectangle({ 0.0f, 0.0f, 20.0f }, { 5.0f, 10.0f, 20.0f }, EDITOR_GREEN_COLOR);
+				debug_drawer.RestorePreviousRenderState();*/
+
+				/*ECS_MESH_INDEX mapping[3];
+				mapping[0] = ECS_MESH_POSITION;
+				mapping[1] = ECS_MESH_UV;
+				mapping[2] = ECS_MESH_NORMAL;
+				graphics.BindMesh(merged_mesh, Stream<ECS_MESH_INDEX>(mapping, 3));
+				for (size_t index = 0; index < materials.size; index++) {
+					graphics.DrawIndexed(_submeshes[index].index_count, _submeshes[index].index_buffer_offset, _submeshes[index].vertex_buffer_offset);
+				}*/
+
 				/*graphics.BindMesh(meshes[60]);
 				graphics.DrawIndexed(meshes[60].index_buffer.count);*/
 

@@ -8,17 +8,17 @@ namespace ECSEngine {
 
 		// Miscellaneous is used as the exponent for the power of two range selector
 		template<typename T, typename Allocator, typename RangeSelector>
-		struct Deque {
-			Deque() : buffers(nullptr, 0), chunk_size(0), miscellaneous(0) {}
-			Deque(
+		struct Deck {
+			Deck() : buffers(nullptr, 0), chunk_size(0), miscellaneous(0) {}
+			Deck(
 				const void* _buffers, 
 				size_t _buffers_capacity,
 				size_t _chunk_size, 
 				size_t _miscellaneous = 0
 			) : buffers(_buffers, 0, _buffers_capacity), chunk_size(_chunk_size), miscellaneous(_miscellaneous) {}
 
-			Deque(const Deque& other) = default;
-			Deque& operator = (const Deque& other) = default;
+			Deck(const Deck& other) = default;
+			Deck& operator = (const Deck& other) = default;
 
 			unsigned int Add(T element) {
 				// The available chunks are completely full
@@ -81,7 +81,9 @@ namespace ECSEngine {
 
 			// Allocates memory for extra count chunks
 			void AllocateChunks(size_t count) {
-				ECS_ASSERT(buffers.size + count <= buffers.capacity);
+				if (buffers.size + count > buffers.capacity) {
+					Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR));
+				}
 
 				for (size_t index = buffers.size; index < buffers.size + count; index++) {
 					buffers[index].Initialize(buffers.allocator, 0, chunk_size);
@@ -120,6 +122,14 @@ namespace ECSEngine {
 					memcpy((void*)memory, buffers[index].buffer, sizeof(T) * buffers[index].size);
 					memory += sizeof(T) * buffers[index].size;
 				}
+			}
+
+			unsigned int GetElementCount() const {
+				unsigned int count = 0;
+				for (size_t index = 0; index < buffers.size; index++) {
+					count += buffers[index].size;
+				}
+				return count;
 			}
 
 			T* GetEntry() {
@@ -194,6 +204,15 @@ namespace ECSEngine {
 				buffers.FreeBuffer();
 			}
 
+			void RecalculateFreeChunks() {
+				chunks_with_elements.size = 0;
+				for (size_t index = 0; index < buffers.size; index++) {
+					if (buffers[index].size < buffers[index].capacity) {
+						chunks_with_elements.Add(index);
+					}
+				}
+			}
+
 			void Reset() {
 				for (size_t index = 0; index < buffers.size; index++) {
 					buffers[index].size = 0;
@@ -245,7 +264,7 @@ namespace ECSEngine {
 
 					buffers.Resize(new_chunk_count);
 					buffers.allocator->Deallocate(chunks_with_elements.buffer);
-					chunks_with_elements = { buffers.allocator->Allocate(sizeof(unsigned int) * new_chunk_count), new_chunk_count, new_chunk_count };
+					chunks_with_elements = { buffers.allocator->Allocate(sizeof(unsigned int) * new_chunk_count), new_chunk_count };
 					// Copy the old counts
 					for (size_t index = 0; index < old_count; index++) {
 						chunks_with_elements[index] = old_counts[index];
@@ -411,7 +430,7 @@ namespace ECSEngine {
 			size_t miscellaneous;
 		};
 
-		struct DequeRangeModulo {
+		struct DeckRangeModulo {
 			static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
 				return index / chunk_size;
 			}
@@ -421,7 +440,7 @@ namespace ECSEngine {
 			}
 		};
 
-		struct DequeRangePowerOfTwo {
+		struct DeckRangePowerOfTwo {
 			static size_t Chunk(size_t index, size_t chunk_size, size_t miscellaneous) {
 				return index >> miscellaneous;
 			}
@@ -432,10 +451,10 @@ namespace ECSEngine {
 		};
 
 		template<typename T, typename Allocator>
-		using DequeModulo = Deque<T, Allocator, DequeRangeModulo>;
+		using DeckModulo = Deck<T, Allocator, DeckRangeModulo>;
 
 		template<typename T, typename Allocator>
-		using DequePowerOfTwo = Deque<T, Allocator, DequeRangePowerOfTwo>;
+		using DeckPowerOfTwo = Deck<T, Allocator, DeckRangePowerOfTwo>;
 
 	}
 

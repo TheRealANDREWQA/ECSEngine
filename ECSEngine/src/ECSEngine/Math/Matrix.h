@@ -925,6 +925,16 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------
 
+	// Rotation in angles
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransform(float3 translation, float3 rotation, float3 scale) {
+		return MatrixScale(scale) * MatrixRotation(rotation) * MatrixTranslation(translation);
+	}
+
+	// Rotation in radians
+	ECS_INLINE Matrix ECS_VECTORCALL MatrixTransformRad(float3 translation, float3 rotation, float3 scale) {
+		return MatrixScale(scale) * MatrixRotationRad(rotation) * MatrixTranslation(translation);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 }

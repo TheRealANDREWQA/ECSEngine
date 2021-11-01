@@ -9,7 +9,7 @@ namespace ECSEngine {
 	public:
 		LinearAllocator() : m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0) {}
 		LinearAllocator(void* buffer, size_t capacity) : m_buffer((unsigned char*)buffer), m_capacity(capacity), m_top(0), 
-			m_marker(0), m_spinLock() {}
+			m_marker(0), m_spin_lock() {}
 		
 		void* Allocate(size_t size, size_t alignment = 8);
 		void Deallocate(const void* block);
@@ -22,7 +22,7 @@ namespace ECSEngine {
 		void SetMarker_ts();
 
 	//private:
-		SpinLock m_spinLock;
+		SpinLock m_spin_lock;
 		void* m_buffer;
 		size_t m_capacity;
 		size_t m_marker;

@@ -61,6 +61,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API ID3D11Resource* GetResource(UABuffer buffer);
 
+	ECSENGINE_API ID3D11Resource* GetResource(UAView view);
+
+	// It will release the view and the resource associated with it
+	ECSENGINE_API void ReleaseShaderView(ResourceView view);
+
+	// It will release the view and the resource associated with it
+	ECSENGINE_API void ReleaseUAView(UAView view);
+
 	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture);
 
 	// It will make a staging texture that has copied the contents of the supplied texture

@@ -7,6 +7,9 @@
 #include "ShaderReflection.h"
 #include "../Allocators/MemoryManager.h"
 
+#define ECS_PIXEL_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\" TEXT(STRING(name.hlsl))
+#define ECS_VERTEX_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\" TEXT(STRING(name.hlsl))
+
 namespace ECSEngine {
 
 	ECS_CONTAINERS;
@@ -234,7 +237,7 @@ namespace ECSEngine {
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		PixelShader CreatePixelShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+		PixelShader CreatePixelShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
 		VertexShader CreateVertexShader(Stream<wchar_t> byte_code);
@@ -245,7 +248,7 @@ namespace ECSEngine {
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		VertexShader CreateVertexShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+		VertexShader CreateVertexShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
 		DomainShader CreateDomainShader(Stream<wchar_t> byte_code);
@@ -256,7 +259,7 @@ namespace ECSEngine {
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		DomainShader CreateDomainShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+		DomainShader CreateDomainShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
 		HullShader CreateHullShader(Stream<wchar_t> byte_code);
@@ -267,7 +270,7 @@ namespace ECSEngine {
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		HullShader CreateHullShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+		HullShader CreateHullShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
 		GeometryShader CreateGeometryShader(Stream<wchar_t> byte_code);
@@ -278,7 +281,7 @@ namespace ECSEngine {
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		GeometryShader CreateGeometryShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+		GeometryShader CreateGeometryShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
 		ComputeShader CreateComputeShader(Stream<wchar_t> path);
@@ -289,7 +292,7 @@ namespace ECSEngine {
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		ComputeShader CreateComputeShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options);
+		ComputeShader CreateComputeShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
 
 		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader);
 
@@ -445,6 +448,13 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Resource release
+
+		template<typename Shader>
+		void FreeShader(Shader shader);
+
+#pragma endregion
+
 #pragma region Pipeline State Changes
 
 		// ------------------------------------------- Pipeline State Changes ------------------------------------
@@ -459,17 +469,17 @@ namespace ECSEngine {
 
 		void DisableDepth(GraphicsContext* context);
 
-		void DisableCulling();
+		void DisableCulling(bool wireframe = false);
 
-		void DisableCulling(GraphicsContext* context);
+		void DisableCulling(GraphicsContext* context, bool wireframe = false);
 
 		void Draw(UINT vertex_count, UINT start_slot = 0u);
 
-		void DrawIndexed(unsigned int index_count, UINT start_vertex = 0u, INT base_vertex_location = 0);
+		void DrawIndexed(unsigned int index_count, UINT start_index = 0u, INT base_vertex_location = 0);
 
-		void DrawInstanced(unsigned int vertex_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot = 0u);
+		void DrawInstanced(unsigned int vertex_count, unsigned int instance_count, unsigned int start_slot = 0u);
 
-		void DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot = 0u);
+		void DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, unsigned int start_slot = 0u);
 
 		void DrawIndexedInstancedIndirect(IndirectBuffer buffer);
 
@@ -509,11 +519,8 @@ namespace ECSEngine {
 
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
-		// Shader path might point to a .cso so a path parameter should be used to supply the actual 
-		// source code
-		InputLayout ReflectVertexShaderInput(VertexShader shader, const wchar_t* path);
-
-		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path);
+		// Path nullptr means take the path from the shader
+		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path = {nullptr, 0});
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
 		bool ReflectShaderBuffers(const wchar_t* path, CapacityStream<ShaderReflectedBuffer>& buffers);
@@ -825,6 +832,9 @@ namespace ECSEngine {
 
 	template<typename Texture>
 	ECSENGINE_API void UnmapTexture(Texture texture, GraphicsContext* context, unsigned int subresource_index = 0);
+
+	// Releases the graphics resources of this material
+	ECSENGINE_API void FreeMaterial(Graphics* graphics, const Material& material);
 
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
 	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh

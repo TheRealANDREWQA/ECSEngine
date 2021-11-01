@@ -647,9 +647,9 @@ ECS_ASSERT(!table.Insert(hash, format, identifier));
 
 					// Input slot - only do the check if increment input slot has not been specified
 					if (!is_increment_input_slot) {
-						char* input_slot = strstr(current_character, STRING(ECS_REFLECT_INPUT_SLOT));
+						char* input_slot = (char*)strstr(colon_character, STRING(ECS_REFLECT_INPUT_SLOT));
 						if (input_slot != nullptr) {
-							input_slot += strlen(STRING(ECS_REFLECT_INPUT_SLOT)) + 2;
+							input_slot += strlen(STRING(ECS_REFLECT_INPUT_SLOT)) + 1;
 							char* starting_input_slot = input_slot;
 							while (function::IsNumberCharacter(*input_slot)) {
 								input_slot++;

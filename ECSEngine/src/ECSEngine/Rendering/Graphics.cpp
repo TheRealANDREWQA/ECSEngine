@@ -48,6 +48,7 @@ namespace ECSEngine {
 	blob->Release(); 
 
 #define CreateShaderByteCode(shader_type) shader_type##Shader shader; \
+	shader.path = { nullptr,  0 }; \
 	HRESULT result; \
 	ID3DBlob* blob; \
 \
@@ -976,6 +977,7 @@ namespace ECSEngine {
 		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
 		buffer_descriptor.MiscFlags = miscFlags;
 		buffer_descriptor.StructureByteStride = 0u;
+		buffer_descriptor.Usage = usage;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
@@ -997,6 +999,7 @@ namespace ECSEngine {
 		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
 		buffer_descriptor.MiscFlags = miscFlags;
 		buffer_descriptor.StructureByteStride = 0u;
+		buffer_descriptor.Usage = usage;
 
 		D3D11_SUBRESOURCE_DATA initial_data = {};
 		initial_data.pSysMem = data;
@@ -1017,10 +1020,11 @@ namespace ECSEngine {
 		D3D11_BUFFER_DESC buffer_descriptor = {};
 
 		buffer_descriptor.ByteWidth = element_size * element_count;
-		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
 		buffer_descriptor.MiscFlags = miscFlags | D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		buffer_descriptor.StructureByteStride = element_size;
+		buffer_descriptor.Usage = usage;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating structred buffer failed.", true);
@@ -1042,6 +1046,7 @@ namespace ECSEngine {
 		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
 		buffer_descriptor.MiscFlags = miscFlags | D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		buffer_descriptor.StructureByteStride = element_size;
+		buffer_descriptor.Usage = usage;
 
 		D3D11_SUBRESOURCE_DATA initial_data;
 		initial_data.pSysMem = data;
@@ -1681,6 +1686,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	template<typename Shader>
+	void Graphics::FreeShader(Shader shader) {
+		shader.shader->Release();
+		if (shader.path.buffer != nullptr) {
+			m_allocator->Deallocate(shader.path.buffer);
+		}
+	}
+
+	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, VertexShader);
+	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, PixelShader);
+	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, HullShader);
+	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, DomainShader);
+	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, GeometryShader);
+	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, ComputeShader);
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::ClearBackBuffer(float red, float green, float blue) {
 		const float color[] = { red, green, blue, 1.0f };
 		m_context->ClearRenderTargetView(m_target_view.target, color);
@@ -1708,26 +1730,35 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DisableCulling()
+	void Graphics::DisableCulling(bool wireframe)
 	{
-		DisableCulling(m_context.Get());
+		DisableCulling(m_context.Get(), wireframe);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::DisableDepth(GraphicsContext* context)
 	{
-		context->OMSetRenderTargets(m_bound_targets.size, (ID3D11RenderTargetView**)m_bound_targets.buffer, nullptr);
+		D3D11_DEPTH_STENCIL_DESC depth_desc = {};
+		depth_desc.DepthEnable = FALSE;
+		depth_desc.StencilEnable = FALSE;
+		
+		ID3D11DepthStencilState* state;
+		HRESULT result = m_device->CreateDepthStencilState(&depth_desc, &state);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failed to disable depth", true);
+		
+		context->OMSetDepthStencilState(state, 0);
+		state->Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DisableCulling(GraphicsContext* context)
+	void Graphics::DisableCulling(GraphicsContext* context, bool wireframe)
 	{
 		D3D11_RASTERIZER_DESC rasterizer_desc = {};
 		rasterizer_desc.AntialiasedLineEnable = TRUE;
 		rasterizer_desc.CullMode = D3D11_CULL_NONE;
-		rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+		rasterizer_desc.FillMode = wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
 		rasterizer_desc.DepthClipEnable = TRUE;
 		rasterizer_desc.FrontCounterClockwise = FALSE;
 
@@ -1748,20 +1779,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawIndexed(unsigned int count, UINT start_vertex, INT base_vertex_location) {
-		ECSEngine::DrawIndexed(count, m_context.Get(), start_vertex, base_vertex_location);
+	void Graphics::DrawIndexed(unsigned int count, UINT start_index, INT base_vertex_location) {
+		ECSEngine::DrawIndexed(count, m_context.Get(), start_index, base_vertex_location);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawInstanced(unsigned int vertex_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot) {
-		ECSEngine::DrawInstanced(vertex_count, instance_count, context, start_slot);
+	void Graphics::DrawInstanced(unsigned int vertex_count, unsigned int instance_count, unsigned int start_slot) {
+		ECSEngine::DrawInstanced(vertex_count, instance_count, m_context.Get(), start_slot);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, GraphicsContext* context, unsigned int start_slot) {
-		ECSEngine::DrawIndexedInstanced(index_count, instance_count, context, start_slot);
+	void Graphics::DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, unsigned int start_slot) {
+		ECSEngine::DrawIndexedInstanced(index_count, instance_count, m_context.Get(), start_slot);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1799,7 +1830,18 @@ namespace ECSEngine {
 
 	void Graphics::EnableDepth(GraphicsContext* context)
 	{
-		context->OMSetRenderTargets(m_bound_targets.size, (ID3D11RenderTargetView**)m_bound_targets.buffer, m_current_depth_stencil.view);
+		D3D11_DEPTH_STENCIL_DESC depth_desc;
+		depth_desc.DepthEnable = TRUE;
+		depth_desc.DepthFunc = D3D11_COMPARISON_LESS;
+		depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		depth_desc.StencilEnable = FALSE;
+
+		ID3D11DepthStencilState* state;
+		HRESULT result = m_device->CreateDepthStencilState(&depth_desc, &state);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failed to enable depth.", true);
+
+		context->OMSetDepthStencilState(state, 0);
+		state->Release();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1980,13 +2022,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, const wchar_t* path)
-	{
-		return ReflectVertexShaderInput(shader, ToStream(path));
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
 	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path)
 	{
 		constexpr size_t MAX_INPUT_FIELDS = 128;
@@ -1996,7 +2031,11 @@ namespace ECSEngine {
 		constexpr size_t NAME_POOL_SIZE = 8192;
 		void* allocation = ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(allocation, 0, NAME_POOL_SIZE);
-		bool success = m_shader_reflection.ReflectVertexShaderInput(path, element_descriptors, name_pool);
+		Stream<wchar_t> source_code_path = path;
+		if (path.buffer == nullptr) {
+			source_code_path = shader.path;
+		}
+		bool success = m_shader_reflection.ReflectVertexShaderInput(source_code_path, element_descriptors, name_pool);
 
 		if (!success) {
 			//_freea(allocation);
@@ -2591,6 +2630,8 @@ namespace ECSEngine {
 			box.right = source_size;
 		}
 		box.right += box.left;
+		box.back = 1;
+		box.bottom = 1;
 
 		context->CopySubresourceRegion(destination.buffer, 0, destination_offset, 0, 0, source.buffer, 0, &box);
 	}
@@ -2895,6 +2936,79 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void FreeMaterial(Graphics* graphics, const Material& material) {
+		// Release the input layout
+		material.layout.layout->Release();
+
+		// Release the mandatory shaders - pixel and vertex.
+		graphics->FreeShader(material.vertex_shader);
+		graphics->FreeShader(material.pixel_shader);
+
+		// Release the mandatory shaders
+		if (material.domain_shader.shader != nullptr) {
+			graphics->FreeShader(material.domain_shader);
+		}
+		if (material.hull_shader.shader != nullptr) {
+			graphics->FreeShader(material.hull_shader);
+		}
+		if (material.geometry_shader.shader != nullptr) {
+			graphics->FreeShader(material.geometry_shader);
+		}
+
+		// Release the constant buffers - each one needs to be released
+		// When they were assigned, their reference count was incremented
+		// in order to avoid checking aliased buffers
+		for (size_t index = 0; index < material.vc_buffer_count; index++) {
+			material.vc_buffers[index].buffer->Release();
+		}
+
+		for (size_t index = 0; index < material.pc_buffer_count; index++) {
+			material.pc_buffers[index].buffer->Release();
+		}
+
+		for (size_t index = 0; index < material.dc_buffer_count; index++) {
+			material.dc_buffers[index].buffer->Release();
+		}
+
+		for (size_t index = 0; index < material.hc_buffer_count; index++) {
+			material.hc_buffers[index].buffer->Release();
+		}
+
+		for (size_t index = 0; index < material.gc_buffer_count; index++) {
+			material.gc_buffers[index].buffer->Release();
+		}
+
+		// Release the resource views - each one needs to be released
+		// Same as constant buffers, their reference count was incremented upon
+		// assignment alongside the resource that they view
+		for (size_t index = 0; index < material.vertex_texture_count; index++) {
+			ReleaseShaderView(material.vertex_textures[index]);
+		}
+
+		for (size_t index = 0; index < material.pixel_texture_count; index++) {
+			ReleaseShaderView(material.pixel_textures[index]);
+		}
+
+		for (size_t index = 0; index < material.domain_texture_count; index++) {
+			ReleaseShaderView(material.domain_textures[index]);
+		}
+
+		for (size_t index = 0; index < material.hull_texture_count; index++) {
+			ReleaseShaderView(material.hull_textures[index]);
+		}
+
+		for (size_t index = 0; index < material.geometry_texture_count; index++) {
+			ReleaseShaderView(material.geometry_textures[index]);
+		}
+
+		// Release the UAVs
+		for (size_t index = 0; index < material.unordered_view_count; index++) {
+			ReleaseUAView(material.unordered_views[index]);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes)
 	{
 		unsigned int* mask = (unsigned int*)ECS_STACK_ALLOC(meshes.size * sizeof(unsigned int));
@@ -2905,6 +3019,8 @@ namespace ECSEngine {
 		//_freea(mask);
 		return mesh;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, Stream<unsigned int> mesh_mask) {
 		Mesh result;
@@ -2938,7 +3054,7 @@ namespace ECSEngine {
 
 		// Copy the vertex buffer and index buffer submeshes
 		for (size_t index = 0; index < meshes.size; index++) {
-			submeshes[index] = { vertex_buffer_offset, index_buffer_offset };
+			submeshes[index] = { vertex_buffer_offset, index_buffer_offset, meshes[mesh_mask[index]].index_buffer.count };
 
 			// Vertex buffers
 			for (size_t buffer_index = 0; buffer_index < mapping_count; buffer_index++) {

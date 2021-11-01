@@ -4,6 +4,7 @@
 #include "../Rendering/Compression/TextureCompression.h"
 #include "../Utilities/FunctionInterfaces.h"
 #include "../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
+#include "../GLTFLoader/GLTFLoader.h"
 
 namespace ECSEngine {
 
@@ -12,6 +13,7 @@ namespace ECSEngine {
 #define ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT 100
 
 	// The handler must implement a void* parameter for additional info and must return void*
+	// If it returns a nullptr, it means the load failed so do not add it to the table
 	template<bool reference_counted, typename Handler>
 	void* AddResource(
 		ResourceManager* resource_manager,
@@ -29,16 +31,19 @@ namespace ECSEngine {
 			bool exists = resource_manager->Exists(identifier, type);
 			ECS_ASSERT(!exists, "The resource already exists!");
 #endif
-			void* allocation = function::Copy(resource_manager->m_memory, identifier.ptr, identifier.size);
-			identifier.ptr = allocation;
-			unsigned int hash_index = ResourceManagerHash::Hash(identifier);
 			void* data = handler(handler_parameter);
 
-			DataPointer data_pointer(data);
-			data_pointer.SetData(USHORT_MAX);
+			if (data != nullptr) {
+				void* allocation = function::Copy(resource_manager->m_memory, identifier.ptr, identifier.size);
+				identifier.ptr = allocation;
+				unsigned int hash_index = ResourceManagerHash::Hash(identifier);
 
-			bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
-			ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+				DataPointer data_pointer(data);
+				data_pointer.SetData(USHORT_MAX);
+
+				bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
+				ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+			}
 			return data;
 		}
 		else {
@@ -47,19 +52,22 @@ namespace ECSEngine {
 
 			unsigned short increment_count = flags & ECS_RESOURCE_INCREMENT_COUNT;
 			if (!exists) {
-				void* allocation = function::Copy(resource_manager->m_memory, identifier.ptr, identifier.size);
-				identifier.ptr = allocation;
-				unsigned int hash_index = ResourceManagerHash::Hash(identifier);
 				void* data = handler(handler_parameter);
 
-				DataPointer data_pointer(data);
-				data_pointer.SetData(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
+				if (data != nullptr) {
+					void* allocation = function::Copy(resource_manager->m_memory, identifier.ptr, identifier.size);
+					identifier.ptr = allocation;
+					unsigned int hash_index = ResourceManagerHash::Hash(identifier);
 
-				bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
-				ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+					DataPointer data_pointer(data);
+					data_pointer.SetData(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
 
-				if (reference_counted_is_loaded != nullptr) {
-					*reference_counted_is_loaded = true;
+					bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
+					ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+
+					if (reference_counted_is_loaded != nullptr) {
+						*reference_counted_is_loaded = true;
+					}
 				}
 				return data;
 			}
@@ -100,21 +108,28 @@ namespace ECSEngine {
 #endif
 
 			// plus 7 bytes for padding
-			void* allocation = resource_manager->m_memory->Allocate(parameter_size + identifier.size + 7);
+			void* allocation = resource_manager->Allocate(parameter_size + identifier.size + 7);
 			ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
 			memcpy(allocation, identifier.ptr, identifier.size);
 			identifier.ptr = allocation;
 
 			allocation = (void*)function::align_pointer((uintptr_t)allocation + identifier.size, 8);
-			unsigned int hash_index = ResourceManagerHash::Hash(identifier);
 
 			memset(allocation, 0, parameter_size);
 			void* data = handler(handler_parameter, allocation);
-			DataPointer data_pointer(data);
-			data_pointer.SetData(USHORT_MAX);
 
-			bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
-			ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+			if (data != nullptr) {
+				DataPointer data_pointer(data);
+				data_pointer.SetData(USHORT_MAX);
+
+				unsigned int hash_index = ResourceManagerHash::Hash(identifier);
+				bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
+				ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+			}
+			// The load failed, release the allocation
+			else {
+				resource_manager->Deallocate(allocation);
+			}
 			return data;
 		}
 		else {
@@ -123,10 +138,8 @@ namespace ECSEngine {
 
 			unsigned short increment_count = flags & ECS_RESOURCE_INCREMENT_COUNT;
 			if (!exists) {
-				unsigned int hash_index = ResourceManagerHash::Hash(identifier);
-
 				// plus 7 bytes for padding
-				void* allocation = resource_manager->m_memory->Allocate(parameter_size + identifier.size + 7);
+				void* allocation = resource_manager->Allocate(parameter_size + identifier.size + 7);
 				ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
 				memcpy(allocation, identifier.ptr, identifier.size);
 				identifier.ptr = allocation;
@@ -136,14 +149,22 @@ namespace ECSEngine {
 				memset(allocation, 0, parameter_size);
 				void* data = handler(handler_parameter, allocation);
 
-				DataPointer data_pointer(data);
-				data_pointer.SetData(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
+				if (data != nullptr) {
+					DataPointer data_pointer(data);
+					data_pointer.SetData(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
 
-				bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
-				ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+					unsigned int hash_index = ResourceManagerHash::Hash(identifier);
 
-				if (reference_counted_is_loaded != nullptr) {
-					*reference_counted_is_loaded = true;
+					bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(hash_index, data_pointer, identifier);
+					ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+
+					if (reference_counted_is_loaded != nullptr) {
+						*reference_counted_is_loaded = true;
+					}
+				}
+				// The load failed, release the allocation
+				else {
+					resource_manager->Deallocate(allocation);
 				}
 				return data;
 			}
@@ -186,7 +207,7 @@ namespace ECSEngine {
 		Handler&& handler,
 		unsigned int thread_index = 0
 	) {
-		void* allocation = resource_manager->m_memory->Allocate(parameter_size);
+		void* allocation = resource_manager->Allocate(parameter_size);
 		ECS_ASSERT(allocation != nullptr, "Allocating memory for temporary resource failed!");
 		memset(allocation, 0, parameter_size);
 		void* data = handler(handler_parameter, allocation);
@@ -206,8 +227,8 @@ namespace ECSEngine {
 			const ResourceIdentifier* identifiers = resource_manager->m_resource_types[type_int].table.GetIdentifiers();
 
 			void* data = data_pointer.GetPointer();
-			handler(data);
-			resource_manager->m_memory->Deallocate(identifiers[index].ptr);
+			handler(data, resource_manager);
+			resource_manager->Deallocate(identifiers[index].ptr);
 			resource_manager->m_resource_types[type_int].table.EraseFromIndex(index);
 		};
 		if constexpr (!reference_counted) {
@@ -225,7 +246,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// The handler must implement a void* parameter as this is how it receives the resource
-	// it will automatically deallocate the memory for that resource
+	// and the ResourceManager* pointer
 	template<bool reference_counted, typename Handler>
 	void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags, Handler&& handler) {
 		unsigned int type_int = (unsigned int)type;
@@ -239,11 +260,11 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	// The handler takes the data as a void*
+	// The handler takes the data as a void* and the ResourceManager* pointer
 	template<typename Handler>
 	void DeleteTemporaryResource(ResourceManager* resource_manager, unsigned int temporary_index, Handler&& handler, unsigned int thread_index = 0) {
 		void* data = resource_manager->m_temporary_resources[thread_index][temporary_index];
-		handler(data);
+		handler(data, resource_manager);
 		resource_manager->m_memory->Deallocate(data);
 		resource_manager->m_temporary_resources[thread_index].RemoveSwapBack(temporary_index);
 	}
@@ -251,19 +272,14 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	using DeleteFunction = void (*)(ResourceManager*, unsigned int, size_t);
-	using UnloadFunction = void (*)(void*);
+	// Return true means deallocate the data given, return false do not deallocate it
+	using UnloadFunction = void (*)(void*, ResourceManager*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadTextureHandler(void* parameter) {
+	void UnloadTextureHandler(void* parameter, ResourceManager* resource_manager) {
 		ID3D11ShaderResourceView* reinterpretation = (ID3D11ShaderResourceView*)parameter;
-
-		ID3D11Resource* resource = GetResource(ResourceView(reinterpretation));
-		// Releasing the view
-		unsigned int count = reinterpretation->Release();
-
-		// Releasing the resource
-		unsigned int count_ = resource->Release();
+		ReleaseShaderView(reinterpretation);
 	}
 
 	void DeleteTexture(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -272,20 +288,76 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadTextFileHandler(void* parameter) {}
+	void UnloadTextFileHandler(void* parameter, ResourceManager* resource_manager) {}
 
 	void DeleteTextFile(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadTextFile<false>(index, flags);
 	}
 
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadMeshesHandler(void* parameter, ResourceManager* resource_manager) {
+		Stream<Mesh>* data = (Stream<Mesh>*)parameter;
+		for (size_t index = 0; index < data->size; index++) {
+			FreeMesh(data->buffer[index]);
+		}
+		resource_manager->Deallocate(data);
+	}
+
+	void DeleteMeshes(ResourceManager* manager, unsigned int index, size_t flags) {
+		manager->UnloadMeshes<false>(index, flags);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadMaterialsHandler(void* parameter, ResourceManager* resource_manager) {
+		Stream<PBRMaterial>* data = (Stream<PBRMaterial>*)parameter;
+		AllocatorPolymorphic allocator = resource_manager->Allocator();
+
+		for (size_t index = 0; index < data->size; index++) {
+			FreePBRMaterial(data->buffer[index], allocator);
+		}
+		resource_manager->Deallocate(data);
+	}
+
+	void DeleteMaterials(ResourceManager* manager, unsigned int index, size_t flags) {
+		manager->UnloadMaterials(index, flags);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void UnloadPBRMeshHandler(void* parameter, ResourceManager* resource_manager) {
+		PBRMesh* data = (PBRMesh*)parameter;
+		AllocatorPolymorphic allocator = resource_manager->Allocator();
+
+		// The mesh must be released, alongside the pbr materials
+		for (size_t index = 0; index < data->submesh_count; index++) {
+			FreePBRMaterial(data->materials[index], allocator);
+		}
+		FreeMesh(data->mesh);
+		resource_manager->Deallocate(data);
+	}
+
+	void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
+		manager->UnloadPBRMesh<false>(index, flags);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	constexpr DeleteFunction DELETE_FUNCTIONS[] = {
 		DeleteTexture, 
-		DeleteTextFile
+		DeleteTextFile,
+		DeleteMeshes,
+		DeleteMaterials,
+		DeletePBRMesh
 	};
 	
 	constexpr UnloadFunction UNLOAD_FUNCTIONS[] = {
 		UnloadTextureHandler,
-		UnloadTextFileHandler
+		UnloadTextFileHandler,
+		UnloadMeshesHandler,
+		UnloadMaterialsHandler,
+		UnloadPBRMeshHandler
 	};
 
 	static_assert(std::size(DELETE_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
@@ -407,15 +479,34 @@ namespace ECSEngine {
 	{
 		InternalResourceType type;
 		size_t name_length = strnlen_s(type_name, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
-		char* name_allocation = (char*)m_memory->Allocate(name_length, alignof(char));
+		char* name_allocation = (char*)Allocate(name_length);
 		type.name = name_allocation;
 		memcpy(name_allocation, type_name, sizeof(char) * name_length);
 		
 		size_t table_size = type.table.MemoryOf(resource_count);
-		void* allocation = m_memory->Allocate(table_size);
+		void* allocation = Allocate(table_size);
 		memset(allocation, 0, table_size);
 		type.table.InitializeFromBuffer(allocation, resource_count);
 		m_resource_types.Add(type);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void* ResourceManager::Allocate(size_t size)
+	{
+		return m_memory->Allocate(size);
+	}
+
+	AllocatorPolymorphic ResourceManager::Allocator()
+	{
+		return { m_memory, AllocatorType::MemoryManager, AllocationType::SingleThreaded };
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::Deallocate(const void* data)
+	{
+		m_memory->Deallocate(data);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -817,6 +908,222 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	// Loads all meshes from a gltf file
+	template<bool reference_counted>
+	Stream<Mesh>* ResourceManager::LoadMeshes(
+		const wchar_t* filename,
+		size_t load_flags,
+		bool* reference_counted_is_loaded,
+		unsigned int resource_folder_path_index
+	) {
+		void* meshes = AddResource<reference_counted>(
+			this,
+			filename,
+			ResourceType::Mesh,
+			nullptr,
+			load_flags,
+			reference_counted_is_loaded,
+			[=](void* parameter) {
+				return LoadMeshImplementation(filename, load_flags, resource_folder_path_index);
+			});
+
+		return (Stream<Mesh>*)meshes;
+	}
+
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<Mesh>*, ResourceManager::LoadMeshes, const wchar_t*, size_t, bool*, unsigned int);
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	// Loads all meshes from a gltf file
+	Stream<Mesh>* ResourceManager::LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index) {
+		GLTFData data = LoadGLTFFile(filename);
+		// The load failed
+		if (data.data == nullptr) {
+			return nullptr;
+		}
+		ECS_ASSERT(data.mesh_count < 200);
+
+		GLTFMesh* gltf_meshes = (GLTFMesh*)ECS_STACK_ALLOC(sizeof(GLTFMesh) * data.mesh_count);
+		AllocatorPolymorphic allocator = Allocator();
+		bool success = LoadMeshesFromGLTF(data, gltf_meshes, allocator);
+		// The load failed
+		if (!success) {
+			// The gltf data must be freed
+			FreeGLTFFile(data);
+			return nullptr;
+		}
+
+		// Calculate the allocation size
+		size_t allocation_size = sizeof(Stream<Mesh>);
+		allocation_size += sizeof(Mesh) * data.mesh_count;
+
+		// Allocate the needed memeory
+		void* allocation = Allocate(allocation_size);
+		Stream<Mesh>* meshes = (Stream<Mesh>*)allocation;
+		uintptr_t buffer = (uintptr_t)allocation;
+		buffer += sizeof(Stream<Mesh>);
+		meshes->InitializeFromBuffer(buffer, data.mesh_count);
+
+		// Convert the gltf meshes into a single mesh
+		GLTFMeshesToMeshes(m_graphics, gltf_meshes, meshes->buffer, meshes->size);
+
+		// Free the gltf file data and the gltf meshes
+		FreeGLTFFile(data);
+		FreeGLTFMeshes(gltf_meshes, meshes->size, allocator);
+
+		return meshes;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	// Loads all materials from a gltf file
+	template<bool reference_counted>
+	Stream<PBRMaterial>* ResourceManager::LoadMaterials(
+		const wchar_t* filename,
+		size_t load_flags,
+		bool* reference_counted_is_loaded,
+		unsigned int resource_folder_path_index
+	) {
+		void* materials = AddResource<reference_counted>(
+			this,
+			filename,
+			ResourceType::Material,
+			nullptr,
+			load_flags,
+			reference_counted_is_loaded,
+			[=](void* parameter) {
+				return LoadMaterialsImplementation(filename, load_flags, resource_folder_path_index);
+			});
+
+		return (Stream<PBRMaterial>*)materials;
+	}
+
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<PBRMaterial>*, ResourceManager::LoadMaterials, const wchar_t*, size_t, bool*, unsigned int);
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	// Loads all materials from a gltf file
+	Stream<PBRMaterial>* ResourceManager::LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index) {
+		GLTFData data = LoadGLTFFile(filename);
+		// The load failed
+		if (data.data == nullptr) {
+			return nullptr;
+		}
+		ECS_ASSERT(data.mesh_count < 200);
+
+		PBRMaterial* _materials = (PBRMaterial*)ECS_STACK_ALLOC((sizeof(PBRMaterial) + sizeof(unsigned int)) * data.mesh_count);
+		Stream<PBRMaterial> materials(_materials, 0);
+		Stream<unsigned int> material_mask(function::OffsetPointer(_materials, sizeof(PBRMaterial) * data.mesh_count), 0);
+
+		AllocatorPolymorphic allocator = Allocator();
+		bool success = LoadDisjointMaterialsFromGLTF(data, materials, material_mask, allocator);
+
+		// The load failed
+		if (!success) {
+			// The gltf data must be freed
+			FreeGLTFFile(data);
+			return nullptr;
+		}
+
+		// Calculate the total memory needed - the pbr materials already allocated memory for themselves with
+		// the call to load the disjoint materials
+		size_t allocation_size = sizeof(Stream<PBRMaterial>);
+		allocation_size += sizeof(PBRMaterial) * materials.size;
+
+		void* allocation = Allocate(allocation_size);
+		Stream<PBRMaterial>* pbr_materials = (Stream<PBRMaterial>*)allocation;
+		pbr_materials->InitializeFromBuffer(function::OffsetPointer(allocation, sizeof(Stream<PBRMaterial>)), materials.size);
+		memcpy(pbr_materials->buffer, materials.buffer, sizeof(PBRMaterial) * materials.size);
+
+		// Free the gltf data
+		FreeGLTFFile(data);
+
+		return pbr_materials;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
+	template<bool reference_counted>
+	PBRMesh* ResourceManager::LoadPBRMesh(
+		const wchar_t* filename,
+		size_t load_flags,
+		bool* reference_counted_is_loaded,
+		unsigned int resource_folder_path_index
+	) {
+		void* mesh = AddResource<reference_counted>(
+			this,
+			filename,
+			ResourceType::PBRMesh,
+			nullptr,
+			load_flags,
+			reference_counted_is_loaded,
+			[=](void* parameter) {
+				return LoadPBRMeshImplementation(filename, load_flags, resource_folder_path_index);
+			});
+
+		return (PBRMesh*)mesh;
+	}
+
+	ECS_TEMPLATE_FUNCTION_BOOL(PBRMesh*, ResourceManager::LoadPBRMesh, const wchar_t*, size_t, bool*, unsigned int);
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
+	PBRMesh* ResourceManager::LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index) {
+		GLTFData data = LoadGLTFFile(filename);
+		// The load failed
+		if (data.data == nullptr) {
+			return nullptr;
+		}
+		ECS_ASSERT(data.mesh_count < 200);
+
+		void* initial_allocation = Allocate((sizeof(GLTFMesh) + sizeof(PBRMaterial) + sizeof(unsigned int)) * data.mesh_count);
+		GLTFMesh* gltf_meshes = (GLTFMesh*)initial_allocation;
+		Stream<PBRMaterial> pbr_materials(function::OffsetPointer(gltf_meshes, sizeof(GLTFMesh) * data.mesh_count), 0);
+		unsigned int* material_masks = (unsigned int*)function::OffsetPointer(pbr_materials.buffer, sizeof(PBRMaterial) * data.mesh_count);
+		AllocatorPolymorphic allocator = Allocator();
+
+		bool success = LoadMeshesAndDisjointMaterialsFromGLTF(data, gltf_meshes, pbr_materials, material_masks, allocator);
+		// The load failed
+		if (!success) {
+			// Free the gltf data and the initial allocation
+			FreeGLTFFile(data);
+			Deallocate(initial_allocation);
+			return nullptr;
+		}
+
+		// Calculate the allocation size
+		size_t allocation_size = sizeof(PBRMesh);
+		allocation_size += (sizeof(Submesh) + sizeof(PBRMaterial)) * pbr_materials.size;
+
+		// Allocate the instance
+		void* allocation = Allocate(allocation_size);
+		PBRMesh* mesh = (PBRMesh*)allocation;
+		uintptr_t buffer = (uintptr_t)allocation;
+		buffer += sizeof(PBRMesh);
+
+		mesh->submeshes = (Submesh*)buffer;
+		buffer += sizeof(Submesh) * pbr_materials.size;
+
+		mesh->materials = (PBRMaterial*)buffer;
+
+		mesh->mesh = GLTFMeshesToMergedMesh(m_graphics, gltf_meshes, mesh->submeshes, material_masks, pbr_materials.size, data.mesh_count);
+		mesh->submesh_count = pbr_materials.size;
+
+		// Copy the pbr materials to this new buffer
+		memcpy(mesh->materials, pbr_materials.buffer, sizeof(PBRMaterial) * pbr_materials.size);
+
+		// Free the gltf data, the gltf meshes and the initial allocation
+		FreeGLTFFile(data);
+		FreeGLTFMeshes(gltf_meshes, data.mesh_count, allocator);
+		Deallocate(initial_allocation);
+
+		return mesh;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	void ResourceManager::RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource)
 	{
 		unsigned int hash_index = ResourceManagerHash::Hash(identifier);
@@ -826,7 +1133,7 @@ namespace ECSEngine {
 		bool success = m_resource_types[int_type].table.TryGetValuePtr(hash_index, identifier, data_pointer);
 		ECS_ASSERT(success, "Could not rebind resource");
 
-		UNLOAD_FUNCTIONS[int_type](data_pointer->GetPointer());
+		UNLOAD_FUNCTIONS[int_type](data_pointer->GetPointer(), this);
 
 		//if (success) {
 		data_pointer->SetPointer(new_resource);
@@ -909,6 +1216,44 @@ namespace ECSEngine {
 	{
 		DeleteTemporaryResource(this, handle, UnloadTextureHandler, thread_index);
 	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadMeshes(const wchar_t* filename, size_t flags) {
+		DeleteResource<reference_counted>(this, filename, ResourceType::Mesh, flags, UnloadMeshesHandler);
+	}
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadMeshes(unsigned int index, size_t flags) {
+		DeleteResource<reference_counted>(this, index, ResourceType::Mesh, flags, UnloadMeshesHandler);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadMaterials(const wchar_t* filename, size_t flags) {
+		DeleteResource<reference_counted>(this, filename, ResourceType::Material, flags, UnloadMaterialsHandler);
+	}
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadMaterials(unsigned int index, size_t flags) {
+		DeleteResource<reference_counted>(this, index, ResourceType::Material, flags, UnloadMaterialsHandler);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadPBRMesh(const wchar_t* filename, size_t flags) {
+		DeleteResource<reference_counted>(this, filename, ResourceType::PBRMesh, flags, UnloadPBRMeshHandler);
+	}
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadPBRMesh(unsigned int index, size_t flags) {
+		DeleteResource<reference_counted>(this, index, ResourceType::PBRMesh, flags, UnloadPBRMeshHandler);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
 
 #pragma region Free functions
 

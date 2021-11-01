@@ -31,7 +31,7 @@ namespace ECSEngine {
 		unsigned char* m_buffer;
 		size_t m_pool_count;
 		size_t m_pool_size;
-		SpinLock m_spinLock;
+		SpinLock m_spin_lock;
 		containers::BooleanBitField m_free_list;
 	};
 

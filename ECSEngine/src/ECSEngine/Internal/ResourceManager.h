@@ -31,10 +31,13 @@ namespace ECSEngine {
 	enum class ResourceType : unsigned char {
 		Texture,
 		TextFile,
+		Mesh,
+		Material,
+		PBRMesh,
 		TypeCount
 	};
 
-	constexpr const char* ECS_RESOURCE_TYPE_NAMES[] = { "Texture", "TextFile" };
+	constexpr const char* ECS_RESOURCE_TYPE_NAMES[] = { "Texture", "TextFile", "Mesh", "Material", "PBRMesh" };
 	static_assert(std::size(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceType::TypeCount);
 	constexpr size_t ECS_RESOURCE_INCREMENT_COUNT = USHORT_MAX;
 
@@ -79,6 +82,12 @@ namespace ECSEngine {
 
 		// Create a new resource type
 		void AddResourceType(const char* type_name, unsigned int resource_count = ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT);
+
+		void* Allocate(size_t size);
+
+		AllocatorPolymorphic Allocator();
+
+		void Deallocate(const void* data);
 
 		template<bool delete_if_zero = true>
 		void DecrementReferenceCount(ResourceType type, unsigned int amount);
@@ -143,6 +152,7 @@ namespace ECSEngine {
 			unsigned int resource_folder_path_index = -1
 		);
 
+		// In order to generate mip-maps, the context must be supplied
 		ResourceView LoadTextureTemporary(
 			const wchar_t* filename,
 			unsigned int& handle,
@@ -151,11 +161,48 @@ namespace ECSEngine {
 			bool use_path = false
 		);
 
+		// In order to generate mip-maps, the context must be supplied
 		ResourceView LoadTextureImplementation(
 			const wchar_t* filename, 
 			ResourceManagerTextureDesc* descriptor, 
 			unsigned int resource_folder_path_index = -1
 		);
+
+		// Loads all meshes from a gltf file
+		template<bool reference_counted = false>
+		containers::Stream<Mesh>* LoadMeshes(
+			const wchar_t* filename,
+			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
+			unsigned int resource_folder_path_index = -1
+		);
+
+		// Loads all meshes from a gltf file
+		containers::Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+
+		// Loads all materials from a gltf file
+		template<bool reference_counted = false>
+		containers::Stream<PBRMaterial>* LoadMaterials(
+			const wchar_t* filename,
+			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
+			unsigned int resource_folder_path_index = -1
+		);
+
+		// Loads all materials from a gltf file
+		containers::Stream<PBRMaterial>* LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+
+		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
+		template<bool reference_counted = false>
+		PBRMesh* LoadPBRMesh(
+			const wchar_t* filename,
+			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
+			unsigned int resource_folder_path_index = -1
+		);
+
+		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
+		PBRMesh* LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
 
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed than reassigned
 		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource);
@@ -183,6 +230,24 @@ namespace ECSEngine {
 		void UnloadTexture(unsigned int index, size_t flags = 1);
 
 		void UnloadTextureTemporary(unsigned int handle, unsigned int thread_index = 0);
+
+		template<bool reference_counted = false>
+		void UnloadMeshes(const wchar_t* filename, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadMeshes(unsigned int index, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadMaterials(const wchar_t* filename, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadMaterials(unsigned int index, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadPBRMesh(const wchar_t* filename, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadPBRMesh(unsigned int index, size_t flags = 1);
 
 	//private:
 		Graphics* m_graphics;

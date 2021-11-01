@@ -1,10 +1,10 @@
 #include "..\Macros.hlsli"
 
-struct VS_INPUT ECS_REFLECT_INCREMENT_INPUT_SLOT
+struct VS_INPUT
 {
     float3 position : POSITION;
-    float4x4 world_matrix : WORLD_MATRIX; ECS_REFLECT_INSTANCE(1)  
-    float4 color : COLOR; ECS_REFLECT_UNORM_8 ECS_REFLECT_INSTANCE(1)
+    float4x4 world_matrix : WORLD_MATRIX; ECS_REFLECT_INSTANCE(1) ECS_REFLECT_INPUT_SLOT(1)
+    float4 color : COLOR; ECS_REFLECT_UNORM_8 ECS_REFLECT_INSTANCE(1) ECS_REFLECT_INPUT_SLOT(1)
 };
 
 struct VS_OUTPUT
