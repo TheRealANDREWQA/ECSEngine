@@ -8,12 +8,16 @@ namespace ECSEngine {
 
 		ECS_CONTAINERS;
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionManager::ReflectionManager(MemoryManager* allocator, size_t type_count, size_t enum_count) : folders(allocator, 0)
 		{
 			InitializeFieldTable();
 			InitializeTypeTable(type_count);
 			InitializeEnumTable(enum_count);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::ClearTypeDefinitions()
 		{
@@ -25,6 +29,8 @@ namespace ECSEngine {
 			}
 			type_definitions.Clear();
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::BindApprovedData(
 			const ReflectionManagerThreadTaskData* data,
@@ -70,6 +76,9 @@ namespace ECSEngine {
 							memcpy(definition_ptr, data[data_index].types[index].fields[field_index].definition, sizeof(char) * definition_size);
 							ptr += sizeof(char) * field_size;
 						}
+						else {
+							type.fields[field_index].definition = data[data_index].types[index].fields[field_index].definition;
+						}
 					}
 
 					ECS_RESOURCE_IDENTIFIER_WITH_HASH(type.name, ReflectionStringHashFunction);
@@ -110,6 +119,8 @@ namespace ECSEngine {
 			folders[folder_index].allocated_buffer = allocation;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::ClearEnumDefinitions() {
 			Stream<ReflectionEnum> enum_defs = enum_definitions.GetValueStream();
 			for (size_t index = 0; index < enum_defs.size; index++) {
@@ -119,6 +130,8 @@ namespace ECSEngine {
 			}
 			enum_definitions.Clear();
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int ReflectionManager::CreateFolderHierarchy(const wchar_t* root) {
 			folders.ReserveNewElements(1);
@@ -134,6 +147,8 @@ namespace ECSEngine {
 			return folders.size - 1;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerThreadTaskData& data)
 		{
 			free(data.thread_memory.buffer);
@@ -141,6 +156,8 @@ namespace ECSEngine {
 			folders.allocator->Deallocate(data.enums.buffer);
 			folders.allocator->Deallocate(data.paths.buffer);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::FreeFolderHierarchy(unsigned int folder_index)
 		{
@@ -168,6 +185,8 @@ namespace ECSEngine {
 			folders[folder_index].hierarchy.FreeAllMemory();
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionType ReflectionManager::GetType(const char* name) const
 		{
 			size_t name_length = strlen(name);
@@ -176,6 +195,8 @@ namespace ECSEngine {
 			return type_definitions.GetValue(hash, identifier);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionEnum ReflectionManager::GetEnum(const char* name) const {
 			size_t name_length = strlen(name);
 			ResourceIdentifier identifier = ResourceIdentifier(name, name_length);
@@ -183,17 +204,21 @@ namespace ECSEngine {
 			return enum_definitions.GetValue(hash, identifier);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void* ReflectionManager::GetTypeInstancePointer(const char* name, void* instance, unsigned int pointer_index) const
 		{
 			ReflectionType type = GetType(name);
 			return GetTypeInstancePointer(type, instance, pointer_index);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void* ReflectionManager::GetTypeInstancePointer(ReflectionType type, void* instance, unsigned int pointer_index) const
 		{
 			size_t count = 0;
 			for (size_t index = 0; index < type.fields.size; index++) {
-				if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::Pointer || IsStream(type.fields[index].info.extended_type)) {
+				if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Pointer || IsStream(type.fields[index].info.extended_type)) {
 					if (count == pointer_index) {
 						return (void*)((uintptr_t)instance + type.fields[index].info.pointer_offset);
 					}
@@ -203,16 +228,22 @@ namespace ECSEngine {
 			ECS_ASSERT(false);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionManager::TryGetType(const char* name, ReflectionType& type) const
 		{
 			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, ReflectionStringHashFunction);
 			return type_definitions.TryGetValue(hash, identifier, type);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionManager::TryGetEnum(const char* name, ReflectionEnum& enum_) const {
 			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, ReflectionStringHashFunction);
 			return enum_definitions.TryGetValue(hash, identifier, enum_);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::InitializeFieldTable()
 		{
@@ -223,22 +254,22 @@ namespace ECSEngine {
 			// Initialize all values, helped by macros
 			ResourceIdentifier identifier;
 #define BASIC_TYPE(type, basic_type, extended_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, extended_type, sizeof(type), 1), identifier);
-#define INT_TYPE(type, val) BASIC_TYPE(type, ReflectionBasicFieldType::val, ReflectionExtendedFieldType::val)
-#define COMPLEX_TYPE(type, basic_type, extended_type, byte_size, basic_type_count) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, extended_type, byte_size, basic_type_count), identifier);
+#define INT_TYPE(type, val) BASIC_TYPE(type, ReflectionBasicFieldType::val, ReflectionStreamFieldType::Basic)
+#define COMPLEX_TYPE(type, basic_type, extended_type, byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, extended_type, byte_size, 1), identifier);
 
-#define TYPE_234(base, reflection_type) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::reflection_type, ReflectionExtendedFieldType::reflection_type##2, sizeof(base) * 2, 2); \
-COMPLEX_TYPE(base##3, ReflectionBasicFieldType::reflection_type, ReflectionExtendedFieldType::reflection_type##3, sizeof(base) * 3, 3); \
-COMPLEX_TYPE(base##4, ReflectionBasicFieldType::reflection_type, ReflectionExtendedFieldType::reflection_type##4, sizeof(base) * 4, 4);
+#define TYPE_234(base, reflection_type) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::reflection_type##2, ReflectionStreamFieldType::Basic, sizeof(base) * 2); \
+COMPLEX_TYPE(base##3, ReflectionBasicFieldType::reflection_type##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \
+COMPLEX_TYPE(base##4, ReflectionBasicFieldType::reflection_type##4, ReflectionStreamFieldType::Basic, sizeof(base) * 4);
 
-#define TYPE_234_SIGNED_INT(base, basic_reflect, extended_reflect) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::basic_reflect, ReflectionExtendedFieldType::extended_reflect##2, sizeof(base) * 2, 2); \
-COMPLEX_TYPE(base##3, ReflectionBasicFieldType::basic_reflect, ReflectionExtendedFieldType::extended_reflect##3, sizeof(base) * 3, 3); \
-COMPLEX_TYPE(base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExtendedFieldType::extended_reflect##4, sizeof(base) * 4, 4);
+#define TYPE_234_SIGNED_INT(base, basic_reflect) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::basic_reflect##2, ReflectionStreamFieldType::Basic, sizeof(base) * 2); \
+COMPLEX_TYPE(base##3, ReflectionBasicFieldType::basic_reflect##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \
+COMPLEX_TYPE(base##4, ReflectionBasicFieldType::basic_reflect##4, ReflectionStreamFieldType::Basic, sizeof(base) * 4);
 
-#define TYPE_234_UNSIGNED_INT(base, basic_reflect, extended_reflect) COMPLEX_TYPE(u##base##2, ReflectionBasicFieldType::basic_reflect, ReflectionExtendedFieldType::U##extended_reflect##2, sizeof(base) * 2, 2); \
-COMPLEX_TYPE(u##base##3, ReflectionBasicFieldType::basic_reflect, ReflectionExtendedFieldType::U##extended_reflect##3, sizeof(base) * 3, 3); \
-COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExtendedFieldType::U##extended_reflect##4, sizeof(base) * 4, 4);
+#define TYPE_234_UNSIGNED_INT(base, basic_reflect) COMPLEX_TYPE(u##base##2, ReflectionBasicFieldType::U##basic_reflect##2, ReflectionStreamFieldType::Basic, sizeof(base) * 2); \
+COMPLEX_TYPE(u##base##3, ReflectionBasicFieldType::U##basic_reflect##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \
+COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, ReflectionStreamFieldType::Basic, sizeof(base) * 4);
 
-#define TYPE_234_INT(base, basic_reflect, extended_reflect) TYPE_234_SIGNED_INT(base, basic_reflect, extended_reflect); TYPE_234_UNSIGNED_INT(base, basic_reflect, extended_reflect)
+#define TYPE_234_INT(base, basic_reflect, extended_reflect) TYPE_234_SIGNED_INT(base, basic_reflect); TYPE_234_UNSIGNED_INT(base, basic_reflect)
 
 			INT_TYPE(int8_t, Int8);
 			INT_TYPE(uint8_t, UInt8);
@@ -250,30 +281,32 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			INT_TYPE(uint64_t, UInt64);
 			INT_TYPE(bool, Bool);
 
-			BASIC_TYPE(char, ReflectionBasicFieldType::Int8, ReflectionExtendedFieldType::Char);
-			BASIC_TYPE(unsigned char, ReflectionBasicFieldType::UInt8, ReflectionExtendedFieldType::UChar);
-			BASIC_TYPE(short, ReflectionBasicFieldType::Int16, ReflectionExtendedFieldType::Short);
-			BASIC_TYPE(unsigned short, ReflectionBasicFieldType::UInt16, ReflectionExtendedFieldType::UShort);
-			BASIC_TYPE(int, ReflectionBasicFieldType::Int32, ReflectionExtendedFieldType::Int);
-			BASIC_TYPE(unsigned int, ReflectionBasicFieldType::UInt32, ReflectionExtendedFieldType::UInt);
-			BASIC_TYPE(long long, ReflectionBasicFieldType::Int64, ReflectionExtendedFieldType::Long);
-			BASIC_TYPE(unsigned long long, ReflectionBasicFieldType::UInt64, ReflectionExtendedFieldType::ULong);
-			BASIC_TYPE(size_t, ReflectionBasicFieldType::UInt64, ReflectionExtendedFieldType::ULong);
-			BASIC_TYPE(wchar_t, ReflectionBasicFieldType::Wchar_t, ReflectionExtendedFieldType::Wchar_t);
+			BASIC_TYPE(float, ReflectionBasicFieldType::Float, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(double, ReflectionBasicFieldType::Double, ReflectionStreamFieldType::Basic);
 
-			BASIC_TYPE(float, ReflectionBasicFieldType::Float, ReflectionExtendedFieldType::Float);
-			BASIC_TYPE(double, ReflectionBasicFieldType::Double, ReflectionExtendedFieldType::Double);
-			COMPLEX_TYPE(enum, ReflectionBasicFieldType::Enum, ReflectionExtendedFieldType::Enum, sizeof(ReflectionBasicFieldType), 1);
-			COMPLEX_TYPE(pointer, ReflectionBasicFieldType::UserDefined, ReflectionExtendedFieldType::Pointer, sizeof(void*), 1);
+			// Basic type aliases
+			BASIC_TYPE(char, ReflectionBasicFieldType::Int8, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(unsigned char, ReflectionBasicFieldType::UInt8, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(short, ReflectionBasicFieldType::Int16, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(unsigned short, ReflectionBasicFieldType::UInt16, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(int, ReflectionBasicFieldType::Int32, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(unsigned int, ReflectionBasicFieldType::UInt32, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(long long, ReflectionBasicFieldType::Int64, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(unsigned long long, ReflectionBasicFieldType::UInt64, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(size_t, ReflectionBasicFieldType::UInt64, ReflectionStreamFieldType::Basic);
+			BASIC_TYPE(wchar_t, ReflectionBasicFieldType::Wchar_t, ReflectionStreamFieldType::Basic);
+
+			COMPLEX_TYPE(enum, ReflectionBasicFieldType::Enum, ReflectionStreamFieldType::Basic, sizeof(ReflectionBasicFieldType), 1);
+			COMPLEX_TYPE(pointer, ReflectionBasicFieldType::UserDefined, ReflectionStreamFieldType::Pointer, sizeof(void*), 1);
 			
 			TYPE_234(bool, Bool);
 			TYPE_234(float, Float);
 			TYPE_234(double, Double);
 
-			TYPE_234_INT(char, Int8, Char);
-			TYPE_234_INT(short, Int16, Short);
-			TYPE_234_INT(int, Int32, Int);
-			TYPE_234_INT(long long, Int64, Long);
+			TYPE_234_INT(char, Char);
+			TYPE_234_INT(short, Short);
+			TYPE_234_INT(int, Int);
+			TYPE_234_INT(long long, Long);
 
 #undef INT_TYPE
 #undef BASIC_TYPE
@@ -284,11 +317,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 #undef TYPE_234
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::InitializeTypeTable(size_t count)
 		{
 			void* allocation = folders.allocator->Allocate(ReflectionTypeTable::MemoryOf(count));
 			type_definitions.InitializeFromBuffer(allocation, count);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::InitializeEnumTable(size_t count)
 		{
@@ -296,11 +333,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			enum_definitions.InitializeFromBuffer(allocation, count);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::InitializeThreadTaskData(
 			size_t thread_memory,
 			size_t path_count, 
 			ReflectionManagerThreadTaskData& data, 
-			const char*& error_message
+			CapacityStream<char>* error_message
 		)
 		{
 			data.error_message = error_message;
@@ -319,40 +358,49 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 			void* thread_allocation = malloc(thread_memory);
 			data.thread_memory.InitializeFromBuffer(thread_allocation, 0, thread_memory);
-			data.faulty_path = -1;
 			data.field_table = &field_table;
 			data.success = true;
 			data.total_memory = 0;
+			data.error_message_lock.unlock();
 		}
 
-		bool ReflectionManager::ProcessFolderHierarchy(const wchar_t* root, const char*& error_message, wchar_t* faulty_path) {
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool ReflectionManager::ProcessFolderHierarchy(const wchar_t* root, CapacityStream<char>* error_message) {
 			for (size_t index = 0; index < folders.size; index++) {
 				if (wcscmp(folders[index].hierarchy.root, root) == 0) {
-					return ProcessFolderHierarchy(index, error_message, faulty_path);
+					return ProcessFolderHierarchy(index, error_message);
 				}
 			}
 			return false;
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool ReflectionManager::ProcessFolderHierarchy(
 			const wchar_t* root, 
-			const char**& error_message, 
 			TaskManager* task_manager, 
-			wchar_t* faulty_path
+			CapacityStream<char>* error_message
 		) {
 			for (size_t index = 0; index < folders.size; index++) {
 				if (wcscmp(folders[index].hierarchy.root, root) == 0) {
-					return ProcessFolderHierarchy(index, error_message, task_manager, faulty_path);
+					return ProcessFolderHierarchy(index, task_manager, error_message);
 				}
 			}
 			return false;
 		}
 
-		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, const char*& error_message, wchar_t* faulty_path) {
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
 			ReflectionManagerThreadTaskData thread_data;
 
 			constexpr size_t thread_memory = 20'000'000;
 			// Paths that need to be searched will not be assigned here
+			ECS_TEMP_ASCII_STRING(temp_error_message, 1024);
+			if (error_message == nullptr) {
+				error_message = &temp_error_message;
+			}
 			InitializeThreadTaskData(thread_memory, folders[index].hierarchy.filtered_files[0].files.size, thread_data, error_message);
 
 			ConditionVariable condition_variable;
@@ -363,12 +411,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			}
 
 			ReflectionManagerThreadTask(0, nullptr, &thread_data);
-			if (thread_data.success == false) {
-				if (faulty_path != nullptr) {
-					wcscpy(faulty_path, thread_data.paths[thread_data.faulty_path]);
-				}
-			}
-			else {
+			if (thread_data.success == true) {
 				BindApprovedData(&thread_data, 1, index);
 			}
 
@@ -376,11 +419,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return thread_data.success;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionManager::ProcessFolderHierarchy(
 			unsigned int index, 
-			const char**& error_messages, 
 			TaskManager* task_manager, 
-			wchar_t* faulty_path
+			CapacityStream<char>* error_message
 		) {
 			unsigned int thread_count = task_manager->GetThreadCount();
 			ReflectionManagerThreadTaskData* thread_data = (ReflectionManagerThreadTaskData*)folders.allocator->Allocate(sizeof(ReflectionManagerThreadTaskData) * thread_count);
@@ -406,6 +450,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 			unsigned int total_paths_counted = 0;
 			ConditionVariable condition_variable;
+
+			ECS_TEMP_ASCII_STRING(temp_error_message, 1024);
+			if (error_message == nullptr) {
+				error_message = &temp_error_message;
+			}
+
 			for (size_t thread_index = 0; thread_index < thread_count; thread_index++) {
 				unsigned int should_add_remainder = 0;
 				if (thread_paths_remainder > 0) {
@@ -415,7 +465,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 				unsigned int thread_current_paths = thread_paths + should_add_remainder;
 				// initialize data with buffers
-				InitializeThreadTaskData(thread_memory, thread_current_paths, thread_data[thread_index], error_messages[thread_index]);
+				InitializeThreadTaskData(thread_memory, thread_current_paths, thread_data[thread_index], error_message);
 				thread_data[thread_index].condition_variable = &condition_variable;
 
 				// Set thread paths
@@ -443,9 +493,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			for (size_t thread_index = 0; thread_index < thread_count; thread_index++) {
 				if (thread_data[thread_index].success == false) {
 					success = false;
-					if (faulty_path != nullptr) {
-						wcscpy(faulty_path, folders[index].hierarchy.filtered_files[0].files[path_indices[thread_data[thread_index].faulty_path + path_index]]);
-					}
 					break;
 				}
 				path_index += thread_data[thread_index].paths.size;
@@ -465,11 +512,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return success;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::RemoveFolderHierarchy(unsigned int folder_index)
 		{
 			FreeFolderHierarchy(folder_index);
 			folders.RemoveSwapBack(folder_index);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::RemoveFolderHierarchy(const wchar_t* root) {
 			for (size_t index = 0; index < folders.size; index++) {
@@ -481,17 +532,21 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			ECS_ASSERT(false);
 		}
 
-		bool ReflectionManager::UpdateFolderHierarchy(unsigned int folder_index, const char*& error_message, wchar_t* faulty_path)
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool ReflectionManager::UpdateFolderHierarchy(unsigned int folder_index, CapacityStream<char>* error_message)
 		{
 			FreeFolderHierarchy(folder_index);
 			folders[folder_index].hierarchy.Recreate();
 			return ProcessFolderHierarchy(folder_index, error_message);
 		}
 
-		bool ReflectionManager::UpdateFolderHierarchy(const wchar_t* root, const char*& error_message, wchar_t* faulty_path) {
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool ReflectionManager::UpdateFolderHierarchy(const wchar_t* root, CapacityStream<char>* error_message) {
 			for (size_t index = 0; index < folders.size; index++) {
 				if (wcscmp(root, folders[index].hierarchy.root) == 0) {
-					return UpdateFolderHierarchy(index, error_message, faulty_path);
+					return UpdateFolderHierarchy(index, error_message);
 				}
 			}
 			// Fail if it was not found previously
@@ -499,10 +554,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return false;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionFolderHierarchy::ReflectionFolderHierarchy(MemoryManager* allocator) : folders(allocator, 0), filtered_files(allocator, 0), root(nullptr) {}
 		ReflectionFolderHierarchy::ReflectionFolderHierarchy(MemoryManager* allocator, const wchar_t* path) : folders(allocator, 0), filtered_files(allocator, 0) {
 			CreateFromPath(path);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionFolderHierarchy::AddFilterFiles(const char* filter_name, containers::Stream<const wchar_t*> extensions)
 		{
@@ -570,6 +629,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			filtered_files.Add(filter);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionFolderHierarchy::FreeAllMemory() {
 			for (size_t index = 0; index < filtered_files.size; index++) {
 				RemoveFilterFiles(index);
@@ -581,6 +642,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			folders.FreeBuffer();
 			filtered_files.FreeBuffer();
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionFolderHierarchy::Recreate()
 		{
@@ -630,6 +693,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			folders.allocator->Deallocate(temp_allocation);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionFolderHierarchy::CreateFromPath(const wchar_t* path)
 		{
 			size_t root_size = wcslen(path) + 1;
@@ -638,6 +703,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			root = (const wchar_t*)allocation;
 			function::GetRecursiveDirectories(folders.allocator, path, folders);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionFolderHierarchy::RemoveFilterFiles(const char* filter_name)
 		{
@@ -649,6 +716,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			}
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionFolderHierarchy::RemoveFilterFiles(unsigned int index) {
 			folders.allocator->Deallocate(filtered_files[index].filter_name);
 			folders.allocator->Deallocate(filtered_files[index].extensions.buffer);
@@ -656,6 +725,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				folders.allocator->Deallocate(filtered_files[index].files[subindex]);
 			}
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool IsTypeCharacter(char character)
 		{
@@ -666,10 +737,28 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return false;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		size_t PtrDifference(const void* ptr1, const void* ptr2)
 		{
 			return (uintptr_t)ptr2 - (uintptr_t)ptr1;
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void WriteErrorMessage(ReflectionManagerThreadTaskData* data, const char* message, unsigned int path_index) {
+			data->success = false;
+			data->error_message_lock.lock();
+			data->error_message->AddStream(ToStream(message));
+			if (path_index != -1) {
+				function::ConvertWideCharsToASCII(ToStream(data->paths[path_index]), *data->error_message);
+			}
+			data->error_message->Add('\n');
+			data->error_message->AssertCapacity();
+			data->error_message_lock.unlock();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManagerThreadTask(unsigned int thread_id, World* world, void* _data) {
 			ReflectionManagerThreadTaskData* data = (ReflectionManagerThreadTaskData*)_data;
@@ -705,9 +794,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 						// if there's not enough memory, fail
 						if (data->thread_memory.size > data->thread_memory.capacity) {
-							data->success = false;
-							data->error_message = "Not enough memory to read file contents";
-							data->faulty_path = index;
+							WriteErrorMessage(data, "Not enough memory to read file contents. Faulty path: ", index);
 							return;
 						}
 
@@ -721,9 +808,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 							// if no space was found after the token, fail
 							if (space == nullptr) {
-								data->success = false;
-								data->error_message = "Finding type leading space failed";
-								data->faulty_path = index;
+								WriteErrorMessage(data, "Finding type leading space failed. Faulty path: ", index);
 								return;
 							}
 							space++;
@@ -732,9 +817,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 							// if the second space was not found, fail
 							if (second_space == nullptr) {
-								data->success = false;
-								data->error_message = "Finding type final space failed";
-								data->faulty_path = index;
+								WriteErrorMessage(data, "Finding type final space failed. Faulty path: ", index);
 								return;
 							}
 
@@ -753,18 +836,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 							const char* opening_parenthese = strchr(second_space + 1, '{');
 							// if no opening curly brace was found, fail
 							if (opening_parenthese == nullptr) {
-								data->success = false;
-								data->error_message = "Finding opening curly brace failed";
-								data->faulty_path = index;
+								WriteErrorMessage(data, "Finding opening curly brace failed. Faulty path: ", index);
 								return;
 							}
 
 							const char* closing_parenthese = strchr(opening_parenthese + 1, '}');
 							// if no closing curly brace was found, fail
 							if (closing_parenthese == nullptr) {
-								data->success = false;
-								data->error_message = "Finding closing curly brace failed";
-								data->faulty_path = index;
+								WriteErrorMessage(data, "Finding closing curly brace failed. Faulty path: ", index);
 								return;
 							}
 
@@ -785,9 +864,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 
 								// if none found, fail
 								if (struct_ptr == nullptr && class_ptr == nullptr) {
-									data->success = false;
-									data->error_message = "Enum and type definition validation failed, didn't find neither";
-									data->faulty_path = index;
+									WriteErrorMessage(data, "Enum and type definition validation failed, didn't find neither", index);
 									return;
 								}
 
@@ -804,11 +881,27 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			data->condition_variable->Notify();
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionFieldInfo ExtendedTypeStringToFieldInfo(ReflectionManager* reflection, const char* extended_type_string)
+		{
+			ReflectionFieldInfo info;
+
+			ResourceIdentifier identifier(extended_type_string);
+			unsigned int hash = ReflectionStringHashFunction::Hash(identifier);
+			bool success = reflection->field_table.TryGetValue(hash, identifier, info);
+			ECS_ASSERT(success, "Invalid type_string");
+
+			return info;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void AddEnumDefinition(
 			ReflectionManagerThreadTaskData* data,
-			const char* ECS_RESTRICT opening_parenthese, 
-			const char* ECS_RESTRICT closing_parenthese,
-			const char* ECS_RESTRICT name,
+			const char* opening_parenthese, 
+			const char* closing_parenthese,
+			const char* name,
 			unsigned int index
 		)
 		{
@@ -834,9 +927,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			data->thread_memory.size += sizeof(const char*) * next_line_positions.size + alignof(ReflectionEnum);
 			data->total_memory += sizeof(const char*) * next_line_positions.size + alignof(ReflectionEnum);
 			if (data->thread_memory.size > data->thread_memory.capacity) {
-				data->success = false;
-				data->error_message = "Not enough memory to assign enum definition stream";
-				data->faulty_path = index;
+				WriteErrorMessage(data, "Not enough memory to assign enum definition stream", index);
 				return;
 			}
 
@@ -860,11 +951,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			data->enums.Add(enum_definition);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void AddTypeDefinition(
 			ReflectionManagerThreadTaskData* data,
-			const char* ECS_RESTRICT opening_parenthese,
-			const char* ECS_RESTRICT closing_parenthese, 
-			const char* ECS_RESTRICT name,
+			const char* opening_parenthese,
+			const char* closing_parenthese, 
+			const char* name,
 			unsigned int index
 		)
 		{
@@ -896,9 +989,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			data->thread_memory.size += sizeof(ReflectionField) * semicolon_positions.size + ptr - ptr_before;
 			data->total_memory += sizeof(ReflectionField) * semicolon_positions.size + alignof(ReflectionField);
 			if (data->thread_memory.size > data->thread_memory.capacity) {
-				data->success = false;
-				data->error_message = "Assigning type field stream failed, insufficient memory";
-				data->faulty_path = index;
+				WriteErrorMessage(data, "Assigning type field stream failed, insufficient memory.", index);
 				return;
 			}
 
@@ -908,8 +999,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				bool succeded = AddFieldType(data, type, pointer_offset, opening_parenthese + next_line_positions[index], opening_parenthese + semicolon_positions[index]);
 				
 				if (!succeded) {
-					data->success = false;
-					data->faulty_path = index;
+					WriteErrorMessage(data, "An error occured during field type determination.", index);
 					return;
 				}
 			}
@@ -917,12 +1007,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			data->total_memory += sizeof(ReflectionType);
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool AddFieldType(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT last_line_character, 
-			const char* ECS_RESTRICT semicolon_character
+			const char* last_line_character, 
+			const char* semicolon_character
 		)
 		{
 			// null terminate the semicolon;
@@ -974,45 +1066,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 						pointer_offset -= info.byte_size;
 						info.byte_size *= embedded_array_size;
 						pointer_offset += info.byte_size;
+
 						// change the extended type to array
-						switch (info.basic_type) {
-						case ReflectionBasicFieldType::Bool:
-							info.extended_type = ReflectionExtendedFieldType::BoolArray;
-							break;
-						case ReflectionBasicFieldType::Float:
-							info.extended_type = ReflectionExtendedFieldType::FloatArray;
-							break;
-						case ReflectionBasicFieldType::Double:
-							info.extended_type = ReflectionExtendedFieldType::DoubleArray;
-							break;
-						case ReflectionBasicFieldType::Enum:
-							info.extended_type = ReflectionExtendedFieldType::EnumArray;
-							break;
-						case ReflectionBasicFieldType::Int8:
-							info.extended_type = ReflectionExtendedFieldType::Int8Array;
-							break;
-						case ReflectionBasicFieldType::Int16:
-							info.extended_type = ReflectionExtendedFieldType::Int16Array;
-							break;
-						case ReflectionBasicFieldType::Int32:
-							info.extended_type = ReflectionExtendedFieldType::Int32Array;
-							break;
-						case ReflectionBasicFieldType::Int64:
-							info.extended_type = ReflectionExtendedFieldType::Int64Array;
-							break;
-						case ReflectionBasicFieldType::UInt8:
-							info.extended_type = ReflectionExtendedFieldType::UInt8Array;
-							break;
-						case ReflectionBasicFieldType::UInt16:
-							info.extended_type = ReflectionExtendedFieldType::UInt16Array;
-							break;
-						case ReflectionBasicFieldType::UInt32:
-							info.extended_type = ReflectionExtendedFieldType::UInt32Array;
-							break;
-						case ReflectionBasicFieldType::UInt64:
-							info.extended_type = ReflectionExtendedFieldType::UInt64Array;
-							break;
-						}
+						info.extended_type = ReflectionStreamFieldType::BasicTypeArray;
 					}
 					return success;
 				}
@@ -1025,7 +1081,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 					
 					field.info.additional_flags = 0;
 					field.info.basic_type = ReflectionBasicFieldType::UserDefined;
-					field.info.extended_type = ReflectionExtendedFieldType::Unknown;
+					field.info.extended_type = ReflectionStreamFieldType::Unknown;
 					field.info.basic_type_count = 1;
 
 					// determine the definition
@@ -1097,50 +1153,61 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return true;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool DeduceFieldType(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT field_name,
-			const char* ECS_RESTRICT last_line_character,
-			const char* ECS_RESTRICT last_valid_character
+			const char* field_name,
+			const char* last_line_character,
+			const char* last_valid_character
 		)
 		{
 			bool type_from_macro = DeduceFieldTypeFromMacros(data, type, pointer_offset, field_name, last_line_character);
-			if (data->error_message != nullptr) {
+			if (data->error_message->size > 0) {
 				return false;
 			}
 			// if the type was not deduced from macros
 			else if (!type_from_macro) {
 				bool success = DeduceFieldTypePointer(data, type, pointer_offset, field_name, last_line_character);
-				if (data->error_message != nullptr) {
+				if (data->error_message->size > 0) {
 					return false;
 				}
-				// if this is not a pointer type, extended type then
 				else if (!success) {
-					ReflectionField field;
-					DeduceFieldTypeExtended(
-						data,
-						pointer_offset,
-						field_name - 2,
-						field
-					);
+					success = DeduceFieldTypeStream(data, type, pointer_offset, field_name, last_line_character);
+					if (data->error_message->size > 0) {
+						return false;
+					}
 
-					field.name = field_name;
-					data->total_memory += strlen(field_name) + 1;
-					type.fields.Add(field);
-					return true;
+					if (!success) {
+						// if this is not a pointer type, extended type then
+						ReflectionField field;
+						DeduceFieldTypeExtended(
+							data,
+							pointer_offset,
+							field_name - 2,
+							field
+						);
+
+						field.name = field_name;
+						data->total_memory += strlen(field_name) + 1;
+						type.fields.Add(field);
+						success = true;
+					}
 				}
 				return success;
 			}
 			return type_from_macro;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool CheckFieldExplicitDefinition(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type, 
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT last_line_character
+			const char* last_line_character
 		)
 		{
 			const char* explicit_definition = strstr(last_line_character, STRING(ECS_EXPLICIT_TYPE_REFLECT));
@@ -1154,7 +1221,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				// The definition must have an extended type with a name associated, it must be an even number of preceding elements
 				// +1 because we must add the opening parenthese to the stream to be processed
 				if (comma_positions.size % 2 == 1) {
-					data->error_message = "Invalid number of fields specified in explicit definition";
+					WriteErrorMessage(data, "Invalid number of fields specified in explicit definition", -1);
 					return true;
 				}
 
@@ -1188,20 +1255,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 					data->total_memory += sizeof(char) * field_name_size;
 					type.fields.Add(field);
 				}
-
-				data->error_message = nullptr;
 				return true;
 			}
 
 			return false;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool DeduceFieldTypeFromMacros(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT field_name,
-			const char* ECS_RESTRICT last_line_character
+			const char* field_name,
+			const char* last_line_character
 		)
 		{
 			bool explicit_definition = CheckFieldExplicitDefinition(data, type, pointer_offset, last_line_character);
@@ -1210,32 +1277,25 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				// Get arguments; extended type and basic type count means the indirection count
 				const char* opening_parenthese = strchr(reflect_pointer, '(');
 				if (opening_parenthese == nullptr) {
-					data->error_message = "Invalid ECS_POINTER_REFLECT, no opening parenthese";
+					WriteErrorMessage(data, "Invalid ECS_POINTER_REFLECT, no opening parenthese", -1);
 					return;
 				}
 
-				char* comma = (char*)strchr(opening_parenthese, ',');
-				if (comma == nullptr) {
-					data->error_message = "Invalid ECS_POINTER_REFLECT, no comma";
-					return;
-				}
-
-				char* closing_parenthese = (char*)strchr(comma, ')');
+				char* closing_parenthese = (char*)strchr(opening_parenthese, ')');
 				if (closing_parenthese == nullptr) {
-					data->error_message = "Invalid ECS_POINTER_REFLECT, no closing parenthese";
+					WriteErrorMessage(data, "Invalid ECS_POINTER_REFLECT, no closing parenthese", -1);
 					return;
 				}
 
 				// null terminate the comma and closing parenthese
-				*comma = '\0';
 				*closing_parenthese = '\0';
 
 				ReflectionField field;
 				GetReflectionFieldInfo(data, opening_parenthese + 1, field);
 
-				if (field.info.extended_type == ReflectionExtendedFieldType::Unknown) {
-					field.info.extended_type = ReflectionExtendedFieldType::Pointer;
-					field.info.basic_type_count = function::ConvertCharactersToInt<unsigned short>(Stream<char>(comma + 2, PtrDifference(comma + 2, closing_parenthese)));
+				if (field.info.extended_type == ReflectionStreamFieldType::Unknown) {
+					field.info.extended_type = ReflectionStreamFieldType::Pointer;
+					field.info.basic_type_count = 1;
 					field.info.byte_size = sizeof(void*);
 				}
 
@@ -1267,7 +1327,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				data->total_memory += strlen(field.definition) + 1;
 
 				field.info.basic_type = ReflectionBasicFieldType::Enum;
-				field.info.extended_type = ReflectionExtendedFieldType::Enum;
+				field.info.extended_type = ReflectionStreamFieldType::Basic;
 				field.info.byte_size = 1;
 				field.info.basic_type_count = 1;
 				field.info.pointer_offset = pointer_offset;
@@ -1290,7 +1350,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				}
 
 				if (stream_ptr == starting_character) {
-					data->error_message = "Invalid ECS_STREAM_REFLECT, no byte size";
+					WriteErrorMessage(data, "Invalid ECS_STREAM_REFLECT, no byte size", -1);
 					return;
 				}
 
@@ -1324,20 +1384,20 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				// Normal stream
 				if (strncmp(initial_ptr, STRING(Stream), strlen(STRING(Stream))) == 0) {
 					field.info.byte_size = sizeof(Stream<void>);
-					field.info.extended_type = ReflectionExtendedFieldType::Stream;
+					field.info.extended_type = ReflectionStreamFieldType::Stream;
 				}
 				// Capacity stream
 				else if (strncmp(initial_ptr, STRING(CapacityStream), strlen(STRING(CapacityStream))) == 0) {
 					field.info.byte_size = sizeof(CapacityStream<void>);
-					field.info.extended_type = ReflectionExtendedFieldType::CapacityStream;
+					field.info.extended_type = ReflectionStreamFieldType::CapacityStream;
 				}
 				// Resizable stream
 				else if (strncmp(initial_ptr, STRING(ResizableStream), strlen(STRING(ResizableStream))) == 0) {
 					field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
-					field.info.extended_type = ReflectionExtendedFieldType::ResizableStream;
+					field.info.extended_type = ReflectionStreamFieldType::ResizableStream;
 				}
 				else {
-					data->error_message = "Invalid ECS_STREAM_REFLECT, no stream identifier";
+					WriteErrorMessage(data, "Invalid ECS_STREAM_REFLECT, no stream identifier", -1);
 					return;
 				}
 
@@ -1359,7 +1419,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				// if it is defined as pointer
 				if (reflect_pointer != 0) {
 					pointer_identification(reflect_pointer);
-
 					return true;
 				}
 				else {
@@ -1368,7 +1427,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 					// if this is a an enum
 					if (enum_ptr != nullptr) {
 						enum_identification(enum_ptr);
-
 						return true;
 					}
 					else {
@@ -1377,7 +1435,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 						// if this is a stream type
 						if (stream_ptr != nullptr) {
 							stream_identification(stream_ptr);
-
 							return true;
 						}
 					}
@@ -1387,12 +1444,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return false;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool DeduceFieldTypePointer(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT field_name,
-			const char* ECS_RESTRICT last_line_character
+			const char* field_name,
+			const char* last_line_character
 		)
 		{
 			// Test first pointer type
@@ -1418,13 +1477,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 					field
 				);
 
-				if (field.info.extended_type == ReflectionExtendedFieldType::Unknown) {
-					field.info.basic_type_count = pointer_level;
-					field.info.byte_size = sizeof(void*);
-					field.info.extended_type = ReflectionExtendedFieldType::Pointer;
-					field.info.basic_type = ReflectionBasicFieldType::UserDefined;
-					field.info.additional_flags = 0;
-				}
+				field.info.basic_type_count = pointer_level;
+				field.info.extended_type = ReflectionStreamFieldType::Pointer;
+				field.info.additional_flags = field.info.byte_size;
+				field.info.byte_size = sizeof(void*);
 				
 				pointer_offset = function::align_pointer(before_pointer_offset, alignof(void*));
 				field.info.pointer_offset = pointer_offset;
@@ -1437,10 +1493,148 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return false;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// The stream will store the contained element byte size inside the additional flags component
+		bool DeduceFieldTypeStream(
+			ReflectionManagerThreadTaskData* data,
+			ReflectionType& type,
+			unsigned short& pointer_offset, 
+			const char* field_name, 
+			const char* new_line_character
+		)
+		{
+			// Test each keyword
+
+			// Start with resizable and capacity, because these contain the stream keyword
+			const char* stream_ptr = strstr(new_line_character, STRING(ResizableStream));
+			if (stream_ptr != nullptr) {
+				ReflectionField field;
+				field.name = field_name;
+
+				unsigned short before_pointer_offset = pointer_offset;
+				char* left_bracket = (char*)strchr(stream_ptr, '<');
+				if (left_bracket == nullptr) {
+					WriteErrorMessage(data, "Incorrect Stream, missing <.", -1);
+					return true;
+				}
+
+				char* comma = (char*)strchr(left_bracket, ',');
+
+				// Make the left bracket \0 because otherwise it will continue to get parsed
+				left_bracket[0] = '\0';
+				left_bracket[-1] = '\0';
+				*comma = '\0';
+				DeduceFieldTypeExtended(
+					data,
+					pointer_offset,
+					comma - 1,
+					field
+				);
+
+				pointer_offset = function::align_pointer(before_pointer_offset, alignof(ResizableStream<void, LinearAllocator>));
+				field.info.pointer_offset = pointer_offset;
+				field.info.extended_type = ReflectionStreamFieldType::ResizableStream;
+				field.info.additional_flags = field.info.byte_size;
+				field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
+				pointer_offset += sizeof(ResizableStream<void, LinearAllocator>);
+
+				data->total_memory += strlen(field.name) + 1;
+				type.fields.Add(field);
+				return true;
+			}
+
+			stream_ptr = strstr(new_line_character, STRING(CapacityStream));
+			if (stream_ptr != nullptr) {
+				ReflectionField field;
+				field.name = field_name;
+
+				unsigned short before_pointer_offset = pointer_offset;
+				char* left_bracket = (char*)strchr(stream_ptr, '<');
+				if (left_bracket == nullptr) {
+					WriteErrorMessage(data, "Incorrect CapacityStream, missing <.", -1);
+					return true;
+				}
+
+				char* right_bracket = (char*)strchr(left_bracket, '>');
+				if (right_bracket == nullptr) {
+					WriteErrorMessage(data, "Incorrent CapacityStream, missing >.", -1);
+					return true;
+				}
+
+				// Make the left bracket \0 because otherwise it will continue to get parsed
+				left_bracket[0] = '\0';
+				left_bracket[-1] = '\0';
+				*right_bracket = '\0';
+				DeduceFieldTypeExtended(
+					data,
+					pointer_offset,
+					right_bracket - 1,
+					field
+				);
+
+				pointer_offset = function::align_pointer(before_pointer_offset, alignof(CapacityStream<void>));
+				field.info.pointer_offset = pointer_offset;
+				field.info.extended_type = ReflectionStreamFieldType::CapacityStream;
+				field.info.additional_flags = field.info.byte_size;
+				field.info.byte_size = sizeof(CapacityStream<void>);
+				pointer_offset += sizeof(CapacityStream<void>);
+
+				data->total_memory += strlen(field.name) + 1;
+				type.fields.Add(field);
+				return true;
+			}
+
+			stream_ptr = strstr(new_line_character, STRING(Stream));
+			if (stream_ptr != nullptr) {
+				ReflectionField field;
+				field.name = field_name;
+
+				unsigned short before_pointer_offset = pointer_offset;
+				char* left_bracket = (char*)strchr(stream_ptr, '<');
+				if (left_bracket == nullptr) {
+					WriteErrorMessage(data, "Incorrect Stream, missing <.", -1);
+					return true;
+				}
+
+				char* right_bracket = (char*)strchr(left_bracket, '>');
+				if (right_bracket == nullptr) {
+					WriteErrorMessage(data, "Incorrent Stream, missing >.", -1);
+					return true;
+				}
+
+				// Make the left bracket and the first character before it \0 because otherwise it will continue to get parsed
+				left_bracket[0] = '\0';
+				left_bracket[-1] = '\0';
+				*right_bracket = '\0';
+				DeduceFieldTypeExtended(
+					data,
+					pointer_offset,
+					right_bracket - 1,
+					field
+				);
+
+				pointer_offset = function::align_pointer(before_pointer_offset, alignof(Stream<void>));
+				field.info.pointer_offset = pointer_offset;
+				field.info.extended_type = ReflectionStreamFieldType::Stream;
+				field.info.additional_flags = field.info.byte_size;
+				field.info.byte_size = sizeof(Stream<void>);
+				pointer_offset += sizeof(Stream<void>);
+
+				data->total_memory += strlen(field.name) + 1;
+				type.fields.Add(field);
+				return true;
+			}
+
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void DeduceFieldTypeExtended(
 			ReflectionManagerThreadTaskData* data,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT last_type_character, 
+			const char* last_type_character, 
 			ReflectionField& field
 		)
 		{
@@ -1459,7 +1653,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 				size_t type_size = strlen(basic_type);
 				GetReflectionFieldInfo(data, basic_type, field);
 				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-					pointer_offset = function::align_pointer(pointer_offset, field.info.byte_size / field.info.basic_type_count);
+					unsigned int component_count = BasicTypeComponentCount(field.info.basic_type);
+					pointer_offset = function::align_pointer(pointer_offset, field.info.byte_size / component_count);
 					field.info.pointer_offset = pointer_offset;
 					pointer_offset += field.info.byte_size;
 				}
@@ -1484,40 +1679,49 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			}
 		}
 
-		void GetReflectionFieldInfo(ReflectionManagerThreadTaskData* data, const char* extended_type, ReflectionField& field)
-		{
-			size_t extended_type_size = strlen(extended_type);
-			ResourceIdentifier identifier = ResourceIdentifier(extended_type, extended_type_size);
-			unsigned int hash = ReflectionStringHashFunction::Hash(extended_type, extended_type_size);
+		// ----------------------------------------------------------------------------------------------------------------------------
 
-			bool success = data->field_table->TryGetValue(hash, identifier, field.info);
-			field.definition = extended_type;
+		void GetReflectionFieldInfo(ReflectionManagerThreadTaskData* data, const char* basic_type, ReflectionField& field)
+		{
+			const char* field_name = field.name;
+			field = GetReflectionFieldInfo(data->field_table, basic_type);
+			field.name = field_name;
+			if (field.info.extended_type == ReflectionStreamFieldType::Unknown || field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
+				data->total_memory += strlen(basic_type) + 1;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionField GetReflectionFieldInfo(const ReflectionFieldTable* reflection_field_table, const char* basic_type)
+		{
+			ReflectionField field;
+
+			ResourceIdentifier identifier = ResourceIdentifier(basic_type);
+			unsigned int hash = ReflectionStringHashFunction::Hash(identifier);
+
+			bool success = reflection_field_table->TryGetValue(hash, identifier, field.info);
+			field.definition = basic_type;
 			if (!success) {
-				field.info.extended_type = ReflectionExtendedFieldType::Unknown;
+				field.info.extended_type = ReflectionStreamFieldType::Unknown;
 				field.info.basic_type = ReflectionBasicFieldType::UserDefined;
-				data->total_memory += strlen(extended_type) + 1;
 			}
 			else {
 				// Set to global strings the definition in order to not occupy extra memory
 
-#define CASE(type, string) case ReflectionExtendedFieldType::type: field.definition = STRING(string); break;
+#define CASE(type, string) case ReflectionBasicFieldType::type: field.definition = STRING(string); break;
 #define CASE234(type, string) CASE(type##2, string##2); CASE(type##3, string##3); CASE(type##4, string##4);
 #define CASE1234(type, string) CASE(type, string); CASE234(type, string);
 
-				switch (field.info.extended_type) {
+				switch (field.info.basic_type) {
 					CASE1234(Bool, bool);
-					CASE1234(Char, char);
-					CASE(UChar, unsigned char);
+					CASE234(Char, char);
 					CASE234(UChar, uchar);
-					CASE1234(Short, short);
-					CASE(UShort, unsigned short);
+					CASE234(Short, short);
 					CASE234(UShort, ushort);
-					CASE1234(Int, int);
-					CASE(UInt, unsigned int);
+					CASE234(Int, int);
 					CASE234(UInt, uint);
-					CASE(Long, long long);
 					CASE234(Long, long);
-					CASE(ULong, unsigned long long);
 					CASE234(ULong, ulong);
 					CASE(Int8, int8_t);
 					CASE(UInt8, uint8_t);
@@ -1527,12 +1731,47 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 					CASE(UInt32, uint32_t);
 					CASE(Int64, int64_t);
 					CASE(UInt64, uint64_t);
-					CASE(SizeT, size_t);
 					CASE1234(Float, float);
 					CASE1234(Double, double);
 				}
 			}
+
+			return field;
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionField GetReflectionFieldInfo(const ReflectionManager* reflection, const char* basic_type)
+		{
+			return GetReflectionFieldInfo(&reflection->field_table, basic_type);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionField GetReflectionFieldInfoStream(const ReflectionManager* reflection, const char* basic_type, ReflectionStreamFieldType stream_type)
+		{
+			ReflectionField field;
+
+			field = GetReflectionFieldInfo(reflection, basic_type);
+			field.info.additional_flags = field.info.byte_size;
+			field.info.extended_type = stream_type;
+			if (stream_type == ReflectionStreamFieldType::Stream) {
+				field.info.byte_size = sizeof(Stream<void>);
+			}
+			else if (stream_type == ReflectionStreamFieldType::CapacityStream) {
+				field.info.byte_size = sizeof(CapacityStream<void>);
+			}
+			else if (stream_type == ReflectionStreamFieldType::ResizableStream) {
+				field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
+			}
+			else if (stream_type == ReflectionStreamFieldType::Pointer) {
+				field.info.byte_size = sizeof(void*);
+			}
+
+			return field;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool HasReflectStructures(const wchar_t* path)
 		{
@@ -1547,60 +1786,77 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::basic_reflect, ReflectionExte
 			return strstr(line_characters, STRING(ECS_REFLECT)) != nullptr;
 		}
 
-		bool ECSENGINE_API IsIntegral(ReflectionBasicFieldType type)
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsIntegral(ReflectionBasicFieldType type)
 		{
+			// Use the negation - if it is different than all the other types
+			return type != ReflectionBasicFieldType::Bool && type != ReflectionBasicFieldType::Bool2 && type != ReflectionBasicFieldType::Bool3 &&
+				type != ReflectionBasicFieldType::Bool4 && type != ReflectionBasicFieldType::Double && type != ReflectionBasicFieldType::Double2 &&
+				type != ReflectionBasicFieldType::Double3 && type != ReflectionBasicFieldType::Double4 && type != ReflectionBasicFieldType::Float &&
+				type != ReflectionBasicFieldType::Float2 && type != ReflectionBasicFieldType::Float3 && type != ReflectionBasicFieldType::Float4 &&
+				type != ReflectionBasicFieldType::Enum && type != ReflectionBasicFieldType::UserDefined && type != ReflectionBasicFieldType::Unknown &&
+				type != ReflectionBasicFieldType::Wchar_t;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsIntegralSingleComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Int8 || type == ReflectionBasicFieldType::UInt8 ||
 				type == ReflectionBasicFieldType::Int16 || type == ReflectionBasicFieldType::UInt16 ||
 				type == ReflectionBasicFieldType::Int32 || type == ReflectionBasicFieldType::UInt32 ||
 				type == ReflectionBasicFieldType::Int64 || type == ReflectionBasicFieldType::UInt64;
 		}
 
-		bool ECSENGINE_API IsIntegral(ReflectionExtendedFieldType type)
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsIntegralMultiComponent(ReflectionBasicFieldType type)
 		{
-			return type == ReflectionExtendedFieldType::Int8 || type == ReflectionExtendedFieldType::UInt8 ||
-				type == ReflectionExtendedFieldType::Int16 || type == ReflectionExtendedFieldType::UInt16 ||
-				type == ReflectionExtendedFieldType::Int32 || type == ReflectionExtendedFieldType::UInt32 ||
-				type == ReflectionExtendedFieldType::Int64 || type == ReflectionExtendedFieldType::UInt64 ||
-				type == ReflectionExtendedFieldType::Char || type == ReflectionExtendedFieldType::UChar ||
-				type == ReflectionExtendedFieldType::Short || type == ReflectionExtendedFieldType::UShort ||
-				type == ReflectionExtendedFieldType::Int || type == ReflectionExtendedFieldType::UInt ||
-				type == ReflectionExtendedFieldType::Long || type == ReflectionExtendedFieldType::ULong ||
-				type == ReflectionExtendedFieldType::SizeT;
+			return IsIntegral(type) && !IsIntegralSingleComponent(type);
 		}
 
-		bool ECSENGINE_API IsIntegralArray(ReflectionExtendedFieldType type)
-		{
-			return type == ReflectionExtendedFieldType::Int8Array || type == ReflectionExtendedFieldType::UInt8Array ||
-				type == ReflectionExtendedFieldType::Int16Array || type == ReflectionExtendedFieldType::UInt16Array ||
-				type == ReflectionExtendedFieldType::Int32Array || type == ReflectionExtendedFieldType::UInt32Array ||
-				type == ReflectionExtendedFieldType::Int64Array || type == ReflectionExtendedFieldType::UInt64Array;
-		}
+		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool IsIntegralBasicType(ReflectionExtendedFieldType type)
+		unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type)
 		{
-			return type == ReflectionExtendedFieldType::Char2 || type == ReflectionExtendedFieldType::Char3 || type == ReflectionExtendedFieldType::Char4 ||
-				type == ReflectionExtendedFieldType::UChar2 || type == ReflectionExtendedFieldType::UChar3 || type == ReflectionExtendedFieldType::UChar4 ||
-				type == ReflectionExtendedFieldType::Short2 || type == ReflectionExtendedFieldType::Short3 || type == ReflectionExtendedFieldType::Short4 ||
-				type == ReflectionExtendedFieldType::UShort2 || type == ReflectionExtendedFieldType::UShort3 || type == ReflectionExtendedFieldType::UShort4 ||
-				type == ReflectionExtendedFieldType::Int2 || type == ReflectionExtendedFieldType::Int3 || type == ReflectionExtendedFieldType::Int4 ||
-				type == ReflectionExtendedFieldType::UInt2 || type == ReflectionExtendedFieldType::UInt3 || type == ReflectionExtendedFieldType::UInt4 ||
-				type == ReflectionExtendedFieldType::Long2 || type == ReflectionExtendedFieldType::Long3 || type == ReflectionExtendedFieldType::Long4 ||
-				type == ReflectionExtendedFieldType::ULong2 || type == ReflectionExtendedFieldType::ULong3 || type == ReflectionExtendedFieldType::ULong4;
-		}
-
-		/*bool GetReflectionBasicFieldType(ReflectionManagerThreadTaskData* data, const char* basic_type, ReflectionBasicFieldType& type)
-		{
-			size_t basic_type_size = strlen(basic_type);
-			ResourceIdentifier identifier = ResourceIdentifier(basic_type, basic_type_size);
-			unsigned int hash = ReflectionStringHashFunction::Hash(basic_type, basic_type_size);
-
-			bool success = data->basic_field_table->TryGetValue(hash, identifier, type);
-			if (!success) {
-				data->error_message = "Invalid basic type";
-				return false;
+			if (type == ReflectionBasicFieldType::Bool || type == ReflectionBasicFieldType::Double || type == ReflectionBasicFieldType::Enum ||
+				type == ReflectionBasicFieldType::Float || type == ReflectionBasicFieldType::Int8 || type == ReflectionBasicFieldType::UInt8 ||
+				type == ReflectionBasicFieldType::Int16 || type == ReflectionBasicFieldType::UInt16 || type == ReflectionBasicFieldType::Int32 ||
+				type == ReflectionBasicFieldType::UInt32 || type == ReflectionBasicFieldType::Int64 || type == ReflectionBasicFieldType::UInt64 ||
+				type == ReflectionBasicFieldType::Wchar_t) {
+				return 1;
 			}
-			return true;
-		}*/
+			else if (type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Float2 ||
+				type == ReflectionBasicFieldType::Char2 || type == ReflectionBasicFieldType::UChar2 || type == ReflectionBasicFieldType::Short2 ||
+				type == ReflectionBasicFieldType::UShort2 || type == ReflectionBasicFieldType::Int2 || type == ReflectionBasicFieldType::UInt2 ||
+				type == ReflectionBasicFieldType::Long2 || type == ReflectionBasicFieldType::ULong2) {
+				return 2;
+			}
+			else if (type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Float3 ||
+				type == ReflectionBasicFieldType::Char3 || type == ReflectionBasicFieldType::UChar3 || type == ReflectionBasicFieldType::Short3 ||
+				type == ReflectionBasicFieldType::UShort3 || type == ReflectionBasicFieldType::Int3 || type == ReflectionBasicFieldType::UInt3 ||
+				type == ReflectionBasicFieldType::Long3 || type == ReflectionBasicFieldType::ULong3) {
+				return 3;
+			}
+			else if (type == ReflectionBasicFieldType::Bool4 || type == ReflectionBasicFieldType::Double4 || type == ReflectionBasicFieldType::Float4 ||
+				type == ReflectionBasicFieldType::Char4 || type == ReflectionBasicFieldType::UChar4 || type == ReflectionBasicFieldType::Short4 ||
+				type == ReflectionBasicFieldType::UShort4 || type == ReflectionBasicFieldType::Int4 || type == ReflectionBasicFieldType::UInt4 ||
+				type == ReflectionBasicFieldType::Long4 || type == ReflectionBasicFieldType::ULong4) {
+				return 4;
+			}
+			else {
+				return 0;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 	}
+
 }

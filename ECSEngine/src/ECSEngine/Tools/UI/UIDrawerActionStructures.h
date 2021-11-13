@@ -475,19 +475,13 @@ namespace ECSEngine {
 			UIDrawerIntegerInputCallbackData<Integer> data;
 		};
 
-		struct ECSENGINE_API UIDrawerFloatInputDragData {
-			float difference_factor;
-			UIDrawerFloatInputCallbackData data;
-		};
+		using UIDrawerFloatInputDragData = UIDrawerFloatInputCallbackData;
 
-		struct ECSENGINE_API UIDrawerDoubleInputDragData {
-			float difference_factor;
-			UIDrawerDoubleInputCallbackData data;
-		};
+		using UIDrawerDoubleInputDragData = UIDrawerDoubleInputCallbackData;
 
 		template<typename Integer>
 		struct UIDrawerIntInputDragData {
-			float difference_factor;
+			float last_position;
 			UIDrawerIntegerInputCallbackData<Integer> data;
 		};
 
@@ -511,6 +505,12 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIDrawerLabelHierarchyChangeStateData {
 			UIDrawerLabelHierarchy* hierarchy;
 			Stream<char> label;
+		};
+
+		struct ECSENGINE_API UIDrawerArrayDragData {
+			UIDrawerArrayData* array_data;
+			float row_y_scale;
+			unsigned int index;
 		};
 
 	}

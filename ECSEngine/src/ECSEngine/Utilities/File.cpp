@@ -73,12 +73,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent)
+	ECS_FILE_COPY_CODE FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent)
 	{
 		return FileCopy(ToStream(from), ToStream(to), overwrite_existent);
 	}
 
-	bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent)
+	ECS_FILE_COPY_CODE FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent)
 	{
 		std::error_code error_code;
 		Stream<wchar_t> filename = function::PathFilename(from);
@@ -97,22 +97,31 @@ namespace ECSEngine {
 			error_code
 		);
 		std::string message = error_code.message();
-		return success && error_code.value() == 0;
+		if (success && error_code.value() == 0) {
+			return ECS_FILE_COPY_SUCCESS;
+		}
+		else {
+			DWORD last_error = GetLastError();
+			if (last_error == ERROR_FILE_EXISTS) {
+				return ECS_FILE_COPY_ALREADY_EXISTS;
+			}
+			return ECS_FILE_COPY_ERROR;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent)
+	ECS_FILE_COPY_CODE FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent)
 	{
 		return FileCut(ToStream(from), ToStream(to), overwrite_existent);
 	}
 
-	bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent) {
-		bool success = FileCopy(from, to, overwrite_existent);
-		if (success) {
-			return RemoveFile(from);
+	ECS_FILE_COPY_CODE FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent) {
+		ECS_FILE_COPY_CODE code = FileCopy(from, to, overwrite_existent);
+		if (code == ECS_FILE_COPY_SUCCESS) {
+			return (ECS_FILE_COPY_CODE)!RemoveFile(from);
 		}
-		return false;
+		return code;
 	}
 
 	// --------------------------------------------------------------------------------------------------

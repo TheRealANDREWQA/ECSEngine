@@ -20,7 +20,7 @@ constexpr float2 TEXT_FILE_BORDER_OFFSET = { 0.005f, 0.005f };
 constexpr float TEXT_FILE_ROW_OFFSET = 0.008f;
 constexpr float C_FILE_ROW_OFFSET = 0.015f;
 
-using HashFunction = HashFunctionAdditiveString;
+using HashFunction = HashFunctionMultiplyString;
 
 void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	descriptor.draw = InspectorWindowDraw<false>;

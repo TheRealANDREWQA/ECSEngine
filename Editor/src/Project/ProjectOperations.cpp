@@ -17,7 +17,7 @@ using namespace ECSEngine;
 ECS_TOOLS;
 ECS_CONTAINERS;
 
-constexpr float2 CREATE_PROJECT_WIZARD_SCALE = float2(0.73f, 0.55f);
+constexpr float2 CREATE_PROJECT_WIZARD_SCALE = float2(1.0f, 0.65f);
 constexpr size_t SAVE_PROJECT_AUTOMATICALLY_TICK = 1000;
 
 struct SaveCurrentProjectConfirmationData {
@@ -25,10 +25,7 @@ struct SaveCurrentProjectConfirmationData {
 	UIActionHandler handler;
 };
 
-template<bool initializer>
-void Nothing(void* window_data, void* drawer_descriptor) {
-	UI_PREPARE_DRAWER(initializer);
-}
+// -------------------------------------------------------------------------------------------------------------------
 
 bool CreateProjectFile(ProjectOperationData* data) {
 	EDITOR_STATE(data->editor_state);
@@ -63,6 +60,8 @@ bool CreateProjectFile(ProjectOperationData* data) {
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void CreateProjectMisc(ProjectOperationData* data) {
 	EDITOR_STATE(data->editor_state);
 
@@ -86,6 +85,8 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	save_automatically_data.timer.SetMarker();
 	ui_system->PushSystemHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	EDITOR_STATE(data->editor_state);
@@ -161,6 +162,8 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	}
 	CreateProjectMisc(&temp_data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void CreateProject(ProjectOperationData* data)
 {
@@ -263,6 +266,8 @@ void CreateProject(ProjectOperationData* data)
 	CreateProjectAuxiliaryDirectories(data);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void CreateProjectAction(ActionData* action_data)
 {
 	UI_UNPACK_ACTION_DATA;
@@ -270,6 +275,8 @@ void CreateProjectAction(ActionData* action_data)
 	ProjectOperationData* data = (ProjectOperationData*)_data;
 	CreateProject(data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 	Stream<wchar_t> required_folders_buffer[std::size(PROJECT_DIRECTORIES)];
@@ -291,10 +298,14 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 	return required_folders.size > 0;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 bool CheckProjectIntegrity(const ProjectFile* project)
 {
 	return CheckProjectDirectoryIntegrity(project);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void DeallocateCurrentProject(EditorState* editor_state)
 {
@@ -304,15 +315,21 @@ void DeallocateCurrentProject(EditorState* editor_state)
 	editor_state->project_file = nullptr;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 bool ExistsProjectInFolder(const ProjectFile* project_file) {
 	return IsFileWithExtension(project_file->path, ToStream(PROJECT_EXTENSION));
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void GetProjectFilePath(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count)
 {
 	CapacityStream<wchar_t> temp_stream = CapacityStream<wchar_t>(characters, 0, max_character_count);
 	GetProjectFilePath(temp_stream, project_file);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* project_file) {
 	characters.AddStream(project_file->path);
@@ -324,15 +341,21 @@ void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* 
 	ECS_ASSERT(characters.size < characters.capacity);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count) {
 	GetProjectCurrentUI(CapacityStream<wchar_t>(characters, 0, max_character_count), project_file);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile* project_file) {
 	characters.Copy(project_file->path);
 	characters.Add(ECS_OS_PATH_SEPARATOR);
 	characters.AddStreamSafe(ToStream(PROJECT_CURRENT_UI_TEMPLATE));
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectWizardDestroyWindowAction(ActionData* action_data)
 {
@@ -344,12 +367,16 @@ void CreateProjectWizardDestroyWindowAction(ActionData* action_data)
 	ReleaseLockedWindow(action_data);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void CreateProjectWizardAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	CreateProjectWizardData* wizard_data = (CreateProjectWizardData*)_data;
 	CreateProjectWizard(system, wizard_data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void CreateProjectDefaultValues(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -372,6 +399,8 @@ void CreateProjectDefaultValues(ActionData* action_data) {
 	data->world_descriptor.system_manager_max_systems = CREATE_PROJECT_DEFAULT_SYSTEM_MANAGER_MAX_SYSTEMS;
 	data->world_descriptor.task_manager_max_dynamic_tasks = CREATE_PROJECT_DEFAULT_TASK_MANAGER_MAX_DYNAMIC_TASKS;
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 template<bool initialize>
 void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
@@ -504,7 +533,9 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 		drawer.SetDrawMode(UIDrawerMode::NextRow);
 		float default_x_before = drawer.layout.default_element_x;
 		drawer.layout.default_element_x *= 5.0f;
-		ui_reflection->DrawInstance<initialize>("WorldDesc", drawer, config, "Default values");
+		if constexpr (!initialize) {
+			ui_reflection->DrawInstance("WorldDesc", drawer, config, "Default values");
+		}
 		drawer.layout.default_element_x = default_x_before;
 		
 
@@ -525,6 +556,8 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 	drawer.Button<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data) {
 	EDITOR_STATE(wizard_data->project_data.editor_state);
 
@@ -543,10 +576,12 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 	window_descriptor.destroy_action_data = ui_reflection;
 	window_descriptor.destroy_action_data_size = 0;
 
-	unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_NO_DOCKING 
-		| UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_LOCK_WINDOW);	
+	unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW 
+		| UI_DOCKSPACE_LOCK_WINDOW);	
 	//system->PopUpSystemHandler(window_index, "Create Project Wizard", false);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 bool OpenProjectFile(ProjectOperationData data) {
 	EDITOR_STATE(data.editor_state);
@@ -600,15 +635,22 @@ bool OpenProjectFile(ProjectOperationData data) {
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void OpenProjectFileAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	OpenProjectFile(*(ProjectOperationData*)action_data->data);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 bool OpenProject(ProjectOperationData data)
 {
 	EDITOR_STATE(data.editor_state);
+
+	// Repair missing folders, if any
+	RepairProjectAuxiliaryDirectories(data);
 
 	if (data.editor_state->project_file != nullptr) {
 		DeallocateCurrentProject(data.editor_state);
@@ -682,6 +724,8 @@ bool OpenProject(ProjectOperationData data)
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void OpenProjectSystemHandlerAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -693,12 +737,34 @@ void OpenProjectSystemHandlerAction(ActionData* action_data) {
 	}
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void OpenProjectAction(ActionData* action_data)
 {
 	UI_UNPACK_ACTION_DATA;
 
 	system->PushSystemHandler({ OpenProjectSystemHandlerAction, action_data->data, sizeof(ProjectOperationData) });
 }
+
+// -------------------------------------------------------------------------------------------------------------------
+
+void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
+{
+	ECS_TEMP_STRING(project_path, 256);
+	project_path.Copy(data.file_data->path);
+	project_path.Add(ECS_OS_PATH_SEPARATOR);
+	
+	unsigned int path_base_size = project_path.size;
+	for (size_t index = 0; index < std::size(PROJECT_DIRECTORIES); index++) {
+		project_path.AddStreamSafe(ToStream(PROJECT_DIRECTORIES[index]));
+		if (!ExistsFileOrFolder(project_path)) {
+			CreateFolder(project_path);
+		}
+		project_path.size = path_base_size;
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------
 
 bool SaveProjectFile(ProjectOperationData data) {
 	EDITOR_STATE(data.editor_state);
@@ -729,6 +795,8 @@ bool SaveProjectFile(ProjectOperationData data) {
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void SaveProjectFileAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -753,13 +821,19 @@ void SaveProjectFileAction(ActionData* action_data) {
 	}
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 bool SaveProjectContents(ProjectOperationData data) {
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void SaveProjectContents(ActionData* action_data) {
 	SaveProjectContents(*(ProjectOperationData*)action_data->data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 bool SaveProject(ProjectOperationData data)
 {
@@ -775,6 +849,8 @@ bool SaveProject(ProjectOperationData data)
 
 	return true;
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void SaveProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -799,6 +875,8 @@ void SaveProjectAction(ActionData* action_data) {
 	}
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 bool SaveCurrentProjectConverted(EditorState* _editor_state, bool (*function)(ProjectOperationData)) {
 	EDITOR_STATE(_editor_state);
 
@@ -810,30 +888,44 @@ bool SaveCurrentProjectConverted(EditorState* _editor_state, bool (*function)(Pr
 	return function(data);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 bool SaveCurrentProjectFile(EditorState* _editor_state)
 {
 	return SaveCurrentProjectConverted(_editor_state, SaveProjectFile);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void SaveCurrentProjectFileAction(ActionData* action_data) {
 	SaveCurrentProjectFile((EditorState*)action_data->data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 bool SaveCurrentProject(EditorState* _editor_state) {
 	return SaveCurrentProjectConverted(_editor_state, SaveProject);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void SaveCurrentProjectAction(ActionData* action_data) {
 	SaveCurrentProject((EditorState*)action_data->data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 bool SaveCurrentProjectContents(EditorState* _editor_state) {
 	return SaveCurrentProjectConverted(_editor_state, SaveProjectContents);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void SaveCurrentProjectContentsAction(ActionData* action_data) {
 	SaveCurrentProjectContents((EditorState*)action_data->data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void SaveCurrentProjectConfirmation(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -843,6 +935,8 @@ void SaveCurrentProjectConfirmation(ActionData* action_data) {
 	action_data->data = data->handler.data;
 	data->handler.action(action_data);
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> description, UIActionHandler callback)
 {
@@ -865,6 +959,8 @@ void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> 
 	CreateChooseOptionWindow(ui_system, choose_data);
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+
 void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	descriptor.draw = ConsoleWindowDraw<false>;
 	descriptor.initialize = ConsoleWindowDraw<true>;
@@ -878,6 +974,8 @@ void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_st
 	descriptor.window_data_size = sizeof(*window_data);
 	descriptor.window_name = CONSOLE_WINDOW_NAME;
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void SaveProjectThreadTask(unsigned int thread_index, World* world, void* data) {
 	EDITOR_STATE(data);
@@ -896,6 +994,8 @@ void SaveProjectThreadTask(unsigned int thread_index, World* world, void* data) 
 		console->Error("Automatic project UI save failed.");
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------------------
 
 void SaveProjectUIAutomatically(ActionData* action_data)
 {

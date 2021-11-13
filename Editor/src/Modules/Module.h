@@ -52,13 +52,13 @@ void GetProjectModuleBuildLogPath(const EditorState* editor_state, Stream<wchar_
 
 void GetProjectModuleThreadBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path, unsigned int thread_index);
 
-void GetBaseModulePath(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
+void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
 
-void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, CapacityStream<wchar_t>& module_path);
+void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, CapacityStream<wchar_t>& module_path);
 
 size_t GetProjectModuleSolutionLastWrite(Stream<wchar_t> solution_path);
 
-size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, Stream<wchar_t> library_name);
+size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration);
 
 size_t GetProjectModuleSolutionLastWrite(const EditorState* editor_state, unsigned int index);
 
@@ -71,7 +71,7 @@ unsigned char GetModuleConfigurationChar(const EditorState* editor_state, unsign
 // The caller must use FreeModuleFunction in order to release the OS handle only if the call succeded
 void LoadEditorModule(EditorState* editor_state, unsigned int index);
 
-bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name);
+bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration);
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index);
 
@@ -85,6 +85,10 @@ bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, contai
 void RemoveProjectModule(EditorState* editor_state, unsigned int index);
 
 void RemoveProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path);
+
+void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, unsigned int index);
+
+void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_t> solution_path);
 
 void ResetProjectModules(EditorState* editor_state);
 

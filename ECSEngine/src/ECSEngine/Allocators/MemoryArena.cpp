@@ -138,7 +138,9 @@ namespace ECSEngine {
 			}
 		}
 		CreateArena();
-		return m_arenas[m_arenas.size - 1].Allocate(size, alignment);
+		void* allocation = m_arenas[m_arenas.size - 1].Allocate(size, alignment);
+		ECS_ASSERT(allocation != nullptr);
+		return allocation;
 	}
 
 	template<bool trigger_error_if_not_found>

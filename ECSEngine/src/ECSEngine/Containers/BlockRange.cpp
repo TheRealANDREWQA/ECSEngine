@@ -197,14 +197,14 @@ namespace ECSEngine {
 		unsigned int BlockRange::Request(unsigned int size) {
 			ECS_ASSERT(size > 0, "Block range: zero allocation not allowed");
 			if (m_free_block_count + m_used_block_count < m_capacity) {
-				Vec8ui section, temp, sizes = size;
+				Vec8ui section, temp, sizes = size, one(1);
 				Vec8ib match;
 				int flag = -1;
 				size_t i = 0;
 				for (; flag == -1 && i < m_free_block_count; i += temp.size()) {
 					section.load((const void*)(m_buffer + i));
 					temp.load((const void*)(m_buffer + i + m_capacity));
-					match = (temp - section) >= sizes;
+					match = (temp - section + one) >= sizes;
 					flag = horizontal_find_first(match);
 				}
 				size_t index = flag + i - temp.size();

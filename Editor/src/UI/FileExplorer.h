@@ -23,8 +23,7 @@ struct FileExplorerData {
 	ECSEngine::containers::Stream<wchar_t> right_click_stream;
 	unsigned int starting_shift_index;
 	unsigned int ending_shift_index;
-	bool are_copied_files_cut;
-	bool get_selected_files_from_indices;
+	unsigned int flags;
 };
 
 void InitializeFileExplorer(FileExplorerData* file_explorer_data, ECSEngine::MemoryManager* allocator);

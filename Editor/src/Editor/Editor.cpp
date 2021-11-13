@@ -230,10 +230,9 @@ public:
 		Reflection::ReflectionManager reflection_manager(&memory_manager);
 		reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 		reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
-		const char* error_message = nullptr;
-		wchar_t faulty_path[256];
-		bool success = reflection_manager.ProcessFolderHierarchy((unsigned int)0, error_message, faulty_path);
-		success = reflection_manager.ProcessFolderHierarchy((unsigned int)1, error_message, faulty_path);
+		ECS_TEMP_ASCII_STRING(error_message, 256);
+		bool success = reflection_manager.ProcessFolderHierarchy((unsigned int)0, &error_message);
+		success = reflection_manager.ProcessFolderHierarchy((unsigned int)1, &error_message);
 
 		UIReflectionDrawer ui_reflection(&resizable_arena, &reflection_manager);
 
@@ -282,7 +281,7 @@ public:
 		ProjectModules project_modules(&memory_manager, 1);
 		editor_state.project_modules = &project_modules;
 
-		TaskGraph project_task_graph(&memory_manager);
+		TaskDependencies project_task_graph(&memory_manager);
 		editor_state.project_task_graph = &project_task_graph;
 
 		InspectorData inspector_data;
@@ -350,8 +349,6 @@ public:
 		ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(&graphics);
 		ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(&graphics);
 
-		Shaders::SetDirectionalLight(directional_light, &graphics, { 0.0f, -1.0f, 0.0f }, ColorFloat(10.0f, 1.0f, 1.0f, 1.0f));
-
 		float* _specular_factors = (float*)graphics.MapBuffer(specular_factors.buffer);
 		_specular_factors[0] = 100.0f;
 		_specular_factors[1] = 1.25f;
@@ -389,6 +386,27 @@ public:
 
 		MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, &global_memory_manager);
 		DebugDrawer debug_drawer(&debug_drawer_memory, &graphics, 1);
+		float3 LIGHT_DIRECTION(0.0f, -1.0f, 0.0f);
+		float4 LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 1.0f);
+
+		InjectWindowElement inject_elements[2];
+		InjectWindowSection section[1];
+		section[0].elements = Stream<InjectWindowElement>(inject_elements, std::size(inject_elements));
+		section[0].name = "Directional Light";
+
+		inject_elements[0].name = "Direction";
+		inject_elements[0].basic_type_string = STRING(float3);
+		inject_elements[0].data = &LIGHT_DIRECTION;
+		inject_elements[0].stream_type = Reflection::ReflectionStreamFieldType::Basic;
+
+		inject_elements[1].name = "Color";
+		inject_elements[1].basic_type_string = STRING(float4);
+		inject_elements[1].data = &LIGHT_INTENSITY;
+		inject_elements[1].stream_type = Reflection::ReflectionStreamFieldType::Basic;
+
+		editor_state.inject_data.ui_reflection = editor_state.ui_reflection;
+		editor_state.inject_data.sections = Stream<InjectWindowSection>(section, std::size(section));
+		editor_state.inject_window_name = "Inject Window";
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -430,6 +448,8 @@ public:
 
 				graphics.BindPixelResourceView(plank_texture);
 
+				unsigned int VALUE = 0;
+
 				if (mouse_state->MiddleButton()) {
 					float2 mouse_position = ui.GetNormalizeMousePosition();
 					float2 delta = ui.GetMouseDelta(mouse_position);
@@ -443,6 +463,8 @@ public:
 						factor = 2.5f;
 					}
 
+					VALUE = 3;
+
 					camera.translation -= right_vector * float3::Splat(delta.x * factor) - up_vector * float3::Splat(delta.y * factor);
 				}
 				if (mouse_state->RightButton()) {
@@ -454,6 +476,8 @@ public:
 						factor = 7.5f;
 					}
 
+					VALUE = 3;
+
 					camera.rotation.x += delta.y * factor;
 					camera.rotation.y += delta.x * factor;
 				}
@@ -461,6 +485,8 @@ public:
 				int scroll_delta = mouse_state->ScrollDelta();
 				if (scroll_delta != 0) {
 					float factor = 0.015f;
+
+					VALUE = 3;
 
 					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
 						factor = 0.005f;
@@ -515,6 +541,8 @@ public:
 				vertex_constant_buffers[0] = obj_buffer;
 				vertex_constant_buffers[1] = camera_position_buffer;
 				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
+
+				Shaders::SetDirectionalLight(directional_light, &graphics, LIGHT_DIRECTION, ColorFloat(LIGHT_INTENSITY.x, LIGHT_INTENSITY.y, LIGHT_INTENSITY.z, LIGHT_INTENSITY.w));
 
 				Shaders::SetPointLight(point_light, &graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
 				ColorFloat spot_light_color = ColorFloat(11.0f, 11.0f, 11.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
@@ -587,6 +615,7 @@ public:
 				graphics.BindRenderTargetViewFromInitialViews();
 
 				frame_pacing = ui.DoFrame();
+				frame_pacing = std::max(frame_pacing, VALUE);
 
 				graphics.SwapBuffers(0);
 				mouse.SetPreviousPositionAndScroll();

@@ -12,13 +12,23 @@ namespace ECSEngine {
 			m_marker(0), m_spin_lock() {}
 		
 		void* Allocate(size_t size, size_t alignment = 8);
+
 		void Deallocate(const void* block);
+
 		void SetMarker();
+
 		void Clear();
 
+		size_t GetMarker() const;
+
+		void ReturnToMarker(size_t marker);
+
 		// ---------------------- Thread safe variants -----------------------------
+		
 		void* Allocate_ts(size_t size, size_t alignment = 8);
+
 		void Deallocate_ts(const void* block);
+
 		void SetMarker_ts();
 
 	//private:

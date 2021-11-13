@@ -95,6 +95,11 @@ namespace ECSEngine {
 			MAPPING_MACRO(SetHemisphericConstants, color_down, color_up);
 		}
 
+		void SetHemisphericConstants(void* data, const HemisphericConstants& values)
+		{
+			SetHemisphericConstants(data, values.color_down, values.color_up);
+		}
+
 		// ----------------------------------------------------------------------------------------------------
 
 		void SetDirectionalLight(void* data, float3 direction, ColorFloat color) {
@@ -105,6 +110,11 @@ namespace ECSEngine {
 
 		void SetDirectionalLight(ConstantBuffer buffer, Graphics* graphics, float3 direction, ColorFloat color) {
 			MAPPING_MACRO(SetDirectionalLight, direction, color);
+		}
+
+		void SetDirectionalLight(void* data, const DirectionalLight& light)
+		{
+			SetDirectionalLight(data, light.direction, light.color);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
@@ -121,6 +131,11 @@ namespace ECSEngine {
 
 		void SetPointLight(ConstantBuffer buffer, Graphics* graphics, float3 direction, float range, float attenuation, ColorFloat color) {
 			MAPPING_MACRO(SetPointLight, direction, range, attenuation, color);
+		}
+
+		void SetPointLight(void* data, const PointLight& light)
+		{
+			SetPointLight(data, light.position, light.range, light.attenuation, light.color);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
@@ -173,6 +188,11 @@ namespace ECSEngine {
 			ColorFloat color
 		) {
 			MAPPING_MACRO(SetSpotLight, position, direction, inner_angle_degrees, outer_angle_degrees, range, range_attenuation, cone_attenuation, color);
+		}
+
+		void SetSpotLight(void* data, const SpotLight& light)
+		{
+			SetSpotLight(data, light.position, light.direction, light.inner_angle_degrees, light.outer_angle_degrees, light.range, light.range_attenuation, light.cone_attenuation, light.color);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
@@ -240,6 +260,11 @@ namespace ECSEngine {
 			ColorFloat color
 		) {
 			MAPPING_MACRO(SetCapsuleLight, first_point, direction, length, range, range_attenuation, color);
+		}
+
+		void SetCapsuleLight(void* data, const CapsuleLight& light)
+		{
+			SetCapsuleLight(data, light.first_point, light.direction, light.length, light.range, light.range_attenuation, light.color);
 		}
 
 		// ----------------------------------------------------------------------------------------------------

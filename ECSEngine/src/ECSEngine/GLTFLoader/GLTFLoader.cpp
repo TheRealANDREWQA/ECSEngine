@@ -381,7 +381,7 @@ namespace ECSEngine {
 	{
 		ECS_TEMP_ASCII_STRING(temp_path, 512);
 		function::ConvertWideCharsToASCII(path, temp_path);
-		temp_path[path.size] = '\0';
+		temp_path[temp_path.size] = '\0';
 		return LoadGLTFFile(temp_path.buffer, error_message);
 	}
 

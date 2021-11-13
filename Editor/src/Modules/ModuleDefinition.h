@@ -23,6 +23,16 @@ constexpr const char* MODULE_CONFIGURATIONS[] = {
 	MODULE_CONFIGURATION_DISTRIBUTION
 };
 
+constexpr const wchar_t* MODULE_CONFIGURATION_DEBUG_WIDE = L"Debug";
+constexpr const wchar_t* MODULE_CONFIGURATION_RELEASE_WIDE = L"Release";
+constexpr const wchar_t* MODULE_CONFIGURATION_DISTRIBUTION_WIDE = L"Distribution";
+
+constexpr const wchar_t* MODULE_CONFIGURATIONS_WIDE[] = {
+	MODULE_CONFIGURATION_DEBUG_WIDE,
+	MODULE_CONFIGURATION_RELEASE_WIDE,
+	MODULE_CONFIGURATION_DISTRIBUTION_WIDE
+};
+
 enum class EditorModuleConfiguration : unsigned char {
 	Debug,
 	Release,

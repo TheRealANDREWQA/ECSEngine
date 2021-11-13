@@ -14,19 +14,19 @@ namespace ECSEngine {
 
 	void ConstructPointerFieldsForType(Stream<function::CopyPointer>& ECS_RESTRICT pointer_fields, ReflectionType type, const void* ECS_RESTRICT data) {
 		for (size_t index = 0; index < type.fields.size; index++) {
-			if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::Stream) {
+			if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				pointer_fields[pointer_fields.size].destination = &stream->buffer;
 				pointer_fields[pointer_fields.size].data = stream->buffer;
 				pointer_fields[pointer_fields.size++].data_size = type.fields[index].info.additional_flags * stream->size;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::CapacityStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
 				CapacityStream<void>* stream = (CapacityStream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				pointer_fields[pointer_fields.size].destination = &stream->buffer;
 				pointer_fields[pointer_fields.size].data = stream->buffer;
 				pointer_fields[pointer_fields.size++].data_size = type.fields[index].info.additional_flags * stream->size;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::ResizableStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::ResizableStream) {
 				ResizableStream<void*, LinearAllocator>* stream = (ResizableStream<void*, LinearAllocator>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				pointer_fields[pointer_fields.size].destination = (void**)&stream->buffer;
 				pointer_fields[pointer_fields.size].data = stream->buffer;
@@ -330,15 +330,15 @@ namespace ECSEngine {
 
 		size_t total_memory = 0;
 		for (size_t index = 0; index < type.fields.size; index++) {
-			if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::Stream) {
+			if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Stream) {
 				const Stream<void>* stream = (const Stream<void>*)((uintptr_t)address + type.fields[index].info.pointer_offset);
 				total_memory += stream->size * type.fields[index].info.additional_flags;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::CapacityStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
 				const CapacityStream<void>* stream = (const CapacityStream<void>*)((uintptr_t)address + type.fields[index].info.pointer_offset);
 				total_memory += stream->size * type.fields[index].info.additional_flags;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::ResizableStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::ResizableStream) {
 				const ResizableStream<void*, LinearAllocator>* stream = (const ResizableStream<void*, LinearAllocator>*)((uintptr_t)address + type.fields[index].info.pointer_offset);
 				total_memory += stream->size * type.fields[index].info.additional_flags;
 			}
@@ -383,15 +383,15 @@ namespace ECSEngine {
 
 		size_t total_memory = 0;
 		for (size_t index = 0; index < type.fields.size; index++) {
-			if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::Stream) {
+			if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Stream) {
 				const Stream<void>* stream = (const Stream<void>*)((uintptr_t)temp_memory + type.fields[index].info.pointer_offset);
 				total_memory += stream->size * type.fields[index].info.additional_flags;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::CapacityStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
 				const CapacityStream<void>* stream = (const CapacityStream<void>*)((uintptr_t)temp_memory + type.fields[index].info.pointer_offset);
 				total_memory += stream->size * type.fields[index].info.additional_flags;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::ResizableStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::ResizableStream) {
 				const ResizableStream<void*, LinearAllocator>* stream = (const ResizableStream<void*, LinearAllocator>*)((uintptr_t)temp_memory + type.fields[index].info.pointer_offset);
 				total_memory += stream->size * type.fields[index].info.additional_flags;
 			}

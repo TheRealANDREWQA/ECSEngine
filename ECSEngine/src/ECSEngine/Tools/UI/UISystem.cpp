@@ -25,7 +25,7 @@ namespace ECSEngine {
 	ECS_CONTAINERS;
 	ECS_MICROSOFT_WRL;
 
-	using UISystemHash = HashFunctionAdditiveString;
+	using UISystemHash = HashFunctionMultiplyString;
 
 	//using namespace HID;
 
@@ -37,7 +37,11 @@ namespace ECSEngine {
 			UISystem* system;
 		};
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void ProcessTexture(unsigned int thread_index, World* world, void* data);
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename RollbackFunction>
 		bool ResizeDockspaceInternal(
@@ -104,6 +108,8 @@ namespace ECSEngine {
 			}
 			return true;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UISystem::UISystem(
 			Application* application,
@@ -293,9 +299,13 @@ namespace ECSEngine {
 			m_focused_window_data.clean_up_call_general = false;
 			m_focused_window_data.clean_up_call_hoverable = false;
 			m_focused_window_data.additional_general_data = nullptr;
+			m_focused_window_data.additional_hoverable_data = nullptr;
 			m_focused_window_data.locked_window = false;
 			m_focused_window_data.additional_general_data_type = ActionAdditionalData::None;
+			m_focused_window_data.additional_hoverable_data_type = ActionAdditionalData::None;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddActionHandler(
 			LinearAllocator* allocator,
@@ -343,6 +353,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddDefaultHoverable(const UISystemDefaultHoverableData& data)
 		{
 			AddHoverableToDockspaceRegion(
@@ -356,6 +368,8 @@ namespace ECSEngine {
 				data.phase
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddHoverableToDockspaceRegion(
 			unsigned int thread_id,
@@ -376,6 +390,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddHoverableToDockspaceRegion(
 			LinearAllocator* allocator,
 			UIDockspace* dockspace,
@@ -393,6 +409,8 @@ namespace ECSEngine {
 				handler
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddDefaultClickable(const UISystemDefaultClickableData& data)
 		{
@@ -436,6 +454,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddDefaultClickable(const UISystemDefaultClickableData& data, LinearAllocator* allocator, UIHandler* hoverable, UIHandler* clickable)
 		{
 			UIDefaultClickableData default_click;
@@ -471,6 +491,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddDefaultHoverableClickable(UISystemDefaultHoverableClickableData& data) {
 			UISystemDefaultClickableData clickable_data;
 			clickable_data.clickable_handler = data.clickable_handler;
@@ -486,6 +508,8 @@ namespace ECSEngine {
 			AddDefaultClickable(clickable_data);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddDefaultHoverableClickable(UISystemDefaultHoverableClickableData& data, LinearAllocator* allocator, UIHandler* hoverable, UIHandler* clickable)
 		{
 			UISystemDefaultClickableData clickable_data;
@@ -499,6 +523,8 @@ namespace ECSEngine {
 			clickable_data.thread_id = data.thread_id;
 			AddDefaultClickable(clickable_data, allocator, hoverable, clickable);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddClickableToDockspaceRegion(
 			unsigned int thread_id,
@@ -519,6 +545,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddClickableToDockspaceRegion(
 			LinearAllocator* allocator,
 			UIDockspace* dockspace,
@@ -536,6 +564,8 @@ namespace ECSEngine {
 				handler
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddDoubleClickActionToDockspaceRegion(
 			unsigned int thread_id, 
@@ -579,6 +609,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddGeneralActionToDockspaceRegion(
 			unsigned int thread_id,
 			UIDockspace* dockspace,
@@ -598,6 +630,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddGeneralActionToDockspaceRegion(
 			LinearAllocator* allocator,
 			UIDockspace* dockspace,
@@ -616,6 +650,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddWindowToDockspaceRegion(
 			unsigned int window_index,
 			unsigned int dockspace_index,
@@ -625,6 +661,8 @@ namespace ECSEngine {
 			AddWindowToDockspaceRegion(window_index, &dockspace_stream[dockspace_index], border_index);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddWindowToDockspaceRegion(unsigned int window_index, UIDockspace* dockspace, unsigned char border_index)
 		{
 			ECS_ASSERT(dockspace->borders[border_index].window_indices.size < dockspace->borders[border_index].window_indices.capacity);
@@ -633,15 +671,21 @@ namespace ECSEngine {
 			dockspace->borders[border_index].window_indices.Add(window_index);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void* UISystem::AllocateHandlerMemory(unsigned int thread_id, size_t size, size_t alignment, const void* memory_to_copy) {
 			return AllocateHandlerMemory(&m_resources.thread_resources[thread_id].temp_allocator, size, alignment, memory_to_copy);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void* UISystem::AllocateHandlerMemory(LinearAllocator* allocator, size_t size, size_t alignment, const void* memory_to_copy) {
-			void* allocation = allocator->Allocate_ts(size, alignment);
+			void* allocation = allocator->Allocate(size, alignment);
 			memcpy(allocation, memory_to_copy, size);
 			return allocation;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddWindowToDockspace(
 			unsigned char element_to_add,
@@ -654,6 +698,8 @@ namespace ECSEngine {
 		) {
 			AddWindowToDockspace(element_to_add, element_position, &dockspace_stream[dockspace_index], child_dockspace, border_width, mask);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddWindowToDockspace(
 			unsigned char element_index, 
@@ -723,6 +769,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddDockspaceToDockspace(
 			unsigned char element_to_add,
 			DockspaceType child_type,
@@ -750,6 +798,8 @@ namespace ECSEngine {
 				mask
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddDockspaceToDockspace(
 			unsigned char child_index, 
@@ -834,11 +884,15 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddWindowMemoryResource(void* resource, unsigned int window_index)
 		{
 			m_windows[window_index].memory_resources.Add(resource);
 			size_t size = m_windows[window_index].memory_resources.size;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddWindowMemoryResourceToTable(void* resource, ResourceIdentifier identifier, unsigned int window_index)
 		{
@@ -848,6 +902,8 @@ namespace ECSEngine {
 			ECS_ASSERT(table->Find(hash, identifier) == -1);
 			ECS_ASSERT(!table->Insert(hash, resource, identifier));
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AppendDockspaceResize(
 			unsigned char dockspace_index,
@@ -860,6 +916,8 @@ namespace ECSEngine {
 			ECS_ASSERT(dockspace_index < dockspaces->size);
 			AppendDockspaceResize(&dockspaces->buffer[dockspace_index], new_scale_to_resize, old_scale, other_scale, mask);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AppendDockspaceResize(UIDockspace* dockspace, float new_scale_to_resize, float old_scale, float other_scale, float mask)
 		{
@@ -923,6 +981,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AppendDockspaceResize(UIDockspace* dockspace, float other_scale, DockspaceType type)
 		{
 			const float masks[4] = { 1.0f, 0.0f, 1.0f, 0.0f };
@@ -934,6 +994,8 @@ namespace ECSEngine {
 				AppendDockspaceResize(dockspace, dockspace->transform.scale.y, dockspace->transform.scale.y, other_scale, mask);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::AddElementToDockspace(
 			unsigned char element_to_add,
@@ -1046,6 +1108,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+		
 		void UISystem::AddElementToDockspace(
 			unsigned char element_index,
 			bool is_dock, 
@@ -1150,16 +1214,46 @@ namespace ECSEngine {
 			}
 		}
 
-		void UISystem::AddWindowDrawerElement(unsigned int window_index, const char* name)
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::AddWindowDrawerElement(
+			unsigned int window_index, 
+			const char* name, 
+			Stream<void*> allocations, 
+			Stream<ResourceIdentifier> table_resources
+		)
 		{
-			unsigned int index = m_windows[window_index].dynamic_resources.ReserveNewElement();
-			m_windows[window_index].dynamic_resources[index].element_allocations.Initialize(m_memory, 0);
-			m_windows[window_index].dynamic_resources[index].previous_allocation_count = m_windows[window_index].memory_resources.size;
+			// Calculate the total memory needed
 			size_t name_size = strlen(name);
-			m_windows[window_index].dynamic_resources[index].name.Initialize(m_memory, name_size);
-			memcpy(m_windows[window_index].dynamic_resources[index].name.buffer, name, sizeof(char) * name_size);
-			m_windows[window_index].dynamic_resources[index].reference_count = 2;
+			size_t memory_size = name_size + sizeof(void*) * allocations.size + sizeof(ResourceIdentifier) * table_resources.size;
+			for (size_t index = 0; index < table_resources.size; index++) {
+				memory_size += table_resources[index].size;
+			}
+			
+			// Make a coallesced allocation
+			void* allocation = m_memory->Allocate(memory_size);
+			uintptr_t ptr = (uintptr_t)allocation;
+
+			UIWindowDynamicResource dynamic_resource;
+			dynamic_resource.element_allocations.InitializeAndCopy(ptr, allocations);
+			dynamic_resource.table_resources.InitializeFromBuffer(ptr, table_resources.size);
+			dynamic_resource.reference_count = 2;
+			
+			// Copy the identifiers and place them inside the table resources buffer
+			for (size_t index = 0; index < table_resources.size; index++) {
+				dynamic_resource.table_resources[index].ptr = (void*)ptr;
+				dynamic_resource.table_resources[index].size = table_resources[index].size;
+				memcpy((void*)ptr, table_resources[index].ptr, table_resources[index].size);
+				ptr += table_resources[index].size;
+			}
+			// Copy the name
+			memcpy((void*)ptr, name, sizeof(char) * name_size);
+			ResourceIdentifier identifier{(void*)ptr, (unsigned int)name_size};
+			unsigned int hash = UISystemHash::Hash(identifier);
+			InsertToDynamicTable<UISystemHash>(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, { (void*)ptr, name_size });
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::BindWindowHandler(Action action, Action data_initializer, size_t data_size)
 		{
@@ -1167,6 +1261,8 @@ namespace ECSEngine {
 			m_window_handler.data = data_initializer;
 			m_window_handler.data_size = data_size;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::CalculateDockspaceRegionHeaders(
 			unsigned int dockspace_index,
@@ -1178,6 +1274,8 @@ namespace ECSEngine {
 		{
 			CalculateDockspaceRegionHeaders(&dockspaces[dockspace_index], border_index, offset_mask, sizes);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::CalculateDockspaceRegionHeaders(
 			const UIDockspace* dockspace,
@@ -1220,6 +1318,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::CheckDockspaceInnerBorders(
 			float2 point_position,
 			UIDockspace* dockspace,
@@ -1259,6 +1359,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::CheckDockspaceInnerBorders(
 			float2 point_position,
 			unsigned int dockspace_index,
@@ -1277,6 +1379,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::CheckParentInnerBorders(
 			float2 mouse_position,
 			const unsigned int* dockspace_indices,
@@ -1290,6 +1394,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::Clear()
 		{
@@ -1331,12 +1437,16 @@ namespace ECSEngine {
 			ECS_ASSERT(m_vertical_dockspaces.size == 0);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ClearFixedDockspace(UIDockspace* dockspace, DockspaceType type)
 		{
 			for (size_t index = 0; index < dockspace->borders.size - 1; index++) {
 				RemoveFixedDockspaceBorder(dockspace, 0, type);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ClearFixedDockspace(UIDockspaceBorder* border, DockspaceType type)
 		{
@@ -1354,6 +1464,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ConfigureToolTipBase(UITooltipBaseData* data) const
 		{
 			if (data->default_background) {
@@ -1370,6 +1482,8 @@ namespace ECSEngine {
 				data->character_spacing = m_descriptors.font.character_spacing;
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool horizontal, bool invert_order>
 		void UISystem::ConvertCharactersToTextSprites(
@@ -1426,6 +1540,8 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(void, UISystem::ConvertCharactersToTextSprites, const char*, float2, UISpriteVertex*, unsigned int, Color, unsigned int, float2, float);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		template<bool horizontal, bool invert_order>
 		void UISystem::ConvertFloatToTextSprites(
 			UISpriteVertex* vertices,
@@ -1458,6 +1574,8 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(void, UISystem::ConvertFloatToTextSprites, UISpriteVertex*, size_t&, float, float2, float, float, size_t, Color, float);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		template<bool horizontal, bool invert_order>
 		void UISystem::ConvertDoubleToTextSprites(
 			UISpriteVertex* vertices,
@@ -1489,6 +1607,8 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(void, UISystem::ConvertDoubleToTextSprites, UISpriteVertex*, size_t&, double, float2, float, float, size_t, Color, float);
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		BorderHover UISystem::CheckDockspaceOuterBorders(
 			float2 point_position,
@@ -1552,6 +1672,8 @@ namespace ECSEngine {
 			return initial_hover;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		BorderHover UISystem::CheckDockspaceOuterBorders(
 			float2 point_position,
 			unsigned int dockspace_index,
@@ -1560,6 +1682,8 @@ namespace ECSEngine {
 			const CapacityStream<UIDockspace>* dockspaces[4] = { &m_horizontal_dockspaces, &m_vertical_dockspaces, &m_floating_horizontal_dockspaces, &m_floating_vertical_dockspaces };
 			return CheckDockspaceOuterBorders(point_position, dockspace_index, *dockspaces[(unsigned int)dockspace_type]);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::CheckDockspaceResize(float2 mouse_position) {
 			BorderHover border_hover;
@@ -1646,6 +1770,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::CheckDockspaceResize(unsigned int dockspace_index, DockspaceType type, float2 mouse_position) {
 			BorderHover border_hover;
 			border_hover.value = 0;
@@ -1687,6 +1813,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::CreateDockspace(
 			UIElementTransform transform, 
@@ -1780,6 +1908,8 @@ namespace ECSEngine {
 			return dockspace_index;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::CreateEmptyDockspace(CapacityStream<UIDockspace>& dockspace_stream, DockspaceType type)
 		{
 			return CreateDockspace(
@@ -1791,6 +1921,8 @@ namespace ECSEngine {
 				type
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::CreateFixedDockspace(
 			UIElementTransform transform,
@@ -1808,6 +1940,8 @@ namespace ECSEngine {
 			m_fixed_dockspaces.AddSafe({ dockspace_index, type });
 			return dockspace_index;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::CreateDockspace(
 			UIElementTransform transform, 
@@ -1831,6 +1965,8 @@ namespace ECSEngine {
 			return CreateDockspace(transform, *dockspaces[(unsigned int)dockspace_type], border_position[(unsigned int)dockspace_type], element, is_dock, dockspace_type, flags);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::CreateEmptyDockspace(DockspaceType type)
 		{
 			return CreateDockspace(
@@ -1840,6 +1976,8 @@ namespace ECSEngine {
 				false
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::CreateFixedDockspace(
 			UIElementTransform transform,
@@ -1859,6 +1997,8 @@ namespace ECSEngine {
 			m_fixed_dockspaces.AddSafe(layer);
 			return dockspace_index;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::CreateDockspace(UIDockspace* dockspace_to_copy, DockspaceType type_to_create)
 		{
@@ -1916,6 +2056,8 @@ namespace ECSEngine {
 			return new_dockspace_index;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::CreateFixedDockspace(UIDockspace* dockspace_to_copy, DockspaceType type_to_create)
 		{
 			ECS_ASSERT(type_to_create == DockspaceType::FloatingHorizontal || type_to_create == DockspaceType::FloatingVertical);
@@ -1924,6 +2066,8 @@ namespace ECSEngine {
 			m_fixed_dockspaces.AddSafe({ dockspace_index, type_to_create });
 			return dockspace_index;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_texture)
 		{
@@ -1952,6 +2096,8 @@ namespace ECSEngine {
 			
 			*sprite_texture = view;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::Create_Window(const UIWindowDescriptor& descriptor, bool do_not_initialize_handler) {
 			ECS_ASSERT(m_windows.size < m_windows.capacity);
@@ -1982,7 +2128,7 @@ namespace ECSEngine {
 			// misc stuff
 			m_windows[window_index].memory_resources.Initialize(m_memory, 0);
 			m_windows[window_index].draw_element_names.Initialize(m_memory, 0);
-			m_windows[window_index].dynamic_resources.Initialize(m_memory, 0);
+			m_windows[window_index].dynamic_resources.Initialize(m_memory, 128);
 			m_windows[window_index].zoom.x = 1.0f;
 			m_windows[window_index].zoom.y = 1.0f;
 			m_windows[window_index].pin_horizontal_slider_count = 0;
@@ -2035,6 +2181,8 @@ namespace ECSEngine {
 			return window_index;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::CreateEmptyWindow()
 		{
 			UIWindowDescriptor descriptor;
@@ -2051,6 +2199,8 @@ namespace ECSEngine {
 			handler_data->revert_commands.Initialize(m_memory, 1);
 			return window_index;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::CreateWindowAndDockspace(const UIWindowDescriptor& descriptor, size_t additional_flags)
 		{
@@ -2174,6 +2324,8 @@ namespace ECSEngine {
 			return window_index;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::CullRegionHeader(
 			const UIDockspace* dockspace,
 			unsigned int border_index, 
@@ -2211,6 +2363,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::CullHandler(UIHandler* handler, float top, float left, float bottom, float right) const
 		{
 			Vec8f tops(top), lefts(left), bottoms(bottom), rights(right);
@@ -2242,6 +2396,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DeallocateDockspaceBorderResource(UIDockspace* dockspace, unsigned int border_index)
 		{
 			// releasing graphics objects
@@ -2259,12 +2415,16 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DeallocateClickableHandler()
 		{
 			if (m_focused_window_data.clickable_handler.action != nullptr && m_focused_window_data.clickable_handler.data_size != 0) {
 				m_memory->Deallocate(m_focused_window_data.clickable_handler.data);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DeallocateHoverableHandler()
 		{
@@ -2274,6 +2434,8 @@ namespace ECSEngine {
 			m_focused_window_data.always_hoverable = false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DeallocateGeneralHandler() 
 		{
 			if (m_focused_window_data.general_handler.action != nullptr && m_focused_window_data.general_handler.data_size != 0) {
@@ -2281,6 +2443,8 @@ namespace ECSEngine {
 			}
 			m_focused_window_data.clean_up_call_general = false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::CreateDockspaceBorder(
 			UIDockspace* dockspace, 
@@ -2414,26 +2578,48 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::CreateEmptyDockspaceBorder(UIDockspace* dockspace, unsigned int border_index)
 		{
 			CreateDockspaceBorder(dockspace, border_index, 0.0f, 0, false);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DeallocateEventData() {
 			m_memory->Deallocate(m_event_data);
 			m_event_data = nullptr;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
-			unsigned int count = m_windows[window_index].dynamic_resources.size;
+			unsigned int count = m_windows[window_index].dynamic_resources.m_count;
+			bool removed_element = false;
 			for (size_t index = 0; index < count; index++) {
-				m_windows[window_index].dynamic_resources[index].reference_count--;
-				if (m_windows[window_index].dynamic_resources[index].reference_count == 0) {
-					RemoveWindowDynamicResource(window_index, index);
+				if (m_windows[window_index].dynamic_resources.IsItemAt(index)) {
+					UIWindowDynamicResource* dynamic_resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
+					dynamic_resource->reference_count--;
+					if (dynamic_resource->reference_count == 0) {
+						// A new dynamic resource will replace this one; so decrement the current index in order to keep
+						// checking the right resource
+						RemoveWindowDynamicResource(window_index, index);
+						removed_element = true;
+					}
 				}
 			}
+
+			// If at least one resource has been deleted, recalculate the maximum count for both the dynamic table
+			// And the standard resource table
+			if (removed_element) {
+				m_windows[window_index].table.ResetProbeCount();
+				m_windows[window_index].dynamic_resources.ResetProbeCount();
+			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool destroy_internal_dockspaces, bool deallocate_borders>
 		void UISystem::DestroyDockspace(UIDockspaceBorder* border, DockspaceType type) {
@@ -2473,6 +2659,10 @@ namespace ECSEngine {
 						if (!dockspace->borders[subindex].is_dock) {
 							for (size_t window_index = 0; window_index < dockspace->borders[subindex].window_indices.size; window_index++) {
 								DestroyWindow(dockspace->borders[subindex].window_indices[window_index]);
+								// The border then must have it's index made an invalid one in order to not affect the 
+								// repairing of the window indices - set it to the window size so not other border
+								// will be affected
+								dockspace->borders[subindex].window_indices[window_index] = m_windows.size;
 							}
 						}
 						DeallocateDockspaceBorderResource(dockspace, subindex);
@@ -2578,17 +2768,23 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_DOUBLE_BOOL(void, UISystem::DestroyDockspace, UIDockspaceBorder* border, DockspaceType);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::DestroyWindow(unsigned int window_index)
 		{
+			ECS_ASSERT(window_index < m_windows.size);
+			size_t max_dynamic_resource_count = m_windows[window_index].dynamic_resources.GetExtendedCapacity();
+			for (size_t index = 0; index < max_dynamic_resource_count; index++) {
+				if (m_windows[window_index].dynamic_resources.IsItemAt(index)) {
+					RemoveWindowDynamicResource(window_index, index);
+				}
+			}
+			m_memory->Deallocate(m_windows[window_index].dynamic_resources.GetAllocatedBuffer());
+
 			for (size_t index = 0; index < m_windows[window_index].memory_resources.size; index++) {
 				m_memory->Deallocate(m_windows[window_index].memory_resources[index]);
 			}
 			m_windows[window_index].memory_resources.FreeBuffer();
-
-			size_t dynamic_resource_count = m_windows[window_index].dynamic_resources.size;
-			for (size_t index = 0; index < dynamic_resource_count; index++) {
-				RemoveWindowDynamicResource(window_index, (unsigned int)0);
-			}
 
 			if (m_windows[window_index].destroy_handler.action != nullptr) {
 				ActionData action_data = GetFilledActionData(window_index);
@@ -2617,6 +2813,8 @@ namespace ECSEngine {
 			return RepairWindowReferences(window_index);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		template<bool destroy_fixed_dockspace>
 		bool UISystem::DestroyWindowIfFound(const char* name)
 		{
@@ -2634,14 +2832,14 @@ namespace ECSEngine {
 					// For pop up window
 					if (dockspace->borders.size == 2 && dockspace->borders[0].window_indices.size == 1 && !dockspace->borders[0].is_dock) {
 						RemoveDockspaceBorder(dockspace, border_index, type);
-						if (IsFixedDockspace(dockspace)) {
+						/*if (IsFixedDockspace(dockspace)) {
 							for (size_t index = 0; index < m_fixed_dockspaces.size; index++) {
 								if (GetConstDockspace(m_fixed_dockspaces[index]) == dockspace) {
 									m_fixed_dockspaces.RemoveSwapBack(index);
 									break;
 								}
 							}
-						}
+						}*/
 					}
 					else {
 						RemoveWindowFromDockspaceRegion(dockspace, type, border_index, window_index);
@@ -2654,6 +2852,8 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(bool, UISystem::DestroyWindowIfFound, const char*);
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DestroyNonReferencedWindows()
 		{
@@ -2682,6 +2882,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectEvents(float2 mouse_position) {
 			DockspaceType dockspace_type(DockspaceType::FloatingVertical);
@@ -2741,6 +2943,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::DetectActiveHandler(const UIHandler* handler, float2 mouse_position, unsigned int offset) const {
 			Vec8f simd_position_x, simd_position_y, simd_scale_x, simd_scale_y;
 			Vec8f mouse_position_x(mouse_position.x), mouse_position_y(mouse_position.y);
@@ -2771,6 +2975,8 @@ namespace ECSEngine {
 
 			return final_index;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectHoverables(
 			size_t* counts,
@@ -2898,6 +3104,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::DetectClickables(
 			size_t* counts,
 			void** buffers,
@@ -2970,6 +3178,8 @@ namespace ECSEngine {
 				return false;
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::DetectGenerals(
 			size_t* counts,
@@ -3087,6 +3297,8 @@ namespace ECSEngine {
 				return false;
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::Draw(float2 mouse_position, void** system_buffers, size_t* system_counts)
 		{
@@ -3208,33 +3420,12 @@ namespace ECSEngine {
 			}
 
 #endif
-//#ifdef ECS_TOOLS_UI_ACTIVE_WINDOW
-//			if (regions.size > 0) {
-//				UIDrawDockspaceRegionData active_window_data;
-//				//const UIVisibleDockspaceRegion* region = &regions[regions.size - 1];
-//				active_window_data.border_index = m_focused_window_data.border_index;
-//				active_window_data.dockspace = m_focused_window_data.dockspace;
-//				active_window_data.draw_index = regions.size - 1;
-//				active_window_data.last_index = regions.size - 1;
-//				active_window_data.mouse_position = mouse_position;
-//				active_window_data.mouse_region = { mouse_dockspace, mouse_dockspace_region, mouse_type };
-//				active_window_data.offset_mask = m_focused_window_data.mask;
-//				active_window_data.system = this;
-//				active_window_data.thread_id = 0;
-//				active_window_data.type = m_focused_window_data.type;
-//				active_window_data.is_fixed_default_when_border_zero = IsEmptyFixedDockspace(m_focused_window_data.dockspace);
-//				active_window_data.system_buffers = system_buffers;
-//				active_window_data.system_count = system_counts;
-//
-//				m_graphics->DisableDepth();
-//				m_resources.thread_resources[0].temp_allocator.Clear();
-//				DrawDockspaceRegion(&active_window_data, true);
-//			}
-//#endif
 
 			m_memory->Deallocate(allocation);
 			m_memory->Deallocate(data_allocation);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::FillViewportBuffer(float* buffer, float2 viewport_position, float2 viewport_half_scale)
 		{
@@ -3246,12 +3437,16 @@ namespace ECSEngine {
 			buffer[3] = 1.0f / viewport_half_scale.y;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::FillViewportBuffer(float2 viewport_position, float2 viewport_scale, float* buffer)
 		{
 			float2 half_scale = { viewport_scale.x * 0.5f, viewport_scale.y * 0.5f };
 
 			FillViewportBuffer(buffer, viewport_position, half_scale);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::DoFrame() {
 			m_texture_evict_count++;
@@ -3391,6 +3586,7 @@ namespace ECSEngine {
 			return m_frame_pacing;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawCollapseTriangleHeader(
 			void** buffers,
@@ -3443,6 +3639,8 @@ namespace ECSEngine {
 
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		// it will call the transform variant which is slightly more expensive in order to have propragation of changes accross 
 		// functions
 		void UISystem::DrawDockingGizmo(float2 position, size_t* counts, void** buffers, bool draw_central_rectangle)
@@ -3450,6 +3648,8 @@ namespace ECSEngine {
 			float2 transforms_useless[10];
 			DrawDockingGizmo(position, counts, buffers, draw_central_rectangle, transforms_useless);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawDockingGizmo(
 			float2 position,
@@ -3570,6 +3770,8 @@ namespace ECSEngine {
 			counts[ECS_TOOLS_UI_SOLID_COLOR] += ECS_TOOLS_UI_DOCKING_GIZMO_LINE_COUNT * 6;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		ID3D11CommandList* UISystem::DrawDockspaceRegion(const UIDrawDockspaceRegionData* data) {
 			unsigned int window_index_in_border = data->dockspace->borders[data->border_index].active_window;
 			unsigned int window_index = 0xFFFFFFFF;
@@ -3645,6 +3847,7 @@ namespace ECSEngine {
 				drawer_descriptor.mouse_position = data->mouse_position;
 				drawer_descriptor.export_scale = nullptr;
 				drawer_descriptor.do_not_initialize_viewport_sliders = false;
+				drawer_descriptor.do_not_allocate_buffers = false;
 				if (m_windows[drawer_descriptor.window_index].draw != nullptr)
 					m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor);
 
@@ -3841,6 +4044,8 @@ namespace ECSEngine {
 #endif
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DrawDockspaceRegion(const UIDrawDockspaceRegionData* data, bool active) {
 			unsigned int window_index_in_border = data->dockspace->borders[data->border_index].active_window;
 			unsigned int window_index = 0xFFFFFFFF;
@@ -3905,6 +4110,7 @@ namespace ECSEngine {
 				drawer_descriptor.mouse_position = data->mouse_position;
 				drawer_descriptor.export_scale = nullptr;
 				drawer_descriptor.do_not_initialize_viewport_sliders = false;
+				drawer_descriptor.do_not_allocate_buffers = false;
 				if (m_windows[drawer_descriptor.window_index].draw != nullptr)
 					m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor);
 				
@@ -4091,6 +4297,8 @@ namespace ECSEngine {
 			}
 
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawDockspaceRegionHeader(
 			unsigned int thread_id,
@@ -4332,6 +4540,8 @@ namespace ECSEngine {
 			
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DrawDockspaceRegionBackground(
 			unsigned int thread_id,
 			UIDockspace* dockspace, 
@@ -4376,6 +4586,8 @@ namespace ECSEngine {
 
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DrawFixedDockspaceRegionBackground(
 			const UIDockspace* dockspace,
 			unsigned int border_index,
@@ -4397,6 +4609,8 @@ namespace ECSEngine {
 				vertex_count[ECS_TOOLS_UI_SOLID_COLOR]
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2  UISystem::DrawToolTipSentence(
 			ActionData* action_data,
@@ -4551,6 +4765,8 @@ namespace ECSEngine {
 		
 			return max_bounds - initial_position;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::DrawToolTipSentenceWithTextToRight(
 			ActionData* ECS_RESTRICT action_data,
@@ -4754,6 +4970,8 @@ namespace ECSEngine {
 			return max_bounds - initial_position;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::DrawToolTipSentenceSize(const char* characters, UITooltipBaseData* data)
 		{
 			size_t character_count = strlen(characters);
@@ -4811,6 +5029,8 @@ namespace ECSEngine {
 			return max_bounds;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::DrawToolTipSentenceWithTextToRightSize(
 			const char* ECS_RESTRICT aligned_to_left_text,
 			const char* ECS_RESTRICT aligned_to_right_text,
@@ -4866,6 +5086,8 @@ namespace ECSEngine {
 			return { max_left_scale + max_right_scale + 2.0f * m_descriptors.misc.tool_tip_padding.x + ECS_TOOLS_UI_TOOL_TIP_TEXT_TO_RIGHT_PADD, 2.0f * m_descriptors.misc.tool_tip_padding.y + (sprite_y_scale + data->next_row_offset) * left_new_lines.size + data->next_row_offset };
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::DrawDockspaceRegionBorders(
 			float2 region_position,
 			float2 region_scale,
@@ -4884,6 +5106,8 @@ namespace ECSEngine {
 				border_transforms
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::DrawPass(
 			CapacityStream<VertexBuffer>& buffers,
@@ -4952,6 +5176,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		// this cannot handle render region
 		template<UIDrawPhase phase>
 		void UISystem::DrawPass(
@@ -4985,6 +5211,8 @@ namespace ECSEngine {
 		template ECSENGINE_API void UISystem::DrawPass<UIDrawPhase::Late>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
 		template ECSENGINE_API void UISystem::DrawPass<UIDrawPhase::System>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::ExistsWindowResource(unsigned int window_index, const char* name) const
 		{
 			ResourceIdentifier identifier(name, strlen(name));
@@ -4992,11 +5220,15 @@ namespace ECSEngine {
 			return m_windows[window_index].table.Find<true>(hash, identifier) != -1;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::ExistsWindowResource(unsigned int window_index, Stream<void> identifier_stream) const {
 			ResourceIdentifier identifier(identifier_stream);
 			unsigned int hash = UISystemHash::Hash(identifier);
 			return m_windows[window_index].table.Find<true>(hash, identifier) != -1;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::FillActionDataSystemParameters(ActionData* action_data)
 		{
@@ -5006,6 +5238,8 @@ namespace ECSEngine {
 			action_data->mouse_tracker = m_mouse_tracker;
 			action_data->system = this;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::FillWindowDataAfterFileLoad(Stream<UIWindowSerializedMissingData> data)
 		{
@@ -5059,6 +5293,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::FinalizeColorTheme()
 		{
 			for (size_t index = 0; index < m_windows.size; index++) {
@@ -5068,6 +5304,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::FinalizeElementDescriptor() {
 			for (size_t index = 0; index < m_windows.size; index++) {
 				if (!m_windows[index].descriptors->configured[(unsigned int)UIWindowDrawerDescriptorIndex::Element]) {
@@ -5076,19 +5314,7 @@ namespace ECSEngine {
 			}
 		}
 
-		void UISystem::FinalizeWindowElement(unsigned int window_index)
-		{
-			unsigned int index = m_windows[window_index].dynamic_resources.size;
-			size_t allocation_count = m_windows[window_index].memory_resources.size - m_windows[window_index].dynamic_resources[index].previous_allocation_count;
-			if (allocation_count > 0) {
-				m_windows[window_index].dynamic_resources[index].element_allocations.ReserveNewElements(allocation_count);
-				for (size_t subindex = m_windows[window_index].dynamic_resources[index].previous_allocation_count; subindex < m_windows[window_index].memory_resources.size; subindex++) {
-					m_windows[window_index].dynamic_resources[index].element_allocations.Add(m_windows[window_index].memory_resources[subindex]);
-				}
-			}
-			m_windows[window_index].memory_resources.size = m_windows[window_index].dynamic_resources[index].previous_allocation_count;
-			m_windows[window_index].dynamic_resources.size++;
-		}
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::FinalizeFont() {
 			for (size_t index = 0; index < m_windows.size; index++) {
@@ -5098,6 +5324,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::FinalizeLayout() {
 			for (size_t index = 0; index < m_windows.size; index++) {
 				if (!m_windows[index].descriptors->configured[(unsigned int)UIWindowDrawerDescriptorIndex::Layout]) {
@@ -5105,6 +5333,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::FindCharacterUVFromAtlas(char character) const {
 			if ( character >= '!' && character <= '~')
@@ -5115,6 +5345,8 @@ namespace ECSEngine {
 				return (unsigned int)CharacterUVIndex::Tab;
 			return (unsigned int)CharacterUVIndex::Unknown;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::FindCharacterUVFromAtlas(char character, CharacterType& character_type) const {
 			unsigned int uv_index = character - '!';
@@ -5162,11 +5394,15 @@ namespace ECSEngine {
 			return (unsigned int)CharacterUVIndex::Unknown;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void* UISystem::FindWindowResource(unsigned int window_index, const void* _identifier, unsigned int identifier_size) const {
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
 			unsigned int hash_index = UISystemHash::Hash(identifier);
 			return m_windows[window_index].table.GetValue<true>(hash_index, identifier);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::FixFixedDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer)
 		{
@@ -5178,6 +5414,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::FixBackgroundDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer)
 		{
 			for (size_t index = 0; index < m_background_dockspaces.size; index++) {
@@ -5187,6 +5425,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceIndexFromMouseCoordinates(float2 mouse_position, DockspaceType& dockspace_type) const {
 
@@ -5213,6 +5453,8 @@ namespace ECSEngine {
 			}
 			return 0xFFFFFFFF;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIDockspace* UISystem::GetDockspaceFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type)
 		{
@@ -5247,6 +5489,8 @@ namespace ECSEngine {
 			return pointer;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::GetDockspaceIndexFromWindow(unsigned int window_index, unsigned int& border_index, DockspaceType& type)
 		{
 			auto search_lambda = [&](CapacityStream<UIDockspace>& dockspaces, DockspaceType current_type) {
@@ -5280,33 +5524,21 @@ namespace ECSEngine {
 			return index;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		// MSVC++ bug - that's why NOINLINE is there
 		float2 ECS_NOINLINE UISystem::GetDockspaceRegionPosition(const UIDockspace* dockspace, unsigned int border_index, float offset_mask) const
 		{
 			float2 position = float2(
 				dockspace->transform.position.x + (dockspace->borders[border_index].position * offset_mask),
 				dockspace->transform.position.y + (dockspace->borders[border_index].position * (1.0f - offset_mask))
 			);
-			//if (position.x <= -1.0f || position.x >= 1.0f || position.y <= -1.0f || position.y >= 1.0f) {
-			//	/*char characters1[128];
-			//	char characters2[128];
-
-			//	Stream<char> float1(characters1, 0);
-			//	Stream<char> float2(characters2, 0);
-
-			//	function::ConvertFloatToChars<3>(position.x, float1);
-			//	function::ConvertFloatToChars<3>(position.y, float2);
-
-			//	wchar_t* ptr1 = function::ConvertASCIIToWide(characters1);
-			//	wchar_t* ptr2 = function::ConvertASCIIToWide(characters2);
-
-			//	OutputDebugString(ptr1);
-			//	OutputDebugString(ptr2);*/
-
-			//	__debugbreak();
-			//}
 			return position;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		// MSVC++ bug - that's why NOINLINE is there
 		float2 ECS_NOINLINE UISystem::GetDockspaceRegionScale(const UIDockspace* dockspace, unsigned int border_index, float offset_mask) const
 		{
 			float inverse_mask = 1.0f - offset_mask;
@@ -5318,6 +5550,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceBorderOffset(const UIDockspace* dockspace, unsigned int border_index, float offset_mask) const
 		{
 			return float2(
@@ -5325,6 +5559,8 @@ namespace ECSEngine {
 				dockspace->borders[border_index].position * (1 - offset_mask)
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float UISystem::GetSpaceXSpan(float font_size_x)
 		{
@@ -5335,6 +5571,8 @@ namespace ECSEngine {
 			return (m_font_character_uvs[uv_index + 1].x - m_font_character_uvs[uv_index].x) * font_size_x * atlas_dimensions.x;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float UISystem::GetUnknownCharacterXSpan(float font_size_x)
 		{
 			unsigned int uv_index = FindCharacterUVFromAtlas('\n');
@@ -5344,6 +5582,8 @@ namespace ECSEngine {
 			return (m_font_character_uvs[uv_index + 1].x - m_font_character_uvs[uv_index].x) * font_size_x * atlas_dimensions.x;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceBorderPosition(const UIDockspace* dockspace, unsigned int border_index, float mask) const {
 			float2 border_offset = GetDockspaceBorderOffset(dockspace, border_index, mask);
 			return float2(
@@ -5351,6 +5591,8 @@ namespace ECSEngine {
 				dockspace->transform.position.y + border_offset.y
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetDockspaceBorderScale(const UIDockspace* dockspace, unsigned int border_index, float mask) const {
 			float inverse_mask = 1.0f - mask;
@@ -5360,6 +5602,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(float2 mouse_position, UIDockspace** dockspace, float& mask) const {
 			DockspaceType type;
 			unsigned int floating_dockspace = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
@@ -5368,6 +5612,8 @@ namespace ECSEngine {
 			}
 			return 0xFFFFFFFF;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(
 			float2 mouse_position,
@@ -5388,6 +5634,8 @@ namespace ECSEngine {
 				type
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceBorderFromMouseCoordinates(
 			float2 mouse_position,
@@ -5446,11 +5694,15 @@ namespace ECSEngine {
 			return 0xFFFFFFFF;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float UISystem::GetDockspaceMaskFromType(DockspaceType type) const
 		{
 			const float masks[4] = { 1.0f, 0.0f, 1.0f, 0.0f };
 			return masks[(unsigned int)type];
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceIndex(const UIDockspace* dockspace, DockspaceType type) const
 		{
@@ -5462,6 +5714,8 @@ namespace ECSEngine {
 			};
 			return ((uintptr_t)dockspace - (uintptr_t)dockspaces[(unsigned int)type]) / (sizeof(UIDockspace));
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetFloatingDockspaceIndexFromMouseCoordinates(float2 mouse_position, DockspaceType& dockspace_type) const {
 			const UIDockspace* dockspaces[2] = { m_floating_horizontal_dockspaces.buffer, m_floating_vertical_dockspaces.buffer };
@@ -5477,6 +5731,8 @@ namespace ECSEngine {
 			}
 			return 0xFFFFFFFF;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceIndexFromMouseCoordinatesWithChildren(
 			float2 mouse_position, 
@@ -5551,6 +5807,8 @@ namespace ECSEngine {
 			return 0xFFFFFFFF;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetDockspacesFromParent(
 			unsigned int dockspace_index,
 			DockspaceType dockspace_type,
@@ -5620,6 +5878,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UIDockspace* UISystem::GetFloatingDockspaceFromDockspace(UIDockspace* dockspace, float mask, DockspaceType& floating_type) const
 		{
 			const CapacityStream<UIDockspace>* dockspaces[4] = {
@@ -5659,6 +5919,8 @@ namespace ECSEngine {
 			}
 			return dockspace;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIDockspace* UISystem::GetFloatingDockspaceFromDockspace(
 			UIDockspace* dockspace, 
@@ -5707,11 +5969,15 @@ namespace ECSEngine {
 			return dockspace;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::GetLastRevertCommand(HandlerCommand& command, unsigned int window_index)
 		{
 			auto handler = GetDefaultWindowHandlerData(window_index);
 			return handler->PeekRevertCommand(command);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void* UISystem::GetLastSystemHandlerData()
 		{
@@ -5720,9 +5986,13 @@ namespace ECSEngine {
 			return handler.data;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetMouseDelta(float2 mouse_position) const {
 			return float2(mouse_position.x - m_previous_mouse_position.x, mouse_position.y - m_previous_mouse_position.y);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool horizontal>
 		float2 UISystem::GetTextSpan(
@@ -5773,12 +6043,16 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, const char*, unsigned int, float, float, float);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float UISystem::GetTextSpriteNDC_YScale() const
 		{
 			unsigned int width, height;
 			m_graphics->GetWindowSize(width, height);
 			return m_font_character_uvs[m_descriptors.font.texture_dimensions].y * (m_font_character_uvs[3].y - m_font_character_uvs[0].y) / height;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float UISystem::GetTextSpriteYScale(float font_size_y) const
 		{
@@ -5787,14 +6061,20 @@ namespace ECSEngine {
 			return (m_font_character_uvs[3].y - m_font_character_uvs[0].y) * sprite_scale_factor;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float UISystem::GetTextSpriteSizeToScale(float scale) const
 		{
 			return scale / GetTextSpriteYScale(m_descriptors.font.size) * m_descriptors.font.size;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetTextSpriteSize(float size) const {
 			return { size * ECS_TOOLS_UI_FONT_X_FACTOR, size };
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& regions)
 		{
@@ -5904,6 +6184,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& regions, bool from_lowest_layer_to_highest)
 		{
 			GetVisibleDockspaceRegions(regions);
@@ -5913,6 +6195,8 @@ namespace ECSEngine {
 				regions[regions.size - index - 1] = copy;
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetOuterDockspaceBorderPosition(const UIDockspace* dockspace, BorderType type) const
 		{
@@ -5944,6 +6228,8 @@ namespace ECSEngine {
 			return { 0.0f, 0.0f };
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetOuterDockspaceBorderScale(const UIDockspace* dockspace, BorderType type) const {
 			unsigned int width, height;
 			m_graphics->GetWindowSize(width, height);
@@ -5959,6 +6245,8 @@ namespace ECSEngine {
 			return sizes[is_horizontal];
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetInnerDockspaceBorderPosition(
 			const UIDockspace* dockspace, 
 			unsigned int border_index, 
@@ -5969,6 +6257,8 @@ namespace ECSEngine {
 			float mask = masks[(unsigned int)type];
 			return GetInnerDockspaceBorderPosition(dockspace, border_index, mask);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetInnerDockspaceBorderPosition(
 			const UIDockspace* dockspace,
@@ -5987,6 +6277,8 @@ namespace ECSEngine {
 			};
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetInnerDockspaceBorderScale(
 			const UIDockspace* dockspace,
 			unsigned int border_index,
@@ -5996,6 +6288,8 @@ namespace ECSEngine {
 			float mask = masks[(unsigned int)type];
 			return GetInnerDockspaceBorderScale(dockspace, border_index, mask);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetInnerDockspaceBorderScale(
 			const UIDockspace* dockspace,
@@ -6013,6 +6307,8 @@ namespace ECSEngine {
 			};
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetDockspaceRegionCollapseTriangleTransform(
 			const UIDockspace* dockspace,
 			unsigned int border_index,
@@ -6029,6 +6325,8 @@ namespace ECSEngine {
 			};
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::GetDockspaceRegionFromMouse(float2 mouse_position, UIDockspace** dockspace, DockspaceType& type) const {
 			unsigned int floating_dockspace_index = GetFloatingDockspaceIndexFromMouseCoordinates(mouse_position, type);
 			if (floating_dockspace_index != 0xFFFFFFFF) {
@@ -6043,6 +6341,8 @@ namespace ECSEngine {
 			}
 			return 0xFFFFFFFF;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetDockspaceRegionFromDockspace(
 			float2 mouse_position,
@@ -6096,6 +6396,8 @@ namespace ECSEngine {
 			}
 			return 0xFFFFFFFF;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIDockspace* UISystem::GetDockspaceParent(const UIDockspace* dockspace, DockspaceType type, DockspaceType& parent_type)
 		{
@@ -6154,6 +6456,8 @@ namespace ECSEngine {
 			// if a floating type was gives, return nullptr
 			return nullptr;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIDockspace* UISystem::GetDockspaceParent(
 			const UIDockspace* dockspace, 
@@ -6222,6 +6526,8 @@ namespace ECSEngine {
 			return nullptr;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetDockspaceRegionsFromMouse(
 			float2 mouse_position,
 			UIDockspace** dockspaces,
@@ -6249,6 +6555,8 @@ namespace ECSEngine {
 				);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::GetDockspaceRegionsFromMouse(
 			float2 mouse_position, 
@@ -6301,6 +6609,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceRegionHorizontalRenderSliderPosition(
 			const UIDockspace* dockspace,
 			unsigned int border_index, 
@@ -6312,12 +6622,16 @@ namespace ECSEngine {
 			return GetDockspaceRegionHorizontalRenderSliderPosition(region_position, region_scale);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceRegionHorizontalRenderSliderPosition(float2 region_position, float2 region_scale) const {
 			float2 position;
 			position.x = region_position.x;
 			position.y = region_position.y + region_scale.y - m_descriptors.dockspaces.border_size - m_descriptors.misc.render_slider_horizontal_size;
 			return position;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetDockspaceRegionHorizontalRenderSliderScale(
 			const UIDockspace* dockspace, 
@@ -6328,12 +6642,16 @@ namespace ECSEngine {
 			return GetDockspaceRegionHorizontalRenderSliderScale(region_scale);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceRegionHorizontalRenderSliderScale(float2 region_scale) const {
 			float2 scale;
 			scale.x = region_scale.x - NormalizeHorizontalToWindowDimensions(m_descriptors.dockspaces.border_size) - m_descriptors.element_descriptor.slider_length.x;
 			scale.y = m_descriptors.misc.render_slider_horizontal_size;
 			return scale;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetDockspaceRegionVerticalRenderSliderPosition(
 			const UIDockspace* dockspace,
@@ -6344,6 +6662,8 @@ namespace ECSEngine {
 			float2 region_scale = GetDockspaceRegionScale(dockspace, border_index, dockspace_mask);
 			return GetDockspaceRegionVerticalRenderSliderPosition(region_position, region_scale, dockspace->borders[border_index].draw_region_header);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetDockspaceRegionVerticalRenderSliderPosition(
 			float2 region_position,
@@ -6359,6 +6679,8 @@ namespace ECSEngine {
 			return position;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceRegionVerticalRenderSliderScale(
 			const UIDockspace* dockspace,
 			unsigned int border_index,
@@ -6373,6 +6695,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetDockspaceRegionVerticalRenderSliderScale(float2 region_scale, bool draw_region_header, bool is_horizontal) const {
 			float2 scale;
 			scale.x = m_descriptors.misc.render_slider_vertical_size;
@@ -6386,6 +6710,8 @@ namespace ECSEngine {
 			return scale;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UIDockspace* UISystem::GetDockspace(unsigned int dockspace_index, DockspaceType type)
 		{
 			UIDockspace* dockspaces[] = {
@@ -6397,6 +6723,8 @@ namespace ECSEngine {
 			return &dockspaces[(unsigned int)type][dockspace_index];
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		const UIDockspace* UISystem::GetConstDockspace(UIDockspaceLayer layer) const
 		{
 			const UIDockspace* dockspaces[] = {
@@ -6407,6 +6735,8 @@ namespace ECSEngine {
 			};
 			return &dockspaces[(unsigned int)layer.type][layer.index];
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIDrawerDescriptor UISystem::GetDrawerDescriptor(unsigned int window_index)
 		{
@@ -6429,9 +6759,12 @@ namespace ECSEngine {
 			descriptor.window_index = window_index;
 			descriptor.export_scale = nullptr;
 			descriptor.do_not_initialize_viewport_sliders = false;
+			descriptor.do_not_allocate_buffers = false;
 
 			return descriptor;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::GetFixedDockspaceRegionsFromMouse(float2 mouse_position, UIDockspace** output_dockspaces, DockspaceType* types, unsigned int& count) const
 		{
@@ -6457,10 +6790,14 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		const char* UISystem::GetDrawElementName(unsigned int window_index, unsigned int index) const
 		{
 			return m_windows[window_index].draw_element_names[index];
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		ActionData UISystem::GetFilledActionData(unsigned int window_index)
 		{
@@ -6491,10 +6828,14 @@ namespace ECSEngine {
 			return result;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		size_t UISystem::GetFrameIndex() const
 		{
 			return m_frame_index;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetWindowFromMouse(float2 mouse_position) const {
 			DockspaceType type;
@@ -6509,6 +6850,8 @@ namespace ECSEngine {
 			}
 			return 0xFFFFFFFF;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id) {
 			ActionData action_data;
@@ -6538,6 +6881,8 @@ namespace ECSEngine {
 			m_frame_pacing = function::Select<unsigned int>(!m_execute_events && m_frame_pacing < 2, 2, m_frame_pacing);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::HandleHoverable(float2 mouse_position, unsigned int thread_id, void** buffers, size_t* counts)
 		{
 			ActionData action_data;
@@ -6562,6 +6907,8 @@ namespace ECSEngine {
 			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < 1, 1, m_frame_pacing);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::HandleFocusedWindowGeneral(float2 mouse_position, unsigned int thread_id) {
 			ActionData action_data;
 			action_data.system = this;
@@ -6583,6 +6930,8 @@ namespace ECSEngine {
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
 			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < 2, 2, m_frame_pacing);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::HandleFocusedWindowCleanupGeneral(
 			float2 mouse_position,
@@ -6616,6 +6965,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::HandleFocusedWindowCleanupHoverable(float2 mouse_position, unsigned int thread_id, void* additional_data, ActionAdditionalData additional_data_type)
 		{
 			if (m_focused_window_data.clean_up_call_general) {
@@ -6642,6 +6993,8 @@ namespace ECSEngine {
 				m_focused_window_data.general_handler.action(&action_data);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::HandleDockingGizmoTransparentHover(
 			UIDockspace* dockspace,
@@ -6672,6 +7025,8 @@ namespace ECSEngine {
 				UIDrawPhase::System
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetWindowFromDockspace(float2 mouse_position, unsigned int dockspace_index, DockspaceType type) const {
 			const UIDockspace* dockspaces[] = {
@@ -6716,11 +7071,15 @@ namespace ECSEngine {
 			return 0xFFFFFFFF;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::GetWindowFromName(const char* name) const
 		{
 			size_t name_size = strlen(name);
 			return GetWindowFromName(Stream<char>(name, name_size));
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetWindowFromName(Stream<char> name) const
 		{
@@ -6734,54 +7093,76 @@ namespace ECSEngine {
 			return 0xFFFFFFFF;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		WindowTable* UISystem::GetWindowTable(unsigned int window_index)
 		{
 			return &m_windows[window_index].table;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		const char* UISystem::GetWindowName(unsigned int window_index) const
 		{
 			return m_windows[window_index].name;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UIWindow* UISystem::GetWindowPointer(unsigned int window_index) {
 			return &m_windows[window_index];
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UIDefaultWindowHandler* UISystem::GetDefaultWindowHandlerData(unsigned int window_index)
 		{
 			return (UIDefaultWindowHandler*)m_windows[window_index].default_handler.data;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void* UISystem::GetWindowPrivateHandlerData(unsigned int window_index)
 		{
 			return m_windows[window_index].private_handler.data;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void* UISystem::GetWindowData(unsigned int window_index)
 		{
 			return m_windows[window_index].window_data;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::GetActiveWindowIndexInBorder(const UIDockspace* dockspace, unsigned int border_index) const
 		{
 			return dockspace->borders[border_index].active_window;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::GetWindowIndexFromBorder(const UIDockspace* dockspace, unsigned int border_index) const
 		{
 			return dockspace->borders[border_index].window_indices[GetActiveWindowIndexInBorder(dockspace, border_index)];
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetWindowPosition(unsigned int window_index)
 		{
 			return m_windows[window_index].transform.position;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetWindowScale(unsigned int window_index)
 		{
 			return m_windows[window_index].transform.scale;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::GetWindowRenderRegion(unsigned int window_index)
 		{
@@ -6791,11 +7172,15 @@ namespace ECSEngine {
 			};
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float4 UISystem::GetUVForCharacter(char character) const
 		{
 			unsigned int uv_index = FindCharacterUVFromAtlas(character);
 			return float4(m_font_character_uvs[uv_index * 2].x, m_font_character_uvs[uv_index * 2].y, m_font_character_uvs[uv_index * 2 + 1].x, m_font_character_uvs[uv_index * 2 + 1].y);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		UISpriteTexture* UISystem::GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type)
 		{
@@ -6812,6 +7197,8 @@ namespace ECSEngine {
 				return stream->buffer + before_size;
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::HandleDockingGizmoAdditionOfDockspace(
 			UIDockspace* dockspace_receiver, 
@@ -7456,6 +7843,8 @@ namespace ECSEngine {
 			DestroyDockspace(element_to_add->borders.buffer, element_type);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::HandleSystemHandler()
 		{
 			if (m_handler_stack.GetElementCount() > 0) {
@@ -7485,24 +7874,30 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::HashString(const char* string) const
 		{
 			return UISystemHash::Hash(string);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::HashString(LPCWSTR string) const {
 			return UISystemHash::Hash(string);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::IncrementWindowDynamicResource(unsigned int window_index, const char* name)
 		{
-			Stream<char> name_stream = ToStream(name);
-			for (size_t index = 0; index < m_windows[window_index].dynamic_resources.size; index++) {
-				if (function::CompareStrings(m_windows[window_index].dynamic_resources[index].name, name_stream)) {
-					m_windows[window_index].dynamic_resources[index].reference_count++;
-				}
-			}
+			ResourceIdentifier identifier(name);
+			unsigned int hash = UISystemHash::Hash(identifier);
+			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtr(hash, identifier);
+			resource->reference_count++;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::InitializeDefaultDescriptors()
 		{
@@ -7650,6 +8045,8 @@ namespace ECSEngine {
 
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::InitializeMaterials()
 		{
 #pragma region Materials
@@ -7675,6 +8072,8 @@ namespace ECSEngine {
 #pragma endregion
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UIDrawerDescriptor UISystem::InitializeDrawerDescriptorReferences(unsigned int window_index) const
 		{
 			return UIDrawerDescriptor(
@@ -7684,6 +8083,8 @@ namespace ECSEngine {
 				m_windows[window_index].descriptors->element_descriptor
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::InitializeWindowDraw(unsigned int index, WindowDraw initialize)
 		{
@@ -7700,20 +8101,22 @@ namespace ECSEngine {
 			drawer_descriptor.export_scale = nullptr;
 			
 			initialize(m_windows[index].window_data, &drawer_descriptor);
-
-			/*m_memory->Deallocate(buffers[ECS_TOOLS_UI_SOLID_COLOR]);
-			m_memory->Deallocate(buffers[ECS_TOOLS_UI_TEXT_SPRITE]);
-			m_memory->Deallocate(buffers[ECS_TOOLS_UI_SPRITE]);*/
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::InitializeWindowDraw(const char* window_name, WindowDraw initialize) {
 			InitializeWindowDraw(Stream<char>(window_name, strlen(window_name)), initialize);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::InitializeWindowDraw(Stream<char> window_name, WindowDraw initialize) {
 			unsigned int window_index = GetWindowFromName(window_name);
 			InitializeWindowDraw(window_index, initialize);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::InitializeWindowDefaultHandler(size_t window_index, const UIWindowDescriptor& descriptor)
 		{
@@ -7730,11 +8133,15 @@ namespace ECSEngine {
 			data_initializer(&initializer_data);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::IsEmptyFixedDockspace(const UIDockspace* dockspace) const
 		{
 			bool is_fixed = IsFixedDockspace(dockspace);
 			return is_fixed && dockspace->borders[0].window_indices.size == 0;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::IsFixedDockspace(const UIDockspace* dockspace) const
 		{
@@ -7751,6 +8158,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::IsFixedDockspace(const UIDockspaceBorder* border) const
 		{
 			const UIDockspace* dockspaces[] = {
@@ -7765,6 +8174,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::IsBackgroundDockspace(const UIDockspace* dockspace) const
 		{
@@ -7781,6 +8192,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::IsBackgroundDockspace(const UIDockspaceBorder* border) const
 		{
 			const UIDockspace* dockspaces[] = {
@@ -7796,6 +8209,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::IsPopUpWindow(unsigned int window_index) const
 		{
 			for (size_t index = 0; index < m_pop_up_windows.size; index++) {
@@ -7807,12 +8222,16 @@ namespace ECSEngine {
 			return -1;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::IsPopUpWindow(const UIDockspace* dockspace) const {
 			if (dockspace->borders.size == 2 && dockspace->borders[0].window_indices.size == 1 && !dockspace->borders[0].is_dock) {
 				return IsPopUpWindow(dockspace->borders[0].window_indices[0]);
 			}
 			return -1;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::IsPopUpWindow(const UIDockspaceBorder* border) const
 		{
@@ -7822,6 +8241,8 @@ namespace ECSEngine {
 			}
 			return -1;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		struct AddToUIFileData {
 			void* window_names;
@@ -7833,10 +8254,14 @@ namespace ECSEngine {
 			window_names->Add(parameter->name.buffer);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void AddToUIFileStream(AddToUIFileData* parameter) {
 			Stream<Stream<char>>* window_names = (Stream<Stream<char>>*)parameter->window_names;
 			window_names->Add(parameter->name);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool LoadUIFileBase(UISystem* system, std::ifstream& stream, AddToUIFileData* parameter, void (*handler)(AddToUIFileData*)) {
 			if (stream.good()) {
@@ -7960,6 +8385,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::LoadUIFile(const wchar_t* filename, Stream<const char*>& window_names)
 		{
 			std::ifstream stream(filename, std::ios::in | std::ios::binary);
@@ -7968,6 +8395,8 @@ namespace ECSEngine {
 			data.window_names = &window_names;
 			return LoadUIFileBase(this, stream, &data, AddToUIFileChar);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names)
 		{
@@ -7980,6 +8409,8 @@ namespace ECSEngine {
 			data.window_names = &window_names;
 			return LoadUIFileBase(this, stream, &data, AddToUIFileStream);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::LoadDescriptorFile(const wchar_t* filename)
 		{
@@ -7998,6 +8429,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::MoveDockspaceBorder(UIDockspaceBorder* border, unsigned int border_index, float delta_x, float delta_y) {
 			border[border_index].position += delta_x + delta_y;
@@ -8033,6 +8466,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::MoveDockspaceBorder(UIDockspaceBorder* border, unsigned int border_index, float delta_x, float delta_y, bool ignore_border_checks) {
 			border[border_index].position += delta_x + delta_y;
 			if (border[border_index].is_dock) {
@@ -8053,6 +8488,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetNormalizeMousePosition() const
 		{
 			int2 mouse_position = m_mouse->GetPosition();
@@ -8060,10 +8497,14 @@ namespace ECSEngine {
 			return { static_cast<float>(mouse_position.x) / m_window_os_size.x * 2 - 1.0f,  static_cast<float>(mouse_position.y) / m_window_os_size.y * 2 - 1.0f };
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetSquareScale(float y_scale) const
 		{
 			return { NormalizeHorizontalToWindowDimensions(y_scale), y_scale };
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float UISystem::NormalizeHorizontalToWindowDimensions(float value) const
 		{
@@ -8071,6 +8512,8 @@ namespace ECSEngine {
 			m_graphics->GetWindowSize(width, height);
 			return value * height / width;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::NormalizeHorizontalToWindowDimensions(float* values, size_t count) const
 		{
@@ -8082,6 +8525,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::NormalizeHorizontalToWindowDimensions(Stream<float>& values) const
 		{
 			unsigned int width, height;
@@ -8092,6 +8537,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float UISystem::NormalizeVerticalToWindowDimensions(float value) const
 		{
 			unsigned int width, height;
@@ -8099,12 +8546,16 @@ namespace ECSEngine {
 			return value * width / height;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UIActionHandler UISystem::PeekSystemHandler() const
 		{
 			UIActionHandler handler;
 			ECS_ASSERT(!m_handler_stack.Peek(handler), "Nothing to peek");
 			return handler;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::PopSystemHandler()
 		{
@@ -8115,6 +8566,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::PopUpSystemHandler(
 			const char* name, 
@@ -8144,6 +8597,8 @@ namespace ECSEngine {
 			PushSystemHandler(handler);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::PushBackgroundDockspace()
 		{
 			UIDockspaceLayer old_layers[128];
@@ -8161,6 +8616,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::PushActiveDockspaceRegion(Stream<UIVisibleDockspaceRegion>& regions) const
 		{
 			for (int64_t index = regions.size - 1; index >= 0; index--) {
@@ -8173,6 +8630,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::PushSystemHandler(UIActionHandler handler)
 		{
 			void* data = nullptr;
@@ -8184,6 +8643,8 @@ namespace ECSEngine {
 
 			m_handler_stack.Push(handler);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ReadFontDescriptionFile(const char* filename) {
 			// loading font uv descriptor;
@@ -8223,6 +8684,8 @@ namespace ECSEngine {
 			m_resource_manager->UnloadTextFileTemporary(handle);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetNewFocusedDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, DockspaceType type) {
 			const float masks[4] = { 1.0f, 0.0f, 1.0f, 0.0f };
 			m_focused_window_data.dockspace = dockspace;
@@ -8230,6 +8693,8 @@ namespace ECSEngine {
 			m_focused_window_data.mask = masks[(unsigned int)type];
 			m_focused_window_data.type = type;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SearchAndSetNewFocusedDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, DockspaceType type)
 		{
@@ -8252,6 +8717,8 @@ namespace ECSEngine {
 				SetNewFocusedDockspaceRegion(dockspace, border_index, type);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetNewFocusedDockspace(UIDockspace* dockspace, DockspaceType type) {
 			if (!IsBackgroundDockspace(dockspace)) {
@@ -8284,10 +8751,14 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetSolidColorRenderState()
 		{
 			SetSolidColorRenderState(m_graphics->GetContext());
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSolidColorRenderState(unsigned int thread_id) {
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
@@ -8297,6 +8768,8 @@ namespace ECSEngine {
 #endif
 			SetSolidColorRenderState(context);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSolidColorRenderState(GraphicsContext* context) {
 			BindVertexShader(m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], context);
@@ -8308,10 +8781,14 @@ namespace ECSEngine {
 			BindTopology(topology, context);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetTextSpriteRenderState() {
 			GraphicsContext* context = m_graphics->GetContext();
 			SetTextSpriteRenderState(m_graphics->GetContext());
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetTextSpriteRenderState(unsigned int thread_id) {
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
@@ -8321,6 +8798,8 @@ namespace ECSEngine {
 #endif
 			SetTextSpriteRenderState(m_graphics->GetContext());
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetTextSpriteRenderState(GraphicsContext* context) {
 			m_graphics->EnableAlphaBlending(context);
@@ -8338,10 +8817,14 @@ namespace ECSEngine {
 			BindTopology(topology, context);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetSpriteRenderState() {
 			GraphicsContext* context = m_graphics->GetContext();
 			SetSpriteRenderState(context);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSpriteRenderState(unsigned int thread_id) {
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
@@ -8351,6 +8834,8 @@ namespace ECSEngine {
 #endif
 			SetSpriteRenderState(context);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSpriteRenderState(GraphicsContext* context) {
 			m_graphics->EnableAlphaBlending(context);
@@ -8365,6 +8850,8 @@ namespace ECSEngine {
 			Topology topology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			BindTopology(topology, context);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSprite(
 			UIDockspace* dockspace,
@@ -8390,6 +8877,8 @@ namespace ECSEngine {
 			);
 			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSprite(
 			UIDockspace* dockspace,
@@ -8417,6 +8906,8 @@ namespace ECSEngine {
 			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetVertexColorSprite(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
@@ -8442,6 +8933,8 @@ namespace ECSEngine {
 			);
 			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetVertexColorSprite(
 			UIDockspace* dockspace, 
@@ -8469,6 +8962,8 @@ namespace ECSEngine {
 			SetSpriteTextureToDraw(dockspace, border_index, texture, UISpriteType::Normal, phase);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetSpriteCluster(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
@@ -8487,6 +8982,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetSpriteTextureToDraw(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
@@ -8498,6 +8995,8 @@ namespace ECSEngine {
 			UISpriteTexture* next_texture = GetNextSpriteTextureToDraw(dockspace, border_index, phase, type);
 			CreateSpriteTexture(_texture, next_texture);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetSpriteTextureToDraw(
 			UIDockspace* dockspace,
@@ -8511,6 +9010,8 @@ namespace ECSEngine {
 			*next_texture = texture;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetPopUpWindowPosition(unsigned int window_index, float2 new_position)
 		{
 			unsigned int border_index;
@@ -8519,6 +9020,8 @@ namespace ECSEngine {
 
 			SetDockspacePosition(dockspace, new_position);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetPopUpWindowScale(unsigned int window_index, float2 new_scale)
 		{
@@ -8531,21 +9034,29 @@ namespace ECSEngine {
 			dockspace->transform.scale = new_scale;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetDockspacePosition(UIDockspace* dockspace, float2 new_position)
 		{
 			dockspace->transform.position = new_position;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetDockspaceScale(UIDockspace* dockspace, float2 new_scale)
 		{
 			dockspace->transform.scale = new_scale;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetViewport(float2 position, float2 scale, GraphicsContext* context)
 		{
 			float2 half_scale = { scale.x * 0.5f, scale.y * 0.5f };
 			SetViewport(context, position, half_scale);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetViewport(GraphicsContext* context, float2 position, float2 half_scale)
 		{
@@ -8562,6 +9073,8 @@ namespace ECSEngine {
 				context
 			);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowActions(unsigned int index, const UIWindowDescriptor& descriptor) {
 			void* window_data = descriptor.window_data;
@@ -8588,14 +9101,20 @@ namespace ECSEngine {
 			m_windows[index].destroy_handler = { descriptor.destroy_action, destroy_data, (unsigned int)descriptor.destroy_action_data_size };
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowActions(const char* name, const UIWindowDescriptor& descriptor) {
 			SetWindowActions(Stream<char>(name, strlen(name)), descriptor);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowActions(Stream<char> name, const UIWindowDescriptor& descriptor) {
 			unsigned int window_index = GetWindowFromName(name);
 			SetWindowActions(window_index, descriptor);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowDestroyAction(unsigned int index, UIActionHandler handler)
 		{
@@ -8608,16 +9127,22 @@ namespace ECSEngine {
 			m_windows[index].destroy_handler.action = handler.action;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowDestroyAction(const char* name, UIActionHandler handler)
 		{
 			SetWindowDestroyAction(ToStream(name), handler);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowDestroyAction(Stream<char> name, UIActionHandler handler) {
 			unsigned int window_index = GetWindowFromName(name);
 			ECS_ASSERT(window_index != -1);
 			SetWindowDestroyAction(window_index, handler);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowPrivateAction(unsigned int index, UIActionHandler handler)
 		{
@@ -8630,9 +9155,13 @@ namespace ECSEngine {
 			m_windows[index].private_handler.data_size = handler.data_size;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowPrivateAction(const char* name, UIActionHandler handler) {
 			SetWindowPrivateAction(ToStream(name), handler);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowPrivateAction(Stream<char> name, UIActionHandler handler) {
 			unsigned int window_index = GetWindowFromName(name);
@@ -8640,11 +9169,15 @@ namespace ECSEngine {
 			SetWindowPrivateAction(window_index, handler);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowName(unsigned int window_index, const char* name)
 		{
 			size_t name_size = strlen(name);
 			SetWindowName(window_index, name, name_size);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowName(unsigned int window_index, const char* name, size_t name_size) {
 			if (m_windows[window_index].name_vertex_buffer.buffer != nullptr) {
@@ -8681,19 +9214,27 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowMaxZoom(unsigned int window_index, float max_zoom)
 		{
 			m_windows[window_index].max_zoom = max_zoom;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowMinZoom(unsigned int window_index, float min_zoom) {
 			m_windows[window_index].min_zoom = min_zoom;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetWindowOSSize(uint2 new_size)
 		{
 			m_window_os_size = new_size;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::StoreElementDrawName(unsigned int window_index, const char* name)
 		{
@@ -8704,11 +9245,15 @@ namespace ECSEngine {
 			return m_windows[window_index].draw_element_names.Add((const char*)allocation);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::TranslateDockspace(UIDockspace* dockspace, float2 translation)
 		{
 			dockspace->transform.position.x += translation.x;
 			dockspace->transform.position.y += translation.y;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RegisterFocusedWindowClickableAction(
 			float2 position, 
@@ -8727,6 +9272,8 @@ namespace ECSEngine {
 			m_focused_window_data.ChangeClickableHandler(position, scale, action, allocation, data_size, phase);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RegisterInputLayouts() {
 			m_resources.input_layouts[ECS_TOOLS_UI_SOLID_COLOR] = m_graphics->ReflectVertexShaderInput(
 				m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], 
@@ -8742,16 +9289,22 @@ namespace ECSEngine {
 			m_resources.input_layouts.size = m_descriptors.materials.count;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RegisterPixelShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.pixel_shaders.size < m_resources.pixel_shaders.capacity);
 			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_graphics->CreatePixelShader(ToStream(filename));
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RegisterPixelShaders() {
 			RegisterPixelShader(SOLID_COLOR_PIXEL_SHADER);
 			RegisterPixelShader(SPRITE_PIXEL_SHADER);
 			RegisterPixelShader(TEXT_SPRITE_PIXEL_SHADER);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RegisterSamplers()
 		{
@@ -8766,12 +9319,16 @@ namespace ECSEngine {
 			m_resources.texture_samplers.size = m_descriptors.materials.sampler_count;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RegisterWindowResource(size_t window_index, void* data, const void* _identifier, unsigned int identifier_size)
 		{
 			unsigned int hash_index = UISystemHash::Hash(_identifier, identifier_size);
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
 			m_windows[window_index].table.Insert(hash_index, data, identifier);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ReleaseWindowResource(size_t window_index, const void* _identifier, unsigned int identifier_size)
 		{
@@ -8780,16 +9337,22 @@ namespace ECSEngine {
 			m_windows[window_index].table.Erase<true>(hash_index, identifier);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RegisterVertexShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.vertex_shaders.size < m_resources.vertex_shaders.capacity);
 			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_graphics->CreateVertexShader(ToStream(filename));
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RegisterVertexShaders() {
 			RegisterVertexShader(SOLID_COLOR_VERTEX_SHADER);
 			RegisterVertexShader(SPRITE_VERTEX_SHADER);
 			RegisterVertexShader(TEXT_SPRITE_VERTEX_SHADER);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RemoveDockspace(unsigned int dockspace_index, DockspaceType dockspace_type) {
 			switch (dockspace_type) {
@@ -8808,6 +9371,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveDockspace(unsigned int dockspace_index, CapacityStream<UIDockspace>& dockspace_buffer) {
 			ECS_ASSERT(dockspace_index >= 0 && dockspace_index < dockspace_buffer.size);
 
@@ -8824,6 +9389,8 @@ namespace ECSEngine {
 			dockspace_buffer.size--;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveWindowMemoryResource(unsigned int window_index, const void* buffer)
 		{
 			for (size_t index = 0; index < m_windows[window_index].memory_resources.size; index++) {
@@ -8835,41 +9402,49 @@ namespace ECSEngine {
 			ECS_ASSERT(false);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveWindowMemoryResource(unsigned int window_index, unsigned int buffer_index)
 		{
 			m_windows[window_index].memory_resources.RemoveSwapBack(buffer_index);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveWindowDynamicResource(unsigned int window_index, const char* name)
 		{
-			Stream<char> name_stream = ToStream(name);
-			for (size_t index = 0; index < m_windows[window_index].dynamic_resources.size; index++) {
-				if (function::CompareStrings(m_windows[window_index].dynamic_resources[index].name, name_stream)) {
-					RemoveWindowDynamicResource(window_index, index);
-					return;
-				}
-			}
-			ECS_ASSERT(false);
+			ResourceIdentifier identifier(name);
+			unsigned int hash = UISystemHash::Hash(identifier);
+			unsigned int index = m_windows[window_index].dynamic_resources.Find(hash, identifier);
+			ECS_ASSERT(index != -1);
+			RemoveWindowDynamicResource(window_index, index);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RemoveWindowDynamicResource(unsigned int window_index, unsigned int index)
 		{
-			ECS_ASSERT(index < m_windows[window_index].dynamic_resources.size);
-			if (m_windows[window_index].dynamic_resources[index].element_allocations.size > 0) {
-				// cannot simply bump back those allocations because if some are deleted before it can affect
-				// the order in which they were stored, invalidating the index reference
-				for (size_t subindex = 0; subindex < m_windows[window_index].dynamic_resources[index].element_allocations.size; subindex++) {
-					m_memory->Deallocate(m_windows[window_index].dynamic_resources[index].element_allocations[subindex]);
-				}
-				m_windows[window_index].dynamic_resources[index].element_allocations.FreeBuffer();
-			}
-			ResourceIdentifier identifier(m_windows[window_index].dynamic_resources[index].name);
-			unsigned int hash = UISystemHash::Hash(identifier);
+			const UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
 
-			m_windows[window_index].table.Erase(hash, identifier);
-			m_memory->Deallocate(m_windows[window_index].dynamic_resources[index].name.buffer);
-			m_windows[window_index].dynamic_resources.RemoveSwapBack(index);
+			// cannot simply bump back those allocations because if some are deleted before it can affect
+			// the order in which they were stored, invalidating the index reference
+			for (size_t subindex = 0; subindex < resource->element_allocations.size; subindex++) {
+				const void* buffer = resource->element_allocations[subindex];
+				m_memory->Deallocate(buffer);
+				RemoveWindowMemoryResource(window_index, buffer);
+			}
+			for (size_t subindex = 0; subindex < resource->table_resources.size; subindex++) {
+				ResourceIdentifier identifier = resource->table_resources[subindex];
+				unsigned int hash = UISystemHash::Hash(identifier);
+				m_windows[window_index].table.Erase(hash, identifier);
+			}
+
+			// The element allocations contains the starting coallesced allocation
+			m_memory->Deallocate(resource->element_allocations.buffer);
+			m_windows[window_index].dynamic_resources.EraseFromIndex(index);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RemoveUnrestoredWindows()
 		{
@@ -8894,18 +9469,26 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveHoverableHandler(UIDockspace* dockspace, unsigned int border_index)
 		{
 			dockspace->borders[border_index].hoverable_handler.position_x.size--;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveClickableHandler(UIDockspace* dockspace, unsigned int border_index) {
 			dockspace->borders[border_index].clickable_handler.position_x.size--;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RemoveGeneralHandler(UIDockspace* dockspace, unsigned int border_index) {
 			dockspace->borders[border_index].general_handler.position_x.size--;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type)
 		{
@@ -8916,6 +9499,8 @@ namespace ECSEngine {
 				dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type].size--;
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::ResizeDockspace(
 			unsigned int dockspace_index, 
@@ -9348,6 +9933,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ResizeDockspaceUnguarded(
 			unsigned int dockspace_index,
 			float delta_scale,
@@ -9586,10 +10173,14 @@ namespace ECSEngine {
 		
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::RestoreWindow(const char* window_name, const UIWindowDescriptor& descriptor)
 		{
 			RestoreWindow(ToStream(window_name), descriptor);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RestoreWindow(Stream<char> window_name, const UIWindowDescriptor& descriptor)
 		{
@@ -9602,6 +10193,8 @@ namespace ECSEngine {
 			SetWindowActions(window_index, descriptor);
 			InitializeWindowDefaultHandler(window_index, descriptor);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RepairDockspaceReferences(unsigned int dockspace_index, DockspaceType type, unsigned int new_index)
 		{
@@ -9678,6 +10271,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		template<bool destroy_dockspace_if_last>
 		void UISystem::RemoveWindowFromDockspaceRegion(UIDockspace* dockspace, DockspaceType type, unsigned int border_index, unsigned int window_index) {
 			dockspace->borders[border_index].window_indices.RemoveSwapBack(window_index);
@@ -9698,6 +10293,8 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, UISystem::RemoveWindowFromDockspaceRegion, UIDockspace*, DockspaceType, unsigned int, unsigned int);
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool destroy_windows>
 		void UISystem::RemoveDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, DockspaceType type) {
@@ -9810,6 +10407,8 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, UISystem::RemoveDockspaceBorder, UIDockspace*, unsigned int, DockspaceType);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		template<bool destroy_windows>
 		void UISystem::RemoveFixedDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, DockspaceType type) {
 			ECS_ASSERT(border_index < dockspace->borders.size - 1 && dockspace->borders.size > 1);
@@ -9885,6 +10484,8 @@ namespace ECSEngine {
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, UISystem::RemoveFixedDockspaceBorder, UIDockspace*, unsigned int, DockspaceType);
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		bool UISystem::RepairWindowReferences(unsigned int window_index)
 		{
 			DockspaceType removed_type;
@@ -9899,7 +10500,7 @@ namespace ECSEngine {
 			auto lambda_search = [&continue_searching, swapped_index, window_index](CapacityStream<UIDockspace>& dockspaces) {
 				for (size_t index = 0; continue_searching && index < dockspaces.size; index++) {
 					UIDockspace* dockspace = &dockspaces[index];
-					for (size_t subindex = 0; subindex < dockspaces[index].borders.size; subindex++) {
+					for (size_t subindex = 0; subindex < dockspaces[index].borders.size - 1 && continue_searching; subindex++) {
 						if (!dockspace->borders[subindex].is_dock) {
 							for (size_t index_to_search = 0; index_to_search < dockspace->borders[subindex].window_indices.size; index_to_search++) {
 								if (dockspace->borders[subindex].window_indices[index_to_search] == swapped_index) {
@@ -9919,6 +10520,8 @@ namespace ECSEngine {
 			// sometimes the last one may already be deleted if using delete non referenced
 			return !continue_searching;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ReplaceDockspace(UIDockspace* dockspace, unsigned int border_index, DockspaceType type)
 		{
@@ -10048,6 +10651,8 @@ namespace ECSEngine {
 
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UISystem::SearchDockspaceForChildrenDockspaces(
 			float2 mouse_position,
 			unsigned int dockspace_index,
@@ -10125,6 +10730,8 @@ namespace ECSEngine {
 			return 0xFFFFFFFF;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetActiveWindow(unsigned int window_index) {
 			DockspaceType type;
 			unsigned int border_index;
@@ -10144,6 +10751,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetActiveWindow(const char* name)
 		{
 			unsigned int window_index = GetWindowFromName(name);
@@ -10151,6 +10760,8 @@ namespace ECSEngine {
 				SetActiveWindow(window_index);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetActiveWindow(Stream<char> name)
 		{
@@ -10160,20 +10771,28 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetCleanupGeneralHandler()
 		{
 			m_focused_window_data.clean_up_call_general = true;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetCleanupHoverableHandler()
 		{
 			m_focused_window_data.clean_up_call_hoverable = true;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetSystemDrawRegion(UIElementTransform transform)
 		{
 			m_system_draw_region = transform;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::SetTextureEvictionCount(unsigned int frame_count)
 		{
@@ -10181,10 +10800,14 @@ namespace ECSEngine {
 			m_texture_evict_count = 0;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetColorTheme(Color color)
 		{
 			m_descriptors.color_theme.SetNewTheme(color);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::UpdateDockspace(unsigned int index, DockspaceType type)
 		{
@@ -10314,11 +10937,15 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::UpdateDockspaceHierarchy() {
 			for (size_t index = 0; index < m_dockspace_layers.size; index++) {
 				UpdateDockspace(m_dockspace_layers[index].index, m_dockspace_layers[index].type);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::WriteDescriptorsFile(const wchar_t* filename) const
 		{
@@ -10331,6 +10958,8 @@ namespace ECSEngine {
 
 			return stream.good();
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::WriteUIFile(const wchar_t* filename, CapacityStream<char>& error_message) const
 		{
@@ -10612,6 +11241,8 @@ namespace ECSEngine {
 #undef SECOND_ERROR
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		// ---------------------------------------------------- Thread Task -------------------------------------------------------
 
 		void DrawDockspaceRegionThreadTask(unsigned int thread_id, World* world, void* data) {
@@ -10635,6 +11266,8 @@ namespace ECSEngine {
 			}
 #endif
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void ProcessTexture(unsigned int thread_index, World* world, void* _data) {
 			ProcessTextureData* data = (ProcessTextureData*)_data;
@@ -10669,7 +11302,11 @@ namespace ECSEngine {
 #pragma region Actions
 		// ----------------------------------------------------------- Actions ------------------------------------------------
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void SkipAction(ActionData* action_data) {}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void PopUpWindowSystemHandler(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -10731,6 +11368,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void CloseXAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -10739,6 +11378,8 @@ namespace ECSEngine {
 			system->RemoveWindowFromDockspaceRegion(dockspace, dockspace_type, border_index, data->window_in_border_index);
 			system->DestroyWindow(window_index);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void CloseXBorderClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -10755,6 +11396,8 @@ namespace ECSEngine {
 				system->RemoveDockspaceBorder(dockspace, border_index, dockspace_type);
 			}		
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void CloseXBorderHoverableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -10787,12 +11430,16 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void CollapseTriangleClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			if (mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale))
 				dockspace->borders[border_index].draw_region_header = 1 - dockspace->borders[border_index].draw_region_header;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void DefaultHoverableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -10833,6 +11480,8 @@ namespace ECSEngine {
 				);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void DefaultTextHoverableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -10956,6 +11605,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void DefaultVertexColorHoverableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -10984,6 +11635,8 @@ namespace ECSEngine {
 			);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void DefaultClickableAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -11004,6 +11657,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void DoubleClickAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -11028,6 +11683,8 @@ namespace ECSEngine {
 				}
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void DragDockspaceAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -11255,6 +11912,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void RegionHeaderAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -11421,6 +12080,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void TextTooltipHoverable(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
@@ -11428,6 +12089,8 @@ namespace ECSEngine {
 			system->m_focused_window_data.always_hoverable = true;
 			system->DrawToolTipSentence(action_data, data->characters, &data->base);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void TooltipHoverable(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -11499,6 +12162,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void TextTooltipAlignTextToRight(Stream<char>& current_text, const char* new_text, size_t total_characters)
 		{
 			size_t next_text_length = strlen(new_text);
@@ -11512,11 +12177,15 @@ namespace ECSEngine {
 			current_text[current_text.size] = '\0';
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void ReleaseLockedWindow(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			system->m_focused_window_data.locked_window--;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void ConvertASCIIToWideAction(ActionData* action_data)
 		{
@@ -11526,6 +12195,8 @@ namespace ECSEngine {
 			size_t size = strlen(data->ascii);
 			function::ConvertASCIIToWide(data->wide, data->ascii, size);
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void ConvertASCIIToWideStreamAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -11537,6 +12208,8 @@ namespace ECSEngine {
 			function::ConvertASCIIToWide(data->wide->buffer, data->ascii, size);
 			data->wide->size = size;
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void DefaultHoverableWithToolTip(ActionData* action_data)
 		{
@@ -11554,10 +12227,14 @@ namespace ECSEngine {
 			TextTooltipHoverable(action_data);
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Events
 		// ---------------------------------------------------------- Events -------------------------------------------------------
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void MoveDockspaceBorderEvent(
 			UISystem* system,
@@ -11635,6 +12312,8 @@ namespace ECSEngine {
 			}
 
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void ResizeDockspaceEvent(
 			UISystem* system,
@@ -11836,6 +12515,8 @@ namespace ECSEngine {
 
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void HoverOuterDockspaceBorderEvent(
 			UISystem* system,
 			void* parameter,
@@ -11936,6 +12617,8 @@ namespace ECSEngine {
 
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void HoverInnerDockspaceBorderEvent(
 			UISystem* system,
 			void* parameter,
@@ -11975,6 +12658,8 @@ namespace ECSEngine {
 			system->DeallocateEventData();
 			system->m_event = SkipEvent;
 		}
+		
+		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void SkipEvent(
 			UISystem* system,
@@ -11994,6 +12679,9 @@ namespace ECSEngine {
 				system->m_application->ChangeCursor(CursorType::Default);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 	}

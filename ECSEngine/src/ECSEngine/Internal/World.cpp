@@ -1,7 +1,15 @@
+// ECS_REFLECT
 #include "ecspch.h"
 #include "World.h"
 
 namespace ECSEngine {
+
+	struct ECS_REFLECT TO_BE_REFLECT {
+		CapacityStream<float2> type;
+		float3* ptr;
+		float* other_ptr;
+		CapacityStream<double> dob;
+	};
 
 	World::World() : memory(nullptr), entity_manager(nullptr), system_manager(nullptr), task_manager(nullptr),
 		resource_manager(nullptr) {};

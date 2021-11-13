@@ -1,15 +1,15 @@
 #pragma once
 #include <stdint.h>
 
-constexpr size_t SLEEP_AMOUNT[] = { 14, 12, 10, 8 };
+constexpr size_t SLEEP_AMOUNT[] = { 16, 12, 8, 4 };
 constexpr size_t GLOBAL_MEMORY_COUNT = 20'000'000;
 constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 4'000'000;
 constexpr size_t UI_RESIZABLE_ARENA_INITIAL_MEMORY = 15'000'000;
 constexpr size_t UI_RESIZABLE_ARENA_INITIAL_BLOCK_COUNT = 512;
 constexpr size_t UI_RESIZABLE_ARENA_ALLOCATOR_INITIAL_COUNT = 8;
 constexpr size_t UI_RESIZABLE_ARENA_ALLOCATOR_RESERVE_COUNT = 4;
-constexpr size_t UI_RESIZABLE_ARENA_RESERVE_MEMORY = 2'000'000;
-constexpr size_t UI_RESIZABLE_ARENA_RESERVE_BLOCK_COUNT = 128;
+constexpr size_t UI_RESIZABLE_ARENA_RESERVE_MEMORY = 5'000'000;
+constexpr size_t UI_RESIZABLE_ARENA_RESERVE_BLOCK_COUNT = 512;
 
 constexpr const wchar_t FONT_PATH[] = L"Resources/Font.tiff";
 constexpr const char FONT_DESCRIPTOR_PATH[] = "Resources/FontDescription_v2.txt";

@@ -6,6 +6,7 @@
 #include "Inspector.h"
 #include "..\Editor\EditorPalette.h"
 #include "..\Editor\EditorEvent.h"
+#include "ECSEngineUtilities.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -44,6 +45,11 @@ constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_COPIED_FILE_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
 
+constexpr unsigned int FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT = 1 << 0;
+constexpr unsigned int FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES = 1 << 1;
+constexpr unsigned int FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES = 1 << 2;
+constexpr unsigned int FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES = 1 << 3;
+
 constexpr int COLOR_CUT_ALPHA = 90;
 
 enum FILE_RIGHT_CLICK_INDEX {
@@ -71,7 +77,7 @@ enum DESELECTION_RIGHT_CLICK_INDEX {
 	DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES
 };
 
-using Hash = HashFunctionAdditiveString;
+using Hash = HashFunctionMultiplyString;
 
 void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 	// Deallocate every string stored
@@ -99,7 +105,7 @@ void FileExplorerResetCopiedFiles(FileExplorerData* data) {
 		data->selected_files.allocator->Deallocate(data->copied_files.buffer);
 		data->copied_files.size = 0;
 	}
-	data->are_copied_files_cut = false;
+	data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
 }
 
 void FileExplorerAllocateSelectedFile(FileExplorerData* data, Stream<wchar_t> path) {
@@ -188,7 +194,7 @@ void FileExplorerHandleShiftSelection(EditorState* editor_state, unsigned int in
 	if (explorer_data->starting_shift_index > index || explorer_data->starting_shift_index == -1) {
 		explorer_data->starting_shift_index = index;
 	}
-	explorer_data->get_selected_files_from_indices = true;
+	explorer_data->flags = function::SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES);
 }
 
 void FileExplorerSelectableBase(ActionData* action_data) {
@@ -206,7 +212,12 @@ void FileExplorerSelectableBase(ActionData* action_data) {
 				FileExplorerHandleShiftSelection(data->editor_state, data->index);
 			}
 			else {
-				FileExplorerSetNewFile(data->editor_state, data->selection, data->index);
+				// Check to see if the file is already selected - if it is, then do nothing in order for 
+				// the drag to work correctly
+				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
+				if (function::IsStringInStream(data->selection, selected_files) == -1) {
+					FileExplorerSetNewFile(data->editor_state, data->selection, data->index);
+				}
 			}
 		}
 	}
@@ -238,10 +249,15 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 			}
 			else {
 				FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
-				FileExplorerResetSelectedFiles(explorer_data);
-				FileExplorerAllocateSelectedFile(explorer_data, data->selection);
-				ChangeInspectorToFolder(data->editor_state, data->selection);
-				FileExplorerSetShiftIndices(explorer_data, data->index);
+				// Check to see if the directory is already selected - if it is, then do nothing in order for 
+				// the drag to work correctly
+				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
+				if (function::IsStringInStream(data->selection, selected_files) == -1) {
+					FileExplorerResetSelectedFiles(explorer_data);
+					FileExplorerAllocateSelectedFile(explorer_data, data->selection);
+					ChangeInspectorToFolder(data->editor_state, data->selection);
+					FileExplorerSetShiftIndices(explorer_data, data->index);
+				}
 			}
 		}
 	}
@@ -294,7 +310,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 	Stream<unsigned int> invalid_files(_invalid_files, 0);
 
 	// For each path, copy it to the current directory or cut it
-	if (data->are_copied_files_cut) {
+	if (function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT)) {
 		for (size_t index = 0; index < data->copied_files.size; index++) {
 			bool is_directory = IsFolder(data->copied_files[index]);
 
@@ -303,7 +319,13 @@ void FileExplorerPasteElements(ActionData* action_data) {
 				current_success = FolderCut(data->copied_files[index], data->current_directory);
 			}
 			else {
-				current_success = FileCut(data->copied_files[index], data->current_directory, true);
+				ECS_FILE_COPY_CODE code = FileCut(data->copied_files[index], data->current_directory, true);
+				if (code == ECS_FILE_COPY_SUCCESS) {
+					current_success = true;
+				}
+				else {
+					current_success = false;
+				}
 			}
 
 			if (!current_success) {
@@ -320,7 +342,13 @@ void FileExplorerPasteElements(ActionData* action_data) {
 				current_success = FolderCopy(data->copied_files[index], data->current_directory);
 			}
 			else {
-				current_success = FileCopy(data->copied_files[index], data->current_directory, true);
+				ECS_FILE_COPY_CODE code = FileCopy(data->copied_files[index], data->current_directory, true);
+				if (code == ECS_FILE_COPY_SUCCESS) {
+					current_success = true;
+				}
+				else {
+					current_success = false;
+				}
 			}
 
 			if (!current_success) {
@@ -346,7 +374,6 @@ void FileExplorerPasteElements(ActionData* action_data) {
 		for (size_t index = 0; index < invalid_files.size; index++) {
 			error_message.Add('\n');
 			function::ConvertWideCharsToASCII(data->copied_files[invalid_files[index]], error_message);
-			error_message.size += data->copied_files[invalid_files[index]].size;
 		}
 
 		EditorSetError(editor_state, error_message);
@@ -354,6 +381,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 		// Also reset the copied files
 		FileExplorerResetCopiedFiles(data);
 	}
+	data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
 
 	_freea(invalid_files.buffer);
 }
@@ -379,7 +407,7 @@ void FileExplorerCopySelection(ActionData* action_data) {
 		data->copied_files[index].Copy(data->selected_files[index]);
 	}
 
-	data->are_copied_files_cut = false;
+	data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
 }
 
 void FileExplorerCutSelection(ActionData* action_data) {
@@ -387,7 +415,7 @@ void FileExplorerCutSelection(ActionData* action_data) {
 
 	FileExplorerData* data = (FileExplorerData*)_data;
 	FileExplorerCopySelection(action_data);
-	data->are_copied_files_cut = true;
+	data->flags = function::SetFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
 }
 
 void FileExplorerDeleteSelection(ActionData* action_data) {
@@ -440,7 +468,6 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		for (size_t index = 0; index < invalid_files.size; index++) {
 			error_message.Add('\n');
 			function::ConvertWideCharsToASCII(data->selected_files[invalid_files[index]], error_message);
-			error_message.size += data->selected_files[invalid_files[index]].size;
 		}
 
 		CreateErrorMessageWindow(system, error_message);
@@ -488,6 +515,7 @@ struct ForEachData {
 	UIDrawer<false>* drawer;
 	UIDrawConfig* config;
 	unsigned int element_count;
+	CapacityStream<wchar_t>* mouse_element_path;
 	FileExplorerSelectFromIndex select_function;
 };
 
@@ -501,7 +529,7 @@ bool FileExplorerIsElementSelected(FileExplorerData* data, Path path) {
 }
 
 bool FileExplorerIsElementCut(FileExplorerData* data, Path path) {
-	return data->are_copied_files_cut && function::IsStringInStream(path, data->copied_files) != (unsigned int)-1;
+	return function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT) && function::IsStringInStream(path, data->copied_files) != (unsigned int)-1;
 }
 
 void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, SelectableData* _data, bool is_selected, bool is_folder) {
@@ -515,7 +543,7 @@ void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, Select
 	char* allocation = (char*)data->allocator.Allocate((path_filename.size + 1) * sizeof(char), alignof(char));
 	CapacityStream<char> ascii_stream(allocation, 0, 512);
 	function::ConvertWideCharsToASCII(path_filename, ascii_stream);
-	ascii_stream[path_filename.size] = '\0';
+	ascii_stream[ascii_stream.size] = '\0';
 	
 	// Draw the stem
 	path_filename.size -= extension_size;
@@ -675,7 +703,7 @@ void FilterActive(ActionData* action_data) {
 	char temp_characters[512];
 	CapacityStream<char> ascii_path(temp_characters, 0, 512);
 	function::ConvertWideCharsToASCII(filename, ascii_path);
-	ascii_path[filename.size] = '\0';
+	ascii_path[ascii_path.size] = '\0';
 
 	FileExplorerData* file_explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
 	*is_valid = strstr(ascii_path.buffer, file_explorer_data->filter_stream.buffer) != nullptr;
@@ -685,9 +713,315 @@ constexpr Action filter_functors[] = { FilterNothing, FilterActive };
 
 #pragma endregion
 
+#pragma region Add Functions - for the plus
+
 void FileExplorerImportFile(ActionData* action_data) {
 
 }
+
+#pragma endregion
+
+void FileExplorerDrag(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	FileExplorerData* explorer_data = (FileExplorerData*)_data;
+	if (mouse_tracker->LeftButton() == MBHELD) {
+		// Display the hover only if the mouse exited the action box
+		if (!IsPointInRectangle(mouse_position, position, scale)) {
+			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			Color transparent_color = ECS_COLOR_WHITE;
+			transparent_color.alpha = 100;
+			Color theme_color = system->m_windows[window_index].descriptors->color_theme.theme;
+			theme_color.alpha = 100;
+
+			float2 hover_scale = system->GetSquareScale(THUMBNAIL_SIZE);
+			float2 hover_position = { mouse_position.x - hover_scale.x * 0.5f, mouse_position.y - hover_scale.y + THUMBNAIL_TO_LABEL_SPACING };
+
+			// The theme transparent hover
+			system->SetSprite(
+				dockspace,
+				border_index,
+				ECS_TOOLS_UI_TEXTURE_MASK,
+				hover_position,
+				hover_scale,
+				buffers,
+				counts,
+				theme_color,
+				{ 0.0f, 0.0f },
+				{ 1.0f, 1.0f },
+				UIDrawPhase::System
+			);
+
+			// The directory or last file type used
+			Stream<wchar_t> last_file = explorer_data->selected_files[explorer_data->selected_files.size - 1];
+			Stream<wchar_t> last_type_extension = function::PathExtension(last_file);
+			const wchar_t* texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
+			ECS_TEMP_STRING(texture_draw, 256);
+
+			// If it has an extension, check to see existing files
+			if (last_type_extension.size != 0) {
+				Action action;
+				ResourceIdentifier identifier(last_type_extension.buffer, last_type_extension.size * sizeof(wchar_t));
+				unsigned int hash = Hash::Hash(identifier);
+				bool success = explorer_data->file_functors.TryGetValue(hash, identifier, action);
+				if (success) {
+					if (action == TextureDraw) {
+						texture_draw.Copy(last_file);
+						texture_draw.Add(L'\0');
+						texture = texture_draw.buffer;
+					}
+					else if (action == FileCDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_C;
+					}
+					else if (action == FileCppDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_CPP;
+					}
+					else if (action == FileConfigDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_CONFIG;
+					}
+					else if (action == FileTextDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_TEXT;
+					}
+					else if (action == FileShaderDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_SHADER;
+					}
+					else if (action == FileEditorDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_EDITOR;
+					}
+				}
+				else {
+					texture = ECS_TOOLS_UI_TEXTURE_FILE_BLANK;
+				}
+			}
+
+			// The last file texture
+			system->SetSprite(
+				dockspace,
+				border_index,
+				texture,
+				hover_position,
+				hover_scale,
+				buffers,
+				counts,
+				transparent_color,
+				{ 0.0f, 0.0f },
+				{ 1.0f, 1.0f },
+				UIDrawPhase::System
+			);
+
+			explorer_data->flags = function::SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
+		}
+	}
+	else if (mouse_tracker->LeftButton() == MBRELEASED) {
+		if (function::HasFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES)) {
+			explorer_data->flags = function::SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES);
+			explorer_data->flags = function::ClearFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
+		}
+	}
+
+}
+
+#pragma region File Explorer Commit Overwrite
+
+constexpr const char* FILE_EXPLORER_SELECT_OVERWRITE_FILES_WINDOW_NAME = "Overwrite files";
+
+struct FileExplorerSelectOverwriteFilesData {
+	FileExplorerData* explorer_data;
+	Stream<unsigned int> overwrite_files;
+	Stream<wchar_t> destination;
+};
+
+template<bool initialize>
+void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descriptor) {
+	constexpr const char* DATA_NAME = "Data";
+	constexpr const char* STATE_NAME = "State";
+
+	UI_PREPARE_DRAWER(initialize);
+
+	struct InternalData {
+		FileExplorerSelectOverwriteFilesData* data;
+		Stream<const char*>* files;
+		bool* states;
+	};
+
+	FileExplorerSelectOverwriteFilesData* data = (FileExplorerSelectOverwriteFilesData*)window_data;
+
+	InternalData internal_data;
+	internal_data.data = data;
+	if constexpr (initialize) {
+		// Make a single coallesced allocation
+		size_t total_memory = sizeof(Stream<const char*>);
+		for (size_t index = 0; index < data->overwrite_files.size; index++) {
+			total_memory += sizeof(char) * (data->explorer_data->selected_files[data->overwrite_files[index]].size + 1);
+		}
+		// The pointer memory
+		total_memory += sizeof(const char*) * data->overwrite_files.size;
+		
+		// For the overwrite file indices
+		total_memory += sizeof(unsigned int) * data->overwrite_files.size;
+		// The destination string memory
+		total_memory += sizeof(wchar_t) * data->destination.size;
+
+		void* allocation = drawer.GetMainAllocatorBufferAndStoreAsResource(DATA_NAME, total_memory);
+		uintptr_t ptr = (uintptr_t)allocation;
+		internal_data.files = (Stream<const char*>*)allocation;
+		ptr += sizeof(*internal_data.files);
+
+		internal_data.files->buffer = (const char**)ptr;
+		internal_data.files->size = data->overwrite_files.size;
+		ptr += sizeof(const char*) * internal_data.files->size;
+
+		for (size_t index = 0; index < data->overwrite_files.size; index++) {
+			Stream<wchar_t> path = data->explorer_data->selected_files[data->overwrite_files[index]];
+			function::ConvertWideCharsToASCII(
+				path.buffer,
+				(char*)ptr,
+				path.size,
+				path.size + 2
+			);
+			char* char_ptr = (char*)ptr;
+			internal_data.files->buffer[index] = char_ptr;
+
+			char_ptr[path.size] = '\0';
+			ptr += path.size + 1;
+		}
+
+		// The overwrite indices memory - no need to store the resource - just repoint the data overwrite buffer
+		memcpy((void*)ptr, data->overwrite_files.buffer, sizeof(unsigned int) * data->overwrite_files.size);
+		data->overwrite_files.buffer = (unsigned int*)ptr;
+		ptr += sizeof(unsigned int) * data->overwrite_files.size;
+
+		// The destination string memory - no need to store the resource - just repoint the data destination buffer
+		wchar_t* destination_string = (wchar_t*)ptr;
+		memcpy(destination_string, data->destination.buffer, sizeof(wchar_t) * data->destination.size);
+		data->destination.buffer = destination_string;
+
+		// The state memory
+		internal_data.states = (bool*)drawer.GetMainAllocatorBufferAndStoreAsResource(STATE_NAME, sizeof(bool) * internal_data.files->size);
+		memset(internal_data.states, 1, sizeof(bool) * internal_data.files->size);
+	}
+	else {
+		internal_data.files = (Stream<const char*>*)drawer.GetResource(DATA_NAME);
+		internal_data.states = (bool*)drawer.GetResource(STATE_NAME);
+	}
+
+	constexpr const char* OVERWRITE_TEXT = "Overwrite";
+	constexpr const char* CANCEL_TEXT = "Cancel";
+	constexpr const char* DESELECT_ALL = "Deselect All";
+	constexpr const char* SELECT_ALL = "Select All";
+
+	// Draw the selection buttons - Select all, Deselect all
+	auto select_all_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		InternalData* data = (InternalData*)_data;
+		memset(data->states, 1, sizeof(bool) * data->data->overwrite_files.size);
+	};
+
+	auto deselect_all_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		InternalData* data = (InternalData*)_data;
+		memset(data->states, 0, sizeof(bool) * data->data->overwrite_files.size);
+	};
+
+	// Display the main message
+	drawer.Text("One or more files already exists in the destination. Are you sure you want to overwrite them?");
+	drawer.NextRow();
+
+	drawer.Button(SELECT_ALL, { select_all_action, &internal_data, sizeof(internal_data) });
+	drawer.Button(DESELECT_ALL, { deselect_all_action, &internal_data, sizeof(internal_data) });
+
+	UIDrawConfig config;
+	drawer.Text<UI_CONFIG_TEXT_ALIGN_TO_ROW_Y>(config, "Select the files you want to overwrite: ");
+	drawer.NextRow();
+	
+	// Draw the checkboxes
+	for (size_t index = 0; index < internal_data.files->size; index++) {
+		drawer.CheckBox(internal_data.files->buffer[index], internal_data.states + index);
+		drawer.NextRow();
+	}
+
+	// Draw the buttons - Overwrite and Cancel
+	UIConfigAbsoluteTransform transform;
+
+	// Overwrite button
+	transform.scale = drawer.GetLabelScale("Overwrite");
+	transform.position = drawer.GetAlignedToBottom(transform.scale.y);
+	config.AddFlag(transform);
+
+	auto overwrite_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		InternalData* data = (InternalData*)_data;
+		ECS_TEMP_ASCII_STRING(error_message, 1024);
+		error_message.Copy(ToStream("One or more files could not be copied. These are:"));
+		unsigned int error_files_count = 0;
+		for (size_t index = 0; index < data->data->overwrite_files.size; index++) {
+			if (data->states[index]) {
+				Stream<wchar_t> path_to_copy = data->data->explorer_data->selected_files[data->data->overwrite_files[index]];
+				ECS_FILE_COPY_CODE code = FileCut(path_to_copy, data->data->destination, true);
+				if (code == ECS_FILE_COPY_ERROR) {
+					error_message.Add('\n');
+					error_message.Add('\t');
+					function::ConvertWideCharsToASCII(path_to_copy, error_message);
+					error_files_count++;
+				}
+			}
+		}
+
+		// Release the selected files
+		FileExplorerResetSelectedFiles(data->data->explorer_data);
+
+		if (error_files_count > 0) {
+			CreateErrorMessageWindow(system, error_message);
+		}
+
+		CloseXBorderClickableAction(action_data);
+	};
+
+	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, OVERWRITE_TEXT, { overwrite_action, &internal_data, sizeof(internal_data), UIDrawPhase::System });
+	config.flag_count--;
+	
+	// Aligned to the right
+	transform.scale = drawer.GetLabelScale(CANCEL_TEXT);
+	transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
+
+	auto cancel_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		FileExplorerSelectOverwriteFilesData* data = (FileExplorerSelectOverwriteFilesData*)_data;
+		FileExplorerResetSelectedFiles(data->explorer_data);
+		CloseXBorderClickableAction(action_data);
+	};
+	config.AddFlag(transform);
+
+	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, CANCEL_TEXT, { cancel_action, data, 0, UIDrawPhase::System });
+}
+
+unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplorerSelectOverwriteFilesData data) {
+	constexpr float2 WINDOW_SIZE = { 0.5f, 1.0f };
+
+	UIWindowDescriptor descriptor;
+
+	descriptor.draw = FileExplorerSelectOverwriteFilesDraw<false>;
+	descriptor.initialize = FileExplorerSelectOverwriteFilesDraw<true>;
+
+	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
+	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
+	descriptor.initial_size_x = WINDOW_SIZE.x;
+	descriptor.initial_size_y = WINDOW_SIZE.y;
+
+	descriptor.window_data = &data;
+	descriptor.window_data_size = sizeof(data);
+	descriptor.window_name = FILE_EXPLORER_SELECT_OVERWRITE_FILES_WINDOW_NAME;
+
+	descriptor.destroy_action = ReleaseLockedWindow;
+
+	return system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_LOCK_WINDOW | UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_ALL);
+}
+
+#pragma endregion
 
 // window_data is EditorState*
 template<bool initialize>
@@ -744,6 +1078,7 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 			ECS_TEMP_ASCII_STRING(ascii_path, 256);
 			Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
 			function::ConvertWideCharsToASCII(*path, ascii_path);
+			ascii_path[ascii_path.size] = '\0';
 			system->m_application->WriteTextToClipboard(ascii_path.buffer);
 		};
 
@@ -893,7 +1228,6 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 		CapacityStream<char> ascii_path(temp_characters, 0, 512);
 		Path wide_path = { data->current_directory.buffer + project_file->path.size + 1, data->current_directory.size - project_file->path.size - 1 };
 		function::ConvertWideCharsToASCII(wide_path, ascii_path);
-		ascii_path.size = wide_path.size;
 		ascii_path[ascii_path.size] = '\0';
 
 		size_t total_path_size = project_file->path.size + 1;
@@ -988,9 +1322,9 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 		transform.scale = drawer.GetSquareScale(THUMBNAIL_SIZE) / drawer.GetElementDefaultScale();
 		config.AddFlag(transform);
 
-		UIConfigClickableAction null_click;
-		null_click = { SkipAction, nullptr, 0 };
-		config.AddFlag(null_click);
+		UIConfigClickableAction drag_click;
+		drag_click = { FileExplorerDrag, data, 0, UIDrawPhase::System };
+		config.AddFlag(drag_click);
 
 		ForEachData for_each_data;
 		for_each_data.config = &config;
@@ -998,10 +1332,10 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 		for_each_data.drawer = &drawer;
 		for_each_data.element_count = 0;
 		for_each_data.select_function = FileExplorerSelectFromIndexNothing;
-		if (data->get_selected_files_from_indices) {
+		if (function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES)) {
 			FileExplorerResetSelectedFiles(data);
 			for_each_data.select_function = FileExplorerSelectFromIndexShift;
-			data->get_selected_files_from_indices = false;
+			data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES);
 		}
 
 		auto directory_functor = [](const std::filesystem::path& _path, void* __data) {
@@ -1069,9 +1403,17 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 				config->AddFlag(hoverable_action);
 
 				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_HOVERABLE_ACTION
-					| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_GENERAL_ACTION | UI_CONFIG_CLICKABLE_ACTION;
+					| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_GENERAL_ACTION | UI_CONFIG_CLICKABLE_ACTION | UI_CONFIG_GET_TRANSFORM;
+
+				float2 rectangle_position;
+				float2 rectangle_scale;
+				UIConfigGetTransform get_transform;
+				get_transform.position = &rectangle_position;
+				get_transform.scale = &rectangle_scale;
+				config->AddFlag(get_transform);
 
 				if (is_selected) {
+					// Add the border highlight
 					UIConfigColor color;
 					color.color = drawer->color_theme.theme;
 					color.color.alpha = color_alpha;
@@ -1090,7 +1432,12 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 					drawer->Rectangle<RECTANGLE_CONFIGURATION>(*config);
 				}
 
-				config->flag_count -= 2;
+				// Update the mouse index if it hovers this directory - only directories must make this check
+				if (drawer->IsMouseInRectangle(rectangle_position, rectangle_scale)) {
+					_data->mouse_element_path->Copy(path);
+				}
+
+				config->flag_count -= 3;
 
 				FileExplorerLabelDraw(drawer, config, &selectable_data, is_selected, true);
 				_data->element_count++;
@@ -1198,6 +1545,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 					UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_CLICKABLE_ACTION;
 
 				if (is_selected) {
+					// Add the border highlight
 					UIConfigBorder border;
 					border.color = EDITOR_GREEN_COLOR;
 					border.thickness = drawer->GetDefaultBorderThickness();
@@ -1240,8 +1588,72 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
 		data->allocator.Clear();
 
+		ECS_TEMP_STRING(mouse_element_path, 256);
+		for_each_data.mouse_element_path = &mouse_element_path;
+
 		if (data->current_directory.size > 0) {
 			ForEachInDirectory(data->current_directory, &for_each_data, directory_functor, file_functor);
+		}
+
+		// Check moved files
+		if (function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES)) {
+			// If there is no element being hovered - skip it
+			if (mouse_element_path.size > 0) {
+				// If it is moved - check that it landed in a folder that is not selected
+				Stream<Stream<wchar_t>> selected_files(data->selected_files.buffer, data->selected_files.size);
+				if (function::IsStringInStream(mouse_element_path, selected_files) == -1) {
+					// Move all the files - if one cannot be moved because it already exists, then ask permision
+					// else skip it
+					unsigned int error_file_count = 0;
+					
+					// Allocate a temporary buffer that will hold the error paths - if any - set it to a big size
+					// and release it from the drawer after using it
+					constexpr size_t ERROR_BUFFER_SIZE = 8192;
+					size_t drawer_temp_allocator_marker = drawer.GetTempAllocatorMarker();
+					CapacityStream<char> error_files(drawer.GetTempBuffer(ERROR_BUFFER_SIZE), 0, ERROR_BUFFER_SIZE);
+					error_files.Copy(ToStream("One or more files/folders could not be copied. These are: "));
+
+					// For the files that already exist, allocate a buffer of indices that will point to
+					// the invalid ones and at the final stage when commiting to the overwrite window
+					// copy them to persistent memory
+					void* _overwrite_files = drawer.GetTempBuffer(sizeof(unsigned int) * data->selected_files.size);
+					Stream<unsigned int> overwrite_files(_overwrite_files, 0);
+
+					for (size_t index = 0; index < data->selected_files.size; index++) {
+						Stream<wchar_t> current_file = data->selected_files[index];
+						ECS_FILE_COPY_CODE error_code = FileCut(current_file, mouse_element_path);
+						if (error_code == ECS_FILE_COPY_ERROR) {
+							error_file_count++;
+							error_files.AddSafe('\n');
+							error_files.Add('\t');
+							function::ConvertWideCharsToASCII(current_file, error_files);
+						}
+						else if (error_code == ECS_FILE_COPY_ALREADY_EXISTS) {
+							overwrite_files.Add(index);
+						}
+					}
+
+					if (error_file_count > 0) {
+						EditorSetConsoleError(editor_state, error_files);
+					}
+
+					if (overwrite_files.size > 0) {
+						// The overwrite wizard will release the selected files
+						FileExplorerSelectOverwriteFilesData wizard_data;
+						wizard_data.destination = mouse_element_path;
+						wizard_data.explorer_data = data;
+						wizard_data.overwrite_files = overwrite_files;
+						CreateFileExplorerSelectOverwriteFiles(drawer.system, wizard_data);
+					}
+					else {
+						FileExplorerResetSelectedFiles(data);
+					}
+
+					drawer.ReturnTempAllocator(drawer_temp_allocator_marker);
+				}
+			}
+			// Clear the flag
+			data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES);
 		}
 
 	}
@@ -1264,8 +1676,7 @@ void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager*
 	file_explorer_data->starting_shift_index = -1;
 	file_explorer_data->ending_shift_index = -1;
 
-	file_explorer_data->are_copied_files_cut = false;
-	file_explorer_data->get_selected_files_from_indices = false;
+	file_explorer_data->flags = 0;
 }
 
 void FileExplorerPrivateAction(ActionData* action_data) {

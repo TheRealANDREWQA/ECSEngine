@@ -187,20 +187,8 @@ void CreateSaveLayoutWindow(void* _editor_state) {
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X);
 }
 
-constexpr size_t WINDOW_COUNT = 6;
-char* WINDOW_MENU_CHARACTERS = "Console\nGame\nDirectory Explorer\nFile Explorer\nModule Explorer\nInspector";
-
-enum WINDOW_INDEX {
-	WINDOW_INDEX_CONSOLE,
-	WINDOW_INDEX_GAME,
-	WINDOW_INDEX_DIRECTORY_EXPLORER,
-	WINDOW_INDEX_FILE_EXPLORER,
-	WINDOW_INDEX_MODULE_EXPLORER,
-	WINDOW_INDEX_INSPECTOR
-};
-
 struct ToolbarPlaceholderData {
-	UIActionHandler handlers[WINDOW_COUNT];
+	UIActionHandler handlers[TOOLBAR_WINDOW_MENU_COUNT];
 	EditorState* editor_state;
 };
 
@@ -264,34 +252,37 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor) 
 	ToolbarPlaceholderData* data = (ToolbarPlaceholderData*)window_data;
 
 	if constexpr (initialize) {
-		size_t total_size = sizeof(PlaceholderDockspaceActionData) * WINDOW_COUNT;
+		size_t total_size = sizeof(PlaceholderDockspaceActionData) * TOOLBAR_WINDOW_MENU_COUNT;
 		void* allocation = drawer.GetMainAllocatorBuffer(total_size);
 
 		PlaceholderDockspaceActionData* action_data = (PlaceholderDockspaceActionData*)allocation;
 
-		action_data[WINDOW_INDEX_CONSOLE] = { data->editor_state, CONSOLE_WINDOW_NAME, {1.0f, 0.5f} };
-		action_data[WINDOW_INDEX_GAME] = { data->editor_state, GAME_WINDOW_NAME, {1.0f, 1.0f} };
-		action_data[WINDOW_INDEX_DIRECTORY_EXPLORER] = { data->editor_state, DIRECTORY_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
-		action_data[WINDOW_INDEX_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
-		action_data[WINDOW_INDEX_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
-		action_data[WINDOW_INDEX_INSPECTOR] = { data->editor_state, INSPECTOR_WINDOW_NAME, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { data->editor_state, data->editor_state->inject_window_name, {1.0f, 0.5f} };
+		action_data[TOOLBAR_WINDOW_MENU_CONSOLE] = { data->editor_state, CONSOLE_WINDOW_NAME, {1.0f, 0.5f} };
+		action_data[TOOLBAR_WINDOW_MENU_GAME] = { data->editor_state, GAME_WINDOW_NAME, {1.0f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { data->editor_state, DIRECTORY_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, INSPECTOR_WINDOW_NAME, {0.6f, 1.0f} };
 
 #define SET_HANDLER(string) data->handlers[string] = {CreatePlaceholderDockspaceAction, action_data + string, 0, UIDrawPhase::System}
 
-		SET_HANDLER(WINDOW_INDEX_CONSOLE);
-		SET_HANDLER(WINDOW_INDEX_GAME);
-		SET_HANDLER(WINDOW_INDEX_DIRECTORY_EXPLORER);
-		SET_HANDLER(WINDOW_INDEX_FILE_EXPLORER);
-		SET_HANDLER(WINDOW_INDEX_MODULE_EXPLORER);
-		SET_HANDLER(WINDOW_INDEX_INSPECTOR);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_INJECT_WINDOW);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_CONSOLE);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_GAME);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_FILE_EXPLORER);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_MODULE_EXPLORER);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_INSPECTOR);
 	}
 
 	UIDrawerMenuState state;
 	state.click_handlers = data->handlers;
-	state.row_count = WINDOW_COUNT;
-	state.left_characters = WINDOW_MENU_CHARACTERS;
+	state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
+	state.left_characters = TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
 	state.separation_lines[0] = 1;
-	state.separation_line_count = 1;
+	state.separation_lines[1] = 4;
+	state.separation_line_count = 2;
 	state.submenu_index = 0;
 	
 	UIConfigWindowDependentSize size;

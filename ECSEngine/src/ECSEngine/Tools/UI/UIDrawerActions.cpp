@@ -9,7 +9,7 @@ namespace ECSEngine {
 
 	namespace Tools {
 
-#define EXPORT(function, integer) template void function<integer>(ActionData*);
+#define EXPORT(function, integer) template ECSENGINE_API void function<integer>(ActionData*);
 
 		ECS_CONTAINERS;
 
@@ -569,6 +569,7 @@ namespace ECSEngine {
 		void TextInputHoverable(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
+			UIDrawerTextInput* data = (UIDrawerTextInput*)_data;
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			float2 region_offset = system->GetWindowRenderRegion(window_index);
 			if (IsPointInRectangle(mouse_position, position, scale)) {
@@ -576,8 +577,7 @@ namespace ECSEngine {
 				UIDefaultWindowHandler* default_handler_data = system->GetDefaultWindowHandlerData(window_index);
 				default_handler_data->ChangeCursor(CursorType::IBeam);
 
-				if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-					UIDrawerTextInput* data = (UIDrawerTextInput*)_data; 
+				/*if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
 					if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
 						system->m_application->WriteTextToClipboard(data->text->buffer);
 					}
@@ -588,7 +588,7 @@ namespace ECSEngine {
 						data->DeleteAllCharacters();
 						data->InsertCharacters(characters, count, 0, system);
 					}
-				}
+				}*/
 			}
 		}
 
@@ -920,15 +920,19 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		constexpr float INPUT_DRAG_FACTOR = 25.0f;
+
 		void DoubleInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			if (mouse_tracker->LeftButton() == MBHELD) {
 				UIDrawerDoubleInputDragData* data = (UIDrawerDoubleInputDragData*)_data;
-				double shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0, 1.0);
-				double amount = (double)mouse_delta.x * (double)data->difference_factor * shift_value;
-				*data->data.number += amount;
-				*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
+				double shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 1.0 / 5.0, 1.0);
+				double ctrl_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftControl), 5.0, 1.0);
+				double amount = (double)mouse_delta.x * (double)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+
+				*data->number += amount;
+				*data->number = function::Clamp(*data->number, data->min, data->max);
 			}
 		}
 
@@ -936,13 +940,14 @@ namespace ECSEngine {
 
 		void FloatInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
-
 			if (mouse_tracker->LeftButton() == MBHELD) {
 				UIDrawerFloatInputDragData* data = (UIDrawerFloatInputDragData*)_data;
-				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0f, 1.0f);
-				float amount = mouse_delta.x * data->difference_factor * shift_value;
-				*data->data.number += amount;
-				*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
+				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 1.0f / 5.0f, 1.0f);
+				float ctrl_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftControl), 5.0f, 1.0f);
+				float amount = mouse_delta.x * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+
+				*data->number += amount;
+				*data->number = function::Clamp(*data->number, data->min, data->max);
 			}
 		}
 
@@ -971,24 +976,34 @@ namespace ECSEngine {
 		void IntegerInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			if (mouse_tracker->LeftButton() == MBHELD) {
-				UIDrawerIntInputDragData<Integer>* data = (UIDrawerIntInputDragData<Integer>*)_data;
-				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 5.0f, 1.0f);
-				float amount = mouse_delta.x * data->difference_factor * shift_value;
+			UIDrawerIntInputDragData<Integer>* data = (UIDrawerIntInputDragData<Integer>*)_data;
+			if (mouse_tracker->LeftButton() == MBPRESSED) {
+				data->last_position = mouse_position.x;
+			}
+			else if (mouse_tracker->LeftButton() == MBHELD) {
+				float delta_to_position = mouse_position.x - data->last_position;
+				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 1.0f / 5.0f, 1.0f);
+				float ctrl_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftControl), 5.0f, 1.0f);
+
+				float amount = delta_to_position * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 				bool is_negative = amount < 0.0f;
 				Integer value_before = *data->data.number;
-				*data->data.number += amount;
-				if (is_negative) {
-					if (*data->data.number > value_before) {
-						*data->data.number = value_before;
+				
+				if (abs(amount) > 1.0f) {
+					*data->data.number += (Integer)amount;
+					if (is_negative) {
+						if (*data->data.number > value_before) {
+							*data->data.number = value_before;
+						}
 					}
-				}
-				else {
-					if (*data->data.number < value_before) {
-						*data->data.number = value_before;
+					else {
+						if (*data->data.number < value_before) {
+							*data->data.number = value_before;
+						}
 					}
+					*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
+					data->last_position = mouse_position.x;
 				}
-				*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
 			}
 		}
 
@@ -1068,6 +1083,9 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)_data;
+			if (data->input->text->size == 0) {
+				data->input->InsertCharacters("0", 1, 0, system);
+			}
 			*data->number = function::ConvertCharactersToFloat(*data->input->text);
 			float before_value = *data->number;
 			*data->number = function::Clamp(*data->number, data->min, data->max);
@@ -1086,6 +1104,9 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)_data;
+			if (data->input->text->size == 0) {
+				data->input->InsertCharacters("0", 1, 0, system);
+			}
 			*data->number = function::ConvertCharactersToDouble(*data->input->text);
 			double before_value = *data->number;
 			*data->number = function::Clamp(*data->number, data->min, data->max);
@@ -1105,15 +1126,29 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)_data;
-			*data->number = function::ConvertCharactersToInt<Integer>(*data->input->text);
-			Integer before_value = *data->number;
-			*data->number = function::Clamp(*data->number, data->min, data->max);
-			if (before_value != *data->number) {
+			if (data->input->text->size == 0) {
+				data->input->InsertCharacters("0", 1, 0, system);
+			}
+
+			auto revert_characters = [data, system]() {
 				data->input->DeleteAllCharacters();
 				char temp_characters[128];
 				Stream characters = Stream<char>(temp_characters, 0);
 				function::ConvertIntToCharsFormatted(characters, static_cast<int64_t>(*data->number));
 				data->input->InsertCharacters(temp_characters, characters.size, 0, system);
+			};
+
+			int64_t number = function::ConvertCharactersToInt<int64_t>(*data->input->text);
+			if (number > (int64_t)data->max || number < (int64_t)data->min) {
+				revert_characters();
+			}
+			else {
+				*data->number = number;
+				Integer before_value = *data->number;
+				*data->number = function::Clamp(*data->number, data->min, data->max);
+				if (before_value != *data->number) {
+					revert_characters();
+				}
 			}
 		}
 
@@ -1143,6 +1178,17 @@ namespace ECSEngine {
 			}
 		}
 
+		void FloatInputNoNameHoverable(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerFloatInputHoverableData* data = (UIDrawerFloatInputHoverableData*)_data;
+			action_data->data = data->data.input;
+			TextInputHoverable(action_data);
+			action_data->data = data;
+			FloatInputHoverable(action_data);
+		}
+
 		// --------------------------------------------------------------------------------------------------------------
 
 		void DoubleInputHoverable(ActionData* action_data) {
@@ -1161,6 +1207,17 @@ namespace ECSEngine {
 				function::ConvertDoubleToChars(temp_stream, *data->data.number, 3);
 				data->data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 			}
+		}
+
+		void DoubleInputNoNameHoverable(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerDoubleInputHoverableData* data = (UIDrawerDoubleInputHoverableData*)_data;
+			action_data->data = data->data.input;
+			TextInputHoverable(action_data);
+			action_data->data = data;
+			DoubleInputHoverable(action_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1187,6 +1244,24 @@ namespace ECSEngine {
 #define EXPORT_THIS(integer) EXPORT(IntInputHoverable, integer);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT_THIS);
+
+#undef EXPORT_THIS
+
+		template<typename Integer>
+		void IntInputNoNameHoverable(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerIntInputHoverableData<Integer>* data = (UIDrawerIntInputHoverableData<Integer>*)_data;
+			action_data->data = data->data.input;
+			TextInputHoverable(action_data);
+			action_data->data = data;
+			IntInputHoverable<Integer>(action_data);
+		}
+
+#define EXPORT_THIS(integer) EXPORT(IntInputNoNameHoverable, integer);
+
+		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT_THIS)
 
 #undef EXPORT_THIS
 
@@ -1363,7 +1438,7 @@ namespace ECSEngine {
 			if (IsClickableTrigger(action_data)) {
 				UIDrawerLabelHierarchyChangeStateData* data = (UIDrawerLabelHierarchyChangeStateData*)_data;
 				ResourceIdentifier identifier(data->label.buffer, data->label.size);
-				unsigned int hash = HashFunctionAdditiveString::Hash(identifier);
+				unsigned int hash = HashFunctionMultiplyString::Hash(identifier);
 
 				UIDrawerLabelHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(hash, identifier);
 				node->state = !node->state;
@@ -1396,6 +1471,22 @@ namespace ECSEngine {
 
 		void PinWindowHorizontalSliderPosition(UISystem* system, unsigned int window_index) {
 			system->m_windows[window_index].pin_horizontal_slider_count++;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void ArrayDragAction(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerArrayDragData* data = (UIDrawerArrayDragData*)_data;
+			if (mouse_tracker->LeftButton() == MBRELEASED) {
+				data->array_data->drag_is_released = true;
+			}
+			else {
+				data->array_data->drag_current_position = mouse_position.y;
+				data->array_data->drag_index = data->index;
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

@@ -7,6 +7,12 @@ ECS_CONTAINERS;
 
 namespace ECSEngine {
 
+	enum ECS_FILE_COPY_CODE {
+		ECS_FILE_COPY_SUCCESS,
+		ECS_FILE_COPY_ERROR,
+		ECS_FILE_COPY_ALREADY_EXISTS
+	};
+
 	ECSENGINE_API bool HasSubdirectories(const wchar_t* directory);
 
 	// Might perform a copy to a stack buffer if cannot place a null terminated character
@@ -32,13 +38,13 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool CreateFolder(Stream<wchar_t> path);
 
-	ECSENGINE_API bool FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false);
+	ECSENGINE_API ECS_FILE_COPY_CODE FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false);
 
-	ECSENGINE_API bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false);
+	ECSENGINE_API ECS_FILE_COPY_CODE FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false);
 
-	ECSENGINE_API bool FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false);
+	ECSENGINE_API ECS_FILE_COPY_CODE FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false);
 
-	ECSENGINE_API bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false);
+	ECSENGINE_API ECS_FILE_COPY_CODE FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false);
 
 	ECSENGINE_API bool FolderCopy(const wchar_t* from, const wchar_t* to);
 

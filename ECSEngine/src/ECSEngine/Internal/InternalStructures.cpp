@@ -152,47 +152,14 @@ namespace ECSEngine {
 		shared_excluded = VectorComponentSignature(exclude_shared);
 	}
 
-	unsigned int HashFunctionAdditiveString::Hash(Stream<const char> string) {
-		return Hash(string.buffer, string.size);
-	}
-
-	unsigned int HashFunctionAdditiveString::Hash(const char* string) {
-		return Hash(string, strlen(string));
-	}
-
-	unsigned int HashFunctionAdditiveString::Hash(Stream<const wchar_t> string) {
-		return Hash(string.buffer, string.size);
-	}
-
-	unsigned int HashFunctionAdditiveString::Hash(const wchar_t* string) {
-		return Hash(string, wcslen(string));
-	}
-
-	unsigned int HashFunctionAdditiveString::Hash(const void* identifier, unsigned int identifier_size) {
-		Vec32c chars;
-		int total_sum = 0;
-		size_t index;
-		for (index = 0; index < identifier_size / chars.size(); index++) {
-			chars.load((void*)((uintptr_t)identifier + index * chars.size()));
-			total_sum += horizontal_add_x(chars);
-		}
-		chars.load_partial(identifier_size % chars.size(), (void*)((uintptr_t)identifier + index * chars.size()));
-		total_sum += horizontal_add_x(chars);
-		return total_sum;
-	}
-
-	unsigned int HashFunctionAdditiveString::Hash(ResourceIdentifier identifier)
-	{
-		return Hash(identifier.ptr, identifier.size);
-	}
-
 	unsigned int HashFunctionMultiplyString::Hash(Stream<const char> string)
 	{
+		// Value must be clipped to 3 bytes only - that's the precision of the hash tables
 		unsigned int sum = 0;
 		for (size_t index = 0; index < string.size; index++) {
 			sum += string[index] * index;
 		}
-		return sum;
+		return (sum * (unsigned int)string.size) & 0x00FFFFFF;
 	}
 
 	unsigned int HashFunctionMultiplyString::Hash(Stream<const wchar_t> string) {

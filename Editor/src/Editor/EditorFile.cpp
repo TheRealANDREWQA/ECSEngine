@@ -138,8 +138,9 @@ bool LoadEditorFile(EditorState* editor_state) {
 			current_path.Add(L'\0');
 			if (!ExistsFileOrFolder(current_path)) {
 				void* allocation = editor_allocator->Allocate(sizeof(char) * current_path.size, alignof(char));
-				function::ConvertWideCharsToASCII(current_path, CapacityStream<char>(allocation, 0, current_path.size));
-				invalid_file_paths.Add((const char*)allocation);
+				CapacityStream<char> allocated_path(allocation, 0, current_path.size);
+				function::ConvertWideCharsToASCII(current_path, allocated_path);
+				invalid_file_paths.Add(allocated_path.buffer);
 			}
 			else {
 				unsigned int project_index = hub_data->projects.size;

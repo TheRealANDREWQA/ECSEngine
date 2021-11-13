@@ -151,14 +151,21 @@ namespace ECSEngine {
 		 
 		ECSENGINE_API void FloatInputHoverable(ActionData* action_data);
 
+		ECSENGINE_API void FloatInputNoNameHoverable(ActionData* action_data);
+
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void DoubleInputHoverable(ActionData* action_data);
+
+		ECSENGINE_API void DoubleInputNoNameHoverable(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		template<typename Integer>
 		ECSENGINE_API void IntInputHoverable(ActionData* action_data);
+
+		template<typename Integer>
+		ECSENGINE_API void IntInputNoNameHoverable(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -227,6 +234,14 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void PinWindowHorizontalSliderPosition(UISystem* system, unsigned int window_index);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void ArrayDragAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		// --------------------------------------------------------------------------------------------------------------
 
 		// --------------------------------------------------------------------------------------------------------------
 

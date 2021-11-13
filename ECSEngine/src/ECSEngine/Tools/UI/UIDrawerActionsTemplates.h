@@ -865,7 +865,7 @@ namespace ECSEngine {
 			if constexpr (!initializer) {
 				drawer.DisablePaddingForRenderRegion();
 				drawer.DisableZoom();
-				constexpr size_t new_configuration = function::RemoveFlag(function::RemoveFlag(configuration, UI_CONFIG_LATE_DRAW), UI_CONFIG_SYSTEM_DRAW);
+				constexpr size_t new_configuration = function::ClearFlag(function::ClearFlag(configuration, UI_CONFIG_LATE_DRAW), UI_CONFIG_SYSTEM_DRAW);
 				drawer.ComboBoxDropDownDrawer<new_configuration>(data->config, data->box);
 			}
 		}
@@ -953,12 +953,11 @@ namespace ECSEngine {
 
 				UIConfigRelativeTransform transform;
 				transform.scale.x = region_scale.x / default_element_scale.x;
-				transform.offset.y = 0.001f;
 				config.AddFlag(transform);
 
 				// Must be replicated inside lambdas
-				constexpr size_t configuration = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT
-					| UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_ADVANCE;
+				constexpr size_t configuration = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_RELATIVE_TRANSFORM 
+					| UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_ADVANCE;
 
 				UIConfigHoverableAction hoverable;
 				UIDrawerSubmenuHoverable hover_data;
@@ -1075,10 +1074,7 @@ namespace ECSEngine {
 
 						draw_label(index, data->state->left_row_substreams, data->state->left_characters);
 
-						drawer.Rectangle<UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_CLICKABLE_ACTION
-								| UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION>(
-									config
-									);
+						drawer.Rectangle<UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_CLICKABLE_ACTION | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION>(config);
 						config.flag_count -= 2;
 					}
 					else {
@@ -1086,9 +1082,7 @@ namespace ECSEngine {
 						
 						draw_label_unavailable(index, data->state->left_row_substreams, data->state->left_characters);
 						
-						drawer.Rectangle<UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION>(
-							config
-						);
+						drawer.Rectangle<UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION>(config);
 						config.flag_count--;
 
 						arrow_color = system->m_descriptors.misc.menu_unavailable_arrow_color;
@@ -1121,8 +1115,7 @@ namespace ECSEngine {
 							transform.position.x += system->m_descriptors.misc.tool_tip_padding.x;
 
 							line_config.AddFlag(transform);
-							drawer.CrossLine<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER
-							 | UI_CONFIG_DO_NOT_ADVANCE>(line_config);
+							drawer.CrossLine<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER | UI_CONFIG_DO_NOT_ADVANCE>(line_config);
 							current_line_index++;
 						}
 					}
@@ -1341,6 +1334,33 @@ namespace ECSEngine {
 					}
 
 					DefaultHoverableAction(action_data);
+
+					if (data->state->separation_line_count > 0) {
+						unsigned int line_index = 0;
+						unsigned int line_position = data->state->separation_lines[line_index];
+						while (line_index < data->state->separation_line_count && line_position <= data->row_index) {
+							if (line_position == data->row_index - 1) {
+								SetSolidColorRectangle(
+									{ position.x + system->m_descriptors.misc.tool_tip_padding.x, position.y },
+									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, ECS_TOOLS_UI_ONE_PIXEL_Y },
+									system->m_descriptors.color_theme.borders,
+									(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
+									counts[ECS_TOOLS_UI_SOLID_COLOR]
+								);
+							}
+							if (line_position == data->row_index) {
+								SetSolidColorRectangle(
+									{ position.x + system->m_descriptors.misc.tool_tip_padding.x, position.y + scale.y },
+									{ scale.x - 2.0f * system->m_descriptors.misc.tool_tip_padding.x, ECS_TOOLS_UI_ONE_PIXEL_Y },
+									system->m_descriptors.color_theme.borders,
+									(UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR],
+									counts[ECS_TOOLS_UI_SOLID_COLOR]
+								);
+							}
+							line_index++;
+							line_position = data->state->separation_lines[line_index];
+						}
+					}
 				}
 			}
 			else {
@@ -1415,7 +1435,8 @@ namespace ECSEngine {
 					else {
 						window_dimensions = system->DrawToolTipSentenceWithTextToRightSize(menu->state.left_characters, menu->state.right_characters, &tool_tip_data);
 					}
-					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset * 0.5f;
+					// The viewport offset must be also substracted
+					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset + system->m_descriptors.dockspaces.viewport_padding_y;
 					window_dimensions.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_horizontal_padd - system->m_descriptors.misc.menu_x_padd;
 
 					float arrow_span = system->GetTextSpan(">", 1, system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;

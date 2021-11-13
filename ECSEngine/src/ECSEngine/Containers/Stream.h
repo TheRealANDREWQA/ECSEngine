@@ -71,7 +71,7 @@ namespace ECSEngine {
 				memory += sizeof(T) * size;
 			}
 
-			void PushDownElements(size_t starting_index, unsigned int count) {
+			void PushDownElements(size_t starting_index, size_t count) {
 				for (int64_t index = size - 1; index >= (int64_t)starting_index; index--) {
 					buffer[index + count] = buffer[index];
 				}
@@ -218,7 +218,7 @@ namespace ECSEngine {
 			}
 
 			// it will set the size
-			void Copy(const void* memory, size_t count) {
+			void Copy(const void* memory, unsigned int count) {
 				ECS_ASSERT(count <= capacity);
 				memcpy(buffer, memory, sizeof(T) * count);
 				size = count;
@@ -235,7 +235,7 @@ namespace ECSEngine {
 			}
 
 			// it will not set the size and will not do a check
-			void CopySlice(unsigned int starting_index, const void* memory, size_t count) {
+			void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 				memcpy(buffer + starting_index, memory, sizeof(T) * count);
 			}
 
@@ -274,7 +274,7 @@ namespace ECSEngine {
 			}
 
 			void Remove(unsigned int index) {
-				for (size_t copy_index = index + 1; copy_index < size; copy_index++) {
+				for (unsigned int copy_index = index + 1; copy_index < size; copy_index++) {
 					buffer[copy_index - 1] = buffer[copy_index];
 				}
 				size--;
@@ -292,16 +292,16 @@ namespace ECSEngine {
 			}
 
 			void SwapContents() {
-				for (size_t index = 0; index < size >> 1; index++) {
+				for (unsigned int index = 0; index < size >> 1; index++) {
 					Swap(index, size - index - 1);
 				}
 			}
 
-			ECS_INLINE T& operator [](size_t index) {
+			ECS_INLINE T& operator [](unsigned int index) {
 				return buffer[index];
 			}
 
-			ECS_INLINE const T& operator [](size_t index) const {
+			ECS_INLINE const T& operator [](unsigned int index) const {
 				return buffer[index];
 			}
 
@@ -309,7 +309,7 @@ namespace ECSEngine {
 				return buffer;
 			}
 
-			static size_t MemoryOf(size_t number) {
+			static size_t MemoryOf(unsigned int number) {
 				return sizeof(T) * number;
 			}
 
@@ -415,7 +415,7 @@ namespace ECSEngine {
 			}
 
 			// it will not set the size and will not do a check
-			void CopySlice(unsigned int starting_index, const void* memory, size_t count) {
+			void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 				memcpy(buffer + starting_index, memory, sizeof(T) * count);
 			}
 
@@ -457,20 +457,20 @@ namespace ECSEngine {
 				size = 0;
 			}
 
-			void Remove(size_t index) {
-				for (size_t copy_index = index + 1; copy_index < size; copy_index++) {
+			void Remove(unsigned int index) {
+				for (unsigned int copy_index = index + 1; copy_index < size; copy_index++) {
 					buffer[copy_index - 1] = buffer[copy_index];
 				}
 				size--;
 			}
 
-			void RemoveSwapBack(size_t index) {
+			void RemoveSwapBack(unsigned int index) {
 				size--;
 				buffer[index] = buffer[size];
 			}
 
 			// makes sure there is enough space for extra count elements
-			void ReserveNewElements(size_t count) {
+			void ReserveNewElements(unsigned int count) {
 				if (size + count > capacity) {
 					Resize(static_cast<unsigned int>(ECS_RESIZABLE_STREAM_FACTOR * capacity + 1));
 				}
@@ -482,7 +482,7 @@ namespace ECSEngine {
 				return index;
 			}
 
-			void Resize(size_t new_capacity) {
+			void Resize(unsigned int new_capacity) {
 				T* new_buffer = (T*)allocator->Allocate(new_capacity * sizeof(T), alignof(T));
 				ECS_ASSERT(new_buffer != nullptr);
 
@@ -499,7 +499,7 @@ namespace ECSEngine {
 				capacity = new_capacity;
 			}
 
-			void ResizeNoCopy(size_t new_capacity) {
+			void ResizeNoCopy(unsigned int new_capacity) {
 				T* new_buffer = (T*)allocator->Allocate(new_capacity * sizeof(T), alignof(T));
 				ECS_ASSERT(new_buffer != nullptr);
 
@@ -520,7 +520,7 @@ namespace ECSEngine {
 			}
 
 			void SwapContents() {
-				for (size_t index = 0; index < size >> 1; index++) {
+				for (unsigned int index = 0; index < size >> 1; index++) {
 					Swap(index, size - index - 1);
 				}
 			}
@@ -538,7 +538,7 @@ namespace ECSEngine {
 			// it will leave another additional_elements over the current size
 			void Trim(unsigned int additional_elements) {
 				if (additional_elements < capacity - size) {
-					size_t elements_to_copy = size + additional_elements;
+					unsigned int elements_to_copy = size + additional_elements;
 					T* allocation = (T*)allocator->Allocate(sizeof(T) * elements_to_copy, alignof(T));
 					ECS_ASSERT(allocation != nullptr);
 
@@ -553,19 +553,19 @@ namespace ECSEngine {
 				}
 			}
 
-			ECS_INLINE T& operator [](size_t index) {
+			ECS_INLINE T& operator [](unsigned int index) {
 				return buffer[index];
 			}
 
-			ECS_INLINE const T& operator [](size_t index) const {
+			ECS_INLINE const T& operator [](unsigned int index) const {
 				return buffer[index];
 			}
 
-			static size_t MemoryOf(size_t number) {
+			static size_t MemoryOf(unsigned int number) {
 				return sizeof(T) * number;
 			}
 
-			void Initialize(Allocator* _allocator, size_t _capacity) {
+			void Initialize(Allocator* _allocator, unsigned int _capacity) {
 				allocator = _allocator;
 				if (_capacity > 0) {
 					ResizeNoCopy(_capacity);
@@ -721,13 +721,13 @@ namespace ECSEngine {
 			// it will reset the mapping
 			void Reset() {
 				size = 0;
-				for (size_t index = 0; index < capacity; index++) {
+				for (unsigned int index = 0; index < capacity; index++) {
 					remapping[index] = index;
 				}
 			}
 
 			void Remove(unsigned int index) {
-				for (size_t copy_index = index + 1; copy_index < size; copy_index++) {
+				for (unsigned int copy_index = index + 1; copy_index < size; copy_index++) {
 					buffer[copy_index - 1] = buffer[copy_index];
 					remapping[copy_index]--;
 				}
@@ -751,15 +751,15 @@ namespace ECSEngine {
 				remapping[second] = remap_value;
 			}
 
-			ECS_INLINE const T& operator [](size_t index) const {
+			ECS_INLINE const T& operator [](unsigned int index) const {
 				return buffer[index];
 			}
 
-			ECS_INLINE T& operator [](size_t index) {
+			ECS_INLINE T& operator [](unsigned int index) {
 				return buffer[index];
 			}
 
-			static size_t MemoryOf(size_t count) {
+			static size_t MemoryOf(unsigned int count) {
 				return sizeof(T) * count;
 			}
 

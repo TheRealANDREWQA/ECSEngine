@@ -28,24 +28,46 @@ namespace ECSEngine {
 
 	namespace Tools {
 
+		static const char* UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS[] = {
+			"x",
+			"y",
+			"z",
+			"w",
+			"t",
+			"u",
+			"v"
+		};
+
+		using UIDrawerLabelHierarchyHash = HashFunctionMultiplyString;
+
 		constexpr size_t slider_group_max_count = 8;
 		constexpr float number_input_drag_factor = 200.0f;
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		static constexpr size_t NullifyConfiguration(size_t configuration, size_t bit_flag) {
 			return ~bit_flag & configuration;
 		}
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		static constexpr bool IsElementNameFirst(size_t configuration, size_t no_name_flag) {
 			return ((configuration & UI_CONFIG_ELEMENT_NAME_FIRST) != 0) && ((configuration & no_name_flag) == 0);
 		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		static constexpr bool IsElementNameAfter(size_t configuration, size_t no_name_flag) {
 			return ((configuration & UI_CONFIG_ELEMENT_NAME_FIRST) == 0) && ((configuration & no_name_flag) == 0);
 		}
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		static constexpr size_t DynamicConfiguration(size_t configuration) {
 			return NullifyConfiguration(configuration, UI_CONFIG_DO_NOT_CACHE) | UI_CONFIG_DYNAMIC_RESOURCE;
 		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		template<size_t configuration, size_t bit_flag, typename Flag>
 		void SetConfigParameter(UIDrawConfig& config, const Flag& flag, Flag& previous_flag) {
@@ -57,6 +79,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		template<size_t configuration, size_t bit_flag, typename Flag>
 		void RemoveConfigParameter(UIDrawConfig& config, const Flag& previous_flag) {
 			if constexpr (configuration & bit_flag) {
@@ -67,10 +91,15 @@ namespace ECSEngine {
 			}
 		}
 
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		template<bool initializer>
-		class UIDrawer
+		struct UIDrawer
 		{
 		public:	
+			
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void CalculateRegionParameters(float2 position, float2 scale, const float2* render_offset) {
 				region_position = position;
 				region_scale = scale;
@@ -102,6 +131,8 @@ namespace ECSEngine {
 				current_y = region_fit_space_vertical_offset;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void DefaultDrawParameters() {
 				draw_mode = UIDrawerMode::Indent;
 				draw_mode_count = 0;
@@ -115,8 +146,10 @@ namespace ECSEngine {
 
 				no_padding_for_render_sliders = false;
 				no_padding_render_region = false;
-				deallocate_identifier_buffers = true;
+				deallocate_constructor_allocations = true;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void ConvertTextToWindowResource(const UIDrawConfig& config, const char* text, UIDrawerTextElement* element, float2 position) {
@@ -242,10 +275,14 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void ExpandRectangleFromFlag(const float* resize_factor, float2& position, float2& scale) const {
 				float2 temp_scale = scale;
 				position = ExpandRectangle(position, temp_scale, { *resize_factor, *(resize_factor + 1) }, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			bool ValidatePosition(float2 position) {
@@ -257,10 +294,14 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			bool ValidatePosition(float2 position, float2 scale) {
 				return ValidatePosition<configuration>(position) && ValidatePositionMinBound<configuration>(position, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			bool ValidatePositionY(float2 position, float2 scale) {
@@ -272,6 +313,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			bool ValidatePositionMinBound(float2 position, float2 scale) {
 				if constexpr (~configuration & UI_CONFIG_DO_NOT_VALIDATE_POSITION) {
@@ -281,6 +324,8 @@ namespace ECSEngine {
 					return true;
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UIVertexColor* HandleSolidColorBuffer() {
@@ -295,6 +340,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			size_t* HandleSolidColorCount() {
 				if constexpr (configuration & UI_CONFIG_LATE_DRAW) {
@@ -307,6 +354,8 @@ namespace ECSEngine {
 					return counts + ECS_TOOLS_UI_SOLID_COLOR;
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UISpriteVertex* HandleTextSpriteBuffer() {
@@ -321,6 +370,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			size_t* HandleTextSpriteCount() {
 				if constexpr (configuration & UI_CONFIG_LATE_DRAW) {
@@ -333,6 +384,8 @@ namespace ECSEngine {
 					return counts + ECS_TOOLS_UI_TEXT_SPRITE;
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UISpriteVertex* HandleSpriteBuffer() {
@@ -347,6 +400,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			size_t* HandleSpriteCount() {
 				if constexpr (configuration & UI_CONFIG_LATE_DRAW) {
@@ -359,6 +414,8 @@ namespace ECSEngine {
 					return counts + ECS_TOOLS_UI_SPRITE;
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UISpriteVertex* HandleSpriteClusterBuffer() {
@@ -373,6 +430,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			size_t* HandleSpriteClusterCount() {
 				if constexpr (configuration & UI_CONFIG_LATE_DRAW) {
@@ -385,6 +444,8 @@ namespace ECSEngine {
 					return counts + ECS_TOOLS_UI_SPRITE_CLUSTER;
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UIVertexColor* HandleLineBuffer() {
@@ -399,6 +460,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			size_t* HandleLineCount() {
 				if constexpr (configuration & UI_CONFIG_LATE_DRAW) {
@@ -412,12 +475,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void Line(float2 positions1, float2 positions2, Color color) {
 				auto buffer = HandleLineBuffer<configuration>();
 				auto count = HandleLineCount<configuration>();
 				SetLine(positions1, positions2, color, *count, buffer);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void HandleLateAndSystemDrawActionNullify(float2 position, float2 scale) {
@@ -435,6 +502,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawPhase HandlePhase() {
 				if constexpr (configuration & UI_CONFIG_LATE_DRAW) {
@@ -448,15 +517,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void HandleTransformFlags(const UIDrawConfig& config, float2& position, float2& scale) {
 				if constexpr (configuration & UI_CONFIG_ABSOLUTE_TRANSFORM) {
-					const float* transform = config.GetParameter(UI_CONFIG_ABSOLUTE_TRANSFORM);
+					const float* transform = (const float*)config.GetParameter(UI_CONFIG_ABSOLUTE_TRANSFORM);
 					position = { *transform, *(transform + 1) };
 					scale = { *(transform + 2), *(transform + 3) };
 				}
 				else if constexpr (configuration & UI_CONFIG_RELATIVE_TRANSFORM) {
-					const float* transform = config.GetParameter(UI_CONFIG_RELATIVE_TRANSFORM);
+					const float* transform = (const float*)config.GetParameter(UI_CONFIG_RELATIVE_TRANSFORM);
 					position.x = current_x + *transform;
 					position.y = current_y + *(transform + 1);
 					scale = {
@@ -465,7 +536,7 @@ namespace ECSEngine {
 					};
 				}
 				else if constexpr (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-					const float* transform = config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+					const float* transform = (const float*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 					WindowSizeTransformType type = *(WindowSizeTransformType*)transform;
 
 					position.x = current_x + (*(transform + 1) * layout.default_element_x);
@@ -487,10 +558,12 @@ namespace ECSEngine {
 
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void HandleText(const UIDrawConfig& config, Color& color, float2& font_size, float& character_spacing) const {
 				if constexpr (configuration & UI_CONFIG_TEXT_PARAMETERS) {
-					const float* params = config.GetParameter(UI_CONFIG_TEXT_PARAMETERS);
+					const float* params = (const float*)config.GetParameter(UI_CONFIG_TEXT_PARAMETERS);
 					// first the color, then the size and finally the spacing
 					color = *(Color*)params;
 					font_size = *(float2*)(params + 1);
@@ -511,6 +584,8 @@ namespace ECSEngine {
 				font_size.y *= zoom_ptr->y;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void HandleTextStreamColorUpdate(Color color, Stream<UISpriteVertex> vertices) {
 				if (color != vertices[0].color) {
 					for (size_t index = 0; index < vertices.size; index++) {
@@ -519,6 +594,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void HandleTextStreamColorUpdate(Color color, CapacityStream<UISpriteVertex> vertices) {
 				if (color != vertices[0].color) {
 					for (size_t index = 0; index < vertices.size; index++) {
@@ -526,6 +603,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void HandleTextLabelAlignment(
@@ -539,7 +618,7 @@ namespace ECSEngine {
 				TextAlignment& vertical_alignment
 			) {
 				if constexpr (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
-					const float* params = config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
+					const float* params = (const float*)config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
 					const TextAlignment* alignments = (TextAlignment*)params;
 					horizontal_alignment = *alignments;
 					vertical_alignment = *(alignments + 1);
@@ -576,6 +655,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void HandleTextLabelAlignment(
 				float2 text_span,
 				float2 label_scale,
@@ -610,6 +691,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void HandleDynamicResource(const char* name) {
 				if constexpr (configuration & UI_CONFIG_DYNAMIC_RESOURCE) {
@@ -617,6 +700,8 @@ namespace ECSEngine {
 					system->IncrementWindowDynamicResource(window_index, identifier);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void HandleBorder(const UIDrawConfig& config, float2 position, float2 scale) {
@@ -648,6 +733,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			Color HandleColor(const UIDrawConfig& config) const {
 				if constexpr (configuration & UI_CONFIG_COLOR) {
@@ -657,6 +744,8 @@ namespace ECSEngine {
 					return color_theme.theme;
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<bool permanent_buffer = false>
 			const char* HandleResourceIdentifier(const char* input) {
@@ -687,6 +776,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<bool permanent_buffer = false>
 			const char* HandleResourceIdentifier(const char* input, size_t& size) {
 				constexpr size_t max_character_count = 1024;
@@ -715,6 +806,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void HandleRectangleActions(const UIDrawConfig& config, float2 position, float2 scale) {
 				if constexpr (configuration & UI_CONFIG_HOVERABLE_ACTION) {
@@ -733,6 +826,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// if zoom differes between initialization and copying, then it will scale and will translate
 			// as if it didn't change zoom; this is due to allow simple text to be copied and for bigger constructs
 			// to determine their own change in translation needed to copy the element; since the buffer will reside
@@ -745,6 +840,8 @@ namespace ECSEngine {
 
 				return info;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// if zoom differes between initialization and copying, then it will scale and will translate
 			// as if it didn't change zoom; this is due to allow simple text to be copied and for bigger constructs
@@ -796,6 +893,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// cull_mode 0 - horizontal
 			// cull_mode 1 - vertical
 			// cull_mode 2 - horizontal main, vertical secondary
@@ -815,6 +914,8 @@ namespace ECSEngine {
 						
 				return info;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// cull_mode 0 - horizontal
 			// cull_mode 1 - vertical
@@ -1118,6 +1219,8 @@ namespace ECSEngine {
 				*text_count += copy_count;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			bool HandleFitSpaceRectangle(float2& position, float2 scale) {
 				if constexpr (~configuration & UI_CONFIG_DO_NOT_FIT_SPACE) {
@@ -1145,6 +1248,8 @@ namespace ECSEngine {
 				}
 				return false;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename SliderType, typename Filter>
 			void HandleSliderActions(
@@ -1202,18 +1307,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 HandleLabelSize(float2 text_span) const {
 				float2 scale;
 				scale = text_span;
 				scale.x += 2 * element_descriptor.label_horizontal_padd;
 				scale.y += 2 * element_descriptor.label_vertical_padd;
-				/*if constexpr (configuration & UI_CONFIG_RELATIVE_TRANSFORM) {
-					const float* transform = config.GetParameter(UI_CONFIG_RELATIVE_TRANSFORM);
-					scale.x += *(transform + 2) * layout.default_element_x;
-					scale.y += *(transform + 3) * layout.default_element_y;
-				}*/
 				return scale;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void HandleSliderVariables(
@@ -1224,7 +1328,7 @@ namespace ECSEngine {
 				Color background_color
 			) {
 				if constexpr (configuration & UI_CONFIG_SLIDER_LENGTH) {
-					length = *config.GetParameter(UI_CONFIG_SLIDER_LENGTH);
+					length = *(const float*)config.GetParameter(UI_CONFIG_SLIDER_LENGTH);
 				}
 				else {
 					if constexpr (configuration & UI_CONFIG_VERTICAL) {
@@ -1236,7 +1340,7 @@ namespace ECSEngine {
 				}
 
 				if constexpr (configuration & UI_CONFIG_SLIDER_PADDING) {
-					padding = *config.GetParameter(UI_CONFIG_SLIDER_PADDING);
+					padding = *(const float*)config.GetParameter(UI_CONFIG_SLIDER_PADDING);
 				}
 				else {
 					if constexpr (configuration & UI_CONFIG_VERTICAL) {
@@ -1262,6 +1366,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void SolidColorRectangle(float2 position, float2 scale, Color color) {
 				if constexpr (!initializer) {
@@ -1275,11 +1381,15 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void SolidColorRectangle(const UIDrawConfig& config, float2 position, float2 scale) {
 				Color color = HandleColor<configuration>(config);
 				SolidColorRectangle<configuration>(position, scale, color);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void SolidColorRectangle(const UIDrawConfig& config, float2 position, float2 scale, Color color) {
@@ -1291,6 +1401,8 @@ namespace ECSEngine {
 					HandleRectangleActions<configuration>(config, position, scale);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// it will finalize the rectangle
 			template<size_t configuration>
@@ -1368,6 +1480,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// resource drawer
 			template<size_t configuration>
 			void TextLabel(const UIDrawConfig& config, UIDrawerTextElement* text, float2& position, float2 scale) {
@@ -1415,6 +1529,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, text_span);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename UIDrawConfig>
 			void Rectangle(const UIDrawConfig& config, float2 position, float2 scale) {
 				HandleFitSpaceRectangle<configuration>(position, scale);
@@ -1456,6 +1572,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void SpriteClusterRectangle(
 				float2 position,
@@ -1470,6 +1588,8 @@ namespace ECSEngine {
 
 				SetSpriteRectangle(position, scale, color, top_left_uv, bottom_right_uv, buffer, *count);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorSpriteClusterRectangle(
@@ -1486,6 +1606,8 @@ namespace ECSEngine {
 				SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, buffer, *count);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorSpriteClusterRectangle(
 				float2 position,
@@ -1500,6 +1622,8 @@ namespace ECSEngine {
 
 				SetVertexColorSpriteRectangle(position, scale, colors, top_left_uv, bottom_right_uv, buffer, *count);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// resource drawer
 			template<size_t configuration>
@@ -1517,6 +1641,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, zoomed_scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void TextLabelWithCull(const UIDrawConfig& config, const char* text, float2 position, float2 scale) {
 				if constexpr (configuration & UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE) {
@@ -1527,7 +1653,7 @@ namespace ECSEngine {
 				TextAlignment horizontal_alignment, vertical_alignment;
 				GetTextLabelAlignment<configuration>(config, horizontal_alignment, vertical_alignment);
 
-				const float* dependent_size = config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+				const float* dependent_size = (const float*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 				const WindowSizeTransformType* type = (WindowSizeTransformType*)dependent_size;
 
 				size_t text_count = ParseStringIdentifier(text, strlen(text));
@@ -1693,10 +1819,16 @@ namespace ECSEngine {
 				HandleLateAndSystemDrawActionNullify<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerTextElement* TextInitializer(const UIDrawConfig& config, const char* characters, float2 position) {
 				UIDrawerTextElement* element;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(characters, [&](const char* label_identifier) {
 					element = GetMainAllocatorBuffer<UIDrawerTextElement>();
 
@@ -1711,10 +1843,16 @@ namespace ECSEngine {
 				return element;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerTextElement* TextLabelInitializer(const UIDrawConfig& config, const char* characters, float2 position, float2 scale) {
 				UIDrawerTextElement* element;
 				
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(characters, [&](const char* identifier) {
 					TextAlignment horizontal_alignment, vertical_alignment;
 					element = GetMainAllocatorBuffer<UIDrawerTextElement>();
@@ -1748,6 +1886,8 @@ namespace ECSEngine {
 				return element;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void TextLabelDrawer(const UIDrawConfig& config, UIDrawerTextElement* element, float2 position, float2 scale) {
 				if constexpr (configuration & UI_CONFIG_GET_TRANSFORM) {
@@ -1765,7 +1905,7 @@ namespace ECSEngine {
 					GetTextLabelAlignment<configuration>(config, horizontal_alignment, vertical_alignment);
 
 					if constexpr (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-						const float* dependent_size = config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+						const float* dependent_size = (const float*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 						const WindowSizeTransformType* type = (WindowSizeTransformType*)dependent_size;
 
 						size_t copy_count;
@@ -1896,33 +2036,7 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
-			/*template<size_t configuration>
-			void TableDrawer(
-				UIDrawConfig& config,
-				size_t row_count,
-				size_t column_count,
-				Action column_action,
-				const char** column_headings,
-				const float* column_x_span,
-				void** cell_data,
-				const char* name,
-				TextAlignment name_alignment,
-				float2 position, 
-				float2 scale
-			) {
-				float2 starting_position = position;
-				if (name != nullptr) {
-					UIConfigTextAlignment alignment;
-					alignment.horizontal = name_alignment;
-					alignment.vertical = TextAlignment::Middle;
-
-					UIConfigTextAlignment previous_alignment;
-					if constexpr (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
-						config.SetExistingFlag(alignmnet, UI_CONFIG_TEXT_ALIGNMENT, previous_alignment);
-					}
-					TextLabel<configuration | UI_CONFIG_TEXT_ALIGNMENT>(config, name, position, scale);
-				}
-			}*/
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// single lined text input; drawer kernel
 			template<size_t configuration, typename Filter = TextFilterAll>
@@ -1954,6 +2068,12 @@ namespace ECSEngine {
 				}
 
 				if (ValidatePosition<configuration>(position, scale)) {
+					bool is_active = true;
+					if constexpr (configuration & UI_CONFIG_ACTIVE_STATE) {
+						const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
+						is_active = active_state->state;
+					}
+
 					auto text_stream = GetTextStream<configuration>(input->vertices.size);
 					UISpriteVertex* text_buffer = HandleTextSpriteBuffer<configuration>();
 					size_t* text_count = HandleTextSpriteCount<configuration>();
@@ -1962,6 +2082,9 @@ namespace ECSEngine {
 					float character_spacing;
 					Color font_color;
 					HandleText<configuration>(config, font_color, font_size, character_spacing);
+					if (!is_active) {
+						font_color = color_theme.unavailable_text;
+					}
 					HandleTextStreamColorUpdate(font_color, input->vertices);
 					input->text_color = font_color;
 
@@ -2054,9 +2177,13 @@ namespace ECSEngine {
 					}
 					Color color = HandleColor<configuration>(config);
 					SolidColorRectangle<configuration>(position, scale, color);
-					AddHoverable(position, scale, { TextInputHoverable, input, 0 });
-					AddClickable(position, scale, { TextInputClickable, input, 0 });
-					AddGeneral(position, scale, { TextInputAction<Filter>, input, 0 });
+					
+					if (is_active) {
+						AddHoverable(position, scale, { TextInputHoverable, input, 0 });
+						AddClickable(position, scale, { TextInputClickable, input, 0 });
+						AddGeneral(position, scale, { TextInputAction<Filter>, input, 0 });
+					}
+
 
 					if (input->current_selection != input->current_sprite_position) {
 						Color select_color = ToneColor(color, color_theme.select_text_factor);
@@ -2124,9 +2251,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerTextInput* TextInputInitializer(UIDrawConfig& config, const char* name, CapacityStream<char>* text_to_fill, float2 position, float2 scale) {
 				UIDrawerTextInput* element;
+
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 
 					float character_spacing;
@@ -2227,6 +2361,8 @@ namespace ECSEngine {
 				return element;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename Value>
 			UIDrawerSlider* SliderInitializer(
 				UIDrawConfig& config, 
@@ -2239,6 +2375,11 @@ namespace ECSEngine {
 				Value default_value
 			) {
 				UIDrawerSlider* slider;
+
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(
 					name, [&](const char* identifier) {
 						Color font_color;
@@ -2332,10 +2473,17 @@ namespace ECSEngine {
 							stack_memory[name_size + 9] = '\0';
 
 							if constexpr (~configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
-								slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME>(config, stack_memory, &slider->characters, position, scale);
+								slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
+									config, 
+									stack_memory, 
+									&slider->characters,
+									position,
+									scale
+								);
 							}
 							else {
-								slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, stack_memory, &slider->characters, position, scale);
+								slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+									| UI_CONFIG_TEXT_INPUT_CALLBACK>(config, stack_memory, &slider->characters, position, scale);
 							}
 
 							RemoveConfigParameter<configuration, UI_CONFIG_TEXT_INPUT_CALLBACK>(config, previous_callback);
@@ -2364,6 +2512,8 @@ namespace ECSEngine {
 				);
 				return slider;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename EnterValuesFilter = TextFilterAll, typename Value>
 			void SliderDrawer(
@@ -2443,7 +2593,7 @@ namespace ECSEngine {
 						else {
 							scale.x -= slider_padding + slider_length;
 						}
-						const float* window_transform = config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+						const float* window_transform = (const float*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 						type = (WindowSizeTransformType*)window_transform;
 					}
 
@@ -2613,6 +2763,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename EnterValuesFilter = TextFilterAll, typename Value>
 			void SliderGroupDrawer(
 				UIDrawConfig& config,
@@ -2634,21 +2786,13 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				char temp_name[128];
-				size_t group_name_size = strlen(group_name);
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					UIDrawerSlider* slider;
-					if constexpr (configuration & UI_CONFIG_SLIDER_GROUP_NO_SUBNAMES) {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), random_index);
-						slider = (UIDrawerSlider*)GetResource(temp_name);
-					}
-					else {
-						slider = (UIDrawerSlider*)GetResource(names[index]);
-					}
+					const char* identifier = HandleResourceIdentifier(names[index]);
+					slider = (UIDrawerSlider*)GetResource(identifier);
 					
 					HandleTransformFlags<configuration>(config, position, scale);
 					Value lower_bound, upper_bound, default_value;
@@ -2694,12 +2838,17 @@ namespace ECSEngine {
 					}
 				}
 
+				PopIdentifierStack();
+				PopIdentifierStack();
+
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_SLIDER_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
 				}
 #undef LABEL_CONFIGURATION
 #undef LABEL_CONFIGURATION_LAST
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename Value>
 			void SliderGroupInitializer(
@@ -2714,14 +2863,19 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale
 			) {
-#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
+
+#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW \
+							| UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_SLIDER_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 				}
 
-				char temp_name[128];
-				size_t group_name_size = strlen(group_name);
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					Value lower_bound, upper_bound, default_value;
@@ -2742,7 +2896,7 @@ namespace ECSEngine {
 					}
 
 					if constexpr (~configuration & UI_CONFIG_SLIDER_GROUP_NO_SUBNAMES) {
-						SliderInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST, Value>(
+						SliderInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN, Value>(
 							config,
 							names[index],
 							position,
@@ -2754,27 +2908,29 @@ namespace ECSEngine {
 							);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), random_index);
-						SliderInitializer<configuration | UI_CONFIG_SLIDER_NO_NAME, Value>(
+						SliderInitializer<configuration | UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN, Value>(
 							config,
-							temp_name,
+							names[index],
 							position,
 							scale,
 							values_to_modify[index],
 							lower_bound,
 							upper_bound,
 							default_value
-							);
+						);
 					}
 				}
+
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_SLIDER_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 				}
 #undef LABEL_CONFIGURATION
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename Integer>
 			UIDrawerSlider* IntSliderInitializer(
@@ -2795,6 +2951,8 @@ namespace ECSEngine {
 				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename Integer>
 			void IntSliderDrawer(
 				const UIDrawConfig& config,
@@ -2813,6 +2971,8 @@ namespace ECSEngine {
 				_default_value.ConstructValue(default_value);
 				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UIDrawerSlider* FloatSliderInitializer(
@@ -2838,6 +2998,8 @@ namespace ECSEngine {
 				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void FloatSliderDrawer(
 				const UIDrawConfig& config,
@@ -2861,6 +3023,8 @@ namespace ECSEngine {
 				_default_value.ConstructExtraData(&precision);
 				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UIDrawerSlider* DoubleSliderInitializer(
@@ -2886,6 +3050,8 @@ namespace ECSEngine {
 				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void DoubleSliderDrawer(
 				const UIDrawConfig& config,
@@ -2910,10 +3076,16 @@ namespace ECSEngine {
 				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerComboBox* ComboBoxInitializer(UIDrawConfig& config, const char* name, Stream<const char*> labels, unsigned int label_display_count, unsigned char* active_label, float2 position, float2 scale) {
 				UIDrawerComboBox* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerComboBox>();
 
@@ -2940,6 +3112,7 @@ namespace ECSEngine {
 					}
 					else {
 						data->prefix = nullptr;
+						data->prefix_x_scale = 0.0f;
 					}
 
 					float current_max_x = 0.0f;
@@ -2977,10 +3150,16 @@ namespace ECSEngine {
 				return data;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerTextElement* CheckBoxInitializer(const UIDrawConfig& config, const char* name, float2 position) {
 				UIDrawerTextElement* element = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					element = GetMainAllocatorBuffer<UIDrawerTextElement>();
 
@@ -2991,6 +3170,8 @@ namespace ECSEngine {
 
 				return element;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void CheckBoxDrawer(const UIDrawConfig& config, UIDrawerTextElement* element, bool* value_to_modify, float2 position, float2 scale) {
@@ -3027,13 +3208,16 @@ namespace ECSEngine {
 						HandleLateAndSystemDrawActionNullify<configuration>(position, scale);
 					}
 
-					FinalizeRectangle<configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW>(position, scale);
+				}
 
-					if constexpr (IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-						ElementName<configuration>(config, element, position, scale);
-					}
+				FinalizeRectangle<configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW>(position, scale);
+
+				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
+					ElementName<configuration>(config, element, position, scale);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void CheckBoxDrawer(const UIDrawConfig& config, const char* name, bool* value_to_modify, float2 position, float2 scale) {
@@ -3065,18 +3249,22 @@ namespace ECSEngine {
 							SpriteRectangle<configuration>(position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color, { 0.0f, 0.0f }, { 1.0f, 1.0f });
 						}
 
+						SolidColorRectangle<configuration>(position, scale, color);
 						AddDefaultClickableHoverable(position, scale, { BoolClickable, value_to_modify, 0 }, color);
 
 						HandleLateAndSystemDrawActionNullify<configuration>(position, scale);
 					}
 
-					FinalizeRectangle<configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW>(position, scale);
+				}
 
-					if constexpr (IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-						ElementName<configuration>(config, name, position, scale);
-					}
+				FinalizeRectangle<configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW>(position, scale);
+
+				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
+					ElementName<configuration>(config, name, position, scale);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void ComboBoxDrawer(UIDrawConfig& config, UIDrawerComboBox* data, unsigned char* active_label, float2 position, float2 scale) {
@@ -3111,7 +3299,7 @@ namespace ECSEngine {
 				if (ValidatePosition<configuration>(position, scale)) {
 					if constexpr (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
 						Stream<UISpriteVertex> vertices = GetTextStream<configuration>(strlen(data->prefix) * 6);
-						constexpr size_t new_configuration = function::RemoveFlag(function::RemoveFlag(configuration, UI_CONFIG_BORDER), UI_CONFIG_GET_TRANSFORM)
+						constexpr size_t new_configuration = function::ClearFlag(function::ClearFlag(configuration, UI_CONFIG_BORDER), UI_CONFIG_GET_TRANSFORM)
 							| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_CACHE;
 
 						if (is_active) {
@@ -3130,7 +3318,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						constexpr size_t new_configuration = function::RemoveFlag(configuration, UI_CONFIG_GET_TRANSFORM) | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
+						constexpr size_t new_configuration = function::ClearFlag(configuration, UI_CONFIG_GET_TRANSFORM) | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
 							| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT;
 						if (is_active) {
 							TextLabelDrawer<new_configuration>(config, &data->labels[*data->active_label], position, scale);
@@ -3158,7 +3346,7 @@ namespace ECSEngine {
 					percentages[0] = 1.25f;
 					percentages[1] = 1.25f;
 
-					constexpr size_t no_get_transform_configuration = function::RemoveFlag(configuration, UI_CONFIG_GET_TRANSFORM);
+					constexpr size_t no_get_transform_configuration = function::ClearFlag(configuration, UI_CONFIG_GET_TRANSFORM);
 
 					float2 triangle_scale = GetSquareScale(scale.y);
 					float2 triangle_position = { position.x + scale.x - triangle_scale.x, position.y };
@@ -3220,6 +3408,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerColorInput* ColorInputInitializer(
 				UIDrawConfig& config, 
@@ -3231,6 +3421,10 @@ namespace ECSEngine {
 			) {
 				UIDrawerColorInput* data = nullptr;
 				
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 
 					data = GetMainAllocatorBuffer<UIDrawerColorInput>();
@@ -3243,10 +3437,10 @@ namespace ECSEngine {
 					unsigned int name_size = strlen(name);
 					constexpr auto slider_lambda = [&]() {
 						if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
-							return configuration | UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
+							return configuration | UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 						}
 						else {
-							return configuration | UI_CONFIG_SLIDER_NO_NAME;
+							return configuration | UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 						}
 					};
 
@@ -3280,18 +3474,42 @@ namespace ECSEngine {
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Red");
 						stack_memory[name_size + 3] = '\0';
-						data->r_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &color->red, (unsigned char)0, (unsigned char)255);
+						data->r_slider = IntSliderInitializer<slider_configuration>(
+							config, 
+							stack_memory, 
+							position, 
+							scale, 
+							&color->red,
+							(unsigned char)0,
+							(unsigned char)255
+						);
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Green");
 
 						HandleTransformFlags<configuration>(config, position, scale);
-						data->g_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &color->green, (unsigned char)0, (unsigned char)255);
+						data->g_slider = IntSliderInitializer<slider_configuration>(
+							config, 
+							stack_memory, 
+							position,
+							scale, 
+							&color->green, 
+							(unsigned char)0, 
+							(unsigned char)255
+						);
 
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Blue");
 
 						HandleTransformFlags<configuration>(config, position, scale);
-						data->b_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &color->blue, (unsigned char)0, (unsigned char)255);			
+						data->b_slider = IntSliderInitializer<slider_configuration>(
+							config,
+							stack_memory,
+							position,
+							scale, 
+							&color->blue, 
+							(unsigned char)0,
+							(unsigned char)255
+							);			
 						
 						if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 							if constexpr (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3332,18 +3550,42 @@ namespace ECSEngine {
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Hue");
 
-						data->h_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &data->hsv.hue, (unsigned char)0, (unsigned char)255);
+						data->h_slider = IntSliderInitializer<slider_configuration>(
+							config, 
+							stack_memory,
+							position, 
+							scale, 
+							&data->hsv.hue,
+							(unsigned char)0, 
+							(unsigned char)255
+						);
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Saturation");
 
 						HandleTransformFlags<configuration>(config, position, scale);
-						data->s_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &data->hsv.saturation, (unsigned char)0, (unsigned char)255);
+						data->s_slider = IntSliderInitializer<slider_configuration>(
+							config, 
+							stack_memory,
+							position,
+							scale,
+							&data->hsv.saturation,
+							(unsigned char)0, 
+							(unsigned char)255
+						);
 
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Value");
 
 						HandleTransformFlags<configuration>(config, position, scale);
-						data->v_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &data->hsv.value, (unsigned char)0, (unsigned char)255);
+						data->v_slider = IntSliderInitializer<slider_configuration>(
+							config,
+							stack_memory, 
+							position, 
+							scale, 
+							&data->hsv.value,
+							(unsigned char)0,
+							(unsigned char)255
+						);
 						
 						if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 							if constexpr (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3384,7 +3626,15 @@ namespace ECSEngine {
 						stack_memory[name_size] = '\0';
 						strcat(stack_memory, "Alpha");
 						stack_memory[name_size + 5] = '\0';
-						data->a_slider = IntSliderInitializer<slider_configuration>(config, stack_memory, position, scale, &color->alpha, (unsigned char)0, (unsigned char)255);
+						data->a_slider = IntSliderInitializer<slider_configuration>(
+							config, 
+							stack_memory, 
+							position, 
+							scale,
+							&color->alpha, 
+							(unsigned char)0,
+							(unsigned char)255
+						);
 						
 						if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 							if constexpr (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3414,7 +3664,8 @@ namespace ECSEngine {
 						callback.handler.data_size = 0;
 
 						config.AddFlag(callback);
-						data->hex_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, stack_memory, &data->hex_characters, position, scale);
+						data->hex_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+							| UI_CONFIG_TEXT_INPUT_CALLBACK>(config, stack_memory, &data->hex_characters, position, scale);
 						config.flag_count--;
 					}
 					else {
@@ -3446,6 +3697,8 @@ namespace ECSEngine {
 
 				return data;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void ColorInputDrawer(UIDrawConfig& config, UIDrawerColorInput* data, float2 position, float2 scale, Color* color, Color default_color) {
@@ -3770,6 +4023,7 @@ namespace ECSEngine {
 					hex_lambda();
 				}
 
+#undef SLIDER
 #undef LABEL_CONFIGURATION
 #undef SLIDER_CONFIGURATION
 			}
@@ -3778,6 +4032,10 @@ namespace ECSEngine {
 			UIDrawerCollapsingHeader* CollapsingHeaderInitializer(const UIDrawConfig& config, const char* name, float2 position, float2 scale) {
 				UIDrawerCollapsingHeader* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerCollapsingHeader>();
 
@@ -3791,6 +4049,8 @@ namespace ECSEngine {
 
 				return data;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void CollapsingHeaderDrawer(UIDrawConfig& config, UIDrawerCollapsingHeader* data, float2 position, float2 scale) {
@@ -3903,6 +4163,8 @@ namespace ECSEngine {
 				}
 				NextRow();
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void CollapsingHeaderDrawer(UIDrawConfig& config, const char* name, bool* state, float2 position, float2 scale) {
@@ -4017,10 +4279,16 @@ namespace ECSEngine {
 				NextRow();
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerHierarchy* HierarchyInitializer(const UIDrawConfig& config, const char* name) {
 				UIDrawerHierarchy* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = (UIDrawerHierarchy*)GetMainAllocatorBuffer<UIDrawerHierarchy>();
 
@@ -4073,6 +4341,8 @@ namespace ECSEngine {
 				return data;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename InitialValueInitializer, typename CallbackHover>
 			UIDrawerTextInput* NumberInputInitializer(
 				UIDrawConfig& config, 
@@ -4085,6 +4355,10 @@ namespace ECSEngine {
 				InitialValueInitializer&& initial_value_init,
 				CallbackHover&& callback_hover
 			) {
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				// kinda unnecessary memcpy's here but should not cost too much
 				char full_name[256];
 				const char* identifier = HandleResourceIdentifier(name);
@@ -4100,7 +4374,13 @@ namespace ECSEngine {
 				UIConfigTextInputCallback callback;
 				callback.handler = { callback_action, callback_data, static_cast<unsigned int>(callback_data_size) };
 				config.AddFlag(callback);
-				UIDrawerTextInput* input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, name, stream, position, scale);
+				UIDrawerTextInput* input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
+					config,
+					name, 
+					stream, 
+					position, 
+					scale
+				);
 				UIDrawerFloatInputCallbackData* callback_input_ptr = (UIDrawerFloatInputCallbackData*)input->callback_data;
 				callback_input_ptr->input = input;
 				config.flag_count--;
@@ -4117,6 +4397,8 @@ namespace ECSEngine {
 				return input;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename Lambda>
 			void NumberInputDrawer(
 				const UIDrawConfig& config, 
@@ -4124,6 +4406,7 @@ namespace ECSEngine {
 				Action hoverable_action,
 				void* hoverable_data,
 				unsigned int hoverable_data_size,
+				Action wrapper_hoverable_action,
 				Action draggable_action,
 				void* draggable_data,
 				unsigned int draggable_data_size,
@@ -4131,64 +4414,88 @@ namespace ECSEngine {
 				float2 scale, 
 				Lambda&& lambda
 			) {
+				constexpr float DRAG_X_THRESHOLD = 0.0175f;
 				UIDrawerTextInput* input = (UIDrawerTextInput*)GetResource(name);
 
-				Stream<char> tool_tip_stream;
-				const char* identifier = HandleResourceIdentifier(name);
-				size_t identifier_size = strlen(identifier);
-				char tool_tip_name[128];
-				memcpy(tool_tip_name, identifier, identifier_size);
-				tool_tip_name[identifier_size] = '\0';
-				strcat(tool_tip_name, "tool tip");
-				char* tool_tip_characters = (char*)GetResource(tool_tip_name);
-				tool_tip_stream = Stream<char>(tool_tip_characters, 0);
+				// Only update the tool tip if it is visible in the y dimension
+				bool is_valid_y = ValidatePositionY<configuration>(position, scale);
+				const char* tool_tip_characters = nullptr;
+				if (is_valid_y) {
+					Stream<char> tool_tip_stream;
+					const char* identifier = HandleResourceIdentifier(name);
+					size_t identifier_size = strlen(identifier);
+					char tool_tip_name[128];
+					memcpy(tool_tip_name, identifier, identifier_size);
+					tool_tip_name[identifier_size] = '\0';
+					strcat(tool_tip_name, "tool tip");
+					tool_tip_characters = (char*)FindWindowResource(tool_tip_name);
+					tool_tip_stream = Stream<char>(tool_tip_characters, 0);
 
-				lambda(input, tool_tip_stream);
+					lambda(input, tool_tip_stream);
+				}
 				size_t text_count_before = *HandleTextSpriteCount<configuration>();
 				TextInputDrawer<configuration, TextFilterNumbers>(config, input, position, scale);
 
 				UISpriteVertex* text_buffer = HandleTextSpriteBuffer<configuration>();
 				size_t* text_count = HandleTextSpriteCount<configuration>();
 
-				if (text_count_before != *text_count) {
-					size_t name_length = input->name.text_vertices.size;
-					Stream<UISpriteVertex> stream;
+				// Only add the actions if it is visible in the y dimension
+				if (is_valid_y) {
+					if (text_count_before != *text_count) {
+						size_t name_length = input->name.text_vertices.size;
+						Stream<UISpriteVertex> stream;
 
-					if constexpr (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-						stream = Stream<UISpriteVertex>(text_buffer + *text_count - name_length, name_length);
-					}
-					else if constexpr (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-						stream = Stream<UISpriteVertex>(text_buffer + text_count_before, name_length);
-					}
-					else {
-						stream = Stream<UISpriteVertex>(nullptr, 0);
-					}
+						float2 text_span = { 0.0f, 0.0f };
+						float2 text_position = { 0.0f, 0.0f };
+						if constexpr (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+							stream = Stream<UISpriteVertex>(text_buffer + *text_count - name_length, name_length);
+							text_span = GetTextSpan(stream);
+							text_position = { stream[0].position.x, -stream[0].position.y };
+						}
+						else if constexpr (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+							stream = Stream<UISpriteVertex>(text_buffer + text_count_before, name_length);
+							text_span = GetTextSpan(stream);
+							text_position = { stream[0].position.x, -stream[0].position.y };
+						}
+						else {
+							stream = Stream<UISpriteVertex>(nullptr, 0);
+						}
 
-					float2 text_span = GetTextSpan(stream);
-					float2 text_position = { stream[0].position.x, -stream[0].position.y };
-					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-						tool_tip_name[identifier_size] = '\0';
-						strcat(tool_tip_name, "tool tip");
-						char* tool_tip_data_characters = (char*)GetResource(tool_tip_name);
+						// If the scale on the x axis is smaller than a threshold, increase it
+						if (text_span.x < DRAG_X_THRESHOLD) {
+							float adjust_position = DRAG_X_THRESHOLD - text_span.x;
+							text_span.x = DRAG_X_THRESHOLD;
+							text_position.x -= adjust_position * 0.5f;
+						}
 
-						UITextTooltipHoverableData* tool_tip_data_ptr = (UITextTooltipHoverableData*)hoverable_data;
-						tool_tip_data_ptr->characters = tool_tip_data_characters;
-						tool_tip_data_ptr->base.offset.y = 0.007f;
-						tool_tip_data_ptr->base.offset_scale.y = true;
-						tool_tip_data_ptr->base.next_row_offset = 0.006f;
-						uintptr_t tool_tip_reinterpretation = (uintptr_t)tool_tip_data_ptr;
-						tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);
-						UIDrawerFloatInputCallbackData* temp_reinterpretation = (UIDrawerFloatInputCallbackData*)tool_tip_reinterpretation;
-						temp_reinterpretation->input = input;
+						if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
+							if constexpr (configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
+								text_position = position;
+								text_span = scale;
+								hoverable_action = wrapper_hoverable_action;
+							}
 
-						AddHoverable(text_position, text_span, { hoverable_action, hoverable_data, hoverable_data_size, UIDrawPhase::System });
-					}
+							UITextTooltipHoverableData* tool_tip_data_ptr = (UITextTooltipHoverableData*)hoverable_data;
+							tool_tip_data_ptr->characters = tool_tip_characters;
+							tool_tip_data_ptr->base.offset.y = 0.007f;
+							tool_tip_data_ptr->base.offset_scale.y = true;
+							tool_tip_data_ptr->base.next_row_offset = 0.006f;
+							uintptr_t tool_tip_reinterpretation = (uintptr_t)tool_tip_data_ptr;
+							tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);
+							UIDrawerFloatInputCallbackData* temp_reinterpretation = (UIDrawerFloatInputCallbackData*)tool_tip_reinterpretation;
+							temp_reinterpretation->input = input;
 
-					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
-						AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+							AddHoverable(text_position, text_span, { hoverable_action, hoverable_data, hoverable_data_size, UIDrawPhase::System });
+						}
+
+						if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
+							AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+						}
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UIDrawerTextInput* FloatInputInitializer(UIDrawConfig& config, const char* name, float* number, float min, float max, float2 position, float2 scale) {
@@ -4199,7 +4506,7 @@ namespace ECSEngine {
 				}
 				else {
 					callback_data.max = FLT_MAX;
-					callback_data.min = FLT_MIN;
+					callback_data.min = -FLT_MAX;
 				}
 				callback_data.number = number;			
 
@@ -4223,6 +4530,8 @@ namespace ECSEngine {
 				);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerTextInput* DoubleInputInitializer(UIDrawConfig& config, const char* name, double* number, double min, double max, float2 position, float2 scale) {
 				UIDrawerDoubleInputCallbackData callback_data;
@@ -4232,7 +4541,7 @@ namespace ECSEngine {
 				}
 				else {
 					callback_data.max = DBL_MAX;
-					callback_data.min = DBL_MIN;
+					callback_data.min = -DBL_MAX;
 				}
 				callback_data.number = number;
 
@@ -4256,6 +4565,8 @@ namespace ECSEngine {
 					);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename Integer>
 			UIDrawerTextInput* IntInputInitializer(UIDrawConfig& config, const char* name, Integer* number, Integer min, Integer max, float2 position, float2 scale) {
 				UIDrawerIntegerInputCallbackData< Integer> callback_data;
@@ -4264,38 +4575,7 @@ namespace ECSEngine {
 					callback_data.min = min;
 				}
 				else {
-					if constexpr (std::is_same_v<Integer, int8_t>) {
-						callback_data.max = CHAR_MAX;
-						callback_data.min = CHAR_MIN;
-					}
-					else if constexpr (std::is_same_v<Integer, uint8_t>) {
-						callback_data.max = UCHAR_MAX;
-						callback_data.min = 0;
-					}
-					else if constexpr (std::is_same_v<Integer, int16_t>) {
-						callback_data.max = SHORT_MAX;
-						callback_data.min = SHORT_MIN;
-					}
-					else if constexpr (std::is_same_v<Integer, uint16_t>) {
-						callback_data.max = USHORT_MAX;
-						callback_data.min = 0;
-					}
-					else if constexpr (std::is_same_v<Integer, int32_t>) {
-						callback_data.max = INT_MAX;
-						callback_data.min = INT_MIN;
-					}
-					else if constexpr (std::is_same_v<Integer, uint32_t>) {
-						callback_data.max = UINT_MAX;
-						callback_data.min = 0;
-					}
-					else if constexpr (std::is_same_v<Integer, int64_t>) {
-						callback_data.max = LLONG_MAX;
-						callback_data.min = LLONG_MIN;
-					}
-					else if constexpr (std::is_same_v<Integer, uint64_t>) {
-						callback_data.max = LLONG_MAX;
-						callback_data.min = 0;
-					}
+					function::IntegerRange(callback_data.min, callback_data.max);
 				}
 				callback_data.number = number;
 
@@ -4319,9 +4599,12 @@ namespace ECSEngine {
 				);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void FloatInputDrawer(const UIDrawConfig& config, const char* name, float* number, float default_value, float min, float max, float2 position, float2 scale) {
+				const float EPSILON = 0.0005f;
+				
 				UIDrawerFloatInputHoverableData hover_data;
 				hover_data.data.default_value = default_value;
 				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
@@ -4331,30 +4614,44 @@ namespace ECSEngine {
 					hover_data.data.default_value = *number;
 				}
 				UIDrawerFloatInputDragData drag_data;
-				drag_data.data.number = number;
+				drag_data.number = number;
 				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-					drag_data.data.min = min;
-					drag_data.data.max = max;
+					drag_data.min = min;
+					drag_data.max = max;
 				}
 				else {
-					drag_data.data.min = FLT_MIN;
-					drag_data.data.max = FLT_MAX;
+					drag_data.min = -FLT_MAX;
+					drag_data.max = FLT_MAX;
 				}
-				drag_data.difference_factor = number_input_drag_factor;
 
-				NumberInputDrawer<configuration>(config, name, FloatInputHoverable, &hover_data, sizeof(hover_data),
+				NumberInputDrawer<configuration>(config, name, FloatInputHoverable, &hover_data, sizeof(hover_data), FloatInputNoNameHoverable,
 					FloatInputDragValue, &drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
 					char temp_chars[256];
-					float current_value = function::ConvertCharactersToFloat(*input->text);
-					if (current_value != *number && !input->is_currently_selected) {
+					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+					UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
+
+					if (!function::IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
 						input->DeleteAllCharacters();
-						Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+						function::ConvertFloatToChars(temp_stream, function::Clamp(0.0f, data->min, data->max));
+						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
+						temp_stream.size = 0;
+					}
+
+					unsigned int digit_count = 0;
+					const char* dot = strchr(input->text->buffer, '.');
+					if (dot != nullptr) {
+						digit_count = input->text->buffer + input->text->size - dot - 1;
+					}
+
+					// If the value changed, update the input stream
+					float current_value = function::ConvertCharactersToFloat(*input->text);
+					if ((abs(current_value - *number) > EPSILON || digit_count != 3) && !input->is_currently_selected) {
+						input->DeleteAllCharacters();
 						function::ConvertFloatToChars(temp_stream, *number, 3);
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 					}
 
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-						UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
 						bool is_different = data->max != max || data->min != min;
 						data->max = max;
 						data->min = min;
@@ -4374,8 +4671,12 @@ namespace ECSEngine {
 				});
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void DoubleInputDrawer(const UIDrawConfig& config, const char* name, double* number, double default_value, double min, double max, float2 position, float2 scale) {
+				const double EPSILON = 0.0005;
+				
 				UIDrawerDoubleInputHoverableData hover_data;
 				hover_data.data.default_value = default_value;
 				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
@@ -4385,31 +4686,45 @@ namespace ECSEngine {
 					hover_data.data.default_value = *number;
 				}
 				UIDrawerDoubleInputDragData drag_data;
-				drag_data.data.number = number;
+				drag_data.number = number;
 				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-					drag_data.data.min = min;
-					drag_data.data.max = max;
+					drag_data.min = min;
+					drag_data.max = max;
 				}
 				else {
-					drag_data.data.min = DBL_MIN;
-					drag_data.data.max = DBL_MAX;
+					drag_data.min = -DBL_MAX;
+					drag_data.max = DBL_MAX;
 				}
-				drag_data.difference_factor = number_input_drag_factor;
 
-				NumberInputDrawer<configuration>(config, name, DoubleInputHoverable, &hover_data, sizeof(hover_data), 
+				NumberInputDrawer<configuration>(config, name, DoubleInputHoverable, &hover_data, sizeof(hover_data), DoubleInputNoNameHoverable,
 					DoubleInputDragValue, &drag_data, sizeof(drag_data), position,
 					scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
 					char temp_chars[256];
-					double current_value = function::ConvertCharactersToDouble(*input->text);
-					if (current_value != *number && !input->is_currently_selected) {
+					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+					UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
+
+					if (!function::IsFloatingPointNumber(*input->text) && !input->is_currently_selected) {
 						input->DeleteAllCharacters();
-						Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+						function::ConvertDoubleToChars(temp_stream, function::Clamp(0.0, data->min, data->max), 3);
+						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
+						temp_stream.size = 0;
+					}
+
+					unsigned int digit_count = 0;
+					const char* dot = strchr(input->text->buffer, '.');
+					if (dot != nullptr) {
+						digit_count = input->text->buffer + input->text->size - dot - 1;
+					}
+
+					// If the value changed, update the input stream
+					double current_value = function::ConvertCharactersToDouble(*input->text);
+					if ((abs(current_value - *number) > EPSILON || digit_count != 3) && !input->is_currently_selected) {
+						input->DeleteAllCharacters();
 						function::ConvertDoubleToChars(temp_stream, *number, 3);
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 					}
 					
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-						UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
 						bool is_different = data->max != max || data->min != min;
 						data->max = max;
 						data->min = min;
@@ -4427,6 +4742,8 @@ namespace ECSEngine {
 					}
 					});
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename Integer>
 			void IntInputDrawer(const UIDrawConfig& config, const char* name, Integer* number, Integer default_value, Integer min, Integer max, float2 position, float2 scale) {
@@ -4448,22 +4765,32 @@ namespace ECSEngine {
 				else {
 					function::IntegerRange(drag_data.data.min, drag_data.data.max);
 				}
-				drag_data.difference_factor = number_input_drag_factor;
+				hover_data.data.min = drag_data.data.min;
+				hover_data.data.max = drag_data.data.max;
 
-				NumberInputDrawer<configuration>(config, name, IntInputHoverable<Integer>, &hover_data, sizeof(hover_data),
+				NumberInputDrawer<configuration>(config, name, IntInputHoverable<Integer>, &hover_data, sizeof(hover_data), IntInputNoNameHoverable<Integer>,
 					IntegerInputDragValue<Integer>, &drag_data, sizeof(drag_data),
 					position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
 					char temp_chars[256];
+					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
+					UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
+
+					if (!function::IsIntegerNumber(*input->text) && !input->is_currently_selected) {
+						input->DeleteAllCharacters();
+						function::ConvertIntToCharsFormatted(temp_stream, function::Clamp((Integer)0, data->min, data->max));
+						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
+						temp_stream.size = 0;
+					}
+
+					// If the value changed, update the input stream
 					Integer current_value = function::ConvertCharactersToInt<Integer>(*input->text);
 					if (current_value != *number && !input->is_currently_selected) {
 						input->DeleteAllCharacters();
-						Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 						function::ConvertIntToCharsFormatted(temp_stream, static_cast<int64_t>(*number));
 						input->InsertCharacters(temp_chars, temp_stream.size, 0, system);
 					}
 
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-						UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
 						bool is_different = data->max != max || data->min != min;
 						data->max = max;
 						data->min = min;
@@ -4481,6 +4808,8 @@ namespace ECSEngine {
 					}
 				});
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void FloatInputGroupDrawer(
@@ -4502,13 +4831,12 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				size_t group_name_size = strlen(group_name);
-				char temp_name[128];
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					float lower_bound, upper_bound, default_value;
+					float lower_bound = -FLT_MAX, upper_bound = FLT_MAX, default_value = *values[index];
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -4544,21 +4872,21 @@ namespace ECSEngine {
 							);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
 						FloatInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME>(
 							config,
-							temp_name,
+							names[index],
 							values[index],
 							default_value,
 							lower_bound,
 							upper_bound,
 							position,
 							scale
-							);
+						);
 					}
 				}
+
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
@@ -4566,6 +4894,8 @@ namespace ECSEngine {
 #undef LABEL_CONFIGURATION
 #undef LABEL_CONFIGURATION_LAST
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void FloatInputGroupInitializer(
@@ -4580,20 +4910,26 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale
 			) {
-#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW
-#define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y
+
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
+
+#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW \
+							| UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+#define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 					Indent(-1.0f);
 				}
 
-				size_t group_name_size = strlen(group_name);
-				char temp_name[128];
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					float lower_bound, upper_bound, default_value;
+					float lower_bound = -FLT_MAX, upper_bound = FLT_MAX, default_value = *values[index];
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -4617,7 +4953,7 @@ namespace ECSEngine {
 					}
 
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
-						FloatInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST>(
+						FloatInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 							config,
 							names[index],
 							values[index],
@@ -4625,23 +4961,24 @@ namespace ECSEngine {
 							upper_bound,
 							position,
 							scale
-							);
+						);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
 						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
-						FloatInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME>(
+						FloatInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 							config,
-							temp_name,
+							names[index],
 							values[index],
 							lower_bound,
 							upper_bound,
 							position,
 							scale
-							);
+						);
 					}
 				}
+
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
@@ -4649,6 +4986,8 @@ namespace ECSEngine {
 #undef LABEL_CONFIGURATION
 #undef LABEL_CONFIGURATION_LAST
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void DoubleInputGroupDrawer(
@@ -4670,13 +5009,12 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				size_t group_name_size = strlen(group_name);
-				char temp_name[128];
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					double lower_bound, upper_bound, default_value;
+					double lower_bound = -DBL_MAX, upper_bound = DBL_MAX, default_value = *values[index];
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -4712,12 +5050,9 @@ namespace ECSEngine {
 							);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = GetRandomIntIdentifier(index);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
 						DoubleInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME>(
 							config,
-							temp_name,
+							names[index],
 							values[index],
 							default_value,
 							lower_bound,
@@ -4727,6 +5062,9 @@ namespace ECSEngine {
 							);
 					}
 				}
+				
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
@@ -4734,6 +5072,8 @@ namespace ECSEngine {
 #undef LABEL_CONFIGURATION
 #undef LABEL_CONFIGURATION_LAST
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void DoubleInputGroupInitializer(
@@ -4748,20 +5088,25 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale
 			) {
-#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW
-#define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
+
+#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW \
+							UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+#define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 					Indent(-1.0f);
 				}
 
-				size_t group_name_size = strlen(group_name);
-				char temp_name[128];
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					double lower_bound, upper_bound, default_value;
+					double lower_bound = -DBL_MAX, upper_bound = DBL_MAX, default_value = *values[index];
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -4785,7 +5130,7 @@ namespace ECSEngine {
 					}
 
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
-						DoubleInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST>(
+						DoubleInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 							config,
 							names[index],
 							values[index],
@@ -4796,20 +5141,20 @@ namespace ECSEngine {
 							);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
-						DoubleInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME>(
+						DoubleInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 							config,
-							temp_name,
+							names[index],
 							values[index],
 							lower_bound,
 							upper_bound,
 							position,
 							scale
-							);
+						);
 					}
 				}
+
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
@@ -4817,6 +5162,8 @@ namespace ECSEngine {
 #undef LABEL_CONFIGURATION
 #undef LABEL_CONFIGURATION_LAST
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename Integer>
 			void IntInputGroupDrawer(
@@ -4844,7 +5191,8 @@ namespace ECSEngine {
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					Integer lower_bound, upper_bound, default_value;
+					Integer lower_bound, upper_bound, default_value = *values[index];
+					function::IntegerRange(lower_bound, upper_bound);
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -4903,6 +5251,8 @@ namespace ECSEngine {
 #undef LABEL_CONFIGURATION_LAST
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename Integer>
 			void IntInputGroupInitializer(
 				UIDrawConfig& config,
@@ -4916,20 +5266,27 @@ namespace ECSEngine {
 				float2 position,
 				float2 scale
 			) {
-#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW
-#define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y
+#define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW \
+							| UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+#define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
+
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 					Indent(-1.0f);
 				}
 
-				size_t group_name_size = strlen(group_name);
-				char temp_name[128];
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					Integer lower_bound, upper_bound, default_value;
+					Integer lower_bound, upper_bound, default_value = *values[index];
+					function::IntegerRange(lower_bound, upper_bound);
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -4953,7 +5310,7 @@ namespace ECSEngine {
 					}
 
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
-						IntInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST, Integer>(
+						IntInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN, Integer>(
 							config,
 							names[index],
 							values[index],
@@ -4964,20 +5321,20 @@ namespace ECSEngine {
 							);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
-						IntInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME, Integer>(
+						IntInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN, Integer>(
 							config,
-							temp_name,
+							names[index],
 							values[index],
 							lower_bound,
 							upper_bound,
 							position,
 							scale
-							);
+						);
 					}
 				}
+
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
@@ -4985,6 +5342,8 @@ namespace ECSEngine {
 #undef LABEL_CONFIGURATION
 #undef LABEL_CONFIGURATION_LAST
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			template<size_t configuration>
 			void HierarchyDrawer(const UIDrawConfig& config, UIDrawerHierarchy* data, float2 scale) {
@@ -5001,7 +5360,7 @@ namespace ECSEngine {
 					// creating a temporary initializer
 					UIDrawer<true> drawer_initializer = UIDrawer<true>(color_theme, font, layout, element_descriptor);
 					memcpy(&drawer_initializer, this, sizeof(UIDrawer<true>));
-					drawer_initializer.deallocate_identifier_buffers = false;
+					drawer_initializer.deallocate_constructor_allocations = false;
 
 					for (size_t index = 0; index < data->pending_initializations.size; index++) {
 						size_t current_window_allocation_count = system->m_windows[window_index].memory_resources.size;
@@ -5203,6 +5562,8 @@ namespace ECSEngine {
 
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename InputStream>
 			void HistogramDrawer(const UIDrawConfig& config, const InputStream& samples, const char* name, float2 position, float2 scale, size_t precision = 2) {
 				constexpr size_t stack_character_count = 128;
@@ -5354,10 +5715,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerList* ListInitializer(const UIDrawConfig& config, const char* name) {
 				UIDrawerList* list = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					list = GetMainAllocatorBuffer<UIDrawerList>();
 
@@ -5383,6 +5750,8 @@ namespace ECSEngine {
 				return list;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void ListDrawer(UIDrawConfig& config, UIDrawerList* data, float2 position, float2 scale) {
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_LIST_NO_NAME) || IsElementNameAfter(configuration, UI_CONFIG_LIST_NO_NAME)) {
@@ -5399,6 +5768,8 @@ namespace ECSEngine {
 
 				HierarchyDrawer<configuration | UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME | UI_CONFIG_HIERARCHY_CHILD>(config, &data->hierarchy, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void MenuDrawer(const UIDrawConfig& config, UIDrawerMenu* data, float2 position, float2 scale) {
@@ -5467,6 +5838,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			size_t MenuCalculateStateMemory(const UIDrawerMenuState* state, bool copy_states) {
 				size_t total_memory = 0;
 				if (copy_states) {
@@ -5500,6 +5873,8 @@ namespace ECSEngine {
 				return total_memory;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			size_t MenuWalkStatesMemory(const UIDrawerMenuState* state, bool copy_states) {
 				size_t total_memory = MenuCalculateStateMemory(state, copy_states);
 				if (state->row_has_submenu != nullptr) {
@@ -5512,6 +5887,8 @@ namespace ECSEngine {
 				}
 				return total_memory;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void MenuSetStateBuffers(
 				UIDrawerMenuState* state,
@@ -5588,6 +5965,8 @@ namespace ECSEngine {
 				state->windows = stream;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void MenuWalkSetStateBuffers(
 				UIDrawerMenuState* state, 
 				uintptr_t& buffer,
@@ -5604,10 +5983,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerMenu* MenuInitializer(const UIDrawConfig& config, const char* name, float2 scale, UIDrawerMenuState* menu_state) {
 				UIDrawerMenu* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerMenu>();
 
@@ -5617,7 +6002,7 @@ namespace ECSEngine {
 						strcat(temp_characters, "##Separate");
 
 						// separate the identifier for the text label
-						data->name = TextLabelInitializer<configuration>(config, temp_characters, { 0.0f, 0.0f }, scale);
+						data->name = TextLabelInitializer<configuration | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(config, temp_characters, { 0.0f, 0.0f }, scale);
 					}
 					data->is_opened = false;
 
@@ -5641,6 +6026,8 @@ namespace ECSEngine {
 				
 				return data;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename InputStream>
 			void MultiGraphDrawer(
@@ -5890,11 +6277,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void* SentenceInitializer(const UIDrawConfig& config, const char* text) {
 				if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
 					UIDrawerSentenceCached* data = nullptr;
 
+					// Begin recording allocations and table resources for dynamic resources
+					if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+						BeginElement();
+					}
 					AddWindowResource(text, [&](const char* identifier) {
 						data = GetMainAllocatorBuffer<UIDrawerSentenceCached>();
 						
@@ -5948,12 +6341,17 @@ namespace ECSEngine {
 				return nullptr;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			size_t SentenceWhitespaceCharactersCount(const char* identifier, CapacityStream<unsigned int> stack_buffer) {
 				return function::FindWhitespaceCharactersCount(identifier, &stack_buffer);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data) {
 				size_t identifier_length = ParseStringIdentifier(identifier, strlen(identifier));
+				size_t temp_marker = GetTempAllocatorMarker();
 				char* temp_chars = (char*)GetTempBuffer(identifier_length + 1);
 				memcpy(temp_chars, identifier, identifier_length);
 				temp_chars[identifier_length + 1] = '\0';
@@ -5961,7 +6359,10 @@ namespace ECSEngine {
 
 				function::FindWhitespaceCharacters(temp_chars, data->whitespace_characters);
 				data->whitespace_characters.Add(identifier_length);
+				ReturnTempAllocator(temp_marker);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void SentenceDrawer(const UIDrawConfig& config, const char* identifier, void* resource, float2 position) {
@@ -6008,6 +6409,7 @@ namespace ECSEngine {
 					unsigned int _whitespace_characters[4096];
 					CapacityStream<unsigned int> whitespace_characters(_whitespace_characters, 0, 4096);
 					whitespace_characters.size = SentenceWhitespaceCharactersCount(identifier, whitespace_characters);
+
 					if (whitespace_characters.size > whitespace_characters.capacity) {
 						unsigned int* new_whitespace_characters = (unsigned int*)GetTempBuffer(sizeof(unsigned int) * whitespace_characters.size);
 						UIDrawerSentenceNotCached data;
@@ -6241,10 +6643,16 @@ namespace ECSEngine {
 
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerTextTable* TextTableInitializer(const UIDrawConfig& config, const char* name, unsigned int rows, unsigned int columns, const char** labels) {
 				UIDrawerTextTable* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerTextTable>();
 
@@ -6252,6 +6660,7 @@ namespace ECSEngine {
 					data->inverse_zoom = zoom_inverse;
 
 					unsigned int cell_count = rows * columns;
+					size_t temp_marker = GetTempAllocatorMarker();
 					unsigned int* label_sizes = (unsigned int*)GetTempBuffer(sizeof(unsigned int) * cell_count, alignof(unsigned int));
 					size_t total_memory_size = 0;
 					for (size_t index = 0; index < cell_count; index++) {
@@ -6310,11 +6719,15 @@ namespace ECSEngine {
 						}
 					}
 
+					ReturnTempAllocator(temp_marker);
+
 					return data;
 				});
 				
 				return data;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void TextTableDrawer(
@@ -6433,6 +6846,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void TextTableDrawer(
 				const UIDrawConfig& config, 
@@ -6448,6 +6863,7 @@ namespace ECSEngine {
 
 				unsigned int cell_count = rows * columns;
 
+				size_t temp_marker = GetTempAllocatorMarker();
 				Stream<UISpriteVertex>* cells = (Stream<UISpriteVertex>*)GetTempBuffer(sizeof(Stream<UISpriteVertex>) * cell_count);
 
 				unsigned int* label_sizes = (unsigned int*)GetTempBuffer(sizeof(unsigned int) * cell_count);
@@ -6563,7 +6979,11 @@ namespace ECSEngine {
 						position.x += scale.x;
 					}
 				}
+
+				ReturnTempAllocator(temp_marker);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			float GraphYAxis(
@@ -6705,6 +7125,8 @@ namespace ECSEngine {
 
 				return max_x_scale + element_descriptor.graph_axis_value_line_size.x + 0.001f;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// it returns the left and the right text spans in order to adjust the graph scale and position
 			template<size_t configuration>
@@ -6867,6 +7289,8 @@ namespace ECSEngine {
 
 				return { left_span.x, right_span.x };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename InputStream>
 			void GraphDrawer(
@@ -7140,9 +7564,6 @@ namespace ECSEngine {
 						}
 						Line<configuration>(previous_point_position, next_point, line_color);
 
-						if (next_point.x > 10.0f) {
-							__debugbreak();
-						}
 						UIDrawerGraphHoverableData hoverable_data;
 						hoverable_data.first_sample_values = samples[index];
 						hoverable_data.second_sample_values = samples[index + 1];
@@ -7215,6 +7636,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// it returns the index of the sprite with the smallest x
 			template<bool left = true>
 			unsigned int LevelVerticalTextX(Stream<UISpriteVertex>& vertices) const {
@@ -7268,6 +7691,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			float2 TextLabelWithSize(const UIDrawConfig& config, const char* text, float2 position) {
 				float2 scale;
@@ -7309,6 +7734,8 @@ namespace ECSEngine {
 				}
 				return scale;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void FixedScaleTextLabel(const UIDrawConfig& config, const char* text, float2 position, float2 scale) {
@@ -7453,6 +7880,8 @@ namespace ECSEngine {
 				HandleLateAndSystemDrawActionNullify<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// this will add automatically VerticalSlider and HorizontalSlider to name
 			void ViewportRegionSliderInitializer(
 				float2* region_offset, 
@@ -7478,6 +7907,8 @@ namespace ECSEngine {
 				// bounds, position and scale here don't matter
 				*horizontal_slider = FloatSliderInitializer<UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_SLIDER_NO_TEXT | UI_CONFIG_DO_NOT_ADVANCE>(null_config, stack_memory, { 0.0f, 0.0f }, { 0.0f, 0.0f }, &region_offset->x, 0.0f, 10.0f);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void ViewportRegionSliders(
 				float2 render_span,
@@ -7623,6 +8054,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void ViewportRegionSliders(
 				const char* horizontal_slider_name,
 				const char* vertical_slider_name,
@@ -7649,6 +8082,8 @@ namespace ECSEngine {
 					vertical_slider
 				);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void SpriteRectangle(
@@ -7708,6 +8143,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorRectangle(
 				float2 position,
@@ -7724,6 +8161,8 @@ namespace ECSEngine {
 					SetVertexColorRectangle(position, scale, top_left, top_right, bottom_left, bottom_right, buffer, count);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorRectangle(
@@ -7742,6 +8181,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorRectangle(
 				float2 position,
@@ -7755,6 +8196,8 @@ namespace ECSEngine {
 					SetVertexColorRectangle(position, scale, colors, buffer, count);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorRectangle(
@@ -7770,6 +8213,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
 				float2 position,
@@ -7784,6 +8229,8 @@ namespace ECSEngine {
 
 				system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, uvs, phase);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
@@ -7801,6 +8248,8 @@ namespace ECSEngine {
 				system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, top_left_uv, bottom_right_uv, phase);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
 				float2 position,
@@ -7815,6 +8264,8 @@ namespace ECSEngine {
 
 				system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, uvs, phase);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
@@ -7831,63 +8282,89 @@ namespace ECSEngine {
 
 				system->SetVertexColorSprite(dockspace, border_index, texture, position, scale, buffers, counts, colors, top_left_uv, bottom_right_uv, phase);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			Stream<UIVertexColor> GetSolidColorStream(size_t size) {
 				return Stream<UIVertexColor>(HandleSolidColorBuffer<configuration>() + *HandleSolidColorCount<configuration>(), size);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			Stream<UISpriteVertex> GetTextStream(size_t size) {
 				return Stream<UISpriteVertex>(HandleTextSpriteBuffer<configuration>() + *HandleTextSpriteCount<configuration>(), size);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			Stream<UISpriteVertex> GetSpriteStream(size_t size) {
 				return Stream<UISpriteVertex>(HandleSpriteBuffer<configuration>() + *HandleSpriteCount<configuration>(), size);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			Stream<UISpriteVertex> GetSpriteClusterStream(size_t size) {
 				return Stream<UISpriteVertex>(HandleSpriteClusterBuffer<configuration>() + *HandleSpriteClusterCount<configuration>(), size);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 TextSpan(Stream<char> characters, float2 font_size, float character_spacing) {
 				return system->GetTextSpan(characters.buffer, characters.size, font_size.x, font_size.y, character_spacing);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 TextSpan(const char* characters, float2 font_size, float character_spacing) {
 				return TextSpan(Stream<char>(characters, strlen(characters)), font_size, character_spacing);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 TextSpan(Stream<char> characters) {
 				return TextSpan(characters, GetFontSize(), font.character_spacing);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 TextSpan(const char* characters) {
 				return TextSpan(characters, GetFontSize(), font.character_spacing);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetLabelScale(Stream<char> characters) {
 				return HandleLabelSize(TextSpan(characters));
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetLabelScale(const char* characters) {
 				return HandleLabelSize(TextSpan(characters));
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetLabelScale(Stream<char> characters, float2 font_size, float character_spacing) {
 				return HandleLabelSize(TextSpan(characters, font_size, character_spacing));
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetLabelScale(const char* characters, float2 font_size, float character_spacing) {
 				return HandleLabelSize(TextSpan(characters, font_size, character_spacing));
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void GetTextLabelAlignment(const UIDrawConfig& config, TextAlignment& horizontal, TextAlignment& vertical) {
 				if constexpr (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
-					const float* params = config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
+					const float* params = (const float*)config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
 					const TextAlignment* alignments = (TextAlignment*)params;
 					horizontal = *alignments;
 					vertical = *(alignments + 1);
@@ -7898,25 +8375,37 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float GetXScaleUntilBorder(float position) const {
 				return region_scale.x - layout.next_row_padding - position + region_position.x /*- region_render_offset.x*/;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float GetNextRowXPosition() const {
 				return region_position.x + layout.next_row_padding + next_row_offset /*- region_render_offset.x*/;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			size_t GetRandomIntIdentifier(size_t index) {
-				return (index * index + (index & 15)) << (index & 3);
+				return (index * index + (index & 15)) << (index & 7) >> 2 << 5;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void UpdateCurrentColumnScale(float value) {
 				current_column_x_scale = function::Select(value > current_column_x_scale, value, current_column_x_scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void UpdateCurrentRowScale(float value) {
 				current_row_y_scale = function::Select(value > current_row_y_scale, value, current_row_y_scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void UpdateCurrentScale(float2 position, float2 value) {
 				// currently only ColumnDraw and ColumnDrawFitSpace require z component
@@ -7927,21 +8416,29 @@ namespace ECSEngine {
 				UpdateCurrentColumnScale(position.x - current_x + value.x + region_render_offset.x);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void UpdateMaxRenderBoundsRectangle(float2 limits) {
 				max_render_bounds.x = function::Select(max_render_bounds.x < limits.x, limits.x, max_render_bounds.x);
 				max_render_bounds.y = function::Select(max_render_bounds.y < limits.y, limits.y, max_render_bounds.y);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void UpdateMinRenderBoundsRectangle(float2 position) {
 				min_render_bounds.x = function::Select(min_render_bounds.x > position.x, position.x, min_render_bounds.x);
 				min_render_bounds.y = function::Select(min_render_bounds.y > position.y, position.y, min_render_bounds.y);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void UpdateRenderBoundsRectangle(float2 position, float2 scale) {
 				float2 limits = { position.x + scale.x, position.y + scale.y };
 				UpdateMaxRenderBoundsRectangle(limits);
 				UpdateMinRenderBoundsRectangle(position);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			bool VerifyFitSpaceNonRectangle(size_t vertex_count) const {
 				UIVertexColor* vertices = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
@@ -7954,9 +8451,13 @@ namespace ECSEngine {
 				return true;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			bool VerifyFitSpaceRectangle(float2 position, float2 scale) const {
 				return position.x + scale.x > region_limit.x - region_render_offset.x;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void HandleDrawMode() {
@@ -8006,6 +8507,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void ECS_NOINLINE FinalizeRectangle(float2 position, float2 scale) {
 				if constexpr (~configuration & UI_CONFIG_DO_NOT_ADVANCE) {
@@ -8014,6 +8517,8 @@ namespace ECSEngine {
 					HandleDrawMode<configuration>();
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void /*__declspec(noinline)*/ ElementName(const UIDrawConfig& config, UIDrawerTextElement* text, float2 position, float2 scale) {
@@ -8084,6 +8589,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void ElementName(const UIDrawConfig& config, const char* text, float2 position, float2 scale) {
 				constexpr size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_CACHE;
@@ -8153,12 +8660,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			bool ExistsResource(const char* name) {
 				const char* string_identifier = HandleResourceIdentifier(name);
 				return system->ExistsWindowResource(window_index, string_identifier);
 			}
 
 		public:
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIDrawer(
 				UIColorThemeDescriptor& _color_theme, 
 				UIFontDescriptor& _font, 
@@ -8166,6 +8678,8 @@ namespace ECSEngine {
 				UIElementDescriptor& _element_descriptor
 			) : color_theme(_color_theme), font(_font), layout(_layout), element_descriptor(_element_descriptor),
 			export_scale(nullptr) {};
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawer(
 				UIDrawerDescriptor& descriptor,
@@ -8200,23 +8714,39 @@ namespace ECSEngine {
 				float2 render_region = system->GetWindowRenderRegion(window_index);
 				CalculateRegionParameters(region_position, region_scale, &render_region);
 
-				identifier_stack.buffer = (unsigned char*)system->m_memory->Allocate_ts(system->m_descriptors.misc.drawer_temp_memory, 1);
-				identifier_stack.size = 0;
-				current_identifier.buffer = (char*)system->m_memory->Allocate_ts(system->m_descriptors.misc.drawer_identifier_memory, 1);
-				current_identifier.size = 0;
+				if (!descriptor.do_not_allocate_buffers) {
+					identifier_stack.buffer = (unsigned char*)system->m_memory->Allocate(system->m_descriptors.misc.drawer_temp_memory, 1);
+					identifier_stack.size = 0;
+					current_identifier.buffer = (char*)system->m_memory->Allocate(system->m_descriptors.misc.drawer_identifier_memory, 1);
+					current_identifier.size = 0;
+
+
+					if constexpr (initializer) {
+						// For convinience, use separate allocations
+						last_initialized_element_allocations.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
+						last_initialized_element_table_resources.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
+					}
+				}
+				else {
+					deallocate_constructor_allocations = false;
+				}
 
 				if constexpr (initializer) {
-					temp_memory_from_main_allocator = Stream<void*>(system->m_memory->Allocate_ts(system->m_descriptors.misc.drawer_identifier_memory), 0);
-					
 					// creating temporaries to hold the values, even tho they are unneeded
 					if (!descriptor.do_not_initialize_viewport_sliders) {
 						void* temp_horizontal_slider;
 						void* temp_vertical_slider;
-						ViewportRegionSliderInitializer(&system->m_windows[window_index].render_region, "##", &temp_horizontal_slider, &temp_vertical_slider);
+						ViewportRegionSliderInitializer(
+							&system->m_windows[window_index].render_region, 
+							ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT,
+							&temp_horizontal_slider, 
+							&temp_vertical_slider
+						);
 					}
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			~UIDrawer() {
 				if constexpr (!initializer) {
@@ -8271,17 +8801,18 @@ namespace ECSEngine {
 					);
 				}
 
-				if (deallocate_identifier_buffers) {
-					system->m_memory->Deallocate_ts(current_identifier.buffer);
-					system->m_memory->Deallocate_ts(identifier_stack.buffer);
+				if (deallocate_constructor_allocations) {
+					system->m_memory->Deallocate(current_identifier.buffer);
+					system->m_memory->Deallocate(identifier_stack.buffer);
+
 					if constexpr (initializer) {
-						for (size_t index = 0; index < temp_memory_from_main_allocator.size; index++) {
-							system->m_memory->Deallocate_ts(temp_memory_from_main_allocator[index]);
-						}
-						system->m_memory->Deallocate_ts(temp_memory_from_main_allocator.buffer);
+						system->m_memory->Deallocate(last_initialized_element_allocations.buffer);
+						system->m_memory->Deallocate(last_initialized_element_table_resources.buffer);
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// the initializer must return a pointer to the data and take as a parameter the resource identifier (i.e. its name)
 			template<typename Initializer>
@@ -8289,9 +8820,22 @@ namespace ECSEngine {
 				const char* label_identifier = HandleResourceIdentifier<true>(label);
 				ResourceIdentifier identifier(label_identifier, strlen(label_identifier));
 				void* data = init(label_identifier);
-				system->AddWindowMemoryResourceToTable(data, identifier, window_index);
+				AddWindowResourceToTable(data, identifier);
+			}
+
+			void AddWindowResourceToTable(void* resource, ResourceIdentifier identifier) {
+				system->AddWindowMemoryResourceToTable(resource, identifier, window_index);
+				if constexpr (initializer) {
+					if (last_initialized_element_table_resources.size < last_initialized_element_table_resources.capacity) {
+						void* temp_identifier = GetTempBuffer(identifier.size);
+						memcpy(temp_identifier, identifier.ptr, identifier.size);
+						last_initialized_element_table_resources.Add({temp_identifier, identifier.size});
+					}
+				}
 			}
 			
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void AddHoverable(float2 position, float2 scale, UIActionHandler handler) {
 				if constexpr (!initializer) {
 					system->AddHoverableToDockspaceRegion(
@@ -8303,9 +8847,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, UIDrawPhase phase = UIDrawPhase::System) {
 				system->AddHoverableToDockspaceRegion(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, data, sizeof(*data), phase });
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddClickable(
 				float2 position,
@@ -8321,6 +8869,8 @@ namespace ECSEngine {
 					);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			void AddGeneral(
 				float2 position,
@@ -8336,6 +8886,8 @@ namespace ECSEngine {
 					);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultHoverable(
 				float2 position, 
@@ -8357,6 +8909,8 @@ namespace ECSEngine {
 					system->AddDefaultHoverable(data);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultHoverable(
 				float2 main_position,
@@ -8390,6 +8944,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void AddDefaultClickable(
 				float2 position,
 				float2 scale,
@@ -8408,6 +8964,8 @@ namespace ECSEngine {
 					system->AddDefaultClickable(data);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDoubleClickAction(
 				float2 position,
@@ -8431,6 +8989,8 @@ namespace ECSEngine {
 					);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickableHoverableWithText(
 				float2 position,
@@ -8459,6 +9019,8 @@ namespace ECSEngine {
 				
 				AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Either horizontal or vertical cull should be set
 			void AddDefaultClickableHoverableWithTextEx(
@@ -8499,21 +9061,7 @@ namespace ECSEngine {
 				AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 			}
 
-			template<size_t configuration>
-			void AddDefaultLabelClickableHoverableLateOrSystem(
-				const UIDrawConfig& config,
-				float2 position,
-				float2 scale,
-				UIActionHandler handler,
-				Color color,
-				const char* text,
-				float percentage = 1.25f
-			) {
-				TextAlignment horizontal_alignment, vertical_alignment;
-				GetTextLabelAlignment<configuration>(config, horizontal_alignment, vertical_alignment);
-
-
-			}
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickableHoverable(
 				float2 position,
@@ -8542,6 +9090,8 @@ namespace ECSEngine {
 					system->AddDefaultHoverableClickable(data);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickableHoverable(
 				float2 main_position,
@@ -8576,6 +9126,8 @@ namespace ECSEngine {
 				}
 			}
 			
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<typename T>
 			void AddDefaultClickableHoverable(
 				float2 position,
@@ -8594,10 +9146,14 @@ namespace ECSEngine {
 					percentage
 				);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			void AddElementDraw(size_t index, UIDrawerElementDraw draw_function, void* data, size_t data_size = 0) {
 				system->AddWindowDrawerElement(window_index, index, draw_function, data, data_size);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddWindowDependentSizeToConfigFromPoint(float2 initial_point, UIDrawConfig& config) const {
 				float x_difference = current_x - region_render_offset.x - initial_point.x;
@@ -8608,6 +9164,8 @@ namespace ECSEngine {
 				config.AddFlag(size);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void AddRelativeTransformToConfigFromPoint(float2 initial_point, UIDrawConfig& config) const {
 				float x_difference = current_x - region_render_offset.x - initial_point.x;
 				float y_difference = current_y - region_render_offset.y - initial_point.y;
@@ -8617,6 +9175,8 @@ namespace ECSEngine {
 				transform.scale.y = y_difference / layout.default_element_y;
 				config.AddFlag(transform);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddAbsoluteTransformToConfigFromPoint(float2 initial_point, UIDrawConfig& config) const {
 				float x_difference = current_x - region_render_offset.x - initial_point.x;
@@ -8629,7 +9189,955 @@ namespace ECSEngine {
 				config.AddFlag(transform);
 			}
 
+#pragma region Array
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Only draw function, no initialization; data is the per element data; additional_data can be used to access data outside the element
+			using UIDrawerArrayDrawFunction = void (*)(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData data);
+
+			// Optional handler for when an element has been dragged to a new position
+			// The new order points indicates elements in the new order
+			using UIDrawerArrayDragFunction = void (*)(UIDrawer<false>& drawer, void* elements, unsigned int element_count, unsigned int* new_order, void* additional_data);
+
+			// The collapsing header will go to the next row after every element - no need to call NextRow() inside draw_function
+			// When changing the values, it will simply do a memcpy between elements; the draw function must cope with that
+			template<typename Element>
+			void Array(
+				const char* name, 
+				CapacityStream<Element>* elements,
+				void* additional_data, 
+				UIDrawerArrayDrawFunction draw_function,
+				UIDrawerArrayDragFunction drag_function = nullptr
+			) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				Array<configuration>(null_config, name, elements, initialize_function, draw_function);
+			}
+
+			// The collapsing header will go to the next row after every element - no need to call NextRow() inside draw_function
+			// When changing the values, it will simply do a memcpy between elements; the draw function must cope with that
+			template<size_t configuration, typename Element>
+			void Array(
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<Element>* elements,
+				void* additional_data,
+				UIDrawerArrayDrawFunction draw_function,
+				UIDrawerArrayDragFunction drag_function = nullptr
+			) {
+				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+				if constexpr (!initializer) {				
+					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+						name = HandleResourceIdentifier(name);
+						ECS_TEMP_ASCII_STRING(data_name, 256);
+						data_name.Copy(ToStream(name));
+						data_name.AddStream(ToStream(" data"));
+						data_name.AddSafe('\0');
+						UIDrawerArrayData* data = (UIDrawerArrayData*)GetResource(data_name.buffer);
+
+						ArrayDrawer<configuration | UI_CONFIG_DO_NOT_VALIDATE_POSITION>(
+							config, 
+							data, 
+							name, 
+							elements,
+							additional_data,
+							draw_function,
+							drag_function,
+							position, 
+							scale
+						);
+						HandleDynamicResource<configuration>(name);
+					}
+					else {
+						bool exists = ExistsResource(name);
+						if (!exists) {
+							UIDrawerInitializeArrayElementData initialize_data;
+							initialize_data.config = (UIDrawConfig*)&config;
+							initialize_data.name = name;
+							initialize_data.element_count = elements->size;
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeArrayElement<DynamicConfiguration(configuration)>);
+						}
+						Array<DynamicConfiguration(configuration), Element>(config, name, elements, additional_data, draw_function, drag_function);
+					}
+				}
+				else {
+					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+						ArrayInitializer<configuration>(config, name, elements->size);
+					}
+				}
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<size_t configuration, typename Element>
+			void ArrayDrawer(
+				const UIDrawConfig& config,
+				UIDrawerArrayData* data, 
+				const char* name, 
+				CapacityStream<Element>* elements,
+				void* additional_data,
+				UIDrawerArrayDrawFunction draw_function,
+				UIDrawerArrayDragFunction drag_function,
+				float2 position,
+				float2 scale
+			) {
+				constexpr float SIZE_INPUT_X_SCALE = 0.06f;
+				constexpr float2 ARROW_SIZE = { 0.02f, 0.02f };
+
+				// The collapsing header will control the active state
+				float collapsing_header_size = GetXScaleUntilBorder(position.x);
+				UIDrawConfig header_config;
+
+				UIConfigCollapsingHeaderDoNotCache do_not_cache;
+				do_not_cache.state = &data->collapsing_header_state;
+				header_config.AddFlag(do_not_cache);
+
+				// Copy all the other configurations except the transform ones
+				for (size_t index = 0; index < config.flag_count; index++) {
+					if (config.associated_bits[index] != UI_CONFIG_ABSOLUTE_TRANSFORM && config.associated_bits[index] != UI_CONFIG_RELATIVE_TRANSFORM
+						&& config.associated_bits[index] != UI_CONFIG_WINDOW_DEPENDENT_SIZE && config.associated_bits[index] != UI_CONFIG_MAKE_SQUARE) {
+						size_t header_config_count = header_config.flag_count;
+						size_t config_byte_size = config.parameter_start[index + 1] - config.parameter_start[index];
+						header_config.associated_bits[header_config_count] = config.associated_bits[index];
+						header_config.parameter_start[header_config_count + 1] = header_config.parameter_start[header_config_count]
+							+ config_byte_size;
+						memcpy(
+							header_config.parameters + header_config.parameter_start[header_config_count],
+							config.parameters + config.parameter_start[index],
+							config_byte_size
+						);
+						header_config.flag_count++;
+					}
+				}
+
+				// Add the transform
+				UIConfigAbsoluteTransform transform;
+				transform.position = { position.x + region_render_offset.x, position.y + region_render_offset.y };
+				transform.scale.x = collapsing_header_size - SIZE_INPUT_X_SCALE - layout.element_indentation;
+				transform.scale.y = scale.y;
+				header_config.AddFlag(transform);
+
+#define NEW_CONFIGURATION UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE | NullifyConfiguration(NullifyConfiguration( \
+					NullifyConfiguration(configuration, UI_CONFIG_RELATIVE_TRANSFORM), UI_CONFIG_WINDOW_DEPENDENT_SIZE), UI_CONFIG_MAKE_SQUARE)
+
+				// Draw the collapsing header - nullified configurations - relative transform, window dependent size, make square
+				CollapsingHeader<NEW_CONFIGURATION | UI_CONFIG_COLLAPSING_HEADER_DO_NOT_INFER>(header_config, name, [&]() {
+					ECS_TEMP_ASCII_STRING(temp_name, 64);
+					temp_name.Copy(ToStream("Element "));
+					size_t base_name_size = temp_name.size;
+
+					// Push onto the identifier stack the field name
+					PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+					PushIdentifierStack(name);
+
+					UIDrawerArrayDragData drag_data;
+					drag_data.array_data = data;
+
+					UIDrawConfig arrow_config;
+					UIConfigAbsoluteTransform arrow_transform;
+					arrow_transform.scale = ARROW_SIZE;
+
+					auto draw_row = [&](unsigned int index) {
+						arrow_transform.position.x = current_x;
+						// Indent the arrow position in order to align to row Y
+						Indent();
+						OffsetX(ARROW_SIZE.x);
+
+						PushIdentifierStackRandom(index);
+						function::ConvertIntToChars(temp_name, index);
+
+						UIDrawerArrayDrawData function_data;
+						function_data.additional_data = additional_data;
+						function_data.current_index = index;
+						function_data.element_data = elements->buffer + index;
+
+						draw_function(*this, temp_name.buffer, function_data);
+
+						// Get the row y scale
+						float row_y_scale = current_row_y_scale;
+						data->row_y_scale = row_y_scale;
+
+						arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
+						arrow_config.AddFlag(arrow_transform);
+						SpriteRectangle<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE>(
+							arrow_config,
+							ECS_TOOLS_UI_TEXTURE_ARROW,
+							color_theme.default_text
+							);
+						arrow_config.flag_count--;
+
+						drag_data.index = index;
+						drag_data.row_y_scale = row_y_scale;
+						float2 action_position = arrow_transform.position - region_render_offset;
+						float2 action_scale;
+						action_position = ExpandRectangle(action_position, arrow_transform.scale, { 1.25f, 1.25f }, action_scale);
+						AddClickable(action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
+						AddDefaultHoverable(action_position, action_scale, color_theme.theme);
+
+						NextRow();
+						temp_name.size = base_name_size;
+						PopIdentifierStack();
+					};
+
+					auto draw_row_no_action = [&](unsigned int index) {
+						arrow_transform.position.x = current_x;
+						// Indent the arrow position in order to align to row Y
+						Indent();
+						OffsetX(ARROW_SIZE.x);
+
+						PushIdentifierStackRandom(index);
+						function::ConvertIntToChars(temp_name, index);
+
+						UIDrawerArrayDrawData function_data;
+						function_data.additional_data = additional_data;
+						function_data.current_index = index;
+						function_data.element_data = elements->buffer + index;
+
+						draw_function(*this, temp_name.buffer, function_data);
+
+						// Get the row y scale
+						float row_y_scale = current_row_y_scale;
+						data->row_y_scale = row_y_scale;
+
+						arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
+						arrow_config.AddFlag(arrow_transform);
+						SpriteRectangle<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE>(
+							arrow_config,
+							ECS_TOOLS_UI_TEXTURE_ARROW,
+							color_theme.default_text
+						);
+						arrow_config.flag_count--;
+
+						NextRow();
+						temp_name.size = base_name_size;
+						PopIdentifierStack();
+					};
+
+					// If there is no drag, proceed normally
+					unsigned int skip_count = 0;
+					unsigned int index = 0;
+
+					// Skip all the elements that are outside the view region - first the elements that come before
+					if (data->row_y_scale > 0.0f) {
+						float skip_length = region_fit_space_vertical_offset - current_y + region_render_offset.y;
+						if (skip_length > 0.0f) {
+							skip_count = (unsigned int)(skip_length / (data->row_y_scale + layout.next_row_y_offset));
+							if (skip_count > 0) {
+								float2 update_position = GetCurrentPosition();
+								float2 update_scale = { 0.0f, skip_count * (data->row_y_scale + layout.next_row_y_offset) - layout.next_row_y_offset };
+								UpdateRenderBoundsRectangle(update_position, update_scale);
+								UpdateCurrentScale(update_position, update_scale);
+								NextRow();
+							}
+							index = skip_count;
+						}
+					}
+
+					if (data->drag_index == -1) {
+						for (; index < elements->size && current_y - region_render_offset.y <= region_limit.y; index++) {
+							draw_row(index);
+						}
+					}
+					// There is currently a drag active - no other drag actions should be added
+					// And the draw should be effective 
+					else {
+						if (data->drag_is_released) {
+							// Make a buffer that will point for each element which is the new element that
+							// will replace it
+							unsigned int* _order_allocation = nullptr;
+							_order_allocation = (unsigned int*)GetTempBuffer(sizeof(unsigned int) * elements->size);
+							Stream<unsigned int> order_allocation(_order_allocation, 0);
+							unsigned int skip_count_start = skip_count + (data->drag_index < skip_count);
+							for (unsigned int counter = 0; counter < skip_count_start; counter++) {
+								counter += data->drag_index == counter;
+								if (counter < skip_count_start) {
+									order_allocation.Add(counter);
+								}
+							}
+
+							index = skip_count_start;
+							position.y = current_y - region_render_offset.y;
+							unsigned int drawn_elements = 0;
+							while (position.y + data->row_y_scale < data->drag_current_position && drawn_elements < elements->size - 1 - skip_count) {
+								index += data->drag_index == index;
+								order_allocation.Add(index);
+								draw_row_no_action(index);
+								drawn_elements++;
+								index++;
+								position.y = current_y - region_render_offset.y;
+							}
+
+							// Reached the dragged element
+							order_allocation.Add(data->drag_index);
+
+							// Draw a small highlight
+							float x_highlight_scale = GetXScaleUntilBorder(current_x - region_render_offset.x);
+							float y_hightlight_scale = data->row_y_scale * 1.25f;
+							float y_highlight_position = AlignMiddle(current_y, data->row_y_scale, y_hightlight_scale);
+							Color highlight_color = color_theme.theme;
+							highlight_color.alpha = 100;
+							// Offset the x a little to the left
+							SpriteRectangle<0>(
+								{ current_x - 0.01f - region_render_offset.x, y_highlight_position - region_render_offset.y }, 
+								{ x_highlight_scale, y_hightlight_scale }, 
+								ECS_TOOLS_UI_TEXTURE_MASK,
+								highlight_color
+							);
+						
+							draw_row_no_action(data->drag_index);
+							unsigned int last_element = function::Select(data->drag_index == elements->size - 1, elements->size - 1, elements->size);
+							for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
+								// Skip the current drag index if it is before drawn
+								index += data->drag_index == index;
+								order_allocation.Add(index);
+								draw_row_no_action(index);
+							}
+
+							for (unsigned int counter = index; counter < last_element; counter++) {
+								// Skip the current drag index if it is before drawn
+								counter += data->drag_index == counter;
+								order_allocation.Add(counter);
+							}
+							index += data->drag_index == index;
+							ECS_ASSERT(order_allocation.size == elements->size);
+
+							// The default drag behaviour is to simply memcpy the new data
+							if (drag_function == nullptr) {
+								size_t temp_marker = GetTempAllocatorMarker();
+								// Make a temporary allocation that will hold the new elements
+								Element* temp_allocation = (Element*)GetTempBuffer(sizeof(Element) * elements->size);
+								for (size_t index = 0; index < elements->size; index++) {
+									temp_allocation[index] = elements->buffer[order_allocation[index]];
+								}							
+
+								memcpy(elements->buffer, temp_allocation, sizeof(Element) * elements->size);
+								ReturnTempAllocator(temp_marker);
+								
+							}
+							else {
+								drag_function(*this, elements->buffer, elements->size, order_allocation.buffer, additional_data);
+							}
+							
+							data->drag_is_released = false;
+							data->drag_index = -1;
+						}
+						else {
+							// The version without the oder_allocation - no adds or memory pressure onto the temp allocator
+							unsigned int skip_count_start = skip_count + (data->drag_index < skip_count);
+
+							index = skip_count_start;
+							position.y = current_y - region_render_offset.y;
+							unsigned int drawn_elements = 0;
+							while (position.y + data->row_y_scale < data->drag_current_position && drawn_elements < elements->size - 1 - skip_count) {
+								index += data->drag_index == index;
+								draw_row_no_action(index);
+								drawn_elements++;
+								index++;
+								position.y = current_y - region_render_offset.y;
+							}
+							// Reached the dragged element
+							
+							// Draw a small highlight
+							float x_highlight_scale = GetXScaleUntilBorder(current_x - region_render_offset.x);
+							float y_hightlight_scale = data->row_y_scale * 1.25f;
+							float y_highlight_position = AlignMiddle(current_y, data->row_y_scale, y_hightlight_scale);
+							Color highlight_color = color_theme.theme;
+							highlight_color.alpha = 100;
+							// Offset the x a little to the left
+							SpriteRectangle<0>(
+								{ current_x - 0.01f - region_render_offset.x, y_highlight_position - region_render_offset.y },
+								{ x_highlight_scale, y_hightlight_scale },
+								ECS_TOOLS_UI_TEXTURE_MASK,
+								highlight_color
+								);
+
+							draw_row_no_action(data->drag_index);
+							unsigned int last_element = function::Select(data->drag_index == elements->size - 1, elements->size - 1, elements->size);
+							for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
+								// Skip the current drag index if it is before drawn
+								index += data->drag_index == index;
+								draw_row_no_action(index);
+							}
+							index += data->drag_index == index;
+						}
+					}
+
+					if (data->row_y_scale > 0.0f) {
+						// Skip all the elements that are the outside the view region - the elements that come after
+						skip_count = elements->size - index;
+						if (skip_count > 0) {
+							float2 update_position = GetCurrentPosition();
+							float2 update_scale = { 0.0f, skip_count * (data->row_y_scale + layout.next_row_y_offset) - layout.next_row_y_offset };
+							UpdateRenderBoundsRectangle(update_position, update_scale);
+							UpdateCurrentScale(update_position, update_scale);
+							NextRow();
+						}
+					}
+
+					auto add_action = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						CapacityStream<void>* data = (CapacityStream<void>*)_data;
+						data->size += 1;
+					};
+
+					auto remove_action = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						CapacityStream<void>* data = (CapacityStream<void>*)_data;
+						data->size -= 1;
+					};
+
+					// The collapsing header had an absolute transform added, so remove it
+					header_config.flag_count--;
+
+					float x_scale_till_border = GetXScaleUntilBorder(current_x) - layout.element_indentation;
+					UIConfigWindowDependentSize button_size;
+					button_size.type = WindowSizeTransformType::Horizontal;
+					button_size.scale_factor = GetWindowSizeFactors(button_size.type, {x_scale_till_border * 0.5f, layout.default_element_y});
+					header_config.AddFlag(button_size);
+
+					float2 button_position;
+					float2 button_scale;
+					UIConfigGetTransform get_transform;
+					get_transform.position = &button_position;
+					get_transform.scale = &button_scale;
+					header_config.AddFlag(get_transform);
+
+#define COLOR_RECTANGLE_CONFIGURATION NullifyConfiguration(NullifyConfiguration(configuration, UI_CONFIG_RELATIVE_TRANSFORM), UI_CONFIG_ABSOLUTE_TRANSFORM) \
+					| UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_GET_TRANSFORM
+
+					SolidColorRectangle<COLOR_RECTANGLE_CONFIGURATION>(header_config, color_theme.theme);
+
+#define BUTTON_CONFIGURATION NullifyConfiguration(NullifyConfiguration(configuration, UI_CONFIG_RELATIVE_TRANSFORM), UI_CONFIG_WINDOW_DEPENDENT_SIZE) | \
+					UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE
+
+					float2 square_scale = GetSquareScale(layout.default_element_y);
+					UIConfigAbsoluteTransform sprite_button_transform;
+					sprite_button_transform.position = { AlignMiddle(button_position.x, button_scale.x, square_scale.x), AlignMiddle(button_position.y, button_scale.y, square_scale.y) };
+					sprite_button_transform.scale = square_scale;
+					sprite_button_transform.position += region_render_offset;
+					header_config.AddFlag(sprite_button_transform);
+
+					Color sprite_color = color_theme.default_text;
+					
+					if (elements->size < elements->capacity) {
+						AddDefaultClickableHoverable(button_position, button_scale, { add_action, elements, 0 }, color_theme.theme);
+					}
+					else {
+						sprite_color.alpha *= color_theme.alpha_inactive_item;
+					}
+
+					// Add and remove buttons
+					SpriteRectangle<BUTTON_CONFIGURATION>(
+						header_config, 
+						ECS_TOOLS_UI_TEXTURE_PLUS,
+						sprite_color
+					);
+
+					// One for the absolute transform
+					header_config.flag_count--;
+					
+					SolidColorRectangle<COLOR_RECTANGLE_CONFIGURATION>(header_config, color_theme.theme);
+					
+					if (elements->size > 0) {
+						AddDefaultClickableHoverable(button_position, button_scale, { remove_action, elements, 0 }, color_theme.theme);
+						sprite_color.alpha = 255;
+					}
+					else {
+						sprite_color.alpha = color_theme.default_text.alpha * color_theme.alpha_inactive_item;
+
+					}
+
+					sprite_button_transform.position = { AlignMiddle(button_position.x, button_scale.x, square_scale.x), AlignMiddle(button_position.y, button_scale.y, square_scale.y) };
+					sprite_button_transform.position += region_render_offset;
+					header_config.AddFlag(sprite_button_transform);
+
+					SpriteRectangle<BUTTON_CONFIGURATION>(
+						header_config,
+						ECS_TOOLS_UI_TEXTURE_MINUS,
+						sprite_color
+					);
+
+					// One for the window dependent size and one for the absolute transform
+					header_config.flag_count -= 2;
+					NextRow();
+
+#undef BUTTON_CONFIGURATION
+#undef COLOR_BUTTON_CONFIGURATION
+
+					// Pop the field name identifier
+					PopIdentifierStack();
+					PopIdentifierStack();
+				});
+
+				ECS_TEMP_ASCII_STRING(temp_input_name, 256);
+				temp_input_name.Copy(ToStream(name));
+				temp_input_name.AddStream(ToStream("Size input"));
+				temp_input_name.AddSafe('\0');
+
+				// Draw the size with the capacity set
+				if (header_config.associated_bits[header_config.flag_count - 1] == UI_CONFIG_ABSOLUTE_TRANSFORM) {
+					header_config.flag_count--;
+				}
+				transform.position.x += transform.scale.x + layout.element_indentation;
+				transform.scale.x = SIZE_INPUT_X_SCALE;
+				header_config.AddFlag(transform);
+
+				if constexpr (~configuration & UI_CONFIG_ARRAY_FIXED_SIZE) {
+					IntInput<NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE>(
+						header_config,
+						temp_input_name.buffer,
+						&elements->size,
+						(unsigned int)0,
+						(unsigned int)0,
+						elements->capacity
+						);
+				}
+				else {
+					UIConfigActiveState active_state;
+					active_state.state = false;
+					header_config.AddFlag(active_state);
+					IntInput<NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_ACTIVE_STATE>(
+						header_config,
+						temp_input_name.buffer,
+						&elements->size,
+						(unsigned int)0,
+						(unsigned int)0,
+						elements->capacity
+					);
+				}
+
+				NextRow();
+#undef NEW_CONFIGURATION
+
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<size_t configuration>
+			UIDrawerArrayData* ArrayInitializer(const UIDrawConfig& config, const char* name, size_t element_count) {
+				UIDrawerArrayData* data = nullptr;
+				
+				ECS_TEMP_ASCII_STRING(data_name, 256);
+				data_name.Copy(ToStream(name));
+				data_name.AddStream(ToStream(" data"));
+				data_name.AddSafe('\0');
+
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
+				AddWindowResource(data_name.buffer, [&](const char* identifier) {
+					data = GetMainAllocatorBuffer<UIDrawerArrayData>();
+
+					data->collapsing_header_state = false;
+					data->drag_index = -1;
+					data->drag_current_position = 0.0f;
+					data->row_y_scale = 0.0f;
+					data->previous_element_count = 0;
+
+					return data;
+				});
+
+				return data;
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma region Array Instantiations - 1 component
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayFloat(const char* name, CapacityStream<float>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayFloat<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayFloat(const UIDrawConfig& config, const char* name, CapacityStream<float>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayFloatFunction);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayDouble(const char* name, CapacityStream<double>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayDouble<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayDouble(const UIDrawConfig& config, const char* name, CapacityStream<double>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayDoubleFunction);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<typename Integer>
+			void ArrayInteger(const char* name, CapacityStream<Integer>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration, typename Integer>
+			void ArrayInteger(const UIDrawConfig& config, const char* name, CapacityStream<Integer>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayIntegerFunction<Integer>);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Instantiations - 2 components
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayFloat2(const char* name, CapacityStream<float2>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayFloat2<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayFloat2(const UIDrawConfig& config, const char* name, CapacityStream<float2>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayFloat2Function);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayDouble2(const char* name, CapacityStream<double2>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayDouble2<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayDouble2(const UIDrawConfig& config, const char* name, CapacityStream<double2>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayDouble2Function);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<typename BaseInteger, typename Integer2>
+			void ArrayInteger2(const char* name, CapacityStream<Integer2>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger2<configuration, BaseInteger>(null_config, name, values);
+			}
+
+			template<size_t configuration, typename BaseInteger, typename Integer2>
+			void ArrayInteger2(const UIDrawConfig& config, const char* name, CapacityStream<Integer2>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayInteger2Function<BaseInteger>);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// it will infer the extended type
+			template<typename BaseInteger>
+			void ArrayInteger2Infer(const char* name, CapacityStream<void>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger2Infer<configuration, BaseInteger>(null_config, name, values);
+			}
+
+			// it will infer the extended type
+			template<size_t configuration, typename BaseInteger>
+			void ArrayInteger2Infer(const UIDrawConfig& config, const char* name, CapacityStream<void>* values) {
+				if constexpr (std::is_same_v<BaseInteger, char> || std::is_same_v<BaseInteger, int8_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<char2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint8_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<uchar2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int16_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<short2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint16_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<ushort2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int32_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<int2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint32_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<uint2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int64_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<long2>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint64_t>) {
+					ArrayInteger2<configuration, BaseInteger>(config, name, (CapacityStream<ulong2>*)values);
+				}
+				else {
+					ECS_ASSERT(false);
+				}
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Instantiations - 3 components
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayFloat3(const char* name, CapacityStream<float3>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayFloat3<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayFloat3(const UIDrawConfig& config, const char* name, CapacityStream<float3>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayFloat3Function);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayDouble3(const char* name, CapacityStream<double3>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayDouble3<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayDouble3(const UIDrawConfig& config, const char* name, CapacityStream<double3>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayDouble3Function);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<typename BaseInteger, typename Integer3>
+			void ArrayInteger3(const char* name, CapacityStream<Integer3>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger3<configuration, BaseInteger>(null_config, name, values);
+			}
+
+			template<size_t configuration, typename BaseInteger, typename Integer3>
+			void ArrayInteger3(const UIDrawConfig& config, const char* name, CapacityStream<Integer3>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayInteger3Function<BaseInteger>);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// it will infer the extended type
+			template<typename BaseInteger>
+			void ArrayInteger3Infer(const char* name, CapacityStream<void>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger3Infer<configuration, BaseInteger>(null_config, name, values);
+			}
+
+			// it will infer the extended type
+			template<size_t configuration, typename BaseInteger>
+			void ArrayInteger3Infer(const UIDrawConfig& config, const char* name, CapacityStream<void>* values) {
+				if constexpr (std::is_same_v<BaseInteger, char> || std::is_same_v<BaseInteger, int8_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<char3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint8_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<uchar3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int16_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<short3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint16_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<ushort3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int32_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<int3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint32_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<uint3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int64_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<long3>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint64_t>) {
+					ArrayInteger3<configuration, BaseInteger>(config, name, (CapacityStream<ulong3>*)values);
+				}
+				else {
+					ECS_ASSERT(false);
+				}
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Instantiations - 4 components
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayFloat4(const char* name, CapacityStream<float4>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayFloat4<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayFloat4(const UIDrawConfig& config, const char* name, CapacityStream<float4>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayFloat4Function);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayDouble4(const char* name, CapacityStream<double4>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayDouble4<configuration>(null_config, name, values);
+			}
+
+			template<size_t configuration>
+			void ArrayDouble4(const UIDrawConfig& config, const char* name, CapacityStream<double4>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayDouble4Function);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<typename BaseInteger, typename Integer4>
+			void ArrayInteger4(const char* name, CapacityStream<Integer4>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger4<configuration, BaseInteger>(null_config, name, values);
+			}
+
+			template<size_t configuration, typename BaseInteger, typename Integer4>
+			void ArrayInteger4(const UIDrawConfig& config, const char* name, CapacityStream<Integer4>* values) {
+				Array<configuration>(config, name, values, nullptr, UIDrawerArrayInteger4Function<BaseInteger>);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// it will infer the extended type
+			template<typename BaseInteger>
+			void ArrayInteger4Infer(const char* name, CapacityStream<void>* values) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayInteger4Infer<configuration, BaseInteger>(null_config, name, values);
+			}
+
+			// it will infer the extended type
+			template<size_t configuration, typename BaseInteger>
+			void ArrayInteger4Infer(const UIDrawConfig& config, const char* name, CapacityStream<void>* values) {
+				if constexpr (std::is_same_v<BaseInteger, char> || std::is_same_v<BaseInteger, int8_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<char4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint8_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<uchar4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int16_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<short4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint16_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<ushort4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int32_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<int4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint32_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<uint4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, int64_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<long4>*)values);
+				}
+				else if constexpr (std::is_same_v<BaseInteger, uint64_t>) {
+					ArrayInteger4<configuration, BaseInteger>(config, name, (CapacityStream<ulong4>*)values);
+				}
+				else {
+					ECS_ASSERT(false);
+				}
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Color
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayColor(const char* name, CapacityStream<Color>* colors) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayColor<configuration>(null_config, name, colors);
+			}
+
+			template<size_t configuration>
+			void ArrayColor(const UIDrawConfig& config, const char* name, CapacityStream<Color>* colors) {
+				Array<configuration>(config, name, colors, nullptr, UIDrawerArrayColorFunction);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Check Boxes
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayCheckBox(const char* name, CapacityStream<bool>* states) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayCheckBox<configuration>(null_config, name, states);
+			}
+			
+			template<size_t configuration>
+			void ArrayCheckBox(const UIDrawConfig& config, const char* name, CapacityStream<bool>* states) {
+				Array<configuration>(config, name, states, nullptr, UIDrawerArrayCheckBoxFunction);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Text Input
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayTextInput(const char* name, CapacityStream<CapacityStream<char>>* texts) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayTextInput<configuration>(null_config, name, texts);
+			}
+
+			template<size_t configuration>
+			void ArrayTextInput(const UIDrawConfig& config, const char* name, CapacityStream<CapacityStream<char>>* texts) {
+				UIDrawerTextInput** inputs = (UIDrawerTextInput**)GetTempBuffer(sizeof(UIDrawerTextInput*) * texts->size);
+				
+				Array<configuration>(config, name, texts, inputs, UIDrawerArrayTextInputFunction, 
+				[](UIDrawer<false>& drawer, void* _elements, unsigned int element_count, unsigned int* new_order, void* additional_data) {
+					Stream<CapacityStream<char>> elements(_elements, element_count);
+					UIDrawerTextInput** inputs = (UIDrawerTextInput**)additional_data;
+
+					size_t temp_marker = drawer.GetTempAllocatorMarker();
+					CapacityStream<char>* copied_elements = (CapacityStream<char>*)drawer.GetTempBuffer(sizeof(CapacityStream<char>) * elements.size);
+					// Copy the old contents to temp buffers
+					for (size_t index = 0; index < elements.size; index++) {
+						copied_elements[index].InitializeFromBuffer(drawer.GetTempBuffer(sizeof(char) * elements[index].size), elements[index].size, elements[index].size);
+						copied_elements[index].Copy(elements[index]);
+					}
+					for (size_t index = 0; index < elements.size; index++) {
+						if (new_order[index] != index) {
+							inputs[index]->DeleteAllCharacters();
+							inputs[index]->InsertCharacters(copied_elements[new_order[index]].buffer, copied_elements[new_order[index]].size, 0, drawer.system);
+						}
+					}
+					drawer.ReturnTempAllocator(temp_marker);
+				});
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Array Combo Box
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayComboBox(const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayComboBox<configuration>(null_config, name, flags, flag_labels);
+			}
+
+			template<size_t configuration>
+			void ArrayComboBox(const UIDrawConfig& config, const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels) {
+				Array<configuration>(config, name, flags, &flag_labels, UIDrawerArrayComboBoxFunction);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma endregion
+
 #pragma region Alpha Color Rectangle
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AlphaColorRectangle(Color color) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -8667,6 +10175,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void AlphaColorRectangle(const UIDrawConfig& config, Color color) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
@@ -8678,9 +10188,19 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion 
 
+			// Used to track which allocations have been made inside an initialization block
+			void BeginElement() {
+				last_initialized_element_allocations.size = 0;
+				last_initialized_element_table_resources.size = 0;
+			}
+
 #pragma region Button
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Button(
 				const char* label, 
@@ -8786,6 +10306,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void StateButton(const char* name, bool* state) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				StateButton<configuration>(null_config, name, state);
@@ -8818,8 +10340,10 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void SpriteStateButton(
-				LPCWSTR texture,
+				const wchar_t* texture,
 				bool* state,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f }, 
@@ -8833,7 +10357,7 @@ namespace ECSEngine {
 			template<size_t configuration>
 			void SpriteStateButton(
 				const UIDrawConfig& config, 
-				LPCWSTR texture,
+				const wchar_t* texture,
 				bool* state,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
@@ -8869,6 +10393,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Stateless, label is done with UI_CONFIG_DO_NOT_CACHE; if drawing with a sprite
 			// name can be made nullptr
@@ -8940,13 +10466,19 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void ChangeThemeColor(Color new_theme_color) {
 				color_theme.SetNewTheme(new_theme_color);
 			}
 
 #pragma region Checkbox
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void CheckBox(const char* name, bool* value_to_change) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -8976,9 +10508,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion 
 
 #pragma region Combo box
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void ComboBox(const char* name, Stream<const char*> labels, unsigned int label_display_count, unsigned char* active_label) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -9008,7 +10544,7 @@ namespace ECSEngine {
 							UIDrawerInitializeComboBox initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_4(initialize_data, name, labels, label_display_count, active_label);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeComboBoxElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeComboBoxElement<DynamicConfiguration(configuration)>);
 						}
 						ComboBox<DynamicConfiguration(configuration)>(config, name, labels, label_display_count, active_label);
 					}
@@ -9020,6 +10556,8 @@ namespace ECSEngine {
 				}
 
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void ComboBoxDropDownDrawer(const UIDrawConfig& config, UIDrawerComboBox* data) {
@@ -9107,9 +10645,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Collapsing Header
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Function>
 			bool CollapsingHeader(const char* name, Function&& function) {
@@ -9158,9 +10700,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Color Input
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void ColorInput(const char* name, Color* color, Color default_color = ECS_COLOR_WHITE) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -9184,7 +10730,12 @@ namespace ECSEngine {
 							UIDrawerInitializeColorInput initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_3(initialize_data, color, name, default_color);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeColorInputElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								name, 
+								InitializeColorInputElement<DynamicConfiguration(configuration)>
+							);
 						}
 						ColorInput<DynamicConfiguration(configuration)>(config, name, color, default_color);
 					}
@@ -9197,9 +10748,13 @@ namespace ECSEngine {
 
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region CrossLine
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Setting the y size for horizontal or x size for vertical as 0.0f means get default 1 pixel width
 			void CrossLine() {
@@ -9264,7 +10819,11 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DisablePaddingForRenderSliders() {
 				region_limit.x += system->m_descriptors.misc.render_slider_vertical_size;
@@ -9272,9 +10831,13 @@ namespace ECSEngine {
 				no_padding_for_render_sliders = true;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void DisablePaddingForRenderRegion() {
 				no_padding_render_region = true;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DisableZoom() const {
 				if constexpr (!initializer) {
@@ -9283,11 +10846,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void DrawElement(size_t index) {
 				system->m_windows[window_index].element_draw[index].draw(system->m_windows[window_index].element_draw[index].data, this);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Filter Menu
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer with bool* to the members that need to be changed
 			void FilterMenu(const char* name, Stream<const char*> label_names, bool** states) {
@@ -9312,7 +10881,12 @@ namespace ECSEngine {
 							UIDrawerInitializeFilterMenu initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_3(initialize_data, name, label_names, states);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeFilterMenuElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data, 
+								name, 
+								InitializeFilterMenuElement<DynamicConfiguration(configuration)>
+							);
 						}
 						FilterMenu<DynamicConfiguration(configuration)>(config, name, label_names, states);
 					}
@@ -9323,6 +10897,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer to a stable bool array
 			void FilterMenu(const char* name, Stream<const char*> label_names, bool* states) {
@@ -9347,7 +10923,12 @@ namespace ECSEngine {
 							UIDrawerInitializeFilterMenuSinglePointer initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_3(initialize_data, label_names, name, states);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeFilterMenuSinglePointerElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								name, 
+								InitializeFilterMenuSinglePointerElement<DynamicConfiguration(configuration)>
+							);
 						}
 						FilterMenu<DynamicConfiguration(configuration)>(config, name, label_names, states);
 					}
@@ -9358,6 +10939,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void FilterMenuDrawer(const UIDrawConfig& config, const char* name, UIDrawerFilterMenuData* data) {
@@ -9375,10 +10958,16 @@ namespace ECSEngine {
 				MenuButton<configuration>(config, name, window_descriptor);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerFilterMenuData* FilterMenuInitializer(const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool** states) {
 				UIDrawerFilterMenuData* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					size_t total_memory = sizeof(UIDrawerFilterMenuData);
 					total_memory += sizeof(const char*) * label_names.size;
@@ -9445,6 +11034,8 @@ namespace ECSEngine {
 				return data;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void FilterMenuDrawer(const UIDrawConfig& config, const char* name, UIDrawerFilterMenuSinglePointerData* data) {
 				UIWindowDescriptor window_descriptor;
@@ -9461,9 +11052,16 @@ namespace ECSEngine {
 				MenuButton<configuration>(config, name, window_descriptor);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerFilterMenuSinglePointerData* FilterMenuInitializer(const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool* states) {
 				UIDrawerFilterMenuSinglePointerData* data = nullptr;
+
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					size_t total_memory = sizeof(UIDrawerFilterMenuSinglePointerData);
 					total_memory += sizeof(const char*) * label_names.size;
@@ -9526,7 +11124,11 @@ namespace ECSEngine {
 				return data;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void FitTextToScale(
@@ -9553,16 +11155,24 @@ namespace ECSEngine {
 				SetConfigParameter<configuration, UI_CONFIG_TEXT_PARAMETERS>(config, parameters, previous_parameters);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void FinishFitTextToScale(UIDrawConfig& config, const UIConfigTextParameters& previous_parameters) {
 				RemoveConfigParameter<configuration, UI_CONFIG_TEXT_PARAMETERS>(config, previous_parameters);
 			}
+			
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void FinalizeElementDraw(size_t index) {
 				system->FinalizeWindowElementDraw(window_index, index);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Gradients
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void Gradient(const UIDrawConfig& config, const Color* colors, size_t horizontal_count, size_t vertical_count) {
@@ -9665,9 +11275,13 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Graphs
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Stream>
 			void Graph(Stream samples, const char* name = nullptr, size_t x_axis_precision = 2, size_t y_axis_precision = 2) {
@@ -9730,6 +11344,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration, typename Stream>
 			void Graph(const UIDrawConfig& config, Stream samples, const char* name = nullptr, size_t x_axis_precision = 2, size_t y_axis_precision = 2) {
 				if constexpr (!initializer) {
@@ -9738,6 +11354,8 @@ namespace ECSEngine {
 					GraphDrawer<configuration>(config, name, samples, position, scale, x_axis_precision, y_axis_precision);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename Stream>
 			void MultiGraph(const UIDrawConfig& config, Stream samples, size_t y_sample_count, const Color* colors = multi_graph_colors, const char* name = nullptr, size_t x_axis_precision = 2, size_t y_axis_precision = 2) {
@@ -9748,36 +11366,54 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			const char* GetElementName(unsigned int index) const {
 				return system->GetDrawElementName(window_index, index);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float GetDefaultBorderThickness() const {
 				return system->m_descriptors.dockspaces.border_size;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetElementDefaultScale() const {
 				return { layout.default_element_x, layout.default_element_y };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Accounts for zoom
 			float2 GetStaticElementDefaultScale() const {
 				return { layout.default_element_x / zoom_ptr->x, layout.default_element_y / zoom_ptr->y };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetCurrentPosition() const {
 				return { current_x - region_render_offset.x, current_y - region_render_offset.y };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetCurrentPositionNonOffset() const {
 				return { current_x, current_y };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetCurrentPositionStatic() const {
 				return { current_x + region_render_offset.x, current_y + region_render_offset.y };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetWindowSizeFactors(WindowSizeTransformType type, float2 scale) const {
 				float2 factors;
@@ -9804,6 +11440,8 @@ namespace ECSEngine {
 
 				return factors;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetWindowSizeScaleElement(WindowSizeTransformType type, float2 scale_factors) const {
 				float2 scale;
@@ -9835,46 +11473,86 @@ namespace ECSEngine {
 				return scale;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetWindowSizeScaleUntilBorder() const {
 				return { (region_limit.x - current_x) / (region_limit.x - region_fit_space_horizontal_offset), 1.0f };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void* GetTempBuffer(size_t size, size_t alignment = 8) {
 				if constexpr (!initializer) {
 					return system->m_resources.thread_resources[thread_id].temp_allocator.Allocate(size, alignment);
 				}
 				else {
-					void* allocation = system->m_memory->Allocate_ts(size, alignment);
+					return system->m_resources.thread_resources[thread_id].temp_allocator.Allocate(size, alignment);
+					/*void* allocation = system->m_memory->Allocate_ts(size, alignment);
 					temp_memory_from_main_allocator.Add(allocation);
-					return allocation;
+					return allocation;*/
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Can be used to release some temp memory - cannot be used when handlers are used
+			void ReturnTempAllocator(size_t marker) {
+				system->m_resources.thread_resources[thread_id].temp_allocator.ReturnToMarker(marker);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			size_t GetTempAllocatorMarker() {
+				return system->m_resources.thread_resources[thread_id].temp_allocator.m_top;
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UISystem* GetSystem() {
 				return system;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetSquareScale(float value) const {
 				return { system->NormalizeHorizontalToWindowDimensions(value), value };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// It will use HandleResourceIdentifier to construct the string
 			void* GetResource(const char* string) {
 				const char* string_identifier = HandleResourceIdentifier(string);
 				return system->FindWindowResource(window_index, string_identifier, strlen(string_identifier));
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// It will forward directly to the UI system; No HandleResourceIdentifier used
+			void* FindWindowResource(const char* string) {
+				return system->FindWindowResource(window_index, string, strlen(string));
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetRegionPosition() const {
 				return region_position;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetRegionScale() const {
 				return region_scale;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// returns the render bound difference
 			float2 GetRenderSpan() const {
 				return { max_render_bounds.x - min_render_bounds.x, max_render_bounds.y - min_render_bounds.y };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// returns the viewport visible zone
 			float2 GetRenderZone() const {
@@ -9895,9 +11573,13 @@ namespace ECSEngine {
 				return { horizontal_region_difference, vertical_region_difference };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void** GetBuffers() {
 				return buffers;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			UIDrawerBufferState GetBufferState() {
@@ -9911,6 +11593,8 @@ namespace ECSEngine {
 				return state;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIDrawerHandlerState GetHandlerState() {
 				UIDrawerHandlerState state;
 
@@ -9923,37 +11607,55 @@ namespace ECSEngine {
 				return state;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			size_t* GetCounts() {
 				return counts;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void** GetSystemBuffers() {
 				return system_buffers;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			size_t* GetSystemCounts() {
 				return system_counts;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetFontSize() const {
 				return { ECS_TOOLS_UI_FONT_X_FACTOR * font.size, font.size };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIFontDescriptor* GetFontDescriptor() {
 				return &font;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UILayoutDescriptor* GetLayoutDescriptor() {
 				return &layout;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIColorThemeDescriptor* GetColorThemeDescriptor() {
 				return &color_theme;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIElementDescriptor* GetElementDescriptor() {
 				return &element_descriptor;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration = 0>
 			float2 GetLastSolidColorRectanglePosition(unsigned int previous_rectangle = 0) {
@@ -9967,6 +11669,8 @@ namespace ECSEngine {
 				return float2(0.0f, 0.0f);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration = 0>
 			float2 GetLastSolidColorRectangleScale(unsigned int previous_rectangle = 0) {
 				UIVertexColor* buffer = HandleSolidColorBuffer<configuration>();
@@ -9978,6 +11682,8 @@ namespace ECSEngine {
 				}
 				return float2(0.0f, 0.0f);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration = 0>
 			float2 GetLastSpriteRectanglePosition(unsigned int previous_rectangle = 0) {
@@ -9991,6 +11697,8 @@ namespace ECSEngine {
 				return float2(0.0f, 0.0f);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration = 0>
 			float2 GetLastSpriteRectangleScale(unsigned int previous_rectangle = 0) {
 				UISpriteVertex* buffer = HandleSpriteBuffer<configuration>();
@@ -10003,9 +11711,13 @@ namespace ECSEngine {
 				return float2(0.0f, 0.0f);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			UIDockspace* GetDockspace() {
 				return dockspace;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float GetAlignedToCenterX(float x_scale) const {
 				float position = function::Select(export_scale != nullptr, current_x, region_position.x);
@@ -10013,15 +11725,21 @@ namespace ECSEngine {
 				return AlignMiddle(position, _region_scale, x_scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float GetAlignedToCenterY(float y_scale) const {
 				float position = function::Select(export_scale != nullptr, current_y, region_position.y);
 				float _region_scale = function::Select(export_scale != nullptr, y_scale, region_scale.y);
 				return AlignMiddle(position, _region_scale, y_scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetAlignedToCenter(float2 scale) const {
 				return { GetAlignedToCenterX(scale.x), GetAlignedToCenterY(scale.y) };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			float2 GetAlignedToRight(float x_scale, float target_position = -5.0f) const {
 				target_position = function::Select(target_position == -5.0f, region_limit.x, target_position);
@@ -10029,10 +11747,14 @@ namespace ECSEngine {
 				return { function::ClampMin(target_position - x_scale, current_x), current_y /*+ region_render_offset.y*/ };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float2 GetAlignedToRightOverLimit(float x_scale) const {
 				float vertical_slider_offset = system->m_windows[window_index].is_vertical_render_slider * system->m_descriptors.misc.render_slider_vertical_size;
 				return { function::ClampMin(region_position.x + region_scale.x - x_scale - vertical_slider_offset, current_x), current_y };
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetAlignedToBottom(float y_scale, float target_position = -5.0f) const {
 				target_position = function::Select(target_position == -5.0f, region_limit.y, target_position);
@@ -10040,56 +11762,78 @@ namespace ECSEngine {
 				return { current_x, function::ClampMin(target_position - y_scale, current_y) };
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			unsigned int GetBorderIndex() const {
 				return border_index;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			DockspaceType GetDockspaceType() const {
 				return dockspace_type;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			ActionData GetDummyActionData() {
 				return system->GetFilledActionData(window_index);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void* GetMainAllocatorBuffer(size_t size, size_t alignment = 8) {
 				void* allocation = system->m_memory->Allocate(size, alignment);
 				system->AddWindowMemoryResource(allocation, window_index);
 				ECS_ASSERT(allocation != nullptr);
+
+				if constexpr (initializer) {
+					if (last_initialized_element_allocations.size < last_initialized_element_allocations.capacity) {
+						last_initialized_element_allocations.Add(allocation);
+					}
+				}
+
 				return allocation;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<typename T>
 			T* GetMainAllocatorBuffer() {
-				T* allocation = (T*)system->m_memory->Allocate(sizeof(T), alignof(T));
-				system->AddWindowMemoryResource(allocation, window_index);
-				ECS_ASSERT(allocation != nullptr);
-				return allocation;
+				return (T*)GetMainAllocatorBuffer(sizeof(T), alignof(T));
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// name must not conflict with other element names
 			template<typename T>
 			T* GetMainAllocatorBufferAndStoreAsResource(const char* name) {
-				T* resource = GetMainAllocatorBuffer<T>();
-				AddWindowResource(name, [resource](const char* identifier) {
-					return resource;
-				});
+				return (T*)GetMainAllocatorBufferAndStoreAsResource(name, sizeof(T), alignof(T));
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void* GetMainAllocatorBufferAndStoreAsResource(const char* name, size_t size, size_t alignment = 8) {
+				size_t name_size = strlen(name);
+				void* resource = GetMainAllocatorBuffer(size + name_size * sizeof(char), alignment);
+				void* name_ptr = function::OffsetPointer(resource, size * sizeof(char));
+				memcpy(name_ptr, name, sizeof(char) * name_size);
+				ResourceIdentifier identifier(name_ptr, name_size);
+				AddWindowResourceToTable(resource, identifier);
 				return resource;
 			}
 
-			void* GetMainAllocatorBufferAndStoreAsResource(const char* name, size_t size, size_t alignment = 8) {
-				void* resource = GetMainAllocatorBuffer(size, alignment);
-				AddWindowResource(name, [resource](const char* identifier) {
-					return resource;
-				});
-				return resource;
-			}
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			unsigned int GetWindowIndex() const {
 				return window_index;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Hierarchy
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawerHierarchy* Hierarchy(const char* name) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -10114,7 +11858,12 @@ namespace ECSEngine {
 							UIDrawerInitializeHierarchy initialize_data;
 							initialize_data.config = (UIDrawConfig*)&config;
 							ECS_FORWARD_STRUCT_MEMBERS_1(initialize_data, name);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeHierarchyElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data, 
+								name, 
+								InitializeHierarchyElement<DynamicConfiguration(configuration)>
+							);
 						}
 						Hierarchy<DynamicConfiguration(configuration)>(config, name);
 					}
@@ -10126,9 +11875,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Histogram
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Stream>
 			void Histogram(Stream samples, const char* name = nullptr) {
@@ -10145,7 +11898,11 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, size_t no_element_name>
 			void InitializeElementName(
@@ -10159,19 +11916,27 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			bool HasClicked(float2 position, float2 scale) {
 				return IsPointInRectangle(mouse_position, position, scale) && system->m_mouse_tracker->LeftButton() == MBPRESSED;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			bool IsMouseInRectangle(float2 position, float2 scale) {
 				return IsPointInRectangle(mouse_position, position, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Indent() {
 				min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
 				current_x += layout.element_indentation + current_column_x_scale;
 				current_column_x_scale = 0.0f;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Indent(float count) {
 				min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
@@ -10180,7 +11945,11 @@ namespace ECSEngine {
 				//max_render_bounds.x = function::Select(max_render_bounds.x < current_x - region_render_offset.x, current_x - region_render_offset.x, max_render_bounds.x);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Label hierarchy
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void LabelHierarchy(const char* identifier, Stream<const char*> labels) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -10201,12 +11970,17 @@ namespace ECSEngine {
 						return data;
 					}
 					else {
-						bool exists = ExistsResource(name);
+						bool exists = ExistsResource(identifier);
 						if (!exists) {
 							UIDrawerInitializeLabelHierarchy initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, identifier, labels);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeLabelHierarchyElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data, 
+								identifier, 
+								InitializeLabelHierarchyElement<DynamicConfiguration(configuration)>
+							);
 						}
 						return LabelHierarchy<DynamicConfiguration(configuration)>(config, identifier, labels);
 					}
@@ -10218,17 +11992,35 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerLabelHierarchy* LabelHierarchyInitializer(const UIDrawConfig& config, const char* _identifier) {
 				UIDrawerLabelHierarchy* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(_identifier, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerLabelHierarchy>();
 					
 					constexpr size_t max_characters = 256;
-					data->active_label.InitializeFromBuffer(GetMainAllocatorBuffer(max_characters * sizeof(char), alignof(char)), max_characters);
-					data->selected_label_temporary.InitializeFromBuffer(GetMainAllocatorBuffer(max_characters * sizeof(char), alignof(char)), max_characters);
-					data->right_click_label_temporary.InitializeFromBuffer(GetMainAllocatorBuffer(max_characters * sizeof(char), alignof(char)), max_characters);
+
+					unsigned int hash_table_capacity = 256;
+					if constexpr (configuration & UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY) {
+						const UIConfigLabelHierarchyHashTableCapacity* capacity = (const UIConfigLabelHierarchyHashTableCapacity*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY);
+						hash_table_capacity = capacity->capacity;
+					}
+
+					size_t total_size = data->active_label.MemoryOf(max_characters) + data->selected_label_temporary.MemoryOf(max_characters) +
+						data->right_click_label_temporary.MemoryOf(max_characters) + data->label_states.MemoryOf(hash_table_capacity);
+					void* allocation = GetMainAllocatorBuffer(total_size);
+					uintptr_t allocation_ptr = (uintptr_t)allocation;
+					data->label_states.InitializeFromBuffer(allocation_ptr, hash_table_capacity);
+					data->active_label.InitializeFromBuffer(allocation_ptr, max_characters);
+					data->selected_label_temporary.InitializeFromBuffer(allocation_ptr, max_characters);
+					data->right_click_label_temporary.InitializeFromBuffer(allocation_ptr, max_characters);
 
 					if constexpr (configuration & UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK) {
 						const UIConfigLabelHierarchySelectableCallback* callback = (const UIConfigLabelHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK);
@@ -10264,18 +12056,13 @@ namespace ECSEngine {
 						data->right_click_callback_data = nullptr;
 					}
 
-					unsigned int hash_table_capacity = 256;
-					if constexpr (configuration & UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY) {
-						const UIConfigLabelHierarchyHashTableCapacity* capacity = (const UIConfigLabelHierarchyHashTableCapacity*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY);
-						hash_table_capacity = capacity->capacity;
-					}
-					data->label_states.InitializeFromBuffer(GetMainAllocatorBuffer(data->label_states.MemoryOf(hash_table_capacity)), hash_table_capacity);
-
 					return data;
 				});
 
 				return data;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void LabelHierarchyDrawer(
@@ -10377,14 +12164,14 @@ namespace ECSEngine {
 
 					if (parent_path_size != 0) {
 						ResourceIdentifier identifier(labels[index], parent_path_size);
-						unsigned int hash = HashFunctionAdditiveString::Hash(identifier);
+						unsigned int hash = UIDrawerLabelHierarchyHash::Hash(identifier);
 						parent_hash_table.TryGetValue(hash, identifier, current_parent_index);
 					}
 
 					// check to see if it is inside the hash table; if it is, then 
 					// increase the activation count else introduce it
 					ResourceIdentifier identifier(labels[index], label_stream.size);
-					unsigned int hash = HashFunctionAdditiveString::Hash(identifier);
+					unsigned int hash = UIDrawerLabelHierarchyHash::Hash(identifier);
 
 					ECS_ASSERT(!parent_hash_table.Insert(hash, index + 1, identifier));
 
@@ -10458,7 +12245,7 @@ namespace ECSEngine {
 
 							if (next_parent_path_size != 0) {
 								ResourceIdentifier next_identifier(next_label_stream.buffer, next_parent_path_size);
-								unsigned int next_hash = HashFunctionAdditiveString::Hash(next_identifier);
+								unsigned int next_hash = UIDrawerLabelHierarchyHash::Hash(next_identifier);
 								parent_hash_table.TryGetValue(next_hash, next_identifier, next_parent_index);
 							}
 							has_children = index < next_parent_index;
@@ -10582,9 +12369,13 @@ namespace ECSEngine {
 				OffsetNextRow(-next_row_offset);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region List
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawerList* List(const char* name) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -10609,7 +12400,12 @@ namespace ECSEngine {
 							UIDrawerInitializeList initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_1(initialize_data, name);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeListElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this, 
+								&initialize_data,
+								name,
+								InitializeListElement<DynamicConfiguration(configuration)>
+							);
 						}
 						return List<DynamicConfiguration(configuration)>(config, name);
 					}
@@ -10621,13 +12417,19 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void ListFinalizeNode(UIDrawerList* list) {
 				list->FinalizeNodeYscale((const void**)buffers, counts);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Label List
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void LabelList(const char* name, Stream<const char*> labels) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -10654,6 +12456,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void LabelListDrawer(const UIDrawConfig& config, UIDrawerLabelList* data, float2 position, float2 scale) {
@@ -10685,6 +12489,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void LabelListDrawer(const UIDrawConfig& config, const char* name, Stream<const char*> labels, float2 position, float2 scale) {
 				if constexpr (~configuration & UI_CONFIG_LABEL_LIST_NO_NAME) {
@@ -10714,10 +12520,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerLabelList* LabelListInitializer(const UIDrawConfig& config, const char* name, Stream<const char*> labels) {
 				UIDrawerLabelList* data = nullptr;
 
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerLabelList>();
 					data->labels.buffer = (UIDrawerTextElement*)GetMainAllocatorBuffer(sizeof(UIDrawerTextElement) * labels.size);
@@ -10733,9 +12545,13 @@ namespace ECSEngine {
 				return data;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Menu
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// State can be stack allocated; name should be unique if drawing with a sprite
 			void Menu(const char* name, UIDrawerMenuState* state) {
@@ -10761,7 +12577,12 @@ namespace ECSEngine {
 							UIDrawerInitializeMenu initialize_data;
 							initialize_data.config = (UIDrawConfig*)&config;
 							ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, name, state);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeMenuElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								name, 
+								InitializeMenuElement<DynamicConfiguration(configuration)>
+							);
 						}
 						Menu<DynamicConfiguration(configuration)>(config, name, state);
 					}
@@ -10773,6 +12594,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void* MenuAllocateStateHandlers(Stream<UIActionHandler> handlers) {
 				void* allocation = GetMainAllocatorBuffer(sizeof(UIActionHandler) * handlers.size);
 				memcpy(allocation, handlers.buffer, sizeof(UIActionHandler) * handlers.size);
@@ -10783,13 +12606,15 @@ namespace ECSEngine {
 
 #pragma region Number input
 
-			void FloatInput(const char* name, float* value, float default_value = 0.0f, float lower_bound = FLT_MIN, float upper_bound = FLT_MAX) {
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void FloatInput(const char* name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				FloatInput<configuration>(null_config, name, value, default_value, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration>
-			void FloatInput(UIDrawConfig& config, const char* name, float* value, float default_value = 0.0f, float lower_bound = FLT_MIN, float upper_bound = FLT_MAX) {
+			void FloatInput(UIDrawConfig& config, const char* name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
@@ -10803,7 +12628,12 @@ namespace ECSEngine {
 							UIDrawerInitializeFloatInput initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, default_value, lower_bound, name, upper_bound, value);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeFloatInputElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								name, 
+								InitializeFloatInputElement<DynamicConfiguration(configuration)>
+							);
 						}
 						FloatInput<DynamicConfiguration(configuration)>(config, name, value, default_value, lower_bound, upper_bound);
 					}
@@ -10815,14 +12645,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void FloatInputGroup(
 				size_t count,
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				float** ECS_RESTRICT values,
-				const float* ECS_RESTRICT default_values,
-				const float* ECS_RESTRICT lower_bound,
-				const float* ECS_RESTRICT upper_bound
+				const float* ECS_RESTRICT default_values = nullptr,
+				const float* ECS_RESTRICT lower_bound = nullptr,
+				const float* ECS_RESTRICT upper_bound = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				FloatInputGroup<configuration>(null_config, count, group_name, names, values, default_values, lower_bound, upper_bound);
@@ -10852,9 +12684,14 @@ namespace ECSEngine {
 							UIDrawerInitializeFloatInputGroup initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, count, default_values, group_name, lower_bound, names, upper_bound, values);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, group_name, InitializeFloatInputGroupElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								group_name, 
+								InitializeFloatInputGroupElement<DynamicConfiguration(configuration)>
+							);
 						}
-						FloatInputGroup<DynamicConfiguration(configuration)>(config, group_name, count, names, values, default_values, lower_bound, upper_bound);
+						FloatInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
 					}
 				}
 				else {
@@ -10864,13 +12701,15 @@ namespace ECSEngine {
 				}
 			}
 
-			void DoubleInput(const char* name, double* value, double default_value = 0, double lower_bound = DBL_MIN, double upper_bound = DBL_MAX) {
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void DoubleInput(const char* name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				DoubleInput<configuration>(null_config, name, value, default_value, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration>
-			void DoubleInput(UIDrawConfig& config, const char* name, double* value, double default_value = 0, double lower_bound = DBL_MIN, double upper_bound = DBL_MAX) {
+			void DoubleInput(UIDrawConfig& config, const char* name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
@@ -10884,7 +12723,7 @@ namespace ECSEngine {
 							UIDrawerInitializeDoubleInput initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, default_value, lower_bound, name, upper_bound, value);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeDoubleInputElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeDoubleInputElement<DynamicConfiguration(configuration)>);
 						}
 						DoubleInput<DynamicConfiguration(configuration)>(config, name, value, default_value, lower_bound, upper_bound);
 					}
@@ -10895,6 +12734,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DoubleInputGroup(
 				size_t count,
@@ -10933,7 +12774,7 @@ namespace ECSEngine {
 							UIDrawerInitializeDoubleInputGroup initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, group_name, count, names, values, default_values, lower_bound, upper_bound);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, group_name, InitializeDoubleInputGroupElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(*this, &initialize_data, group_name, InitializeDoubleInputGroupElement<DynamicConfiguration(configuration)>);
 						}
 						DoubleInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
 					}
@@ -10945,6 +12786,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<typename Integer>
 			void IntInput(const char* name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -10954,10 +12797,6 @@ namespace ECSEngine {
 			template<size_t configuration, typename Integer>
 			void IntInput(UIDrawConfig& config, const char* name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
-
-				/*if constexpr (std::is_unsigned_v<Integer>) {
-					min = 0;
-				}*/
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
@@ -10970,7 +12809,7 @@ namespace ECSEngine {
 							UIDrawerInitializeIntegerInput<Integer> initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, name, value, default_value, min, max);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeIntegerInputElement<DynamicConfiguration(configuration), Integer>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeIntegerInputElement<DynamicConfiguration(configuration), Integer>);
 						}
 						IntInput<DynamicConfiguration(configuration)>(config, name, value, default_value, min, max);
 					}
@@ -10982,15 +12821,17 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<typename Integer>
 			void IntInputGroup(
 				size_t count,
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values,
-				const Integer* ECS_RESTRICT default_values,
-				const Integer* ECS_RESTRICT lower_bound,
-				const Integer* ECS_RESTRICT upper_bound
+				const Integer* ECS_RESTRICT default_values = nullptr,
+				const Integer* ECS_RESTRICT lower_bound = nullptr,
+				const Integer* ECS_RESTRICT upper_bound = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				IntInputGroup<configuration>(null_config, count, group_name, names, values, default_values, lower_bound, upper_bound);
@@ -11003,9 +12844,9 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values,
-				const Integer* ECS_RESTRICT default_values,
-				const Integer* ECS_RESTRICT lower_bound,
-				const Integer* ECS_RESTRICT upper_bound
+				const Integer* ECS_RESTRICT default_values = nullptr,
+				const Integer* ECS_RESTRICT lower_bound = nullptr,
+				const Integer* ECS_RESTRICT upper_bound = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
@@ -11020,9 +12861,9 @@ namespace ECSEngine {
 							UIDrawerInitializeIntegerInputGroup<Integer> initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, count, group_name, names, values, default_values, lower_bound, upper_bound);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, group_name, InitializeIntegerInputGroupElement<DynamicConfiguration(configuration), Integer>);
+							InitializeDrawerElement(*this, &initialize_data, group_name, InitializeIntegerInputGroupElement<DynamicConfiguration(configuration), Integer>);
 						}
-						IntInput<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+						IntInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
 					}
 				}
 				else {
@@ -11032,7 +12873,11 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void NextRow() {
 				min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
@@ -11040,8 +12885,10 @@ namespace ECSEngine {
 				current_x = GetNextRowXPosition();
 				current_row_y_scale = 0.0f;
 				current_column_x_scale = 0.0f;
-				draw_mode_extra_float.y = current_y/* - region_render_offset.y*/;
+				draw_mode_extra_float.y = current_y;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void NextRow(float count) {
 				min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
@@ -11052,26 +12899,37 @@ namespace ECSEngine {
 				draw_mode_extra_float.x = current_y;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float NormalizeHorizontalToWindowDimensions(float value) const {
 				return system->NormalizeHorizontalToWindowDimensions(value);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void OffsetNextRow(float value) {
 				next_row_offset += value;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void OffsetX(float value) {
 				current_x += value;
 				current_column_x_scale -= value;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void OffsetY(float value) {
 				current_y += value;
 				current_row_y_scale -= value;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma region Progress bar
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void ProgressBar(const char* name, float percentage, float x_scale_factor = 1) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -11186,12 +13044,18 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void PopIdentifierStack() {
 				identifier_stack.size--;
 				current_identifier.size -= identifier_stack[identifier_stack.size];
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void PushIdentifierStack(const char* identifier) {
 				size_t count = strlen(identifier);
@@ -11205,22 +13069,30 @@ namespace ECSEngine {
 				current_identifier[current_identifier.size] = '\0';
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void PushIdentifierStack(size_t index) {
 				char temp_chars[64];
 				Stream<char> stream_char = Stream<char>(temp_chars, 0);
-				function::ConvertIntToCharsFormatted(stream_char, (int64_t)index);
+				function::ConvertIntToChars(stream_char, (int64_t)index);
 				PushIdentifierStack(temp_chars);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void PushIdentifierStackRandom(size_t index) {
 				index = GetRandomIntIdentifier(index);
 				PushIdentifierStack(index);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void RemoveAllocation(const void* allocation) {
 				system->m_memory->Deallocate(allocation);
 				system->RemoveWindowMemoryResource(window_index, allocation);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void RestoreBufferState(UIDrawerBufferState state) {
@@ -11259,6 +13131,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void RestoreHandlerState(UIDrawerHandlerState state) {
 				if constexpr (!initializer) {
 					dockspace->borders[border_index].hoverable_handler.position_x.size = state.hoverable_count;
@@ -11267,7 +13141,11 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Sentence
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Sentence(const char* text) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -11291,15 +13169,23 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SetCurrentX(float value) {
 				current_x = value;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void SetCurrentY(float value) {
 				current_y = value;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<bool reduce_values = true>
 			void SetLayoutFromZoomXFactor(float zoom_factor) {
@@ -11334,6 +13220,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<bool reduce_values = true>
 			void SetLayoutFromZoomYFactor(float zoom_factor) {
 				if constexpr (reduce_values) {
@@ -11359,8 +13247,12 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 
 #pragma region Rectangle
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename UIDrawConfig>
 			void Rectangle(const UIDrawConfig& config) {
@@ -11368,6 +13260,8 @@ namespace ECSEngine {
 
 				Rectangle<configuration>(config, position, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void Rectangles(const UIDrawConfig& overall_config, const UIDrawSmallConfig* configs, const float2* offsets, size_t count) {
@@ -11404,6 +13298,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(initial_position, total_scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void Rectangles(const UIDrawConfig& overall_config, const UIDrawSmallConfig* configs, float2 offset, size_t count) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, overall_config);
@@ -11439,9 +13335,13 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(initial_position, total_scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Sliders
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Value must implement Interpolate, Percentage and ToString in order to be used
 			template<typename EnterValuesFilter = TextFilterAll, typename Value>
@@ -11449,6 +13349,8 @@ namespace ECSEngine {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				Slider<configuration, EnterValuesFilter, Value>(null_config, label, value_to_modify, lower_bound, upper_bound, default_value);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Value must implement Interpolate, Percentage and ToString in order to be used;
 			// If values can be entered, then Validate must be implemented
@@ -11470,9 +13372,9 @@ namespace ECSEngine {
 							UIDrawerInitializeSlider<Value> initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, name, value_to_modify, lower_bound, upper_bound, default_value);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeSliderElement<DynamicConfiguration(configuration), Value>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeSliderElement<DynamicConfiguration(configuration), Value>);
 						}
-						Slider<DynamicConfiguration(configuration), EnterValuesFilter, Value>(config, info, value_to_modify, lower_bound, upper_bound, default_value);
+						Slider<DynamicConfiguration(configuration), EnterValuesFilter, Value>(config, name, value_to_modify, lower_bound, upper_bound, default_value);
 					}
 				}
 				else {
@@ -11481,6 +13383,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename EnterValuesFilter = TextFilterAll, typename Value>
 			void SliderGroup(
@@ -11520,9 +13424,9 @@ namespace ECSEngine {
 							UIDrawerInitializeSliderGroup<Value> initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, group_name, InitializeSliderGroupElement<DynamicConfiguration(configuration), Value>);
+							InitializeDrawerElement(*this, &initialize_data, group_name, InitializeSliderGroupElement<DynamicConfiguration(configuration), Value>);
 						}
-						SliderGroup<DynamicConfiguration(configuration), EnterValueFilter>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
+						SliderGroup<DynamicConfiguration(configuration), EnterValuesFilter>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
 					}
 				}
 				else {
@@ -11531,6 +13435,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename EnterValuesFilter = TextFilterAll, typename Value>
 			void SliderGroup2(
@@ -11587,6 +13493,8 @@ namespace ECSEngine {
 				SliderGroup<configuration, EnterValuesFilter, Value>(config, 2, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void FloatSlider(const char* _label, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 2) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				FloatSlider<configuration>(null_config, _label, value_to_modify, lower_bound, upper_bound, default_value, precision);
@@ -11605,6 +13513,8 @@ namespace ECSEngine {
 				_default_value.ConstructExtraData(&precision);
 				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void FloatSliderGroup(
 				size_t count, 
@@ -11671,6 +13581,8 @@ namespace ECSEngine {
 				);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void DoubleSlider(const char* _label, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, size_t precision = 2) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				DoubleSlider<configuration>(null_config, _label, value_to_modify, lower_bound, upper_bound, default_value, precision);
@@ -11689,6 +13601,8 @@ namespace ECSEngine {
 				_default_value.ConstructExtraData(&precision);
 				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DoubleSliderGroup(
 				size_t count,
@@ -11755,6 +13669,8 @@ namespace ECSEngine {
 				);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<typename Integer>
 			void IntSlider(const char* _label, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = Integer(0)) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -11770,6 +13686,8 @@ namespace ECSEngine {
 				_default_value.ConstructValue(default_value);
 				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound, _default_value);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
 			void IntSliderGroup(
@@ -11829,7 +13747,11 @@ namespace ECSEngine {
 				);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SetZoomXFactor(float zoom_x_factor) {
 				if (current_x == GetNextRowXPosition()) {
@@ -11844,6 +13766,8 @@ namespace ECSEngine {
 				}
 				zoom_inverse.x = 1 / zoom_x_factor;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SetZoomYFactor(float zoom_y_factor) {
 				if (current_y == region_fit_space_vertical_offset) {
@@ -11862,12 +13786,16 @@ namespace ECSEngine {
 				zoom_inverse.y = 1 / zoom_y_factor;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void SetRowHorizontalOffset(float value) {
 				if (current_x == GetNextRowXPosition()) {
 					current_x += value - next_row_offset;
 				}
 				next_row_offset = value;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SetRowPadding(float value) {
 				region_fit_space_horizontal_offset += value - layout.next_row_padding;
@@ -11878,6 +13806,8 @@ namespace ECSEngine {
 				layout.next_row_padding = value;
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void SetNextRowYOffset(float value) {
 				region_fit_space_vertical_offset += value - layout.next_row_y_offset;
 				if (fabsf(current_x - GetNextRowXPosition()) < 0.0001f) {
@@ -11886,6 +13816,8 @@ namespace ECSEngine {
 				region_limit.y -= value - layout.next_row_y_offset;
 				layout.next_row_y_offset = value;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Currently, draw_mode_floats is needed for column draw, only the y component needs to be filled
 			// with the desired y spacing
@@ -11899,24 +13831,34 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// places a hoverable on the whole window
 			void SetWindowHoverable(const UIActionHandler* handler) {
 				AddHoverable(region_position, region_scale, *handler);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// places a clickable on the whole window
 			void SetWindowClickable(const UIActionHandler* handler) {
 				AddClickable(region_position, region_scale, *handler);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// places a general on the whole window
 			void SetWindowGeneral(const UIActionHandler* handler) {
 				AddGeneral(region_position, region_scale, *handler);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void StabilizeRenderSpan(float2 span) {
 				stabilized_render_span = span;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// configuration is needed for phase deduction
 			template<size_t configuration>
@@ -11932,7 +13874,11 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Solid Color Rectangle
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SolidColorRectangle(Color color = ECS_TOOLS_UI_THEME_COLOR) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -11965,9 +13911,13 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region State Table
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer to bool* to the members that should be changed
 			void StateTable(const char* name, Stream<const char*> labels, bool** states) {
@@ -11998,7 +13948,7 @@ namespace ECSEngine {
 							UIDrawerInitializeStateTable initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_3(initialize_data, name, labels, states);
-							InitializeDrawerElement(system, window_index, window_data, additional_data, name, InitializeStateTableElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeStateTableElement<DynamicConfiguration(configuration)>);
 						}
 						StateTable<DynamicConfiguration(configuration)>(config, name, labels, states);
 					}
@@ -12009,6 +13959,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer to a bool array
 			template<size_t configuration>
@@ -12027,7 +13979,7 @@ namespace ECSEngine {
 							UIDrawerInitializeStateTableSinglePointer initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_3(initialize_data, name, labels, states);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeStateTableSinglePointerElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeStateTableSinglePointerElement<DynamicConfiguration(configuration)>);
 						}
 						StateTable<DynamicConfiguration(configuration)>(config, name, labels, states);
 					}
@@ -12039,10 +13991,16 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			UIDrawerStateTable* StateTableInitializer(const UIDrawConfig& config, const char* name, Stream<const char*> labels, float2 position) {
 				UIDrawerStateTable* data = nullptr;
 				
+				// Begin recording allocations and table resources for dynamic resources
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
 				AddWindowResource(name, [&](const char* identifier) {
 					data = GetMainAllocatorBuffer<UIDrawerStateTable>();
 					data->labels.Initialize(system->m_memory, labels.size);
@@ -12064,6 +14022,8 @@ namespace ECSEngine {
 
 				return data;
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void StateTableDrawer(const UIDrawConfig& config, UIDrawerStateTable* data, bool** states, float2 position, float2 scale) {
@@ -12191,11 +14151,15 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Sprite Rectangle
 
-			void SpriteRectangle(LPCWSTR texture, Color color = ECS_COLOR_WHITE, float2 top_left_uv = {0.0f, 0.0f}, float2 bottom_right_uv = { 1.0f, 1.0f }) {
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void SpriteRectangle(const wchar_t* texture, Color color = ECS_COLOR_WHITE, float2 top_left_uv = {0.0f, 0.0f}, float2 bottom_right_uv = { 1.0f, 1.0f }) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				SpriteRectangle<configuration>(null_config, texture, color, top_left_uv, bottom_right_uv);
 			}
@@ -12203,7 +14167,7 @@ namespace ECSEngine {
 			template<size_t configuration>
 			void SpriteRectangle(
 				const UIDrawConfig& config, 
-				LPCWSTR texture, 
+				const wchar_t* texture, 
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f }, 
 				float2 bottom_right_uv = {1.0f, 1.0f}
@@ -12232,17 +14196,25 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void StoreElementName(const char* name) {
 				system->StoreElementDrawName(window_index, name);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Sprite Button
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SpriteButton(
 				UIActionHandler clickable,
-				LPCWSTR texture, 
+				const wchar_t* texture, 
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f }, 
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -12255,7 +14227,7 @@ namespace ECSEngine {
 			void SpriteButton(
 				const UIDrawConfig& config, 
 				UIActionHandler clickable, 
-				LPCWSTR texture, 
+				const wchar_t* texture, 
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -12291,15 +14263,24 @@ namespace ECSEngine {
 							SpriteRectangle<configuration>(position, scale, texture, color, top_left_uv, bottom_right_uv);
 							HandleBorder<configuration>(config, position, scale);
 						}
+
+						if constexpr (configuration & UI_CONFIG_SPRITE_BUTTON_BACKGROUND) {
+							Color color = HandleColor<configuration>(config);
+							SolidColorRectangle<configuration>(position, scale, color);
+						}
 					}
 
 					FinalizeRectangle<configuration>(position, scale);
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Text Table
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void TextTable(const char* name, unsigned int rows, unsigned int columns, const char**  labels) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -12326,9 +14307,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Text Input
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// single lined text input
 			UIDrawerTextInput* TextInput(const char* name, CapacityStream<char>* text_to_fill) {
@@ -12355,7 +14340,7 @@ namespace ECSEngine {
 							UIDrawerInitializeTextInput initialize_data;
 							initialize_data.config = &config;
 							ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, name, text_to_fill);
-							InitializeDrawerElement(system, window_index, window_data, &initialize_data, name, InitializeTextInputElement<DynamicConfiguration(configuration)>);
+							InitializeDrawerElement(*this, &initialize_data, name, InitializeTextInputElement<DynamicConfiguration(configuration)>);
 						}
 						return TextInput<DynamicConfiguration(configuration), Filter>(config, name, text_to_fill);
 					}
@@ -12370,9 +14355,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Text Label
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void TextLabel(const char* characters) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -12412,9 +14401,13 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Text
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Text(const char* text) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -12565,6 +14558,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void Text(const UIDrawConfig& config, const char* text, float2& position, float2& text_span) {
 				Color color;
@@ -12626,6 +14621,8 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void Text(const UIDrawConfig& config, const char* characters) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
@@ -12645,7 +14642,11 @@ namespace ECSEngine {
 				}
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void TextToolTip(const char* characters, float2 position, float2 scale, const UITooltipBaseData* base = nullptr) {
 				UITextTooltipHoverableData tool_tip_data;
@@ -12665,6 +14666,8 @@ namespace ECSEngine {
 					TextTooltipHoverable(&default_action_data);
 				}
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DefaultHoverableWithToolTip(const char* characters, float2 position, float2 scale, const Color* color = nullptr, const float* percentage = nullptr, const UITooltipBaseData* base = nullptr) {
 				UIDefaultHoverableWithTooltipData tool_tip_data;
@@ -12690,11 +14693,17 @@ namespace ECSEngine {
 				AddHoverable(position, scale, { DefaultHoverableWithToolTip, &tool_tip_data, sizeof(tool_tip_data), UIDrawPhase::System });
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void DefaultHoverableWithToolTip(float2 position, float2 scale, const UIDefaultHoverableWithTooltipData* data) {
 				AddHoverable(position, scale, { DefaultHoverableWithToolTip, data, sizeof(*data), UIDrawPhase::System });
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Vertex Color Rectangle
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorRectangle(
@@ -12731,6 +14740,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorRectangle(
 				const UIDrawConfig& config,
@@ -12765,6 +14776,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
 				const UIDrawConfig& config,
@@ -12796,6 +14809,8 @@ namespace ECSEngine {
 
 				FinalizeRectangle<configuration>(position, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
@@ -12829,6 +14844,8 @@ namespace ECSEngine {
 
 				FinalizeRectangle<configuration>(position, scale);
 			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
@@ -12862,6 +14879,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			template<size_t configuration>
 			void VertexColorSpriteRectangle(
 				const UIDrawConfig& config,
@@ -12895,6 +14914,8 @@ namespace ECSEngine {
 				FinalizeRectangle<configuration>(position, scale);
 			}
 
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 		//private:
@@ -12911,7 +14932,7 @@ namespace ECSEngine {
 			UIDrawerMode draw_mode;
 			bool no_padding_for_render_sliders;
 			bool no_padding_render_region;
-			bool deallocate_identifier_buffers;
+			bool deallocate_constructor_allocations;
 			unsigned short draw_mode_count;
 			unsigned short draw_mode_target;
 			float4 draw_mode_extra_float;
@@ -12943,26 +14964,54 @@ namespace ECSEngine {
 			void* window_data;
 			Stream<unsigned char> identifier_stack;
 			Stream<char> current_identifier;
-			// this is in order to not add another allocator for the system; 
-			// it will keep track of all the allocations made and free them all at the end
-			Stream<void*> temp_memory_from_main_allocator;
+			CapacityStream<void*> last_initialized_element_allocations;
+			CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
 		};
 
 		using UIDrawerInitializeFunction = void (*)(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		static void InitializeDrawerElement(UISystem* system, unsigned int window_index, void* window_data, void* additional_data, const char* name, UIDrawerInitializeFunction initialize) {
-			UIDrawerDescriptor descriptor = system->GetDrawerDescriptor(window_index);
+		// --------------------------------------------------------------------------------------------------------------
+
+		// Last initialized element allocations and table resources must be manually deallocated after finishing using it
+		static UIDrawer<true> InitializeInitializerDrawer(UIDrawer<false>& drawer_to_copy) {
+			UIDrawerDescriptor descriptor = drawer_to_copy.system->GetDrawerDescriptor(drawer_to_copy.window_index);
 			descriptor.do_not_initialize_viewport_sliders = true;
+			descriptor.do_not_allocate_buffers = true;
+
 			UIDrawer<true> drawer = UIDrawer<true>(
 				descriptor,
-				window_data
+				drawer_to_copy.window_data
 			);
 
-			system->AddWindowDrawerElement(window_index, name);
-			initialize(window_data, additional_data, &drawer);
-			system->FinalizeWindowElement(window_index);
+			drawer.identifier_stack = drawer_to_copy.identifier_stack;
+			drawer.current_identifier = drawer_to_copy.current_identifier;
+			drawer.last_initialized_element_allocations.Initialize(drawer.system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
+			drawer.last_initialized_element_table_resources.Initialize(drawer.system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS);
+
+			return drawer;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		// The identifier stack and the current identifier are used to initialize the identifier stack of the initializing drawer
+		// These are mostly used by the internal initializing functions inside the UIDrawer
+		static void InitializeDrawerElement(
+			UIDrawer<false>& drawer_to_copy,
+			void* additional_data,
+			const char* name,
+			UIDrawerInitializeFunction initialize
+		) {
+			UIDrawer<true> drawer = InitializeInitializerDrawer(drawer_to_copy);
+
+			const char* identifier = drawer.HandleResourceIdentifier(name);
+			initialize(drawer.window_data, additional_data, &drawer);
+			drawer.system->AddWindowDrawerElement(drawer.window_index, identifier, drawer.last_initialized_element_allocations, drawer.last_initialized_element_table_resources);
+			
+			// The last element initializations buffers must be manually deallocated
+			drawer.system->m_memory->Deallocate(drawer.last_initialized_element_allocations.buffer);
+			drawer.system->m_memory->Deallocate(drawer.last_initialized_element_table_resources.buffer);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -13116,6 +15165,243 @@ namespace ECSEngine {
 			UIDrawerInitializeTextInput* data = (UIDrawerInitializeTextInput*)additional_data;
 			drawer_ptr->TextInput<configuration>(*data->config, data->name, data->text_to_fill);
 		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		template<size_t configuration>
+		void InitializeArrayElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
+			UIDrawerInitializeArrayElementData* data = (UIDrawerInitializeArrayElementData*)additional_data;
+			drawer_ptr->ArrayInitializer<configuration>(*data->config, data->name, data->element_count);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayFloatFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			drawer.FloatInput<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(temp_config, element_name, (float*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayDoubleFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			drawer.DoubleInput<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(temp_config, element_name, (double*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		template<typename Integer>
+		void UIDrawerArrayIntegerFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			drawer.IntInput<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, Integer>(temp_config, element_name, (Integer*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayFloat2Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			float* values[2];
+			values[0] = (float*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			
+			drawer.FloatInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				2,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayDouble2Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			double* values[2];
+			values[0] = (double*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			
+			drawer.DoubleInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				2,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		template<typename BaseInteger>
+		void UIDrawerArrayInteger2Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			BaseInteger* values[2];
+			values[0] = (BaseInteger*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			
+			drawer.IntInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				2,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+		
+		static void UIDrawerArrayFloat3Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			float* values[3];
+			values[0] = (float*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			values[2] = values[0] + 2;
+
+			drawer.FloatInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				3,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayDouble3Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			double* values[3];
+			values[0] = (double*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			values[2] = values[0] + 2;
+
+			drawer.DoubleInputGroup<UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				3,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		template<typename BaseInteger>
+		void UIDrawerArrayInteger3Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			BaseInteger* values[3];
+			values[0] = (BaseInteger*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			values[2] = values[0] + 2;
+			
+			drawer.IntInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				3,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayFloat4Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			float* values[4];
+			values[0] = (float*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			values[2] = values[0] + 2;
+			values[3] = values[0] + 3;
+
+			drawer.FloatInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				4,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayDouble4Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+
+			double* values[4];
+			values[0] = (double*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			values[2] = values[0] + 2;
+			values[3] = values[0] + 3;
+
+			drawer.DoubleInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				4,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		template<typename BaseInteger>
+		void UIDrawerArrayInteger4Function(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+
+			BaseInteger* values[4];
+			values[0] = (BaseInteger*)draw_data.element_data;
+			values[1] = values[0] + 1;
+			values[2] = values[0] + 2;
+			values[3] = values[0] + 3;
+
+			drawer.IntInputGroup<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE>(
+				temp_config,
+				4,
+				element_name,
+				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
+				values
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayColorFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			drawer.ColorInput<UI_CONFIG_DO_NOT_CACHE>(temp_config, element_name, (Color*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayCheckBoxFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			drawer.CheckBox<UI_CONFIG_DO_NOT_CACHE>(temp_config, element_name, (bool*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayTextInputFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			UIDrawerTextInput** inputs = (UIDrawerTextInput**)draw_data.additional_data;
+
+			inputs[draw_data.current_index] = drawer.TextInput<UI_CONFIG_DO_NOT_CACHE>(temp_config, element_name, (CapacityStream<char>*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayComboBoxFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			CapacityStream<Stream<const char*>>* flag_labels = (CapacityStream<Stream<const char*>>*)draw_data.additional_data;
+
+			drawer.ComboBox<UI_CONFIG_DO_NOT_CACHE>(
+				temp_config,
+				element_name,
+				flag_labels->buffer[draw_data.current_index],
+				flag_labels->buffer[draw_data.current_index].size,
+				(unsigned char*)draw_data.element_data
+			);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
 
 		// --------------------------------------------------------------------------------------------------------------
 

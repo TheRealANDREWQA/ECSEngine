@@ -263,6 +263,23 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------
 
+	// All sections will be considered
+	ECSENGINE_API void DeserializeSectionStreamSizes(uintptr_t data, CapacityStream<size_t>& sizes, size_t* header_size = nullptr);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	// Sections names is used to select only the regions that are of interest
+	// It will do a linear search through the section names - not suited for huge number
+	// of sections. A hash table implementation could be helpful for that
+	ECSENGINE_API void DeserializeSectionStreamSizes(
+		uintptr_t data, 
+		Stream<size_t>& sizes,
+		Stream<const char*> section_names, 
+		size_t* header_size = nullptr
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
 	ECSENGINE_API size_t DeserializeSectionHeaderSize(uintptr_t data);
 
 	// -------------------------------------------------------------------------------------------------------------------

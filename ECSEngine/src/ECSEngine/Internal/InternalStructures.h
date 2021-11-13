@@ -249,15 +249,6 @@ namespace ECSEngine {
 		unsigned int size;
 	};
 
-	struct ECSENGINE_API HashFunctionAdditiveString {
-		static unsigned int Hash(Stream<const char> string);
-		static unsigned int Hash(Stream<const wchar_t> string);
-		static unsigned int Hash(const char* string);
-		static unsigned int Hash(const wchar_t* string);
-		static unsigned int Hash(const void* identifier, unsigned int identifier_size);
-		static unsigned int Hash(ResourceIdentifier identifier);
-	};
-
 	struct ECSENGINE_API HashFunctionMultiplyString {
 		static unsigned int Hash(Stream<const char> string);
 		static unsigned int Hash(Stream<const wchar_t> string);

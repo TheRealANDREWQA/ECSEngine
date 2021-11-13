@@ -197,8 +197,8 @@ namespace ECSEngine {
 
 		ID3D11Texture2D* old_texture = texture.tex;
 		texture_descriptor.Format = compressed_format;
-		texture_descriptor.BindFlags = function::RemoveFlag(texture_descriptor.BindFlags, D3D11_BIND_RENDER_TARGET);
-		texture_descriptor.MiscFlags = function::RemoveFlag(texture_descriptor.MiscFlags, D3D11_RESOURCE_MISC_GENERATE_MIPS);
+		texture_descriptor.BindFlags = function::ClearFlag(texture_descriptor.BindFlags, D3D11_BIND_RENDER_TARGET);
+		texture_descriptor.MiscFlags = function::ClearFlag(texture_descriptor.MiscFlags, D3D11_RESOURCE_MISC_GENERATE_MIPS);
 		result = device->CreateTexture2D(&texture_descriptor, new_texture_data, &texture.tex);
 		if (FAILED(result)) {
 			SetErrorMessage(error_message, "Creating final texture after compression failed.");
