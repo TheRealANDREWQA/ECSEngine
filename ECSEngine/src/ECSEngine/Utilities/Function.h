@@ -319,6 +319,56 @@ namespace ECSEngine {
 			return (unsigned int)(((uintptr_t)ptr >> 3) & 0x0000000000FFFFFF);
 		}
 
+		template<bool is_delta = false, typename Value>
+		Value Lerp(Value a, Value b, float percentage) {
+			if constexpr (!is_delta) {
+				return (b - a) * percentage + a;
+			}
+			else {
+				return b * percentage + a;
+			}
+		}
+
+		template<typename Value>
+		float InverseLerp(Value a, Value b, Value c) {
+			return (c - a) / (b - a);
+		}
+
+		template<typename Value>
+		Value PlanarLerp(Value a, Value b, Value c, Value d, float x_percentage, float y_percentage) {
+			// Interpolation formula
+			// a ----- b
+			// |       |
+			// |       |
+			// |       |
+			// c ----- d
+
+			// result = a * (1 - x)(1 - y) + b * x (1 - y) + c * (1 - x) y + d * x y;
+
+			return a * ((1.0f - x_percentage) * (1.0f - y_percentage)) + b * (x_percentage * (1.0f - y_percentage)) +
+				c * ((1.0f - x_percentage) * y_percentage) + d * (x_percentage * y_percentage);
+		}
+
+		template<typename Function>
+		float2 SampleFunction(float value, Function&& function) {
+			return { value, function(value) };
+		}
+
+		template<typename Value>
+		Value Clamp(Value value, Value min, Value max) {
+			return ClampMax(ClampMin(value, min), max);
+		}
+
+		template<typename Value>
+		Value ClampMin(Value value, Value min) {
+			return Select(value < min, min, value);
+		}
+
+		template<typename Value>
+		Value ClampMax(Value value, Value max) {
+			return Select(value > max, max, value);
+		}
+
 	}
 
 }

@@ -528,7 +528,7 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 	drawer.NextRow();
 
 	drawer.CollapsingHeader("Project Parameters", [&]() {
-		constexpr size_t input_configuration = UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_RELATIVE_TRANSFORM;
+		constexpr size_t input_configuration = UI_CONFIG_RELATIVE_TRANSFORM;
 
 		drawer.SetDrawMode(UIDrawerMode::NextRow);
 		float default_x_before = drawer.layout.default_element_x;

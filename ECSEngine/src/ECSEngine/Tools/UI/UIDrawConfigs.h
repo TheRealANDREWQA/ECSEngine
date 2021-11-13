@@ -65,7 +65,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_SLIDER_MOUSE_DRAGGABLE = (size_t)1 << 44;
 		constexpr size_t UI_CONFIG_SLIDER_ENTER_VALUES = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_SLIDER_DEFAULT_VALUE = (size_t)1 << 47;
+		constexpr size_t UI_CONFIG_SLIDER_NO_DEFAULT_VALUE = (size_t)1 << 47;
 
 		constexpr size_t UI_CONFIG_SLIDER_GROUP_NO_NAME = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS = (size_t)1 << 51;
@@ -79,7 +79,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR = (size_t)1 << 54;
 		constexpr size_t UI_CONFIG_COLOR_INPUT_HEX_INPUT = (size_t)1 << 55;
 		constexpr size_t UI_CONFIG_COLOR_INPUT_CALLBACK = (size_t)1 << 56;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE = (size_t)1 << 57;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_NO_DEFAULT_VALUE = (size_t)1 << 57;
 
 		constexpr size_t UI_CONFIG_COMBO_BOX_NO_NAME = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_COMBO_BOX_DISABLE_X_SCALING = (size_t)1 << 46;
@@ -143,13 +143,14 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_HISTOGRAM_VARIANT_ZOOM_FONT = (size_t)1 << 48;
 
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_NO_RANGE = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_DEFAULT = (size_t)1 << 47;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_NO_DEFAULT = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_DO_NOT_REDUCE_SCALE = (size_t)1 << 49;
 
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME = (size_t)1 << 47;
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS = (size_t)1 << 48;
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT = (size_t)1 << 49;
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES = (size_t)1 << 50;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME = (size_t)1 << 50;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS = (size_t)1 << 51;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT = (size_t)1 << 52;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES = (size_t)1 << 53;
 
 		constexpr size_t UI_CONFIG_STATE_TABLE_NO_NAME = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_STATE_TABLE_SINGLE_POINTER = (size_t)1 << 46;

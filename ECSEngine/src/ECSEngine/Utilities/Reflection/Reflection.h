@@ -81,12 +81,12 @@ namespace ECSEngine {
 		struct ECSENGINE_API ReflectionFieldInfo {
 			ReflectionFieldInfo() {}
 			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionStreamFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
-				: extended_type(_extended_type), basic_type(_basic_type), byte_size(_byte_size), basic_type_count(_basic_type_count) {}
+				: stream_type(_extended_type), basic_type(_basic_type), byte_size(_byte_size), basic_type_count(_basic_type_count) {}
 
 			ReflectionFieldInfo(const ReflectionFieldInfo& other) = default;
 			ReflectionFieldInfo& operator = (const ReflectionFieldInfo& other) = default;
 
-			ReflectionStreamFieldType extended_type;
+			ReflectionStreamFieldType stream_type;
 			ReflectionBasicFieldType basic_type;
 			unsigned short basic_type_count;
 			unsigned short additional_flags;

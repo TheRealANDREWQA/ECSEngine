@@ -41,7 +41,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void WindowParameterColorTheme(UIWindowDrawerDescriptor* descriptor, UIDrawer<initialize>& drawer) {
-			constexpr size_t input_configuration = UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE | UI_CONFIG_COLOR_INPUT_CALLBACK;
+			constexpr size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigColorInputCallback color_input_callback;
@@ -60,17 +60,17 @@ namespace ECSEngine {
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.ColorInput<input_configuration>(config, "Theme", &theme->theme, system_theme->theme);
+			drawer.ColorInput<input_configuration>(config, "Theme", &theme->theme);
 
 			color_input_callback.callback = { WindowParameterColorInputCallback, descriptor, 0 };
-			drawer.ColorInput<input_configuration>(config, "Text", &theme->default_text, system_theme->default_text);
-			drawer.ColorInput<input_configuration>(config, "Graph hover line", &theme->graph_hover_line, system_theme->graph_hover_line);
-			drawer.ColorInput<input_configuration>(config, "Graph line", &theme->graph_line, system_theme->graph_line);
-			drawer.ColorInput<input_configuration>(config, "Graph sample circle", &theme->graph_sample_circle, system_theme->graph_sample_circle);
-			drawer.ColorInput<input_configuration>(config, "Histogram", &theme->histogram_color, system_theme->histogram_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram hovered", &theme->histogram_hovered_color, system_theme->histogram_hovered_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram text", &theme->histogram_text_color, system_theme->histogram_text_color);
-			drawer.ColorInput<input_configuration>(config, "Unavailable text", &theme->unavailable_text, system_theme->unavailable_text);
+			drawer.ColorInput<input_configuration>(config, "Text", &theme->default_text);
+			drawer.ColorInput<input_configuration>(config, "Graph hover line", &theme->graph_hover_line);
+			drawer.ColorInput<input_configuration>(config, "Graph line", &theme->graph_line);
+			drawer.ColorInput<input_configuration>(config, "Graph sample circle", &theme->graph_sample_circle);
+			drawer.ColorInput<input_configuration>(config, "Histogram", &theme->histogram_color);
+			drawer.ColorInput<input_configuration>(config, "Histogram hovered", &theme->histogram_hovered_color);
+			drawer.ColorInput<input_configuration>(config, "Histogram text", &theme->histogram_text_color);
+			drawer.ColorInput<input_configuration>(config, "Unavailable text", &theme->unavailable_text);
 		}
 
 		template ECSENGINE_API void WindowParameterColorTheme<true>(UIWindowDrawerDescriptor*, UIDrawer<true>&);
@@ -80,7 +80,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void WindowParametersLayout(UIWindowDrawerDescriptor* descriptor, UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -98,12 +98,12 @@ namespace ECSEngine {
 
 			UILayoutDescriptor* layout = &descriptor->layout;
 			const UILayoutDescriptor* system_layout = &system->m_descriptors.window_layout;
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element x", &layout->default_element_x, 0.01f, 0.3f, system_layout->default_element_x, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element y", &layout->default_element_y, 0.01f, 0.15f, system_layout->default_element_y, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, system_layout->element_indentation, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, system_layout->next_row_padding, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, system_layout->next_row_y_offset, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, system_layout->node_indentation, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element x", &layout->default_element_x, 0.01f, 0.3f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element y", &layout->default_element_y, 0.01f, 0.15f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, 3);
 
 #undef SLIDER_CONFIGURATION
 		}
@@ -115,7 +115,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void WindowParametersElementDescriptor(UIWindowDrawerDescriptor* descriptor, UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -133,17 +133,14 @@ namespace ECSEngine {
 
 			UIElementDescriptor* elements = &descriptor->element_descriptor;
 			UIElementDescriptor* system_elements = &system->m_descriptors.element_descriptor;
-			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, system_elements->color_input_padd, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, system_elements->combo_box_padding, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
 			float* float2_values[2];
 			float float2_lower_bounds[1];
 			float float2_upper_bounds[1];
-			float* float2_default_values;
 			const char* float2_names[2];
 
 			auto float2_sliders = [&](const char* group_name, size_t index) {
-				drawer.PushIdentifierStackRandom(index);
 				drawer.FloatSliderGroup<SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS>(
 					config,
 					2,
@@ -152,17 +149,14 @@ namespace ECSEngine {
 					float2_values,
 					float2_lower_bounds,
 					float2_upper_bounds,
-					float2_default_values,
 					3
-					);
-				drawer.PopIdentifierStack();
+				);
 			};
 
 			float2_values[0] = &elements->graph_axis_bump.x;
 			float2_values[1] = &elements->graph_axis_bump.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.01f;
-			float2_default_values = &system_elements->graph_axis_bump.x;
 			float2_names[0] = "x:";
 			float2_names[1] = "y:";
 			float2_sliders("Graph axis bump", 0);
@@ -170,13 +164,11 @@ namespace ECSEngine {
 			float2_values[0] = &elements->graph_axis_value_line_size.x;
 			float2_values[1] = &elements->graph_axis_value_line_size.y;
 			float2_upper_bounds[0] = 0.02f;
-			float2_default_values = &system_elements->graph_axis_value_line_size.x;
 			float2_sliders("Graph axis value line size", 1);
 
 			float2_values[0] = &elements->graph_padding.x;
 			float2_values[1] = &elements->graph_padding.y;
 			float2_upper_bounds[0] = 0.02f;
-			float2_default_values = &system_elements->graph_padding.x;
 			float2_sliders("Graph padding", 2);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
@@ -185,9 +177,8 @@ namespace ECSEngine {
 				&elements->graph_reduce_font,
 				0.5f,
 				1.0f,
-				system_elements->graph_reduce_font,
 				3
-				);
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
@@ -195,9 +186,8 @@ namespace ECSEngine {
 				&elements->graph_sample_circle_size,
 				0.003f,
 				0.02f,
-				system_elements->graph_sample_circle_size,
 				3
-				);
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
@@ -205,18 +195,16 @@ namespace ECSEngine {
 				&elements->graph_x_axis_space,
 				0.005f,
 				0.05f,
-				system_elements->graph_x_axis_space,
 				4
-				);
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
 				"Histogram bar min scale",
 				&elements->histogram_bar_min_scale,
 				0.01f,
-				0.2f,
-				system_elements->histogram_bar_min_scale
-				);
+				0.2f
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
@@ -224,15 +212,13 @@ namespace ECSEngine {
 				&elements->histogram_bar_spacing,
 				0.0028f,
 				0.01f,
-				system_elements->histogram_bar_spacing,
 				3
-				);
+			);
 
 			float2_values[0] = &elements->histogram_padding.x;
 			float2_values[1] = &elements->histogram_padding.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &system_elements->histogram_padding.x;
 			float2_sliders("Histogram padding", 3);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
@@ -241,9 +227,8 @@ namespace ECSEngine {
 				&elements->histogram_reduce_font,
 				0.5f,
 				1.0f,
-				system_elements->histogram_reduce_font,
 				3
-				);
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
@@ -251,7 +236,6 @@ namespace ECSEngine {
 				&elements->menu_button_padding,
 				0.0f,
 				0.1f,
-				system_elements->menu_button_padding,
 				4
 			);
 
@@ -259,35 +243,29 @@ namespace ECSEngine {
 			float2_values[1] = &elements->label_vertical_padd;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.2f;
-			float2_default_values = &system_elements->label_horizontal_padd;
 			float2_sliders("Label padding", 4);
 
 			float2_values[0] = &elements->slider_length.x;
 			float2_values[1] = &elements->slider_length.y;
 			float2_lower_bounds[0] = 0.01f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &system_elements->slider_length.x;
 			float2_sliders("Slider length", 5);
 
 			float2_values[0] = &elements->slider_padding.x;
 			float2_values[1] = &elements->slider_padding.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.05f;
-			float2_default_values = &system_elements->slider_padding.x;
 			float2_sliders("Slider padding", 6);
 
 			float2_values[0] = &elements->slider_shrink.x;
 			float2_values[1] = &elements->slider_shrink.y;
-			float2_default_values = &system_elements->slider_shrink.x;
 			float2_sliders("Slider shrink", 7);
 
 			float2_values[0] = &elements->text_input_padding.x;
 			float2_values[1] = &elements->text_input_padding.y;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &system_elements->text_input_padding.x;
 			float2_sliders("Text input padding", 8);
 
-			drawer.PopIdentifierStack();
 #undef SLIDER_CONFIGURATION
 		}
 
@@ -376,8 +354,8 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParametersColorTheme(UIDrawer<initialize>& drawer) {
-			constexpr size_t input_configuration = UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE | UI_CONFIG_COLOR_INPUT_CALLBACK;
-			constexpr size_t slider_configuration = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK | UI_CONFIG_SLIDER_DEFAULT_VALUE;
+			constexpr size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
+			constexpr size_t slider_configuration = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigColorInputCallback color_input_callback;
@@ -396,36 +374,36 @@ namespace ECSEngine {
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			const UIColorThemeDescriptor* startup_theme = &system->m_startup_descriptors.color_theme;
-			drawer.ColorInput<input_configuration>(config, "Theme", &theme->theme, startup_theme->theme);
+			drawer.ColorInput<input_configuration>(config, "Theme", &theme->theme);
 
 			color_input_callback.callback = { SystemParameterColorThemeCallback, nullptr, 0 };
-			drawer.ColorInput<input_configuration>(config, "Text", &theme->default_text, startup_theme->default_text);
-			drawer.ColorInput<input_configuration>(config, "Graph hover line", &theme->graph_hover_line, startup_theme->graph_hover_line);
-			drawer.ColorInput<input_configuration>(config, "Graph line", &theme->graph_line, startup_theme->graph_line);
-			drawer.ColorInput<input_configuration>(config, "Graph sample circle", &theme->graph_sample_circle, startup_theme->graph_sample_circle);
-			drawer.ColorInput<input_configuration>(config, "Histogram", &theme->histogram_color, startup_theme->histogram_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram hovered", &theme->histogram_hovered_color, startup_theme->histogram_hovered_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram text", &theme->histogram_text_color, startup_theme->histogram_text_color);
-			drawer.ColorInput<input_configuration>(config, "Unavailable text", &theme->unavailable_text, startup_theme->unavailable_text);
-			drawer.ColorInput<input_configuration>(config, "Background", &theme->background, startup_theme->background);
-			drawer.ColorInput<input_configuration>(config, "Borders", &theme->borders, startup_theme->borders);
-			drawer.ColorInput<input_configuration>(config, "Collapse Triangle", &theme->collapse_triangle, startup_theme->collapse_triangle);
-			drawer.ColorInput<input_configuration>(config, "Docking gizmo background", &theme->docking_gizmo_background, startup_theme->docking_gizmo_background);
-			drawer.ColorInput<input_configuration>(config, "Docking gizmo border", &theme->docking_gizmo_border, startup_theme->docking_gizmo_border);
-			drawer.ColorInput<input_configuration>(config, "Hierarchy drag node bar", &theme->hierarchy_drag_node_bar, startup_theme->hierarchy_drag_node_bar);
-			drawer.ColorInput<input_configuration>(config, "Render sliders active part", &theme->render_sliders_active_part, startup_theme->render_sliders_active_part);
-			drawer.ColorInput<input_configuration>(config, "Render sliders background", &theme->render_sliders_background, startup_theme->render_sliders_background);
-			drawer.ColorInput<input_configuration>(config, "Region header X", &theme->region_header_x, startup_theme->region_header_x);
-			drawer.ColorInput<input_configuration>(config, "Region header hovered X", &theme->region_header_hover_x, startup_theme->region_header_hover_x);
+			drawer.ColorInput<input_configuration>(config, "Text", &theme->default_text);
+			drawer.ColorInput<input_configuration>(config, "Graph hover line", &theme->graph_hover_line);
+			drawer.ColorInput<input_configuration>(config, "Graph line", &theme->graph_line);
+			drawer.ColorInput<input_configuration>(config, "Graph sample circle", &theme->graph_sample_circle);
+			drawer.ColorInput<input_configuration>(config, "Histogram", &theme->histogram_color);
+			drawer.ColorInput<input_configuration>(config, "Histogram hovered", &theme->histogram_hovered_color);
+			drawer.ColorInput<input_configuration>(config, "Histogram text", &theme->histogram_text_color);
+			drawer.ColorInput<input_configuration>(config, "Unavailable text", &theme->unavailable_text);
+			drawer.ColorInput<input_configuration>(config, "Background", &theme->background);
+			drawer.ColorInput<input_configuration>(config, "Borders", &theme->borders);
+			drawer.ColorInput<input_configuration>(config, "Collapse Triangle", &theme->collapse_triangle);
+			drawer.ColorInput<input_configuration>(config, "Docking gizmo background", &theme->docking_gizmo_background);
+			drawer.ColorInput<input_configuration>(config, "Docking gizmo border", &theme->docking_gizmo_border);
+			drawer.ColorInput<input_configuration>(config, "Hierarchy drag node bar", &theme->hierarchy_drag_node_bar);
+			drawer.ColorInput<input_configuration>(config, "Render sliders active part", &theme->render_sliders_active_part);
+			drawer.ColorInput<input_configuration>(config, "Render sliders background", &theme->render_sliders_background);
+			drawer.ColorInput<input_configuration>(config, "Region header X", &theme->region_header_x);
+			drawer.ColorInput<input_configuration>(config, "Region header hovered X", &theme->region_header_hover_x);
 
 			config.flag_count = 0;
 			UIConfigSliderChangedValueCallback callback;
 			callback.handler = { SystemParameterColorThemeCallback, nullptr, 0 };
 			config.AddFlag(callback);
-			drawer.FloatSlider<slider_configuration>(config, "Check box factor", &theme->check_box_factor, 1.2f, 2.0f, startup_theme->check_box_factor, 3);
-			drawer.FloatSlider<slider_configuration>(config, "Select text factor", &theme->select_text_factor, 1.1f, 2.0f, startup_theme->select_text_factor, 3);
-			drawer.FloatSlider<slider_configuration>(config, "Darken hover factor", &theme->darken_hover_factor, 0.2f, 0.9f, startup_theme->darken_hover_factor, 3);
-			drawer.FloatSlider<slider_configuration>(config, "Slider lighten factor", &theme->slider_lighten_factor, 1.1f, 2.5f, startup_theme->slider_lighten_factor, 3);
+			drawer.FloatSlider<slider_configuration>(config, "Check box factor", &theme->check_box_factor, 1.2f, 2.0f, 3);
+			drawer.FloatSlider<slider_configuration>(config, "Select text factor", &theme->select_text_factor, 1.1f, 2.0f, 3);
+			drawer.FloatSlider<slider_configuration>(config, "Darken hover factor", &theme->darken_hover_factor, 0.2f, 0.9f, 3);
+			drawer.FloatSlider<slider_configuration>(config, "Slider lighten factor", &theme->slider_lighten_factor, 1.1f, 2.5f, 3);
 		}
 
 		template ECSENGINE_API void SystemParametersColorTheme<false>(UIDrawer<false>& drawer);
@@ -435,7 +413,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParametersLayout(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_DEFAULT_VALUE | UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -471,7 +449,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParametersElementDescriptor(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -491,12 +469,11 @@ namespace ECSEngine {
 			drawer.Button("Default values##20", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, system_elements->color_input_padd, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, system_elements->combo_box_padding, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
 			float* float2_values[2];
 			float float2_lower_bounds[1];
 			float float2_upper_bounds[1];
-			float* float2_default_values;
 			const char* float2_names[2];
 
 			auto float2_sliders = [&](const char* group_name, size_t index) {
@@ -509,9 +486,8 @@ namespace ECSEngine {
 					float2_values,
 					float2_lower_bounds,
 					float2_upper_bounds,
-					float2_default_values,
 					3
-					);
+				);
 				drawer.PopIdentifierStack();
 			};
 
@@ -519,7 +495,6 @@ namespace ECSEngine {
 			float2_values[1] = &elements->graph_axis_bump.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.01f;
-			float2_default_values = &system_elements->graph_axis_bump.x;
 			float2_names[0] = "x:";
 			float2_names[1] = "y:";
 			float2_sliders("Graph axis bump", 0);
@@ -527,13 +502,11 @@ namespace ECSEngine {
 			float2_values[0] = &elements->graph_axis_value_line_size.x;
 			float2_values[1] = &elements->graph_axis_value_line_size.y;
 			float2_upper_bounds[0] = 0.02f;
-			float2_default_values = &system_elements->graph_axis_value_line_size.x;
 			float2_sliders("Graph axis value line size", 1);
 
 			float2_values[0] = &elements->graph_padding.x;
 			float2_values[1] = &elements->graph_padding.y;
 			float2_upper_bounds[0] = 0.02f;
-			float2_default_values = &system_elements->graph_padding.x;
 			float2_sliders("Graph padding", 2);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
@@ -541,20 +514,16 @@ namespace ECSEngine {
 				"Graph reduce font",
 				&elements->graph_reduce_font,
 				0.5f,
-				1.0f,
-				system_elements->graph_reduce_font,
-				3
-				);
+				1.0f
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
 				"Graph sample circle size",
 				&elements->graph_sample_circle_size,
 				0.003f,
-				0.02f,
-				system_elements->graph_sample_circle_size,
-				3
-				);
+				0.02f
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
@@ -562,34 +531,29 @@ namespace ECSEngine {
 				&elements->graph_x_axis_space,
 				0.005f,
 				0.05f,
-				system_elements->graph_x_axis_space,
 				4
-				);
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
 				"Histogram bar min scale",
 				&elements->histogram_bar_min_scale,
 				0.01f,
-				0.2f,
-				system_elements->histogram_bar_min_scale
-				);
+				0.2f
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
 				"Histogram bar spacing",
 				&elements->histogram_bar_spacing,
 				0.0028f,
-				0.01f,
-				system_elements->histogram_bar_spacing,
-				3
-				);
+				0.01f
+			);
 
 			float2_values[0] = &elements->histogram_padding.x;
 			float2_values[1] = &elements->histogram_padding.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &system_elements->histogram_padding.x;
 			float2_sliders("Histogram padding", 3);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
@@ -597,10 +561,8 @@ namespace ECSEngine {
 				"Histogram reduce font",
 				&elements->histogram_reduce_font,
 				0.5f,
-				1.0f,
-				system_elements->histogram_reduce_font,
-				3
-				);
+				1.0f
+			);
 
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(
 				config,
@@ -608,7 +570,6 @@ namespace ECSEngine {
 				&elements->menu_button_padding,
 				0.0f,
 				0.1f,
-				system_elements->menu_button_padding,
 				4
 			);
 
@@ -616,32 +577,27 @@ namespace ECSEngine {
 			float2_values[1] = &elements->label_vertical_padd;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.2f;
-			float2_default_values = &system_elements->label_horizontal_padd;
 			float2_sliders("Label padding", 4);
 
 			float2_values[0] = &elements->slider_length.x;
 			float2_values[1] = &elements->slider_length.y;
 			float2_lower_bounds[0] = 0.01f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &system_elements->slider_length.x;
 			float2_sliders("Slider length", 5);
 
 			float2_values[0] = &elements->slider_padding.x;
 			float2_values[1] = &elements->slider_padding.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.05f;
-			float2_default_values = &system_elements->slider_padding.x;
 			float2_sliders("Slider padding", 6);
 
 			float2_values[0] = &elements->slider_shrink.x;
 			float2_values[1] = &elements->slider_shrink.y;
-			float2_default_values = &system_elements->slider_shrink.x;
 			float2_sliders("Slider shrink", 7);
 
 			float2_values[0] = &elements->text_input_padding.x;
 			float2_values[1] = &elements->text_input_padding.y;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &system_elements->text_input_padding.x;
 			float2_sliders("Text input padding", 8);
 
 			drawer.PopIdentifierStack();
@@ -655,7 +611,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParameterFont(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
 
 			UIDrawConfig config;
 			auto system = drawer.GetSystem();
@@ -671,8 +627,8 @@ namespace ECSEngine {
 			button_data.system_descriptor = font;
 			drawer.Button("Default values##32", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Character spacing", &font->character_spacing, 0.0f, 0.1f, startup_font->character_spacing, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Size", &font->size, 0.0009f, 0.003f, startup_font->size, 5);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Character spacing", &font->character_spacing, 0.0f, 0.1f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Size", &font->size, 0.0007f, 0.003f, 5);
 #undef SLIDER_CONFIGURATION
 		}
 
@@ -683,7 +639,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParameterDockspace(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
 			UIDrawConfig config;
 			auto system = drawer.GetSystem();
 
@@ -698,20 +654,20 @@ namespace ECSEngine {
 			button_data.system_descriptor = dockspace;
 			drawer.Button("Default values##41", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border clickable handler count", &dockspace->border_default_clickable_handler_count, (unsigned int)64, (unsigned int)1024, startup_dockspace->border_default_clickable_handler_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border general handler count", &dockspace->border_default_general_handler_count, (unsigned int)16, (unsigned int)1024, startup_dockspace->border_default_general_handler_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border hoverable handler count", &dockspace->border_default_hoverable_handler_count, (unsigned int)64, (unsigned int)1024, startup_dockspace->border_default_hoverable_handler_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border sprite texture count", &dockspace->border_default_sprite_texture_count, (unsigned int)16, (unsigned int)1024, startup_dockspace->border_default_sprite_texture_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Dockspace count", &dockspace->count, (unsigned int)8, (unsigned int)64, startup_dockspace->count);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Max border count", &dockspace->max_border_count, 4, 16, startup_dockspace->max_border_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Max windows per border", &dockspace->max_windows_border, 4, 16, startup_dockspace->max_border_count);
+			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border clickable handler count", &dockspace->border_default_clickable_handler_count, (unsigned int)64, (unsigned int)1024);
+			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border general handler count", &dockspace->border_default_general_handler_count, (unsigned int)16, (unsigned int)1024);
+			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border hoverable handler count", &dockspace->border_default_hoverable_handler_count, (unsigned int)64, (unsigned int)1024);
+			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border sprite texture count", &dockspace->border_default_sprite_texture_count, (unsigned int)16, (unsigned int)1024);
+			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Dockspace count", &dockspace->count, (unsigned int)8, (unsigned int)64);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Max border count", &dockspace->max_border_count, 4, 16);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Max windows per border", &dockspace->max_windows_border, 4, 16);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border margin", &dockspace->border_margin, 0.0f, 0.5f, startup_dockspace->border_margin);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border minimum distance", &dockspace->border_minimum_distance, 0.0f, 0.5f, startup_dockspace->border_minimum_distance);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border size", &dockspace->border_size, 0.0005f, 0.01f, startup_dockspace->border_size, 7);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Mininum scale", &dockspace->mininum_scale, 0.01f, 0.5f, startup_dockspace->mininum_scale, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Viewport padding x", &dockspace->viewport_padding_x, 0.0f, 0.003f, startup_dockspace->viewport_padding_x, 7);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Viewport padding y", &dockspace->viewport_padding_y, 0.0f, 0.003f, startup_dockspace->viewport_padding_y, 7);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border margin", &dockspace->border_margin, 0.0f, 0.5f);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border minimum distance", &dockspace->border_minimum_distance, 0.0f, 0.5f);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border size", &dockspace->border_size, 0.0005f, 0.01f, 7);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Mininum scale", &dockspace->mininum_scale, 0.01f, 0.5f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Viewport padding x", &dockspace->viewport_padding_x, 0.0f, 0.003f, 7);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Viewport padding y", &dockspace->viewport_padding_y, 0.0f, 0.003f, 7);
 
 #undef SLIDER_CONFIGURATION
 		}
@@ -723,7 +679,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParameterMaterial(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_DEFAULT_VALUE | UI_CONFIG_SLIDER_ENTER_VALUES
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
 
 			auto system = drawer.GetSystem();
 
@@ -750,7 +706,7 @@ namespace ECSEngine {
 				UIDrawConfig config;
 				drawer.PushIdentifierStack("##1");
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &material->vertex_buffer_count[index], 256, 5'000'000, startup_material->vertex_buffer_count[index]);
+					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &material->vertex_buffer_count[index], 256, 5'000'000);
 				}
 				drawer.PopIdentifierStack();
 				});
@@ -759,7 +715,7 @@ namespace ECSEngine {
 				UIDrawConfig config;
 				drawer.PushIdentifierStack("##2");
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &material->vertex_buffer_count[ECS_TOOLS_UI_MATERIALS + index], 256, 5'000'000, startup_material->vertex_buffer_count[ECS_TOOLS_UI_MATERIALS + index]);
+					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &material->vertex_buffer_count[ECS_TOOLS_UI_MATERIALS + index], 256, 5'000'000);
 				}
 				drawer.PopIdentifierStack();
 				});
@@ -776,8 +732,7 @@ namespace ECSEngine {
 
 		template<bool initialize>
 		void SystemParameterMiscellaneous(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE
-#define COLOR_CONFIGURATION UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE
+#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
 
 			UIDrawConfig config;
 			auto system = drawer.GetSystem();
@@ -793,20 +748,20 @@ namespace ECSEngine {
 			button_data.system_descriptor = misc;
 			drawer.Button("Default values##100", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Drawer identifier memory", &misc->drawer_identifier_memory, 100, 1000, startup_misc->drawer_identifier_memory);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Drawer temp memory", &misc->drawer_temp_memory, 1'000, 1'000'000, startup_misc->drawer_temp_memory);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Hierarchy drag node hover time until drop", &misc->hierarchy_drag_node_hover_drop, 250, 5000, startup_misc->hierarchy_drag_node_hover_drop);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Hierarchy drag node time", &misc->hierarchy_drag_node_time, 100, 2'000, startup_misc->hierarchy_drag_node_time);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Slider bring back start time", &misc->slider_bring_back_start, 50, 2'000, startup_misc->slider_bring_back_start);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Slider enter values duration", &misc->slider_enter_value_duration, 100, 2'000, startup_misc->slider_enter_value_duration);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input caret display time", &misc->text_input_caret_display_time, 25, 5'000, startup_misc->text_input_caret_display_time);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input coallesce command time", &misc->text_input_coallesce_command, 25, 1'000, startup_misc->text_input_coallesce_command);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input start time", &misc->text_input_repeat_start_duration, 25, 1'000, startup_misc->text_input_repeat_start_duration);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input repeat time", &misc->text_input_repeat_time, 25, 1'000, startup_misc->text_input_repeat_time);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Thread temp memory", &misc->thread_temp_memory, 128, 1'000'000, startup_misc->thread_temp_memory);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned short>(config, "Window count", &misc->window_count, 8, 64, startup_misc->window_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Window handler revert command count", &misc->window_handler_revert_command_count, 32, 4096, startup_misc->window_handler_revert_command_count);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned short>(config, "Window table default resource count", &misc->window_table_default_count, 64, 1024, startup_misc->window_table_default_count);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Drawer identifier memory", &misc->drawer_identifier_memory, 100, 1000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Drawer temp memory", &misc->drawer_temp_memory, 1'000, 1'000'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Hierarchy drag node hover time until drop", &misc->hierarchy_drag_node_hover_drop, 250, 5000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Hierarchy drag node time", &misc->hierarchy_drag_node_time, 100, 2'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Slider bring back start time", &misc->slider_bring_back_start, 50, 2'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Slider enter values duration", &misc->slider_enter_value_duration, 100, 2'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input caret display time", &misc->text_input_caret_display_time, 25, 5'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input coallesce command time", &misc->text_input_coallesce_command, 25, 1'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input start time", &misc->text_input_repeat_start_duration, 25, 1'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input repeat time", &misc->text_input_repeat_time, 25, 1'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Thread temp memory", &misc->thread_temp_memory, 128, 1'000'000);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned short>(config, "Window count", &misc->window_count, 8, 64);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Window handler revert command count", &misc->window_handler_revert_command_count, 32, 4096);
+			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned short>(config, "Window table default resource count", &misc->window_table_default_count, 64, 1024);
 
 			const char* names[] = {
 				"Solid color",
@@ -818,14 +773,13 @@ namespace ECSEngine {
 
 			drawer.CollapsingHeader("System vertex buffer count", [&]() {
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &misc->system_vertex_buffers[index], 128, 5'000'000, startup_misc->system_vertex_buffers[index]);
+					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &misc->system_vertex_buffers[index], 128, 5'000'000);
 				}
 				});
 
 			float* float2_values[2];
 			float float2_lower_bounds[2];
 			float float2_upper_bounds[2];
-			float* float2_default_values;
 			const char* float2_names[2] = { "x:", "y:" };
 
 			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
@@ -840,7 +794,6 @@ namespace ECSEngine {
 					float2_values,
 					float2_lower_bounds,
 					float2_upper_bounds,
-					float2_default_values,
 					3
 					);
 				drawer.PopIdentifierStack();
@@ -850,47 +803,42 @@ namespace ECSEngine {
 			float2_values[1] = &misc->color_input_window_size_y;
 			float2_lower_bounds[0] = 0.1f;
 			float2_upper_bounds[0] = 1.0f;
-			float2_default_values = &startup_misc->color_input_window_size_x;
 			float2_lambda("Color input window size", 10);
 
 			float2_values[0] = &misc->graph_hover_offset.x;
 			float2_values[1] = &misc->graph_hover_offset.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.2f;
-			float2_default_values = &startup_misc->graph_hover_offset.x;
 			float2_lambda("Graph hover offset", 11);
 
 			float2_values[0] = &misc->histogram_hover_offset.x;
 			float2_values[1] = &misc->histogram_hover_offset.y;
-			float2_default_values = &startup_misc->histogram_hover_offset.x;
 			float2_lambda("Histogram hover offset", 12);
 
 			float2_values[0] = &misc->render_slider_horizontal_size;
 			float2_values[1] = &misc->render_slider_vertical_size;
 			float2_lower_bounds[0] = 0.005f;
 			float2_upper_bounds[1] = 0.05f;
-			float2_default_values = &startup_misc->render_slider_horizontal_size;
 			float2_lambda("Render slider size", 13);
 
 			float2_values[0] = &misc->tool_tip_padding.x;
 			float2_values[1] = &misc->tool_tip_padding.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_default_values = &startup_misc->tool_tip_padding.x;
 			float2_lambda("Tool tip padding", 14);
 
 			drawer.PopIdentifierStack();
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f, startup_misc->menu_x_padd, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, startup_misc->rectangle_hierarchy_drag_node_dimension, 4);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Title y scale", &misc->title_y_scale, 0.01f, 0.1f, startup_misc->title_y_scale);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f, 3);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, 4);
+			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Title y scale", &misc->title_y_scale, 0.01f, 0.1f);
 
-			drawer.ColorInput<COLOR_CONFIGURATION>(config, "Menu arrow color", &misc->menu_arrow_color, startup_misc->menu_arrow_color);
-			drawer.ColorInput<COLOR_CONFIGURATION>(config, "Menu unavailable arrow color", &misc->menu_unavailable_arrow_color, startup_misc->menu_unavailable_arrow_color);
-			drawer.ColorInput<COLOR_CONFIGURATION>(config, "Tool tip background", &misc->tool_tip_background_color, startup_misc->tool_tip_background_color);
-			drawer.ColorInput<COLOR_CONFIGURATION>(config, "Tool tip border", &misc->tool_tip_border_color, startup_misc->tool_tip_border_color);
-			drawer.ColorInput<COLOR_CONFIGURATION>(config, "Tool tip font", &misc->tool_tip_font_color, startup_misc->tool_tip_font_color);
-			drawer.ColorInput<COLOR_CONFIGURATION>(config, "Tool tip unavailable font", &misc->tool_tip_unavailable_font_color, startup_misc->tool_tip_unavailable_font_color);
+			drawer.ColorInput("Menu arrow color", &misc->menu_arrow_color);
+			drawer.ColorInput("Menu unavailable arrow color", &misc->menu_unavailable_arrow_color);
+			drawer.ColorInput("Tool tip background", &misc->tool_tip_background_color);
+			drawer.ColorInput("Tool tip border", &misc->tool_tip_border_color);
+			drawer.ColorInput("Tool tip font", &misc->tool_tip_font_color);
+			drawer.ColorInput("Tool tip unavailable font", &misc->tool_tip_unavailable_font_color);
 
 #undef COLOR_CONFIGURATION
 #undef SLIDER_CONFIGURATION
@@ -1048,21 +996,15 @@ namespace ECSEngine {
 							system->m_windows[window_index].zoom.x += scroll_amount * ECS_TOOLS_UI_DEFAULT_HANDLER_ZOOM_FACTOR;
 							system->m_windows[window_index].zoom.y += scroll_amount * ECS_TOOLS_UI_DEFAULT_HANDLER_ZOOM_FACTOR;
 
-							system->m_windows[window_index].zoom.x = function::ClampMin(
+							system->m_windows[window_index].zoom.x = function::Clamp(
 								system->m_windows[window_index].zoom.x,
-								system->m_windows[window_index].min_zoom
-							);
-							system->m_windows[window_index].zoom.x = function::ClampMax(
-								system->m_windows[window_index].zoom.x,
+								system->m_windows[window_index].min_zoom,
 								system->m_windows[window_index].max_zoom
 							);
 
-							system->m_windows[window_index].zoom.y = function::ClampMin(
+							system->m_windows[window_index].zoom.y = function::Clamp(
 								system->m_windows[window_index].zoom.y,
-								system->m_windows[window_index].min_zoom
-							);
-							system->m_windows[window_index].zoom.y = function::ClampMax(
-								system->m_windows[window_index].zoom.y,
+								system->m_windows[window_index].min_zoom,
 								system->m_windows[window_index].max_zoom
 							);
 

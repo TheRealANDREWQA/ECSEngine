@@ -925,14 +925,26 @@ namespace ECSEngine {
 		void DoubleInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
+			UIDrawerDoubleInputDragData* data = (UIDrawerDoubleInputDragData*)_data;
 			if (mouse_tracker->LeftButton() == MBHELD) {
-				UIDrawerDoubleInputDragData* data = (UIDrawerDoubleInputDragData*)_data;
 				double shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 1.0 / 5.0, 1.0);
 				double ctrl_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftControl), 5.0, 1.0);
 				double amount = (double)mouse_delta.x * (double)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 
 				*data->number += amount;
 				*data->number = function::Clamp(*data->number, data->min, data->max);
+
+				if (amount != 0 && data->number_data.input->callback != nullptr) {
+					// The text input must also be updated before it
+					char number_characters[64];
+					Stream<char> number_characters_stream(number_characters, 0);
+					function::ConvertDoubleToChars(number_characters_stream, *data->number, 3);
+					data->number_data.input->DeleteAllCharacters();
+					data->number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+
+					action_data->data = data->number_data.input->callback_data;
+					data->number_data.input->callback(action_data);
+				}
 			}
 		}
 
@@ -940,14 +952,27 @@ namespace ECSEngine {
 
 		void FloatInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerFloatInputDragData* data = (UIDrawerFloatInputDragData*)_data;
 			if (mouse_tracker->LeftButton() == MBHELD) {
-				UIDrawerFloatInputDragData* data = (UIDrawerFloatInputDragData*)_data;
 				float shift_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 1.0f / 5.0f, 1.0f);
 				float ctrl_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftControl), 5.0f, 1.0f);
 				float amount = mouse_delta.x * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 
 				*data->number += amount;
 				*data->number = function::Clamp(*data->number, data->min, data->max);
+
+				if (amount != 0.0f && data->number_data.input->callback != nullptr) {
+					// The text input must also be updated before it
+					char number_characters[64];
+					Stream<char> number_characters_stream(number_characters, 0);
+					function::ConvertFloatToChars(number_characters_stream, *data->number, 3);
+					data->number_data.input->DeleteAllCharacters();
+					data->number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+
+					action_data->data = data->number_data.input->callback_data;
+					data->number_data.input->callback(action_data);
+				}
 			}
 		}
 
@@ -1003,6 +1028,18 @@ namespace ECSEngine {
 					}
 					*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
 					data->last_position = mouse_position.x;
+
+					if (data->data.number_data.input->callback != nullptr) {
+						// The text input must also be updated before it
+						char number_characters[64];
+						Stream<char> number_characters_stream(number_characters, 0);
+						function::ConvertIntToChars(number_characters_stream, *data->data.number);
+						data->data.number_data.input->DeleteAllCharacters();
+						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+
+						action_data->data = data->data.number_data.input->callback_data;
+						data->data.number_data.input->callback(action_data);
+					}
 				}
 			}
 		}
@@ -1083,18 +1120,23 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)_data;
-			if (data->input->text->size == 0) {
-				data->input->InsertCharacters("0", 1, 0, system);
+			if (data->number_data.input->text->size == 0) {
+				data->number_data.input->InsertCharacters("0", 1, 0, system);
 			}
-			*data->number = function::ConvertCharactersToFloat(*data->input->text);
+			*data->number = function::ConvertCharactersToFloat(*data->number_data.input->text);
 			float before_value = *data->number;
 			*data->number = function::Clamp(*data->number, data->min, data->max);
 			if (before_value != *data->number) {
-				data->input->DeleteAllCharacters();
+				data->number_data.input->DeleteAllCharacters();
 				char temp_characters[128];
 				Stream characters = Stream<char>(temp_characters, 0);
 				function::ConvertFloatToChars(characters, *data->number, 3);
-				data->input->InsertCharacters(temp_characters, characters.size, 0, system);
+				data->number_data.input->InsertCharacters(temp_characters, characters.size, 0, system);
+			}
+
+			if (data->number_data.user_action != nullptr) {
+				action_data->data = data->number_data.user_action_data;
+				data->number_data.user_action(action_data);
 			}
 		}
 
@@ -1104,18 +1146,23 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)_data;
-			if (data->input->text->size == 0) {
-				data->input->InsertCharacters("0", 1, 0, system);
+			if (data->number_data.input->text->size == 0) {
+				data->number_data.input->InsertCharacters("0", 1, 0, system);
 			}
-			*data->number = function::ConvertCharactersToDouble(*data->input->text);
+			*data->number = function::ConvertCharactersToDouble(*data->number_data.input->text);
 			double before_value = *data->number;
 			*data->number = function::Clamp(*data->number, data->min, data->max);
 			if (before_value != *data->number) {
-				data->input->DeleteAllCharacters();
+				data->number_data.input->DeleteAllCharacters();
 				char temp_characters[128];
 				Stream characters = Stream<char>(temp_characters, 0);
 				function::ConvertDoubleToChars(characters, *data->number, 3);
-				data->input->InsertCharacters(temp_characters, characters.size, 0, system);
+				data->number_data.input->InsertCharacters(temp_characters, characters.size, 0, system);
+			}
+
+			if (data->number_data.user_action != nullptr) {
+				action_data->data = data->number_data.user_action_data;
+				data->number_data.user_action(action_data);
 			}
 		}
 
@@ -1126,19 +1173,19 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)_data;
-			if (data->input->text->size == 0) {
-				data->input->InsertCharacters("0", 1, 0, system);
+			if (data->number_data.input->text->size == 0) {
+				data->number_data.input->InsertCharacters("0", 1, 0, system);
 			}
 
 			auto revert_characters = [data, system]() {
-				data->input->DeleteAllCharacters();
+				data->number_data.input->DeleteAllCharacters();
 				char temp_characters[128];
 				Stream characters = Stream<char>(temp_characters, 0);
 				function::ConvertIntToCharsFormatted(characters, static_cast<int64_t>(*data->number));
-				data->input->InsertCharacters(temp_characters, characters.size, 0, system);
+				data->number_data.input->InsertCharacters(temp_characters, characters.size, 0, system);
 			};
 
-			int64_t number = function::ConvertCharactersToInt<int64_t>(*data->input->text);
+			int64_t number = function::ConvertCharactersToInt<int64_t>(*data->number_data.input->text);
 			if (number > (int64_t)data->max || number < (int64_t)data->min) {
 				revert_characters();
 			}
@@ -1149,6 +1196,11 @@ namespace ECSEngine {
 				if (before_value != *data->number) {
 					revert_characters();
 				}
+			}
+
+			if (data->number_data.user_action != nullptr) {
+				action_data->data = data->number_data.user_action_data;
+				data->number_data.user_action(action_data);
 			}
 		}
 
@@ -1164,17 +1216,25 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerFloatInputHoverableData* data = (UIDrawerFloatInputHoverableData*)_data;
-			action_data->data = &data->tool_tip;
-			action_data->position = mouse_position;
-			TextTooltipHoverable(action_data);
+			if (data->data->number_data.display_range) {
+				action_data->data = &data->tool_tip;
+				action_data->position = mouse_position;
+				TextTooltipHoverable(action_data);
+			}
 
-			if (mouse_tracker->RightButton() == MBPRESSED) {
-				*data->data.number = data->data.default_value;
-				data->data.input->DeleteAllCharacters();
+			if (mouse_tracker->RightButton() == MBPRESSED && data->data->number_data.return_to_default) {
+				*data->data->number = data->data->default_value;
+				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
 				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-				function::ConvertFloatToChars(temp_stream, *data->data.number, 3);
-				data->data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
+				function::ConvertFloatToChars(temp_stream, *data->data->number, 3);
+				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
+
+				// Call the input callback if any
+				if (data->data->number_data.input->callback != nullptr) {
+					action_data->data = data->data->number_data.input->callback_data;
+					data->data->number_data.input->callback(action_data);
+				}
 			}
 		}
 
@@ -1183,7 +1243,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerFloatInputHoverableData* data = (UIDrawerFloatInputHoverableData*)_data;
-			action_data->data = data->data.input;
+			action_data->data = data->data->number_data.input;
 			TextInputHoverable(action_data);
 			action_data->data = data;
 			FloatInputHoverable(action_data);
@@ -1195,17 +1255,25 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerDoubleInputHoverableData* data = (UIDrawerDoubleInputHoverableData*)_data;
-			action_data->data = &data->tool_tip;
-			action_data->position = mouse_position;
-			TextTooltipHoverable(action_data);
+			if (data->data->number_data.display_range) {
+				action_data->data = &data->tool_tip;
+				action_data->position = mouse_position;
+				TextTooltipHoverable(action_data);
+			}
 
-			if (mouse_tracker->RightButton() == MBPRESSED) {
-				*data->data.number = data->data.default_value;
-				data->data.input->DeleteAllCharacters();
+			if (mouse_tracker->RightButton() == MBPRESSED && data->data->number_data.return_to_default) {
+				*data->data->number = data->data->default_value;
+				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
 				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-				function::ConvertDoubleToChars(temp_stream, *data->data.number, 3);
-				data->data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
+				function::ConvertDoubleToChars(temp_stream, *data->data->number, 3);
+				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
+
+				// Call the input callback if any
+				if (data->data->number_data.input->callback != nullptr) {
+					action_data->data = data->data->number_data.input->callback_data;
+					data->data->number_data.input->callback(action_data);
+				}
 			}
 		}
 
@@ -1214,7 +1282,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerDoubleInputHoverableData* data = (UIDrawerDoubleInputHoverableData*)_data;
-			action_data->data = data->data.input;
+			action_data->data = data->data->number_data.input;
 			TextInputHoverable(action_data);
 			action_data->data = data;
 			DoubleInputHoverable(action_data);
@@ -1227,17 +1295,25 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerIntInputHoverableData<Integer>* data = (UIDrawerIntInputHoverableData<Integer>*)_data;
-			action_data->data = &data->tool_tip;
-			action_data->position = mouse_position;
-			TextTooltipHoverable(action_data);
+			if (data->data->number_data.display_range) {
+				action_data->data = &data->tool_tip;
+				action_data->position = mouse_position;
+				TextTooltipHoverable(action_data);
+			}
 
-			if (mouse_tracker->RightButton() == MBPRESSED) {
-				*data->data.number = data->data.default_value;
-				data->data.input->DeleteAllCharacters();
+			if (mouse_tracker->RightButton() == MBPRESSED && data->data->number_data.return_to_default) {
+				*data->data->number = data->data->default_value;
+				data->data->number_data.input->DeleteAllCharacters();
 				char temp_chars[128];
 				Stream<char> temp_stream = Stream<char>(temp_chars, 0);
-				function::ConvertIntToCharsFormatted(temp_stream, static_cast<int64_t>(*data->data.number));
-				data->data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
+				function::ConvertIntToCharsFormatted(temp_stream, static_cast<int64_t>(*data->data->number));
+				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
+
+				// Call the input callback if any
+				if (data->data->number_data.input->callback != nullptr) {
+					action_data->data = data->data->number_data.input->callback_data;
+					data->data->number_data.input->callback(action_data);
+				}
 			}
 		}
 
@@ -1253,7 +1329,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerIntInputHoverableData<Integer>* data = (UIDrawerIntInputHoverableData<Integer>*)_data;
-			action_data->data = data->data.input;
+			action_data->data = data->data->number_data.input;
 			TextInputHoverable(action_data);
 			action_data->data = data;
 			IntInputHoverable<Integer>(action_data);
@@ -1486,6 +1562,37 @@ namespace ECSEngine {
 			else {
 				data->array_data->drag_current_position = mouse_position.y;
 				data->array_data->drag_index = data->index;
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void ColorFloatInputCallback(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerColorFloatInputCallbackData* data = (UIDrawerColorFloatInputCallbackData*)_data;
+			*data->input->color_float = SDRColorToHDR(data->input->base_color, data->input->intensity);
+
+			if (data->callback != nullptr) {
+				action_data->data = data->callback_data;
+				data->callback(action_data);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void ColorFloatInputIntensityCallback(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerColorFloatInput* data = (UIDrawerColorFloatInput*)_data;
+			*data->color_float = SDRColorToHDR(data->base_color, data->intensity);
+		
+			UIDrawerColorFloatInputCallbackData* color_input_callback_data = (UIDrawerColorFloatInputCallbackData*)data->color_input->callback.data;
+			if (color_input_callback_data->callback != nullptr) {
+				action_data->data = color_input_callback_data->callback_data;
+				color_input_callback_data->callback(action_data);
 			}
 		}
 

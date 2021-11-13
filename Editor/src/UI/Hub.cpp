@@ -219,6 +219,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 	CapacityStream<TYPE4>* type4u;
 	CapacityStream<CapacityStream<char>>* text_input;
 	CapacityStream<Color>* colors;
+	ColorFloat* color_float;
 
 	if constexpr (initialize) {
 		cool_stuff = (CapacityStream<TYPE>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POGCHAMP", sizeof(TYPE) * 10000), 0, 5000);
@@ -240,6 +241,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			text_input->buffer[index].InitializeFromBuffer(ptr, 0, 50);
 		}
 		colors = (CapacityStream<Color>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POP", sizeof(Color) * 100), 0, 50);
+		color_float = (ColorFloat*)drawer.GetMainAllocatorBufferAndStoreAsResource("COLORFLOAT", sizeof(ColorFloat));
 	}
 	else {
 		cool_stuff = (CapacityStream<TYPE>*)drawer.GetResource("POGCHAMP");
@@ -250,7 +252,11 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 		type4u = (CapacityStream<TYPE4>*)drawer.GetResource("PO");
 		text_input = (CapacityStream<CapacityStream<char>>*)drawer.GetResource("POG");
 		colors = (CapacityStream<Color>*)drawer.GetResource("POP");
+		color_float = (ColorFloat*)drawer.GetResource("COLORFLOAT");
 	}
+
+	drawer.ColorFloatInput("Color float", color_float);
+	drawer.NextRow();
 
 	/*drawer.ArrayDouble("What's up", cool_stuff);
 	drawer.ArrayCheckBox("Heya", check_boxes);

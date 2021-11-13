@@ -218,7 +218,7 @@ namespace ECSEngine {
 		{
 			size_t count = 0;
 			for (size_t index = 0; index < type.fields.size; index++) {
-				if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Pointer || IsStream(type.fields[index].info.extended_type)) {
+				if (type.fields[index].info.stream_type == ReflectionStreamFieldType::Pointer || IsStream(type.fields[index].info.stream_type)) {
 					if (count == pointer_index) {
 						return (void*)((uintptr_t)instance + type.fields[index].info.pointer_offset);
 					}
@@ -253,9 +253,9 @@ namespace ECSEngine {
 
 			// Initialize all values, helped by macros
 			ResourceIdentifier identifier;
-#define BASIC_TYPE(type, basic_type, extended_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, extended_type, sizeof(type), 1), identifier);
+#define BASIC_TYPE(type, basic_type, stream_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, stream_type, sizeof(type), 1), identifier);
 #define INT_TYPE(type, val) BASIC_TYPE(type, ReflectionBasicFieldType::val, ReflectionStreamFieldType::Basic)
-#define COMPLEX_TYPE(type, basic_type, extended_type, byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, extended_type, byte_size, 1), identifier);
+#define COMPLEX_TYPE(type, basic_type, stream_type, byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, stream_type, byte_size, 1), identifier);
 
 #define TYPE_234(base, reflection_type) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::reflection_type##2, ReflectionStreamFieldType::Basic, sizeof(base) * 2); \
 COMPLEX_TYPE(base##3, ReflectionBasicFieldType::reflection_type##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \
@@ -1068,7 +1068,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						pointer_offset += info.byte_size;
 
 						// change the extended type to array
-						info.extended_type = ReflectionStreamFieldType::BasicTypeArray;
+						info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
 					}
 					return success;
 				}
@@ -1081,7 +1081,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					
 					field.info.additional_flags = 0;
 					field.info.basic_type = ReflectionBasicFieldType::UserDefined;
-					field.info.extended_type = ReflectionStreamFieldType::Unknown;
+					field.info.stream_type = ReflectionStreamFieldType::Unknown;
 					field.info.basic_type_count = 1;
 
 					// determine the definition
@@ -1293,8 +1293,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				ReflectionField field;
 				GetReflectionFieldInfo(data, opening_parenthese + 1, field);
 
-				if (field.info.extended_type == ReflectionStreamFieldType::Unknown) {
-					field.info.extended_type = ReflectionStreamFieldType::Pointer;
+				if (field.info.stream_type == ReflectionStreamFieldType::Unknown) {
+					field.info.stream_type = ReflectionStreamFieldType::Pointer;
 					field.info.basic_type_count = 1;
 					field.info.byte_size = sizeof(void*);
 				}
@@ -1327,7 +1327,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				data->total_memory += strlen(field.definition) + 1;
 
 				field.info.basic_type = ReflectionBasicFieldType::Enum;
-				field.info.extended_type = ReflectionStreamFieldType::Basic;
+				field.info.stream_type = ReflectionStreamFieldType::Basic;
 				field.info.byte_size = 1;
 				field.info.basic_type_count = 1;
 				field.info.pointer_offset = pointer_offset;
@@ -1384,17 +1384,17 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Normal stream
 				if (strncmp(initial_ptr, STRING(Stream), strlen(STRING(Stream))) == 0) {
 					field.info.byte_size = sizeof(Stream<void>);
-					field.info.extended_type = ReflectionStreamFieldType::Stream;
+					field.info.stream_type = ReflectionStreamFieldType::Stream;
 				}
 				// Capacity stream
 				else if (strncmp(initial_ptr, STRING(CapacityStream), strlen(STRING(CapacityStream))) == 0) {
 					field.info.byte_size = sizeof(CapacityStream<void>);
-					field.info.extended_type = ReflectionStreamFieldType::CapacityStream;
+					field.info.stream_type = ReflectionStreamFieldType::CapacityStream;
 				}
 				// Resizable stream
 				else if (strncmp(initial_ptr, STRING(ResizableStream), strlen(STRING(ResizableStream))) == 0) {
 					field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
-					field.info.extended_type = ReflectionStreamFieldType::ResizableStream;
+					field.info.stream_type = ReflectionStreamFieldType::ResizableStream;
 				}
 				else {
 					WriteErrorMessage(data, "Invalid ECS_STREAM_REFLECT, no stream identifier", -1);
@@ -1478,7 +1478,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				);
 
 				field.info.basic_type_count = pointer_level;
-				field.info.extended_type = ReflectionStreamFieldType::Pointer;
+				field.info.stream_type = ReflectionStreamFieldType::Pointer;
 				field.info.additional_flags = field.info.byte_size;
 				field.info.byte_size = sizeof(void*);
 				
@@ -1534,7 +1534,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				pointer_offset = function::align_pointer(before_pointer_offset, alignof(ResizableStream<void, LinearAllocator>));
 				field.info.pointer_offset = pointer_offset;
-				field.info.extended_type = ReflectionStreamFieldType::ResizableStream;
+				field.info.stream_type = ReflectionStreamFieldType::ResizableStream;
 				field.info.additional_flags = field.info.byte_size;
 				field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
 				pointer_offset += sizeof(ResizableStream<void, LinearAllocator>);
@@ -1575,7 +1575,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				pointer_offset = function::align_pointer(before_pointer_offset, alignof(CapacityStream<void>));
 				field.info.pointer_offset = pointer_offset;
-				field.info.extended_type = ReflectionStreamFieldType::CapacityStream;
+				field.info.stream_type = ReflectionStreamFieldType::CapacityStream;
 				field.info.additional_flags = field.info.byte_size;
 				field.info.byte_size = sizeof(CapacityStream<void>);
 				pointer_offset += sizeof(CapacityStream<void>);
@@ -1616,7 +1616,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				pointer_offset = function::align_pointer(before_pointer_offset, alignof(Stream<void>));
 				field.info.pointer_offset = pointer_offset;
-				field.info.extended_type = ReflectionStreamFieldType::Stream;
+				field.info.stream_type = ReflectionStreamFieldType::Stream;
 				field.info.additional_flags = field.info.byte_size;
 				field.info.byte_size = sizeof(Stream<void>);
 				pointer_offset += sizeof(Stream<void>);
@@ -1686,7 +1686,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			const char* field_name = field.name;
 			field = GetReflectionFieldInfo(data->field_table, basic_type);
 			field.name = field_name;
-			if (field.info.extended_type == ReflectionStreamFieldType::Unknown || field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
+			if (field.info.stream_type == ReflectionStreamFieldType::Unknown || field.info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				data->total_memory += strlen(basic_type) + 1;
 			}
 		}
@@ -1703,7 +1703,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			bool success = reflection_field_table->TryGetValue(hash, identifier, field.info);
 			field.definition = basic_type;
 			if (!success) {
-				field.info.extended_type = ReflectionStreamFieldType::Unknown;
+				field.info.stream_type = ReflectionStreamFieldType::Unknown;
 				field.info.basic_type = ReflectionBasicFieldType::UserDefined;
 			}
 			else {
@@ -1754,7 +1754,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			field = GetReflectionFieldInfo(reflection, basic_type);
 			field.info.additional_flags = field.info.byte_size;
-			field.info.extended_type = stream_type;
+			field.info.stream_type = stream_type;
 			if (stream_type == ReflectionStreamFieldType::Stream) {
 				field.info.byte_size = sizeof(Stream<void>);
 			}
