@@ -133,7 +133,7 @@ namespace ECSEngine {
 
 			UIElementDescriptor* elements = &descriptor->element_descriptor;
 			UIElementDescriptor* system_elements = &system->m_descriptors.element_descriptor;
-			drawer.PushIdentifierStack("##");
+			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, system_elements->color_input_padd, 3);
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, system_elements->combo_box_padding, 3);
 			float* float2_values[2];
@@ -490,7 +490,7 @@ namespace ECSEngine {
 			button_data.system_descriptor = elements;
 			drawer.Button("Default values##20", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.PushIdentifierStack("##");
+			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, system_elements->color_input_padd, 3);
 			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, system_elements->combo_box_padding, 3);
 			float* float2_values[2];
@@ -828,7 +828,7 @@ namespace ECSEngine {
 			float* float2_default_values;
 			const char* float2_names[2] = { "x:", "y:" };
 
-			drawer.PushIdentifierStack("##");
+			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 
 			auto float2_lambda = [&](const char* group_name, size_t index) {
 				drawer.PushIdentifierStackRandom(index);
@@ -1569,11 +1569,11 @@ namespace ECSEngine {
 				system->IncrementWindowDynamicResource(drawer->window_index, STABILIZE_STRING_NAME);
 			}
 			else {
-				system->AddWindowDrawerElement(drawer->window_index, STABILIZE_STRING_NAME);
+				ResourceIdentifier identifier(ToStream(STABILIZE_STRING_NAME));
 				stabilized_render_span = (float2*)system->m_memory->Allocate(sizeof(float2), alignof(float2));
 				system->AddWindowMemoryResource(stabilized_render_span, drawer->window_index);
-				system->AddWindowMemoryResourceToTable(stabilized_render_span, ResourceIdentifier(ToStream(STABILIZE_STRING_NAME)), drawer->window_index);
-				system->FinalizeWindowElement(drawer->window_index);
+				system->AddWindowMemoryResourceToTable(stabilized_render_span, identifier, drawer->window_index);
+				system->AddWindowDrawerElement(drawer->window_index, STABILIZE_STRING_NAME, Stream<void*>(&stabilized_render_span, 1), Stream<ResourceIdentifier>(&identifier, 1));
 				*stabilized_render_span = { 0.0f, 0.0f };
 			}
 
@@ -2190,6 +2190,8 @@ namespace ECSEngine {
 			return mask;
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		unsigned int CreateConsoleWindow(UISystem* system, Console* console) {
 			UIWindowDescriptor descriptor;
 
@@ -2211,6 +2213,8 @@ namespace ECSEngine {
 			return system->Create_Window(descriptor);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void CreateConsole(UISystem* system, Console* console) {
 			unsigned int window_index = system->GetWindowFromName(CONSOLE_WINDOW_NAME);
 
@@ -2226,6 +2230,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void CreateConsoleAction(ActionData* action_data)
 		{
 			UI_UNPACK_ACTION_DATA;
@@ -2234,6 +2240,8 @@ namespace ECSEngine {
 			Console* console = (Console*)_data;
 			CreateConsole(system, console);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void CreateConsoleWindowData(ConsoleWindowData& data, Console* console)
 		{
@@ -2253,6 +2261,8 @@ namespace ECSEngine {
 			data.filtered_message_indices = containers::ResizableStream<unsigned int, MemoryManager>(console->messages.allocator, 0);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		Console::Console(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* _dump_path) : allocator(allocator),
 			pause_on_error(false), verbosity_level(CONSOLE_VERBOSITY_DETAILED), dump_type(ConsoleDumpType::CountMessages),
 			task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
@@ -2267,10 +2277,14 @@ namespace ECSEngine {
 			dump_path = (const wchar_t*)allocation;
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Lock()
 		{
 			lock.lock();
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Clear()
 		{
@@ -2282,16 +2296,22 @@ namespace ECSEngine {
 			Dump();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::AddSystemFilterString(const char* string)
 		{
 			AddSystemFilterString(Stream<char>(string, strlen(string)));
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::AddSystemFilterString(Stream<char> string) {
 			char* new_string = (char*)function::Copy(messages.allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char));
 			new_string[string.size] = '\0';
 			system_filter_strings.Add(new_string);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		size_t Console::GetFormatCharacterCount() const
 		{
@@ -2307,6 +2327,8 @@ namespace ECSEngine {
 			count += 3;
 			return count;
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::ConvertToMessage(const char* message, ConsoleMessage& console_message)
 		{
@@ -2325,6 +2347,8 @@ namespace ECSEngine {
 			console_message.message = stream;
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::ConvertToMessage(Stream<char> message, ConsoleMessage& console_message)
 		{
 			size_t format_character_count = GetFormatCharacterCount();
@@ -2341,10 +2365,14 @@ namespace ECSEngine {
 			console_message.message = stream;
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::ChangeDumpPath(const wchar_t* new_path)
 		{
 			ChangeDumpPath(ToStream(new_path));
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::ChangeDumpPath(Stream<wchar_t> new_path)
 		{
@@ -2359,6 +2387,8 @@ namespace ECSEngine {
 			Dump();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::AppendDump()
 		{
 			ConsoleDumpData dump_data;
@@ -2368,6 +2398,8 @@ namespace ECSEngine {
 			ThreadTask task = { ConsoleAppendToDump, &dump_data };
 			task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Dump()
 		{
@@ -2379,6 +2411,8 @@ namespace ECSEngine {
 			task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Message(const char* message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity)
 		{
 			using WriteFunction = void (Console::*)(const char*, size_t, unsigned char);
@@ -2386,11 +2420,15 @@ namespace ECSEngine {
 			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Message(Stream<char> message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity) {
 			using WriteFunction = void (Console::*)(Stream<char>, size_t, unsigned char);
 			WriteFunction write_functions[] = { &Console::Info, &Console::Warn, &Console::Error, &Console::Trace, &Console::Info };
 			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::MessageAtomic(const char* message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity)
 		{
@@ -2399,12 +2437,16 @@ namespace ECSEngine {
 			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::MessageAtomic(Stream<char> message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity)
 		{
 			using WriteFunction = void (Console::*)(Stream<char>, size_t, unsigned char);
 			WriteFunction write_functions[] = { &Console::InfoAtomic, &Console::WarnAtomic, &Console::ErrorAtomic, &Console::TraceAtomic, &Console::InfoAtomic };
 			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Write(const char* message, ConsoleMessage& console_message)
 		{
@@ -2432,6 +2474,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Write(Stream<char> stream, ConsoleMessage& console_message) {
 			ConvertToMessage(stream, console_message);
 			messages.Add(console_message);
@@ -2457,11 +2501,15 @@ namespace ECSEngine {
 			}
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::WriteAtomic(const char* message, ConsoleMessage& console_message) {
 			Lock();
 			Write(message, console_message);
 			Unlock();
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::WriteAtomic(Stream<char> message, ConsoleMessage& console_message) {
 			Lock();
@@ -2469,9 +2517,13 @@ namespace ECSEngine {
 			Unlock();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Info(const char* message, size_t system_filter, unsigned char verbosity) {
 			Info(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Info(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			ConsoleMessage console_message;
@@ -2482,9 +2534,13 @@ namespace ECSEngine {
 			Write(message, console_message);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::InfoAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
 			InfoAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::InfoAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			Lock();
@@ -2492,9 +2548,13 @@ namespace ECSEngine {
 			Unlock();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Warn(const char* message, size_t system_filter, unsigned char verbosity) {
 			Warn(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Warn(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			ConsoleMessage console_message;
@@ -2505,9 +2565,13 @@ namespace ECSEngine {
 			Write(message, console_message);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::WarnAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
 			WarnAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::WarnAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			Lock();
@@ -2515,9 +2579,13 @@ namespace ECSEngine {
 			Unlock();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Error(const char* message, size_t system_filter, unsigned char verbosity) {
 			Error(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Error(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			ConsoleMessage console_message;
@@ -2531,9 +2599,13 @@ namespace ECSEngine {
 			}
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::ErrorAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
 			ErrorAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::ErrorAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			Lock();
@@ -2541,9 +2613,13 @@ namespace ECSEngine {
 			Unlock();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Trace(const char* message, size_t system_filter, unsigned char verbosity) {
 			Trace(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::Trace(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			ConsoleMessage console_message;
@@ -2554,15 +2630,21 @@ namespace ECSEngine {
 			Write(message, console_message);
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::TraceAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
 			TraceAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::TraceAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
 			Lock();
 			Trace(message, system_filter, verbosity);
 			Unlock();
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::WriteFormatCharacters(Stream<char>& characters)
 		{
@@ -2654,13 +2736,19 @@ namespace ECSEngine {
 			characters.Add(' ');
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::Unlock() {
 			lock.unlock();
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::TryLock() {
 			lock.try_lock();
 		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 		void Console::SetDumpType(ConsoleDumpType type, unsigned int count)
 		{
@@ -2668,15 +2756,158 @@ namespace ECSEngine {
 			dump_count_for_commit = count;
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::SetFormat(size_t _format)
 		{
 			format = _format;
 		}
 
+		// -------------------------------------------------------------------------------------------------------
+
 		void Console::SetVerbosity(unsigned char new_level)
 		{
 			verbosity_level = new_level;
 		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		template<bool initializer>
+		void InjectValuesWindowDraw(void* window_data, void* drawer_descriptor) {
+			UI_PREPARE_DRAWER(initializer);
+
+			InjectWindowData* data = (InjectWindowData*)window_data;
+			if constexpr (initializer) {
+				// Make a coallesced allocation for all streams
+				size_t allocation_size = 0;
+				allocation_size += sizeof(InjectWindowSection) * data->sections.size;
+				for (size_t index = 0; index < data->sections.size; index++) {
+					allocation_size += sizeof(InjectWindowElement) * data->sections[index].elements.size;
+					allocation_size += sizeof(char) * (strlen(data->sections[index].name) + 1);
+					for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
+						allocation_size += strlen(data->sections[index].elements[subindex].name) + 1;
+					}
+				}
+
+				void* allocation = drawer.GetMainAllocatorBuffer(allocation_size);
+				InjectWindowSection* sections = (InjectWindowSection*)allocation;
+				uintptr_t buffer = (uintptr_t)allocation;
+				data->sections.CopyTo(buffer);
+				for (size_t index = 0; index < data->sections.size; index++) {
+					sections[index].elements.InitializeAndCopy(buffer, data->sections[index].elements);
+				}
+				for (size_t index = 0; index < data->sections.size; index++) {
+					sections[index].name = (const char*)buffer;
+					size_t section_name_size = strlen(data->sections[index].name) + 1;
+					memcpy((void*)buffer, data->sections[index].name, sizeof(char) * section_name_size);
+					buffer += section_name_size;
+
+					for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
+						sections[index].elements[subindex].name = (const char*)buffer;
+						size_t name_size = strlen(data->sections[index].elements[subindex].name) + 1;
+						memcpy((void*)buffer, data->sections[index].elements[subindex].name, sizeof(char) * name_size);
+						buffer += name_size;
+					}
+				}
+
+				data->sections.buffer = sections;
+
+				Reflection::ReflectionField field;
+				Reflection::ReflectionType type;
+				type.fields = Stream<Reflection::ReflectionField>(&field, 1);
+
+				// One type and instance must be created separetely for each element - cannot create a type and an instance
+				// for each sections because the data is provided through pointers for each element
+				for (size_t index = 0; index < data->sections.size; index++) {
+					for (size_t subindex = 0; subindex < sections[index].elements.size; subindex++) {
+						type.name = data->sections[index].elements[subindex].name;;
+						type.fields[0].name = sections[index].elements[subindex].name;
+						type.fields[0].definition = sections[index].elements[subindex].basic_type_string;
+
+						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Basic) {
+							type.fields[0].info = Reflection::GetReflectionFieldInfo(data->ui_reflection->reflection, sections[index].elements[subindex].basic_type_string).info;
+						}
+						else {
+							type.fields[0].info = Reflection::GetReflectionFieldInfoStream(
+								data->ui_reflection->reflection, 
+								sections[index].elements[subindex].basic_type_string, 
+								sections[index].elements[subindex].stream_type
+							).info;
+						}
+						
+						type.fields[0].info.pointer_offset = 0;
+
+						UIReflectionType* ui_type = data->ui_reflection->CreateType(type);
+						UIReflectionInstance* instance = data->ui_reflection->CreateInstance(type.name, ui_type);
+						data->ui_reflection->BindInstancePtrs(instance, data->sections[index].elements[subindex].data, type);
+					}
+				}
+			}
+
+			UIDrawConfig config;
+			for (size_t index = 0; index < data->sections.size; index++) {
+				drawer.CollapsingHeader(data->sections[index].name, [&]() {
+					if constexpr (!initializer) {
+						for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
+							data->ui_reflection->DrawInstance(data->sections[index].elements[subindex].name, drawer, config);
+						}
+					}
+				});
+			}
+
+		}
+
+		ECS_TEMPLATE_FUNCTION_BOOL(void, InjectValuesWindowDraw, void*, void*);
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void InjectWindowDestroyAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			// Window data is stored in additional data
+			InjectWindowData* data = (InjectWindowData*)_additional_data;
+			for (size_t index = 0; index < data->sections.size; index++) {
+				// Release the instances and types
+				for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
+					data->ui_reflection->DestroyInstance(data->sections[index].elements[subindex].name);
+					data->ui_reflection->DestroyType(data->sections[index].elements[subindex].name);
+				}
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, const char* window_name, bool is_pop_up_window) {
+			constexpr float2 SIZE = { 1.0f, 1.0f };
+
+			UIWindowDescriptor descriptor;
+
+			descriptor.draw = InjectValuesWindowDraw<false>;
+			descriptor.initialize = InjectValuesWindowDraw<true>;
+			descriptor.destroy_action = InjectWindowDestroyAction;
+
+			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, SIZE.x);
+			descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, SIZE.y);
+			descriptor.initial_size_x = SIZE.x;
+			descriptor.initial_size_y = SIZE.y;
+
+			descriptor.window_data = &data;
+			descriptor.window_data_size = sizeof(data);
+			descriptor.window_name = window_name;
+
+			return system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void CreateInjectValuesAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			InjectValuesActionData* data = (InjectValuesActionData*)_data;
+			CreateInjectValuesWindow(system, data->data, data->name, data->is_pop_up_window);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
 
 	}
 

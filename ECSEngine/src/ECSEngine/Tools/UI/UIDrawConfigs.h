@@ -36,6 +36,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_ACTIVE_STATE = (size_t)1 << 28;
 		constexpr size_t UI_CONFIG_DYNAMIC_RESOURCE = (size_t)1 << 60;
 		constexpr size_t UI_CONFIG_GET_TRANSFORM = (size_t)1 << 61;
+		constexpr size_t UI_CONFIG_INITIALIZER_DO_NOT_BEGIN = (size_t)1 << 62;
 
 		constexpr size_t UI_CONFIG_BUTTON_HOVERABLE = (size_t)1 << 40;
 		
@@ -165,7 +166,11 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK = (size_t)1 << 48;
 		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DO_NOT_INFER_X = (size_t)1 << 49;
 
+		constexpr size_t UI_CONFIG_SPRITE_BUTTON_BACKGROUND = (size_t)1 << 45;
+
 		constexpr size_t UI_CONFIG_LABEL_LIST_NO_NAME = (size_t)1 << 45;
+
+		constexpr size_t UI_CONFIG_ARRAY_FIXED_SIZE = (size_t)1 << 45;
 
 		const Color MULTI_GRAPH_COLORS[] = {Color(40, 180, 40), Color(35, 150, 35), Color(40, 120, 30), Color(30, 100, 40)};
 	}

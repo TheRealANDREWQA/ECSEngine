@@ -30,6 +30,7 @@
     <ClInclude Include="src\UI\Inspector.h" />
     <ClInclude Include="src\UI\InspectorData.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="src\Modules\ModuleConfigurationGroup.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
@@ -53,11 +54,9 @@
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\UI\Inspector.cpp" />
+    <ClCompile Include="src\Modules\ModuleConfigurationGroup.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="ECSLogo.ico" />
   </ItemGroup>
 </Project>

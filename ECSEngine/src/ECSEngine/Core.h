@@ -118,7 +118,7 @@ template return_type function_name(GlobalMemoryManager*, __VA_ARGS__); \
 template return_type function_name(MemoryArena*, __VA_ARGS__); \
 template return_type function_name(ResizableMemoryArena*, __VA_ARGS__);
 
-#define ECS_TEMPLATE_FUNCTION_INTEGER(function) function(int8_t); function(uint8_t); function(int16_t); function(uint16_t); \
+#define ECS_TEMPLATE_FUNCTION_INTEGER(function) function(char); function(int8_t); function(uint8_t); function(int16_t); function(uint16_t); \
 function(int32_t); function(uint32_t); function(int64_t); function(uint64_t);
 
 #define ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(type) type(const type& other) = default; type& operator = (const type& other) = default;

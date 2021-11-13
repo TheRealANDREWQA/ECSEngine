@@ -11,7 +11,7 @@ namespace ECSEngine {
 			parameter_start[0] = 0;
 		}
 
-		const float* UIDrawConfig::GetParameter(size_t bit_flag) const
+		const void* UIDrawConfig::GetParameter(size_t bit_flag) const
 		{
 			for (size_t index = 0; index < flag_count; index++) {
 				if (associated_bits[index] == bit_flag) {

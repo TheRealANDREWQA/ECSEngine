@@ -404,7 +404,32 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		bool IsFloatingPointNumber(Stream<char> characters)
+		{
+			unsigned int dot_count = 0;
+			size_t starting_index = characters[0] == '+' || characters[0] == '-';
+			for (size_t index = starting_index; index < characters.size; index++) {
+				if ((characters[index] < '0' || characters[index] > '9') && characters[index] != '.') {
+					return false;
+				}
+
+				dot_count += characters[index] == '.';
+			}
+			return dot_count <= 1;
+		}
+
 		// --------------------------------------------------------------------------------------------------
+
+		bool IsIntegerNumber(Stream<char> characters)
+		{
+			size_t starting_index = characters[0] == '+' || characters[0] == '-';
+			for (size_t index = starting_index; index < characters.size; index++) {
+				if (characters[index] < '0' || characters[index] > '9' && characters[index] != '.') {
+					return false;
+				}
+			}
+			return true;
+		}
 
 		// --------------------------------------------------------------------------------------------------
 

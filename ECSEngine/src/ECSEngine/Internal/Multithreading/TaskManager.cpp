@@ -6,9 +6,13 @@ constexpr size_t SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL = 50;
 
 namespace ECSEngine {
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void ThreadWrapperNone(unsigned int thread_id, World* ECS_RESTRICT world, ThreadFunction function, void* ECS_RESTRICT data, void* ECS_RESTRICT wrapper_data) {
 		function(thread_id, world, data);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void ThreadWrapperCountTasks(unsigned int thread_id, World* ECS_RESTRICT _world, ThreadFunction function, void* ECS_RESTRICT data, void* ECS_RESTRICT _wrapper_data) {
 		std::atomic<unsigned int>* wrapper_data = (std::atomic<unsigned int>*)_wrapper_data;
@@ -17,10 +21,14 @@ namespace ECSEngine {
 		wrapper_data->fetch_sub(1);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	constexpr ThreadFunctionWrapper WRAPPERS[] = {
 		ThreadWrapperNone,
 		ThreadWrapperCountTasks
 	};
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	TaskManager::TaskManager(
 		size_t thread_count,
@@ -92,6 +100,8 @@ namespace ECSEngine {
 		m_tasks = ResizableStream<ThreadTask, MemoryManager>(memory_manager, 0);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::AddTask(ThreadTask task, size_t task_data_size) {
 		if (task_data_size > 0) {
 			void* allocation = m_tasks.allocator->Allocate(task_data_size);
@@ -106,6 +116,8 @@ namespace ECSEngine {
 		m_tasks.Add(task);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	unsigned int TaskManager::AddDynamicTask(ThreadTask task, size_t task_data_size) {
 		AddDynamicTask(task, m_last_thread_index, task_data_size);
 		unsigned int thread_index = m_last_thread_index;
@@ -113,12 +125,16 @@ namespace ECSEngine {
 		return thread_index;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	unsigned int TaskManager::AddDynamicTaskAndWake(ThreadTask task, size_t task_data_size)
 	{
 		unsigned int thread_index = AddDynamicTask(task, task_data_size);
 		WakeThread(thread_index);
 		return thread_index;
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::AddDynamicTask(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
 		if (task_data_size > 0) {
@@ -134,10 +150,14 @@ namespace ECSEngine {
 		m_thread_queue[thread_id]->Push(task);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::AddDynamicTaskAndWake(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
 		AddDynamicTask(task, thread_id, task_data_size);
 		WakeThread(thread_id);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManagerChangeWrapperMode(
 		TaskManagerWrapper new_wrapper_mode,
@@ -185,6 +205,8 @@ namespace ECSEngine {
 		}
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ChangeStaticWrapperMode(TaskManagerWrapper wrapper_mode, void* wrapper_data, size_t wrapper_data_size, ThreadFunctionWrapper custom_function)
 	{
 #ifdef ECS_TASK_MANAGER_WRAPPER
@@ -192,15 +214,21 @@ namespace ECSEngine {
 #endif
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ChangeDynamicWrapperMode(TaskManagerWrapper wrapper_mode, void* wrapper_data, size_t wrapper_data_size, ThreadFunctionWrapper custom_function) {
 #ifdef ECS_TASK_MANAGER_WRAPPER
 		TaskManagerChangeWrapperMode(wrapper_mode, wrapper_data, wrapper_data_size, custom_function, &m_dynamic_wrapper_mode, &m_dynamic_wrapper_data, &m_dynamic_wrapper_data_size, &m_dynamic_wrapper, m_world);
 #endif
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ClearTaskIndex(unsigned int thread_id) {
 		m_thread_task_index[thread_id]->store(0, ECS_RELEASE);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 	
 	void TaskManager::ClearTaskIndices() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
@@ -208,9 +236,13 @@ namespace ECSEngine {
 		}
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ClearTaskStream() {
 		m_tasks.size = 0;
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::CreateThreads(LinearAllocator** temp_allocators, MemoryManager** memory) {
 		size_t thread_count = m_thread_queue.size;
@@ -222,63 +254,91 @@ namespace ECSEngine {
 		}
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::DecrementThreadTaskIndex(unsigned int thread_id)
 	{
 		m_thread_task_index[thread_id]->fetch_sub(1, ECS_ACQ_REL);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::IncrementThreadTaskIndex(unsigned int thread_id) {
 		m_thread_task_index[thread_id]->fetch_add(1, ECS_ACQ_REL);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	Timer* TaskManager::GetTimer() {
 		return &m_timer;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	unsigned int TaskManager::GetTaskCount() const {
 		return m_tasks.size;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	unsigned int TaskManager::GetThreadCount() const {
 		return m_thread_queue.size;
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	ThreadTask TaskManager::GetTask(unsigned int task_index) const {
 		ECS_ASSERT(task_index >= 0 && task_index < m_tasks.capacity);
 		return m_tasks[task_index];
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	ThreadTask* TaskManager::GetTaskPtr(unsigned int task_index) const {
 		ECS_ASSERT(task_index >= 0 && task_index < m_tasks.capacity);
 		return m_tasks.buffer + task_index;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	ThreadQueue* TaskManager::GetThreadQueue(unsigned int thread_id) const {
 		return m_thread_queue[thread_id];
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	int TaskManager::GetThreadTaskIndex(unsigned int thread_id) const {
 		return m_thread_task_index[thread_id]->load(ECS_ACQUIRE);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ReserveTasks(unsigned int count) {
 		m_tasks.ReserveNewElements(count);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 	
 	void TaskManager::ResetDynamicQueue(unsigned int thread_id) {
 		m_thread_queue[thread_id]->Reset();
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::ResetTaskAllocator()
 	{
 		m_allocator.Clear();
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::ResetDynamicQueues() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
 			ResetDynamicQueue(index);
 		}
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::SetTask(ThreadTask task, unsigned int index, size_t task_data_size) {
 		ECS_ASSERT(m_tasks.size < m_tasks.capacity);
@@ -290,22 +350,32 @@ namespace ECSEngine {
 		m_tasks[index] = task;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::SetWorld(World* world)
 	{
 		m_world = world;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::SetTimerMarker() {
 		m_timer.SetMarker();
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::SetThreadTaskIndex(unsigned int thread_id, int value) {
 		m_thread_task_index[thread_id]->store(value, ECS_RELEASE);
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::SleepThread(unsigned int thread_id) {
 		m_events[thread_id].Wait();
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::SleepUntilDynamicTasksFinish(size_t max_period) {
 #ifdef ECS_TASK_MANAGER_WRAPPER
@@ -325,9 +395,13 @@ namespace ECSEngine {
 #endif
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::TerminateThread(unsigned int thread_id) {
 		SetThreadTaskIndex(thread_id, -1);
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::TerminateThreads() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
@@ -335,9 +409,13 @@ namespace ECSEngine {
 		}
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::WakeThread(unsigned int thread_id) {
 		m_events[thread_id].Notify();
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::WakeThreads() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
@@ -345,7 +423,9 @@ namespace ECSEngine {
 		}
 	}
 
-	void TaskManager::ThreadProcedure(
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ThreadProcedure(
 		TaskManager* task_manager,
 		LinearAllocator* temp_thread_allocator,
 		MemoryManager* thread_allocator,
@@ -383,5 +463,11 @@ namespace ECSEngine {
 			}
 		}
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	// ----------------------------------------------------------------------------------------------------------------------
 
 }

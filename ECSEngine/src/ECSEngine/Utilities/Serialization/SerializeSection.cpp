@@ -294,21 +294,21 @@ namespace ECSEngine {
 			type_data.name = type.fields[index].name;
 			serialize_data.Add(type_data);
 
-			if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::Stream) {
+			if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				serialize_data[serialize_data.size].data.buffer = stream->buffer;
 				serialize_data[serialize_data.size].name = (char*)name_ptr;
 				allocate_name(type.fields[index].name);
 				serialize_data[serialize_data.size++].data.size = type.fields[index].info.additional_flags * stream->size;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::CapacityStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
 				CapacityStream<void>* stream = (CapacityStream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				serialize_data[serialize_data.size].data.buffer = stream->buffer;
 				serialize_data[serialize_data.size].name = (char*)name_ptr;
 				allocate_name(type.fields[index].name);
 				serialize_data[serialize_data.size++].data.size = type.fields[index].info.additional_flags * stream->size;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::ResizableStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::ResizableStream) {
 				ResizableStream<void*, LinearAllocator>* stream = (ResizableStream<void*, LinearAllocator>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				serialize_data[serialize_data.size].data.buffer = stream->buffer;
 				serialize_data[serialize_data.size].name = (char*)name_ptr;
@@ -448,17 +448,17 @@ namespace ECSEngine {
 		for (size_t index = 0; index < type.fields.size; index++) {
 			total_size += sizeof(unsigned short) + sizeof(char) * strlen(type.fields[index].name) + sizeof(size_t) + type.fields[index].info.byte_size;
 			
-			if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::Stream) {
+			if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				total_size += strlen(type.fields[index].name) + std::size(APPEND_STRING) - 1;
 				total_size += type.fields[index].info.additional_flags * stream->size;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::CapacityStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
 				CapacityStream<void>* stream = (CapacityStream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				total_size += strlen(type.fields[index].name) + std::size(APPEND_STRING) - 1;
 				total_size += type.fields[index].info.additional_flags * stream->size;
 			}
-			else if (type.fields[index].info.extended_type == ReflectionExtendedFieldType::ResizableStream) {
+			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::ResizableStream) {
 				ResizableStream<void*, LinearAllocator>* stream = (ResizableStream<void*, LinearAllocator>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				total_size += strlen(type.fields[index].name) + std::size(APPEND_STRING) - 1;
 				total_size += type.fields[index].info.additional_flags * stream->size;
@@ -825,7 +825,7 @@ namespace ECSEngine {
 		ECS_ASSERT(type.fields.size < 128);
 		unsigned short field_name_sizes[128];
 		for (size_t index = 0; index < type.fields.size; index++) {
-			field_name_sizes[index] = (unsigned short)type.fields[index].name;
+			field_name_sizes[index] = (unsigned short)strlen(type.fields[index].name);
 		}
 
 		size_t _header_size = 0;
@@ -864,6 +864,74 @@ namespace ECSEngine {
 
 		return total_memory;
 
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	void DeserializeSectionStreamSizes(uintptr_t data, CapacityStream<size_t>& sizes, size_t* header_size)
+	{
+		size_t _header_size = 0;
+		Read(data, &_header_size, sizeof(_header_size));
+		if (header_size != nullptr) {
+			*header_size = _header_size;
+		}
+		Ignore(data, _header_size);
+
+		size_t section_count;
+		Read(data, &section_count, sizeof(size_t));
+
+		ECS_ASSERT(sizes.capacity < section_count);
+
+		for (size_t index = 0; index < section_count; index++) {
+			unsigned short name_size;
+			Read(data, &name_size, sizeof(unsigned short));
+			Ignore(data, name_size * sizeof(char));
+
+			Read(data, &sizes[index], sizeof(size_t));
+			Ignore(data, sizes[index]);
+		}
+		sizes.size = section_count;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	void DeserializeSectionStreamSizes(uintptr_t data, Stream<size_t>& sizes, Stream<const char*> section_names, size_t* header_size)
+	{
+		ECS_ASSERT(section_names.size < 50'000);
+		unsigned short* section_name_sizes = (unsigned short*)ECS_STACK_ALLOC(sizeof(unsigned short) * section_names.size);
+		for (size_t index = 0; index < section_names.size; index++) {
+			section_name_sizes[index] = (unsigned short)strlen(section_names[index]);
+		}
+
+		size_t _header_size = 0;
+		Read(data, &_header_size, sizeof(_header_size));
+		if (header_size != nullptr) {
+			*header_size = _header_size;
+		}
+		Ignore(data, _header_size);
+
+		size_t section_count;
+		Read(data, &section_count, sizeof(size_t));
+
+		char temp_name[1024];
+		for (size_t index = 0; index < section_count; index++) {
+			unsigned short name_size;
+			Read(data, &name_size, sizeof(unsigned short));
+			Read(data, temp_name, name_size * sizeof(char));
+
+			unsigned int section_index = -1;
+			for (size_t subindex = 0; subindex < section_names.size && section_index != -1; subindex++) {
+				section_index = subindex * function::CompareStrings(Stream<char>(temp_name, name_size), Stream<char>(section_names[subindex], section_name_sizes[subindex]));
+			}
+
+			size_t data_size;
+			Read(data, &data_size, sizeof(size_t));
+			Ignore(data, data_size);
+
+			if (section_index != -1) {
+				sizes.Add(data_size);
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------

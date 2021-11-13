@@ -138,10 +138,7 @@ namespace ECSEngine {
 			ResizableStack(Allocator* allocator, size_t capacity) : m_stack(allocator, 0, capacity), m_first_item(0), m_last_item(0) {}
 
 			ResizableStack(const ResizableStack& other) = default;
-			ResizableStack(ResizableStack&& other) = default;
-
 			ResizableStack& operator = (const ResizableStack& other) = default;
-			ResizableStack& operator = (ResizableStack&& other) = default;
 
 			void FreeBuffer() {
 				m_stack.FreeBuffer();
@@ -161,12 +158,8 @@ namespace ECSEngine {
 
 			bool Peek(T& element) const {
 				if (m_stack.size > 0) {
-					if (m_last_item != 0) {
-						element = m_stack[m_last_item - 1];
-					}
-					else {
-						element = m_stack[m_stack.size - 1];
-					}
+					unsigned int index = function::Select(m_last_index != 0, m_last_item - 1, m_stack_size - 1);
+					element = m_stack[index];
 					return true;
 				}
 				else {
@@ -195,12 +188,12 @@ namespace ECSEngine {
 					memcpy(m_stack.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 					memcpy(m_stack.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
 					m_first_item = 0;
-					m_stack[m_stack.size++] = element;
+					m_stack.Add(element);
 					m_last_item = m_stack.size;
 				}
 				else {
 					m_stack[m_last_item] = element;
-					m_last_item = (m_last_item + 1) % m_stack.capacity;
+					m_last_item = function::Select(m_last_item == m_stack.capacity, 0, m_last_item + 1);
 					m_stack.size++;
 				}
 			}
@@ -216,12 +209,12 @@ namespace ECSEngine {
 					memcpy(m_stack.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 					memcpy(m_stack.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
 					m_first_item = 0;
-					m_stack[m_stack.size++] = *element;
+					m_stack.Add(element);
 					m_last_item = m_stack.size;
 				}
 				else {
 					m_stack[m_last_item] = *element;
-					m_last_item = (m_last_item + 1) % m_stack.capacity;
+					m_last_item = function::Select(m_last_item == m_stack.capacity, 0, m_last_item + 1);
 					m_stack.size++;
 				}
 			}

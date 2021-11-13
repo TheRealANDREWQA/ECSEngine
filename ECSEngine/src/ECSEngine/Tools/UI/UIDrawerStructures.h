@@ -54,17 +54,20 @@ namespace ECSEngine {
 				associated_bits[flag_count] = associated_bit;
 				flag_count++;
 			}
+
 			template<typename ConfigFlag1, typename ConfigFlag2>
 			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2) {
 				AddFlag(flag1);
 				AddFlag(flag2);
 			}
+
 			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3>
 			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3) {
 				AddFlag(flag1);
 				AddFlag(flag2);
 				AddFlag(flag3);
 			}
+
 			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3, typename ConfigFlag4>
 			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3, const ConfigFlag4& flag4) {
 				AddFlag(flag1);
@@ -72,6 +75,7 @@ namespace ECSEngine {
 				AddFlag(flag3);
 				AddFlag(flag4);
 			}
+
 			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3, typename ConfigFlag4, typename ConfigFlag5>
 			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3, const ConfigFlag4& flag4, const ConfigFlag5& flag5) {
 				AddFlag(flag1);
@@ -104,7 +108,7 @@ namespace ECSEngine {
 				}
 			}
 
-			const float* GetParameter(size_t bit_flag) const;
+			const void* GetParameter(size_t bit_flag) const;
 
 			size_t flag_count;
 			unsigned int parameter_start[16];
@@ -1623,7 +1627,7 @@ namespace ECSEngine {
 			const char* name; 
 			float* value; 
 			float default_value = 0.0f;
-			float lower_bound = FLT_MIN;
+			float lower_bound = -FLT_MAX;
 			float upper_bound = FLT_MAX;
 		};
 
@@ -1642,7 +1646,7 @@ namespace ECSEngine {
 			const char* name; 
 			double* value; 
 			double default_value = 0; 
-			double lower_bound = DBL_MIN; 
+			double lower_bound = -DBL_MAX; 
 			double upper_bound = DBL_MAX;
 		};
 
@@ -1775,6 +1779,27 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler handler;
+		};
+
+		struct ECSENGINE_API UIDrawerInitializeArrayElementData {
+			UIDrawConfig* config;
+			const char* name;
+			size_t element_count;
+		};
+
+		struct ECSENGINE_API UIDrawerArrayData {
+			bool collapsing_header_state;
+			bool drag_is_released;
+			unsigned int drag_index;
+			float drag_current_position;
+			float row_y_scale;
+			unsigned int previous_element_count;
+		};
+
+		struct ECSENGINE_API UIDrawerArrayDrawData {
+			void* element_data;
+			void* additional_data;
+			unsigned int current_index;
 		};
 
 	}

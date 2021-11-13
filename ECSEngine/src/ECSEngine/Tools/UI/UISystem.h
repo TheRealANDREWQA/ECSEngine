@@ -19,6 +19,9 @@ namespace ECSEngine {
 
 	namespace Tools {
 
+		// Bool acts as a placeholder, only interested to see if the resource existed previously
+		using UISystemAddDynamicWindowElementTable = IdentifierHashTable<bool, ResourceIdentifier, HashFunctionPowerOfTwo>;
+
 		class ECSENGINE_API UISystem
 		{
 		public:
@@ -402,8 +405,8 @@ namespace ECSEngine {
 				DockspaceType type
 			);
 
-			// size 0 means take the pointer as is
-			void AddWindowDrawerElement(unsigned int window_index, const char* name);
+			// It returns a list of streams that will be needed when finishing the drawer element
+			void AddWindowDrawerElement(unsigned int window_index, const char* name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
 
 			void BindWindowHandler(Action action, Action data_initializer, size_t data_size);
 
@@ -581,7 +584,7 @@ namespace ECSEngine {
 				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING
 			);
 
-			void CreateSpriteTexture(const wchar_t* filename, ResourceView* sprite_view);
+			void CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_view);
 
 			void CreateDockspaceBorder(
 				UIDockspace* dockspace, 
@@ -885,8 +888,6 @@ namespace ECSEngine {
 			void FinalizeFont();
 
 			void FinalizeElementDescriptor();
-
-			void FinalizeWindowElement(unsigned int window_index);
 
 			unsigned int FindCharacterUVFromAtlas(char character) const;
 

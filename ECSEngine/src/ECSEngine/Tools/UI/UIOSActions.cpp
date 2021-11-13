@@ -297,11 +297,9 @@ namespace ECSEngine {
 
 			const wchar_t* data = (const wchar_t*)_data;
 
-			size_t path_size = wcslen(data);
-			ECS_ASSERT(path_size < 512);
 			ECS_TEMP_ASCII_STRING(ascii_string, 512);
-			function::ConvertWideCharsToASCII(data, ascii_string.buffer, path_size, 512);
-			ascii_string[path_size] = '\0';
+			function::ConvertWideCharsToASCII(ToStream(data), ascii_string);
+			ascii_string[ascii_string.size] = '\0';
 			system->m_application->WriteTextToClipboard(ascii_string.buffer);
 		}
 
@@ -311,12 +309,11 @@ namespace ECSEngine {
 
 			Stream<wchar_t>* data = (Stream<wchar_t>*)_data;
 
-			char temp_characters[512];
-			ECS_ASSERT(data->size < 512);
-			function::ConvertWideCharsToASCII(*data, CapacityStream<char>(temp_characters, 0, 512));
-			temp_characters[data->size] = '\0';
+			ECS_TEMP_ASCII_STRING(temp_characters, 512);
+			function::ConvertWideCharsToASCII(*data, temp_characters);
+			temp_characters[temp_characters.size] = '\0';
 
-			system->m_application->WriteTextToClipboard(temp_characters);
+			system->m_application->WriteTextToClipboard(temp_characters.buffer);
 		}
 
 		// ----------------------------------------------------------------------------------------------------

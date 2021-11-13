@@ -65,7 +65,9 @@ void AddExistingProjectAction(ActionData* action_data) {
 		EditorSetError((EditorState*)_data, get_data.error_message);
 	}
 	else {
-		AddHubProject((EditorState*)_data, get_data.path);
+		if (get_data.path.size > 0) {
+			AddHubProject((EditorState*)_data, get_data.path);
+		}
 	}
 }
 
@@ -202,6 +204,74 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 	ecs_text.size *= {1.75f, 1.75f};
 	ecs_text.color = drawer.GetColorThemeDescriptor()->default_text;
 	ecs_text.character_spacing *= 1.75f;
+
+#define TYPE double
+#define TYPE2 float2
+#define TYPE3 uint3
+#define TYPE4 long4
+
+	
+	CapacityStream<TYPE>* cool_stuff;
+	CapacityStream<bool>* check_boxes;
+	CapacityStream<unsigned char>* combo_boxes;
+	CapacityStream<TYPE2>* float2u;
+	CapacityStream<TYPE3>* type3u;
+	CapacityStream<TYPE4>* type4u;
+	CapacityStream<CapacityStream<char>>* text_input;
+	CapacityStream<Color>* colors;
+
+	if constexpr (initialize) {
+		cool_stuff = (CapacityStream<TYPE>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POGCHAMP", sizeof(TYPE) * 10000), 0, 5000);
+
+		check_boxes = (CapacityStream<bool>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POGU", sizeof(bool) * 100), 0, 50);
+
+		combo_boxes = (CapacityStream<unsigned char>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POGGGU", sizeof(unsigned char) * 100), 20, 50);
+		memset(combo_boxes->buffer, 0, 50);
+
+		float2u = (CapacityStream<TYPE2>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POGUU", sizeof(TYPE2) * 100), 0, 50);
+
+		type3u = (CapacityStream<TYPE3>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("P", sizeof(TYPE3) * 100), 0, 50);
+
+		type4u = (CapacityStream<TYPE4>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("PO", sizeof(TYPE4) * 100), 0, 50);
+		text_input = (CapacityStream<CapacityStream<char>>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POG", sizeof(CapacityStream<char>) * 300), 0, 50);
+		uintptr_t ptr = (uintptr_t)text_input;
+		ptr += sizeof(CapacityStream<char>*) * 55;
+		for (size_t index = 0; index < 50; index++) {
+			text_input->buffer[index].InitializeFromBuffer(ptr, 0, 50);
+		}
+		colors = (CapacityStream<Color>*)function::CoallesceCapacityStreamWithData(drawer.GetMainAllocatorBufferAndStoreAsResource("POP", sizeof(Color) * 100), 0, 50);
+	}
+	else {
+		cool_stuff = (CapacityStream<TYPE>*)drawer.GetResource("POGCHAMP");
+		check_boxes = (CapacityStream<bool>*)drawer.GetResource("POGU");
+		combo_boxes = (CapacityStream<unsigned char>*)drawer.GetResource("POGGGU");
+		float2u = (CapacityStream<TYPE2>*)drawer.GetResource("POGUU");
+		type3u = (CapacityStream<TYPE3>*)drawer.GetResource("P");
+		type4u = (CapacityStream<TYPE4>*)drawer.GetResource("PO");
+		text_input = (CapacityStream<CapacityStream<char>>*)drawer.GetResource("POG");
+		colors = (CapacityStream<Color>*)drawer.GetResource("POP");
+	}
+
+	/*drawer.ArrayDouble("What's up", cool_stuff);
+	drawer.ArrayCheckBox("Heya", check_boxes);
+	drawer.ArrayFloat2("Yupp", float2u);
+	drawer.ArrayInteger3<int>("UwU", type3u);
+	drawer.ArrayInteger4<long long>("OwO", type4u);
+	drawer.ArrayTextInput("YEA", text_input);
+	drawer.ArrayColor("POP", colors);
+
+	drawer.ColorInput("COLOR", colors->buffer);
+
+	const char* BOX_CHARS[3];
+	BOX_CHARS[0] = "First";
+	BOX_CHARS[1] = "Second";
+	BOX_CHARS[2] = "Third";
+
+	Stream<const char*> BOXES[50];
+	for (size_t index = 0; index < 50; index++) {
+		BOXES[index] = { BOX_CHARS, 3 };
+	}
+	drawer.ArrayComboBox("YESAS", combo_boxes, CapacityStream<Stream<const char*>>(BOXES, combo_boxes->size, 50));*/
 
 	char ecs_characters[128];
 	memcpy(ecs_characters, "ECSEngine Version: ", 19);
@@ -544,6 +614,7 @@ void Hub(EditorState* editor_state) {
 	LoadHubProjects(editor_state);
 	SortHubProjects(editor_state);
 
+	window_descriptor.resource_count = 8192 * 4;
 	window_descriptor.window_data = editor_state;
 	window_descriptor.window_data_size = 0;
 	ui_system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_BORDER_NOTHING | UI_DOCKSPACE_BACKGROUND);

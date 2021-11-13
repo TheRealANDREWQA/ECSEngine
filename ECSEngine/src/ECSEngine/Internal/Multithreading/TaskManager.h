@@ -43,13 +43,6 @@ namespace ECSEngine {
 			size_t max_dynamic_tasks = ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 		);
 
-		static void ThreadProcedure(
-			TaskManager* task_manager, 
-			LinearAllocator* temp_thread_allocator, 
-			MemoryManager* thread_allocator, 
-			unsigned int thread_id
-		);
-
 		void AddTask(ThreadTask task, size_t task_data_size = 0);
 
 		// it will add that task to the next thread after the last one used and returns the index of the 
@@ -146,6 +139,13 @@ namespace ECSEngine {
 		size_t m_dynamic_wrapper_data_size;
 #endif
 	};
+
+	 ECSENGINE_API void ThreadProcedure(
+		TaskManager* task_manager,
+		LinearAllocator* temp_thread_allocator,
+		MemoryManager* thread_allocator,
+		unsigned int thread_id
+	);
 
 }
 

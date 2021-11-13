@@ -29,3 +29,5 @@
 #define ECS_TOOLS_UI_TEXTURE_FILE_EDITOR L"Resources\\FileEditor.png"
 #define ECS_TOOLS_UI_TEXTURE_ECS_LOGO L"Resources\\ECSLogo.png"
 #define ECS_TOOLS_UI_TEXTURE_CLOCK L"Resources\\Clock.png"
+#define ECS_TOOLS_UI_TEXTURE_ARROW L"Resources\\Arrow.png"
+#define ECS_TOOLS_UI_TEXTURE_MINUS L"Resources\\Minus.png"

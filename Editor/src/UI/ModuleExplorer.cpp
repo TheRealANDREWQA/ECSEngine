@@ -157,7 +157,7 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor) {
 			function::ConvertWideCharsToASCII(stem, ascii_stem);
 			data->library_input->DeleteAllCharacters();
 			if (stem.size > 0) {
-				data->library_input->InsertCharacters(ascii_stem.buffer, stem.size, 0, system);
+				data->library_input->InsertCharacters(ascii_stem.buffer, ascii_stem.size, 0, system);
 				data->is_data_valid = true;
 				return;
 			}
@@ -377,8 +377,8 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 	}
 
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
-	TaskGraphElement _elements[128];
-	Stream<TaskGraphElement> elements(_elements, 0);
+	TaskDependencyElement _elements[128];
+	Stream<TaskDependencyElement> elements(_elements, 0);
 
 	UIDrawConfig config;
 
@@ -477,7 +477,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 		// Delete associated files (.dll, .pdb, .lib, .exp) from the module folder
 		const ProjectModules* modules = (const ProjectModules*)data->editor_state->project_modules;
 		ECS_TEMP_STRING(path, 256);
-		GetBaseModulePath(data->editor_state, path);
+		GetModulesFolder(data->editor_state, path);
 		path.Add(ECS_OS_PATH_SEPARATOR);
 		path.AddStream(modules->buffer[data->selected_module].library_name);
 		size_t path_size = path.size;
@@ -601,7 +601,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 
 		ECS_TEMP_ASCII_STRING(ascii_module_name, 256);
 		function::ConvertWideCharsToASCII(module_name, ascii_module_name);
-		ascii_module_name[module_name.size] = '\0';
+		ascii_module_name[ascii_module_name.size] = '\0';
 
 		struct SelectModuleData {
 			ModuleExplorerData* explorer_data;
@@ -705,7 +705,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
 				bool success = false;
 				if (project_modules->buffer[index].library_last_write_time != 0) {
-					success = HasModuleFunction(editor_state, project_modules->buffer[index].library_name);
+					success = HasModuleFunction(editor_state, index);
 				}
 				SetModuleLoadStatus(project_modules->buffer + index, success);
 			}
@@ -722,7 +722,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
 				bool success = false;
 				if (project_modules->buffer[index].library_last_write_time != 0) {
-					success = HasModuleFunction(editor_state, project_modules->buffer[index].library_name);
+					success = HasModuleFunction(editor_state, index);
 				}
 				SetModuleLoadStatus(project_modules->buffer + index, success);
 			}

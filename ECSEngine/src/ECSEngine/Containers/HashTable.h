@@ -8,11 +8,15 @@
 #define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 85
 #endif
 
+#ifndef ECS_HASHTABLE_DYNAMIC_GROW_FACTOR
+#define ECS_HASHTABLE_DYNAMIC_GROW_FACTOR 1.5f
+#endif
+
 namespace ECSEngine {
 
 	namespace containers {
 
-		class ECSENGINE_API HashFunctionPowerOfTwo {
+		struct ECSENGINE_API HashFunctionPowerOfTwo {
 		public:
 			HashFunctionPowerOfTwo() {}
 			HashFunctionPowerOfTwo(size_t additional_info) {}
@@ -21,7 +25,7 @@ namespace ECSEngine {
 			}
 		};
 
-		class HashFunctionPrimeNumber {
+		struct ECSENGINE_API HashFunctionPrimeNumber {
 		public:
 			HashFunctionPrimeNumber() {}
 			HashFunctionPrimeNumber(size_t additional_info) {}
@@ -247,18 +251,18 @@ namespace ECSEngine {
 			}
 		};
 
-		class ECSENGINE_API HashFunctionFibonacci {
+		struct ECSENGINE_API HashFunctionFibonacci {
 		public:
 			HashFunctionFibonacci() : m_shift_amount(64) {}
 			HashFunctionFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
 			unsigned int operator () (unsigned int key, unsigned int capacity) const {
 				return (key * 11400714819323198485llu) >> m_shift_amount;
 			}
-		private:
+		//private:
 			size_t m_shift_amount;
 		};
 
-		class ECSENGINE_API HashFunctionXORFibonacci {
+		struct ECSENGINE_API HashFunctionXORFibonacci {
 		public:
 			HashFunctionXORFibonacci() : m_shift_amount(64) {}
 			HashFunctionXORFibonacci(size_t additional_info) : m_shift_amount(64 - additional_info) {}
@@ -266,16 +270,16 @@ namespace ECSEngine {
 				key ^= key >> m_shift_amount;
 				return (key * 11400714819323198485llu) >> m_shift_amount;
 			}
-		private:
+		//private:
 			size_t m_shift_amount;
 		};
 		
-		class ECSENGINE_API HashFunctionFolding {
+		struct ECSENGINE_API HashFunctionFolding {
 		public:
 			HashFunctionFolding() {}
 			HashFunctionFolding(size_t additional_info) {}
 			unsigned int operator() (unsigned int key, unsigned int capacity) const {
-				return (key & 0x0000FFFF + key & 0xFFFF0000) & (capacity - 1);
+				return (key & 0x0000FFFF + (key & 0xFFFF0000) >> 16) & (capacity - 1);
 			}
 		};
 
@@ -287,7 +291,7 @@ namespace ECSEngine {
 		* operations. Use MemoryOf to get the number of bytes needed for the buffers
 		*/
 		template<typename T, typename HashFunction>
-		class HashTable {
+		struct HashTable {
 		public:
 			HashTable() : m_keys(nullptr), m_values(nullptr), m_capacity(0), m_count(0), m_maximum_probe_count(0),
 				m_function(HashFunction(0)) {}
@@ -296,13 +300,10 @@ namespace ECSEngine {
 			}
 
 			HashTable(const HashTable& other) = default;
-			HashTable(HashTable&& other) = default;
-
 			HashTable<T, HashFunction>& operator = (const HashTable<T, HashFunction>& other) = default;
-			HashTable<T, HashFunction>& operator = (HashTable<T, HashFunction>&& other) = default;
 
 			void Clear() {
-				for (size_t index = 0; index < m_capacity; index++) {
+				for (unsigned int index = 0; index < m_capacity + 256; index++) {
 					m_keys[index] = (unsigned int)0;
 				}
 				m_maximum_probe_count = 0;
@@ -341,15 +342,15 @@ namespace ECSEngine {
 				// preparing SIMD variables and to check 8 elements at once
 				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
 				Vec8ib match;
-				unsigned int temp[8];
+				unsigned int temp[elements.size()];
 				int flag = -1;
 
-				for (; i < index + m_maximum_probe_count; i += 8) {
+				for (; i < index + m_maximum_probe_count; i += elements.size()) {
 					elements.load(m_keys + i);
 					match = (elements & ignore_distance) == keys;
 					if (horizontal_or(match)) {
 						match.store(temp);
-						for (size_t _index = 0; _index < 8; _index++) {
+						for (size_t _index = 0; _index < elements.size(); _index++) {
 							if (temp[_index] != 0) {
 								values.Add(m_values[i + _index]);
 							}
@@ -439,7 +440,7 @@ namespace ECSEngine {
 			void ResetProbeCount() {
 				m_maximum_probe_count = 0;
 				// account for padding elements
-				for (size_t index = 0; index < m_capacity + 256; index++) {
+				for (unsigned int index = 0; index < m_capacity + 256; index++) {
 					unsigned int distance = (m_keys[index] & 0xFF000000) >> 24;
 					m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
 				}
@@ -463,8 +464,9 @@ namespace ECSEngine {
 				return m_values[index];
 			}
 
-			T GetValueFromIndex(size_t index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity);
+			// The extended capacity is used to check bounds validity
+			T GetValueFromIndex(unsigned int index) const {
+				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
 				return m_values[index];
 			}
 
@@ -474,8 +476,9 @@ namespace ECSEngine {
 				return m_values + index;
 			}
 
-			T* GetValuePtrFromIndex(size_t index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity);
+			// The extended capacity is used to check bounds validity
+			T* GetValuePtrFromIndex(unsigned int index) const {
+				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
 				return m_values + index;
 			}
 
@@ -495,19 +498,28 @@ namespace ECSEngine {
 				return m_values;
 			}
 
-			Stream<T> GetValueStream() {
-				return Stream<T>(m_values, m_capacity);
+			size_t GetCapacity() const {
+				return m_capacity;
 			}
 
-			void SetValue(T value, unsigned int key) {
+			size_t GetExtendedCapacity() const {
+				return m_capacity + 256;
+			}
+
+			Stream<T> GetValueStream() {
+				return Stream<T>(m_values, m_capacity + 256);
+			}
+
+			void SetValueFromKey(unsigned int key, T value) {
 				int index = Find(key);
 				ECS_ASSERT(index != -1);
 
 				m_values[index] = value;
 			}
 
-			void SetValue(size_t index, T value) {
-				ECS_ASSERT(index >= 0 && index < m_capacity);
+			// The extended capacity is used to check bounds validity
+			void SetValue(unsigned int index, T value) {
+				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
 				m_values[index] = value;
 			}
 
@@ -533,24 +545,24 @@ namespace ECSEngine {
 				}
 			}
 
-			static size_t MemoryOf(size_t number) {
+			static size_t MemoryOf(unsigned int number) {
 				return (sizeof(unsigned int) + sizeof(T)) * (number + 256);
 			}
 
 			template<typename Allocator>
-			void Initialize(Allocator* allocator, size_t max_element_count, size_t additional_info = 0) {
+			void Initialize(Allocator* allocator, unsigned int max_element_count, size_t additional_info = 0) {
 				size_t memory_size = MemoryOf(max_element_count);
 				void* allocation = allocator->Allocate(max_element_count, 8);
 				InitializeFromBuffer(allocation, max_element_count, additional_info);
 			}
 
-			void InitializeFromBuffer(void* buffer, size_t capacity, size_t additional_info = 0) {
+			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
 				m_values = (T*)buffer;
 				uintptr_t ptr = (uintptr_t)buffer;
 				m_keys = (unsigned int*)(ptr + sizeof(T) * (capacity + 256));
 
 				// account for padding elements
-				for (size_t index = 0; index < capacity + 256; index++) {
+				for (unsigned int index = 0; index < capacity + 256; index++) {
 					m_keys[index] = (unsigned int)0;
 				}
 
@@ -560,17 +572,17 @@ namespace ECSEngine {
 				m_function = HashFunction(additional_info);
 			}
 
-			void InitializeFromBuffer(uintptr_t& buffer, size_t capacity, size_t additional_info = 0) {
+			void InitializeFromBuffer(uintptr_t& buffer, unsigned int capacity, size_t additional_info = 0) {
 				InitializeFromBuffer((void*)buffer, capacity, additional_info);
 				buffer += MemoryOf(capacity);
 			}
 
-		private:
+		//private:
 			unsigned int* m_keys;
 			T* m_values;
-			size_t m_capacity;
-			size_t m_count;
-			size_t m_maximum_probe_count;
+			unsigned int m_capacity;
+			unsigned int m_count;
+			unsigned int m_maximum_probe_count;
 			HashFunction m_function;
 		};
 
@@ -583,25 +595,22 @@ namespace ECSEngine {
 		* It does a identifier check when trying to retrieve the value. Identifier type must implement Compare
 		* function because it supports checking for equality with a user defined operation other than assignment operator
 		* e. g. for pointers, they might be equal if the data they point to is the same
-		* Identifier must be stable, this table only keeps the pointer not the data pointed to
+		* Identifier must be stable, this table only keeps the pointer, not the data pointed to
 		*/
 		template<typename T, typename Identifier, typename HashFunction>
-		class IdentifierHashTable {
+		struct IdentifierHashTable {
 		public:
 			IdentifierHashTable() : m_keys(nullptr), m_values(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_maximum_probe_count(0),
 				m_function(HashFunction(0)) {}
-			IdentifierHashTable(void* buffer, size_t capacity, size_t additional_info = 0) {
+			IdentifierHashTable(void* buffer, unsigned int capacity, size_t additional_info = 0) {
 				InitializeFromBuffer(buffer, capacity, additional_info);
 			}
 
 			IdentifierHashTable(const IdentifierHashTable& other) = default;
-			IdentifierHashTable(IdentifierHashTable&& other) = default;
-
 			IdentifierHashTable<T, Identifier, HashFunction>& operator = (const IdentifierHashTable<T, Identifier, HashFunction>& other) = default;
-			IdentifierHashTable<T, Identifier, HashFunction>& operator = (IdentifierHashTable<T, Identifier, HashFunction>&& other) = default;
 
 			void Clear() {
-				for (size_t index = 0; index < m_capacity; index++) {
+				for (size_t index = 0; index < m_capacity + 256; index++) {
 					m_keys[index] = (unsigned int)0;
 				}
 				m_count = 0;
@@ -611,51 +620,53 @@ namespace ECSEngine {
 			unsigned int Find(unsigned int key) const {
 				// calculating the index for the array with the hash function
 				unsigned int index = m_function(key, m_capacity);
-				size_t i = index;
+				unsigned int subindex = index;
 
-				// preparing SIMD variables and to check 8 elements at once
+				// preparing SIMD variables to check 8 elements at once
 				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
 				Vec8ib match;
 				int flag = -1;
 
-				for (; flag == -1 && i < index + m_maximum_probe_count; i += elements.size()) {
-					elements.load(m_keys + i);
+				for (; flag == -1 && subindex < index + m_maximum_probe_count; subindex += elements.size()) {
+					elements.load(m_keys + subindex);
 					match = (elements & ignore_distance) == keys;
-					flag = horizontal_find_first(match);
+					if (horizontal_or(match)) {
+						flag = horizontal_find_first(match);
+					}
 				}
 
 				if (flag == -1) {
 					return -1;
 				}
-				return i + flag - elements.size();
+				return subindex + flag - elements.size();
 			}
 
 			template<bool use_compare_function = true>
 			unsigned int Find(unsigned int key, Identifier identifier) const {
 				// calculating the index for the array with the hash function
 				unsigned int index = m_function(key, m_capacity);
-				size_t i = index;
+				unsigned int subindex = index;
 
-				// preparing SIMD variables and to check 8 elements at once
+				// preparing SIMD variables to check 8 elements at once
 				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
 				Vec8ib match;
-				unsigned int temp[8];
+				unsigned int temp[elements.size()];
 				int flag = -1;
 
-				for (; flag == -1 && i < index + m_maximum_probe_count; i += 8) {
-					elements.load(m_keys + i);
+				for (; flag == -1 && subindex < index + m_maximum_probe_count; subindex += elements.size()) {
+					elements.load(m_keys + subindex);
 					match = (elements & ignore_distance) == keys;
 					if (horizontal_or(match)) {
 						match.store(temp);
-						for (size_t _index = 0; _index < 8; _index++) {
+						for (unsigned int vector_index = 0; vector_index < elements.size(); vector_index++) {
 							if constexpr (!use_compare_function) {
-								if (temp[_index] != 0 && m_identifiers[i + _index] == identifier) {
-									return i + _index;
+								if (temp[vector_index] != 0 && m_identifiers[subindex + vector_index] == identifier) {
+									return subindex + vector_index;
 								}
 							}
 							else {
-								if (temp[_index] != 0 && m_identifiers[i + _index].Compare(identifier)) {
-									return i + _index;
+								if (temp[vector_index] != 0 && m_identifiers[subindex + vector_index].Compare(identifier)) {
+									return subindex + vector_index;
 								}
 							}
 						}
@@ -728,6 +739,7 @@ namespace ECSEngine {
 			void Erase(unsigned int key, Identifier identifier) {
 				// determining the next index and clearing the current slot
 				int index = Find<use_compare_function>(key, identifier);
+				ECS_ASSERT(index != -1);
 				EraseFromIndex(index);
 			}
 
@@ -753,7 +765,7 @@ namespace ECSEngine {
 			void ResetProbeCount() {
 				m_maximum_probe_count = 0;
 				// account for padding elements
-				for (size_t index = 0; index < m_capacity + 256; index++) {
+				for (unsigned int index = 0; index < m_capacity + 256; index++) {
 					unsigned int distance = (m_keys[index] & 0xFF000000) >> 24;
 					m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
 				}
@@ -785,13 +797,15 @@ namespace ECSEngine {
 				return m_values + index;
 			}
 
-			T GetValueFromIndex(size_t index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity);
+			// The extended capacity is used to check bounds validity
+			T GetValueFromIndex(unsigned int index) const {
+				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
 				return m_values[index];
 			}
 
-			T* GetValuePtrFromIndex(size_t index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity);
+			// The extended capacity is used to check bounds validity
+			T* GetValuePtrFromIndex(unsigned int index) const {
+				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
 				return m_values + index;
 			}
 
@@ -806,6 +820,10 @@ namespace ECSEngine {
 
 			size_t GetCapacity() const {
 				return m_capacity;
+			}
+
+			size_t GetExtendedCapacity() const {
+				return m_capacity + 256;
 			}
 
 			unsigned int* GetKeys() {
@@ -825,7 +843,7 @@ namespace ECSEngine {
 			}
 
 			Stream<T> GetValueStream() {
-				return Stream<T>(m_values, m_capacity);
+				return Stream<T>(m_values, m_capacity + 256);
 			}
 
 			const Identifier* GetIdentifiers() const {
@@ -840,8 +858,9 @@ namespace ECSEngine {
 				m_values[index] = value;
 			}
 
+			// The extended capacity is used to check bounds validity
 			void SetValue(size_t index, T value) {
-				ECS_ASSERT(index >= 0 && index < m_capacity);
+				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
 				m_values[index] = value;
 			}
 
@@ -869,22 +888,22 @@ namespace ECSEngine {
 				}
 			}
 
-			static size_t MemoryOf(size_t number) {
+			static size_t MemoryOf(unsigned int number) {
 				return (sizeof(unsigned int) + sizeof(T) + sizeof(Identifier)) * (number + 256);
 			}
 
-			void InitializeFromBuffer(void* buffer, size_t capacity, size_t additional_info = 0) {
+			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+				unsigned int extended_capacity = capacity + 256;
+
 				m_values = (T*)buffer;
 				uintptr_t ptr = (uintptr_t)buffer;
-				ptr += sizeof(T) * (capacity + 256);
+				ptr += sizeof(T) * extended_capacity;
 				m_identifiers = (Identifier*)ptr;
-				ptr += sizeof(Identifier) * (capacity + 256);
+				ptr += sizeof(Identifier) * extended_capacity;
 				m_keys = (unsigned int*)ptr;
 
 				// make distance 0 for keys, account for padding elements
-				for (size_t index = 0; index < capacity + 256; index++) {
-					m_keys[index] = (unsigned int)0;
-				}
+				memset(m_keys, 0, sizeof(unsigned int) * extended_capacity);
 
 				m_capacity = capacity;
 				m_count = 0;
@@ -892,13 +911,13 @@ namespace ECSEngine {
 				m_function = HashFunction(additional_info);
 			}
 
-			void InitializeFromBuffer(uintptr_t& buffer, size_t capacity, size_t additional_info = 0) {
+			void InitializeFromBuffer(uintptr_t& buffer, unsigned int capacity, size_t additional_info = 0) {
 				InitializeFromBuffer((void*)buffer, capacity, additional_info);
 				buffer += MemoryOf(capacity);
 			}
 
 			template<typename Allocator>
-			void Initialize(Allocator* allocator, size_t capacity, size_t additional_info = 0) {
+			void Initialize(Allocator* allocator, unsigned int capacity, size_t additional_info = 0) {
 				size_t memory_size = MemoryOf(capacity);
 				void* allocation = allocator->Allocate(memory_size, 8);
 				InitializeFromBuffer(allocation, capacity, additional_info);
@@ -906,17 +925,17 @@ namespace ECSEngine {
 
 			// The buffer given must be allocated with MemoryOf
 			template<typename IdentifierHashFunction>
-			const void* Grow(void* buffer, size_t new_capacity) {
+			const void* Grow(void* buffer, unsigned int new_capacity) {
 				const unsigned int* old_keys = m_keys;
 				const T* old_values = m_values;
 				const Identifier* old_identifiers = m_identifiers;
 				const HashFunction old_hash = m_function;
-				size_t old_capacity = m_capacity;
+				unsigned int old_capacity = m_capacity;
 
 				InitializeFromBuffer(buffer, new_capacity);
 				m_function = old_hash;
 
-				for (size_t index = 0; index < old_capacity; index++) {
+				for (unsigned int index = 0; index < old_capacity; index++) {
 					bool is_item = old_keys[index] != 0;
 					if (is_item) {
 						unsigned int hash = IdentifierHashFunction::Hash(old_identifiers[index]);
@@ -928,13 +947,13 @@ namespace ECSEngine {
 				return old_values;
 			}
 
-		private:
+		//private:
 			unsigned int* m_keys;
 			T* m_values;
 			Identifier* m_identifiers;
-			size_t m_capacity;
-			size_t m_count;
-			size_t m_maximum_probe_count;
+			unsigned int m_capacity;
+			unsigned int m_count;
+			unsigned int m_maximum_probe_count;
 			HashFunction m_function;
 		};
 
@@ -945,7 +964,7 @@ namespace ECSEngine {
 			unsigned int hash = HashFunction::Hash(identifier);
 
 			if (table.Insert(hash, value, identifier)) {
-				size_t new_capacity = (size_t)((float)table.GetCapacity() * 1.5f + 1);
+				size_t new_capacity = (size_t)((float)table.GetCapacity() * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 1);
 				void* new_allocation = allocator->Allocate(table.MemoryOf(new_capacity));
 				const void* old_allocation = table.Grow<HashFunction>(new_allocation, new_capacity);
 				allocator->Deallocate(old_allocation);

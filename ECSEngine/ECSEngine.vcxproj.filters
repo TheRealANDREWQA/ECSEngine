@@ -88,7 +88,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\IndexSerialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeSection.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeMultisection.h" />
-    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskDependencyGraph.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
     <ClInclude Include="src\Includes\ECSEngineInternal.h" />
@@ -197,7 +197,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\IndexSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeSection.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeMultisection.cpp" />
-    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencyGraph.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerActions.cpp" />

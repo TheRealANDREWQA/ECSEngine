@@ -23,7 +23,7 @@ namespace ECSEngine {
 
 	ECS_CONTAINERS;
 
-	using ResourceManagerHash = HashFunctionAdditiveString;
+	using ResourceManagerHash = HashFunctionMultiplyString;
 	using ResourceManagerAllocator = MemoryManager;
 	// Embed the reference count inside the pointer
 	using ResourceManagerTable = IdentifierHashTable<DataPointer, ResourceIdentifier, HashFunctionPowerOfTwo>;

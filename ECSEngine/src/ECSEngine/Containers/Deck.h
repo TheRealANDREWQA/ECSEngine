@@ -23,7 +23,7 @@ namespace ECSEngine {
 			unsigned int Add(T element) {
 				// The available chunks are completely full
 				if (chunks_with_elements.size == 0) {
-					// The deque is completely full, need to reallocate the buffer of buffers and the chunks with elements
+					// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
 					if (buffers.size == buffers.capacity) {
 						buffers.allocator->Deallocate(chunks_with_elements.buffer);
 						buffers.Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 1.0f));
@@ -49,7 +49,7 @@ namespace ECSEngine {
 			unsigned int Add(const T* element) {
 				// The available chunks are completely full
 				if (chunks_with_elements.size == 0) {
-					// The deque is completely full, need to reallocate the buffer of buffers and the chunks with elements
+					// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
 					if (buffers.size == buffers.capacity) {
 						buffers.allocator->Deallocate(chunks_with_elements.buffer);
 						buffers.Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 1.0f));

@@ -12,12 +12,30 @@ constexpr const char* PROJECT_ASSETS_RELATIVE_PATH_ASCII = "Assets";
 constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH = L"Modules";
 constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII = "Modules";
 
+constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DEBUG = L"Modules\\Debug";
+constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_DEBUG = "Modules\\Debug";
+
+constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_RELEASE = L"Modules\\Release";
+constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_RELEASE = "Modules\\Release";
+
+constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION = L"Modules\\Distribution";
+constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_DISTRIBUTION = "Modules\\Distribution";
+
 constexpr const wchar_t PROJECT_EXTENSION[] = L".ecsproj";
 constexpr const wchar_t* PROJECT_DIRECTORIES[] = {
 	L"Debug",
-	L"Assets",
 	L"UI",
-	L"Modules"
+	PROJECT_ASSETS_RELATIVE_PATH,
+	PROJECT_MODULES_RELATIVE_PATH,
+	PROJECT_MODULES_RELATIVE_PATH_DEBUG,
+	PROJECT_MODULES_RELATIVE_PATH_RELEASE,
+	PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION
+};
+
+constexpr const wchar_t* PROJECT_MODULE_RELATIVE_PATHS[] = {
+	PROJECT_MODULES_RELATIVE_PATH_DEBUG,
+	PROJECT_MODULES_RELATIVE_PATH_RELEASE,
+	PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION
 };
 
 struct ECS_REFLECT ProjectFile {
@@ -27,9 +45,9 @@ struct ECS_REFLECT ProjectFile {
 	size_t version;
 	size_t platform;
 	WorldDescriptor ECS_REGISTER_ONLY_NAME_REFLECT(120) world_descriptor;
-	CapacityStream<wchar_t> ECS_STREAM_REFLECT(2) project_name;
-	CapacityStream<wchar_t> ECS_STREAM_REFLECT(2) source_dll_name;
-	CapacityStream<wchar_t> ECS_STREAM_REFLECT(2) path;
+	CapacityStream<wchar_t> project_name;
+	CapacityStream<wchar_t> source_dll_name;
+	CapacityStream<wchar_t> path;
 };
 
 struct EditorState;
@@ -92,6 +110,10 @@ void OpenProjectContentsAction(ActionData* action_data);
 bool OpenProject(ProjectOperationData data);
 
 void OpenProjectAction(ActionData* action_data);
+
+// Goes through the list of directories that a project should have, and if they don't exist,
+// it creates them
+void RepairProjectAuxiliaryDirectories(ProjectOperationData data);
 
 // Error message needs to have memory allocated or nullptr to skip it
 bool SaveProjectFile(ProjectOperationData data);

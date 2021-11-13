@@ -1,6 +1,7 @@
 #pragma once
 #include "UIDrawer.h"
 #include "../../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "UIReflection.h"
 
 #define ECS_TOOLS using namespace ECSEngine::Tools
 constexpr const char* ECS_TOOLS_UI_ERROR_MESSAGE_WINDOW_NAME = "Error Message";
@@ -324,7 +325,7 @@ namespace ECSEngine {
 		// Thread task
 		ECSENGINE_API void ConsoleAppendToDump(unsigned int thread_index, World* world, void* data);
 
-		using ConsoleUIHashFunction = HashFunctionAdditiveString;
+		using ConsoleUIHashFunction = HashFunctionMultiplyString;
 
 		struct ECSENGINE_API UniqueConsoleMessage {
 			ConsoleMessage message;
@@ -367,6 +368,38 @@ namespace ECSEngine {
 		ECSENGINE_API void CreateConsoleAction(ActionData* action_data);
 
 		ECSENGINE_API void CreateConsoleWindowData(ConsoleWindowData& data, Console* console);
+
+		struct InjectWindowElement {
+			void* data;
+			const char* name;
+			const char* basic_type_string;
+			Reflection::ReflectionStreamFieldType stream_type = Reflection::ReflectionStreamFieldType::Basic;
+		};
+
+		struct InjectWindowSection {
+			containers::Stream<InjectWindowElement> elements;
+			const char* name;
+		};
+
+		struct InjectWindowData {
+			containers::Stream<InjectWindowSection> sections;
+			UIReflectionDrawer* ui_reflection;
+		};
+
+		template<bool initializer>
+		ECSENGINE_API void InjectValuesWindowDraw(void* drawer_descriptor, void* window_data);
+
+		ECSENGINE_API unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, const char* window_name, bool is_pop_up_window = true);
+		
+		struct InjectValuesActionData {
+			InjectWindowData data;
+			const char* name;
+			bool is_pop_up_window;
+		};
+
+		ECSENGINE_API void CreateInjectValuesAction(ActionData* action_data);
+
+		ECSENGINE_API void InjectWindowDestroyAction(ActionData* action_data);
 
 	}
 

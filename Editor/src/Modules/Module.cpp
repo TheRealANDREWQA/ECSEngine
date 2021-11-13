@@ -28,6 +28,8 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 	L"source"
 };
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, EditorModuleConfiguration configuration) {
 	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
@@ -80,10 +82,14 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void WriteModuleLogDelimitator(std::ofstream& stream) {
 	constexpr const char* STRING = "\n------------------------------------------- Module end -------------------------------------------------\n\n";
 	stream.write(STRING, strlen(STRING));
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void WriteModuleLogDelimitator(Stream<wchar_t> log_path) {
 	std::ofstream stream(log_path.buffer, std::ios::app);
@@ -92,6 +98,8 @@ void WriteModuleLogDelimitator(Stream<wchar_t> log_path) {
 		WriteModuleLogDelimitator(stream);
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 struct ThreadTaskData {
 	EditorState* editor_state;
@@ -108,12 +116,16 @@ void BuildThreadTask(unsigned int thread_index, World* world, void* _data) {
 	*data->success = success;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 // Returns the index of the thread that is executing the task
 unsigned int PushBuildThreadTask(EditorState* editor_state, unsigned int index, ConditionVariable* condition_variable, bool* success_status, ThreadFunction function) {
 	EDITOR_STATE(editor_state);
 	ThreadTaskData data = { editor_state, index, condition_variable, success_status };
 	return task_manager->AddDynamicTaskAndWake({ function, &data }, sizeof(data));
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
 	constexpr size_t MAX_THREADS = 128;
@@ -156,7 +168,6 @@ void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
 		if (successful_tasks[index]) {
 			console_output.Add(' ');
 			function::ConvertWideCharsToASCII(project_modules->buffer[index].library_name, console_output);
-			console_output.size += project_modules->buffer[index].library_name.size;
 			console_output.AddSafe(',');
 		}
 	}
@@ -190,13 +201,14 @@ void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
 	}
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void CommandLineString(CapacityStream<char> string, Stream<wchar_t> solution_path, Stream<char> command, Stream<char> configuration, Stream<wchar_t> log_file) {
 	string.Copy(ToStream(CMB_BUILD_SYSTEM_PATH));
 	string.AddStream(ToStream(" && "));
 	string.AddStream(ToStream(CMD_BUILD_SYSTEM));
 	string.Add(' ');
 	function::ConvertWideCharsToASCII(solution_path, string);
-	string.size += solution_path.size;
 	string.Add(' ');
 	string.AddStream(command);
 	string.Add(' ');
@@ -205,9 +217,10 @@ void CommandLineString(CapacityStream<char> string, Stream<wchar_t> solution_pat
 	string.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_COMMAND));
 	string.Add(' ');
 	function::ConvertWideCharsToASCII(log_file, string);
-	string.size += log_file.size;
 	string.AddSafe('\0');
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 bool PrintCommandStatus(EditorState* editor_state, Stream<char> configuration, Stream<wchar_t> log_path) {
 	std::ifstream stream(std::wstring(log_path.buffer, log_path.buffer + log_path.size));
@@ -256,41 +269,7 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<char> configuration, S
 	}
 }
 
-bool launchDebugger()
-{
-	// Get System directory, typically c:\windows\system32
-	std::wstring systemDir(MAX_PATH + 1, '\0');
-	UINT nChars = GetSystemDirectoryW(&systemDir[0], systemDir.length());
-	if (nChars == 0) return false; // failed to get system directory
-	systemDir.resize(nChars);
-
-	// Get process ID and create the command line
-	DWORD pid = GetCurrentProcessId();
-	std::wostringstream s;
-	s << systemDir << L"\\vsjitdebugger.exe -p " << pid;
-	std::wstring cmdLine = s.str();
-
-	// Start debugger process
-	STARTUPINFOW si;
-	ZeroMemory(&si, sizeof(si));
-	si.cb = sizeof(si);
-
-	PROCESS_INFORMATION pi;
-	ZeroMemory(&pi, sizeof(pi));
-
-	if (!CreateProcessW(NULL, &cmdLine[0], NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return false;
-
-	// Close debugger process handles to eliminate resource leak
-	CloseHandle(pi.hThread);
-	CloseHandle(pi.hProcess);
-
-	// Wait for the debugger to attach
-	while (!IsDebuggerPresent()) Sleep(100);
-
-	// Stop execution so the debugger can take over
-	DebugBreak();
-	return true;
-}
+// -------------------------------------------------------------------------------------------------------------------------
 
 bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> command, unsigned int thread_index) {
 	EDITOR_STATE(editor_state);
@@ -302,7 +281,7 @@ bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> c
 
 	solution_path = modules->buffer[index].solution_path;
 	library_name = modules->buffer[index].library_name;
-	configuration = editor_state->module_configurations[(unsigned int)modules->buffer[index].configuration];
+	configuration = editor_state->module_configuration_definitions[(unsigned int)modules->buffer[index].configuration];
 
 	// Construct the system string
 	ECS_TEMP_ASCII_STRING(command_string, 512);
@@ -317,8 +296,6 @@ bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> c
 		GetProjectModuleThreadBuildLogPath(editor_state, log_path, thread_index);
 	}
 	CommandLineString(command_string, solution_path, command, configuration, log_path);
-	
-	//launchDebugger();
 	
 	// Run the command
 	system(command_string.buffer);
@@ -335,6 +312,8 @@ bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> c
 	return succeded;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool BuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
 	if (UpdateProjectModuleLastWrite(editor_state, index) || modules->buffer[index].load_status != EditorModuleLoadStatus::Good) {
@@ -343,32 +322,46 @@ bool BuildProjectModule(EditorState* editor_state, unsigned int index, unsigned 
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void BuildProjectModules(EditorState* editor_state)
 {
 	ForEachProjectModule(editor_state, BuildThreadTask<BuildProjectModule>);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool CleanProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
 	return RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING), thread_index);
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void CleanProjectModules(EditorState* editor_state) {
 	ForEachProjectModule(editor_state, BuildThreadTask<CleanProjectModule>);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool RebuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
 	return RunCmdCommand(editor_state, index, ToStream(REBUILD_PROJECT_STRING), thread_index);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void RebuildProjectModules(EditorState* editor_state) {
 	ForEachProjectModule(editor_state, BuildThreadTask<RebuildProjectModule>);
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void ChangeProjectModuleConfiguration(EditorState* editor_state, unsigned int index, EditorModuleConfiguration new_configuration)
 {
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 	project_modules->buffer[index].configuration = new_configuration;
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void InitializeModuleConfigurations(EditorState* editor_state)
 {
@@ -388,13 +381,15 @@ void InitializeModuleConfigurations(EditorState* editor_state)
 
 	void* allocation = editor_allocator->Allocate(total_memory);
 	uintptr_t buffer = (uintptr_t)allocation;
-	editor_state->module_configurations.InitializeFromBuffer(buffer, count);
+	editor_state->module_configuration_definitions.InitializeFromBuffer(buffer, count);
 	
 	for (size_t index = 0; index < count; index++) {
-		editor_state->module_configurations[index].InitializeFromBuffer(buffer, string_sizes[index]);
-		editor_state->module_configurations[index].Copy(Stream<char>(MODULE_CONFIGURATIONS[index], string_sizes[index]));
+		editor_state->module_configuration_definitions[index].InitializeFromBuffer(buffer, string_sizes[index]);
+		editor_state->module_configuration_definitions[index].Copy(Stream<char>(MODULE_CONFIGURATIONS[index], string_sizes[index]));
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 unsigned int ProjectModuleIndex(const EditorState* editor_state, Stream<wchar_t> solution_path)
 {
@@ -409,6 +404,8 @@ unsigned int ProjectModuleIndex(const EditorState* editor_state, Stream<wchar_t>
 	return -1;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 unsigned int ProjectModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_name) {
 	EDITOR_STATE(editor_state);
 
@@ -421,6 +418,8 @@ unsigned int ProjectModuleIndexFromName(const EditorState* editor_state, Stream<
 	return -1;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void GetProjectModuleBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path)
 {
 	EDITOR_STATE(editor_state);
@@ -430,6 +429,8 @@ void GetProjectModuleBuildLogPath(const EditorState* editor_state, Stream<wchar_
 	log_path.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
 	log_path[log_path.size] = L'\0';
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void GetProjectModuleThreadBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path, unsigned int thread_index)
 {
@@ -442,7 +443,9 @@ void GetProjectModuleThreadBuildLogPath(const EditorState* editor_state, Stream<
 	log_path[log_path.size] = L'\0';
 }
 
-void GetBaseModulePath(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
 	EDITOR_STATE(editor_state);
 
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
@@ -452,14 +455,20 @@ void GetBaseModulePath(const EditorState* editor_state, CapacityStream<wchar_t>&
 	path[path.size] = L'\0';
 }
 
-void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, CapacityStream<wchar_t>& module_path)
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, CapacityStream<wchar_t>& module_path)
 {
-	GetBaseModulePath(editor_state, module_path);
+	GetModulesFolder(editor_state, module_path);
+	module_path.Add(ECS_OS_PATH_SEPARATOR);
+	module_path.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]));
 	module_path.Add(ECS_OS_PATH_SEPARATOR);
 	module_path.AddStream(library_name);
 	module_path.AddStreamSafe(ToStream(ECS_MODULE_EXTENSION));
 	module_path[module_path.size] = L'\0';
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 size_t GetProjectModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 {
@@ -504,24 +513,32 @@ size_t GetProjectModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 	return std::max(data.last_write, solution_last_write);
 }
 
-size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, Stream<wchar_t> library_name) {
+// -------------------------------------------------------------------------------------------------------------------------
+
+size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration) {
 	ECS_TEMP_STRING(module_path, 256);
-	GetModulePath(editor_state, library_name, module_path);
+	GetModulePath(editor_state, library_name, configuration, module_path);
 
 	size_t last_write = 0;
 	bool success = OS::GetFileTimes(module_path.buffer, nullptr, nullptr, &last_write);
 	return last_write;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 size_t GetProjectModuleSolutionLastWrite(const EditorState* editor_state, unsigned int index) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	return modules->buffer[index].solution_last_write_time;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, unsigned int index) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	return modules->buffer[index].library_last_write_time;
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 unsigned char* GetModuleConfigurationPtr(EditorState* editor_state, unsigned int index)
 {
@@ -529,36 +546,48 @@ unsigned char* GetModuleConfigurationPtr(EditorState* editor_state, unsigned int
 	return (unsigned char*)&modules->buffer[index].configuration;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 unsigned char GetModuleConfigurationChar(const EditorState* editor_state, unsigned int index)
 {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	return (unsigned char)modules->buffer[index].configuration;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void LoadEditorModule( EditorState* editor_state, unsigned int index) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	ECS_TEMP_STRING(library_path, 256);
-	GetModulePath(editor_state, modules->buffer[index].library_name, library_path);
+	GetModulePath(editor_state, modules->buffer[index].library_name, modules->buffer[index].configuration, library_path);
 	modules->buffer[index].ecs_module = LoadModule(library_path);
 }
 
-bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name)
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration)
 {
 	ECS_TEMP_STRING(library_path, 256);
-	GetModulePath(editor_state, library_name, library_path);
+	GetModulePath(editor_state, library_name, configuration, library_path);
 	return IsModule(library_path);
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index) {
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	return HasModuleFunction(editor_state, modules->buffer[index].library_name);
+	return HasModuleFunction(editor_state, modules->buffer[index].library_name, modules->buffer[index].configuration);
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 bool HasGraphicsModule(const EditorState* editor_state)
 {
 	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
 	return project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name.size > 0 && project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size > 0;
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 bool ProjectModulesNeedsBuild(const EditorState* editor_state, unsigned int index)
 {
@@ -567,13 +596,15 @@ bool ProjectModulesNeedsBuild(const EditorState* editor_state, unsigned int inde
 	return modules->buffer[index].solution_last_write_time > new_last_write || modules->buffer[index].library_last_write_time == 0;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, CapacityStream<char>* error_message) {
 	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 
 	if (project_modules->buffer[index].ecs_module.code != ECS_GET_MODULE_OK) {
 		ECS_TEMP_STRING(module_path, 256);
-		GetModulePath(editor_state, project_modules->buffer[index].library_name, module_path);
+		GetModulePath(editor_state, project_modules->buffer[index].library_name, project_modules->buffer[index].configuration, module_path);
 		project_modules->buffer[index].ecs_module = LoadModule(module_path, editor_state->ActiveWorld(), { editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded });
 	}
 
@@ -592,6 +623,8 @@ bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, Capaci
 	return false;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool UpdateProjectModuleLastWrite(EditorState* editor_state, unsigned int index)
 {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
@@ -600,12 +633,16 @@ bool UpdateProjectModuleLastWrite(EditorState* editor_state, unsigned int index)
 	return is_solution_updated || is_library_updated;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void UpdateProjectModulesLastWrite(EditorState* editor_state) {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
 	for (size_t index = 0; index < modules->size; index++) {
 		UpdateProjectModuleLastWrite(editor_state, index);
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 bool UpdateProjectModuleSolutionLastWrite(EditorState* editor_state, unsigned int index) {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
@@ -615,13 +652,17 @@ bool UpdateProjectModuleSolutionLastWrite(EditorState* editor_state, unsigned in
 	return solution_last_write < modules->buffer[index].solution_last_write_time || modules->buffer[index].solution_last_write_time == 0;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool UpdateProjectModuleLibraryLastWrite(EditorState* editor_state, unsigned int index) {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
 
 	size_t library_last_write = modules->buffer[index].library_last_write_time;
-	modules->buffer[index].library_last_write_time = GetProjectModuleLibraryLastWrite(editor_state, modules->buffer[index].library_name);
+	modules->buffer[index].library_last_write_time = GetProjectModuleLibraryLastWrite(editor_state, modules->buffer[index].library_name, modules->buffer[index].configuration);
 	return library_last_write < modules->buffer[index].library_last_write_time || modules->buffer[index].library_last_write_time == 0;
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void ReleaseProjectModule(EditorState* editor_state, unsigned int index) {
 	EDITOR_STATE(editor_state);
@@ -631,22 +672,11 @@ void ReleaseProjectModule(EditorState* editor_state, unsigned int index) {
 	if (modules->buffer[index].load_status != EditorModuleLoadStatus::Failed) {
 		ReleaseModule(modules->buffer[index].ecs_module, { editor_allocator, AllocatorType::MemoryManager, AllocationType::SingleThreaded });
 
-		// Delete the associated files
-		Stream<const wchar_t*> associated_file_extensions(MODULE_ASSOCIATED_FILES, std::size(MODULE_ASSOCIATED_FILES));
-
-		ECS_TEMP_STRING(path, 256);
-		GetModulePath(editor_state, modules->buffer[index].library_name, path);
-		size_t path_size = path.size;
-
-		for (size_t index = 0; index < std::size(MODULE_ASSOCIATED_FILES); index++) {
-			path.size = path_size;
-			path.AddStreamSafe(ToStream(MODULE_ASSOCIATED_FILES[index]));
-			if (ExistsFileOrFolder(path)) {
-				OS::DeleteFileWithError(path, console);
-			}
-		}
+		RemoveProjectModuleAssociatedFiles(editor_state, index);
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void RemoveProjectModule(EditorState* editor_state, unsigned int index) {
 	EDITOR_STATE(editor_state);
@@ -662,22 +692,58 @@ void RemoveProjectModule(EditorState* editor_state, unsigned int index) {
 	}
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void RemoveProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path)
 {
 	EDITOR_STATE(editor_state);
 
-	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
-	size_t module_count = modules->size;
-	for (size_t index = 0; index < module_count; index++) {
-		if (function::CompareStrings(modules->buffer[index].solution_path, solution_path)) {
-			RemoveProjectModule(editor_state, index);
-			return;
-		}
+	unsigned int module_index = ProjectModuleIndex(editor_state, solution_path);
+	if (module_index != -1) {
+		RemoveProjectModule(editor_state, module_index);
+		return;
 	}
 	ECS_TEMP_ASCII_STRING(error_message, 256);
-	error_message.size = function::FormatString(error_message.buffer, "Remove project module {0} failed. No such module exists.", solution_path);
+	error_message.size = function::FormatString(error_message.buffer, "Removing project module {0} failed. No such module exists.", solution_path);
 	EditorSetError(editor_state, error_message);
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, unsigned int module_index)
+{
+	EDITOR_STATE(editor_state);
+	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
+
+	// Delete the associated files
+	Stream<const wchar_t*> associated_file_extensions(MODULE_ASSOCIATED_FILES, std::size(MODULE_ASSOCIATED_FILES));
+
+	ECS_TEMP_STRING(path, 256);
+	GetModulePath(editor_state, modules->buffer[module_index].library_name, modules->buffer[module_index].configuration, path);
+	size_t path_size = path.size;
+
+	for (size_t index = 0; index < std::size(MODULE_ASSOCIATED_FILES); index++) {
+		path.size = path_size;
+		path.AddStreamSafe(ToStream(MODULE_ASSOCIATED_FILES[index]));
+		if (ExistsFileOrFolder(path)) {
+			OS::DeleteFileWithError(path, console);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_t> solution_path)
+{
+	unsigned int module_index = ProjectModuleIndex(editor_state, solution_path);
+	if (module_index != -1) {
+		RemoveProjectModuleAssociatedFiles(editor_state, module_index);
+		ECS_FORMAT_TEMP_STRING(error_message, "Could not find module with solution path {0}.", solution_path);
+		EditorSetConsoleError(editor_state, error_message);
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void ResetProjectModules(EditorState* editor_state)
 {
@@ -689,6 +755,8 @@ void ResetProjectModules(EditorState* editor_state)
 	}
 	project_modules->size = 1;
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 void ResetProjectGraphicsModule(EditorState* editor_state)
 {
@@ -706,11 +774,15 @@ void ResetProjectGraphicsModule(EditorState* editor_state)
 	modules->buffer[GRAPHICS_MODULE_INDEX].ecs_module.os_module_handle = nullptr;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void SetModuleLoadStatus(EditorModule* module, bool has_functions)
 {
 	bool library_write_greater_than_solution = module->library_last_write_time >= module->solution_last_write_time;
 	module->load_status = (EditorModuleLoadStatus)((has_functions + library_write_greater_than_solution) * has_functions);
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 bool SetProjectGraphicsModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, EditorModuleConfiguration configuration)
 {
@@ -764,10 +836,12 @@ bool SetProjectGraphicsModule(EditorState* editor_state, Stream<wchar_t> solutio
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 {
 	ECS_TEMP_STRING(module_path, 256);
-	GetBaseModulePath(editor_state, module_path);
+	GetModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](const std::filesystem::path& std_path, void* data) {
 		const wchar_t* filename = std_path.c_str();
@@ -780,13 +854,15 @@ size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state)
 	};
 
 	size_t count = 0;
-	ForEachFileInDirectory(module_path.buffer, &count, file_functor);
+	ForEachFileInDirectoryRecursive(module_path.buffer, &count, file_functor);
 	return count;
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
+
 void DeleteVisualStudioLockedFiles(const EditorState* editor_state) {
 	ECS_TEMP_STRING(module_path, 256);
-	GetBaseModulePath(editor_state, module_path);
+	GetModulesFolder(editor_state, module_path);
 
 	auto file_functor = [](const std::filesystem::path& std_path, void* data) {
 		const wchar_t* filename = std_path.c_str();
@@ -796,5 +872,11 @@ void DeleteVisualStudioLockedFiles(const EditorState* editor_state) {
 		}
 		return true;
 	};
-	ForEachFileInDirectory(module_path.buffer, nullptr, file_functor);
+	ForEachFileInDirectoryRecursive(module_path.buffer, nullptr, file_functor);
 }
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+// -------------------------------------------------------------------------------------------------------------------------

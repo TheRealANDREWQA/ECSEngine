@@ -76,13 +76,13 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<TaskGraphElement> LoadModuleTasks(World* world, Module module, AllocatorPolymorphic allocator)
+	Stream<TaskDependencyElement> LoadModuleTasks(World* world, Module module, AllocatorPolymorphic allocator)
 	{
 		constexpr size_t MAX_TASKS = 32;
 		constexpr size_t MAX_DEPENDENCIES_PER_TASK = 8;
-		Stream<TaskGraphElement> stream;
+		Stream<TaskDependencyElement> stream;
 
-		void* temp_allocation = ECS_STACK_ALLOC(sizeof(TaskGraphElement) * MAX_TASKS + sizeof(Stream<char>) * MAX_TASKS * MAX_DEPENDENCIES_PER_TASK);
+		void* temp_allocation = ECS_STACK_ALLOC(sizeof(TaskDependencyElement) * MAX_TASKS + sizeof(Stream<char>) * MAX_TASKS * MAX_DEPENDENCIES_PER_TASK);
 		stream.InitializeFromBuffer(temp_allocation, 0);
 		for (size_t index = 0; index < MAX_TASKS; index++) {
 			stream[index].task.name = nullptr;
@@ -90,7 +90,7 @@ namespace ECSEngine {
 
 		module.function(world, stream);
 
-		size_t total_size = sizeof(TaskGraphElement) * stream.size;
+		size_t total_size = sizeof(TaskDependencyElement) * stream.size;
 		for (size_t index = 0; index < stream.size; index++) {
 			if (stream[index].task.name != nullptr) {
 				total_size += sizeof(char) * (strlen(stream[index].task.name) + 1);
@@ -105,7 +105,7 @@ namespace ECSEngine {
 		void* allocation = Allocate(allocator, total_size);
 		uintptr_t buffer = (uintptr_t)allocation;
 
-		Stream<TaskGraphElement> temp_stream = stream;
+		Stream<TaskDependencyElement> temp_stream = stream;
 		stream.InitializeFromBuffer(buffer, temp_stream.size);
 		for (size_t index = 0; index < temp_stream.size; index++) {
 			stream[index].task = temp_stream[index].task;

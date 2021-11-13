@@ -22,9 +22,9 @@ namespace ECSEngine {
 	// Handles activation, deactivation, addition and removal of systems;
 	// Shared structures like partition trees or acceleration structures can be bound to systems
 	// and easily referenced without coupling systems
-	class ECSENGINE_API SystemManager
+	struct ECSENGINE_API SystemManager
 	{
-		using HashFunction = HashFunctionAdditiveString;
+		using HashFunction = HashFunctionMultiplyString;
 		struct SystemInternal {
 			Stream<ThreadTask> tasks;
 			void* data;

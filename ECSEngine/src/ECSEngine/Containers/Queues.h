@@ -151,7 +151,7 @@ namespace ECSEngine {
 			bool Pop(T& element) {
 				if (m_queue.size > 0) {
 					unsigned int element_index = m_first_item;
-					m_first_item = (m_first_item + 1) % m_queue.capacity;
+					m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity, 0, m_first_item + 1);
 					m_queue.size--;
 					element = m_queue[element_index];
 					return true;
@@ -168,7 +168,7 @@ namespace ECSEngine {
 					memcpy(m_queue.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 					memcpy(m_queue.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
 					m_first_item = 0;
-					m_queue[m_queue.size++] = element;
+					m_queue.Add(element);
 				}
 				else {
 					unsigned int index = m_first_item + m_queue.size;
@@ -182,12 +182,12 @@ namespace ECSEngine {
 				if (m_queue.size == m_queue.capacity) {
 					unsigned int old_capacity = m_queue.capacity;
 					T* old_buffer = m_queue.buffer;
-					m_queue.FreeBufferUnguarded();
+					m_queue.FreeBuffer();
 					m_queue.ResizeNoCopy(static_cast<size_t>((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
 					memcpy(m_queue.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 					memcpy(m_queue.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
 					m_first_item = 0;
-					m_queue[m_queue.size++] = *element;
+					m_queue.Add(element);
 				}
 				else {
 					unsigned int index = m_first_item + m_queue.size;
@@ -221,10 +221,7 @@ namespace ECSEngine {
 			ThreadSafeQueue(void* allocation, size_t capacity) : m_queue(allocation, capacity) {}
 
 			ThreadSafeQueue(const ThreadSafeQueue& other) = default;
-			ThreadSafeQueue(ThreadSafeQueue&& other) = default;
-
 			ThreadSafeQueue& operator = (const ThreadSafeQueue& other) = default;
-			ThreadSafeQueue& operator = (ThreadSafeQueue&& other) = default;
 
 			void Reset() {
 				m_queue.Reset();

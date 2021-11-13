@@ -1,6 +1,6 @@
 #pragma once
 #include "../../Core.h"
-#include "../../Internal/Multithreading/TaskDependencyGraph.h"
+#include "../../Internal/Multithreading/TaskDependencies.h"
 #include "../../Allocators/AllocatorTypes.h"
 
 #define ECS_MODULE_FUNCTION_NAME "ModuleFunction"
@@ -11,7 +11,7 @@ namespace ECSEngine {
 
 	struct World;
 
-	using ModuleFunction = void (*)(World* world, containers::Stream<TaskGraphElement>& module_stream);
+	using ModuleFunction = void (*)(World* world, containers::Stream<TaskDependencyElement>& module_stream);
 
 	// Module function missing is returned for either graphics function missing
 	enum ModuleStatus : unsigned char {
@@ -23,7 +23,7 @@ namespace ECSEngine {
 	struct Module {
 		ModuleStatus code;
 		ModuleFunction function;
-		containers::Stream<TaskGraphElement> tasks;
+		containers::Stream<TaskDependencyElement> tasks;
 		HMODULE os_module_handle;
 	};
 
@@ -47,7 +47,7 @@ namespace ECSEngine {
 
 	// It will not release the OS Handler - it must be kept around as long as the tasks are loaded;
 	// It does a single coallesced allocation
-	ECSENGINE_API containers::Stream<TaskGraphElement> LoadModuleTasks(
+	ECSENGINE_API containers::Stream<TaskDependencyElement> LoadModuleTasks(
 		World* world,
 		Module module,
 		AllocatorPolymorphic allocator

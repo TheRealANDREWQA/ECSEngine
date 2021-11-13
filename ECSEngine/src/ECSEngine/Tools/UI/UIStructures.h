@@ -543,9 +543,8 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIWindowDynamicResource {
-			UIDynamicStream<void*> element_allocations;
-			Stream<char> name;
-			unsigned int previous_allocation_count;
+			Stream<void*> element_allocations;
+			Stream<ResourceIdentifier> table_resources;
 			unsigned int reference_count;
 		};
 
@@ -568,7 +567,7 @@ namespace ECSEngine {
 			containers::Stream<UISpriteVertex> name_vertex_buffer;
 			UIDynamicStream<const char*> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
-			UIDynamicStream<UIWindowDynamicResource> dynamic_resources;
+			IdentifierHashTable<UIWindowDynamicResource, ResourceIdentifier, HashFunctionPowerOfTwo> dynamic_resources;
 			WindowDraw draw;
 			UIActionHandler private_handler;
 			UIActionHandler default_handler;

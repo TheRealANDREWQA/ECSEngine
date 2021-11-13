@@ -76,6 +76,17 @@ void SaveCurrentProjectUIAction(ActionData* action_data) {
 	SaveCurrentProjectUI((EditorState*)action_data->data);
 }
 
+void InjectWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
+	descriptor.draw = InjectValuesWindowDraw<false>;
+	descriptor.initialize = InjectValuesWindowDraw<true>;
+
+	descriptor.destroy_action = InjectWindowDestroyAction;
+	descriptor.window_data = &editor_state->inject_data;
+	descriptor.window_data_size = sizeof(editor_state->inject_data);
+
+	descriptor.window_name = editor_state->inject_window_name;
+}
+
 bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _template, CapacityStream<char>& error_message)
 {
 	EDITOR_STATE(editor_state);
@@ -92,6 +103,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	}
 	else {
 		Stream<char> _window_names[] = {
+			ToStream(editor_state->inject_window_name),
 			ToStream(TOOLBAR_WINDOW_NAME),
 			ToStream(MISCELLANEOUS_BAR_WINDOW_NAME),
 			ToStream(CONSOLE_WINDOW_NAME),
@@ -105,6 +117,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 
 		Stream<Stream<char>> window_names(_window_names, std::size(_window_names));
 		SetDescriptorFunction set_functions[] = {
+			InjectWindowSetDescriptor,
 			ToolbarSetDescriptor,
 			MiscellaneousBarSetDescriptor,
 			ConsoleSetDescriptor,

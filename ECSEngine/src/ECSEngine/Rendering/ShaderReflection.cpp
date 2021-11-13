@@ -75,7 +75,7 @@ const char* DXGI_SINT_FORMAT_MAPPINGS[] = {
 	STRING(ECS_REFLECT_SINT_32)
 };
 
-using Hash = ECSEngine::HashFunctionAdditiveString;
+using Hash = ECSEngine::HashFunctionMultiplyString;
 
 namespace ECSEngine {
 

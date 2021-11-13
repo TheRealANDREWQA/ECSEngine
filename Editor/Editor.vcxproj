@@ -259,6 +259,7 @@
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
     <ClInclude Include="src\Modules\Module.h" />
+    <ClInclude Include="src\Modules\ModuleConfigurationGroup.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />
     <ClInclude Include="src\OSFunctions.h" />
@@ -289,6 +290,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Modules\Module.cpp" />
+    <ClCompile Include="src\Modules\ModuleConfigurationGroup.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\OSFunctions.cpp" />
     <ClCompile Include="src\Project\ProjectOperations.cpp" />
@@ -308,9 +310,6 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="ECSLogo.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

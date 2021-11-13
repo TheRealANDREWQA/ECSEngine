@@ -532,10 +532,12 @@ namespace ECSEngine {
 				return value;
 			}
 			else {
-				size_t integer = ConvertCharactersToInt<size_t>(Stream(stream.buffer + starting_index, stream.size - starting_index));
-				FloatingPoint value = static_cast<FloatingPoint>(integer);
-				if (stream[0] == '-') {
-					value = -value;
+				if (stream.size > 0) {
+					size_t integer = ConvertCharactersToInt<size_t>(Stream(stream.buffer + starting_index, stream.size - starting_index));
+					value = static_cast<FloatingPoint>(integer);
+					if (stream[0] == '-') {
+						value = -value;
+					}
 				}
 				return value;
 			}

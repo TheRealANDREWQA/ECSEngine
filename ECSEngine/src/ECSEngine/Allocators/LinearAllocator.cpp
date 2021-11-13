@@ -23,13 +23,24 @@ namespace ECSEngine {
 	}
 
 	void LinearAllocator::Deallocate(const void* block) {
-		ECS_ASSERT(m_top > m_marker);
+		ECS_ASSERT(m_top >= m_marker);
 		m_top = m_marker;
 	}
 
 	void LinearAllocator::Clear() {
 		m_top = 0;
 		m_marker = 0;
+	}
+
+	size_t LinearAllocator::GetMarker() const
+	{
+		return m_top;
+	}
+
+	void LinearAllocator::ReturnToMarker(size_t marker)
+	{
+		ECS_ASSERT(marker <= m_top);
+		m_top = marker;
 	}
 
 	void LinearAllocator::SetMarker() {

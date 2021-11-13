@@ -492,18 +492,18 @@ namespace ECSEngine {
 			scalar_function(buffer + index);
 		}
 
-		constexpr size_t convert_int_to_hex_do_not_write_0x = 1 << 0;
-		constexpr size_t convert_int_to_hex_add_normal_value_after = 1 << 1;
+		constexpr size_t CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X = 1 << 0;
+		constexpr size_t CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER = 1 << 1;
 
 		template<size_t flags = 0, typename Integer>
 		void ConvertIntToHex(Stream<char>& characters, Integer integer) {
 			constexpr char hex_characters[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 			
-			if constexpr ((flags & convert_int_to_hex_do_not_write_0x) == 0) {
+			if constexpr ((flags & CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X) == 0) {
 				characters.Add('0');
 				characters.Add('x');
 			}
-			if constexpr (std::is_same_v<Integer, int8_t> || std::is_same_v<Integer, uint8_t>) {
+			if constexpr (std::is_same_v<Integer, int8_t> || std::is_same_v<Integer, uint8_t> || std::is_same_v<Integer, char>) {
 				char low_part = integer & 0x0F;
 				char high_part = (integer & 0xF0) >> 4;
 				characters.Add(hex_characters[(unsigned int)high_part]);
@@ -522,17 +522,17 @@ namespace ECSEngine {
 			else if constexpr (std::is_same_v<Integer, int32_t> || std::is_same_v<Integer, uint32_t>) {
 				uint16_t first_two_bytes = integer & 0x0000FFFF;
 				uint16_t last_two_bytes = (integer & 0xFFFF0000) >> 16;
-				ConvertIntToHex<convert_int_to_hex_do_not_write_0x>(characters, last_two_bytes);
-				ConvertIntToHex<convert_int_to_hex_do_not_write_0x>(characters, first_two_bytes);
+				ConvertIntToHex<CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X>(characters, last_two_bytes);
+				ConvertIntToHex<CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X>(characters, first_two_bytes);
 			}
 			else if constexpr (std::is_same_v<Integer, int64_t> || std::is_same_v<Integer, uint64_t>) {
 				uint32_t first_integer = integer & 0x00000000FFFFFFFF;
 				uint32_t second_integer = (integer & 0xFFFFFFFF00000000) >> 32;
-				ConvertIntToHex<convert_int_to_hex_do_not_write_0x>(characters, second_integer);
-				ConvertIntToHex<convert_int_to_hex_do_not_write_0x>(characters, first_integer);
+				ConvertIntToHex<CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X>(characters, second_integer);
+				ConvertIntToHex<CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X>(characters, first_integer);
 			}
 
-			if constexpr ((flags & convert_int_to_hex_add_normal_value_after) != 0) {
+			if constexpr ((flags & CONVERT_INT_TO_HEX_ADD_NORMAL_VALUE_AFTER) != 0) {
 				characters.Add(' ');
 				characters.Add('(');
 				ConvertIntToCharsFormatted(characters, static_cast<int64_t>(integer));
@@ -712,9 +712,27 @@ namespace ECSEngine {
 			return characters_written.x;
 		}
 
+		// Idiot C++ bug, char and int8_t does not equal to the same according to the compiler, only signed char
+		// and int8_t; So make all the signed version separately
 		template<typename Integer>
 		void IntegerRange(Integer& min, Integer& max) {
-			if constexpr (std::is_same_v<Integer, int8_t>) {
+			if constexpr (std::is_same_v<Integer, char>) {
+				min = CHAR_MIN;
+				max = CHAR_MAX;
+			}
+			else if constexpr (std::is_same_v<Integer, short>) {
+				min = SHORT_MIN;
+				max = SHORT_MAX;
+			}
+			else if constexpr (std::is_same_v<Integer, int>) {
+				min = INT_MIN;
+				max = INT_MAX;
+			}
+			else if constexpr (std::is_same_v<Integer, long long>) {
+				min = LLONG_MIN;
+				max = LLONG_MAX;
+			}
+			else if constexpr (std::is_same_v<Integer, int8_t>) {
 				min = CHAR_MIN;
 				max = CHAR_MAX;
 			}

@@ -7,25 +7,25 @@ ECS_CONTAINERS;
 
 namespace ECSEngine {
 
-	struct TaskGraphElement {
+	struct TaskDependencyElement {
 		ThreadTask task;
 		Stream<char> task_name;
 		Stream<Stream<char>> dependencies;
 	};
 
-	struct ECSENGINE_API TaskGraph {
-		TaskGraph() : solved_task_count(0) {}
-		TaskGraph(MemoryManager* allocator) : elements(allocator, 0), solved_task_count(0) {}
+	struct ECSENGINE_API TaskDependencies {
+		TaskDependencies() : solved_task_count(0) {}
+		TaskDependencies(MemoryManager* allocator) : elements(allocator, 0), solved_task_count(0) {}
 
-		TaskGraph(const TaskGraph& other) = default;
-		TaskGraph& operator = (const TaskGraph & other) = default;
+		TaskDependencies(const TaskDependencies& other) = default;
+		TaskDependencies& operator = (const TaskDependencies & other) = default;
 
 		// The task name and dependencies names will be copied
-		void Add(TaskGraphElement element);
+		void Add(TaskDependencyElement element);
 
-		void Add(Stream<TaskGraphElement> stream);
+		void Add(Stream<TaskDependencyElement> stream);
 
-		void Copy(Stream<TaskGraphElement> stream);
+		void Copy(Stream<TaskDependencyElement> stream);
 
 		void Reset();
 
@@ -38,7 +38,7 @@ namespace ECSEngine {
 		// Or missing tasks
 		bool Solve();
 
-		ResizableStream<TaskGraphElement, MemoryManager> elements;
+		ResizableStream<TaskDependencyElement, MemoryManager> elements;
 		unsigned int solved_task_count;
 	};
 

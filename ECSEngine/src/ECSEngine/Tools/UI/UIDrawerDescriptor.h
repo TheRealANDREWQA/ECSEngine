@@ -24,6 +24,7 @@ namespace ECSEngine {
 			unsigned int border_index;
 			DockspaceType dockspace_type;
 			bool do_not_initialize_viewport_sliders;
+			bool do_not_allocate_buffers;
 			float2 mouse_position;
 			void** buffers;
 			size_t* counts;

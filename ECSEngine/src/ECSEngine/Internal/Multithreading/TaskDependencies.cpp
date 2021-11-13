@@ -1,12 +1,12 @@
 #include "ecspch.h"
-#include "TaskDependencyGraph.h"
+#include "TaskDependencies.h"
 #include "../../Utilities/Function.h"
 
 ECS_CONTAINERS;
 
 namespace ECSEngine {
 
-	void TaskGraph::Add(TaskGraphElement element) {
+	void TaskDependencies::Add(TaskDependencyElement element) {
 		size_t total_size = element.task_name.size * sizeof(char);
 		for (size_t index = 0; index < element.dependencies.size; index++) {
 			total_size += element.dependencies[index].size;
@@ -26,17 +26,17 @@ namespace ECSEngine {
 		elements.Add(element);
 	}
 
-	void TaskGraph::Add(Stream<TaskGraphElement> stream) {
+	void TaskDependencies::Add(Stream<TaskDependencyElement> stream) {
 		for (size_t index = 0; index < stream.size; index++) {
 			Add(stream[index]);
 		}
 	}
 
-	void TaskGraph::Copy(Stream<TaskGraphElement> stream) {
+	void TaskDependencies::Copy(Stream<TaskDependencyElement> stream) {
 		elements.Copy(stream);
 	}
 
-	void TaskGraph::Reset()
+	void TaskDependencies::Reset()
 	{
 		for (size_t index = 0; index < elements.size; index++) {
 			elements.allocator->Deallocate(elements[index].task_name.buffer);
@@ -44,11 +44,11 @@ namespace ECSEngine {
 		elements.FreeBuffer();
 	}
 
-	void TaskGraph::Remove(const char* name) {
+	void TaskDependencies::Remove(const char* name) {
 		Remove(ToStream(name));
 	}
 
-	void TaskGraph::Remove(Stream<char> task_name) {
+	void TaskDependencies::Remove(Stream<char> task_name) {
 		for (size_t index = 0; index < elements.size; index++) {
 			if (function::CompareStrings(elements[index].task_name, task_name)) {
 				elements.allocator->Deallocate(elements[index].task_name.buffer);
@@ -58,7 +58,7 @@ namespace ECSEngine {
 		}
 	}
 
-	bool TaskGraph::Solve() {
+	bool TaskDependencies::Solve() {
 		// First pass - detect all tasks that do not have dependencies and place them
 		// at the front
 		unsigned int current_count = 0;

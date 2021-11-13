@@ -20,25 +20,14 @@ using namespace ECSEngine::Tools;
 
 constexpr size_t TOOLBAR_DATA_FILE_ROW_COUNT = 3;
 constexpr size_t TOOLBAR_DATA_EDIT_ROW_COUNT = 4;
-constexpr size_t TOOLBAR_DATA_WINDOW_ROW_COUNT = 6;
 constexpr size_t TOOLBAR_DATA_LAYOUT_ROW_COUNT = 9;
 constexpr size_t TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT = 4;
 
 constexpr wchar_t* PATH = L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\Editor\\TEMPLATE.uit";
 
-#define WINDOWS_MENU_GAME 0
-#define WINDOWS_MENU_CONSOLE 1
-#define WINDOWS_MENU_DIRECTORY_EXPLORER 2
-#define WINDOWS_MENU_FILE_EXPLORER 3
-#define WINDOWS_MENU_MODULE_EXPLORER 4
-#define WINDOWS_MENU_INSPECTOR 5
-
-#define WINDOWS_MENU_CHAR_DESCRIPTION "Game\nConsole\nDirectory Explorer\nFile Explorer\nModule Explorer\nInspector"
-
 struct ToolbarData {
 	UIActionHandler file_actions[TOOLBAR_DATA_FILE_ROW_COUNT];
-	UIActionHandler edit_actions[TOOLBAR_DATA_EDIT_ROW_COUNT];
-	UIActionHandler window_actions[TOOLBAR_DATA_WINDOW_ROW_COUNT];
+	UIActionHandler window_actions[TOOLBAR_WINDOW_MENU_COUNT];
 	UIActionHandler layout_actions[TOOLBAR_DATA_LAYOUT_ROW_COUNT];
 	bool layout_has_submenu[TOOLBAR_DATA_LAYOUT_ROW_COUNT];
 	bool layout_submenu_unavailables[TOOLBAR_DATA_LAYOUT_ROW_COUNT * 2];
@@ -46,28 +35,6 @@ struct ToolbarData {
 	UIActionHandler* layout_submenu_handlers;
 	EditorState* editor_state;
 };
-
-void EditUndo(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	system->SetActiveWindow(CONSOLE_WINDOW_NAME);
-}
-
-void EditCut(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	system->SetActiveWindow(FILE_EXPLORER_WINDOW_NAME);
-}
-
-void EditCopy(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-}
-
-void EditPaste(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-}
 
 void DefaultUITemplate(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -105,8 +72,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 	ToolbarData* data = (ToolbarData*)window_data;
 	if constexpr (initialize) {
 		// Default initialize all handlers with SkipAction, data size 0
-		Stream<UIActionHandler> handlers(data, TOOLBAR_DATA_EDIT_ROW_COUNT + TOOLBAR_DATA_FILE_ROW_COUNT
-			+ TOOLBAR_DATA_WINDOW_ROW_COUNT + TOOLBAR_DATA_LAYOUT_ROW_COUNT);
+		Stream<UIActionHandler> handlers(data,  TOOLBAR_DATA_FILE_ROW_COUNT + TOOLBAR_WINDOW_MENU_COUNT + TOOLBAR_DATA_LAYOUT_ROW_COUNT);
 		for (size_t index = 0; index < handlers.size; index++) {
 			handlers[index] = { SkipAction, nullptr, 0 };
 		}
@@ -123,26 +89,16 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 
 #pragma endregion
 
-#pragma region Edit
-
-		data->edit_actions[0].action = EditUndo;
-		data->edit_actions[1].action = EditCut;
-		data->edit_actions[2].action = EditCopy;
-		data->edit_actions[3].action = EditPaste;
-
-		data->edit_actions[1].data = data->editor_state;
-		data->edit_actions[1].phase = UIDrawPhase::System;
-
-#pragma endregion
-
 #pragma region Windows
 
-		data->window_actions[WINDOWS_MENU_GAME] = { CreateGameAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[WINDOWS_MENU_CONSOLE] = { CreateConsoleAction, editor_state->console, 0, UIDrawPhase::System };
-		data->window_actions[WINDOWS_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[WINDOWS_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[WINDOWS_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[WINDOWS_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, UIDrawPhase::System };
+		// The action data is the inject data + the window name
+		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, editor_state->console, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, UIDrawPhase::System };
 
 #pragma endregion
 
@@ -296,23 +252,13 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 
 	drawer.Menu<configuration>(config, "File", &current_state);
 
-
-	current_state.left_characters = (char*)"Undo\nCut\nCopy\nPaste";
-	current_state.right_characters = (char*)"Ctrl+Z\nCtrl+X\nCtrl+C\nCtrl+V";
-	current_state.row_count = TOOLBAR_DATA_EDIT_ROW_COUNT;
-	current_state.click_handlers = data->edit_actions;
-	current_state.separation_lines[0] = 0;
-	current_state.separation_line_count = 1;
-
-	drawer.Menu<configuration>(config, "Edit", &current_state);
-
 	current_state.right_characters = nullptr;
 	current_state.separation_lines[0] = 1;
 	current_state.separation_lines[1] = 4;
 	current_state.separation_line_count = 2;
-	current_state.left_characters = (char*)WINDOWS_MENU_CHAR_DESCRIPTION;
+	current_state.left_characters = (char*)TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
 	current_state.click_handlers = data->window_actions;
-	current_state.row_count = TOOLBAR_DATA_WINDOW_ROW_COUNT;
+	current_state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
 
 	drawer.Menu<configuration>(config, "Window", &current_state);
 

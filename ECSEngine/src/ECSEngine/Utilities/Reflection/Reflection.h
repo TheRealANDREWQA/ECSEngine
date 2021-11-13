@@ -25,40 +25,11 @@ namespace ECSEngine {
 			UInt32,
 			Int64,
 			UInt64,
-			Char,
 			Wchar_t,
 			Float,
 			Double,
 			Bool,
 			Enum,
-			UserDefined,
-			Unknown
-		};
-
-		enum class ECSENGINE_API ReflectionExtendedFieldType : unsigned char {
-			Int8,
-			UInt8,
-			Int16,
-			UInt16,
-			Int32,
-			UInt32,
-			Int64,
-			UInt64,
-			Wchar_t,
-			Float,
-			Double,
-			Bool,
-			Pointer,
-			Enum,
-			Char,
-			UChar,
-			Short,
-			UShort,
-			Int,
-			UInt,
-			Long,
-			ULong,
-			SizeT,
 			Char2,
 			UChar2,
 			Short2,
@@ -92,18 +63,15 @@ namespace ECSEngine {
 			Bool2,
 			Bool3,
 			Bool4,
-			Int8Array,
-			UInt8Array,
-			Int16Array,
-			UInt16Array,
-			Int32Array,
-			UInt32Array,
-			Int64Array,
-			UInt64Array,
-			FloatArray,
-			DoubleArray,
-			BoolArray,
-			EnumArray,
+			UserDefined,
+			Unknown
+		};
+
+		// The extended type indicates whether or not this is a stream/pointer/embedded array
+		enum class ECSENGINE_API ReflectionStreamFieldType : unsigned char {
+			Basic,
+			Pointer,
+			BasicTypeArray,
 			Stream,
 			CapacityStream,
 			ResizableStream,
@@ -112,13 +80,13 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API ReflectionFieldInfo {
 			ReflectionFieldInfo() {}
-			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionExtendedFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
+			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionStreamFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
 				: extended_type(_extended_type), basic_type(_basic_type), byte_size(_byte_size), basic_type_count(_basic_type_count) {}
 
 			ReflectionFieldInfo(const ReflectionFieldInfo& other) = default;
 			ReflectionFieldInfo& operator = (const ReflectionFieldInfo& other) = default;
 
-			ReflectionExtendedFieldType extended_type;
+			ReflectionStreamFieldType extended_type;
 			ReflectionBasicFieldType basic_type;
 			unsigned short basic_type_count;
 			unsigned short additional_flags;
@@ -185,9 +153,9 @@ namespace ECSEngine {
 			containers::CapacityStream<ReflectionType> types;
 			containers::CapacityStream<ReflectionEnum> enums;
 			const ReflectionFieldTable* field_table;
-			const char* error_message;
+			CapacityStream<char>* error_message;
+			SpinLock error_message_lock;
 			bool success;
-			unsigned int faulty_path;
 			size_t total_memory;
 			ConditionVariable* condition_variable;
 			void* allocated_buffer;
@@ -236,33 +204,30 @@ namespace ECSEngine {
 			void InitializeTypeTable(size_t count);
 			void InitializeEnumTable(size_t count);
 			// It will not set the paths that need to be searched; thread memory will be allocated from the heap, must be freed manually
-			void InitializeThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerThreadTaskData& data, const char*& error_message);
+			void InitializeThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerThreadTaskData& data, containers::CapacityStream<char>* error_message = nullptr);
 
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(const wchar_t* root, const char*& error_message, wchar_t* faulty_path = nullptr);
+			bool ProcessFolderHierarchy(const wchar_t* root, containers::CapacityStream<char>* faulty_path = nullptr);
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(const wchar_t* root, const char**& error_message, TaskManager* task_manager, wchar_t* faulty_path);
+			bool ProcessFolderHierarchy(const wchar_t* root, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
 
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(unsigned int index, const char*& error_message, wchar_t* faulty_path = nullptr);
+			bool ProcessFolderHierarchy(unsigned int index, containers::CapacityStream<char>* error_message = nullptr);
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(unsigned int index, const char**& error_message, TaskManager* task_manager, wchar_t* faulty_path = nullptr);
+			bool ProcessFolderHierarchy(unsigned int index, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
 
 			void RemoveFolderHierarchy(unsigned int index);
 			void RemoveFolderHierarchy(const wchar_t* root);
 
-			/*void SolveEnumReferences();
-			void SolveEnumReferences(unsigned int index);*/
-
-			// keeps reference intact, it is equal as removing all types from the respective folder hierarchy,
+			// keeps reference intact, it is the same as removing all types from the respective folder hierarchy,
 			// calling recreate on the folder hierarchy and then process it
-			bool UpdateFolderHierarchy(unsigned int index, const char*& error_message, wchar_t* faulty_path = nullptr);
+			bool UpdateFolderHierarchy(unsigned int index, containers::CapacityStream<char>* error_message = nullptr);
 			// keeps reference intact
-			bool UpdateFolderHierarchy(const wchar_t* root, const char*& error_message, wchar_t* faulty_path = nullptr);
+			bool UpdateFolderHierarchy(const wchar_t* root, containers::CapacityStream<char>* error_message = nullptr);
 
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
@@ -271,185 +236,158 @@ namespace ECSEngine {
 			//ReflectionBasicFieldTable basic_field_table;
 		};
 
-		size_t ECSENGINE_API PtrDifference(const void* ptr1, const void* ptr2);
+		ECSENGINE_API size_t PtrDifference(const void* ptr1, const void* ptr2);
 
-		void ECSENGINE_API ReflectionManagerThreadTask(unsigned int thread_id, World* world, void* data);
+		ECSENGINE_API void ReflectionManagerThreadTask(unsigned int thread_id, World* world, void* data);
 
-		void ECSENGINE_API AddEnumDefinition(
+		ECSENGINE_API void AddEnumDefinition(
 			ReflectionManagerThreadTaskData* data,
-			const char* ECS_RESTRICT opening_parenthese,
-			const char* ECS_RESTRICT closing_parenthese,
-			const char* ECS_RESTRICT name,
+			const char* opening_parenthese,
+			const char* closing_parenthese,
+			const char* name,
 			unsigned int index
 		);
 
-		void ECSENGINE_API AddTypeDefinition(
+		ECSENGINE_API void AddTypeDefinition(
 			ReflectionManagerThreadTaskData* data,
-			const char* ECS_RESTRICT opening_parenthese,
-			const char* ECS_RESTRICT closing_parenthese,
-			const char* ECS_RESTRICT name,
+			const char* opening_parenthese,
+			const char* closing_parenthese,
+			const char* name,
 			unsigned int index
 		);
 
 		// returns whether or not the field read succeded
-		bool ECSENGINE_API AddFieldType(
+		ECSENGINE_API bool AddFieldType(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT last_line_character,
-			const char* ECS_RESTRICT semicolon_character
+			const char* last_line_character,
+			const char* semicolon_character
 		);
 
-		bool ECSENGINE_API DeduceFieldType(
+		ECSENGINE_API bool DeduceFieldType(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT field_name,
-			const char* ECS_RESTRICT new_line_character,
-			const char* ECS_RESTRICT last_valid_character
+			const char* field_name,
+			const char* new_line_character,
+			const char* last_valid_character
 		);
 
 		// It returns false when there is no such definition, but returns true independently of success status,
 		// If error message is nullptr, then it means processing succeded, else failure
-		bool ECSENGINE_API CheckFieldExplicitDefinition(
+		ECSENGINE_API bool CheckFieldExplicitDefinition(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT new_line_character
+			const char* new_line_character
 		);
 
 		// It will check macro tokens in order to check if it is explicitely given the type
-		bool ECSENGINE_API DeduceFieldTypeFromMacros(
+		ECSENGINE_API bool DeduceFieldTypeFromMacros(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT field_name,
-			const char* ECS_RESTRICT new_line_character
+			const char* field_name,
+			const char* new_line_character
 		);
 
 		// Checks to see if it is a pointer type, not from macros
-		bool ECSENGINE_API DeduceFieldTypePointer(
+		ECSENGINE_API bool DeduceFieldTypePointer(
 			ReflectionManagerThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT field_name,
-			const char* ECS_RESTRICT new_line_character
+			const char* field_name,
+			const char* new_line_character
 		);
 
-		void ECSENGINE_API DeduceFieldTypeExtended(
+		ECSENGINE_API bool DeduceFieldTypeStream(
+			ReflectionManagerThreadTaskData* data,
+			ReflectionType& type,
+			unsigned short& pointer_offset,
+			const char* field_name,
+			const char* new_line_character
+		);
+
+		ECSENGINE_API void DeduceFieldTypeExtended(
 			ReflectionManagerThreadTaskData* data,
 			unsigned short& pointer_offset,
-			const char* ECS_RESTRICT last_type_character,
+			const char* last_type_character,
 			ReflectionField& info
 		);
 
-		void ECSENGINE_API GetReflectionFieldInfo(
+		ECSENGINE_API void GetReflectionFieldInfo(
 			ReflectionManagerThreadTaskData* data,
-			const char* extended_type,
+			const char* basic_type,
 			ReflectionField& info
 		);
 
-		bool ECSENGINE_API HasReflectStructures(const wchar_t* path);
+		ECSENGINE_API ReflectionField GetReflectionFieldInfo(const ReflectionFieldTable* reflection_field_table, const char* basic_type);
 
-		bool ECSENGINE_API IsIntegral(ReflectionBasicFieldType type);
+		ECSENGINE_API ReflectionField GetReflectionFieldInfo(const ReflectionManager* reflection, const char* basic_type);
 
-		bool ECSENGINE_API IsIntegral(ReflectionExtendedFieldType type);
+		ECSENGINE_API ReflectionField GetReflectionFieldInfoStream(const ReflectionManager* reflection, const char* basic_type, ReflectionStreamFieldType stream_type);
 
-		bool ECSENGINE_API IsIntegralArray(ReflectionExtendedFieldType type);
+		ECSENGINE_API bool HasReflectStructures(const wchar_t* path);
 
-		bool ECSENGINE_API IsIntegralBasicType(ReflectionExtendedFieldType type);
+		// Checks for single, double, triple and quadruple component integers
+		ECSENGINE_API bool IsIntegral(ReflectionBasicFieldType type);
 
-		inline bool IsBoolBasicType(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Bool2 || type == ReflectionExtendedFieldType::Bool3 || type == ReflectionExtendedFieldType::Bool4;
+		ECSENGINE_API bool IsIntegralSingleComponent(ReflectionBasicFieldType type);
+
+		ECSENGINE_API bool IsIntegralMultiComponent(ReflectionBasicFieldType type);
+
+		ECSENGINE_API unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type);
+
+		inline bool IsBoolBasicType(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Bool || type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 
+				|| type == ReflectionBasicFieldType::Bool4;
 		}
 
+		// Checks for float2, float3, float4
+		inline bool IsFloatBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Float2 || type == ReflectionBasicFieldType::Float3 || type == ReflectionBasicFieldType::Float4;
+		}
+
+		// Checks for float, float2, float3, float4
+		inline bool IsFloatBasicType(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Float || IsFloatBasicTypeMultiComponent(type);
+		}
+
+		// Checks for double2, double3, double4
+		inline bool IsDoubleBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Double4;
+		}
+
+		// Checks for double, double2, double3, double4
+		inline bool IsDoubleBasicType(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Double || IsDoubleBasicTypeMultiComponent(type);
+		}
+
+		// Checks for float, float2, float3, float4, double, double2, double3, double4
 		inline bool IsFloating(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Float || type == ReflectionBasicFieldType::Double;
-		}
-
-		inline bool IsFloating(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Float || type == ReflectionExtendedFieldType::Double;
-		}
-
-		inline bool IsFloatingArray(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::FloatArray || type == ReflectionExtendedFieldType::DoubleArray;
-		}
-
-		inline bool IsFloatBasicType(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Float2 || type == ReflectionExtendedFieldType::Float3 || type == ReflectionExtendedFieldType::Float4;
-		}
-
-		inline bool IsDoubleBasicType(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Double2 || type == ReflectionExtendedFieldType::Double3 || type == ReflectionExtendedFieldType::Double4;
+			return IsFloatBasicType(type) || IsDoubleBasicType(type);
 		}
 
 		inline bool IsUserDefined(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::UserDefined;
 		}
 
-		inline bool IsBool(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Bool;
-		}
-
-		inline bool IsBool(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Bool;
-		}
-
-		inline bool IsBoolArray(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::BoolArray;
-		}
-
-		inline bool IsPointer(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Pointer;
+		inline bool IsPointer(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::Pointer;
 		}
 
 		inline bool IsEnum(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Enum;
 		}
 
-		inline bool IsEnum(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Enum;
+		inline bool IsArray(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::BasicTypeArray;
 		}
 
-		inline bool IsEnumArray(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::EnumArray;
-		}
-
-		inline bool IsInt8(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Char || type == ReflectionExtendedFieldType::Int8;
-		}
-
-		inline bool IsUInt8(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::UChar || type == ReflectionExtendedFieldType::UInt8;
-		}
-
-		inline bool IsInt16(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Short || type == ReflectionExtendedFieldType::Int16;
-		}
-
-		inline bool isUInt16(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::UShort || type == ReflectionExtendedFieldType::UInt16;
-		}
-
-		inline bool IsInt32(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Int || type == ReflectionExtendedFieldType::Int32;
-		}
-
-		inline bool IsUInt32(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::UInt || type == ReflectionExtendedFieldType::UInt32;
-		}
-
-		inline bool IsInt64(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Long || type == ReflectionExtendedFieldType::Int64;
-		}
-
-		inline bool IsUInt64(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::ULong || type == ReflectionExtendedFieldType::UInt64 || type == ReflectionExtendedFieldType::SizeT;
-		}
-
-		inline bool IsStream(ReflectionExtendedFieldType type) {
-			return type == ReflectionExtendedFieldType::Stream || type == ReflectionExtendedFieldType::CapacityStream 
-				|| type == ReflectionExtendedFieldType::ResizableStream;
+		inline bool IsStream(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::Stream || type == ReflectionStreamFieldType::CapacityStream 
+				|| type == ReflectionStreamFieldType::ResizableStream;
 		}
 
 	}

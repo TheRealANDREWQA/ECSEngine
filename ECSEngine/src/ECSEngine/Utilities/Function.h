@@ -124,20 +124,22 @@ namespace ECSEngine {
 
 		inline void ConvertWideCharsToASCII(
 			CapacityStream<wchar_t> wide_chars,
-			CapacityStream<char> ascii_chars
+			CapacityStream<char>& ascii_chars
 		) {
 			size_t written_chars = 0;
 			errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
 			ECS_ASSERT(status == 0);
+			ascii_chars.size += written_chars - 1;
 		}
 
 		inline void ConvertWideCharsToASCII(
 			Stream<wchar_t> wide_chars,
-			CapacityStream<char> ascii_chars
+			CapacityStream<char>& ascii_chars
 		) {
 			size_t written_chars = 0;
 			errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
 			ECS_ASSERT(status == 0);
+			ascii_chars.size += written_chars - 1;
 		}
 
 		// it searches for spaces and next line characters
@@ -199,15 +201,15 @@ namespace ECSEngine {
 			}
 		}
 
-		constexpr inline bool HasFlag(size_t configuration, size_t flag) {
+		constexpr bool HasFlag(size_t configuration, size_t flag) {
 			return (configuration & flag) != 0;
 		}
 
-		constexpr inline size_t RemoveFlag(size_t configuration, size_t flag) {
+		constexpr size_t ClearFlag(size_t configuration, size_t flag) {
 			return configuration & (~flag);
 		}
 
-		constexpr inline size_t WriteFlag(size_t configuration, size_t flag) {
+		constexpr size_t SetFlag(size_t configuration, size_t flag) {
 			return configuration | flag;
 		}
 
@@ -268,6 +270,14 @@ namespace ECSEngine {
 		// If allocating a capacity stream alongside its data, this function sets it up
 		ECSENGINE_API void* CoallesceCapacityStreamWithData(void* allocation, size_t size, size_t capacity);
 
+		// Verifies if the characters form a valid floating point number: 
+		// consisting of at maximum a dot and only number characters and at max a minus or plus as the first character
+		ECSENGINE_API bool IsFloatingPointNumber(Stream<char> characters);
+
+		// Verifies if the characters form a valid number: 
+		// only number characters and at max a minus or plus as the first character
+		ECSENGINE_API bool IsIntegerNumber(Stream<char> characters);
+
 		inline bool IsNumberCharacter(char value) {
 			return value >= '0' && value <= '9';
 		}
@@ -301,6 +311,14 @@ namespace ECSEngine {
 			}
 			return pointer;
 		}
+
+		// Shifts the pointer 3 positions to the right in order to provide significant digits for hashing functions
+		// like power of two that use the lower bits in order to hash the element inside the table.
+		// It will clip to only 24 bits - 3 bytes - that's the precision the hash table work with
+		inline unsigned int PointerHash(void* ptr) {
+			return (unsigned int)(((uintptr_t)ptr >> 3) & 0x0000000000FFFFFF);
+		}
+
 	}
 
 }

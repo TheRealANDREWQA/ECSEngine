@@ -386,13 +386,12 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 		starting_path.buffer += project_file->path.size + 1;
 		starting_path.size -= project_file->path.size + 1;
 		function::ConvertWideCharsToASCII(starting_path, ascii_stream);
-		ascii_stream.size = starting_path.size;
 
 		data->drawer_hierarchy->active_label.Copy(ascii_stream);
 
 		ASCIIPath parent_path = function::PathParent(ascii_stream);
 		ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
-		unsigned int hash = HashFunctionAdditiveString::Hash(identifier);
+		unsigned int hash = UIDrawerLabelHierarchyHash::Hash(identifier);
 
 		UIDrawerLabelHierarchyLabelData* label_data;
 		if (data->drawer_hierarchy->label_states.TryGetValuePtr(hash, identifier, label_data)) {
