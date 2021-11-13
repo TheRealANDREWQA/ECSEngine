@@ -434,45 +434,65 @@ namespace ECSEngine {
 			int64_t window_count;
 		};
 
-		struct ECSENGINE_API UIDrawerFloatInputCallbackData {
+		struct ECSENGINE_API UIDrawerNumberInputCallbackData {
+			Action user_action;
+			void* user_action_data;
 			UIDrawerTextInput* input;
+			bool return_to_default;
+			bool display_range;
+		};
+
+		// input, return_to_default and display_range must be the first data members
+		// for type punning inside the number input initializer
+		struct ECSENGINE_API UIDrawerFloatInputCallbackData {
+			UIDrawerNumberInputCallbackData number_data;
 			float* number;
 			float default_value;
 			float min;
 			float max;
 		};
 
+		// input, return_to_default and display_range must be the first data members
+		// for type punning inside the number input initializer
 		struct ECSENGINE_API UIDrawerDoubleInputCallbackData {
-			UIDrawerTextInput* input;
+			UIDrawerNumberInputCallbackData number_data;
 			double* number;
 			double default_value;
 			double min;
 			double max;
 		};
 
+		// input, return_to_default and display_range must be the first data members
+		// for type punning inside the number input initializer
 		template<typename Integer>
 		struct UIDrawerIntegerInputCallbackData {
-			UIDrawerTextInput* input;
+			UIDrawerNumberInputCallbackData number_data;
 			Integer* number;
 			Integer default_value;
 			Integer min;
 			Integer max;
 		};
 
+		// Type pun the types - all have UITextTooltipHoverableData as first field
+		// and second field a pointer to the input callback data
 		struct ECSENGINE_API UIDrawerFloatInputHoverableData {
 			UITextTooltipHoverableData tool_tip;
-			UIDrawerFloatInputCallbackData data;
+			UIDrawerFloatInputCallbackData* data;
 		};
 
+		// Type pun the types - all have UITextTooltipHoverableData as first field
+		// and second field a pointer to the input callback data
 		struct ECSENGINE_API UIDrawerDoubleInputHoverableData {
 			UITextTooltipHoverableData tool_tip;
-			UIDrawerDoubleInputCallbackData data;
+			UIDrawerDoubleInputCallbackData* data;
 		};
 
+		// Type pun the types - all have UITextTooltipHoverableData as first field
+		// and second field a pointer to the input callback data
 		template<typename Integer>
 		struct UIDrawerIntInputHoverableData {
 			UITextTooltipHoverableData tool_tip;
-			UIDrawerIntegerInputCallbackData<Integer> data;
+			UIDrawerIntegerInputCallbackData<Integer>* data;
 		};
 
 		using UIDrawerFloatInputDragData = UIDrawerFloatInputCallbackData;
@@ -481,8 +501,8 @@ namespace ECSEngine {
 
 		template<typename Integer>
 		struct UIDrawerIntInputDragData {
-			float last_position;
 			UIDrawerIntegerInputCallbackData<Integer> data;
+			float last_position;
 		};
 
 		struct ECSENGINE_API UIChangeStateData {
@@ -511,6 +531,19 @@ namespace ECSEngine {
 			UIDrawerArrayData* array_data;
 			float row_y_scale;
 			unsigned int index;
+		};
+
+		struct ECSENGINE_API UIDrawerColorFloatInput {
+			UIDrawerColorInput* color_input;
+			ColorFloat* color_float;
+			Color base_color;
+			float intensity;
+		};
+
+		struct ECSENGINE_API UIDrawerColorFloatInputCallbackData {
+			UIDrawerColorFloatInput* input;
+			Action callback;
+			void* callback_data;
 		};
 
 	}

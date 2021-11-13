@@ -1262,7 +1262,7 @@ namespace ECSEngine {
 				UIDrawerSlider* info
 			) {
 				UIDrawPhase phase = HandlePhase<configuration>();
-				if constexpr (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
+				if constexpr (~configuration & UI_CONFIG_SLIDER_NO_DEFAULT_VALUE) {
 					AddHoverable(position, scale, { SliderReturnToDefault, info, 0, phase });
 				}
 				if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
@@ -1288,7 +1288,7 @@ namespace ECSEngine {
 				else {
 					if (info->text_input_counter == 0) {
 						AddClickable(position, scale, { SliderMouseDraggable, &info, 8, phase });
-						if constexpr (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
+						if constexpr (~configuration & UI_CONFIG_SLIDER_NO_DEFAULT_VALUE) {
 							UIDrawerSliderReturnToDefaultMouseDraggable data;
 							data.slider = info;
 							data.hoverable_data.colors[0] = color;
@@ -1300,7 +1300,7 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						if constexpr (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
+						if constexpr (~configuration & UI_CONFIG_SLIDER_NO_DEFAULT_VALUE) {
 							AddHoverable(position, scale, { SliderReturnToDefault, info, 0, phase });
 						}
 					}
@@ -2043,7 +2043,7 @@ namespace ECSEngine {
 			void TextInputDrawer(const UIDrawConfig& config, UIDrawerTextInput* input, float2 position, float2 scale) {
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
 					ElementName<configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW>(config, &input->name, position, scale);
-					HandleTransformFlags<configuration>(config, position, scale);
+					position.x = current_x - region_render_offset.x;
 				}
 
 				if constexpr (configuration & UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER) {
@@ -2371,8 +2371,7 @@ namespace ECSEngine {
 				float2 scale, 
 				Value value_to_modify, 
 				Value lower_bound, 
-				Value upper_bound,
-				Value default_value
+				Value upper_bound
 			) {
 				UIDrawerSlider* slider;
 
@@ -2380,135 +2379,134 @@ namespace ECSEngine {
 				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
 					BeginElement();
 				}
-				AddWindowResource(
-					name, [&](const char* identifier) {
-						Color font_color;
-						float character_spacing;
-						float2 font_size;
-						UIConfigTextParameters previous_parameters;
+				AddWindowResource(name, [&](const char* identifier) {
+					Color font_color;
+					float character_spacing;
+					float2 font_size;
+					UIConfigTextParameters previous_parameters;
 
-						float slider_padding, slider_length;
-						float2 slider_shrink;
-						Color slider_color;
-						// color here is useless
-						HandleSliderVariables<configuration>(config, slider_length, slider_padding, slider_shrink, slider_color, ECS_COLOR_WHITE);
+					float slider_padding, slider_length;
+					float2 slider_shrink;
+					Color slider_color;
+					// color here is useless
+					HandleSliderVariables<configuration>(config, slider_length, slider_padding, slider_shrink, slider_color, ECS_COLOR_WHITE);
 
-						HandleText<configuration>(config, font_color, font_size, character_spacing);
+					HandleText<configuration>(config, font_color, font_size, character_spacing);
 
-						float sprite_y_scale = system->GetTextSpriteYScale(font_size.y);
+					float sprite_y_scale = system->GetTextSpriteYScale(font_size.y);
 
-						slider = GetMainAllocatorBuffer<UIDrawerSlider>();
+					slider = GetMainAllocatorBuffer<UIDrawerSlider>();
 
-						float alignment;
-						if constexpr (~configuration & UI_CONFIG_SLIDER_NO_NAME) {
-							if constexpr (~configuration & UI_CONFIG_VERTICAL) {
-								alignment = AlignMiddle(position.y, scale.y, sprite_y_scale);
-								ConvertTextToWindowResource<configuration>(config, identifier, &slider->label, { position.x + scale.x + slider_padding + slider_length, alignment });
-							}
-							else {
-								ConvertTextToWindowResource<configuration>(config, identifier, &slider->label, { position.x, position.y + scale.y + slider_padding + slider_length });
-								alignment = AlignMiddle(position.x, scale.x, slider->TextScale()->x);
-								if (*slider->TextSize() > 0) {
-									TranslateText(alignment, position.y + scale.y + slider_padding + slider_length, *slider->TextStream());
-								}
-							}
-						}
-
-						slider->initial_scale = scale;
-						slider->current_scale = scale;
-						slider->current_position = position;
-						slider->changed_value = false;
-						slider->character_value = false;
-						slider->interpolate_value = false;
-
-						if constexpr (configuration & UI_CONFIG_VERTICAL) {
-							slider->is_vertical = true;
+					float alignment;
+					if constexpr (~configuration & UI_CONFIG_SLIDER_NO_NAME) {
+						if constexpr (~configuration & UI_CONFIG_VERTICAL) {
+							alignment = AlignMiddle(position.y, scale.y, sprite_y_scale);
+							ConvertTextToWindowResource<configuration>(config, identifier, &slider->label, { position.x + scale.x + slider_padding + slider_length, alignment });
 						}
 						else {
-							slider->is_vertical = false;
-						}
-
-						void* character_allocation = GetMainAllocatorBuffer(sizeof(char) * 32, 1);
-						slider->characters.buffer = (char*)character_allocation;
-						slider->characters.size = 0;
-						slider->characters.capacity = 32;
-
-						if (*value_to_modify.Pointer() < lower_bound.Value() && *value_to_modify.Pointer() > upper_bound.Value()) {
-							slider->slider_position = 0.5f;
-							*value_to_modify.Pointer() = Value::Interpolate(lower_bound, upper_bound, 0.5f);
-						}
-						else {
-							slider->slider_position = Value::Percentage(lower_bound, upper_bound, value_to_modify);
-						}
-
-						slider->text_input_counter = 0;
-						slider->value_to_change = value_to_modify.Pointer();
-
-						if constexpr (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
-							const UIConfigSliderChangedValueCallback* callback = (const UIConfigSliderChangedValueCallback*)config.GetParameter(UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
-							slider->changed_value_callback = callback->handler;
-						}
-						else {
-							slider->changed_value_callback = { nullptr, nullptr, 0 };
-						}
-
-						if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
-							size_t name_size = strlen(identifier);
-
-							UIActionHandler previous_callback;
-							UIConfigTextInputCallback input_callback;
-							input_callback.handler = slider->changed_value_callback;
-							if constexpr (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
-								config.SetExistingFlag(input_callback, UI_CONFIG_TEXT_INPUT_CALLBACK, previous_callback);
+							ConvertTextToWindowResource<configuration>(config, identifier, &slider->label, { position.x, position.y + scale.y + slider_padding + slider_length });
+							alignment = AlignMiddle(position.x, scale.x, slider->TextScale()->x);
+							if (*slider->TextSize() > 0) {
+								TranslateText(alignment, position.y + scale.y + slider_padding + slider_length, *slider->TextStream());
 							}
-							else {
-								config.AddFlag(input_callback);
-							}
-
-							// TextInput - 9 chars
-							char stack_memory[256];
-							memcpy(stack_memory, identifier, name_size);
-							stack_memory[name_size] = '\0';
-							strcat(stack_memory, "TextInput");
-							stack_memory[name_size + 9] = '\0';
-
-							if constexpr (~configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
-								slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
-									config, 
-									stack_memory, 
-									&slider->characters,
-									position,
-									scale
-								);
-							}
-							else {
-								slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
-									| UI_CONFIG_TEXT_INPUT_CALLBACK>(config, stack_memory, &slider->characters, position, scale);
-							}
-
-							RemoveConfigParameter<configuration, UI_CONFIG_TEXT_INPUT_CALLBACK>(config, previous_callback);
 						}
-
-						slider->value_byte_size = Value::ByteSize();
-						if constexpr (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
-							void* allocation = GetMainAllocatorBuffer(slider->value_byte_size);
-							auto def_value = default_value.Value();
-							memcpy(allocation, &def_value, slider->value_byte_size);
-							slider->default_value = allocation;
-						}
-
-						if constexpr (configuration & UI_CONFIG_VERTICAL) {
-							slider->total_length_main_axis = scale.y + slider->TextScale()->y + slider_length + slider_padding;
-							FinalizeRectangle<configuration>(position, { scale.x, slider->total_length_main_axis });
-						}
-						else {
-							slider->total_length_main_axis = scale.x + slider->TextScale()->x + slider_length + slider_padding;
-							FinalizeRectangle<configuration>(position, { slider->total_length_main_axis, scale.y });
-						}
-
-
-						return slider;
 					}
+
+					slider->initial_scale = scale;
+					slider->current_scale = scale;
+					slider->current_position = position;
+					slider->changed_value = false;
+					slider->character_value = false;
+					slider->interpolate_value = false;
+
+					if constexpr (configuration & UI_CONFIG_VERTICAL) {
+						slider->is_vertical = true;
+					}
+					else {
+						slider->is_vertical = false;
+					}
+
+					void* character_allocation = GetMainAllocatorBuffer(sizeof(char) * 32, 1);
+					slider->characters.buffer = (char*)character_allocation;
+					slider->characters.size = 0;
+					slider->characters.capacity = 32;
+
+					if (*value_to_modify.Pointer() < lower_bound.Value() && *value_to_modify.Pointer() > upper_bound.Value()) {
+						slider->slider_position = 0.5f;
+						*value_to_modify.Pointer() = Value::Interpolate(lower_bound, upper_bound, 0.5f);
+					}
+					else {
+						slider->slider_position = Value::Percentage(lower_bound, upper_bound, value_to_modify);
+					}
+
+					slider->text_input_counter = 0;
+					slider->value_to_change = value_to_modify.Pointer();
+
+					if constexpr (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
+						const UIConfigSliderChangedValueCallback* callback = (const UIConfigSliderChangedValueCallback*)config.GetParameter(UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
+						slider->changed_value_callback = callback->handler;
+					}
+					else {
+						slider->changed_value_callback = { nullptr, nullptr, 0 };
+					}
+
+					if constexpr (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
+						size_t name_size = strlen(identifier);
+
+						UIActionHandler previous_callback;
+						UIConfigTextInputCallback input_callback;
+						input_callback.handler = slider->changed_value_callback;
+						if constexpr (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+							config.SetExistingFlag(input_callback, UI_CONFIG_TEXT_INPUT_CALLBACK, previous_callback);
+						}
+						else {
+							config.AddFlag(input_callback);
+						}
+
+						// TextInput - 9 chars
+						char stack_memory[256];
+						memcpy(stack_memory, identifier, name_size);
+						stack_memory[name_size] = '\0';
+						strcat(stack_memory, "TextInput");
+						stack_memory[name_size + 9] = '\0';
+
+						if constexpr (~configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
+							slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
+								config, 
+								stack_memory, 
+								&slider->characters,
+								position,
+								scale
+							);
+						}
+						else {
+							slider->text_input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+								| UI_CONFIG_TEXT_INPUT_CALLBACK>(config, stack_memory, &slider->characters, position, scale);
+						}
+
+						RemoveConfigParameter<configuration, UI_CONFIG_TEXT_INPUT_CALLBACK>(config, previous_callback);
+					}
+
+					slider->value_byte_size = Value::ByteSize();
+					if constexpr (~configuration & UI_CONFIG_SLIDER_NO_DEFAULT_VALUE) {
+						void* allocation = GetMainAllocatorBuffer(slider->value_byte_size);
+						auto def_value = *value_to_modify.Pointer();
+						memcpy(allocation, &def_value, slider->value_byte_size);
+						slider->default_value = allocation;
+					}
+
+					if constexpr (configuration & UI_CONFIG_VERTICAL) {
+						slider->total_length_main_axis = scale.y + slider->TextScale()->y + slider_length + slider_padding;
+						FinalizeRectangle<configuration>(position, { scale.x, slider->total_length_main_axis });
+					}
+					else {
+						slider->total_length_main_axis = scale.x + slider->TextScale()->x + slider_length + slider_padding;
+						FinalizeRectangle<configuration>(position, { slider->total_length_main_axis, scale.y });
+					}
+
+
+					return slider;
+				}
 				);
 				return slider;
 			}
@@ -2523,8 +2521,7 @@ namespace ECSEngine {
 				float2 scale,
 				Value value_to_modify, 
 				Value lower_bound,
-				Value upper_bound,
-				Value default_value
+				Value upper_bound
 			) {
 				bool is_null_window_dependent_size = false;
 
@@ -2774,7 +2771,6 @@ namespace ECSEngine {
 				Value* ECS_RESTRICT values_to_modify,
 				const Value* ECS_RESTRICT lower_bounds,
 				const Value* ECS_RESTRICT upper_bounds,
-				const Value* ECS_RESTRICT default_values,
 				float2 position,
 				float2 scale
 			) {
@@ -2790,12 +2786,10 @@ namespace ECSEngine {
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
-					UIDrawerSlider* slider;
-					const char* identifier = HandleResourceIdentifier(names[index]);
-					slider = (UIDrawerSlider*)GetResource(identifier);
+					UIDrawerSlider* slider = (UIDrawerSlider*)GetResource(names[index]);
 					
 					HandleTransformFlags<configuration>(config, position, scale);
-					Value lower_bound, upper_bound, default_value;
+					Value lower_bound, upper_bound;
 					if constexpr (configuration & UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -2803,13 +2797,6 @@ namespace ECSEngine {
 					else {
 						lower_bound = lower_bounds[index];
 						upper_bound = upper_bounds[index];
-					}
-					
-					if constexpr (configuration & UI_CONFIG_SLIDER_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						default_value = default_values[index];
 					}
 
 					if constexpr (~configuration & UI_CONFIG_SLIDER_GROUP_NO_SUBNAMES) {
@@ -2820,8 +2807,7 @@ namespace ECSEngine {
 							scale,
 							values_to_modify[index],
 							lower_bound,
-							upper_bound,
-							default_value
+							upper_bound
 							);
 					}
 					else {
@@ -2832,8 +2818,7 @@ namespace ECSEngine {
 							scale,
 							values_to_modify[index],
 							lower_bound,
-							upper_bound,
-							default_value
+							upper_bound
 						);
 					}
 				}
@@ -2859,7 +2844,6 @@ namespace ECSEngine {
 				Value* ECS_RESTRICT values_to_modify,
 				const Value* ECS_RESTRICT lower_bounds,
 				const Value* ECS_RESTRICT upper_bounds,
-				const Value* ECS_RESTRICT default_values,
 				float2 position,
 				float2 scale
 			) {
@@ -2888,13 +2872,6 @@ namespace ECSEngine {
 						upper_bound = upper_bounds[index];
 					}
 
-					if constexpr (configuration & UI_CONFIG_SLIDER_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						default_value = default_values[index];
-					}
-
 					if constexpr (~configuration & UI_CONFIG_SLIDER_GROUP_NO_SUBNAMES) {
 						SliderInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN, Value>(
 							config,
@@ -2903,8 +2880,7 @@ namespace ECSEngine {
 							scale,
 							values_to_modify[index],
 							lower_bound,
-							upper_bound,
-							default_value
+							upper_bound
 							);
 					}
 					else {
@@ -2915,8 +2891,7 @@ namespace ECSEngine {
 							scale,
 							values_to_modify[index],
 							lower_bound,
-							upper_bound,
-							default_value
+							upper_bound
 						);
 					}
 				}
@@ -2940,15 +2915,13 @@ namespace ECSEngine {
 				float2 scale,
 				Integer* value_to_modify,
 				Integer lower_bound,
-				Integer upper_bound,
-				Integer default_value = Integer(0)
+				Integer upper_bound
 			) {
-				SliderInteger<Integer> _value_to_modify, _lower_bound, _upper_bound, _default_value;
+				SliderInteger<Integer> _value_to_modify, _lower_bound, _upper_bound;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
-				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -2961,15 +2934,13 @@ namespace ECSEngine {
 				float2 scale,
 				Integer* value_to_modify, 
 				Integer lower_bound, 
-				Integer upper_bound,
-				Integer default_value = Integer(0)
+				Integer upper_bound
 			) {
-				SliderInteger<Integer> _value_to_modify, _lower_bound, _upper_bound, _default_value;
+				SliderInteger<Integer> _value_to_modify, _lower_bound, _upper_bound;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
-				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -2983,19 +2954,16 @@ namespace ECSEngine {
 				float* value_to_modify,
 				float lower_bound,
 				float upper_bound,
-				unsigned int precision = 2,
-				float default_value = 0.0f
+				unsigned int precision = 2
 			) {
-				SliderFloat _value_to_modify, _lower_bound, _upper_bound, _default_value;
+				SliderFloat _value_to_modify, _lower_bound, _upper_bound;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
 				_value_to_modify.ConstructExtraData(&precision);
 				_lower_bound.ConstructExtraData(&precision);
 				_upper_bound.ConstructExtraData(&precision);
-				_default_value.ConstructExtraData(&precision);
-				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				return SliderInitializer<configuration>(config, name, position, scale, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3009,19 +2977,16 @@ namespace ECSEngine {
 				float* value_to_modify,
 				float lower_bound,
 				float upper_bound,
-				unsigned int precision = 2,
-				float default_value = 0.0f
+				unsigned int precision = 2
 			) {
 				SliderFloat _value_to_modify, _lower_bound, _upper_bound, _default_value;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
 				_value_to_modify.ConstructExtraData(&precision);
 				_lower_bound.ConstructExtraData(&precision);
 				_upper_bound.ConstructExtraData(&precision);
-				_default_value.ConstructExtraData(&precision);
-				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				SliderDrawer<configuration>(config, slider, position, scale, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3415,7 +3380,6 @@ namespace ECSEngine {
 				UIDrawConfig& config, 
 				const char* name, 
 				Color* color,
-				Color default_color,
 				float2 position,
 				float2 scale
 			) {
@@ -3432,7 +3396,7 @@ namespace ECSEngine {
 					InitializeElementName<configuration, UI_CONFIG_COLOR_INPUT_NO_NAME>(config, identifier, &data->name, position);
 					data->hsv = RGBToHSV(*color);
 					data->rgb = color;
-					data->default_color = default_color;
+					data->default_color = *color;
 
 					unsigned int name_size = strlen(name);
 					constexpr auto slider_lambda = [&]() {
@@ -3701,11 +3665,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
-			void ColorInputDrawer(UIDrawConfig& config, UIDrawerColorInput* data, float2 position, float2 scale, Color* color, Color default_color) {
-				if constexpr (configuration & UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE) {
-					data->default_color = default_color;
-				}
-				
+			void ColorInputDrawer(UIDrawConfig& config, UIDrawerColorInput* data, float2 position, float2 scale, Color* color) {
 				Color initial_frame_color = *color;
 
 #define LABEL_CONFIGURATION UI_CONFIG_TEXT_PARAMETERS | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT \
@@ -4009,7 +3969,7 @@ namespace ECSEngine {
 					if constexpr (~configuration & UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR) {
 						AddDefaultClickable(position, GetSquareScale(scale.y), { SkipAction, nullptr, 0 }, { ColorInputCreateWindow, data, 0, UIDrawPhase::System });
 					}
-					if constexpr (configuration & UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE) {
+					if constexpr (~configuration & UI_CONFIG_COLOR_INPUT_NO_DEFAULT_VALUE) {
 						AddHoverable(position, GetSquareScale(scale.y), { ColorInputDefaultColor, data, 0 });
 					}
 				}
@@ -4355,6 +4315,10 @@ namespace ECSEngine {
 				InitialValueInitializer&& initial_value_init,
 				CallbackHover&& callback_hover
 			) {
+				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_DO_NOT_REDUCE_SCALE) {
+					scale.x *= 0.75f;
+				}
+
 				// Begin recording allocations and table resources for dynamic resources
 				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
 					BeginElement();
@@ -4370,10 +4334,37 @@ namespace ECSEngine {
 				stream->InitializeFromBuffer(GetMainAllocatorBuffer(sizeof(char) * 64, alignof(char)), 0, 63);
 				initial_value_init(stream);
 
-				// implement callback
-				UIConfigTextInputCallback callback;
-				callback.handler = { callback_action, callback_data, static_cast<unsigned int>(callback_data_size) };
-				config.AddFlag(callback);
+				// implement callback - if it already has one, catch it and wrapp it
+				if constexpr (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+					UIConfigTextInputCallback* user_callback = (UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
+					// Coallesce the allocation
+					void* allocation = GetMainAllocatorBuffer(callback_data_size + user_callback->handler.data_size);
+					memcpy(allocation, callback_data, callback_data_size);
+					UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)allocation;
+					base_data->user_action = user_callback->handler.action;
+					
+					if (user_callback->handler.data_size > 0) {
+						void* user_data = function::OffsetPointer(base_data, sizeof(*base_data));
+						memcpy(user_data, user_callback->handler.data, user_callback->handler.data_size);
+						base_data->user_action_data = user_data;
+					}
+					else {
+						base_data->user_action_data = user_callback->handler.data;
+					}
+
+					user_callback->handler.action = callback_action;
+					user_callback->handler.data = allocation;
+					user_callback->handler.data_size = 0;
+				}
+				else {
+					UIConfigTextInputCallback callback;
+					callback.handler = { callback_action, callback_data, static_cast<unsigned int>(callback_data_size) };
+					// Nullify the user action and data callbacks
+					UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)callback_data;
+					base_data->user_action = nullptr;
+					base_data->user_action_data = nullptr;
+					config.AddFlag(callback);
+				}
 				UIDrawerTextInput* input = TextInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 					config,
 					name, 
@@ -4381,9 +4372,21 @@ namespace ECSEngine {
 					position, 
 					scale
 				);
-				UIDrawerFloatInputCallbackData* callback_input_ptr = (UIDrawerFloatInputCallbackData*)input->callback_data;
+				// Type pun all types - they all have as the third data member the text input followed by the bool to indicate
+				// whether or not return to default is allowed
+				UIDrawerNumberInputCallbackData* callback_input_ptr = (UIDrawerNumberInputCallbackData*)input->callback_data;
 				callback_input_ptr->input = input;
-				config.flag_count--;
+				callback_input_ptr->return_to_default = true;
+				callback_input_ptr->display_range = true;
+				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_NO_DEFAULT) {
+					callback_input_ptr->return_to_default = false;
+				}
+				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
+					callback_input_ptr->display_range = false;
+				}
+				if constexpr (~configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+					config.flag_count--;
+				}
 
 				full_name[identifier_size] = '\0';
 				strcat(full_name, "tool tip");
@@ -4404,8 +4407,6 @@ namespace ECSEngine {
 				const UIDrawConfig& config, 
 				const char* name, 
 				Action hoverable_action,
-				void* hoverable_data,
-				unsigned int hoverable_data_size,
 				Action wrapper_hoverable_action,
 				Action draggable_action,
 				void* draggable_data,
@@ -4414,6 +4415,10 @@ namespace ECSEngine {
 				float2 scale, 
 				Lambda&& lambda
 			) {
+				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_DO_NOT_REDUCE_SCALE) {
+					scale.x *= 0.75f;
+				}
+
 				constexpr float DRAG_X_THRESHOLD = 0.0175f;
 				UIDrawerTextInput* input = (UIDrawerTextInput*)GetResource(name);
 
@@ -4468,27 +4473,30 @@ namespace ECSEngine {
 							text_position.x -= adjust_position * 0.5f;
 						}
 
-						if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
-							if constexpr (configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
-								text_position = position;
-								text_span = scale;
-								hoverable_action = wrapper_hoverable_action;
-							}
-
-							UITextTooltipHoverableData* tool_tip_data_ptr = (UITextTooltipHoverableData*)hoverable_data;
-							tool_tip_data_ptr->characters = tool_tip_characters;
-							tool_tip_data_ptr->base.offset.y = 0.007f;
-							tool_tip_data_ptr->base.offset_scale.y = true;
-							tool_tip_data_ptr->base.next_row_offset = 0.006f;
-							uintptr_t tool_tip_reinterpretation = (uintptr_t)tool_tip_data_ptr;
-							tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);
-							UIDrawerFloatInputCallbackData* temp_reinterpretation = (UIDrawerFloatInputCallbackData*)tool_tip_reinterpretation;
-							temp_reinterpretation->input = input;
-
-							AddHoverable(text_position, text_span, { hoverable_action, hoverable_data, hoverable_data_size, UIDrawPhase::System });
+						if constexpr (configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
+							text_position = position;
+							text_span = scale;
+							hoverable_action = wrapper_hoverable_action;
 						}
 
+						// Type pun the types - all have UITextTooltipHoverableData as first field
+						// and second field a pointer to the input callback data
+						UIDrawerFloatInputHoverableData hoverable_data;
+
+						hoverable_data.tool_tip.characters = tool_tip_characters;
+						hoverable_data.tool_tip.base.offset.y = 0.007f;
+						hoverable_data.tool_tip.base.offset_scale.y = true;
+						hoverable_data.tool_tip.base.next_row_offset = 0.006f;
+						uintptr_t tool_tip_reinterpretation = (uintptr_t)&hoverable_data;
+						tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);
+						void** temp_reinterpretation = (void**)tool_tip_reinterpretation;
+						*temp_reinterpretation = input->callback_data;
+
+						AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), UIDrawPhase::System });
+
 						if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
+							UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
+							base_data->input = input;
 							AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
 						}
 					}
@@ -4508,7 +4516,8 @@ namespace ECSEngine {
 					callback_data.max = FLT_MAX;
 					callback_data.min = -FLT_MAX;
 				}
-				callback_data.number = number;			
+				callback_data.number = number;		
+				callback_data.default_value = *number;
 
 				return NumberInputInitializer<configuration>(
 					config,
@@ -4544,6 +4553,7 @@ namespace ECSEngine {
 					callback_data.min = -DBL_MAX;
 				}
 				callback_data.number = number;
+				callback_data.default_value = *number;
 
 				return NumberInputInitializer<configuration>(
 					config,
@@ -4569,7 +4579,7 @@ namespace ECSEngine {
 
 			template<size_t configuration, typename Integer>
 			UIDrawerTextInput* IntInputInitializer(UIDrawConfig& config, const char* name, Integer* number, Integer min, Integer max, float2 position, float2 scale) {
-				UIDrawerIntegerInputCallbackData< Integer> callback_data;
+				UIDrawerIntegerInputCallbackData<Integer> callback_data;
 				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
 					callback_data.max = max;
 					callback_data.min = min;
@@ -4578,6 +4588,7 @@ namespace ECSEngine {
 					function::IntegerRange(callback_data.min, callback_data.max);
 				}
 				callback_data.number = number;
+				callback_data.default_value = *number;
 
 				return NumberInputInitializer<configuration>(
 					config,
@@ -4602,17 +4613,9 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
-			void FloatInputDrawer(const UIDrawConfig& config, const char* name, float* number, float default_value, float min, float max, float2 position, float2 scale) {
+			void FloatInputDrawer(const UIDrawConfig& config, const char* name, float* number, float min, float max, float2 position, float2 scale) {
 				const float EPSILON = 0.0005f;
 				
-				UIDrawerFloatInputHoverableData hover_data;
-				hover_data.data.default_value = default_value;
-				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
-					hover_data.data.default_value = default_value;
-				}
-				else {
-					hover_data.data.default_value = *number;
-				}
 				UIDrawerFloatInputDragData drag_data;
 				drag_data.number = number;
 				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
@@ -4624,8 +4627,8 @@ namespace ECSEngine {
 					drag_data.max = FLT_MAX;
 				}
 
-				NumberInputDrawer<configuration>(config, name, FloatInputHoverable, &hover_data, sizeof(hover_data), FloatInputNoNameHoverable,
-					FloatInputDragValue, &drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
+				NumberInputDrawer<configuration>(config, name, FloatInputHoverable, FloatInputNoNameHoverable, FloatInputDragValue, 
+					&drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
 					char temp_chars[256];
 					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 					UIDrawerFloatInputCallbackData* data = (UIDrawerFloatInputCallbackData*)input->callback_data;
@@ -4674,17 +4677,9 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration>
-			void DoubleInputDrawer(const UIDrawConfig& config, const char* name, double* number, double default_value, double min, double max, float2 position, float2 scale) {
+			void DoubleInputDrawer(const UIDrawConfig& config, const char* name, double* number, double min, double max, float2 position, float2 scale) {
 				const double EPSILON = 0.0005;
-				
-				UIDrawerDoubleInputHoverableData hover_data;
-				hover_data.data.default_value = default_value;
-				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
-					hover_data.data.default_value = default_value;
-				}
-				else {
-					hover_data.data.default_value = *number;
-				}
+
 				UIDrawerDoubleInputDragData drag_data;
 				drag_data.number = number;
 				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
@@ -4696,9 +4691,8 @@ namespace ECSEngine {
 					drag_data.max = DBL_MAX;
 				}
 
-				NumberInputDrawer<configuration>(config, name, DoubleInputHoverable, &hover_data, sizeof(hover_data), DoubleInputNoNameHoverable,
-					DoubleInputDragValue, &drag_data, sizeof(drag_data), position,
-					scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
+				NumberInputDrawer<configuration>(config, name, DoubleInputHoverable, DoubleInputNoNameHoverable, DoubleInputDragValue,
+					&drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
 					char temp_chars[256];
 					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 					UIDrawerDoubleInputCallbackData* data = (UIDrawerDoubleInputCallbackData*)input->callback_data;
@@ -4746,16 +4740,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<size_t configuration, typename Integer>
-			void IntInputDrawer(const UIDrawConfig& config, const char* name, Integer* number, Integer default_value, Integer min, Integer max, float2 position, float2 scale) {
-				UIDrawerIntInputHoverableData<Integer> hover_data;
-				hover_data.data.number = number;
-				if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_DEFAULT) {
-					hover_data.data.default_value = default_value;
-				}
-				else {
-					hover_data.data.default_value = *number;
-				}
-
+			void IntInputDrawer(const UIDrawConfig& config, const char* name, Integer* number, Integer min, Integer max, float2 position, float2 scale) {
 				UIDrawerIntInputDragData<Integer> drag_data;
 				drag_data.data.number = number;
 				if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_NO_RANGE) {
@@ -4765,12 +4750,9 @@ namespace ECSEngine {
 				else {
 					function::IntegerRange(drag_data.data.min, drag_data.data.max);
 				}
-				hover_data.data.min = drag_data.data.min;
-				hover_data.data.max = drag_data.data.max;
 
-				NumberInputDrawer<configuration>(config, name, IntInputHoverable<Integer>, &hover_data, sizeof(hover_data), IntInputNoNameHoverable<Integer>,
-					IntegerInputDragValue<Integer>, &drag_data, sizeof(drag_data),
-					position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
+				NumberInputDrawer<configuration>(config, name, IntInputHoverable<Integer>, IntInputNoNameHoverable<Integer>, IntegerInputDragValue<Integer>, 
+					&drag_data, sizeof(drag_data), position, scale, [=](UIDrawerTextInput* input, Stream<char> tool_tip_characters) {
 					char temp_chars[256];
 					Stream<char> temp_stream = Stream<char>(temp_chars, 0);
 					UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)input->callback_data;
@@ -4818,7 +4800,6 @@ namespace ECSEngine {
 				size_t count,
 				const char** ECS_RESTRICT names,
 				float** ECS_RESTRICT values,
-				const float* ECS_RESTRICT default_values,
 				const float* ECS_RESTRICT lower_bounds,
 				const float* ECS_RESTRICT upper_bounds,
 				float2 position,
@@ -4850,21 +4831,11 @@ namespace ECSEngine {
 						}
 					}
 
-					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						if (default_values != nullptr) {
-							default_value = default_values[index];
-						}
-					}
-
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
 						FloatInputDrawer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST>(
 							config,
 							names[index],
 							values[index],
-							default_value,
 							lower_bound,
 							upper_bound,
 							position,
@@ -4876,7 +4847,6 @@ namespace ECSEngine {
 							config,
 							names[index],
 							values[index],
-							default_value,
 							lower_bound,
 							upper_bound,
 							position,
@@ -4904,7 +4874,6 @@ namespace ECSEngine {
 				size_t count,
 				const char** ECS_RESTRICT names,
 				float** ECS_RESTRICT values,
-				const float* ECS_RESTRICT default_values,
 				const float* ECS_RESTRICT lower_bounds,
 				const float* ECS_RESTRICT upper_bounds,
 				float2 position,
@@ -4943,15 +4912,6 @@ namespace ECSEngine {
 						}
 					}
 
-					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						if (default_values != nullptr) {
-							default_value = default_values[index];
-						}
-					}
-
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
 						FloatInputInitializer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 							config,
@@ -4964,7 +4924,6 @@ namespace ECSEngine {
 						);
 					}
 					else {
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
 						FloatInputInitializer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
 							config,
 							names[index],
@@ -4996,7 +4955,6 @@ namespace ECSEngine {
 				size_t count,
 				const char** ECS_RESTRICT names,
 				double** ECS_RESTRICT values,
-				const double* ECS_RESTRICT default_values,
 				const double* ECS_RESTRICT lower_bounds,
 				const double* ECS_RESTRICT upper_bounds,
 				float2 position,
@@ -5004,6 +4962,7 @@ namespace ECSEngine {
 			) {
 #define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW
 #define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y
+				
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 					Indent(-1.0f);
@@ -5028,21 +4987,11 @@ namespace ECSEngine {
 						}
 					}
 
-					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						if (default_values != nullptr) {
-							default_value = default_values[index];
-						}
-					}
-
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
 						DoubleInputDrawer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST>(
 							config,
 							names[index],
 							values[index],
-							default_value,
 							lower_bound,
 							upper_bound,
 							position,
@@ -5054,7 +5003,6 @@ namespace ECSEngine {
 							config,
 							names[index],
 							values[index],
-							default_value,
 							lower_bound,
 							upper_bound,
 							position,
@@ -5082,7 +5030,6 @@ namespace ECSEngine {
 				size_t count,
 				const char** ECS_RESTRICT names,
 				double** ECS_RESTRICT values,
-				const double* ECS_RESTRICT default_values,
 				const double* ECS_RESTRICT lower_bounds,
 				const double* ECS_RESTRICT upper_bounds,
 				float2 position,
@@ -5096,6 +5043,7 @@ namespace ECSEngine {
 #define LABEL_CONFIGURATION configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW \
 							UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
 #define LABEL_CONFIGURATION_LAST configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN
+				
 				if constexpr (IsElementNameFirst(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 					Indent(-1.0f);
@@ -5117,15 +5065,6 @@ namespace ECSEngine {
 						}
 						if (upper_bounds != nullptr) {
 							upper_bound = upper_bounds[index];
-						}
-					}
-
-					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						if (default_values != nullptr) {
-							default_value = default_values[index];
 						}
 					}
 
@@ -5172,7 +5111,6 @@ namespace ECSEngine {
 				size_t count,
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values,
-				const Integer* ECS_RESTRICT default_values,
 				const Integer* ECS_RESTRICT lower_bounds,
 				const Integer* ECS_RESTRICT upper_bounds,
 				float2 position,
@@ -5185,9 +5123,8 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				size_t group_name_size = strlen(group_name);
-				char temp_name[128];
-				memcpy(temp_name, group_name, group_name_size);
+				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
@@ -5206,21 +5143,12 @@ namespace ECSEngine {
 						}
 					}
 
-					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						if (default_values != nullptr) {
-							default_value = default_values[index];
-						}
-					}
 
 					if constexpr (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_SUBNAMES) {
 						IntInputDrawer<configuration | UI_CONFIG_ELEMENT_NAME_FIRST, Integer>(
 							config,
 							names[index],
 							values[index],
-							default_value,
 							lower_bound,
 							upper_bound,
 							position,
@@ -5228,21 +5156,20 @@ namespace ECSEngine {
 							);
 					}
 					else {
-						temp_name[group_name_size] = '\0';
-						size_t random_index = (index * index + (index & 15)) << (index & 3);
-						function::ConvertIntToChars(Stream<char>(temp_name, group_name_size), static_cast<int64_t>(random_index));
 						IntInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME, Integer>(
 							config,
-							temp_name,
+							names[index],
 							values[index],
-							default_value,
 							lower_bound,
 							upper_bound,
 							position,
 							scale
-							);
+						);
 					}
 				}
+
+				PopIdentifierStack();
+				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
 					TextLabel<LABEL_CONFIGURATION_LAST>(config, group_name);
@@ -5260,7 +5187,6 @@ namespace ECSEngine {
 				size_t count,
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values,
-				const Integer* ECS_RESTRICT default_values,
 				const Integer* ECS_RESTRICT lower_bounds,
 				const Integer* ECS_RESTRICT upper_bounds,
 				float2 position,
@@ -5297,15 +5223,6 @@ namespace ECSEngine {
 						}
 						if (upper_bounds != nullptr) {
 							upper_bound = upper_bounds[index];
-						}
-					}
-
-					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_DEFAULT) {
-						default_value = default_values[0];
-					}
-					else {
-						if (default_values != nullptr) {
-							default_value = default_values[index];
 						}
 					}
 
@@ -9690,9 +9607,8 @@ namespace ECSEngine {
 						temp_input_name.buffer,
 						&elements->size,
 						(unsigned int)0,
-						(unsigned int)0,
-						elements->capacity
-						);
+						(unsigned int)0
+					);
 				}
 				else {
 					UIConfigActiveState active_state;
@@ -9703,8 +9619,7 @@ namespace ECSEngine {
 						temp_input_name.buffer,
 						&elements->size,
 						(unsigned int)0,
-						(unsigned int)0,
-						elements->capacity
+						(unsigned int)0
 					);
 				}
 
@@ -10057,6 +9972,25 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
+
+#pragma region Array Color Float
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ArrayColorFloat(const char* name, CapacityStream<ColorFloat>* colors) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ArrayColorFloat<configuration>(null_config, name, colors);
+			}
+
+			template<size_t configuration>
+			void ArrayColorFloat(const UIDrawConfig& config, const char* name, CapacityStream<ColorFloat>* colors) {
+				Array<configuration>(config, name, colors, nullptr, UIDrawerArrayColorFloatFunction);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 
 #pragma region Array Check Boxes
 
@@ -10708,20 +10642,20 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ColorInput(const char* name, Color* color, Color default_color = ECS_COLOR_WHITE) {
+			void ColorInput(const char* name, Color* color) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				ColorInput<configuration>(null_config, name, color, default_color);
+				ColorInput<configuration>(null_config, name, color);
 			}
 
 			template<size_t configuration>
-			void ColorInput(UIDrawConfig& config, const char* name, Color* color, Color default_color = ECS_COLOR_WHITE) {
+			void ColorInput(UIDrawConfig& config, const char* name, Color* color) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
 						UIDrawerColorInput* data = (UIDrawerColorInput*)GetResource(name);
 
-						ColorInputDrawer<configuration>(config, data, position, scale, color, default_color);
+						ColorInputDrawer<configuration>(config, data, position, scale, color);
 						HandleDynamicResource<configuration>(name);
 					}
 					else {
@@ -10729,7 +10663,7 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeColorInput initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_3(initialize_data, color, name, default_color);
+							ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, color, name);
 							InitializeDrawerElement(
 								*this,
 								&initialize_data,
@@ -10737,15 +10671,189 @@ namespace ECSEngine {
 								InitializeColorInputElement<DynamicConfiguration(configuration)>
 							);
 						}
-						ColorInput<DynamicConfiguration(configuration)>(config, name, color, default_color);
+						ColorInput<DynamicConfiguration(configuration)>(config, name, color);
 					}
 				}
 				else {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						ColorInputInitializer<configuration>(config, name, color, default_color, position, scale);
+						ColorInputInitializer<configuration>(config, name, color, position, scale);
 					}
 				}
 
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Color Float Input
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ColorFloatInput(const char* name, ColorFloat* color) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				ColorFloatInput<configuration>(null_config, name, color);
+			}
+
+			template<size_t configuration>
+			void ColorFloatInput(UIDrawConfig& config, const char* name, ColorFloat* color) {
+				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+
+				if constexpr (!initializer) {
+					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+						ColorFloatInputDrawer<configuration>(config, name, color, position, scale);
+						HandleDynamicResource<configuration>(name);
+					}
+					else {
+						bool exists = ExistsResource(name);
+						if (!exists) {
+							UIDrawerInitializeColorFloatInput initialize_data;
+							initialize_data.config = &config;
+							ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, color, name);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								name,
+								InitializeColorFloatInputElement<DynamicConfiguration(configuration)>
+							);
+						}
+						ColorFloatInput<DynamicConfiguration(configuration)>(config, name, color);
+					}
+				}
+				else {
+					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+						ColorFloatInputInitializer<configuration>(config, name, color, position, scale);
+					}
+				}
+
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void ColorFloatInputIntensityInputName(char* intensity_input_name, const char* identifier) {
+				size_t base_intensity_name = strlen("Intensity##");
+				memcpy(intensity_input_name, "Intensity##", base_intensity_name * sizeof(char));
+				size_t identifier_size = strlen(identifier);
+				size_t parsed_identifier_size = ParseStringIdentifier(identifier, identifier_size);
+				memcpy(intensity_input_name + base_intensity_name, identifier, parsed_identifier_size * sizeof(char));
+				if (parsed_identifier_size < identifier_size) {
+					memcpy(intensity_input_name + base_intensity_name + parsed_identifier_size, identifier + parsed_identifier_size + 2, identifier_size - parsed_identifier_size - 2);
+					intensity_input_name[base_intensity_name + identifier_size - 2] = '\0';
+				}
+				else {
+					intensity_input_name[base_intensity_name + identifier_size] = '\0';
+				}
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<size_t configuration>
+			void ColorFloatInputDrawer(UIDrawConfig& config, const char* name, ColorFloat* color, float2 position, float2 scale) {
+				const char* identifier = HandleResourceIdentifier(name);
+
+				// The resource must be taken from the table with manual parsing
+				char resource_name[512];
+				resource_name[0] = '\0';
+				strcpy(resource_name, identifier);
+				strcat(resource_name, " resource");
+				UIDrawerColorFloatInput* data = (UIDrawerColorFloatInput*)GetResource(resource_name);
+
+				data->color_float = color;
+
+				// Draw the color input
+				ColorInputDrawer<configuration | UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW | UI_CONFIG_MAKE_SQUARE>(
+					config, 
+					data->color_input,
+					position,
+					scale,
+					&data->base_color
+				);
+
+				// Draw the intensity
+				char intensity_input_name[256];
+				ColorFloatInputIntensityInputName(intensity_input_name, identifier);
+				FloatInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, intensity_input_name, &data->intensity, 0.0f, 10000.0f, { current_x - region_render_offset.x, position.y }, scale);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			template<size_t configuration>
+			UIDrawerColorFloatInput* ColorFloatInputInitializer(UIDrawConfig& config, const char* name, ColorFloat* color, float2 position, float2 scale) {
+				UIDrawerColorFloatInput* input = nullptr;
+
+				if constexpr (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+					BeginElement();
+				}
+
+				const char* identifier = HandleResourceIdentifier(name);
+
+				// Create a temporary name for resource, in order to avoid poluting the color input's
+				// name - if there is any
+				char color_input_name[256];
+				color_input_name[0] = '\0';
+				strcpy(color_input_name, identifier);
+				strcat(color_input_name, " resource");
+				input = GetMainAllocatorBufferAndStoreAsResource<UIDrawerColorFloatInput>(color_input_name);
+
+				input->color_float = color;
+				input->base_color = HDRColorToSDR(*color, &input->intensity);
+
+				// The intensity will be controlled by number input - the reference must be made through the name
+				char intensity_input_name[256];
+				ColorFloatInputIntensityInputName(intensity_input_name, identifier);
+				// Add the callback
+				UIConfigTextInputCallback callback;
+				callback.handler.action = ColorFloatInputIntensityCallback;
+				callback.handler.data = input;
+				callback.handler.data_size = 0;
+				callback.handler.phase = UIDrawPhase::Normal;
+				config.AddFlag(callback);
+				FloatInputInitializer<configuration | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN | UI_CONFIG_TEXT_INPUT_CALLBACK>(
+					config, 
+					intensity_input_name,
+					&input->intensity, 
+					0.0f,
+					10000.0f, 
+					position, 
+					scale
+				);
+				config.flag_count--;
+
+				// The callback must be intercepted
+				if constexpr (configuration & UI_CONFIG_COLOR_INPUT_CALLBACK) {
+					// Make a coallesced allocation for the callback data
+					UIConfigColorInputCallback* callback = (UIConfigColorInputCallback*)config.GetParameter(UI_CONFIG_COLOR_INPUT_CALLBACK);
+					UIDrawerColorFloatInputCallbackData* callback_data = GetMainAllocatorBuffer(sizeof(UIDrawerColorFloatInputCallbackData) + callback->callback.data_size);
+					callback_data->input = input;
+					if (callback->callback.data_size > 0) {
+						void* callback_data_user = function::OffsetPointer(callback_data, sizeof(UIDrawerColorFloatInputCallbackData));
+						memcpy(callback_data_user, callback->callback.data, callback->callback.data_size);
+						callback_data->callback_data = callback_data_user;
+					}
+					else {
+						callback_data->callback_data = callback->callback.data;
+					}
+					callback->callback.action = ColorFloatInputCallback;
+					callback->callback.data = callback_data;
+					callback->callback.data_size = 0;
+				}
+				else {
+					UIDrawerColorFloatInputCallbackData callback_data;
+					callback_data.callback = nullptr;
+					callback_data.callback_data = nullptr;
+					callback_data.input = input;
+					UIConfigColorInputCallback callback = { ColorFloatInputCallback, &callback_data, sizeof(callback_data) };
+					config.AddFlag(callback);
+				}
+				input->color_input = ColorInputInitializer<configuration | UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN>(
+					config,
+					name,
+					&input->base_color,
+					position,
+					scale
+				);
+
+				return input;
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11744,7 +11852,7 @@ namespace ECSEngine {
 			float2 GetAlignedToRight(float x_scale, float target_position = -5.0f) const {
 				target_position = function::Select(target_position == -5.0f, region_limit.x, target_position);
 				target_position = function::Select(export_scale != nullptr, current_x + x_scale, target_position);
-				return { function::ClampMin(target_position - x_scale, current_x), current_y /*+ region_render_offset.y*/ };
+				return { function::ClampMin(target_position - x_scale, current_x), current_y };
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12608,18 +12716,18 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FloatInput(const char* name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX) {
+			void FloatInput(const char* name, float* value, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				FloatInput<configuration>(null_config, name, value, default_value, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration>
-			void FloatInput(UIDrawConfig& config, const char* name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX) {
+			void FloatInput(UIDrawConfig& config, const char* name, float* value, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						FloatInputDrawer<configuration>(config, name, value, default_value, lower_bound, upper_bound, position, scale);
+						FloatInputDrawer<configuration>(config, name, value, lower_bound, upper_bound, position, scale);
 						HandleDynamicResource<configuration>(name);
 					}
 					else {
@@ -12627,7 +12735,7 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeFloatInput initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, default_value, lower_bound, name, upper_bound, value);
+							ECS_FORWARD_STRUCT_MEMBERS_4(initialize_data, lower_bound, name, upper_bound, value);
 							InitializeDrawerElement(
 								*this,
 								&initialize_data,
@@ -12635,7 +12743,7 @@ namespace ECSEngine {
 								InitializeFloatInputElement<DynamicConfiguration(configuration)>
 							);
 						}
-						FloatInput<DynamicConfiguration(configuration)>(config, name, value, default_value, lower_bound, upper_bound);
+						FloatInput<DynamicConfiguration(configuration)>(config, name, value, lower_bound, upper_bound);
 					}
 				}
 				else {
@@ -12652,12 +12760,11 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				float** ECS_RESTRICT values,
-				const float* ECS_RESTRICT default_values = nullptr,
 				const float* ECS_RESTRICT lower_bound = nullptr,
 				const float* ECS_RESTRICT upper_bound = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				FloatInputGroup<configuration>(null_config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+				FloatInputGroup<configuration>(null_config, count, group_name, names, values, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration>
@@ -12667,7 +12774,6 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				float** ECS_RESTRICT values,
-				const float* ECS_RESTRICT default_values = nullptr,
 				const float* ECS_RESTRICT lower_bound = nullptr,
 				const float* ECS_RESTRICT upper_bound = nullptr
 			) {
@@ -12675,7 +12781,7 @@ namespace ECSEngine {
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						FloatInputGroupDrawer<configuration>(config, group_name, count, names, values, default_values, lower_bound, upper_bound, position, scale);
+						FloatInputGroupDrawer<configuration>(config, group_name, count, names, values, lower_bound, upper_bound, position, scale);
 						HandleDynamicResource<configuration>(group_name);
 					}
 					else {
@@ -12683,7 +12789,7 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeFloatInputGroup initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, count, default_values, group_name, lower_bound, names, upper_bound, values);
+							ECS_FORWARD_STRUCT_MEMBERS_6(initialize_data, count, group_name, lower_bound, names, upper_bound, values);
 							InitializeDrawerElement(
 								*this,
 								&initialize_data,
@@ -12691,30 +12797,30 @@ namespace ECSEngine {
 								InitializeFloatInputGroupElement<DynamicConfiguration(configuration)>
 							);
 						}
-						FloatInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+						FloatInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, lower_bound, upper_bound);
 					}
 				}
 				else {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						FloatInputGroupInitializer<configuration>(config, group_name, count, names, values, default_values, lower_bound, upper_bound, position, scale);
+						FloatInputGroupInitializer<configuration>(config, group_name, count, names, values, lower_bound, upper_bound, position, scale);
 					}
 				}
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DoubleInput(const char* name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX) {
+			void DoubleInput(const char* name, double* value, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				DoubleInput<configuration>(null_config, name, value, default_value, lower_bound, upper_bound);
+				DoubleInput<configuration>(null_config, name, value, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration>
-			void DoubleInput(UIDrawConfig& config, const char* name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX) {
+			void DoubleInput(UIDrawConfig& config, const char* name, double* value, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						DoubleInputDrawer<configuration>(config, name, value, default_value, lower_bound, upper_bound, position, scale);
+						DoubleInputDrawer<configuration>(config, name, value, lower_bound, upper_bound, position, scale);
 						HandleDynamicResource<configuration>(name);
 					}
 					else {
@@ -12722,10 +12828,10 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeDoubleInput initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, default_value, lower_bound, name, upper_bound, value);
+							ECS_FORWARD_STRUCT_MEMBERS_4(initialize_data, lower_bound, name, upper_bound, value);
 							InitializeDrawerElement(*this, &initialize_data, name, InitializeDoubleInputElement<DynamicConfiguration(configuration)>);
 						}
-						DoubleInput<DynamicConfiguration(configuration)>(config, name, value, default_value, lower_bound, upper_bound);
+						DoubleInput<DynamicConfiguration(configuration)>(config, name, value, lower_bound, upper_bound);
 					}
 				}
 				else {
@@ -12742,12 +12848,11 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				double** ECS_RESTRICT values,
-				const double* ECS_RESTRICT default_values = nullptr,
 				const double* ECS_RESTRICT lower_bound = nullptr,
 				const double* ECS_RESTRICT upper_bound = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				DoubleInputGroup<configuration>(null_config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+				DoubleInputGroup<configuration>(null_config, count, group_name, names, values, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration>
@@ -12757,7 +12862,6 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				double** ECS_RESTRICT values,
-				const double* ECS_RESTRICT default_values = nullptr,
 				const double* ECS_RESTRICT lower_bound = nullptr,
 				const double* ECS_RESTRICT upper_bound = nullptr
 			) {
@@ -12765,7 +12869,7 @@ namespace ECSEngine {
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						DoubleInputGroupDrawer<configuration>(config, group_name, count, names, values, default_values, lower_bound, upper_bound, position, scale);
+						DoubleInputGroupDrawer<configuration>(config, group_name, count, names, values, lower_bound, upper_bound, position, scale);
 						HandleDynamicResource<configuration>(group_name);
 					}
 					else {
@@ -12773,15 +12877,15 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeDoubleInputGroup initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, group_name, count, names, values, default_values, lower_bound, upper_bound);
+							ECS_FORWARD_STRUCT_MEMBERS_6(initialize_data, group_name, count, names, values, lower_bound, upper_bound);
 							InitializeDrawerElement(*this, &initialize_data, group_name, InitializeDoubleInputGroupElement<DynamicConfiguration(configuration)>);
 						}
-						DoubleInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+						DoubleInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, lower_bound, upper_bound);
 					}
 				}
 				else {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						DoubleInputGroupInitializer<configuration>(config, group_name, count, names, values, default_values, lower_bound, upper_bound, position, scale);
+						DoubleInputGroupInitializer<configuration>(config, group_name, count, names, values, lower_bound, upper_bound, position, scale);
 					}
 				}
 			}
@@ -12789,18 +12893,18 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			void IntInput(const char* name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX) {
+			void IntInput(const char* name, Integer* value, Integer min = LLONG_MIN, Integer max = ULLONG_MAX) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				IntInput<configuration>(null_config, name, value, default_value, min, max);
+				IntInput<configuration>(null_config, name, value, min, max);
 			}
 
 			template<size_t configuration, typename Integer>
-			void IntInput(UIDrawConfig& config, const char* name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX) {
+			void IntInput(UIDrawConfig& config, const char* name, Integer* value, Integer min = LLONG_MIN, Integer max = ULLONG_MAX) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						IntInputDrawer<configuration, Integer>(config, name, value, default_value, min, max, position, scale);
+						IntInputDrawer<configuration, Integer>(config, name, value, min, max, position, scale);
 						HandleDynamicResource<configuration>(name);
 					}
 					else {
@@ -12808,10 +12912,10 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeIntegerInput<Integer> initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, name, value, default_value, min, max);
+							ECS_FORWARD_STRUCT_MEMBERS_4(initialize_data, name, value, min, max);
 							InitializeDrawerElement(*this, &initialize_data, name, InitializeIntegerInputElement<DynamicConfiguration(configuration), Integer>);
 						}
-						IntInput<DynamicConfiguration(configuration)>(config, name, value, default_value, min, max);
+						IntInput<DynamicConfiguration(configuration)>(config, name, value, min, max);
 					}
 				}
 				else {
@@ -12829,12 +12933,11 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values,
-				const Integer* ECS_RESTRICT default_values = nullptr,
 				const Integer* ECS_RESTRICT lower_bound = nullptr,
 				const Integer* ECS_RESTRICT upper_bound = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				IntInputGroup<configuration>(null_config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+				IntInputGroup<configuration>(null_config, count, group_name, names, values, lower_bound, upper_bound);
 			}
 
 			template<size_t configuration, typename Integer>
@@ -12844,7 +12947,6 @@ namespace ECSEngine {
 				const char* ECS_RESTRICT group_name,
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values,
-				const Integer* ECS_RESTRICT default_values = nullptr,
 				const Integer* ECS_RESTRICT lower_bound = nullptr,
 				const Integer* ECS_RESTRICT upper_bound = nullptr
 			) {
@@ -12852,7 +12954,7 @@ namespace ECSEngine {
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						IntInputGroupDrawer<configuration, Integer>(config, group_name, count, names, values, default_values, lower_bound, upper_bound, position, scale);
+						IntInputGroupDrawer<configuration, Integer>(config, group_name, count, names, values, lower_bound, upper_bound, position, scale);
 						HandleDynamicResource<configuration>(group_name);
 					}
 					else {
@@ -12860,15 +12962,15 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeIntegerInputGroup<Integer> initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, count, group_name, names, values, default_values, lower_bound, upper_bound);
+							ECS_FORWARD_STRUCT_MEMBERS_6(initialize_data, count, group_name, names, values, lower_bound, upper_bound);
 							InitializeDrawerElement(*this, &initialize_data, group_name, InitializeIntegerInputGroupElement<DynamicConfiguration(configuration), Integer>);
 						}
-						IntInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, default_values, lower_bound, upper_bound);
+						IntInputGroup<DynamicConfiguration(configuration)>(config, count, group_name, names, values, lower_bound, upper_bound);
 					}
 				}
 				else {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						IntInputGroupInitializer<configuration, Integer>(config, group_name, count, names, values, default_values, lower_bound, upper_bound, position, scale);
+						IntInputGroupInitializer<configuration, Integer>(config, group_name, count, names, values, lower_bound, upper_bound, position, scale);
 					}
 				}
 			}
@@ -13345,9 +13447,9 @@ namespace ECSEngine {
 
 			// Value must implement Interpolate, Percentage and ToString in order to be used
 			template<typename EnterValuesFilter = TextFilterAll, typename Value>
-			void Slider(const char* label, Value value_to_modify, Value lower_bound, Value upper_bound, Value default_value = Value()) {
+			void Slider(const char* label, Value value_to_modify, Value lower_bound, Value upper_bound) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				Slider<configuration, EnterValuesFilter, Value>(null_config, label, value_to_modify, lower_bound, upper_bound, default_value);
+				Slider<configuration, EnterValuesFilter, Value>(null_config, label, value_to_modify, lower_bound, upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -13355,7 +13457,7 @@ namespace ECSEngine {
 			// Value must implement Interpolate, Percentage and ToString in order to be used;
 			// If values can be entered, then Validate must be implemented
 			template<size_t configuration, typename EnterValuesFilter = TextFilterAll, typename Value>
-			void Slider(UIDrawConfig& config, const char* name, Value value_to_modify, Value lower_bound, Value upper_bound, Value default_value = Value()) {
+			void Slider(UIDrawConfig& config, const char* name, Value value_to_modify, Value lower_bound, Value upper_bound) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
@@ -13363,7 +13465,7 @@ namespace ECSEngine {
 						void* _info = GetResource(name);
 						UIDrawerSlider* info = (UIDrawerSlider*)_info;
 
-						SliderDrawer<configuration, EnterValuesFilter, Value>(config, info, position, scale, value_to_modify, lower_bound, upper_bound, default_value);
+						SliderDrawer<configuration, EnterValuesFilter, Value>(config, info, position, scale, value_to_modify, lower_bound, upper_bound);
 						HandleDynamicResource<configuration>(name);
 					}
 					else {
@@ -13371,15 +13473,15 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeSlider<Value> initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_5(initialize_data, name, value_to_modify, lower_bound, upper_bound, default_value);
+							ECS_FORWARD_STRUCT_MEMBERS_4(initialize_data, name, value_to_modify, lower_bound, upper_bound);
 							InitializeDrawerElement(*this, &initialize_data, name, InitializeSliderElement<DynamicConfiguration(configuration), Value>);
 						}
-						Slider<DynamicConfiguration(configuration), EnterValuesFilter, Value>(config, name, value_to_modify, lower_bound, upper_bound, default_value);
+						Slider<DynamicConfiguration(configuration), EnterValuesFilter, Value>(config, name, value_to_modify, lower_bound, upper_bound);
 					}
 				}
 				else {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						SliderInitializer<configuration>(config, name, position, scale, value_to_modify, lower_bound, upper_bound, default_value);
+						SliderInitializer<configuration>(config, name, position, scale, value_to_modify, lower_bound, upper_bound);
 					}
 				}
 			}
@@ -13393,11 +13495,10 @@ namespace ECSEngine {
 				const char** ECS_RESTRICT names,
 				Value* ECS_RESTRICT values_to_modify,
 				const Value* ECS_RESTRICT lower_bounds,
-				const Value* ECS_RESTRICT upper_bounds,
-				const Value* ECS_RESTRICT default_values
+				const Value* ECS_RESTRICT upper_bounds
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				SliderGroup<configuration, EnterValuesFilter, Value>(null_config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
+				SliderGroup<configuration, EnterValuesFilter, Value>(null_config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds);
 			}
 
 			template<size_t configuration, typename EnterValuesFilter = TextFilterAll, typename Value>
@@ -13408,14 +13509,13 @@ namespace ECSEngine {
 				const char** ECS_RESTRICT names,
 				Value* ECS_RESTRICT values_to_modify,
 				const Value* ECS_RESTRICT lower_bounds,
-				const Value* ECS_RESTRICT upper_bounds,
-				const Value* ECS_RESTRICT default_values
+				const Value* ECS_RESTRICT upper_bounds
 			) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 				if constexpr (!initializer) {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						SliderGroupDrawer<configuration, EnterValuesFilter>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values, position, scale);
+						SliderGroupDrawer<configuration, EnterValuesFilter>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, position, scale);
 						HandleDynamicResource<configuration>(group_name);
 					}
 					else {
@@ -13423,15 +13523,15 @@ namespace ECSEngine {
 						if (!exists) {
 							UIDrawerInitializeSliderGroup<Value> initialize_data;
 							initialize_data.config = &config;
-							ECS_FORWARD_STRUCT_MEMBERS_7(initialize_data, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
+							ECS_FORWARD_STRUCT_MEMBERS_6(initialize_data, count, group_name, names, values_to_modify, lower_bounds, upper_bounds);
 							InitializeDrawerElement(*this, &initialize_data, group_name, InitializeSliderGroupElement<DynamicConfiguration(configuration), Value>);
 						}
-						SliderGroup<DynamicConfiguration(configuration), EnterValuesFilter>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
+						SliderGroup<DynamicConfiguration(configuration), EnterValuesFilter>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds);
 					}
 				}
 				else {
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						SliderGroupInitializer<configuration, Value>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values, position, scale);
+						SliderGroupInitializer<configuration, Value>(config, count, group_name, names, values_to_modify, lower_bounds, upper_bounds, position, scale);
 					}
 				}
 			}
@@ -13445,15 +13545,13 @@ namespace ECSEngine {
 				Value value_to_modify1,
 				Value lower_bounds1,
 				Value upper_bounds1,
-				Value default_value1,
 				const char* ECS_RESTRICT name2,
 				Value value_to_modify2,
 				Value lower_bounds2,
-				Value upper_bounds2,
-				Value default_value2
+				Value upper_bounds2
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				SliderGroup2<configuration, EnterValuesFilter, Value>(null_config, group_name, name1, value_to_modify1, lower_bounds1, upper_bounds1, default_value1, name2, value_to_modify2, lower_bounds2, upper_bounds2, default_value1);
+				SliderGroup2<configuration, EnterValuesFilter, Value>(null_config, group_name, name1, value_to_modify1, lower_bounds1, upper_bounds1, name2, value_to_modify2, lower_bounds2, upper_bounds2);
 			}
 
 			template<size_t configuration, typename EnterValuesFilter = TextFilterAll, typename Value>
@@ -13464,12 +13562,10 @@ namespace ECSEngine {
 				Value value_to_modify1,
 				Value lower_bounds1,
 				Value upper_bounds1,
-				Value default_value1,
 				const char* ECS_RESTRICT name2,
 				Value value_to_modify2,
 				Value lower_bounds2,
-				Value upper_bounds2,
-				Value default_value2
+				Value upper_bounds2
 			) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
@@ -13487,31 +13583,27 @@ namespace ECSEngine {
 				lower_bounds[1] = lower_bounds2;
 				upper_bounds[0] = upper_bounds1;
 				upper_bounds[1] = upper_bounds2;
-				default_values[0] = default_value1;
-				default_values[1] = default_value2;
 
-				SliderGroup<configuration, EnterValuesFilter, Value>(config, 2, group_name, names, values_to_modify, lower_bounds, upper_bounds, default_values);
+				SliderGroup<configuration, EnterValuesFilter, Value>(config, 2, group_name, names, values_to_modify, lower_bounds, upper_bounds);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FloatSlider(const char* _label, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 2) {
+			void FloatSlider(const char* _label, float* value_to_modify, float lower_bound, float upper_bound, unsigned int precision = 3) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				FloatSlider<configuration>(null_config, _label, value_to_modify, lower_bound, upper_bound, default_value, precision);
 			}
 
 			template<size_t configuration>
-			void FloatSlider(UIDrawConfig& config, const char* _label, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 2) {
+			void FloatSlider(UIDrawConfig& config, const char* _label, float* value_to_modify, float lower_bound, float upper_bound, unsigned int precision = 3) {
 				SliderFloat _value_to_modify, _lower_bound, _upper_bound, _default_value;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
 				_value_to_modify.ConstructExtraData(&precision);
 				_lower_bound.ConstructExtraData(&precision);
 				_upper_bound.ConstructExtraData(&precision);
-				_default_value.ConstructExtraData(&precision);
-				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -13523,7 +13615,6 @@ namespace ECSEngine {
 				float** ECS_RESTRICT values_to_modify,
 				const float* ECS_RESTRICT lower_bounds,
 				const float* ECS_RESTRICT upper_bounds,
-				const float* ECS_RESTRICT default_values,
 				size_t precision = 2
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -13535,7 +13626,6 @@ namespace ECSEngine {
 					values_to_modify, 
 					lower_bounds,
 					upper_bounds, 
-					default_values, 
 					precision
 				);
 			}
@@ -13549,24 +13639,20 @@ namespace ECSEngine {
 				float** ECS_RESTRICT values_to_modify,
 				const float* ECS_RESTRICT lower_bounds,
 				const float* ECS_RESTRICT upper_bounds,
-				const float* ECS_RESTRICT default_values,
 				size_t precision = 2
 			) {
 				SliderFloat _values_to_modify[slider_group_max_count];
 				SliderFloat _lower_bounds[slider_group_max_count];
 				SliderFloat _upper_bounds[slider_group_max_count];
-				SliderFloat _default_values[slider_group_max_count];
 
 				for (size_t index = 0; index < count; index++) {
 					_values_to_modify[index].ConstructPointer(values_to_modify[index]);
 					_lower_bounds[index].ConstructValue(lower_bounds[index]);
 					_upper_bounds[index].ConstructValue(upper_bounds[index]);
-					_default_values[index].ConstructValue(default_values[index]);
 
 					_values_to_modify[index].ConstructExtraData(&precision);
 					_lower_bounds[index].ConstructExtraData(&precision);
 					_upper_bounds[index].ConstructExtraData(&precision);
-					_default_values[index].ConstructExtraData(&precision);
 				}
 
 				SliderGroup<configuration, TextFilterNumbers>(
@@ -13576,30 +13662,27 @@ namespace ECSEngine {
 					names, 
 					_values_to_modify, 
 					_lower_bounds, 
-					_upper_bounds, 
-					_default_values
+					_upper_bounds
 				);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DoubleSlider(const char* _label, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, size_t precision = 2) {
+			void DoubleSlider(const char* _label, double* value_to_modify, double lower_bound, double upper_bound, size_t precision = 3) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
-				DoubleSlider<configuration>(null_config, _label, value_to_modify, lower_bound, upper_bound, default_value, precision);
+				DoubleSlider<configuration>(null_config, _label, value_to_modify, lower_bound, upper_bound, precision);
 			}
 
 			template<size_t configuration>
-			void DoubleSlider(UIDrawConfig& config, const char* _label, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, size_t precision = 2) {
+			void DoubleSlider(UIDrawConfig& config, const char* _label, double* value_to_modify, double lower_bound, double upper_bound, size_t precision = 3) {
 				SliderDouble _value_to_modify, _lower_bound, _upper_bound, _default_value;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
 				_value_to_modify.ConstructExtraData(&precision);
 				_lower_bound.ConstructExtraData(&precision);
 				_upper_bound.ConstructExtraData(&precision);
-				_default_value.ConstructExtraData(&precision);
-				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -13611,7 +13694,6 @@ namespace ECSEngine {
 				double** ECS_RESTRICT values_to_modify,
 				const double* ECS_RESTRICT lower_bounds,
 				const double* ECS_RESTRICT upper_bounds,
-				const double* ECS_RESTRICT default_values,
 				size_t precision = 2
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
@@ -13623,7 +13705,6 @@ namespace ECSEngine {
 					values_to_modify,
 					lower_bounds,
 					upper_bounds,
-					default_values,
 					precision
 					);
 			}
@@ -13637,24 +13718,20 @@ namespace ECSEngine {
 				double** ECS_RESTRICT values_to_modify,
 				const double* ECS_RESTRICT lower_bounds,
 				const double* ECS_RESTRICT upper_bounds,
-				const double* ECS_RESTRICT default_values,
 				size_t precision = 2
 			) {
 				SliderDouble _values_to_modify[slider_group_max_count];
 				SliderDouble _lower_bounds[slider_group_max_count];
 				SliderDouble _upper_bounds[slider_group_max_count];
-				SliderDouble _default_values[slider_group_max_count];
 
 				for (size_t index = 0; index < count; index++) {
 					_values_to_modify[index].ConstructPointer(values_to_modify[index]);
 					_lower_bounds[index].ConstructValue(lower_bounds[index]);
 					_upper_bounds[index].ConstructValue(upper_bounds[index]);
-					_default_values[index].ConstructValue(default_values[index]);
 
 					_values_to_modify[index].ConstructExtraData(&precision);
 					_lower_bounds[index].ConstructExtraData(&precision);
 					_upper_bounds[index].ConstructExtraData(&precision);
-					_default_values[index].ConstructExtraData(&precision);
 				}
 
 				SliderGroup<configuration, TextFilterNumbers>(
@@ -13664,27 +13741,25 @@ namespace ECSEngine {
 					names,
 					_values_to_modify, 
 					_lower_bounds, 
-					_upper_bounds, 
-					_default_values
+					_upper_bounds
 				);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			void IntSlider(const char* _label, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = Integer(0)) {
+			void IntSlider(const char* _label, Integer* value_to_modify, Integer lower_bound, Integer upper_bound) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				IntSlider<configuration>(null_config, _label, value_to_modify, lower_bound, upper_bound, default_value);
 			}
 
 			template<size_t configuration, typename Integer>
-			void IntSlider(UIDrawConfig& config, const char* _label, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = Integer(0)) {
-				SliderInteger<Integer> _value_to_modify, _lower_bound, _upper_bound, _default_value;
+			void IntSlider(UIDrawConfig& config, const char* _label, Integer* value_to_modify, Integer lower_bound, Integer upper_bound) {
+				SliderInteger<Integer> _value_to_modify, _lower_bound, _upper_bound;
 				_value_to_modify.ConstructPointer(value_to_modify);
 				_lower_bound.ConstructValue(lower_bound);
 				_upper_bound.ConstructValue(upper_bound);
-				_default_value.ConstructValue(default_value);
-				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound, _default_value);
+				Slider<configuration, TextFilterNumbers>(config, _label, _value_to_modify, _lower_bound, _upper_bound);
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -13696,8 +13771,7 @@ namespace ECSEngine {
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values_to_modify,
 				const Integer* ECS_RESTRICT lower_bounds,
-				const Integer* ECS_RESTRICT upper_bounds,
-				const Integer* ECS_RESTRICT default_values
+				const Integer* ECS_RESTRICT upper_bounds
 			) {
 				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
 				IntSliderGroup<configuration>(
@@ -13707,8 +13781,7 @@ namespace ECSEngine {
 					names,
 					values_to_modify,
 					lower_bounds,
-					upper_bounds,
-					default_values
+					upper_bounds
 				);
 			}
 
@@ -13720,19 +13793,16 @@ namespace ECSEngine {
 				const char** ECS_RESTRICT names,
 				Integer** ECS_RESTRICT values_to_modify,
 				const Integer* ECS_RESTRICT lower_bounds,
-				const Integer* ECS_RESTRICT upper_bounds,
-				const Integer* ECS_RESTRICT default_values
+				const Integer* ECS_RESTRICT upper_bounds
 			) {
 				SliderInteger<Integer> _values_to_modify[slider_group_max_count];
 				SliderInteger<Integer> _lower_bounds[slider_group_max_count];
 				SliderInteger<Integer> _upper_bounds[slider_group_max_count];
-				SliderInteger<Integer> _default_values[slider_group_max_count];
 
 				for (size_t index = 0; index < count; index++) {
 					_values_to_modify[index].ConstructPointer(values_to_modify[index]);
 					_lower_bounds[index].ConstructValue(lower_bounds[index]);
 					_upper_bounds[index].ConstructValue(upper_bounds[index]);
-					_default_values[index].ConstructValue(default_values[index]);
 				}
 
 				SliderGroup<configuration, TextFilterNumbers>(
@@ -13742,8 +13812,7 @@ namespace ECSEngine {
 					names,
 					_values_to_modify,
 					_lower_bounds,
-					_upper_bounds,
-					_default_values
+					_upper_bounds
 				);
 			}
 
@@ -15027,7 +15096,7 @@ namespace ECSEngine {
 		template<size_t configuration>
 		void InitializeColorInputElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeColorInput* data = (UIDrawerInitializeColorInput*)additional_data;
-			drawer_ptr->ColorInput<configuration>(*data->config, data->name, data->color, data->default_color);
+			drawer_ptr->ColorInput<configuration>(*data->config, data->name, data->color);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15083,7 +15152,7 @@ namespace ECSEngine {
 		template<size_t configuration>
 		void InitializeFloatInputElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeFloatInput* data = (UIDrawerInitializeFloatInput*)additional_data;
-			drawer_ptr->FloatInput<configuration>(*data->config, data->name, data->value, data->default_value, data->lower_bound, data->upper_bound);
+			drawer_ptr->FloatInput<configuration>(*data->config, data->name, data->value, data->lower_bound, data->upper_bound);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15091,7 +15160,7 @@ namespace ECSEngine {
 		template<size_t configuration, typename Integer>
 		void InitializeIntegerInputElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeIntegerInput<Integer>* data = (UIDrawerInitializeIntegerInput<Integer>*)additional_data;
-			drawer_ptr->IntInput<configuration>(*data->config, data->name, data->value, data->default_value, data->min, data->max);
+			drawer_ptr->IntInput<configuration>(*data->config, data->name, data->value, data->min, data->max);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15099,7 +15168,7 @@ namespace ECSEngine {
 		template<size_t configuration>
 		void InitializeDoubleInputElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeDoubleInput* data = (UIDrawerInitializeDoubleInput*)additional_data;
-			drawer_ptr->DoubleInput<configuration>(*data->config, data->name, data->value, data->default_value, data->lower_bound, data->upper_bound);
+			drawer_ptr->DoubleInput<configuration>(*data->config, data->name, data->value, data->lower_bound, data->upper_bound);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15107,7 +15176,7 @@ namespace ECSEngine {
 		template<size_t configuration>
 		void InitializeFloatInputGroupElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeFloatInputGroup* data = (UIDrawerInitializeFloatInputGroup*)additional_data;
-			drawer_ptr->FloatInputGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values, data->default_values, data->lower_bound, data->upper_bound);
+			drawer_ptr->FloatInputGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values, data->lower_bound, data->upper_bound);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15115,7 +15184,7 @@ namespace ECSEngine {
 		template<size_t configuration, typename Integer>
 		void InitializeIntegerInputGroupElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeIntegerInputGroup<Integer>* data = (UIDrawerInitializeIntegerInputGroup<Integer>*)additional_data;
-			drawer_ptr->IntInputGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values, data->default_values, data->lower_bound, data->upper_bound);
+			drawer_ptr->IntInputGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values, data->lower_bound, data->upper_bound);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15123,7 +15192,7 @@ namespace ECSEngine {
 		template<size_t configuration>
 		void InitializeDoubleInputGroupElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeDoubleInputGroup* data = (UIDrawerInitializeDoubleInputGroup*)additional_data;
-			drawer_ptr->DoubleInputGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values, data->default_values, data->lower_bound, data->upper_bound);
+			drawer_ptr->DoubleInputGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values, data->lower_bound, data->upper_bound);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15131,7 +15200,7 @@ namespace ECSEngine {
 		template<size_t configuration, typename Value>
 		void InitializeSliderElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeSlider<Value>* data = (UIDrawerInitializeSlider<Value>*)additional_data;
-			drawer_ptr->Slider<configuration>(*data->config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->default_value);
+			drawer_ptr->Slider<configuration>(*data->config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15139,7 +15208,7 @@ namespace ECSEngine {
 		template<size_t configuration, typename Value>
 		void InitializeSliderGroupElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeSliderGroup<Value>* data = (UIDrawerInitializeSliderGroup<Value>*)additional_data;
-			drawer_ptr->SliderGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values_to_modify, data->lower_bounds, data->upper_bounds, data->default_values);
+			drawer_ptr->SliderGroup<configuration>(*data->config, data->count, data->group_name, data->names, data->values_to_modify, data->lower_bounds, data->upper_bounds);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15164,6 +15233,14 @@ namespace ECSEngine {
 		void InitializeTextInputElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
 			UIDrawerInitializeTextInput* data = (UIDrawerInitializeTextInput*)additional_data;
 			drawer_ptr->TextInput<configuration>(*data->config, data->name, data->text_to_fill);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		template<size_t configuration>
+		void InitializeColorFloatInputElement(void* window_data, void* additional_data, UIDrawer<true>* drawer_ptr) {
+			UIDrawerInitializeColorFloatInput* data = (UIDrawerInitializeColorFloatInput*)additional_data;
+			drawer_ptr->ColorFloatInput<configuration>(*data->config, data->name, data->color);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15368,6 +15445,13 @@ namespace ECSEngine {
 		static void UIDrawerArrayColorFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
 			drawer.ColorInput<UI_CONFIG_DO_NOT_CACHE>(temp_config, element_name, (Color*)draw_data.element_data);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		static void UIDrawerArrayColorFloatFunction(UIDrawer<false>& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
+			UIDrawConfig temp_config;
+			drawer.ColorFloatInput<UI_CONFIG_DO_NOT_CACHE>(temp_config, element_name, (ColorFloat*)draw_data.element_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

@@ -340,14 +340,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisectionSize(uintptr_t stream, size_t* header_size) {
+	size_t DeserializeMultisectionSize(uintptr_t stream) {
 		size_t total_memory = 0;
 
 		size_t _header_size = 0;
 		Read(stream, &_header_size, sizeof(_header_size));
-		if (header_size != nullptr) {
-			*header_size = _header_size;
-		}
 		Ignore(stream, _header_size);
 
 		size_t multisection_count = 0;
@@ -369,14 +366,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------
 
-	size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count, size_t* header_size) {
+	size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count) {
 		size_t total_memory = 0;
 
 		size_t _header_size = 0;
 		Read(stream, &_header_size, sizeof(_header_size));
-		if (header_size != nullptr) {
-			*header_size = _header_size;
-		}
 		Ignore(stream, _header_size);
 
 		size_t multisection_count = 0;
@@ -400,6 +394,187 @@ namespace ECSEngine {
 		}
 
 		return total_memory;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	void DeserializeMultisectionPerSectionSize(uintptr_t stream, CapacityStream<size_t>& sizes)
+	{
+		size_t _header_size = 0;
+		Read(stream, &_header_size, sizeof(_header_size));
+		Ignore(stream, _header_size);
+
+		size_t multisection_count = 0;
+		Read(stream, &multisection_count, sizeof(size_t));
+		ECS_ASSERT(multisection_count <= sizes.capacity);
+
+		for (size_t index = 0; index < multisection_count; index++) {
+			size_t stream_count = 0;
+			Read(stream, &stream_count, sizeof(size_t));
+
+			sizes[index] = 0;
+			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				Ignore(stream, data_size);
+				sizes[index] += data_size;
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	void DeserializeMultisectionPerSectionSize(uintptr_t stream, CapacityStream<size_t>& sizes, Stream<size_t> multisection_data_stream_count)
+	{
+		size_t _header_size = 0;
+		Read(stream, &_header_size, sizeof(_header_size));
+		Ignore(stream, _header_size);
+
+		size_t multisection_count = 0;
+		Read(stream, &multisection_count, sizeof(size_t));
+		ECS_ASSERT(multisection_count <= sizes.capacity);
+
+		for (size_t index = 0; index < multisection_count; index++) {
+			size_t stream_count = 0;
+			Read(stream, &stream_count, sizeof(size_t));
+
+			sizes[index] = 0;
+			for (size_t stream_index = 0; stream_index < multisection_data_stream_count[index]; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				sizes[index] += data_size;
+				Ignore(stream, data_size);
+			}
+			for (size_t stream_index = multisection_data_stream_count[index]; stream_index < stream_count; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				Ignore(stream, data_size);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	void DeserializeMultisectionStreamCount(uintptr_t stream, CapacityStream<size_t>& multisection_stream_count)
+	{
+		size_t _header_size = 0;
+		Read(stream, &_header_size, sizeof(_header_size));
+		Ignore(stream, _header_size);
+
+		size_t multisection_count = 0;
+		Read(stream, &multisection_count, sizeof(size_t));
+
+		ECS_ASSERT(multisection_stream_count.capacity >= multisection_count);
+		multisection_stream_count.size = multisection_count;
+
+		for (size_t index = 0; index < multisection_count; index++) {
+			size_t stream_count = 0;
+			Read(stream, &stream_count, sizeof(size_t));
+
+			multisection_stream_count[index] = stream_count;
+			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				Ignore(stream, data_size);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	void DeserializeMultisectionStreamCount(std::ifstream& stream, CapacityStream<size_t>& multisection_stream_count)
+	{
+		size_t _header_size = 0;
+		Read(stream, &_header_size, sizeof(_header_size));
+		Ignore(stream, _header_size);
+
+		size_t multisection_count = 0;
+		Read(stream, &multisection_count, sizeof(size_t));
+
+		ECS_ASSERT(multisection_stream_count.capacity >= multisection_count);
+		multisection_stream_count.size = multisection_count;
+
+		for (size_t index = 0; index < multisection_count; index++) {
+			size_t stream_count = 0;
+			Read(stream, &stream_count, sizeof(size_t));
+
+			multisection_stream_count[index] = stream_count;
+			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				Ignore(stream, data_size);
+			}
+		}
+
+		stream.seekg(std::ios::beg);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	void DeserializeMultisectionStreamSizes(uintptr_t stream, CapacityStream<Stream<size_t>>& multisection_sizes)
+	{
+		size_t _header_size = 0;
+		Read(stream, &_header_size, sizeof(_header_size));
+		Ignore(stream, _header_size);
+
+		size_t multisection_count = 0;
+		Read(stream, &multisection_count, sizeof(size_t));
+
+		ECS_ASSERT(multisection_sizes.capacity >= multisection_count);
+		multisection_sizes.size = multisection_count;
+
+		for (size_t index = 0; index < multisection_count; index++) {
+			size_t stream_count = 0;
+			Read(stream, &stream_count, sizeof(size_t));
+
+			ECS_ASSERT(stream_count >= multisection_sizes[index].size);
+			for (size_t stream_index = 0; stream_index < multisection_sizes[index].size; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				multisection_sizes[index][stream_index] = data_size;
+				Ignore(stream, data_size);
+			}
+			for (size_t stream_index = multisection_sizes[index].size; stream_index < stream_count; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				Ignore(stream, data_size);
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	void DeserializeMultisectionStreamSizes(std::ifstream& stream, CapacityStream<Stream<size_t>>& multisection_sizes)
+	{
+		size_t _header_size = 0;
+		Read(stream, &_header_size, sizeof(_header_size));
+		Ignore(stream, _header_size);
+
+		size_t multisection_count = 0;
+		Read(stream, &multisection_count, sizeof(size_t));
+
+		ECS_ASSERT(multisection_sizes.capacity >= multisection_count);
+		multisection_sizes.size = multisection_count;
+
+		for (size_t index = 0; index < multisection_count; index++) {
+			size_t stream_count = 0;
+			Read(stream, &stream_count, sizeof(size_t));
+
+			ECS_ASSERT(stream_count >= multisection_sizes[index].size);
+			for (size_t stream_index = 0; stream_index < multisection_sizes[index].size; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				multisection_sizes[index][stream_index] = data_size;
+				Ignore(stream, data_size);
+			}
+			for (size_t stream_index = multisection_sizes[index].size; stream_index < stream_count; stream_index++) {
+				size_t data_size = 0;
+				Read(stream, &data_size, sizeof(size_t));
+				Ignore(stream, data_size);
+			}
+		}
+
+		stream.seekg(std::ios::beg);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------

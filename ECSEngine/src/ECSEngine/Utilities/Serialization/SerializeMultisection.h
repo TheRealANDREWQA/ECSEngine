@@ -100,11 +100,41 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t DeserializeMultisectionSize(uintptr_t stream, size_t* header_size = nullptr);
+	ECSENGINE_API size_t DeserializeMultisectionSize(uintptr_t stream);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count, size_t* header_size = nullptr);
+	ECSENGINE_API size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void DeserializeMultisectionPerSectionSize(uintptr_t stream, CapacityStream<size_t>& sizes);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void DeserializeMultisectionPerSectionSize(
+		uintptr_t stream,
+		CapacityStream<size_t>& sizes,
+		Stream<size_t> multisection_data_stream_count
+	);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void DeserializeMultisectionStreamCount(uintptr_t stream, CapacityStream<size_t>& multisection_stream_count);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void DeserializeMultisectionStreamCount(std::ifstream& stream, CapacityStream<size_t>& multisection_stream_count);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// These are byte sizes
+	ECSENGINE_API void DeserializeMultisectionStreamSizes(uintptr_t stream, CapacityStream<Stream<size_t>>& multisection_sizes);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// These are byte sizes
+	ECSENGINE_API void DeserializeMultisectionStreamSizes(std::ifstream& stream, CapacityStream<Stream<size_t>>& multisection_sizes);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
@@ -124,6 +154,10 @@ namespace ECSEngine {
 	// It will not advance the stream so that calling deserialize will work as expected
 	ECSENGINE_API bool DeserializeMultisectionHeader(std::ifstream& stream, CapacityStream<void>& header);
 
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// ---------------------------------------------------------------------------------------------------------------
+	
 	// ---------------------------------------------------------------------------------------------------------------
 
 }

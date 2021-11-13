@@ -522,7 +522,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor) {
 	config.flag_count = 1;
 
 	header_transform.position.x = drawer.GetAlignedToRightOverLimit(total_all_scale).x;
-	header_transform.position.x = function::ClampMin(header_transform.position.x, min_position);
+	header_transform.position.x = std::max(header_transform.position.x, min_position);
 	header_transform.scale = drawer.GetLabelScale(HEADER_OPEN_BUILD_LOG);
 	config.AddFlag(header_transform);
 	

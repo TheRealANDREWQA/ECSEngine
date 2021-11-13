@@ -326,11 +326,7 @@
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerWindows.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIOSActions.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\UI\UIReflection.cpp">
-      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">/bigobj %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">/bigobj %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/bigobj %(AdditionalOptions)</AdditionalOptions>
-    </ClCompile>
+    <ClCompile Include="src\ECSEngine\Tools\UI\UIReflection.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UISystem.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />

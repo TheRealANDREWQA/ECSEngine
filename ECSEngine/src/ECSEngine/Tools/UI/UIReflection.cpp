@@ -29,6 +29,8 @@ namespace ECSEngine {
 		constexpr size_t UI_INT64_T = (size_t)1 << (UI_INT_BASE + 6);
 		constexpr size_t UI_UINT64_T = (size_t)1 << (UI_INT_BASE + 7);
 
+#define ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0(function, a, ...) function(0, __VA_ARGS__)
+
 #define ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(function, a, ...) function(0, __VA_ARGS__) \
 		function(a, __VA_ARGS__) 
 
@@ -126,10 +128,10 @@ namespace ECSEngine {
 		void UIReflectionFloatSlider(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionFloatSliderData* data = (UIReflectionFloatSliderData*)_data;
 
-#define SLIDER(configuration) case configuration: drawer.FloatSlider<configuration | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->default_value, data->precision); break;
+#define SLIDER(configuration) case configuration: drawer.FloatSlider<configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
+			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE>(config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->precision); break;
 						
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4(SLIDER, UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_MOUSE_DRAGGABLE, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK, UI_CONFIG_SLIDER_DEFAULT_VALUE));
+			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(SLIDER, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
 
 #undef SLIDER
 		}
@@ -139,10 +141,10 @@ namespace ECSEngine {
 		void UIReflectionDoubleSlider(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionDoubleSliderData* data = (UIReflectionDoubleSliderData*)_data;
 
-#define SLIDER(configuration) case configuration: drawer.DoubleSlider<configuration | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->default_value, data->precision); break;
+#define SLIDER(configuration) case configuration: drawer.DoubleSlider<configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
+			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE>(config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->precision); break;
 
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4(SLIDER, UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_MOUSE_DRAGGABLE, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK, UI_CONFIG_SLIDER_DEFAULT_VALUE));
+			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(SLIDER, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
 
 #undef SLIDER
 		}
@@ -154,10 +156,11 @@ namespace ECSEngine {
 
 			size_t int_flags = ExtractIntFlags(configuration_flags);
 			configuration_flags = RemoveIntFlags(configuration_flags);
-#define SLIDER_IMPLEMENTATION(configuration, integer_type) case configuration: drawer.IntSlider<configuration | UI_CONFIG_DO_NOT_CACHE, integer_type>( \
-			config, data->name, (integer_type*)data->value_to_modify, *(integer_type*)data->lower_bound, *(integer_type*)data->upper_bound, *(integer_type*)data->default_value); break;
+#define SLIDER_IMPLEMENTATION(configuration, integer_type) case configuration: drawer.IntSlider<configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
+			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE, integer_type>( \
+			config, data->name, (integer_type*)data->value_to_modify, *(integer_type*)data->lower_bound, *(integer_type*)data->upper_bound); break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4, SLIDER_IMPLEMENTATION, UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_DEFAULT_VALUE, UI_CONFIG_SLIDER_MOUSE_DRAGGABLE, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1, SLIDER_IMPLEMENTATION, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
 
 #undef SLIDER_IMPLEMENTATION
 		}
@@ -166,24 +169,14 @@ namespace ECSEngine {
 
 		void UIReflectionFloatInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionFloatInputData* data = (UIReflectionFloatInputData*)_data;
-#define INPUT(configuration) case configuration: drawer.FloatInput<configuration | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->name, data->value, data->default_value, data->lower_bound, data->upper_bound); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2(INPUT, UI_CONFIG_NUMBER_INPUT_DEFAULT, UI_CONFIG_NUMBER_INPUT_NO_RANGE));
-
-#undef INPUT
+			drawer.FloatInput<UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->value, data->lower_bound, data->upper_bound);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		void UIReflectionDoubleInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionDoubleInputData* data = (UIReflectionDoubleInputData*)_data;
-#define INPUT(configuration) case configuration: drawer.DoubleInput<configuration | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->name, data->value, data->default_value, data->lower_bound, data->upper_bound); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2(INPUT, UI_CONFIG_NUMBER_INPUT_DEFAULT, UI_CONFIG_NUMBER_INPUT_NO_RANGE));
-
-#undef INPUT
+			drawer.DoubleInput<UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->value, data->lower_bound, data->upper_bound);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -193,12 +186,11 @@ namespace ECSEngine {
 			size_t int_flags = ExtractIntFlags(configuration_flags);
 			configuration_flags = RemoveIntFlags(configuration_flags);
 
-#define INPUT(configuration, integer_convert) case configuration: { integer_convert default_value = *(integer_convert*)data->default_value; \
-		integer_convert upper_bound = *(integer_convert*)data->upper_bound; \
+#define INPUT(configuration, integer_convert) case configuration: { integer_convert upper_bound = *(integer_convert*)data->upper_bound; \
 		integer_convert lower_bound = *(integer_convert*)data->lower_bound; \
-	drawer.IntInput<configuration | UI_CONFIG_DO_NOT_CACHE, integer_convert>(config, data->name, (integer_convert*)data->value_to_modify, default_value, lower_bound, upper_bound); } break;
+		drawer.IntInput<UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER | UI_CONFIG_DO_NOT_CACHE, integer_convert>(config, data->name, (integer_convert*)data->value_to_modify, lower_bound, upper_bound); } break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2_EX, INPUT, UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER, UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER, UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0, INPUT);
 
 #undef INPUT
 		}
@@ -220,11 +212,19 @@ namespace ECSEngine {
 		void UIReflectionColor(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionColorData* data = (UIReflectionColorData*)_data;
 
-#define COLOR(configuration) case configuration: drawer.ColorInput<configuration | UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->color, data->default_color); break;
+#define COLOR(configuration) case configuration: drawer.ColorInput<configuration | UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->color); break;
 
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_5(COLOR, UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE, UI_CONFIG_COLOR_INPUT_RGB_SLIDERS, UI_CONFIG_COLOR_INPUT_HSV_SLIDERS, UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER, UI_CONFIG_COLOR_INPUT_CALLBACK));
+			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4(COLOR, UI_CONFIG_COLOR_INPUT_RGB_SLIDERS, UI_CONFIG_COLOR_INPUT_HSV_SLIDERS, UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER, UI_CONFIG_COLOR_INPUT_CALLBACK));
 
 #undef COLOR
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionColorFloat(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data)
+		{
+			UIReflectionColorFloatData* data = (UIReflectionColorFloatData*)_data;
+			drawer.ColorFloatInput<UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->color);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -246,10 +246,11 @@ namespace ECSEngine {
 		void UIReflectionFloatSliderGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionGroupData<float>* data = (UIReflectionGroupData<float>*)_data;
 
-#define GROUP(configuration) case configuration: drawer.FloatSliderGroup<configuration | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->default_values, data->precision); break;
+#define GROUP(configuration) case configuration: drawer.FloatSliderGroup<configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
+			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE>( \
+			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->precision); break;
 
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4(GROUP, UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_DEFAULT_VALUE, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK, UI_CONFIG_SLIDER_MOUSE_DRAGGABLE));
+			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(GROUP, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
 
 #undef GROUP
 		}
@@ -259,10 +260,10 @@ namespace ECSEngine {
 		void UIReflectionDoubleSliderGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionGroupData<double>* data = (UIReflectionGroupData<double>*)_data;
 
-#define GROUP(configuration) case configuration: drawer.DoubleSliderGroup<configuration | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->default_values, data->precision); break;
+#define GROUP(configuration) case configuration: drawer.DoubleSliderGroup<configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE>( \
+			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->precision); break;
 
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4(GROUP, UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_DEFAULT_VALUE, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK, UI_CONFIG_SLIDER_MOUSE_DRAGGABLE));
+			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(GROUP, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
 
 #undef GROUP
 		}
@@ -274,10 +275,10 @@ namespace ECSEngine {
 			size_t int_flags = ExtractIntFlags(configuration_flags);
 			configuration_flags = RemoveIntFlags(configuration_flags);
 
-#define GROUP(configuration, integer_type) case configuration: drawer.IntSliderGroup<configuration | UI_CONFIG_DO_NOT_CACHE, integer_type>( \
-			config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound, (const integer_type*)data->default_values); break;
+#define GROUP(configuration, integer_type) case configuration: drawer.IntSliderGroup<configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE \
+			| UI_CONFIG_SLIDER_ENTER_VALUES, integer_type>(config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound); break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4, GROUP, UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_DEFAULT_VALUE, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK, UI_CONFIG_SLIDER_MOUSE_DRAGGABLE);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1, GROUP, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
 
 #undef GROUP
 		}
@@ -287,12 +288,14 @@ namespace ECSEngine {
 		void UIReflectionFloatInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionGroupData<float>* data = (UIReflectionGroupData<float>*)_data;
 
-#define GROUP(configuration) case configuration: drawer.FloatInputGroup<configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->default_values); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2(GROUP, UI_CONFIG_NUMBER_INPUT_DEFAULT, UI_CONFIG_NUMBER_INPUT_NO_RANGE));
-
-#undef GROUP
+			drawer.FloatInputGroup<UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE>(config,
+				data->count,
+				data->group_name, 
+				data->input_names, 
+				data->values, 
+				data->lower_bound,
+				data->upper_bound
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -300,12 +303,15 @@ namespace ECSEngine {
 		void UIReflectionDoubleInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
 			UIReflectionGroupData<double>* data = (UIReflectionGroupData<double>*)_data;
 
-#define GROUP(configuration) case configuration: drawer.DoubleInputGroup<configuration| UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE>( \
-			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->default_values); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2(GROUP, UI_CONFIG_NUMBER_INPUT_DEFAULT, UI_CONFIG_NUMBER_INPUT_NO_RANGE));
-
-#undef GROUP
+			drawer.DoubleInputGroup<UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE>(
+				config, 
+				data->count,
+				data->group_name,
+				data->input_names,
+				data->values, 
+				data->lower_bound,
+				data->upper_bound
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -315,10 +321,10 @@ namespace ECSEngine {
 			size_t int_flags = ExtractIntFlags(configuration_flags);
 			configuration_flags = RemoveIntFlags(configuration_flags);
 
-#define GROUP(configuration, integer_type) case configuration: drawer.IntInputGroup<configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE, integer_type>( \
-			config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound, (const integer_type*)data->default_values); break;
+#define GROUP(configuration, integer_type) case configuration: drawer.IntInputGroup<UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE, integer_type>( \
+			config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound); break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2, GROUP, UI_CONFIG_NUMBER_INPUT_DEFAULT, UI_CONFIG_NUMBER_INPUT_NO_RANGE);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0, GROUP);
 
 #undef GROUP
 		}
@@ -389,6 +395,19 @@ namespace ECSEngine {
 			}
 			else {
 				drawer.ArrayColor<UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->values);
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionStreamColorFloat(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data)
+		{
+			UIReflectionStreamColorFloatData* data = (UIReflectionStreamColorFloatData*)_data;
+			if (configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE) {
+				drawer.ArrayColorFloat<UI_CONFIG_ARRAY_FIXED_SIZE | UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->values);
+			}
+			else {
+				drawer.ArrayColorFloat<UI_CONFIG_DO_NOT_CACHE>(config, data->name, data->values);
 			}
 		}
 
@@ -686,15 +705,15 @@ namespace ECSEngine {
 			case UIReflectionIndex::FloatSlider:
 			case UIReflectionIndex::DoubleSlider:
 			case UIReflectionIndex::IntegerSlider:
-				mask = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK | UI_CONFIG_SLIDER_DEFAULT_VALUE;
+				mask = UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 				break;
 			case UIReflectionIndex::Color:
-				mask = UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE | UI_CONFIG_COLOR_INPUT_RGB_SLIDERS | UI_CONFIG_COLOR_INPUT_HSV_SLIDERS | UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER | UI_CONFIG_COLOR_INPUT_CALLBACK;
+				mask = UI_CONFIG_COLOR_INPUT_RGB_SLIDERS | UI_CONFIG_COLOR_INPUT_HSV_SLIDERS | UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER | UI_CONFIG_COLOR_INPUT_CALLBACK;
 				break;
 			case UIReflectionIndex::DoubleInput:
 			case UIReflectionIndex::FloatInput:
 			case UIReflectionIndex::IntegerInput:
-				mask = UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_NO_RANGE;
+				mask = 0;
 				break;
 			case UIReflectionIndex::TextInput:
 				mask = UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_CALLBACK;
@@ -702,12 +721,12 @@ namespace ECSEngine {
 			case UIReflectionIndex::FloatSliderGroup:
 			case UIReflectionIndex::DoubleSliderGroup:
 			case UIReflectionIndex::IntegerSliderGroup:
-				mask = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE;
+				mask = UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 				break;
 			case UIReflectionIndex::FloatInputGroup:
 			case UIReflectionIndex::DoubleInputGroup:
 			case UIReflectionIndex::IntegerInputGroup:
-				mask = UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_NO_RANGE;
+				mask = 0;
 				break;
 			}
 
@@ -866,40 +885,6 @@ namespace ECSEngine {
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(*type, data[index].field_name);
 				UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[field_index].reflection_index](type->fields.buffer + field_index, data[index].value);
-				/*switch (type->fields[field_index].reflection_index) {
-				case UIReflectionIndex::DoubleInput:
-				case UIReflectionIndex::DoubleSlider:
-				{
-					UIReflectionDoubleInputData* current_data = (UIReflectionDoubleInputData*)type->fields[field_index].data;
-					current_data->default_value = *(double*)data[index].value;
-				}
-				break;
-				case UIReflectionIndex::FloatInput:
-				case UIReflectionIndex::FloatSlider:
-				{
-					UIReflectionFloatInputData* current_data = (UIReflectionFloatInputData*)type->fields[field_index].data;
-					current_data->default_value = *(float*)data[index].value;
-				}
-				break;
-				case UIReflectionIndex::IntegerInput:
-				case UIReflectionIndex::IntegerSlider:
-				{
-					UIReflectionIntInputData* current_data = (UIReflectionIntInputData*)type->fields[field_index].data;
-					memcpy(current_data->default_value, data[index].value, current_data->byte_size);
-				}
-				break;
-				case UIReflectionIndex::DoubleInputGroup:
-				case UIReflectionIndex::DoubleSliderGroup:
-				case UIReflectionIndex::FloatInputGroup:
-				case UIReflectionIndex::FloatSliderGroup:
-				case UIReflectionIndex::IntegerInputGroup:
-				case UIReflectionIndex::IntegerSliderGroup:
-				{
-					UIReflectionGroupData<void>* current_data = (UIReflectionGroupData<void>*)type->fields[field_index].data;
-					memcpy((void*)current_data->default_values, data[index].value, current_data->byte_size * current_data->count);
-				}
-				break;
-				}*/
 			}
 		}
 
@@ -1049,17 +1034,17 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					if (reflect.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
+					if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::CapacityStream) {
 						CapacityStream<void>** values = (CapacityStream<void>**)instance->datas[index].struct_data;
 						*values = (CapacityStream<void>*)ptr;
 					}
-					else if (reflect.fields[index].info.extended_type == ReflectionStreamFieldType::Pointer) {
+					else if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::Pointer) {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
 						instance->datas[index].stream_data->buffer = (void*)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = 0;
 					}
-					else if (reflect.fields[index].info.extended_type == ReflectionStreamFieldType::BasicTypeArray) {
+					else if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
 						instance->datas[index].stream_data->buffer = (void*)ptr;
 						instance->datas[index].stream_data->size = 0;
@@ -1607,6 +1592,20 @@ namespace ECSEngine {
 				field.stream_type = UIReflectionStreamType::None;
 			};
 
+			auto color_float_convert = [this](ReflectionField reflection_field, UIReflectionTypeField& field) {
+				UIReflectionColorFloatData* data = (UIReflectionColorFloatData*)allocator->Allocate(sizeof(UIReflectionColorFloatData));
+				field.data = data;
+				field.reflection_index = UIReflectionIndex::ColorFloat;
+				field.byte_size = sizeof(*data);
+
+				data->color = nullptr;
+				data->default_color = ColorFloat(0.0f, 0.0f, 0.0f, 1.0f);
+				data->name = reflection_field.name;
+
+				field.configuration = 0;
+				field.stream_type = UIReflectionStreamType::None;
+			};
+
 			auto integer_stream_convert_single = [this](ReflectionField reflection_field, UIReflectionTypeField& field) {
 				UIReflectionStreamIntInputData* data = (UIReflectionStreamIntInputData*)this->allocator->Allocate(sizeof(UIReflectionIntInputData));
 				field.data = data;
@@ -1741,65 +1740,30 @@ namespace ECSEngine {
 				field.stream_type = UIReflectionStreamType::Basic;
 			};
 
+			auto color_float_stream_convert = [this](ReflectionField reflection_field, UIReflectionTypeField& field) {
+				UIReflectionStreamColorFloatData* data = (UIReflectionStreamColorFloatData*)allocator->Allocate(sizeof(UIReflectionColorFloatData));
+				field.data = data;
+				field.reflection_index = UIReflectionIndex::ColorFloat;
+				field.byte_size = sizeof(*data);
+
+				data->values = nullptr;
+				data->name = reflection_field.name;
+
+				field.configuration = 0;
+				field.stream_type = UIReflectionStreamType::Basic;
+			};
+
 			UIReflectionType type;
 			type.name = reflected_type.name;
 			type.fields.Initialize(allocator, 0, reflected_type.fields.size);
 
-			for (size_t index = 0; index < reflected_type.fields.size; index++) {
-				ReflectionFieldInfo field_info = reflected_type.fields[index].info;
-
-				bool value_written = false;
-				type.fields[index].name = reflected_type.fields[index].name;
-				type.fields[type.fields.size].pointer_offset = reflected_type.fields[index].info.pointer_offset;
-				if (field_info.extended_type == ReflectionStreamFieldType::Pointer) {
-					// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
-					// Only reflect single indirection pointers
-					if (field_info.basic_type_count == 1) {
-						// text input - default for char and unsigned char
-						if (field_info.basic_type == ReflectionBasicFieldType::Int8 || field_info.basic_type == ReflectionBasicFieldType::UInt8) {
-							text_input_convert(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (field_info.basic_type == ReflectionBasicFieldType::Float) {
-							float_stream_convert_single(reflected_type.fields[index], type.fields[type.fields.size]);				
-							value_written = true;
-						}
-						else if (IsFloatBasicTypeMultiComponent(field_info.basic_type)) {
-							float_stream_convert_group(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (field_info.basic_type == ReflectionBasicFieldType::Double) {
-							double_stream_convert_single(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (IsDoubleBasicTypeMultiComponent(field_info.basic_type)) {
-							double_stream_convert_group(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (IsIntegralSingleComponent(field_info.basic_type)) {
-							integer_stream_convert_single(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (IsIntegralMultiComponent(field_info.basic_type)) {
-							integer_stream_convert_group(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (field_info.basic_type == ReflectionBasicFieldType::Bool) {
-							bool_stream_convert(reflected_type.fields[index], type.fields[type.fields.size]);
-							value_written = true;
-						}
-						else if (IsEnum(field_info.basic_type)) {
-							ReflectionEnum reflected_enum;
-							bool success = reflection->TryGetEnum(reflected_type.fields[index].definition, reflected_enum);
-							if (success) {
-								enum_stream_convert(reflected_enum, type.fields[type.fields.size]);
-								value_written = true;
-							}
-						}
-					}
-				}
-				else if (strcmp(reflected_type.fields[index].definition, "Color") == 0) {
+			auto test_basic_type = [&](unsigned int index, ReflectionFieldInfo field_info, bool& value_written) {
+				if (strcmp(reflected_type.fields[index].definition, "Color") == 0) {
 					color_convert(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (strcmp(reflected_type.fields[index].definition, "ColorFloat") == 0) {
+					color_float_convert(reflected_type.fields[index], type.fields[type.fields.size]);
 					value_written = true;
 				}
 				else if (IsIntegralSingleComponent(field_info.basic_type)) {
@@ -1837,6 +1801,79 @@ namespace ECSEngine {
 						enum_convert(reflected_enum, type.fields[type.fields.size]);
 						value_written = true;
 					}
+				}
+			};
+
+			auto test_stream_type = [&](unsigned int index, ReflectionFieldInfo field_info, bool& value_written) {
+				if (strcmp(reflected_type.fields[index].definition, "Color") == 0) {
+					color_stream_convert(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (strcmp(reflected_type.fields[index].definition, "ColorFloat") == 0) {
+					color_float_stream_convert(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				// text input - default for char and unsigned char
+				else if (field_info.basic_type == ReflectionBasicFieldType::Int8 || field_info.basic_type == ReflectionBasicFieldType::UInt8) {
+					text_input_convert(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (field_info.basic_type == ReflectionBasicFieldType::Float) {
+					float_stream_convert_single(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (IsFloatBasicTypeMultiComponent(field_info.basic_type)) {
+					float_stream_convert_group(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (field_info.basic_type == ReflectionBasicFieldType::Double) {
+					double_stream_convert_single(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (IsDoubleBasicTypeMultiComponent(field_info.basic_type)) {
+					double_stream_convert_group(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (IsIntegralSingleComponent(field_info.basic_type)) {
+					integer_stream_convert_single(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (IsIntegralMultiComponent(field_info.basic_type)) {
+					integer_stream_convert_group(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (field_info.basic_type == ReflectionBasicFieldType::Bool) {
+					bool_stream_convert(reflected_type.fields[index], type.fields[type.fields.size]);
+					value_written = true;
+				}
+				else if (IsEnum(field_info.basic_type)) {
+					ReflectionEnum reflected_enum;
+					bool success = reflection->TryGetEnum(reflected_type.fields[index].definition, reflected_enum);
+					if (success) {
+						enum_stream_convert(reflected_enum, type.fields[type.fields.size]);
+						value_written = true;
+					}
+				}
+			};
+
+			for (size_t index = 0; index < reflected_type.fields.size; index++) {
+				ReflectionFieldInfo field_info = reflected_type.fields[index].info;
+
+				bool value_written = false;
+				type.fields[index].name = reflected_type.fields[index].name;
+				type.fields[type.fields.size].pointer_offset = reflected_type.fields[index].info.pointer_offset;
+				if (field_info.stream_type == ReflectionStreamFieldType::Pointer) {
+					// The basic type count tells the indirection count: e.g void* - indirection 1; void** indirection 2
+					// Only reflect single indirection pointers
+					if (field_info.basic_type_count == 1) {
+						test_stream_type(index, field_info, value_written);
+					}
+				}
+				else if (field_info.stream_type != Reflection::ReflectionStreamFieldType::Basic && field_info.stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
+					test_stream_type(index, field_info, value_written);
+				}
+				else {
+					test_basic_type(index, field_info, value_written);
 				}
 
 				type.fields.size += value_written;

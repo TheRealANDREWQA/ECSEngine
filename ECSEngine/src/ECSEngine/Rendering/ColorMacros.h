@@ -249,4 +249,38 @@ namespace ECSEngine {
 
 	}
 
+	// Normalizes the 3 component rgb and returns the base color along side
+	// the intensity. The alpha channel is clamped to [0, 1]
+	static Color HDRColorToSDR(ColorFloat color, float* intensity = nullptr) {
+		Color sdr_color;
+
+		color.alpha = function::Clamp(color.alpha, 0.0f, 1.0f);
+		Vector4 vector_color;
+		vector_color.Load(&color);
+
+		unsigned char alpha = color.alpha * 255.0f;
+		Vector4 intensity_vector = Length3(vector_color);
+		if (intensity != nullptr) {
+			*intensity = intensity_vector.First();
+		}
+		Vector4 normalized_vector_color = vector_color / intensity_vector;
+		ColorFloat normalized_color;
+		normalized_vector_color.Store(&normalized_color);
+		sdr_color = normalized_color;
+		sdr_color.alpha = alpha;
+
+		return sdr_color;
+	}
+
+	static ColorFloat SDRColorToHDR(Color color, float intensity) {
+		ColorFloat hdr_color;
+
+		hdr_color = color;
+		hdr_color.red *= intensity;
+		hdr_color.green *= intensity;
+		hdr_color.blue *= intensity;
+
+		return hdr_color;
+	}
+
 }

@@ -8098,6 +8098,7 @@ namespace ECSEngine {
 			drawer_descriptor.window_index = index;
 			drawer_descriptor.thread_id = 0;
 			drawer_descriptor.do_not_initialize_viewport_sliders = false;
+			drawer_descriptor.do_not_allocate_buffers = false;
 			drawer_descriptor.export_scale = nullptr;
 			
 			initialize(m_windows[index].window_data, &drawer_descriptor);

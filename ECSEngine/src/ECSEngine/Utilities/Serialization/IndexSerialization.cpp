@@ -146,19 +146,19 @@ namespace ECSEngine {
 			pointers[index].data.size = type.fields[index].info.byte_size;
 			pointers[index].name = type.fields[index].name;
 
-			if (type.fields[index].info.extended_type == ReflectionStreamFieldType::Stream) {
+			if (type.fields[index].info.stream_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				pointers[index].pointer_data.buffer = stream->buffer;
 				pointers[index].pointer_data.size = type.fields[index].info.additional_flags * stream->size;
 				handler(index, &stream->buffer);
 			}
-			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::CapacityStream) {
+			else if (type.fields[index].info.stream_type == ReflectionStreamFieldType::CapacityStream) {
 				CapacityStream<void>* stream = (CapacityStream<void>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				pointers[index].pointer_data.buffer = stream->buffer;
 				pointers[index].pointer_data.size = type.fields[index].info.additional_flags * stream->size;
 				handler(index, &stream->buffer);
 			}
-			else if (type.fields[index].info.extended_type == ReflectionStreamFieldType::ResizableStream) {
+			else if (type.fields[index].info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 				ResizableStream<void*, LinearAllocator>* stream = (ResizableStream<void*, LinearAllocator>*)((uintptr_t)data + type.fields[index].info.pointer_offset);
 				pointers[index].pointer_data.buffer = stream->buffer;
 				pointers[index].pointer_data.size = type.fields[index].info.additional_flags * stream->size;

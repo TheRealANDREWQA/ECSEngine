@@ -235,6 +235,7 @@ public:
 		success = reflection_manager.ProcessFolderHierarchy((unsigned int)1, &error_message);
 
 		UIReflectionDrawer ui_reflection(&resizable_arena, &reflection_manager);
+		ui_reflection.CreateType(STRING(TO_BE_REFLECT));
 
 		EditorState editor_state;
 
@@ -387,7 +388,7 @@ public:
 		MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, &global_memory_manager);
 		DebugDrawer debug_drawer(&debug_drawer_memory, &graphics, 1);
 		float3 LIGHT_DIRECTION(0.0f, -1.0f, 0.0f);
-		float4 LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 1.0f);
+		ColorFloat LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 1.0f);
 
 		InjectWindowElement inject_elements[2];
 		InjectWindowSection section[1];
@@ -400,7 +401,7 @@ public:
 		inject_elements[0].stream_type = Reflection::ReflectionStreamFieldType::Basic;
 
 		inject_elements[1].name = "Color";
-		inject_elements[1].basic_type_string = STRING(float4);
+		inject_elements[1].basic_type_string = STRING(ColorFloat);
 		inject_elements[1].data = &LIGHT_INTENSITY;
 		inject_elements[1].stream_type = Reflection::ReflectionStreamFieldType::Basic;
 
@@ -542,7 +543,7 @@ public:
 				vertex_constant_buffers[1] = camera_position_buffer;
 				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
 
-				Shaders::SetDirectionalLight(directional_light, &graphics, LIGHT_DIRECTION, ColorFloat(LIGHT_INTENSITY.x, LIGHT_INTENSITY.y, LIGHT_INTENSITY.z, LIGHT_INTENSITY.w));
+				Shaders::SetDirectionalLight(directional_light, &graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
 
 				Shaders::SetPointLight(point_light, &graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
 				ColorFloat spot_light_color = ColorFloat(11.0f, 11.0f, 11.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;

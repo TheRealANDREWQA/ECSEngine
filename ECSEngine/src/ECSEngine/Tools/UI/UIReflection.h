@@ -26,6 +26,7 @@ namespace ECSEngine {
 			IntegerInputGroup,
 			TextInput,
 			Color,
+			ColorFloat,
 			CheckBox,
 			ComboBox,
 			Count
@@ -67,6 +68,8 @@ namespace ECSEngine {
 
 		ECSENGINE_API void UIReflectionColor(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
+		ECSENGINE_API void UIReflectionColorFloat(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+
 		ECSENGINE_API void UIReflectionCheckBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		ECSENGINE_API void UIReflectionComboBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
@@ -98,6 +101,7 @@ namespace ECSEngine {
 			UIReflectionIntInputGroup,
 			UIReflectionTextInput,
 			UIReflectionColor,
+			UIReflectionColorFloat,
 			UIReflectionCheckBox,
 			UIReflectionComboBox
 		};
@@ -115,6 +119,8 @@ namespace ECSEngine {
 		ECSENGINE_API void UIReflectionStreamTextInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		ECSENGINE_API void UIReflectionStreamColor(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+
+		ECSENGINE_API void UIReflectionStreamColorFloat(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		ECSENGINE_API void UIReflectionStreamCheckBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
@@ -142,6 +148,7 @@ namespace ECSEngine {
 			UIReflectionStreamIntInputGroup,
 			UIReflectionStreamTextInput,
 			UIReflectionStreamColor,
+			UIReflectionStreamColorFloat,
 			UIReflectionStreamCheckBox,
 			UIReflectionComboBox
 		};
@@ -316,6 +323,12 @@ namespace ECSEngine {
 			Color default_color;
 		};
 
+		struct ECSENGINE_API UIReflectionColorFloatData {
+			ColorFloat* color;
+			const char* name;
+			ColorFloat default_color;
+		};
+
 		struct ECSENGINE_API UIReflectionCheckBoxData {
 			bool* value;
 			const char* name;
@@ -334,9 +347,9 @@ namespace ECSEngine {
 			Field** values;
 			const char* group_name;
 			const char** input_names;
-			const Field* default_values;
 			const Field* lower_bound;
 			const Field* upper_bound;
+			const Field* default_values;
 			unsigned int count;
 			unsigned int precision = 3;
 			unsigned int byte_size;
@@ -364,6 +377,11 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIReflectionStreamColorData {
 			CapacityStream<Color>* values;
+			const char* name;
+		};
+
+		struct ECSENGINE_API UIReflectionStreamColorFloatData {
+			CapacityStream<ColorFloat>* values;
 			const char* name;
 		};
 
