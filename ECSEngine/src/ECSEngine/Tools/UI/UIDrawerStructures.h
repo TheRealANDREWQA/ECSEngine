@@ -1583,6 +1583,7 @@ namespace ECSEngine {
 			UIDrawConfig* config;
 			const char* name;
 			Color* color;
+			Color default_color;
 		};
 
 		struct ECSENGINE_API UIDrawerInitializeFilterMenu {
@@ -1625,6 +1626,7 @@ namespace ECSEngine {
 			UIDrawConfig* config;
 			const char* name; 
 			float* value; 
+			float default_value = 0.0f;
 			float lower_bound = -FLT_MAX;
 			float upper_bound = FLT_MAX;
 		};
@@ -1634,6 +1636,7 @@ namespace ECSEngine {
 			UIDrawConfig* config; 
 			const char* name; 
 			Integer* value;
+			Integer default_value = 0;
 			Integer min = LLONG_MIN;
 			Integer max = ULLONG_MAX;
 		};
@@ -1642,6 +1645,7 @@ namespace ECSEngine {
 			UIDrawConfig* config;
 			const char* name; 
 			double* value; 
+			double default_value = 0;
 			double lower_bound = -DBL_MAX; 
 			double upper_bound = DBL_MAX;
 		};
@@ -1652,6 +1656,7 @@ namespace ECSEngine {
 			const char* ECS_RESTRICT group_name;
 			const char** ECS_RESTRICT names;
 			float** ECS_RESTRICT values;
+			const float* ECS_RESTRICT default_values;
 			const float* ECS_RESTRICT lower_bound;
 			const float* ECS_RESTRICT upper_bound;
 		};
@@ -1662,6 +1667,7 @@ namespace ECSEngine {
 			const char* ECS_RESTRICT group_name;
 			const char** ECS_RESTRICT names;
 			double** ECS_RESTRICT values;
+			const double* ECS_RESTRICT default_values;
 			const double* ECS_RESTRICT lower_bound;
 			const double* ECS_RESTRICT upper_bound;
 		};
@@ -1673,6 +1679,7 @@ namespace ECSEngine {
 			const char* ECS_RESTRICT group_name;
 			const char** ECS_RESTRICT names;
 			Integer** ECS_RESTRICT values;
+			const Integer* ECS_RESTRICT default_values;
 			const Integer* ECS_RESTRICT lower_bound;
 			const Integer* ECS_RESTRICT upper_bound;
 		};
@@ -1684,6 +1691,7 @@ namespace ECSEngine {
 			Value value_to_modify;
 			Value lower_bound;
 			Value upper_bound;
+			Value default_value;
 		};
 
 		template<typename Value>
@@ -1695,6 +1703,7 @@ namespace ECSEngine {
 			Value* values_to_modify;
 			const Value* lower_bounds;
 			const Value* upper_bounds;
+			const Value* default_values;
 		};
 
 		struct ECSENGINE_API UIDrawerInitializeStateTable {
@@ -1797,6 +1806,7 @@ namespace ECSEngine {
 			UIDrawConfig* config;
 			const char* name;
 			ColorFloat* color;
+			ColorFloat default_color;
 		};
 
 	}

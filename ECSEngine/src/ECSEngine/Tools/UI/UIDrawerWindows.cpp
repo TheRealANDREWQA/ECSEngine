@@ -148,8 +148,7 @@ namespace ECSEngine {
 					float2_names,
 					float2_values,
 					float2_lower_bounds,
-					float2_upper_bounds,
-					3
+					float2_upper_bounds
 				);
 			};
 
@@ -485,8 +484,7 @@ namespace ECSEngine {
 					float2_names,
 					float2_values,
 					float2_lower_bounds,
-					float2_upper_bounds,
-					3
+					float2_upper_bounds
 				);
 				drawer.PopIdentifierStack();
 			};
@@ -793,8 +791,7 @@ namespace ECSEngine {
 					float2_names,
 					float2_values,
 					float2_lower_bounds,
-					float2_upper_bounds,
-					3
+					float2_upper_bounds
 					);
 				drawer.PopIdentifierStack();
 			};

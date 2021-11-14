@@ -12,6 +12,7 @@
 #include "ProjectUITemplate.h"
 #include "..\Modules\ModuleFile.h"
 #include "..\Modules\Module.h"
+#include "..\Modules\ModuleConfigurationGroup.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -713,6 +714,19 @@ bool OpenProject(ProjectOperationData data)
 	else {
 		ResetProjectModules(data.editor_state);
 		ResetProjectGraphicsModule(data.editor_state);
+	}
+	// Load the module configurations groups
+	CapacityStream<wchar_t> module_configuration_group_path(_temp_chars, 0, 256);
+	GetModuleConfigurationGroupFilePath(data.editor_state, module_configuration_group_path);
+	if (ExistsFileOrFolder(module_configuration_group_path)) {
+		bool success = LoadModuleConfigurationGroupFile(data.editor_state);
+		if (!success) {
+			EditorSetConsoleError(data.editor_state, ToStream("An error occured during module configuration group file load. No groups have been imported"));
+		}
+	}
+	else {
+		// Else reset the groups
+		ResetModuleConfigurationGroups(data.editor_state);
 	}
 
 	SaveProjectUIAutomaticallyData save_automatically_data;

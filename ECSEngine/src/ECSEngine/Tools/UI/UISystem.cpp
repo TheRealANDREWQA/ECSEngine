@@ -2596,7 +2596,7 @@ namespace ECSEngine {
 
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
-			unsigned int count = m_windows[window_index].dynamic_resources.m_count;
+			unsigned int count = m_windows[window_index].dynamic_resources.GetExtendedCapacity();
 			bool removed_element = false;
 			for (size_t index = 0; index < count; index++) {
 				if (m_windows[window_index].dynamic_resources.IsItemAt(index)) {

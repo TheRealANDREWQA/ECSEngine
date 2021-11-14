@@ -118,6 +118,16 @@ void RemoveModuleConfigurationGroup(EditorState* editor_state, Stream<char> name
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
+void ResetModuleConfigurationGroups(EditorState* editor_state)
+{
+	for (size_t index = 0; index < editor_state->module_configuration_groups.size; index++) {
+		DeallocateModuleConfigurationGroup(editor_state, index);
+	}
+	editor_state->module_configuration_groups.FreeBuffer();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+
 bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(file_path, 256);
 	GetModuleConfigurationGroupFilePath(editor_state, file_path);
