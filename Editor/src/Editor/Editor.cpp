@@ -281,6 +281,7 @@ public:
 
 		ProjectModules project_modules(&memory_manager, 1);
 		editor_state.project_modules = &project_modules;
+		editor_state.module_configuration_groups.Initialize(&memory_manager, 1);
 
 		TaskDependencies project_task_graph(&memory_manager);
 		editor_state.project_task_graph = &project_task_graph;

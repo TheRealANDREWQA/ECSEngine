@@ -255,9 +255,6 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 		color_float = (ColorFloat*)drawer.GetResource("COLORFLOAT");
 	}
 
-	drawer.ColorFloatInput("Color float", color_float);
-	drawer.NextRow();
-
 	/*drawer.ArrayDouble("What's up", cool_stuff);
 	drawer.ArrayCheckBox("Heya", check_boxes);
 	drawer.ArrayFloat2("Yupp", float2u);

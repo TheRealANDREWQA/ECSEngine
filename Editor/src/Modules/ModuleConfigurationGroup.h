@@ -37,6 +37,8 @@ void RemoveModuleConfigurationGroup(EditorState* editor_state, unsigned int inde
 
 void RemoveModuleConfigurationGroup(EditorState* editor_state, ECSEngine::containers::Stream<char> name);
 
+void ResetModuleConfigurationGroups(EditorState* editor_state);
+
 // Returns whether or not it succeded in loading the file
 bool LoadModuleConfigurationGroupFile(EditorState* editor_state);
 
