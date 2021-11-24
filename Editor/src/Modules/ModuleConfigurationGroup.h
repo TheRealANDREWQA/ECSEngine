@@ -20,6 +20,8 @@ void AddModuleConfigurationGroup(
 // If a group was created externally, i.e. from loading a file, it can be added directly
 void AddModuleConfigurationGroup(EditorState* editor_state, ModuleConfigurationGroup group);
 
+void ApplyModuleConfigurationGroup(EditorState* editor_state, unsigned int group_index);
+
 ModuleConfigurationGroup CreateModuleConfigurationGroup(
 	EditorState* editor_state,
 	ECSEngine::containers::Stream<char> name,
@@ -27,7 +29,16 @@ ModuleConfigurationGroup CreateModuleConfigurationGroup(
 	EditorModuleConfiguration* configurations
 );
 
+ModuleConfigurationGroup CreateModuleConfigurationGroup(
+	EditorState* editor_state,
+	ECSEngine::containers::Stream<char> name,
+	ECSEngine::containers::Stream<ECSEngine::containers::Stream<wchar_t>> libraries,
+	EditorModuleConfiguration* configurations
+);
+
 void DeallocateModuleConfigurationGroup(EditorState* editor_state, unsigned int index);
+
+void DeleteModuleConfigurationGroupFile(EditorState* editor_state);
 
 void GetModuleConfigurationGroupFilePath(EditorState* editor_state, ECSEngine::containers::CapacityStream<wchar_t>& path);
 
@@ -48,3 +59,8 @@ bool SaveModuleConfigurationGroupFile(EditorState* editor_state);
 // Checks to see if all configurations are valid, i.e. are in bounds [0, 2], if not, they are changed to debug,
 // And if the libraries exist, if some do not, they will simply be removed, 
 void ValidateModuleConfigurationGroups(EditorState* editor_state, ECSEngine::containers::Stream<ModuleConfigurationGroup> groups);
+
+void UpdateModuleConfigurationGroup(EditorState* editor_state, unsigned int index, ModuleConfigurationGroup group);
+
+// Group index -1 means create a new group instead of editing an existing one
+unsigned int CreateModuleConfigurationGroupAddWizard(EditorState* editor_state, unsigned int group_index);

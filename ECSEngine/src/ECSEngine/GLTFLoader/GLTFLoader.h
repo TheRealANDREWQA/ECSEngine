@@ -21,6 +21,7 @@ namespace ECSEngine {
 		GLTFMesh(const GLTFMesh& other) = default;
 		GLTFMesh& operator = (const GLTFMesh& other) = default;
 
+		const char* name;
 		containers::Stream<float3> positions;
 		containers::Stream<float3> normals;
 		containers::Stream<float2> uvs;
@@ -42,10 +43,11 @@ namespace ECSEngine {
 	ECSENGINE_API GLTFData LoadGLTFFile(containers::Stream<char> path, containers::CapacityStream<char>* error_message = nullptr);
 
 	ECSENGINE_API bool LoadMeshFromGLTF(
-		GLTFData data, 
-		GLTFMesh& mesh, 
+		GLTFData data,
+		GLTFMesh& mesh,
 		AllocatorPolymorphic allocator,
-		unsigned int mesh_index = 0, 
+		unsigned int mesh_index = 0,
+		bool invert_z_axis = true,
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
@@ -61,6 +63,7 @@ namespace ECSEngine {
 		GLTFData data,
 		GLTFMesh* meshes,
 		AllocatorPolymorphic allocator,
+		bool invert_z_axis = true,
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
@@ -90,6 +93,7 @@ namespace ECSEngine {
 		GLTFMesh* meshes,
 		PBRMaterial* materials,
 		AllocatorPolymorphic allocator,
+		bool invert_z_axis = true,
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
@@ -102,6 +106,7 @@ namespace ECSEngine {
 		containers::Stream<PBRMaterial>& materials,
 		unsigned int* submesh_material_index,
 		AllocatorPolymorphic allocator,
+		bool invert_z_axis = true,
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
@@ -113,6 +118,8 @@ namespace ECSEngine {
 
 	// Merges the submeshes that have the same material into the same buffer
 	// Material count submeshes will be created
+	// The returned mesh will have no name associated with it
+	// The submeshes will inherit the mesh name
 	ECSENGINE_API Mesh GLTFMeshesToMergedMesh(
 		Graphics* graphics, 
 		GLTFMesh* gltf_meshes, 

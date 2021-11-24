@@ -20,7 +20,7 @@ namespace ECSEngine {
 			Deck(const Deck& other) = default;
 			Deck& operator = (const Deck& other) = default;
 
-			unsigned int Add(T element) {
+			size_t Add(T element) {
 				// The available chunks are completely full
 				if (chunks_with_elements.size == 0) {
 					// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
@@ -38,15 +38,15 @@ namespace ECSEngine {
 				}
 
 				unsigned int index = buffers[chunks_with_elements[0]].Add(element);
-				unsigned int previous_elements_count = chunks_with_elements[0] * chunk_size;
+				size_t previous_elements_count = (size_t)chunks_with_elements[0] * chunk_size;
 
 				if (buffers[chunks_with_elements[0]].size == buffers[chunks_with_elements[0]].capacity) {
 					chunks_with_elements.Remove(0);
 				}
-				return (size_t)previous_elements_count + (size_t)index;
+				return previous_elements_count + (size_t)index;
 			}
 
-			unsigned int Add(const T* element) {
+			size_t Add(const T* element) {
 				// The available chunks are completely full
 				if (chunks_with_elements.size == 0) {
 					// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
@@ -64,12 +64,12 @@ namespace ECSEngine {
 				}
 
 				unsigned int index = buffers[chunks_with_elements[0]].Add(element);
-				unsigned int previous_elements_count = chunks_with_elements[0] * chunk_size;
+				size_t previous_elements_count = (size_t)chunks_with_elements[0] * chunk_size;
 
 				if (buffers[chunks_with_elements[0]].size == buffers[chunks_with_elements[0]].capacity) {
 					chunks_with_elements.Remove(0);
 				}
-				return previous_elements_count + index;
+				return previous_elements_count + (size_t)index;
 			}
 
 			void AddStream(Stream<T> other) {
@@ -82,7 +82,7 @@ namespace ECSEngine {
 			// Allocates memory for extra count chunks
 			void AllocateChunks(size_t count) {
 				if (buffers.size + count > buffers.capacity) {
-					Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR));
+					Resize((unsigned int)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR));
 				}
 
 				for (size_t index = buffers.size; index < buffers.size + count; index++) {
@@ -124,8 +124,8 @@ namespace ECSEngine {
 				}
 			}
 
-			unsigned int GetElementCount() const {
-				unsigned int count = 0;
+			size_t GetElementCount() const {
+				size_t count = 0;
 				for (size_t index = 0; index < buffers.size; index++) {
 					count += buffers[index].size;
 				}
@@ -148,7 +148,7 @@ namespace ECSEngine {
 			// Returns a pointer to a contiguous portion with count elements 
 			// Nullptr will be returned if there is no such zone in the current buffers
 			// It does not allocate new chunks
-			T* GetEntries(unsigned int count) {
+			T* GetEntries(size_t count) {
 				ECS_ASSERT(count <= chunk_size);
 
 				for (size_t index = 0; index < chunks_with_elements.size; index++) {
@@ -168,7 +168,7 @@ namespace ECSEngine {
 
 			// Returns a pointer to a contiguous portion with count elements
 			// It does allocate a new block if it doesn't find such a zone in the current buffers
-			T* GetEntriesWithAllocation(unsigned int count) {
+			T* GetEntriesWithAllocation(size_t count) {
 				ECS_ASSERT(count <= chunk_size);
 
 				for (size_t index = 0; index < chunks_with_elements.size; index++) {
@@ -185,7 +185,7 @@ namespace ECSEngine {
 
 				// Allocate a new chunk
 				if (buffers.size == buffers.capacity) {
-					Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR));
+					Resize((unsigned int)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR));
 				}
 
 				AllocateChunks(1);
@@ -245,13 +245,13 @@ namespace ECSEngine {
 				}
 			}
 
-			void ResizeElementCount(size_t element_count) {
+			void ResizeElementCount(unsigned int element_count) {
 				Resize(element_count / chunk_size + (element_count % chunk_size != 0));
 			}
 
-			void Resize(size_t new_chunk_count) {
+			void Resize(unsigned int new_chunk_count) {
 				// Get the chunk difference
-				size_t chunk_difference = new_chunk_count - buffers.size;
+				unsigned int chunk_difference = new_chunk_count - buffers.size;
 
 				unsigned int old_count = buffers.size;
 
@@ -416,11 +416,12 @@ namespace ECSEngine {
 				chunk_size = _chunk_size;
 				miscellaneous = _miscellaneous;
 				buffers.Initialize(_allocator, _initial_chunk_count);
-				if (_initial_chunk_count > 0) {
-					chunks_with_elements = { _allocator->Allocate(sizeof(unsigned int) * _initial_chunk_count), 0, _initial_chunk_count };
-					void* first_chunk = _allocator->Allocate(sizeof(T) * chunk_size);
-					buffers[0] = { first_chunk, 0, chunk_size };
-					chunks_with_elements.Add(0);
+				buffers.size = _initial_chunk_count;
+				chunks_with_elements = { _allocator->Allocate(sizeof(unsigned int) * _initial_chunk_count), 0 };
+				for (size_t index = 0; index < _initial_chunk_count; index++) {
+					void* chunk = _allocator->Allocate(sizeof(T) * chunk_size);
+					buffers[index] = { chunk, 0, (unsigned int)chunk_size };
+					chunks_with_elements.Add((unsigned int)index);
 				}
 			}
 

@@ -5,6 +5,7 @@
 #include "..\..\Math\Matrix.h"
 #include "..\..\Containers\Deck.h"
 #include "..\..\Internal\Multithreading\ConcurrentPrimitives.h"
+#include "..\..\Rendering\RenderingStructures.h"
 
 namespace ECSEngine {
 
@@ -29,19 +30,17 @@ namespace ECSEngine {
 	enum DebugShaders {
 		ECS_DEBUG_SHADER_TRANSFORM,
 		ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA,
+		ECS_DEBUG_SHADER_NORMAL_SINGLE_DRAW,
 		ECS_DEBUG_SHADER_COUNT
 	};
 
-	// The circle vertex buffer is constructed by the drawer
 	enum DebugVertexBuffers {
 		ECS_DEBUG_VERTEX_BUFFER_SPHERE,
 		ECS_DEBUG_VERTEX_BUFFER_POINT,
 		ECS_DEBUG_VERTEX_BUFFER_CROSS,
 		ECS_DEBUG_VERTEX_BUFFER_ARROW_CYLINDER,
 		ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD,
-		ECS_DEBUG_VERTEX_BUFFER_AXES,
 		ECS_DEBUG_VERTEX_BUFFER_CUBE,
-		ECS_DEBUG_VERTEX_BUFFER_CIRCLE,
 		ECS_DEBUG_VERTEX_BUFFER_COUNT
 	};
 
@@ -63,34 +62,35 @@ namespace ECSEngine {
 	struct DebugLine {
 		float3 start;
 		float3 end;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugSphere {
 		float3 position;
 		float radius;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugPoint {
 		float3 position;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugRectangle {
 		float3 corner0;
 		float3 corner1;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugCross {
 		float3 position;
+		float3 rotation;
 		float size;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
@@ -98,7 +98,7 @@ namespace ECSEngine {
 		float3 position;
 		float3 rotation;
 		float radius;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
@@ -107,7 +107,7 @@ namespace ECSEngine {
 		float3 rotation;
 		float length;
 		float size;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
@@ -115,7 +115,9 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 		float size;
-		Color color;
+		ColorFloat color_x;
+		ColorFloat color_y;
+		ColorFloat color_z;
 		DebugDrawCallOptions options;
 	};
 
@@ -123,14 +125,14 @@ namespace ECSEngine {
 		float3 point0;
 		float3 point1;
 		float3 point2;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugAABB {
 		float3 translation;
 		float3 scale;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
@@ -138,15 +140,16 @@ namespace ECSEngine {
 		float3 translation;
 		float3 rotation;
 		float3 scale;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
 	struct DebugString {
 		float3 position;
+		float3 direction;
 		float size;
 		Stream<char> text;
-		Color color;
+		ColorFloat color;
 		DebugDrawCallOptions options;
 	};
 
@@ -159,114 +162,153 @@ namespace ECSEngine {
 
 #pragma region Add to the draw queue - single threaded
 
-		void AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
+		void AddLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddPoint(float3 position, Color color, DebugDrawCallOptions options = {});
+		void AddPoint(float3 position, ColorFloat color, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
+		void AddRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddCross(float3 position, float size, Color color, DebugDrawCallOptions options = {});
+		void AddCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void AddCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void AddCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {});
+		void AddArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 		
-		void AddArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {});
+		void AddArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void AddAxes(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void AddAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options = {false});
 
-		void AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
+		void AddTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddAABB(float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void AddOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddString(float3 position, float size, containers::Stream<char> text, Color color, DebugDrawCallOptions options = { false });
+		void AddString(float3 position, float3 direction, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
+
+		void AddStringRotation(float3 position, float3 rotation, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
 
 #pragma endregion
 
 #pragma region Add to the draw queue - multi threaded
 
-		void AddLineThread(float3 start, float3 end, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddLineThread(float3 start, float3 end, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddSphereThread(float3 position, float radius, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddSphereThread(float3 position, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddPointThread(float3 position, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddPointThread(float3 position, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {false});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void AddRectangleThread(float3 corner0, float3 corner1, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddRectangleThread(float3 corner0, float3 corner1, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddCrossThread(float3 position, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddCrossThread(float3 position, float3 rotation, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddCircleThread(float3 position, float3 rotation, float radius, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddCircleThread(float3 position, float3 rotation, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddArrowThread(float3 start, float3 end, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddArrowThread(float3 start, float3 end, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {false});
 
-		void AddArrowRotationThread(float3 translation, float3 rotation, float length, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddArrowRotationThread(float3 translation, float3 rotation, float length, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {false});
 
-		void AddAxesThread(float3 translation, float3 rotation, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddAxesThread(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, unsigned int thread_index, DebugDrawCallOptions options = {false});
 
-		void AddTriangleThread(float3 point0, float3 point1, float3 point2, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddTriangleThread(float3 point0, float3 point1, float3 point2, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddAABBThread(float3 translation, float3 scale, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddAABBThread(float3 translation, float3 scale, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
-		void AddOOBBThread(float3 translation, float3 rotation, float3 scale, Color color, unsigned int thread_index, DebugDrawCallOptions options = {});
+		void AddOOBBThread(float3 translation, float3 rotation, float3 scale, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options = {});
 
 		// It must do an allocation from the memory manager under lock - possible expensive operation
-		void AddStringThread(float3 position, float size, containers::Stream<char> text, Color color, unsigned int thread_index, DebugDrawCallOptions options = { false });
+		void AddStringThread(
+			float3 position, 
+			float3 direction,
+			float size,
+			containers::Stream<char> text,
+			ColorFloat color, 
+			unsigned int thread_index,
+			DebugDrawCallOptions options = { false }
+		);
+
+		// It must do an allocation from the memory manager under lock - possible expensive operation
+		void AddStringRotationThread(
+			float3 position,
+			float3 direction,
+			float size,
+			containers::Stream<char> text,
+			ColorFloat color,
+			unsigned int thread_index,
+			DebugDrawCallOptions options = { false }
+		);
 
 #pragma endregion
 
 #pragma region Draw immediately
 
-		void DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options = {});
+		void DrawLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options = {});
+		void DrawSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawPoint(float3 position, Color color, DebugDrawCallOptions options = {});
+		void DrawPoint(float3 position, ColorFloat color, DebugDrawCallOptions options = {});
 
 		// Corner0 is the top left corner, corner1 is the bottom right corner
-		void DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options = {});
+		void DrawRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawCross(float3 position, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options = {});
+		void DrawCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
 		// Rotation expressed as radians
-		void DrawArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options = {false});
 
-		void DrawAxes(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options = {});
+		void DrawAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options = {false});
 
-		void DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options = {});
+		void DrawTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void DrawAABB(float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options = {});
+		void DrawOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void DrawString(float3 position, float size, containers::Stream<char> text, Color color, DebugDrawCallOptions options = {});
-
-		void DrawNormal(VertexBuffer positions, VertexBuffer normals, float size, Color color, DebugDrawCallOptions options = {});
-
-		void DrawNormalSlice(
-			VertexBuffer positions, 
-			VertexBuffer normals, 
+		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
+		void DrawString(
+			float3 translation, 
+			float3 direction, 
 			float size, 
-			Color color, 
-			containers::Stream<uint2> slices, 
+			containers::Stream<char> text,
+			ColorFloat color, 
+			DebugDrawCallOptions options = {false}
+		);
+
+		// Text rotation is the rotation alongside the X axis - rotates the text in order to be seen from below, above, or at a specified angle
+		// The direction is specified as rotation in angles as degrees
+		void DrawStringRotation(
+			float3 translation, 
+			float3 rotation, 
+			float size, 
+			containers::Stream<char> text, 
+			ColorFloat color, 
+			DebugDrawCallOptions options = {false}
+		);
+
+		// Draws the normals for an object
+		void DrawNormals(
+			VertexBuffer model_position, 
+			VertexBuffer model_normals,
+			float size, 
+			ColorFloat color, 
+			Matrix world_matrix,
 			DebugDrawCallOptions options = {}
 		);
 
 		// Draws the normals for multiple objects of the same type
 		void DrawNormals(
-			VertexBuffer model_position, 
+			VertexBuffer model_position,
 			VertexBuffer model_normals,
-			float size, 
-			Color color, 
+			float size,
+			ColorFloat color,
 			containers::Stream<Matrix> world_matrices,
 			DebugDrawCallOptions options = {}
 		);
@@ -426,24 +468,70 @@ namespace ECSEngine {
 
 #pragma region Initialize
 
+		// If creates with a default constructor or allocated
 		void Initialize(MemoryManager* allocator, Graphics* graphics, size_t thread_count);
 
 		// The circle vertex buffer is constructed by the drawer
 		void InitializePrimitiveBuffers(ResourceManager* resource_manager);
 
-		// Initializes the vertex shader, the pixel shader, the input layout and the vertex constant buffer used
-		// to transform the vertices
-		//void InitializeRenderResources(containers::Stream<containers::Stream<wchar_t>> vertex_shaders, containers::Stream<containers::Stream<wchar_t>> pixel_shaders);
+#pragma endregion
+
+#pragma region Bindings
+
+		void BindSphereBuffers(VertexBuffer instanced_data);
+
+		void BindPointBuffers(VertexBuffer instanced_data);
+
+		void BindCrossBuffers(VertexBuffer instanced_data);
+
+		void BindCircleBuffers(VertexBuffer instanced_data);
+
+		void BindArrowCylinderBuffers(VertexBuffer instanced_data);
+
+		void BindArrowHeadBuffers(VertexBuffer instanced_data);
+
+		void BindCubeBuffers(VertexBuffer instanced_data);
+
+		void BindStringBuffers(VertexBuffer instanced_data);
+
+#pragma endregion
+
+#pragma region Draw Calls
+
+		void DrawCallLine(unsigned int instance_count);
+
+		void DrawCallSphere(unsigned int instance_count);
+
+		void DrawCallPoint(unsigned int instance_count);
+
+		void DrawCallRectangle(unsigned int instance_count);
+
+		void DrawCallCross(unsigned int instance_count);
+
+		void DrawCallCircle(unsigned int instance_count);
+
+		void DrawCallArrowCylinder(unsigned int instance_count);
+
+		void DrawCallArrowHead(unsigned int instance_count);
+
+		void DrawCallTriangle(unsigned int instance_count);
+		
+		void DrawCallAABB(unsigned int instance_count);
+
+		void DrawCallOOBB(unsigned int instance_count);
 
 #pragma endregion
 
 		void BindShaders(unsigned int index);
 
+		// It also bumps forward the buffer offset
+		void CopyCharacterSubmesh(IndexBuffer index_buffer, unsigned int& buffer_offset, unsigned int alphabet_index);
+
 		void UpdateCameraMatrix(Matrix new_matrix);
 
-		void SetPreviousRenderState();
+		GraphicsPipelineRenderState GetPreviousRenderState() const;
 
-		void RestorePreviousRenderState();
+		void RestorePreviousRenderState(GraphicsPipelineRenderState state);
 
 		MemoryManager* allocator;
 		Graphics* graphics;
@@ -472,24 +560,20 @@ namespace ECSEngine {
 		containers::CapacityStream<DebugOOBB>* thread_oobbs;
 		containers::CapacityStream<DebugString>* thread_strings;
 		SpinLock** thread_locks;
-		size_t thread_count;
+		unsigned int thread_count;
 		ID3D11RasterizerState* rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];
 		VertexBuffer positions_small_vertex_buffer;
 		VertexBuffer instanced_small_vertex_buffer;
 		StructuredBuffer instanced_small_structured_buffer;
 		ResourceView instanced_structured_view;
-		VertexBuffer primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_COUNT];
-		VertexBuffer* string_buffers;
+		Mesh* primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_COUNT];
+		CoallescedMesh* string_mesh;
+		VertexBuffer circle_buffer;
 		VertexShader vertex_shaders[ECS_DEBUG_SHADER_COUNT];
 		PixelShader pixel_shaders[ECS_DEBUG_SHADER_COUNT];
 		InputLayout layout_shaders[ECS_DEBUG_SHADER_COUNT];
-		ID3D11RasterizerState* previous_rasterizer_state;
-		ID3D11DepthStencilState* previous_depth_stencil_state;
-		ID3D11BlendState* previous_blend_state;
-		float previous_blend_factors[4];
-		unsigned int previous_blend_mask;
-		unsigned int previous_stencil_ref;
 		Matrix camera_matrix;
+		float2* string_character_bounds;
 	};
 
 }

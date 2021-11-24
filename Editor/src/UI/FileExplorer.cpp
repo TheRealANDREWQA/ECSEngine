@@ -221,9 +221,6 @@ void FileExplorerSelectableBase(ActionData* action_data) {
 			}
 		}
 	}
-	/*else {
-		FileExplorerResetSelectedFiles(data->editor_state);
-	}*/
 }
 
 void FileExplorerDirectorySelectable(ActionData* action_data) {
@@ -261,9 +258,6 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 			}
 		}
 	}
-	/*else {
-		FileExplorerResetSelectedFile(data->editor_state);
-	}*/
 }
 
 void FileExplorerChangeDirectoryFromFile(ActionData* action_data) {
@@ -562,7 +556,7 @@ void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, Select
 	UIConfigTextParameters text_parameters;
 	text_parameters.color = drawer->color_theme.default_text;
 	text_parameters.character_spacing = drawer->font.character_spacing;
-	text_parameters.size *= {0.85f, 0.85f};
+	text_parameters.size *= {0.75f, 0.8f};
 	config->AddFlag(text_parameters);
 
 	drawer->element_descriptor.label_horizontal_padd *= 0.5f;
@@ -645,43 +639,53 @@ void TextureDraw(ActionData* action_data) {
 void FileBlankDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, white_color);
+	Color sprite_color = drawer->color_theme.default_text;
+	sprite_color.alpha = white_color.alpha;
+	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, sprite_color);
+}
+
+void FileOverlayDraw(ActionData* action_data, const wchar_t* overlay_texture) {
+	EXPAND_ACTION;
+
+	Color base_color = drawer->color_theme.theme;
+	Color overlay_color = drawer->color_theme.default_text;
+	base_color.alpha = white_color.alpha;
+	overlay_color.alpha = white_color.alpha;
+	drawer->SpriteRectangleDouble<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(
+		*config,
+		ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
+		overlay_texture,
+		overlay_color,
+		base_color
+	);
 }
 
 void FileCDraw(ActionData* action_data) {
-	EXPAND_ACTION;
-
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_C, white_color);
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_C);
 }
 
 void FileCppDraw(ActionData* action_data) {
-	EXPAND_ACTION;
-
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_CPP, white_color);
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_CPP);
 }
 
 void FileConfigDraw(ActionData* action_data) {
-	EXPAND_ACTION;
-
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, white_color);
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG);
 }
 
 void FileTextDraw(ActionData* action_data) {
-	EXPAND_ACTION;
-
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_TEXT, white_color);
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_TEXT);
 }
 
 void FileShaderDraw(ActionData* action_data) {
-	EXPAND_ACTION;
-	
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_SHADER, white_color);
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_SHADER);
 }
 
 void FileEditorDraw(ActionData* action_data) {
-	EXPAND_ACTION;
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_EDITOR);
+}
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_EDITOR, white_color);
+void FileMeshDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_MESH);
 }
 
 #undef EXPAND_ACTION
@@ -1033,101 +1037,107 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
 
 	if constexpr (initialize) {
-		ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
-		data->current_directory.Copy(project_file->path);
-		data->current_directory.AddSafe(ECS_OS_PATH_SEPARATOR);
-		data->current_directory.AddStreamSafe(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
-		data->current_directory[data->current_directory.size] = L'\0';
+		// Initialize the states only if they have not been previously initialized
+		// Test the file functors table
+		if (data->file_functors.m_capacity == 0) {
+			ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+			data->current_directory.Copy(project_file->path);
+			data->current_directory.AddSafe(ECS_OS_PATH_SEPARATOR);
+			data->current_directory.AddStreamSafe(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
+			data->current_directory[data->current_directory.size] = L'\0';
 
-		void* allocation = drawer.GetMainAllocatorBuffer(ALLOCATOR_CAPACITY);
-		data->allocator = LinearAllocator(allocation, ALLOCATOR_CAPACITY);
-		
-		allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
-		data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
+			void* allocation = drawer.GetMainAllocatorBuffer(ALLOCATOR_CAPACITY);
+			data->allocator = LinearAllocator(allocation, ALLOCATOR_CAPACITY);
+
+			allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
+			data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
 
 #pragma region Add Handlers
 
-		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * ADD_ROW_COUNT);
-		data->add_handlers.InitializeFromBuffer(allocation, ADD_ROW_COUNT, ADD_ROW_COUNT);
-		data->add_handlers[0] = { SkipAction, nullptr, 0 };
-		data->add_handlers[1] = { SkipAction, nullptr, 0 };
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * ADD_ROW_COUNT);
+			data->add_handlers.InitializeFromBuffer(allocation, ADD_ROW_COUNT, ADD_ROW_COUNT);
+			data->add_handlers[0] = { SkipAction, nullptr, 0 };
+			data->add_handlers[1] = { SkipAction, nullptr, 0 };
 
 #pragma endregion
 
 #pragma region Deselection Handlers
 
-		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
-		data->deselection_right_click_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
+			data->deselection_right_click_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
 
-		data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
+			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
 
-		auto reset_copied_files = [](ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
-			
-			FileExplorerResetCopiedFiles((FileExplorerData*)_data);
-		};
-		data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
+			auto reset_copied_files = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				FileExplorerResetCopiedFiles((FileExplorerData*)_data);
+			};
+			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
 
 #pragma endregion
 
 #pragma region File Right Click Handlers
 
-		auto CopyPath = [](ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
+			auto CopyPath = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-			ECS_TEMP_ASCII_STRING(ascii_path, 256);
-			Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
-			function::ConvertWideCharsToASCII(*path, ascii_path);
-			ascii_path[ascii_path.size] = '\0';
-			system->m_application->WriteTextToClipboard(ascii_path.buffer);
-		};
+				ECS_TEMP_ASCII_STRING(ascii_path, 256);
+				Stream<wchar_t>* path = (Stream<wchar_t>*)_data;
+				function::ConvertWideCharsToASCII(*path, ascii_path);
+				ascii_path[ascii_path.size] = '\0';
+				system->m_application->WriteTextToClipboard(ascii_path.buffer);
+			};
 
-		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
-		data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
-		data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
+			data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
 
 #pragma endregion
 
 #pragma region Folder Right Click Handlers
 
-		allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FOLDER_RIGHT_CLICK_ROW_COUNT);
-		data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
-		data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FOLDER_RIGHT_CLICK_ROW_COUNT);
+			data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
 
 #pragma endregion
 
-		ResourceIdentifier identifier;
-		unsigned int hash;
+			ResourceIdentifier identifier;
+			unsigned int hash;
 
 #define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(ToStream(string)); \
 hash = Hash::Hash(identifier); \
 ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 
-		ADD_FUNCTOR(TextureDraw, L".jpg");
-		ADD_FUNCTOR(TextureDraw, L".png");
-		ADD_FUNCTOR(FileCDraw, L".c");
-		ADD_FUNCTOR(FileCppDraw, L".cpp");
-		ADD_FUNCTOR(FileCppDraw, L".h");
-		ADD_FUNCTOR(FileCppDraw, L".hpp");
-		ADD_FUNCTOR(FileConfigDraw, L".config");
-		ADD_FUNCTOR(FileTextDraw, L".txt");
-		ADD_FUNCTOR(FileTextDraw, L".doc");
-		ADD_FUNCTOR(FileShaderDraw, L".hlsl");
-		ADD_FUNCTOR(FileShaderDraw, L".hlsli");
+			ADD_FUNCTOR(TextureDraw, L".jpg");
+			ADD_FUNCTOR(TextureDraw, L".png");
+			ADD_FUNCTOR(FileCDraw, L".c");
+			ADD_FUNCTOR(FileCppDraw, L".cpp");
+			ADD_FUNCTOR(FileCppDraw, L".h");
+			ADD_FUNCTOR(FileCppDraw, L".hpp");
+			ADD_FUNCTOR(FileConfigDraw, L".config");
+			ADD_FUNCTOR(FileTextDraw, L".txt");
+			ADD_FUNCTOR(FileTextDraw, L".doc");
+			ADD_FUNCTOR(FileShaderDraw, L".hlsl");
+			ADD_FUNCTOR(FileShaderDraw, L".hlsli");
+			ADD_FUNCTOR(FileMeshDraw, L".gltf");
+			ADD_FUNCTOR(FileMeshDraw, L".glb");
 
 #undef ADD_FUNCTOR
+		}
 
 	}
 
@@ -1484,14 +1494,13 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 				FileFunctorData functor_data;
 				functor_data.for_each_data = _data;
 				functor_data.color_alpha = color_alpha;
+				action_data.additional_data = &functor_data;
 
 				if (data->file_functors.TryGetValue(hash, identifier, functor)) {
-					action_data.additional_data = &functor_data;
-
 					functor(&action_data);
 				}
 				else {
-					drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK);
+					FileBlankDraw(&action_data);
 				}
 
 				UIConfigHoverableAction hoverable_action;

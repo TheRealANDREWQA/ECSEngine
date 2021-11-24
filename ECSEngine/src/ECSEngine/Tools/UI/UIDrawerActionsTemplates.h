@@ -107,7 +107,7 @@ namespace ECSEngine {
 						CharacterType type = CharacterType::Unknown;
 
 						size_t current_index = data->filter_characters_start + index;
-						system->FindCharacterUVFromAtlas(data->text->buffer[current_index], type);
+						system->FindCharacterType(data->text->buffer[current_index], type);
 						bool is_valid = Filter::Filter(data->text->buffer[current_index], type);
 						size_t current_sprite_index = current_index * 6;
 
@@ -162,7 +162,7 @@ namespace ECSEngine {
 					size_t character_count = 0;
 					while (keyboard->GetCharacter(characters[character_count++])) {
 						CharacterType type;
-						system->FindCharacterUVFromAtlas(characters[character_count - 1], type);
+						system->FindCharacterType(characters[character_count - 1], type);
 						if (type == CharacterType::Unknown) {
 							character_count--;
 						}

@@ -168,10 +168,15 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DO_NOT_INFER_X = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_SPRITE_BUTTON_BACKGROUND = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND = (size_t)1 << 46;
 
 		constexpr size_t UI_CONFIG_LABEL_LIST_NO_NAME = (size_t)1 << 45;
 
 		constexpr size_t UI_CONFIG_ARRAY_FIXED_SIZE = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_ARRAY_PROVIDE_NAMES = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT = (size_t)1 << 47;
+		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 46;
 

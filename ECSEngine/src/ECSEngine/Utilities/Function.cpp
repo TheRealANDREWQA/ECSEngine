@@ -431,6 +431,66 @@ namespace ECSEngine {
 			return true;
 		}
 
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int GetAlphabetIndex(char character) {
+			if (character >= '!' && character <= '~')
+				return character - '!';
+			if (character == ' ')
+				return (unsigned int)AlphabetIndex::Space;
+			if (character == '\t')
+				return (unsigned int)AlphabetIndex::Tab;
+			return (unsigned int)AlphabetIndex::Unknown;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int GetAlphabetIndex(char character, CharacterType& character_type) {
+			unsigned int uv_index = character - '!';
+			if (character == ' ') {
+				character_type = CharacterType::Space;
+				return uv_index;
+			}
+			if (character < '!') {
+				character_type = CharacterType::Unknown;
+				return uv_index;
+			}
+			if (character < '0') {
+				character_type = CharacterType::Symbol;
+				return uv_index;
+			}
+			if (character <= '9') {
+				character_type = CharacterType::Digit;
+				return uv_index;
+			}
+			if (character < 'A') {
+				character_type = CharacterType::Symbol;
+				return uv_index;
+			}
+			if (character <= 'Z') {
+				character_type = CharacterType::CapitalLetter;
+				return uv_index;
+			}
+			if (character < 'a') {
+				character_type = CharacterType::Symbol;
+				return uv_index;
+			}
+			if (character <= 'z') {
+				character_type = CharacterType::LowercaseLetter;
+				return uv_index;
+			}
+			if (character <= '~') {
+				character_type = CharacterType::Symbol;
+				return uv_index;
+			}
+			if (character == '\t') {
+				character_type = CharacterType::Tab;
+				return (unsigned int)AlphabetIndex::Tab;
+			}
+			character_type = CharacterType::Unknown;
+			return (unsigned int)AlphabetIndex::Unknown;
+		}
+
 		// --------------------------------------------------------------------------------------------------
 
 		// --------------------------------------------------------------------------------------------------

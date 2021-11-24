@@ -565,48 +565,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	template<typename IntType>
-	IndexBuffer CreateIndexBufferImpl(Graphics* graphics, Stream<IntType> indices) {
-		IndexBuffer component;
-		component.count = indices.size;
-		component.int_size = sizeof(IntType);
-
-		HRESULT result;
-		D3D11_BUFFER_DESC index_buffer_descriptor = {};
-		index_buffer_descriptor.ByteWidth = UINT(component.count * sizeof(IntType));
-		index_buffer_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
-		index_buffer_descriptor.BindFlags = D3D11_BIND_INDEX_BUFFER;
-		index_buffer_descriptor.CPUAccessFlags = 0;
-		index_buffer_descriptor.MiscFlags = 0;
-		index_buffer_descriptor.StructureByteStride = sizeof(IntType);
-
-		D3D11_SUBRESOURCE_DATA initial_data_index = {};
-		initial_data_index.pSysMem = indices.buffer;
-
-		result = graphics->m_device->CreateBuffer(&index_buffer_descriptor, &initial_data_index, &component.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
-		return component;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
 	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned char> indices)
 	{ 
-		return CreateIndexBufferImpl(this, indices);
+		return CreateIndexBuffer(sizeof(unsigned char), indices.size, indices.buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned short> indices)
 	{
-		return CreateIndexBufferImpl(this, indices);
+		return CreateIndexBuffer(sizeof(unsigned short), indices.size, indices.buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	IndexBuffer Graphics::CreateIndexBuffer(Stream<unsigned int> indices)
 	{
-		return CreateIndexBufferImpl(this, indices);
+		return CreateIndexBuffer(sizeof(unsigned int), indices.size, indices.buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -627,6 +602,31 @@ namespace ECSEngine {
 		index_buffer_descriptor.StructureByteStride = int_size;
 
 		result = m_device->CreateBuffer(&index_buffer_descriptor, nullptr, &component.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
+		return component;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	IndexBuffer Graphics::CreateIndexBuffer(size_t int_size, size_t element_count, const void* data, D3D11_USAGE usage, unsigned int cpu_access)
+	{
+		IndexBuffer component;
+		component.count = element_count;
+		component.int_size = int_size;
+
+		HRESULT result;
+		D3D11_BUFFER_DESC index_buffer_descriptor = {};
+		index_buffer_descriptor.ByteWidth = UINT(component.count * int_size);
+		index_buffer_descriptor.Usage = usage;
+		index_buffer_descriptor.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		index_buffer_descriptor.CPUAccessFlags = cpu_access;
+		index_buffer_descriptor.MiscFlags = 0;
+		index_buffer_descriptor.StructureByteStride = int_size;
+
+		D3D11_SUBRESOURCE_DATA subresource_data = {};
+		subresource_data.pSysMem = data;
+
+		result = m_device->CreateBuffer(&index_buffer_descriptor, &subresource_data, &component.buffer);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
 		return component;
 	}
@@ -965,15 +965,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	StandardBuffer Graphics::CreateStandardBuffer(size_t byte_size, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	StandardBuffer Graphics::CreateStandardBuffer(size_t element_size, size_t element_count, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
 	{
 		StandardBuffer buffer;
 
 		HRESULT result;
 		D3D11_BUFFER_DESC buffer_descriptor = {};
 
-		buffer_descriptor.ByteWidth = byte_size;
-		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
 		buffer_descriptor.MiscFlags = miscFlags;
 		buffer_descriptor.StructureByteStride = 0u;
@@ -981,21 +981,22 @@ namespace ECSEngine {
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		buffer.count = element_count;
 
 		return buffer;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	StandardBuffer Graphics::CreateStandardBuffer(size_t byte_size, const void* data, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
+	StandardBuffer Graphics::CreateStandardBuffer(size_t element_size, size_t element_count, const void* data, D3D11_USAGE usage, unsigned int cpuAccessFlags, unsigned int miscFlags)
 	{
 		StandardBuffer buffer;
 
 		HRESULT result;
 		D3D11_BUFFER_DESC buffer_descriptor = {};
 
-		buffer_descriptor.ByteWidth = byte_size;
-		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		buffer_descriptor.ByteWidth = element_size * element_count;
+		buffer_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 		buffer_descriptor.CPUAccessFlags = cpuAccessFlags;
 		buffer_descriptor.MiscFlags = miscFlags;
 		buffer_descriptor.StructureByteStride = 0u;
@@ -1006,6 +1007,7 @@ namespace ECSEngine {
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		buffer.count = element_count;
 
 		return buffer;
 	}
@@ -1483,11 +1485,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	ResourceView Graphics::CreateBufferView(StandardBuffer buffer)
+	ResourceView Graphics::CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format)
 	{
 		ResourceView view;
 
-		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, nullptr, &view.view);
+		D3D11_SHADER_RESOURCE_VIEW_DESC descriptor;
+		descriptor.Format = format;
+		descriptor.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+		descriptor.Buffer.ElementOffset = 0;
+		descriptor.Buffer.ElementWidth = buffer.count;
+		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, &descriptor, &view.view);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer view failed.", true);
 
 		return view;
@@ -1703,6 +1710,31 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::FreeMesh(const Mesh& mesh)
+	{
+		if (mesh.name != nullptr) {
+			m_allocator->Deallocate(mesh.name);
+		}
+		for (size_t index = 0; index < mesh.mapping_count; index++) {
+			if (mesh.vertex_buffers[index].buffer != nullptr) {
+				mesh.vertex_buffers[index].buffer->Release();
+			}
+		}
+		if (mesh.index_buffer.buffer != nullptr) {
+			mesh.index_buffer.buffer->Release();
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::FreeSubmesh(const Submesh& submesh) {
+		if (submesh.name != nullptr) {
+			m_allocator->Deallocate(submesh.name);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::ClearBackBuffer(float red, float green, float blue) {
 		const float color[] = { red, green, blue, 1.0f };
 		m_context->ClearRenderTargetView(m_target_view.target, color);
@@ -1772,27 +1804,38 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::Draw(UINT vertex_count, UINT start_slot)
+	void Graphics::Draw(unsigned int vertex_count, unsigned int vertex_offset)
 	{
-		ECSEngine::Draw(vertex_count, m_context.Get(), start_slot);
+		ECSEngine::Draw(vertex_count, m_context.Get(), vertex_offset);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawIndexed(unsigned int count, UINT start_index, INT base_vertex_location) {
+	void Graphics::DrawIndexed(unsigned int count, unsigned int start_index, unsigned int base_vertex_location) {
 		ECSEngine::DrawIndexed(count, m_context.Get(), start_index, base_vertex_location);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawInstanced(unsigned int vertex_count, unsigned int instance_count, unsigned int start_slot) {
-		ECSEngine::DrawInstanced(vertex_count, instance_count, m_context.Get(), start_slot);
+	void Graphics::DrawInstanced(
+		unsigned int vertex_count, 
+		unsigned int instance_count, 
+		unsigned int vertex_buffer_offset,
+		unsigned int instance_offset
+	) {
+		ECSEngine::DrawInstanced(vertex_count, instance_count, m_context.Get(), vertex_buffer_offset, instance_offset);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, unsigned int start_slot) {
-		ECSEngine::DrawIndexedInstanced(index_count, instance_count, m_context.Get(), start_slot);
+	void Graphics::DrawIndexedInstanced(
+		unsigned int index_count, 
+		unsigned int instance_count, 
+		unsigned int index_buffer_offset,
+		unsigned int vertex_buffer_offset, 
+		unsigned int instance_offset
+	) {
+		ECSEngine::DrawIndexedInstanced(index_count, instance_count, m_context.Get(), index_buffer_offset, vertex_buffer_offset, instance_offset);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1914,6 +1957,48 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	GraphicsPipelineBlendState Graphics::GetBlendState() const
+	{
+		return ECSEngine::GetBlendState(m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::FreeAllocatedBuffer(const void* buffer)
+	{
+		m_allocator->Deallocate(buffer);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* Graphics::GetAllocatorBuffer(size_t size)
+	{
+		return m_allocator->Allocate(size);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineDepthStencilState Graphics::GetDepthStencilState() const
+	{
+		return ECSEngine::GetDepthStencilState(m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineRasterizerState Graphics::GetRasterizerState() const
+	{
+		return ECSEngine::GetRasterizerState(m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineRenderState Graphics::GetRenderState() const
+	{
+		return ECSEngine::GetRenderState(m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::ResizeSwapChainSize(HWND hWnd, float width, float height)
 	{
 		D3D11_RENDER_TARGET_VIEW_DESC descriptor;
@@ -1990,6 +2075,34 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::RestoreBlendState(GraphicsPipelineBlendState state)
+	{
+		ECSEngine::RestoreBlendState(GetContext(), state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::RestoreDepthStencilState(GraphicsPipelineDepthStencilState state)
+	{
+		ECSEngine::RestoreDepthStencilState(GetContext(), state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::RestoreRasterizerState(GraphicsPipelineRasterizerState state)
+	{
+		ECSEngine::RestoreRasterizerState(GetContext(), state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::RestoreRenderState(GraphicsPipelineRenderState state)
+	{
+		ECSEngine::RestoreRenderState(GetContext(), state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, D3D11_MAP map_type, unsigned int map_flags, unsigned int subresource_index)
 	{
 		ECSEngine::UpdateBuffer(buffer, data, data_size, m_context.Get(), map_type, map_flags, subresource_index);
@@ -2038,11 +2151,9 @@ namespace ECSEngine {
 		bool success = m_shader_reflection.ReflectVertexShaderInput(source_code_path, element_descriptors, name_pool);
 
 		if (!success) {
-			//_freea(allocation);
 			return {};
 		}
 		InputLayout layout = CreateInputLayout(element_descriptors, shader);
-		//_freea(allocation);
 		return layout;
 	}
 
@@ -2062,7 +2173,6 @@ namespace ECSEngine {
 
 		bool success = m_shader_reflection.ReflectShaderBuffers(path, buffers, name_pool);
 		if (!success) {
-			//_freea(name_allocation);
 			return false;
 		}
 
@@ -2076,7 +2186,6 @@ namespace ECSEngine {
 		for (size_t index = 0; index < buffers.size; index++) {
 			buffers[index].name.CopyTo(buffer);
 		}
-		//_freea(name_allocation);
 		return true;
 	}
 
@@ -2497,7 +2606,7 @@ namespace ECSEngine {
 		}
 
 		ECS_ASSERT(valid_mappings == mapping.size, "The given mesh does not have the necessary vertex buffers.");
-		BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, mesh.mapping_count), context);
+		BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, mapping.size), context);
 
 		// Topology
 		BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, context);
@@ -2732,14 +2841,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Draw(unsigned int vertex_count, GraphicsContext* context, UINT start_slot)
+	void Draw(unsigned int vertex_count, GraphicsContext* context, unsigned int vertex_offset)
 	{
-		context->Draw(vertex_count, start_slot);
+		context->Draw(vertex_count, vertex_offset);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void DrawIndexed(unsigned int count, GraphicsContext* context, UINT start_index, INT base_vertex_location) {
+	void DrawIndexed(unsigned int count, GraphicsContext* context, unsigned int start_index, unsigned int base_vertex_location) {
 		context->DrawIndexed(count, start_index, base_vertex_location);
 	}
 
@@ -2750,7 +2859,8 @@ namespace ECSEngine {
 		unsigned int instance_count,
 		GraphicsContext* context,
 		unsigned int vertex_offset,
-		unsigned int instance_offset) 
+		unsigned int instance_offset
+	) 
 	{
 		context->DrawInstanced(vertex_count, instance_count, vertex_offset, instance_offset);
 	}
@@ -2761,8 +2871,8 @@ namespace ECSEngine {
 		unsigned int index_count,
 		unsigned int instance_count,
 		GraphicsContext* context,
-		unsigned int vertex_offset,
 		unsigned int index_offset,
+		unsigned int vertex_offset,
 		unsigned int instance_offset
 	) {
 		context->DrawIndexedInstanced(index_count, instance_count, index_offset, vertex_offset, instance_offset);
@@ -2789,6 +2899,52 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating command list failed!", true);
 		return list;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineRasterizerState GetRasterizerState(GraphicsContext* context)
+	{
+		GraphicsPipelineRasterizerState state;
+
+		context->RSGetState(&state.rasterizer_state);
+
+		return state;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineRenderState GetRenderState(GraphicsContext* context)
+	{
+		GraphicsPipelineRenderState state;
+
+		state.rasterizer_state = GetRasterizerState(context);
+		state.blend_state = GetBlendState(context);
+		state.depth_stencil_state = GetDepthStencilState(context);
+
+		return state;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineDepthStencilState GetDepthStencilState(GraphicsContext* context)
+	{
+		GraphicsPipelineDepthStencilState state;
+
+		context->OMGetDepthStencilState(&state.depth_stencil_state, &state.stencil_ref);
+
+		return state;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsPipelineBlendState GetBlendState(GraphicsContext* context)
+	{
+		GraphicsPipelineBlendState state;
+
+		context->OMGetBlendState(&state.blend_state, state.blend_factors, &state.sample_mask);
+
+		return state;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2875,6 +3031,36 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void RestoreRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state)
+	{
+		RestoreBlendState(context, render_state.blend_state);
+		RestoreDepthStencilState(context, render_state.depth_stencil_state);
+		RestoreRasterizerState(context, render_state.rasterizer_state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void RestoreBlendState(GraphicsContext* context, GraphicsPipelineBlendState blend_state)
+	{
+		context->OMSetBlendState(blend_state.blend_state, blend_state.blend_factors, blend_state.sample_mask);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void RestoreRasterizerState(GraphicsContext* context, GraphicsPipelineRasterizerState rasterizer_state)
+	{
+		context->RSSetState(rasterizer_state.rasterizer_state);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void RestoreDepthStencilState(GraphicsContext* context, GraphicsPipelineDepthStencilState depth_stencil_state)
+	{
+		context->OMSetDepthStencilState(depth_stencil_state.depth_stencil_state, depth_stencil_state.stencil_ref);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void UpdateBuffer(
 		ID3D11Buffer* buffer,
 		const void* data,
@@ -2894,8 +3080,6 @@ namespace ECSEngine {
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(buffer, subresource_index);
 	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
 
 	void UpdateBufferResource(
 		ID3D11Buffer* buffer,
@@ -3016,7 +3200,6 @@ namespace ECSEngine {
 		function::MakeSequence(Stream<unsigned int>(mask, meshes.size));
 
 		Mesh mesh = MeshesToSubmeshes(graphics, meshes, submeshes, sequence);
-		//_freea(mask);
 		return mesh;
 	}
 
@@ -3028,52 +3211,97 @@ namespace ECSEngine {
 		// Accumulate the total vertex buffer size and index buffer size
 		size_t vertex_buffer_size = 0;
 		size_t index_buffer_size = 0;
+		size_t mapping_count = meshes[0].mapping_count;
 
 		for (size_t index = 0; index < mesh_mask.size; index++) {
 			vertex_buffer_size += meshes[mesh_mask[index]].vertex_buffers[0].size;
 			index_buffer_size += meshes[mesh_mask[index]].index_buffer.count;
 		}
 
-		for (size_t index = 0; index < meshes.size; index++) {
-			vertex_buffer_size += meshes[index].vertex_buffers[0].size;
-			index_buffer_size += meshes[index].index_buffer.count;
-		}
-
 		// Create the new vertex buffers and the index buffer
 		VertexBuffer new_vertex_buffers[ECS_MESH_BUFFER_COUNT];
-		for (size_t index = 0; index < meshes[0].mapping_count; index++) {
+		for (size_t index = 0; index < mapping_count; index++) {
 			new_vertex_buffers[index] = graphics->CreateVertexBuffer(meshes[0].vertex_buffers[index].stride, vertex_buffer_size, D3D11_USAGE_DEFAULT, 0);
 		}
 
 		IndexBuffer new_index_buffer = graphics->CreateIndexBuffer(meshes[0].index_buffer.int_size, index_buffer_size);
 
-		size_t mapping_count = meshes[0].mapping_count;
 		// all vertex buffers must have the same size - so a single offset suffices
 		unsigned int vertex_buffer_offset = 0;
 		unsigned int index_buffer_offset = 0;
 
 		// Copy the vertex buffer and index buffer submeshes
-		for (size_t index = 0; index < meshes.size; index++) {
-			submeshes[index] = { vertex_buffer_offset, index_buffer_offset, meshes[mesh_mask[index]].index_buffer.count };
+		for (size_t index = 0; index < mesh_mask.size; index++) {
+			Mesh* current_mesh = &meshes[mesh_mask[index]];
+			// If the mesh has a name, simply repoint the submesh pointer - do not deallocate and reallocate again
+			if (current_mesh->name != nullptr) {
+				submeshes[index].name = current_mesh->name;
+			}
+			else {
+				submeshes[index].name = nullptr;
+			}
+
+			submeshes[index].index_buffer_offset = index_buffer_offset;
+			submeshes[index].vertex_buffer_offset = vertex_buffer_offset;
+			submeshes[index].index_count = current_mesh->index_buffer.count;
+			submeshes[index].vertex_buffer_offset = vertex_buffer_offset;
+			submeshes[index].vertex_count = current_mesh->vertex_buffers[0].size;
 
 			// Vertex buffers
 			for (size_t buffer_index = 0; buffer_index < mapping_count; buffer_index++) {
 				CopyBufferSubresource(
 					new_vertex_buffers[buffer_index],
 					vertex_buffer_offset,
-					meshes[index].vertex_buffers[buffer_index],
+					current_mesh->vertex_buffers[buffer_index],
 					0,
-					meshes[index].vertex_buffers[buffer_index].size,
+					current_mesh->vertex_buffers[buffer_index].size,
 					graphics->GetContext()
 				);
-			}
-			// all vertex buffers must have the same size
-			vertex_buffer_offset += meshes[index].vertex_buffers[0].size;
 
-			// Index buffer
-			CopyBufferSubresource(new_index_buffer, index_buffer_offset, meshes[index].index_buffer, 0, meshes[index].index_buffer.count, graphics->GetContext());
-			index_buffer_offset += meshes[index].index_buffer.count;
+				// Release all the old buffers
+				current_mesh->vertex_buffers[buffer_index].buffer->Release();
+				current_mesh->vertex_buffers[buffer_index].buffer = nullptr;
+			}
+			// Index buffer - a new copy must be created which has the indices offset by the correct amount
+			// Use a staging resource for that
+			IndexBuffer staging_buffer = ToStaging(current_mesh->index_buffer);
+			// Map the staging buffer 
+			unsigned int* staging_data = (unsigned int*)graphics->MapBuffer(staging_buffer.buffer, D3D11_MAP_READ_WRITE);
+
+			// Use simd to increase the offsets
+			unsigned int index_buffer_count = current_mesh->index_buffer.count;
+			unsigned int simd_count = index_buffer_count & (-Vec8ui::size());
+
+			Vec8ui simd_offset(vertex_buffer_offset);
+			for (size_t simd_index = 0; simd_index < simd_count; simd_index += Vec8ui::size()) {
+				Vec8ui data;
+				data.load(staging_data + simd_index);
+				data += simd_offset;
+				data.store(staging_data + simd_index);
+			}
+			for (size_t simd_index = simd_count; simd_index < index_buffer_count; simd_index++) {
+				staging_data[simd_index] += vertex_buffer_offset;
+			}
+			graphics->UnmapBuffer(staging_buffer.buffer);
+			CopyBufferSubresource(new_index_buffer, index_buffer_offset, staging_buffer, 0, index_buffer_count, graphics->GetContext());
+			index_buffer_offset += index_buffer_count;
+
+			// all vertex buffers must have the same size
+			vertex_buffer_offset += current_mesh->vertex_buffers[0].size;
+
+			// Release the staging buffer and the normal buffer
+			staging_buffer.buffer->Release();
+			current_mesh->index_buffer.buffer->Release();
+			current_mesh->index_buffer.buffer = nullptr;
+			current_mesh->mapping_count = 0;
 		}
+
+		result.index_buffer = new_index_buffer;
+		for (size_t index = 0; index < mapping_count; index++) {
+			result.vertex_buffers[index] = new_vertex_buffers[index];
+			result.mapping[index] = meshes[0].mapping[index];
+		}
+		result.mapping_count = mapping_count;
 
 		return result;
 	}

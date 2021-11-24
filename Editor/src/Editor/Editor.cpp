@@ -231,8 +231,8 @@ public:
 		reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 		reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		bool success = reflection_manager.ProcessFolderHierarchy((unsigned int)0, &error_message);
-		success = reflection_manager.ProcessFolderHierarchy((unsigned int)1, &error_message);
+		bool success = reflection_manager.ProcessFolderHierarchy((unsigned int)0, &task_manager, &error_message);
+		success = reflection_manager.ProcessFolderHierarchy((unsigned int)1, &task_manager, &error_message);
 
 		UIReflectionDrawer ui_reflection(&resizable_arena, &reflection_manager);
 		ui_reflection.CreateType(STRING(TO_BE_REFLECT));
@@ -288,6 +288,7 @@ public:
 
 		InspectorData inspector_data;
 		editor_state.inspector_data = &inspector_data;
+		InitializeInspector(&editor_state);
 
 		World scene_worlds[EDITOR_SCENE_BUFFERING_COUNT];
 
@@ -306,11 +307,14 @@ public:
 
 		ECS_TEMP_ASCII_STRING(ERROR_MESSAGE, 256);
 		GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2material.glb", &ERROR_MESSAGE);
+		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2_flipped.glb", &ERROR_MESSAGE);
+		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\DebugPrimitives\\Alphabet.glb", &ERROR_MESSAGE);
 		GLTFMesh gltf_meshes[128];
 		Mesh meshes[128];
 		PBRMaterial _materials[128];
 		unsigned int _submesh_material_index[128];
 		Submesh _submeshes[128];
+		Submesh _normal_submeshes[128];
 
 		AllocatorPolymorphic allocator = { &memory_manager, AllocatorType::MemoryManager, AllocationType::SingleThreaded };
 		success = LoadMeshesFromGLTF(gltf_data, gltf_meshes, allocator, &ERROR_MESSAGE);
@@ -320,7 +324,10 @@ public:
 		Stream<unsigned int> submesh_material_index(_submesh_material_index, 0);
 		success = LoadDisjointMaterialsFromGLTF(gltf_data, materials, submesh_material_index, allocator, &ERROR_MESSAGE);
 		GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);
+		memset(submesh_material_index.buffer, 0, sizeof(unsigned int) * gltf_data.mesh_count);
+		materials.size = 1;
 		Mesh merged_mesh = GLTFMeshesToMergedMesh(&graphics, gltf_meshes, _submeshes, _submesh_material_index, materials.size, gltf_data.mesh_count);
+		Mesh normal_merged_mesh = MeshesToSubmeshes(&graphics, Stream<Mesh>(meshes, gltf_data.mesh_count), _normal_submeshes);
 		FreeGLTFMeshes(gltf_meshes, gltf_data.mesh_count, allocator);
 		FreeGLTFFile(gltf_data);
 
@@ -390,6 +397,8 @@ public:
 		DebugDrawer debug_drawer(&debug_drawer_memory, &graphics, 1);
 		float3 LIGHT_DIRECTION(0.0f, -1.0f, 0.0f);
 		ColorFloat LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 1.0f);
+
+		debug_drawer.InitializePrimitiveBuffers(&resource_manager);
 
 		InjectWindowElement inject_elements[2];
 		InjectWindowSection section[1];
@@ -504,39 +513,6 @@ public:
 					window_index = 0;
 
 
-				float ____value = ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y * new_width / new_height;
-				camera.SetPerspectiveProjectionFOV(60.0f, ____value, 0.05f, 1000.0f);
-
-				void* obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
-				float* reinter = (float*)obj_ptr;
-				DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
-
-				Matrix matrix = MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 5.0f) * MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
-					* MatrixTranslation(0.0f, 0.0f, 20.0f);
-				Matrix transpose = MatrixTranspose(matrix);
-
-				/*DirectX::XMMATRIX directx_matrix = DirectX::XMMatrixTranspose(DirectX::XMMatrixRotationZ(DegToRad(0.0f))
-					* DirectX::XMMatrixRotationY(0.0f) * DirectX::XMMatrixRotationX(0.0f) * DirectX::XMMatrixTranslation(0.0f, 0.0f, 20.0f));
-				memcpy(reinter, &directx_matrix, sizeof(directx_matrix));*/
-				transpose.Store(reinter);
-				Matrix camera_matrix = camera.GetProjectionViewMatrix();
-
-				//DirectX::XMMATRIX directx_camera_matrix = DirectX::XMMatrixTranslation(-camera.translation.x, -camera.translation.y, -camera.translation.z) 
-				//	* DirectX::XMMatrixRotationZ(DegToRad(-camera.rotation.z)) * DirectX::XMMatrixRotationY(DegToRad(-camera.rotation.y)) * DirectX::XMMatrixRotationX(DegToRad(-camera.rotation.x))
-				//	* DirectX::XMMatrixPerspectiveFovLH(DegToRad(60.0f), ____value, 0.05f, 1000.0f);
-				//
-				//DirectX::XMMATRIX inverted_directx = DirectX::XMMatrixTranspose(DirectX::XMMatrixTranspose(directx_matrix) * directx_camera_matrix);
-				//
-				//memcpy(reinter + 16, &inverted_directx, sizeof(inverted_directx));
-				matrix = MatrixTranspose(matrix * camera_matrix);
-				matrix.Store(reinter + 16);	
-
-				graphics.UnmapBuffer(obj_buffer.buffer);
-
-				/*float3* light_pos_data = (float3*)graphics.MapBuffer(light_buffer.buffer);
-				*light_pos_data = { sin(timer.GetDuration_ms() * 0.0005f) * 0.0f, 1.0f, 20.0f };
-				graphics.UnmapBuffer(light_buffer.buffer);*/
-
 				Shaders::SetCameraPosition(camera_position_buffer, &graphics, camera.translation);
 
 				ConstantBuffer vertex_constant_buffers[2];
@@ -560,59 +536,97 @@ public:
 
 				graphics.BindPixelConstantBuffers(Stream<ConstantBuffer>(pixel_constant_buffers, std::size(pixel_constant_buffers)));
 
-				/*graphics.BindVertexBuffer(vertex_buffer);
-				graphics.BindIndexBuffer(index_buffer);
-				graphics.BindTopology({ D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST });*/
+				float ____value = ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y * new_width / new_height;
+				camera.SetPerspectiveProjectionFOV(60.0f, ____value, 0.05f, 1000.0f);
 
-				graphics.EnableDepth();
-				graphics.BindSamplerState(sampler);
-				//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME]);
-				for (size_t index = 0; index < gltf_data.mesh_count; index++) {
+				Matrix world_matrices[10];
+				for (size_t subindex = 0; subindex < 10; subindex++) {
+					void* obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
+					float* reinter = (float*)obj_ptr;
+					DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
+
+					Matrix matrix = MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) * MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
+						* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
+					Matrix world_matrix = matrix;
+					world_matrices[subindex] = world_matrix;
+					Matrix transpose = MatrixTranspose(matrix);
+					transpose.Store(reinter);
+					Matrix camera_matrix = camera.GetProjectionViewMatrix();
+
+					Matrix MVP_matrix = matrix * camera_matrix;
+					matrix = MatrixTranspose(MVP_matrix);
+					matrix.Store(reinter + 16);
+
+					graphics.UnmapBuffer(obj_buffer.buffer);
+
+					graphics.EnableDepth();
+					graphics.BindSamplerState(sampler);
+
 					ECS_MESH_INDEX mapping[3];
 					mapping[0] = ECS_MESH_POSITION;
 					mapping[1] = ECS_MESH_UV;
 					mapping[2] = ECS_MESH_NORMAL;
-					graphics.BindMesh(meshes[index], Stream<ECS_MESH_INDEX>(mapping, 3));
 
-					graphics.DrawIndexed(meshes[index].index_buffer.count);
+					//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME]);
+					/*for (size_t index = 53; index < 55; index++) {
+						ECS_MESH_INDEX mapping[3];
+						mapping[0] = ECS_MESH_POSITION;
+						mapping[1] = ECS_MESH_UV;
+						mapping[2] = ECS_MESH_NORMAL;
+						graphics.BindMesh(meshes[index], Stream<ECS_MESH_INDEX>(mapping, 3));
+
+						graphics.DrawIndexed(meshes[index].index_buffer.count);
+					}*/
+
+					graphics.BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, 3));
+					graphics.DrawIndexed(normal_merged_mesh.index_buffer.count);
 				}
 				//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL]);
 
-				/*debug_drawer.SetPreviousRenderState();
+				auto previos_render_state = debug_drawer.GetPreviousRenderState();
 				debug_drawer.UpdateCameraMatrix(camera.GetProjectionViewMatrix());
-				debug_drawer.DrawLine({ 0.0f, 0.0f, 10.0f }, { 0.0f, 100.0f, 10.0f }, EDITOR_GREEN_COLOR, {true});
-				debug_drawer.DrawRectangle({ 0.0f, 0.0f, 20.0f }, { 5.0f, 10.0f, 20.0f }, EDITOR_GREEN_COLOR);
-				debug_drawer.RestorePreviousRenderState();*/
 
-				/*ECS_MESH_INDEX mapping[3];
-				mapping[0] = ECS_MESH_POSITION;
-				mapping[1] = ECS_MESH_UV;
-				mapping[2] = ECS_MESH_NORMAL;
-				graphics.BindMesh(merged_mesh, Stream<ECS_MESH_INDEX>(mapping, 3));
-				for (size_t index = 0; index < materials.size; index++) {
-					graphics.DrawIndexed(_submeshes[index].index_count, _submeshes[index].index_buffer_offset, _submeshes[index].vertex_buffer_offset);
-				}*/
+				debug_drawer.DrawNormals(GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_POSITION), GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_NORMAL), 0.05f, Color(200, 50, 40), { world_matrices, std::size(world_matrices) });
 
-				/*graphics.BindMesh(meshes[60]);
-				graphics.DrawIndexed(meshes[60].index_buffer.count);*/
+				debug_drawer.AddLine({ 0.0f, 0.0f, 10.0f }, { 0.0f, 5.0f, 10.0f }, EDITOR_GREEN_COLOR);
+				debug_drawer.AddRectangle({ 0.0f, 0.0f, 20.0f }, { 2.5f, 5.0f, 20.0f }, Color(200, 200, 200));
+				debug_drawer.AddAABB({ 0.0f, 0.0f, 15.0f }, { 1.0f, 1.0f, 1.0f }, Color(120, 20, 10));
+				//debug_drawer.AddArrow({ 0.0f, 0.0f, 12.0f }, { cos(timer.GetDuration_ms() * 0.005f) * 2.0f, 0.0f, 12.0f + sin(timer.GetDuration_ms() * 0.005f) * 2.0f }, 0.5f, EDITOR_GREEN_COLOR);
+				//debug_drawer.AddArrowRotation({ -2.0f, 0.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 4.0f, 0.5f, EDITOR_GREEN_COLOR);
+				debug_drawer.AddAxes({ 0.0f, 0.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.1f, Color(180, 20, 30), Color(30, 150, 30), Color(20, 40, 160));
+				debug_drawer.AddAxes({ 0.0f, -2.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.2f, Color(180, 20, 30), Color(30, 150, 30), Color(20, 40, 160));
+				debug_drawer.AddCross({ 0.0f, 3.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.5f, EDITOR_GREEN_COLOR);
+				debug_drawer.AddOOBB({ 0.0f, -2.0f, 12.0f }, { 30.0f, 0.0f, 0.0f }, { 5.0f, 0.2f, 1.0f }, EDITOR_GREEN_COLOR);
+				debug_drawer.AddPoint({ -2.0f, 0.0f, 12.0f }, Color(30, 190, 40));
+				debug_drawer.AddSphere({ 0.0f, 0.0f, 5.0f }, 2.5f, EDITOR_GREEN_COLOR);
+				debug_drawer.AddTriangle({ 1.0f, 1.0f, 1.0f }, { 2.0f, 2.0f, 2.0f }, { -1.0f, 3.0f, 3.0f }, EDITOR_GREEN_COLOR);
+				debug_drawer.AddCircle({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 5.0f, EDITOR_GREEN_COLOR);
 
-				//obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
-				//reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
-				//matrix = MatrixRotationY(60.0f * sin(timer.GetDurationSinceMarker_ms() * .0005f)) * MatrixRotationX(45.0f) * MatrixTranslation(sin(timer.GetDurationSinceMarker_ms() * 0.0005f), 0.0f, 2.0f);
-				////camera.translation = {cos(timer.GetDurationSinceMarker_ms() * 0.001f), 0.0f, sin(timer.GetDurationSinceMarker_ms() * 0.005f)};
-				//camera_matrix = camera.GetProjectionViewMatrix();
-				//matrix = MatrixTranspose(matrix * camera_matrix);
-				//matrix.Store((float*)reinterpretation);
-				////*reinterpretation = DirectX::XMMatrixTranspose(
-				////	/*DirectX::XMMatrixRotationZ(timer.GetDurationSinceMarker_ms() * 0.0005f) * */
-				////	DirectX::XMMatrixRotationY(DegToRad(60.0f)) * 
-				////	DirectX::XMMatrixTranslation(0.0f, 0.0f, 2.0f /*+ sin(timer.GetDurationSinceMarker_ms() * 0.005f)*/) *
-				////	DirectX::XMMatrixPerspectiveLH(ui.m_windows[window_index].transform.scale.x, ui.m_windows[window_index].transform.scale.y * (float)height / width /*/ ui.m_windows[window_index].transform.scale.x*/, 0.5f, 10.0f)
-				////);			
-
-				//graphics.UnmapBuffer(obj_buffer.buffer);
-
-				//graphics.DrawIndexed(36);
+				debug_drawer.AddString({ -0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, ToStream("#pragma once\n"
+"#include \"ECSEngineMultithreading.h\"\n"
+"#include \"ECSEngineModule.h\"\n\n"
+				"constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {\n\tL\".dll\",\n\tL\".pdb\",\n\tL\".lib\",\n\tL\".exp\"\n};\n\n"
+				"namespace ECSEngine {\n\tstruct World;\n}\n\n"
+				"constexpr const char* MODULE_CONFIGURATION_DEBUG = \"Debug\";\n"
+				"constexpr const char* MODULE_CONFIGURATION_RELEASE = \"Release\";\n"
+				"constexpr const char* MODULE_CONFIGURATION_DISTRIBUTION = \"Distribution\";\n\n"
+				"constexpr const char* MODULE_CONFIGURATIONS[] = {\n\tMODULE_CONFIGURATION_DEBUG,\n\tMODULE_CONFIGURATION_RELEASE,\n\tMODULE_CONFIGURATION_DISTRIBUTION};\n\n"
+				"constexpr const wchar_t* MODULE_CONFIGURATION_DEBUG_WIDE = L\"Debug\";\n"
+				"constexpr const wchar_t* MODULE_CONFIGURATION_RELEASE_WIDE = L\"Release\";\n"
+				"constexpr const wchar_t* MODULE_CONFIGURATION_DISTRIBUTION_WIDE = L\"Distribution\";\n\n"
+				"constexpr const wchar_t* MODULE_CONFIGURATIONS_WIDE[] = {\n\tMODULE_CONFIGURATION_DEBUG_WIDE,\n\tMODULE_CONFIGURATION_RELEASE_WIDE,\n\tMODULE_CONFIGURATION_DISTRIBUTION_WIDE\n};\n\n"
+				"enum class EditorModuleConfiguration : unsigned char {\n\tDebug,\n\tRelease,\n\tDistribution,\n\tCount\n};\n\n"
+				"enum class EditorModuleLoadStatus : unsigned char {\n\tFailed,\n\tOutOfDate,\n\tGood\n};\n\n"
+				"struct EditorModule {"
+					"\n\tECSEngine::containers::Stream<wchar_t> solution_path;"
+					"\n\tECSEngine::containers::Stream<wchar_t> library_name;"
+					"\n\tECSEngine::Module ecs_module;"
+					"\n\tEditorModuleConfiguration configuration;"
+					"\n\tEditorModuleLoadStatus load_status;"
+					"\n\tsize_t solution_last_write_time;"
+					"\n\tsize_t library_last_write_time;\n};"), Color(200, 200, 200));
+				debug_drawer.DrawAll(1.0f);
+				debug_drawer.RestorePreviousRenderState(previos_render_state);
 
 				graphics.BindRenderTargetViewFromInitialViews();
 

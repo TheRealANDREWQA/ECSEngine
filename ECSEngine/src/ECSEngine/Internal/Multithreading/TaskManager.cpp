@@ -95,6 +95,7 @@ namespace ECSEngine {
 		m_events = (ConditionVariable*)buffer_start;
 		for (size_t index = 0; index < thread_count; index++) {
 			new (m_events + index) ConditionVariable();
+			m_events[index].Reset();
 		}
 
 		m_tasks = ResizableStream<ThreadTask, MemoryManager>(memory_manager, 0);
@@ -119,7 +120,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	unsigned int TaskManager::AddDynamicTask(ThreadTask task, size_t task_data_size) {
-		AddDynamicTask(task, m_last_thread_index, task_data_size);
+		AddDynamicTaskWithAffinity(task, m_last_thread_index, task_data_size);
 		unsigned int thread_index = m_last_thread_index;
 		m_last_thread_index = function::Select(m_last_thread_index == m_thread_queue.size - 1, (unsigned int)0, m_last_thread_index + 1);
 		return thread_index;
@@ -136,7 +137,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddDynamicTask(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
+	void TaskManager::AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
 		if (task_data_size > 0) {
 			void* allocation = m_allocator.Allocate(task_data_size);
 			memcpy(allocation, task.data, task_data_size);
@@ -152,8 +153,8 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddDynamicTaskAndWake(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
-		AddDynamicTask(task, thread_id, task_data_size);
+	void TaskManager::AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
+		AddDynamicTaskWithAffinity(task, thread_id, task_data_size);
 		WakeThread(thread_id);
 	}
 

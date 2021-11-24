@@ -12,3 +12,5 @@ struct InspectorData {
 	size_t data_size;
 	InspectorTable table;
 };
+
+void InitializeInspector(EditorState* editor_state);

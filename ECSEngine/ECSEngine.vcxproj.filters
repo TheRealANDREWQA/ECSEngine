@@ -238,6 +238,8 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugTransform.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugStructured.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugStructured.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugNormalSingleDraw.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugNormalSingleDraw.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />

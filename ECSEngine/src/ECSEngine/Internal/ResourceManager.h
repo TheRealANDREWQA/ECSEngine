@@ -19,6 +19,8 @@ constexpr size_t ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT = 256;
 constexpr size_t ECS_RESOURCE_MANAGER_TEMPORARY_ELEMENTS = 8;
 constexpr size_t ECS_RESOURCE_MANAGER_MAX_FOLDER_COUNT = 6;
 
+constexpr size_t ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT = (size_t)1 << 16;
+
 namespace ECSEngine {
 
 	ECS_CONTAINERS;
@@ -32,12 +34,13 @@ namespace ECSEngine {
 		Texture,
 		TextFile,
 		Mesh,
+		CoallescedMesh,
 		Material,
 		PBRMesh,
 		TypeCount
 	};
 
-	constexpr const char* ECS_RESOURCE_TYPE_NAMES[] = { "Texture", "TextFile", "Mesh", "Material", "PBRMesh" };
+	constexpr const char* ECS_RESOURCE_TYPE_NAMES[] = { "Texture", "TextFile", "Mesh", "CoallescedMesh", "Material", "PBRMesh" };
 	static_assert(std::size(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceType::TypeCount);
 	constexpr size_t ECS_RESOURCE_INCREMENT_COUNT = USHORT_MAX;
 
@@ -132,10 +135,6 @@ namespace ECSEngine {
 			unsigned int resource_folder_path_index = -1
 		);
 
-		char* LoadTextFileTemporary(const char* filename, size_t& size, unsigned int& handle, unsigned int thread_index = 0, bool use_path = false);
-
-		char* LoadTextFileTemporary(const wchar_t* filename, size_t& size, unsigned int& handle, unsigned int thread_index = 0, bool use_path = false);
-
 		char* LoadTextFileImplementation(std::ifstream& input, size_t* size);
 
 		void OpenFile(const char* filename, std::ifstream& input, unsigned int resource_folder_path_index = -1);
@@ -153,15 +152,6 @@ namespace ECSEngine {
 		);
 
 		// In order to generate mip-maps, the context must be supplied
-		ResourceView LoadTextureTemporary(
-			const wchar_t* filename,
-			unsigned int& handle,
-			ResourceManagerTextureDesc& descriptor,
-			unsigned int thread_index = 0,
-			bool use_path = false
-		);
-
-		// In order to generate mip-maps, the context must be supplied
 		ResourceView LoadTextureImplementation(
 			const wchar_t* filename, 
 			ResourceManagerTextureDesc* descriptor, 
@@ -170,7 +160,7 @@ namespace ECSEngine {
 
 		// Loads all meshes from a gltf file
 		template<bool reference_counted = false>
-		containers::Stream<Mesh>* LoadMeshes(
+		Stream<Mesh>* LoadMeshes(
 			const wchar_t* filename,
 			size_t load_flags = 1,
 			bool* reference_counted_is_loaded = nullptr,
@@ -178,7 +168,21 @@ namespace ECSEngine {
 		);
 
 		// Loads all meshes from a gltf file
-		containers::Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
+		Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+
+		// Loads all meshes from a gltf file and creates a coallesced mesh
+		template<bool reference_counted = false>
+		CoallescedMesh* LoadCoallescedMesh(
+			const wchar_t* filename,
+			size_t load_flags = 1,
+			bool* reference_counted_is_loaded = nullptr,
+			unsigned int resource_folder_path_index = -1
+		);
+
+		// Loads all meshes from a gltf file and creates a coallesced mesh
+		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
+		CoallescedMesh* LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
 
 		// Loads all materials from a gltf file
 		template<bool reference_counted = false>
@@ -202,6 +206,7 @@ namespace ECSEngine {
 		);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
+		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
 		PBRMesh* LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
 
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed than reassigned
@@ -212,6 +217,8 @@ namespace ECSEngine {
 
 		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type);
 
+		// ---------------------------------------------------------------------------------------------------------------------------
+
 		template<bool reference_counted = false>
 		void UnloadTextFile(const char* filename, size_t flags = 1);
 
@@ -221,7 +228,7 @@ namespace ECSEngine {
 		template<bool reference_counted = false>
 		void UnloadTextFile(unsigned int index, size_t flags = 1);
 
-		void UnloadTextFileTemporary(unsigned int handle, unsigned int thread_index = 0);
+		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
 		void UnloadTexture(const wchar_t* filename, size_t flags = 1);
@@ -229,7 +236,7 @@ namespace ECSEngine {
 		template<bool reference_counted = false>
 		void UnloadTexture(unsigned int index, size_t flags = 1);
 
-		void UnloadTextureTemporary(unsigned int handle, unsigned int thread_index = 0);
+		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
 		void UnloadMeshes(const wchar_t* filename, size_t flags = 1);
@@ -237,11 +244,23 @@ namespace ECSEngine {
 		template<bool reference_counted = false>
 		void UnloadMeshes(unsigned int index, size_t flags = 1);
 
+		// ---------------------------------------------------------------------------------------------------------------------------
+
+		template<bool reference_counted = false>
+		void UnloadCoallescedMesh(const wchar_t* filename, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadCoallescedMesh(unsigned int index, size_t flags = 1);
+
+		// ---------------------------------------------------------------------------------------------------------------------------
+
 		template<bool reference_counted = false>
 		void UnloadMaterials(const wchar_t* filename, size_t flags = 1);
 
 		template<bool reference_counted = false>
 		void UnloadMaterials(unsigned int index, size_t flags = 1);
+
+		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
 		void UnloadPBRMesh(const wchar_t* filename, size_t flags = 1);
@@ -249,12 +268,13 @@ namespace ECSEngine {
 		template<bool reference_counted = false>
 		void UnloadPBRMesh(unsigned int index, size_t flags = 1);
 
+		// ---------------------------------------------------------------------------------------------------------------------------
+
 	//private:
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
 		ResizableStream<InternalResourceType, ResourceManagerAllocator> m_resource_types;
 		CapacityStream<ResourceFolder> m_resource_folder_path;
-		CapacityStream<StableReferenceStream<void*>> m_temporary_resources;
 	};
 
 #pragma region Free functions

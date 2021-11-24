@@ -1,17 +1,36 @@
 #include "ecspch.h"
 #include "DebugDraw.h"
 #include "..\..\Utilities\FunctionInterfaces.h"
-// Import the CharacterUVIndex
-#include "..\..\Tools\UI\UIStructures.h"
 #include "..\..\Internal\ResourceManager.h"
+#include "..\..\Rendering\GraphicsHelpers.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
 constexpr size_t PER_THREAD_RESOURCES = 128;
 
-#define POINT_SIZE 0.05f
+#define POINT_SIZE 0.3f
 #define CIRCLE_TESSELATION 32
-#define ARROW_BASE_CONE_DARKEN_COLOR 0.5f
-#define ARROW_CONE_DARKEN_COLOR 0.75f
+#define ARROW_HEAD_DARKEN_COLOR 0.9f
+#define AXES_X_SCALE 3.5f
+
+#define STRING_SPACE_SIZE 0.2f
+#define STRING_TAB_SIZE STRING_SPACE_SIZE * 4
+#define STRING_NEW_LINE_SIZE 0.85f
+#define STRING_CHARACTER_SPACING 0.05f
+
+#define DECK_CHUNK_SIZE 128
+#define DECK_POWER_OF_TWO 7
+
+// In consort with DebugVertexBuffers
+constexpr const wchar_t* PRIMITIVE_MESH_FILES[] = {
+	L"Resources/DebugPrimitives/Sphere.glb",
+	L"Resources/DebugPrimitives/Point.glb",
+	L"Resources/DebugPrimitives/Cross.glb",
+	L"Resources/DebugPrimitives/ArrowCylinder.glb",
+	L"Resources/DebugPrimitives/ArrowHead.glb",
+	L"Resources/DebugPrimitives/Cube.glb"
+};
+
+constexpr const wchar_t* STRING_MESH_FILE = L"Resources/DebugPrimitives/Alphabet.glb";
 
 namespace ECSEngine {
 
@@ -55,19 +74,22 @@ namespace ECSEngine {
 			for (size_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
 				unsigned char mask = GetMaskFromOptions(deck->buffers[index][subindex].options);
 				// Assigned the indices and update the count
-				type_indices[counts[mask]++] = { (unsigned short)index, (unsigned short)subindex };
+				indices[mask][counts[mask]++] = { (unsigned short)index, (unsigned short)subindex };
 			}
 		}
 		return type_indices;
 	}
 
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	template<typename Element>
 	void UpdateElementDurations(DeckPowerOfTwo<Element, MemoryManager>* deck, float time_delta) {
 		for (size_t index = 0; index < deck->buffers.size; index++) {
-			for (size_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
+			for (int64_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
 				deck->buffers[index][subindex].options.duration -= time_delta;
 				if (deck->buffers[index][subindex].options.duration < 0.0f) {
 					deck->buffers[index].RemoveSwapBack(subindex);
+					subindex--;
 				}
 			}
 		}
@@ -118,7 +140,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Sets the color of the instaced data if the stream has a color and matrix as instanced data
-	void SetInstancedColor(void* pointer, unsigned int index, Color color) {
+	void SetInstancedColor(void* pointer, unsigned int index, ColorFloat color) {
 		InstancedTransformData* data = (InstancedTransformData*)pointer;
 		data[index].color = color;
 	}
@@ -178,13 +200,17 @@ namespace ECSEngine {
 
 	// float3 rotation and the length is in the w component
 	float4 ArrowStartEndToRotation(float3 start, float3 end) {
+		float4 result;
+
 		float3 direction = start - end;
-		float x_angle = atan2(direction.y, direction.z);
-		float y_angle = atan2(direction.z, direction.x);
-		float z_angle = atan2(direction.y, direction.x);
-		Vector4 vector(direction);
-		float length = Length3(vector).First();
-		return { 0.0f, y_angle, z_angle, length };
+		Vector4 direction_simd(direction);
+		Vector4 angles = DirectionToRotation(direction_simd);
+		angles.Store(&result);
+
+		float length = Length3(direction_simd).First();
+		result.w = length;
+
+		return result;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -199,6 +225,100 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void ECS_VECTORCALL FillInstancedArrowCylinder(void* instanced_data, size_t buffer_index, const DebugArrow* arrow, Matrix camera_matrix) {
+		SetInstancedColor(instanced_data, buffer_index, arrow->color);
+		float3 direction_3 = GetRightVector(arrow->rotation);
+
+		float3 current_translation = arrow->translation + float3::Splat(arrow->length / 2.0f) * direction_3;
+
+		Matrix rotation_matrix = MatrixRotation(arrow->rotation);
+
+		Matrix matrix = MatrixScale(arrow->length / 2.0f, arrow->size, arrow->size) * rotation_matrix * MatrixTranslation(current_translation);
+		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix * camera_matrix));
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ECS_VECTORCALL FillInstancedArrowHead(void* instanced_data, size_t buffer_index, const DebugArrow* arrow, Matrix camera_matrix) {
+		float3 direction_3 = GetRightVector(arrow->rotation);
+		SetInstancedColor(instanced_data, buffer_index, arrow->color * ARROW_HEAD_DARKEN_COLOR);
+		Matrix matrix = MatrixScale(float3::Splat(arrow->size)) * MatrixRotation(arrow->rotation) * MatrixTranslation(arrow->translation 
+			+ float3::Splat(arrow->length) * direction_3);
+		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix * camera_matrix));
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ECS_VECTORCALL FillInstancedAxesArrowCylinders(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
+		// The X axis
+		SetInstancedColor(instanced_data, buffer_index, axes->color_x);
+
+		float3 direction_x_3 = GetRightVector(axes->rotation);
+
+		float cylinder_x_scale = AXES_X_SCALE * axes->size / 2.0f;
+		float3 splatted_cylinder_scale = float3::Splat(cylinder_x_scale);
+		Matrix arrow_cylinder_scale_matrix = MatrixScale(cylinder_x_scale, axes->size, axes->size);
+
+		float3 old_translation = axes->translation;
+		float3 current_translation = axes->translation + splatted_cylinder_scale * direction_x_3;
+
+		// The translation changes for every cylinder - must be computed each time - cannot be cached
+		Matrix matrix_x = arrow_cylinder_scale_matrix * MatrixRotation(axes->rotation) * MatrixTranslation(current_translation);
+		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix_x * camera_matrix));
+		current_translation = old_translation;
+
+		// The Y axis - rotate around Z axis by 90 degrees
+		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
+		SetInstancedColor(instanced_data, buffer_index + 1, axes->color_y);
+		float3 direction_y_3 = GetUpVector(axes->rotation);
+
+		current_translation += splatted_cylinder_scale * direction_y_3;
+		// The translation changes for every cylinder - must be computed each time - cannot be cached
+		Matrix matrix_y = arrow_cylinder_scale_matrix * MatrixRotation(y_rotation) * MatrixTranslation(current_translation);
+		SetInstancedMatrix(instanced_data, buffer_index + 1, MatrixTranspose(matrix_y * camera_matrix));
+		current_translation = old_translation;
+
+		// The Z axis - rotate around Y axis by 90 degrees
+		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, axes->rotation.z };
+		SetInstancedColor(instanced_data, buffer_index + 2, axes->color_z);
+		float3 direction_z_3 = GetForwardVector(axes->rotation);
+
+		current_translation += splatted_cylinder_scale * direction_z_3;
+		// The translation changes for every cylinder - must be computed each time - cannot be cached
+		Matrix matrix_z = arrow_cylinder_scale_matrix * MatrixRotation(z_rotation) * MatrixTranslation(current_translation);
+		SetInstancedMatrix(instanced_data, buffer_index + 2, MatrixTranspose(matrix_z * camera_matrix));
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ECS_VECTORCALL FillInstancedAxesArrowHead(void* instanced_data, size_t buffer_index, const DebugAxes* axes, Matrix camera_matrix) {
+		// The X axis
+		SetInstancedColor(instanced_data, buffer_index, axes->color_x * ARROW_HEAD_DARKEN_COLOR);
+
+		Matrix arrow_head_scale = MatrixScale(float3::Splat(axes->size));
+		float3 splatted_length = float3::Splat(AXES_X_SCALE * axes->size);
+
+		float3 direction_x_3 = GetRightVector(axes->rotation);
+		Matrix matrix_x = arrow_head_scale * MatrixRotation(axes->rotation) * MatrixTranslation(axes->translation + splatted_length * direction_x_3);
+		SetInstancedMatrix(instanced_data, buffer_index, MatrixTranspose(matrix_x * camera_matrix));
+
+		// The Y axis
+		float3 y_rotation = { axes->rotation.x, axes->rotation.y, axes->rotation.z + 90.0f };
+		float3 direction_y_3 = GetUpVector(axes->rotation);
+		SetInstancedColor(instanced_data, buffer_index + 1, axes->color_y * ARROW_HEAD_DARKEN_COLOR);
+		Matrix matrix_y = arrow_head_scale * MatrixRotation(y_rotation) * MatrixTranslation(axes->translation + splatted_length * direction_y_3);
+		SetInstancedMatrix(instanced_data, buffer_index + 1, MatrixTranspose(matrix_y * camera_matrix));
+
+		// The Z axis
+		float3 z_rotation = { axes->rotation.x, axes->rotation.y - 90.0f, axes->rotation.z };
+		float3 direction_z_3 = GetForwardVector(axes->rotation);
+		SetInstancedColor(instanced_data, buffer_index + 2, axes->color_z * ARROW_HEAD_DARKEN_COLOR);
+		Matrix matrix_z = arrow_head_scale * MatrixRotation(z_rotation) * MatrixTranslation(axes->translation + splatted_length * direction_z_3);
+		SetInstancedMatrix(instanced_data, buffer_index + 2, MatrixTranspose(matrix_z * camera_matrix));
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	DebugDrawer::DebugDrawer(MemoryManager* allocator, Graphics* graphics, size_t thread_count) {
 		Initialize(allocator, graphics, thread_count);
 	}
@@ -207,21 +327,21 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLine(float3 start, float3 end, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
 	{
 		lines.Add({ start, end, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphere(float3 position, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		spheres.Add({ position, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPoint(float3 position, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddPoint(float3 position, ColorFloat color, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
 		points.Add({ position, color, { false, options.ignore_depth, options.duration } });
@@ -229,28 +349,28 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
 	{
 		rectangles.Add({ corner0, corner1, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCross(float3 position, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
-		crosses.Add({ position, size, color, options });
+		crosses.Add({ position, rotation, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		circles.Add({ position, rotation, radius, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		float4 rotation_length = ArrowStartEndToRotation(start, end);
 		arrows.Add({ start, {rotation_length.x, rotation_length.y, rotation_length.z}, rotation_length.w, size, color, options });
@@ -258,38 +378,54 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxes(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
-		axes.Add({ translation, rotation, size, color, options });
+		arrows.Add({ translation, rotation, length, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
+	{
+		axes.Add({ translation, rotation, size, color_x, color_y, color_z, options });
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
 	{
 		triangles.Add({ point0, point1, point2, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABB(float3 min_coordinates, float3 max_coordinates, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABB(float3 min_coordinates, float3 max_coordinates, ColorFloat color, DebugDrawCallOptions options)
 	{
 		aabbs.Add({ min_coordinates, max_coordinates, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
 	{
 		oobbs.Add({ translation, rotation, scale, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddString(float3 position, float size, containers::Stream<char> text, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::AddString(float3 position, float3 direction, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = function::StringCopy(allocator, text);
-		strings.Add({ position, size, text_copy, color, options });
+		strings.Add({ position, direction, size, text_copy, color, options });
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	{
+		Stream<char> text_copy = function::StringCopy(allocator, text);
+		float3 direction = GetRightVector(rotation);
+		strings.Add({ position, direction, size, text_copy, color, options });
 	}
 
 
@@ -301,7 +437,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddLineThread(float3 start, float3 end, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddLineThread(float3 start, float3 end, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -313,7 +449,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddSphereThread(float3 position, float radius, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddSphereThread(float3 position, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -325,7 +461,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddPointThread(float3 position, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddPointThread(float3 position, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Make wireframe false
 		options.wireframe = false;
@@ -340,7 +476,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddRectangleThread(float3 corner0, float3 corner1, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddRectangleThread(float3 corner0, float3 corner1, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -352,19 +488,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCrossThread(float3 position, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddCrossThread(float3 position, float3 rotation, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
 		if (thread_crosses[thread_index].IsFull()) {
 			FlushCross(thread_index);
 		}
-		thread_crosses[thread_index].Add({ position, size, color, options });
+		thread_crosses[thread_index].Add({ position, rotation, size, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddCircleThread(float3 position, float3 rotation, float radius, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddCircleThread(float3 position, float3 rotation, float radius, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -376,7 +512,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddArrowThread(float3 start, float3 end, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowThread(float3 start, float3 end, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -389,19 +525,31 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAxesThread(float3 translation, float3 rotation, float size, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddArrowRotationThread(float3 translation, float3 rotation, float length, float size, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	{
+		// Check to see if the queue is full
+		// If it is, then a flush is needed to clear the queue
+		if (thread_arrows[thread_index].IsFull()) {
+			FlushArrow(thread_index);
+		}
+		thread_arrows[thread_index].Add({ translation, rotation, length, size, color, options });
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddAxesThread(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
 		if (thread_axes[thread_index].IsFull()) {
 			FlushAxes(thread_index);
 		}
-		thread_axes[thread_index].Add({ translation, rotation, size, color, options });
+		thread_axes[thread_index].Add({ translation, rotation, size, color_x, color_y, color_z, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddTriangleThread(float3 point0, float3 point1, float3 point2, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddTriangleThread(float3 point0, float3 point1, float3 point2, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -413,7 +561,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddAABBThread(float3 min_coordinates, float3 max_coordinates, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddAABBThread(float3 min_coordinates, float3 max_coordinates, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -425,7 +573,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddOOBBThread(float3 translation, float3 rotation, float3 scale, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddOOBBThread(float3 translation, float3 rotation, float3 scale, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -437,7 +585,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringThread(float3 position, float size, containers::Stream<char> text, Color color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringThread(float3 position, float3 direction, float size, containers::Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -445,7 +593,20 @@ namespace ECSEngine {
 			FlushString(thread_index);
 		}
 		Stream<char> string_copy = function::StringCopyTs(allocator, text);
-		thread_strings[thread_index].Add({ position, size, string_copy, color, options });
+		thread_strings[thread_index].Add({ position, direction, size, string_copy, color, options });
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::AddStringRotationThread(float3 position, float3 rotation, float size, containers::Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	{
+		// Check to see if the queue is full
+		// If it is, then a flush is needed to clear the queue
+		if (thread_strings[thread_index].IsFull()) {
+			FlushString(thread_index);
+		}
+		Stream<char> string_copy = function::StringCopyTs(allocator, text);
+		thread_strings[thread_index].Add({ position, GetRightVector(rotation), size, string_copy, color, options });
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -456,7 +617,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawLine(float3 start, float3 end, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawLine(float3 start, float3 end, ColorFloat color, DebugDrawCallOptions options)
 	{
 		float3* positions = MapPositions(this);
 		InstancedTransformData* instanced = MapInstancedStructured(this);
@@ -471,12 +632,12 @@ namespace ECSEngine {
 		SetLineState(options);
 		BindSmallStructuredBuffers(this);
 
-		graphics->DrawInstanced(2, 1);
+		DrawCallLine(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawSphere(float3 position, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawSphere(float3 position, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 		SetInstancedColor(instanced, 0, color);
@@ -485,17 +646,14 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 
 		SetSphereState(options);
-		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE];
-		vertex_buffers[1] = instanced_small_vertex_buffer;
-		graphics->BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, std::size(vertex_buffers)));
+		BindSphereBuffers(instanced_small_vertex_buffer);
 
-		graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE].size, 1);
+		DrawCallSphere(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawPoint(float3 position, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawPoint(float3 position, ColorFloat color, DebugDrawCallOptions options)
 	{
 		options.wireframe = false;
 
@@ -506,18 +664,15 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 
 		SetPointState(options);
-		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE];
-		vertex_buffers[1] = instanced_small_vertex_buffer;
-		graphics->BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, std::size(vertex_buffers)));
+		BindPointBuffers(instanced_small_vertex_buffer);
 
-		graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE].size, 1);
+		DrawCallPoint(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// Draw it double sided, so it appears on both sides
-	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawRectangle(float3 corner0, float3 corner1, ColorFloat color, DebugDrawCallOptions options)
 	{
 		float3* positions = MapPositions(this);
 		InstancedTransformData* instanced = MapInstancedStructured(this);
@@ -531,33 +686,32 @@ namespace ECSEngine {
 		SetRectangleState(options);
 		BindSmallStructuredBuffers(this);
 
-		graphics->DrawInstanced(6, 1);
+		DrawCallRectangle(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCross(float3 position, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCross(float3 position, float3 rotation, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
+		options.wireframe = false;
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 
-		Matrix matrix = MatrixScale(float3::Splat(size)) * MatrixTranslation(position);
+		Matrix matrix = MatrixScale(float3::Splat(size)) * MatrixRotation(rotation) * MatrixTranslation(position);
 		SetInstancedColor(instanced, 0, color);
 		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
 		UnmapInstancedVertex(this);
 
 		SetCrossState(options);
-		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CROSS];
-		vertex_buffers[1] = instanced_small_vertex_buffer;
-		graphics->BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, 2));
+		BindCrossBuffers(instanced_small_vertex_buffer);
 
-		graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CROSS].size, 1);
+		DrawCallCross(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawCircle(float3 position, float3 rotation, float radius, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawCircle(float3 position, float3 rotation, float radius, ColorFloat color, DebugDrawCallOptions options)
 	{
+		options.wireframe = false;
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 		Matrix matrix = MatrixScale(float3::Splat(radius)) * MatrixRotation(rotation) * MatrixTranslation(position);
 		SetInstancedColor(instanced, 0, color);
@@ -565,74 +719,75 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 
 		SetCircleState(options);
-		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CIRCLE];
-		vertex_buffers[1] = instanced_small_vertex_buffer;
-		graphics->BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, std::size(vertex_buffers)));
+		BindCircleBuffers(instanced_small_vertex_buffer);
 
-		graphics->DrawInstanced(6, 1);
+		DrawCallCircle(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrow(float3 start, float3 end, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		float4 rotation_length = ArrowStartEndToRotation(start, end);
 		DrawArrowRotation(start, { rotation_length.x, rotation_length.y, rotation_length.z }, rotation_length.w, size, color, options);
 	}
 
-	void DebugDrawer::DrawArrowRotation(float3 translation, float3 rotation, float length, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawArrowRotation(float3 translation, float3 rotation, float length, float size, ColorFloat color, DebugDrawCallOptions options)
 	{
 		InstancedTransformData* instanced = MapInstancedVertex(this);
-		SetInstancedColor(instanced, 0, color);
+		
+		DebugArrow arrow = { translation, rotation, length, size, color, options };
+		FillInstancedArrowCylinder(instanced, 0, &arrow, camera_matrix);
 
-		Matrix matrix = MatrixScale(length, size, size) * MatrixRotation(rotation) * MatrixTranslation(translation);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
 		UnmapInstancedVertex(this);
-
 		SetArrowCylinderState(options);
 
-		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_CYLINDER];
-		vertex_buffers[1] = instanced_small_vertex_buffer;
-		Stream<VertexBuffer> stream_buffers(vertex_buffers, std::size(vertex_buffers));
-		graphics->BindVertexBuffers(stream_buffers);
+		BindArrowCylinderBuffers(instanced_small_vertex_buffer);
 
-		graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_CYLINDER].size, 1);
+		DrawCallArrowCylinder(1);
 
 		// The instanced buffer must be mapped again
 		instanced = MapInstancedVertex(this);
-		SetInstancedColor(instanced, 0, color);
-		Vector4 direction = VectorGlobals::RIGHT_4;
-		direction = RotateVectorSIMD(rotation, direction);
-		float3 direction_3;
-		direction.StorePartialConstant<3>(&direction_3);
-		matrix = MatrixScale(float3::Splat(size)) * MatrixRotation(rotation) * MatrixTranslation(translation + float3::Splat(length) * direction_3);
-		SetInstancedMatrix(instanced, 0, MatrixTranspose(matrix * camera_matrix));
+		FillInstancedArrowHead(instanced, 0, &arrow, camera_matrix);
 		UnmapInstancedVertex(this);
 
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD];
-		graphics->BindVertexBuffers(stream_buffers);
+		BindArrowHeadBuffers(instanced_small_vertex_buffer);
 
 		SetArrowHeadState(options);
 
-		graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD].size, 1);
+		DrawCallArrowHead(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawAxes(float3 translation, float3 rotation, float size, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAxes(float3 translation, float3 rotation, float size, ColorFloat color_x, ColorFloat color_y, ColorFloat color_z, DebugDrawCallOptions options)
 	{
-		/*DrawArrowRotation(translation, rotation, size, color, options);
-		DrawArrowRotation(translation, { rotation.x, rotation.y + PI / 2, rotation.z }, size, color, options);
-		DrawArrowRotation(translation, { rotation.x, rotation.y, rotation.z + PI / 2 }, size, color, options);*/
+		// Draw 3 separate arrows - but batch the cylinder and head draws - in order to avoid 3 times the draw calls
+		InstancedTransformData* instanced = MapInstancedVertex(this);
 
-		// Use the axes primitive
+		DebugAxes axes = { translation, rotation, size, color_x, color_y, color_z, options };
+		FillInstancedAxesArrowCylinders(instanced, 0, &axes, camera_matrix);
+
+		UnmapInstancedVertex(this);
+		SetArrowCylinderState(options);
+		BindArrowCylinderBuffers(instanced_small_vertex_buffer);
+		DrawCallArrowCylinder(3);
+
+		// The arrow heads - The instanced buffer must be mapped again
+		instanced = MapInstancedVertex(this);
+
+		FillInstancedAxesArrowHead(instanced, 0, &axes, camera_matrix);
+		
+		UnmapInstancedVertex(this);
+		BindArrowHeadBuffers(instanced_small_vertex_buffer);
+		SetArrowHeadState(options);
+
+		DrawCallArrowHead(3);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawTriangle(float3 point0, float3 point1, float3 point2, ColorFloat color, DebugDrawCallOptions options)
 	{
 		float3* positions = MapPositions(this);
 		InstancedTransformData* instanced = MapInstancedStructured(this);
@@ -648,20 +803,20 @@ namespace ECSEngine {
 		SetTriangleState(options);
 		BindSmallStructuredBuffers(this);
 
-		graphics->DrawInstanced(3, 1);
+		DrawCallTriangle(1);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// It uses a scaled cube to draw it
-	void DebugDrawer::DrawAABB(float3 translation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawAABB(float3 translation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
 	{
 		DrawOOBB(translation, float3::Splat(0.0f), scale, color, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::DrawOOBB(float3 translation, float3 rotation, float3 scale, Color color, DebugDrawCallOptions options)
+	void DebugDrawer::DrawOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options)
 	{
 		InstancedTransformData* instanced = MapInstancedVertex(this);
 		SetInstancedColor(instanced, 0, color);
@@ -669,36 +824,252 @@ namespace ECSEngine {
 		UnmapInstancedVertex(this);
 
 		SetOOBBState(options);
+		BindCubeBuffers(instanced_small_vertex_buffer);
+
+		DrawCallOOBB(1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	{
+		ECS_ASSERT(text.size < 10'000);
+
+		// Normalize the direction
+		direction = Normalize(direction);
+
+		float3 rotation_from_direction = DirectionToRotation(direction);
+		// Invert the y axis 
+		rotation_from_direction.y = -rotation_from_direction.y;
+		float3 up_direction = GetUpVector(rotation_from_direction);
+
+		// Splat these early
+		float3 space_size = float3::Splat(STRING_SPACE_SIZE * size) * direction;
+		float3 tab_size = float3::Splat(STRING_TAB_SIZE * size) * direction;
+		float3 character_spacing = float3::Splat(STRING_CHARACTER_SPACING * size) * direction;
+		float3 new_line_size = float3::Splat(STRING_NEW_LINE_SIZE * -size) * up_direction;
+
+		Matrix rotation_matrix = MatrixRotation({rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z});
+		Matrix scale_matrix = MatrixScale(float3::Splat(size));
+		Matrix scale_rotation = scale_matrix * rotation_matrix;
+
+		// Create the instanced vertex buffer
+		VertexBuffer instanced_data_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), text.size);
+
+		// Keep track of already checked elements - the same principle as the Eratosthenes sieve
+		bool* checked_characters = (bool*)ECS_STACK_ALLOC(sizeof(bool) * text.size);
+		memset(checked_characters, 0, sizeof(bool) * text.size);
+
+		// Horizontal offsets as in the offset alongside the direction
+		float3* horizontal_offsets = (float3*)ECS_STACK_ALLOC(sizeof(float3) * text.size);
+		// Vertical offsets as in the offset alongside the -up direction
+		float3* vertical_offsets = (float3*)ECS_STACK_ALLOC(sizeof(float3) * text.size);
+
+		// Create a mask of spaces and tabs offsets for each character
+
+		// Do the first character separately
+		horizontal_offsets[0] = { 0.0f, 0.0f, 0.0f };
+		vertical_offsets[0] = { 0.0f, 0.0f, 0.0f };
+
+		if (text[0] == ' ' || text[0] == '\n' || text[0] == '\t') {
+			checked_characters[0] = true;
+		}
+
+		for (size_t index = 1; index < text.size; index++) {
+			// Hoist the checking outside the if
+			checked_characters[index] = text[index] == ' ' || text[index] == '\t' || text[index] == '\n';
+			
+			if (text[index - 1] == '\n') {
+				vertical_offsets[index] = vertical_offsets[index - 1] + new_line_size;
+
+				// If a new character has been found - set to 0 all the other offsets - the tab and the space
+				horizontal_offsets[index] = { 0.0f, 0.0f, 0.0f };
+			}
+			else {
+				// It doesn't matter if the current character is \n because it will reset the horizontal offset anyway
+				unsigned int previous_alphabet_index = function::GetAlphabetIndex(text[index - 1]);
+				unsigned int current_alphabet_index = function::GetAlphabetIndex(text[index]);
+
+				float previous_offset = string_character_bounds[previous_alphabet_index].y;
+				float current_offset = string_character_bounds[current_alphabet_index].x;
+
+				// The current offset will be negative
+				float3 character_span = float3::Splat((previous_offset - current_offset) * size) * direction;
+				horizontal_offsets[index] = horizontal_offsets[index - 1] + character_spacing + character_span;
+				vertical_offsets[index] = vertical_offsets[index - 1];
+			}
+		}
+
+		SetStringState(options);
+		BindStringBuffers(instanced_data_buffer);
+
+		for (size_t index = 0; index < text.size; index++) {
+			if (!checked_characters[index]) {
+				// Map the vertex buffer
+				void* instance_data = graphics->MapBuffer(instanced_data_buffer.buffer);
+
+				unsigned int current_character_count = 0;
+				// Do a search for the same character
+				for (size_t subindex = index; subindex < text.size; subindex++) {
+					if (text[subindex] == text[index]) {
+						float3 translation = position + horizontal_offsets[subindex] + vertical_offsets[subindex];
+						checked_characters[subindex] = true;
+						
+						SetInstancedColor(instance_data, current_character_count, color);
+						SetInstancedMatrix(instance_data, current_character_count, MatrixTranspose(scale_rotation * MatrixTranslation(translation) * camera_matrix));
+						current_character_count++;
+					}
+				}
+
+				// Draw the current characters
+				graphics->UnmapBuffer(instanced_data_buffer.buffer);
+
+				unsigned int alphabet_index = function::GetAlphabetIndex(text[index]);
+				// Draw the current character
+				graphics->DrawIndexedInstanced(string_mesh->submeshes[alphabet_index].index_count, current_character_count, string_mesh->submeshes[alphabet_index].index_buffer_offset);
+			}
+		}
+
+		// Release the temporary buffer
+		instanced_data_buffer.buffer->Release();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawStringRotation(
+		float3 translation,
+		float3 rotation,
+		float size,
+		containers::Stream<char> text,
+		ColorFloat color,
+		DebugDrawCallOptions options
+	) {
+		DrawString(translation, GetRightVector(rotation), size, text, color, options);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawNormals(
+		VertexBuffer model_position,
+		VertexBuffer model_normals, 
+		float size,
+		ColorFloat color, 
+		Matrix world_matrix,
+		DebugDrawCallOptions options
+	)
+	{
+		// Draw them as lines
+
+		// Allocate temporary constant buffer and position buffers
+		ConstantBuffer constant_buffer = graphics->CreateConstantBuffer(sizeof(InstancedTransformData));
+		VertexBuffer line_position_buffer = graphics->CreateVertexBuffer(sizeof(float3), model_normals.size * 2);
+
+		// Create staging buffers for positions and normals
+		VertexBuffer staging_normals = ToStaging(model_normals);
+		VertexBuffer staging_positions = ToStaging(model_position);
+
+		float3* normals = (float3*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
+		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		void* constant_data = graphics->MapBuffer(constant_buffer.buffer);
+		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
+
+		SetInstancedColor(constant_data, 0, color);
+		SetInstancedMatrix(constant_data, 0, MatrixTranspose(world_matrix * camera_matrix));
+
+		// Set the line positions
+		for (size_t index = 0; index < model_normals.size; index++) {
+			size_t offset = index * 2;
+			line_positions[offset] = model_positions[index];
+			line_positions[offset + 1] = model_positions[index] + normals[index] * size;
+		}
+
+		// Unmap the constant buffer and the staging ones
+		graphics->UnmapBuffer(staging_normals.buffer);
+		graphics->UnmapBuffer(staging_positions.buffer);
+		graphics->UnmapBuffer(constant_buffer.buffer);
+		graphics->UnmapBuffer(line_position_buffer.buffer);
+
+		// Special shader
+		unsigned int shader_type = ECS_DEBUG_SHADER_NORMAL_SINGLE_DRAW;
+		BindShaders(shader_type);
+		HandleOptions(this, options);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+		// The positions will be taken from the model positions buffer
+		graphics->BindVertexBuffer(line_position_buffer);
+		graphics->BindVertexConstantBuffer(constant_buffer);
+
+		graphics->Draw(model_normals.size * 2);
+
+		// Release the temporary buffer and the staging normals
+		staging_normals.buffer->Release();
+		staging_positions.buffer->Release();
+		constant_buffer.buffer->Release();
+		line_position_buffer.buffer->Release();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawNormals(
+		VertexBuffer model_position,
+		VertexBuffer model_normals,
+		float size,
+		ColorFloat color,
+		containers::Stream<Matrix> world_matrices,
+		DebugDrawCallOptions options
+	) {
+		// Draw them as lines
+
+		// Allocate temporary instanced buffer and position buffers
+		VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), world_matrices.size);
+		VertexBuffer line_position_buffer = graphics->CreateVertexBuffer(sizeof(float3), model_normals.size * 2);
+
+		// Create staging buffers for positions and normals
+		VertexBuffer staging_normals = ToStaging(model_normals);
+		VertexBuffer staging_positions = ToStaging(model_position);
+
+		float3* normals = (float3*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
+		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		void* instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
+		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
+
+		// Set the line positions
+		for (size_t index = 0; index < model_normals.size; index++) {
+			size_t offset = index * 2;
+			line_positions[offset] = model_positions[index];
+			line_positions[offset + 1] = model_positions[index] + normals[index] * size;
+		}
+
+		for (size_t index = 0; index < world_matrices.size; index++) {
+			SetInstancedColor(instanced_data, index, color);
+			SetInstancedMatrix(instanced_data, index, MatrixTranspose(world_matrices[index] * camera_matrix));
+		}
+
+		// Unmap the constant buffer and the staging ones
+		graphics->UnmapBuffer(staging_normals.buffer);
+		graphics->UnmapBuffer(staging_positions.buffer);
+		graphics->UnmapBuffer(instanced_buffer.buffer);
+		graphics->UnmapBuffer(line_position_buffer.buffer);
+
+		// Instanced draw
+		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
+		BindShaders(shader_type);
+		HandleOptions(this, options);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+		// The positions will be taken from the model positions buffer
 		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CUBE];
-		vertex_buffers[1] = instanced_small_vertex_buffer;
+		vertex_buffers[0] = line_position_buffer;
+		vertex_buffers[1] = instanced_buffer;
+		graphics->BindVertexBuffers({vertex_buffers, std::size(vertex_buffers)});
 
-		graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CUBE].size, 1);
-	}
+		graphics->DrawInstanced(model_normals.size * 2, world_matrices.size);
 
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void DebugDrawer::DrawString(float3 position, float size, Stream<char> text, Color color, DebugDrawCallOptions options)
-	{
-
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void DebugDrawer::DrawNormal(VertexBuffer positions, VertexBuffer normals, float size, Color color, DebugDrawCallOptions options)
-	{
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void DebugDrawer::DrawNormalSlice(VertexBuffer positions, VertexBuffer normals, float size, Color color, Stream<uint2> slices, DebugDrawCallOptions options)
-	{
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void DebugDrawer::DrawNormals(VertexBuffer model_position, VertexBuffer model_normals, float size, Color color, Stream<Matrix> world_matrices, DebugDrawCallOptions options)
-	{
+		// Release the temporary buffer and the staging normals
+		staging_normals.buffer->Release();
+		staging_positions.buffer->Release();
+		instanced_buffer.buffer->Release();
+		line_position_buffer.buffer->Release();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -722,11 +1093,11 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
-			// Create temporary buffers to hold the data
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), vertex_count);
-			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), vertex_count);
+			// Create temporary buffers to hold the data - each line has 2 endpoints
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 2);
+			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffer and the structured buffer now
 			graphics->BindVertexBuffer(position_buffer);
@@ -776,17 +1147,17 @@ namespace ECSEngine {
 					SetLineState(options);
 
 					// Issue the draw call
-					graphics->DrawInstanced(2, current_count);
+					DrawCallLine(current_count);
 				}
 			};
 
-			// Draw all the Wireframe depth elements
-			draw_call({ true, false });
+			// Draw all the Wireframe depth elements - only solid draw
+			draw_call({ false, false });
 
-			// Draw all the Wireframe no depth elements
+			// Draw all the Wireframe no depth elements - only solid draw
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ true, true });
+			draw_call({ false, true });
 
 			// Draw all the Solid depth elements
 			current_count = counts[SOLID_DEPTH];
@@ -824,16 +1195,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindSphereBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -870,8 +1238,9 @@ namespace ECSEngine {
 
 					// Set the state
 					SetSphereState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE].size, current_count);
+					DrawCallSphere(current_count);
 				}
 			};
 
@@ -917,16 +1286,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindPointBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -963,8 +1329,9 @@ namespace ECSEngine {
 
 					// Set the state
 					SetPointState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_SPHERE].size, current_count);
+					DrawCallPoint(current_count);
 				}
 			};
 
@@ -1010,11 +1377,11 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
-			// Create temporary buffers to hold the data
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), vertex_count);
-			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), vertex_count);
+			// Create temporary buffers to hold the data - each rectangles has 6 vertices
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 6);
+			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffer and the structured buffer now
 			graphics->BindVertexBuffer(position_buffer);
@@ -1063,7 +1430,7 @@ namespace ECSEngine {
 					SetRectangleState(options);
 
 					// Issue the draw call
-					graphics->DrawInstanced(6, current_count);
+					DrawCallRectangle(current_count);
 				}
 			};
 
@@ -1111,16 +1478,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CROSS];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindCrossBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1157,18 +1521,19 @@ namespace ECSEngine {
 
 					// Set the state
 					SetCrossState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CROSS].size, current_count);
+					DrawCallCross(current_count);
 				}
 			};
 
-			// Draw all the Wireframe depth elements - it should be solid filled
-			draw_call({ false, false });
+			// Draw all the Wireframe depth elements
+			draw_call({ true, false });
 
-			// Draw all the Wireframe no depth elements - it should be solid filled
+			// Draw all the Wireframe no depth elements
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ false, true });
+			draw_call({ true, true });
 
 			// Draw all the Solid depth elements
 			current_count = counts[SOLID_DEPTH];
@@ -1204,16 +1569,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CIRCLE];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindCircleBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1250,8 +1612,9 @@ namespace ECSEngine {
 
 					// Set the state
 					SetCircleState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CIRCLE].size, current_count);
+					DrawCallCircle(current_count);
 				}
 			};
 
@@ -1297,16 +1660,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_CYLINDER];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindArrowCylinderBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1322,23 +1682,14 @@ namespace ECSEngine {
 			auto map_for_cylinder = [&current_count, &current_indices, this, deck_pointer](void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugArrow* arrow = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
-					SetInstancedColor(instanced_data, index, arrow->color);
-					Matrix matrix = MatrixScale(arrow->length, arrow->size, arrow->size) * MatrixRotation(arrow->rotation) * MatrixTranslation(arrow->translation);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					FillInstancedArrowCylinder(instanced_data, index, arrow, camera_matrix);
 				}
 			};
 
 			auto map_for_header = [&current_count, &current_indices, this, deck_pointer](void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugArrow* arrow = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
-					SetInstancedColor(instanced_data, index, arrow->color);
-					Vector4 direction_simd = VectorGlobals::RIGHT_4;
-					direction_simd = RotateVectorSIMD(arrow->rotation, direction_simd);
-					float3 direction;
-					direction_simd.StorePartialConstant<3>(&direction);
-					Matrix matrix = MatrixScale(float3::Splat(arrow->size)) * MatrixRotation(arrow->rotation) 
-						* MatrixTranslation(arrow->translation + float3::Splat(arrow->length) * direction);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+					FillInstancedArrowHead(instanced_data, index, arrow, camera_matrix);
 				}
 			};
 
@@ -1357,8 +1708,9 @@ namespace ECSEngine {
 
 					// Set the state
 					SetArrowCylinderState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD].size, current_count);
+					DrawCallArrowCylinder(current_count);
 				}
 			};
 
@@ -1368,25 +1720,25 @@ namespace ECSEngine {
 					map_buffers(instanced_buffer, &instanced_data);
 
 					// Fill the buffers
-					map_for_cylinder(instanced_data);
+					map_for_header(instanced_data);
 
 					// Unmap the buffers
 					unmap_buffers(instanced_buffer);
 
 					// Set the state
 					SetArrowHeadState(options);
-					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD].size, current_count);
+
+					DrawCallArrowHead(current_count);
 				}
 			};
 
-			// Draw all the cylinder Wireframe depth elements - it should be solid filled
-			draw_call_cylinder({ false, false });
+			// Draw all the cylinder Wireframe depth elements
+			draw_call_cylinder({ true, false });
 
-			// Draw all the cylinder Wireframe no depth elements - it should be solid filled
+			// Draw all the cylinder Wireframe no depth elements
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call_cylinder({ false, true });
+			draw_call_cylinder({ true, true });
 
 			// Draw all the cylinder Solid depth elements
 			current_count = counts[SOLID_DEPTH];
@@ -1398,16 +1750,19 @@ namespace ECSEngine {
 			current_indices = indices[SOLID_NO_DEPTH];
 			draw_call_cylinder({ false, true });
 
+			// Bind the vertex buffers now
+			BindArrowHeadBuffers(instanced_buffer);
+
 			current_count = counts[WIREFRAME_DEPTH];
 			current_count = counts[WIREFRAME_DEPTH];
 
-			// Draw all the head Wireframe depth elements - it should be solid filled
-			draw_call_head({ false, false });
+			// Draw all the head Wireframe depth elements
+			draw_call_head({ true, false });
 
-			// Draw all the head Wireframe no depth elements - it should be solid filled
+			// Draw all the head Wireframe no depth elements
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call_head({ false, true });
+			draw_call_head({ true, true });
 
 			// Draw all the head Solid depth elements
 			current_count = counts[SOLID_DEPTH];
@@ -1443,16 +1798,10 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
-
-			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_AXES];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count * 3);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1465,52 +1814,87 @@ namespace ECSEngine {
 				graphics->UnmapBuffer(instanced_buffer.buffer);
 			};
 
-			auto map_for = [&current_count, &current_indices, this, deck_pointer](void* instanced_data) {
+			auto map_cylinder_for = [&current_count, &current_indices, this, deck_pointer](void* instanced_data) {
 				for (size_t index = 0; index < current_count; index++) {
 					DebugAxes* axes = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
-					SetInstancedColor(instanced_data, index, axes->color);
-					Matrix matrix = MatrixScale(float3::Splat(axes->size)) * MatrixRotation(axes->rotation) * MatrixTranslation(axes->translation);
-					SetInstancedMatrix(instanced_data, index, MatrixTranspose(matrix * camera_matrix));
+
+					size_t buffer_index = index * 3;
+					FillInstancedAxesArrowCylinders(instanced_data, buffer_index, axes, camera_matrix);
+				}
+			};
+
+			auto map_head_for = [&current_count, &current_indices, this, deck_pointer](void* instanced_data) {
+				for (size_t index = 0; index < current_count; index++) {
+					DebugAxes* axes = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
+
+					size_t buffer_index = index * 3;
+					FillInstancedAxesArrowHead(instanced_data, buffer_index, axes, camera_matrix);
 				}
 			};
 
 			void* instanced_data = nullptr;
 
-			auto draw_call = [&](DebugDrawCallOptions options) {
+			auto draw_call_cylinder = [&](DebugDrawCallOptions options) {
 				if (current_count > 0) {
 					// Map the buffers
 					map_buffers(instanced_buffer, &instanced_data);
 
 					// Fill the buffers
-					map_for(instanced_data);
+					map_cylinder_for(instanced_data);
 
 					// Unmap the buffers
 					unmap_buffers(instanced_buffer);
 
 					// Set the state
-					SetAxesState(options);
+					SetArrowCylinderState(options);
+					BindArrowCylinderBuffers(instanced_buffer);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_AXES].size, current_count);
+					DrawCallArrowCylinder(current_count * 3);
 				}
 			};
 
-			// Draw all the Wireframe depth elements - it should be solid filled
-			draw_call({ false, false });
+			auto draw_call_head = [&](DebugDrawCallOptions options) {
+				if (current_count > 0) {
+					// Map the buffers
+					map_buffers(instanced_buffer, &instanced_data);
 
-			// Draw all the Wireframe no depth elements - it should be solid filled
+					// Fill the buffers
+					map_head_for(instanced_data);
+
+					// Unmap the buffers
+					unmap_buffers(instanced_buffer);
+
+					// Set the state
+					SetArrowHeadState(options);
+					BindArrowHeadBuffers(instanced_buffer);
+
+					// Issue the draw call
+					DrawCallArrowHead(current_count * 3);
+				}
+			};
+
+			// Draw all the Wireframe depth elements
+			draw_call_cylinder({ true, false });
+			draw_call_head({ true, false });
+
+			// Draw all the Wireframe no depth elements
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ false, true });
+			draw_call_cylinder({ true, true });
+			draw_call_head({ true, true });
 
 			// Draw all the Solid depth elements
 			current_count = counts[SOLID_DEPTH];
 			current_indices = indices[SOLID_DEPTH];
-			draw_call({ false, false });
+			draw_call_cylinder({ false, false });
+			draw_call_head({ false, false });
 
 			// Draw all the Solid no depth elements
 			current_count = counts[SOLID_NO_DEPTH];
 			current_indices = indices[SOLID_NO_DEPTH];
-			draw_call({ false, true });
+			draw_call_cylinder({ false, true });
+			draw_call_head({ false, true });
 
 			// Update the duration and remove those elements that expired
 			UpdateElementDurations(deck_pointer, time_delta);
@@ -1536,11 +1920,11 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
-			// Create temporary buffers to hold the data
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), vertex_count);
-			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), vertex_count);
+			// Create temporary buffers to hold the data - each triangle has 3 vertices
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 3);
+			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffer and the structured buffer now
 			graphics->BindVertexBuffer(position_buffer);
@@ -1591,7 +1975,7 @@ namespace ECSEngine {
 					SetTriangleState(options);
 
 					// Issue the draw call
-					graphics->DrawInstanced(3, current_count);
+					DrawCallTriangle(current_count);
 				}
 			};
 
@@ -1639,16 +2023,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CUBE];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindCubeBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1685,18 +2066,19 @@ namespace ECSEngine {
 
 					// Set the state
 					SetOOBBState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CUBE].size, current_count);
+					DrawCallAABB(current_count);
 				}
 			};
 
-			// Draw all the Wireframe depth elements - it should be solid filled
-			draw_call({ false, false });
+			// Draw all the Wireframe depth elements
+			draw_call({ true, false });
 
-			// Draw all the Wireframe no depth elements - it should be solid filled
+			// Draw all the Wireframe no depth elements
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ false, true });
+			draw_call({ true, true });
 
 			// Draw all the Solid depth elements
 			current_count = counts[SOLID_DEPTH];
@@ -1732,16 +2114,13 @@ namespace ECSEngine {
 			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
 
 			// Get the max
-			unsigned int vertex_count = GetMaximumCount(counts);
+			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), vertex_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
 
 			// Bind the vertex buffers now
-			VertexBuffer vbuffers[2];
-			vbuffers[0] = primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CUBE];
-			vbuffers[1] = instanced_buffer;
-			graphics->BindVertexBuffers(Stream<VertexBuffer>(vbuffers, std::size(vbuffers)));
+			BindCubeBuffers(instanced_buffer);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1778,18 +2157,19 @@ namespace ECSEngine {
 
 					// Set the state
 					SetOOBBState(options);
+
 					// Issue the draw call
-					graphics->DrawInstanced(primitive_buffers[ECS_DEBUG_VERTEX_BUFFER_CUBE].size, current_count);
+					DrawCallOOBB(current_count);
 				}
 			};
 
-			// Draw all the Wireframe depth elements - it should be solid filled
-			draw_call({ false, false });
+			// Draw all the Wireframe depth elements
+			draw_call({ true, false });
 
-			// Draw all the Wireframe no depth elements - it should be solid filled
+			// Draw all the Wireframe no depth elements
 			current_count = counts[WIREFRAME_NO_DEPTH];
 			current_indices = indices[WIREFRAME_NO_DEPTH];
-			draw_call({ false, true });
+			draw_call({ true, true });
 
 			// Draw all the Solid depth elements
 			current_count = counts[SOLID_DEPTH];
@@ -1813,7 +2193,165 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::DrawStringDeck(float time_delta) {
+		// Calculate the maximum amount of vertices needed for every type
+		// and also get an integer mask to indicate the elements for each type
+		unsigned int counts[ELEMENT_COUNT] = { 0 };
+		ushort2* indices[ELEMENT_COUNT];
+		auto deck_pointer = &strings;
+		unsigned int total_count = deck_pointer->GetElementCount();
 
+		if (total_count > 0) {
+			// Allocate 4 times the memory needed to be sure that each type has enough indices
+			ushort2* type_indices = CalculateElementTypeCounts(allocator, counts, indices, deck_pointer);
+
+			// Get the maximum count of characters for each string
+			size_t instance_count = 0;
+			for (size_t index = 0; index < strings.buffers.size; index++) {
+				for (size_t subindex = 0; subindex < strings.buffers[index].size; subindex++) {
+					instance_count = std::max(strings.buffers[index][subindex].text.size, instance_count);
+				}
+			}
+			// Sanity check
+			ECS_ASSERT(instance_count < 10'000);
+
+			// Create temporary buffers to hold the data
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+
+			unsigned int current_count = counts[WIREFRAME_DEPTH];
+			ushort2* current_indices = indices[WIREFRAME_DEPTH];
+
+			bool* checked_characters = (bool*)allocator->Allocate(sizeof(bool) * instance_count);
+			float3* horizontal_offsets = (float3*)allocator->Allocate(sizeof(float3) * instance_count);
+			float3* vertical_offsets = (float3*)allocator->Allocate(sizeof(float3) * instance_count);
+
+			auto map_for = [&]() {
+				for (size_t index = 0; index < current_count; index++) {
+					const DebugString* string = &deck_pointer->buffers[current_indices[index].x][current_indices[index].y];
+
+					// Normalize the direction
+					float3 direction = Normalize(string->direction);
+
+					float3 rotation_from_direction = DirectionToRotation(direction);
+					// Invert the y axis 
+					rotation_from_direction.y = -rotation_from_direction.y;
+					float3 up_direction = GetUpVector(rotation_from_direction);
+
+					// Splat these early
+					float3 space_size = float3::Splat(STRING_SPACE_SIZE * string->size) * direction;
+					float3 tab_size = float3::Splat(STRING_TAB_SIZE * string->size) * direction;
+					float3 character_spacing = float3::Splat(STRING_CHARACTER_SPACING * string->size) * direction;
+					float3 new_line_size = float3::Splat(STRING_NEW_LINE_SIZE * -string->size) * up_direction;
+
+					Matrix rotation_matrix = MatrixRotation({ rotation_from_direction.x, rotation_from_direction.y, rotation_from_direction.z });
+					Matrix scale_matrix = MatrixScale(float3::Splat(string->size));
+					Matrix scale_rotation = scale_matrix * rotation_matrix;
+
+					// Keep track of already checked elements - the same principle as the Eratosthenes sieve
+					memset(checked_characters, 0, sizeof(bool) * string->text.size);
+
+					// Create a mask of spaces and tabs offsets for each character
+
+					// Do the first character separately
+					horizontal_offsets[0] = { 0.0f, 0.0f, 0.0f };
+					vertical_offsets[0] = { 0.0f, 0.0f, 0.0f };
+
+					if (string->text[0] == ' ' || string->text[0] == '\n' || string->text[0] == '\t') {
+						checked_characters[0] = true;
+					}
+
+					for (size_t text_index = 1; text_index < string->text.size; text_index++) {
+						// Hoist the checking outside the if
+						checked_characters[text_index] = string->text[text_index] == ' ' || string->text[text_index] == '\t' || string->text[text_index] == '\n';
+
+						if (string->text[text_index - 1] == '\n') {
+							vertical_offsets[text_index] = vertical_offsets[text_index - 1] + new_line_size;
+
+							// If a new character has been found - set to 0 all the other offsets - the tab and the space
+							horizontal_offsets[text_index] = { 0.0f, 0.0f, 0.0f };
+						}
+						else {
+							// It doesn't matter if the current character is \n because it will reset the horizontal offset anyway
+							unsigned int previous_alphabet_index = function::GetAlphabetIndex(string->text[text_index - 1]);
+							unsigned int current_alphabet_index = function::GetAlphabetIndex(string->text[text_index]);
+
+							float previous_offset = string_character_bounds[previous_alphabet_index].y;
+							float current_offset = string_character_bounds[current_alphabet_index].x;
+
+							// The current offset will be negative
+							float3 character_span = float3::Splat((previous_offset - current_offset) * string->size) * direction;
+							horizontal_offsets[text_index] = horizontal_offsets[text_index - 1] + character_spacing + character_span;
+							vertical_offsets[text_index] = vertical_offsets[text_index - 1];
+						}
+					}
+
+					for (size_t text_index = 0; text_index < string->text.size; text_index++) {
+						if (!checked_characters[text_index]) {
+							unsigned int current_character_count = 0;
+
+							void* instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
+
+							// Do a search for the same character
+							for (size_t subindex = text_index; subindex < string->text.size; subindex++) {
+								if (string->text[subindex] == string->text[text_index]) {
+									float3 translation = string->position + horizontal_offsets[subindex] + vertical_offsets[subindex];
+									checked_characters[subindex] = true;
+
+									SetInstancedColor(instanced_data, current_character_count, string->color);
+									SetInstancedMatrix(instanced_data, current_character_count, MatrixTranspose(scale_rotation * MatrixTranslation(translation) * camera_matrix));
+									current_character_count++;
+								}
+							}
+
+							graphics->UnmapBuffer(instanced_buffer.buffer);
+
+							unsigned int alphabet_index = function::GetAlphabetIndex(string->text[text_index]);
+							// Draw the current character
+							graphics->DrawIndexedInstanced(string_mesh->submeshes[alphabet_index].index_count, current_character_count, string_mesh->submeshes[alphabet_index].index_buffer_offset);
+						}
+					}
+				}
+			};
+
+			BindStringBuffers(instanced_buffer);
+
+			auto draw_call = [&](DebugDrawCallOptions options) {
+				if (current_count > 0) {
+					// Set the state
+					SetStringState(options);
+
+					// Issues the draw calls once per string - too difficult to batch multiple strings at once
+					map_for();
+				}
+			};
+
+			// Draw all the Wireframe depth elements
+			draw_call({ true, false });
+
+			// Draw all the Wireframe no depth elements
+			current_count = counts[WIREFRAME_NO_DEPTH];
+			current_indices = indices[WIREFRAME_NO_DEPTH];
+			draw_call({ true, true });
+
+			// Draw all the Solid depth elements
+			current_count = counts[SOLID_DEPTH];
+			current_indices = indices[SOLID_DEPTH];
+			draw_call({ false, false });
+
+			// Draw all the Solid no depth elements
+			current_count = counts[SOLID_NO_DEPTH];
+			current_indices = indices[SOLID_NO_DEPTH];
+			draw_call({ false, true });
+
+			// Update the duration and remove those elements that expired
+			UpdateElementDurations(deck_pointer, time_delta);
+
+			// Release the temporary vertex buffers and the temporary allocation
+			instanced_buffer.buffer->Release();
+			allocator->Deallocate(type_indices);
+			allocator->Deallocate(horizontal_offsets);
+			allocator->Deallocate(vertical_offsets);
+			allocator->Deallocate(checked_characters);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2137,7 +2675,7 @@ namespace ECSEngine {
 		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
 		BindShaders(shader_type);
 		HandleOptions(this, options);
-		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2161,7 +2699,10 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::SetAxesState(DebugDrawCallOptions options) {
-
+		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
+		BindShaders(shader_type);
+		HandleOptions(this, options);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2185,7 +2726,10 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::SetStringState(DebugDrawCallOptions options) {
-
+		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
+		HandleOptions(this, options);
+		BindShaders(shader_type);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2207,14 +2751,16 @@ namespace ECSEngine {
 		instanced_small_structured_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), SMALL_VERTEX_BUFFER_CAPACITY);
 		instanced_structured_view = graphics->CreateBufferView(instanced_small_structured_buffer);
 
-		// Initialize the shaders and input layouts
-		vertex_shaders[ECS_DEBUG_SHADER_TRANSFORM] = graphics->CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)));
-		pixel_shaders[ECS_DEBUG_SHADER_TRANSFORM] = graphics->CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(DebugTransform)));
-		layout_shaders[ECS_DEBUG_SHADER_TRANSFORM] = graphics->ReflectVertexShaderInput(vertex_shaders[ECS_DEBUG_SHADER_TRANSFORM]);
+#define REGISTER_SHADER(index, name) vertex_shaders[index] = graphics->CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(name))); \
+		pixel_shaders[index] = graphics->CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(name))); \
+		layout_shaders[index] = graphics->ReflectVertexShaderInput(vertex_shaders[index]);
 
-		vertex_shaders[ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA] = graphics->CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(DebugStructured)));
-		pixel_shaders[ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA] = graphics->CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(DebugStructured)));
-		layout_shaders[ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA] = graphics->ReflectVertexShaderInput(vertex_shaders[ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA]);
+		// Initialize the shaders and input layouts
+		REGISTER_SHADER(ECS_DEBUG_SHADER_TRANSFORM, DebugTransform);
+		REGISTER_SHADER(ECS_DEBUG_SHADER_STRUCTURED_INSTANCED_DATA, DebugStructured);
+		REGISTER_SHADER(ECS_DEBUG_SHADER_NORMAL_SINGLE_DRAW, DebugNormalSingleDraw);
+
+#undef REGISTER_SHADER
 
 		// Initialize the raster states
 
@@ -2238,9 +2784,6 @@ namespace ECSEngine {
 		result = graphics->m_device->CreateRasterizerState(&rasterizer_desc, rasterizer_states + ECS_DEBUG_RASTERIZER_SOLID_CULL);
 		ECS_ASSERT(!FAILED(result));
 
-		// Initialize the string buffers
-		string_buffers = (VertexBuffer*)allocator->Allocate(sizeof(VertexBuffer) * (unsigned int)Tools::CharacterUVIndex::Unknown);
-
 		size_t total_memory = 0;
 		size_t thread_capacity_stream_size = sizeof(CapacityStream<void>) * thread_count;
 
@@ -2262,6 +2805,9 @@ namespace ECSEngine {
 
 		// The locks will be padded to different cache lines
 		total_memory += (ECS_CACHE_LINE_SIZE + sizeof(SpinLock*)) * ECS_DEBUG_PRIMITIVE_COUNT;
+
+		// The string character bounds
+		total_memory += sizeof(float2) * (unsigned int)AlphabetIndex::Unknown;
 
 		void* allocation = allocator->Allocate(total_memory);
 		uintptr_t buffer = (uintptr_t)allocation;
@@ -2326,7 +2872,217 @@ namespace ECSEngine {
 			thread_locks[index]->value.store(0, ECS_RELAXED);
 			buffer += ECS_CACHE_LINE_SIZE;
 		}
+
+		lines.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		spheres.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		points.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		rectangles.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		crosses.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		circles.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		arrows.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		axes.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		triangles.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		aabbs.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		oobbs.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		strings.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+
+
+		string_character_bounds = (float2*)buffer;
 	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::InitializePrimitiveBuffers(ResourceManager* resource_manager)
+	{
+		// The string meshes - in the gltf mesh they are stored in reverse order.
+		// Change their order
+		string_mesh = resource_manager->LoadCoallescedMesh(STRING_MESH_FILE);
+
+		size_t submesh_count = string_mesh->submeshes.size;
+		// Change the order of the submeshes such that they mirror alphabet index
+		unsigned int* string_submesh_mask = (unsigned int*)ECS_STACK_ALLOC(sizeof(unsigned int) * submesh_count);
+		memset(string_submesh_mask, 0, sizeof(unsigned int) * submesh_count);
+
+		// Blender export bug - " gets exported as \" - must account for that
+		for (size_t index = 0; index < (unsigned int)AlphabetIndex::Space; index++) {
+			for (size_t subindex = 0; subindex < submesh_count && string_submesh_mask[index] == 0; subindex++) {
+				// If it is not the invalid character, " or backslash
+				if (string_mesh->submeshes[subindex].name[1] == '\0') {
+					unsigned int alphabet_index = function::GetAlphabetIndex(string_mesh->submeshes[subindex].name[0]);
+					string_submesh_mask[index] = (alphabet_index == index) * subindex;
+				}
+			}
+		}
+
+		// Invalid character, " and \\ handled separately
+
+		// "
+		for (size_t index = 0; index < submesh_count; index++) {
+			if (string_mesh->submeshes[index].name[1] == '\"') {
+				string_submesh_mask[(unsigned int)AlphabetIndex::Quotes] = index;
+				break;
+			}
+		}
+
+		// backslash
+		for (size_t index = 0; index < submesh_count; index++) {
+			if (string_mesh->submeshes[index].name[1] == '\\') {
+				string_submesh_mask[(unsigned int)AlphabetIndex::Backslash] = index;
+				break;
+			}
+		}
+
+		// Invalid character
+		for (size_t index = 0; index < submesh_count; index++) {
+			if (string_mesh->submeshes[index].name[1] != '\0' && string_mesh->submeshes[index].name[2] != '\0') {
+				string_submesh_mask[submesh_count - 1] = index;
+				break;
+			}
+		}
+
+		// Swap the submeshes according to the mask
+		Submesh* backup_submeshes = (Submesh*)ECS_STACK_ALLOC(sizeof(Submesh) * submesh_count);
+		memcpy(backup_submeshes, string_mesh->submeshes.buffer, sizeof(Submesh) * submesh_count);
+		for (size_t index = 0; index < submesh_count; index++) {
+			string_mesh->submeshes[index] = backup_submeshes[string_submesh_mask[index]];
+		}
+
+		// Transform the vertex buffer to a staging buffer and read the values
+		VertexBuffer staging_buffer = ToStaging(GetMeshVertexBuffer(string_mesh->mesh, ECS_MESH_POSITION));
+
+		// Map the buffer
+		float3* values = (float3*)graphics->MapBuffer(staging_buffer.buffer, D3D11_MAP_READ);
+
+		// Determine the string character spans
+		for (size_t index = 0; index < submesh_count; index++) {
+			float maximum = -10000.0f;
+			float minimum = 10000.0f;
+			// Walk through the vertices and record the minimum and maximum for the X axis
+			for (size_t vertex_index = 0; vertex_index < string_mesh->submeshes[index].vertex_count; vertex_index++) {
+				size_t offset = string_mesh->submeshes[index].vertex_buffer_offset + vertex_index;
+				maximum = std::max(values[offset].x, maximum);
+				minimum = std::min(values[offset].x, minimum);
+			}
+
+			// The character span is the difference between maximum and minimum
+			string_character_bounds[index] = { minimum, maximum };
+		}
+		// Copy the unknown character to the last character
+		string_character_bounds[(unsigned int)AlphabetIndex::Unknown - 1] = string_character_bounds[submesh_count - 1];
+		
+		// Place the space and tab dimensions
+		string_character_bounds[(unsigned int)AlphabetIndex::Space] = { -STRING_SPACE_SIZE, STRING_SPACE_SIZE };
+		string_character_bounds[(unsigned int)AlphabetIndex::Tab] = { -STRING_TAB_SIZE, STRING_TAB_SIZE };
+
+		graphics->UnmapBuffer(staging_buffer.buffer);
+
+		// Release the staging buffer
+		staging_buffer.buffer->Release();
+
+		for (size_t index = 0; index < ECS_DEBUG_VERTEX_BUFFER_COUNT; index++) {
+			primitive_meshes[index] = ((Stream<Mesh>*)resource_manager->LoadMeshes(PRIMITIVE_MESH_FILES[index]))->buffer;
+		}
+
+		float3 circle_positions[CIRCLE_TESSELATION + 1];
+
+		// The circle
+		float step = 2.0f * PI / CIRCLE_TESSELATION;
+		size_t index = 0;
+		for (; index < CIRCLE_TESSELATION; index++) {
+			float float_index = index * step;
+			float z = cos(float_index);
+			float x = sin(float_index);
+
+			circle_positions[index].x = x;
+			circle_positions[index].y = 0.0f;
+			circle_positions[index].z = z;
+		}
+		// Last point must be the same as the first
+		circle_positions[index] = circle_positions[0];
+
+		circle_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(circle_positions), circle_positions);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+#pragma region Bindings
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindSphereBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_index = ECS_MESH_POSITION;
+		graphics->BindMesh(*primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_SPHERE], Stream<ECS_MESH_INDEX>(&mesh_index, 1));
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindPointBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_index = ECS_MESH_POSITION;
+		graphics->BindMesh(*primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_POINT], Stream<ECS_MESH_INDEX>(&mesh_index, 1));
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindCrossBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_index = ECS_MESH_POSITION;
+		graphics->BindMesh(*primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_CROSS], Stream<ECS_MESH_INDEX>(&mesh_index, 1));
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindCircleBuffers(VertexBuffer instanced_data)
+	{
+		VertexBuffer vertex_buffers[2];
+		vertex_buffers[0] = circle_buffer;
+		vertex_buffers[1] = instanced_data;
+		graphics->BindVertexBuffers(Stream<VertexBuffer>(vertex_buffers, std::size(vertex_buffers)));
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindArrowCylinderBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_position = ECS_MESH_POSITION;
+		Stream<ECS_MESH_INDEX> mesh_mapping(&mesh_position, 1);
+		graphics->BindMesh(*primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_ARROW_CYLINDER], mesh_mapping);
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindArrowHeadBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_position = ECS_MESH_POSITION;
+		Stream<ECS_MESH_INDEX> mesh_mapping(&mesh_position, 1);
+		graphics->BindMesh(*primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD], mesh_mapping);
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindCubeBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_index = ECS_MESH_POSITION;
+		graphics->BindMesh(*primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_CUBE], Stream<ECS_MESH_INDEX>(&mesh_index, 1));
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::BindStringBuffers(VertexBuffer instanced_data)
+	{
+		ECS_MESH_INDEX mesh_position = ECS_MESH_POSITION;
+		graphics->BindMesh(string_mesh->mesh, Stream<ECS_MESH_INDEX>(&mesh_position, 1));
+		graphics->BindVertexBuffer(instanced_data, 1);
+	}
+
+#pragma endregion
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -2339,6 +3095,21 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DebugDrawer::CopyCharacterSubmesh(IndexBuffer index_buffer, unsigned int& buffer_offset, unsigned int alphabet_index) {
+		CopyBufferSubresource(
+			index_buffer,
+			buffer_offset,
+			string_mesh->mesh.index_buffer,
+			string_mesh->submeshes[alphabet_index].index_buffer_offset,
+			string_mesh->submeshes[alphabet_index].index_count,
+			graphics->GetContext()
+		);
+
+		buffer_offset += string_mesh->submeshes[alphabet_index].index_count;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void DebugDrawer::UpdateCameraMatrix(Matrix new_matrix)
 	{
 		camera_matrix = new_matrix;
@@ -2346,33 +3117,105 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::SetPreviousRenderState()
+	GraphicsPipelineRenderState DebugDrawer::GetPreviousRenderState() const
 	{
-		graphics->m_context->OMGetBlendState(&previous_blend_state, previous_blend_factors, &previous_blend_mask);
-		graphics->m_context->RSGetState(&previous_rasterizer_state);
-		graphics->m_context->OMGetDepthStencilState(&previous_depth_stencil_state, &previous_stencil_ref);
+		return graphics->GetRenderState();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::RestorePreviousRenderState()
+	void DebugDrawer::RestorePreviousRenderState(GraphicsPipelineRenderState state)
 	{
-		graphics->m_context->OMSetBlendState(previous_blend_state, previous_blend_factors, previous_blend_mask);
-		graphics->m_context->RSSetState(previous_rasterizer_state);
-		graphics->m_context->OMSetDepthStencilState(previous_depth_stencil_state, previous_stencil_ref);
+		graphics->RestoreRenderState(state);
 	}
-
-
-	// ----------------------------------------------------------------------------------------------------------------------
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
 
+#pragma region Draw Calls
+
 	// ----------------------------------------------------------------------------------------------------------------------
-	
+
+	void DebugDrawer::DrawCallLine(unsigned int instance_count)
+	{
+		graphics->DrawInstanced(2, instance_count);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------------
-	
+
+	void DebugDrawer::DrawCallSphere(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_SPHERE]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallPoint(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_POINT]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallRectangle(unsigned int instance_count)
+	{
+		graphics->DrawInstanced(6, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallCross(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_CROSS]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallCircle(unsigned int instance_count)
+	{
+		graphics->DrawInstanced(CIRCLE_TESSELATION + 1, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallArrowCylinder(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_ARROW_CYLINDER]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallArrowHead(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_ARROW_HEAD]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallTriangle(unsigned int instance_count)
+	{
+		graphics->DrawInstanced(3, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallAABB(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_CUBE]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void DebugDrawer::DrawCallOOBB(unsigned int instance_count)
+	{
+		graphics->DrawIndexedInstanced(primitive_meshes[ECS_DEBUG_VERTEX_BUFFER_CUBE]->index_buffer.count, instance_count);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	// ----------------------------------------------------------------------------------------------------------------------

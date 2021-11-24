@@ -99,10 +99,8 @@ void DirectoryExplorerCreateFolderCallback(ActionData* action_data) {
 	ChooseDirectoryOrFileNameData* choose_data = (ChooseDirectoryOrFileNameData*)_additional_data;
 	DirectoryExplorerData* data = (DirectoryExplorerData*)_data;
 
-	wchar_t wide_name[512];
-	function::ConvertASCIIToWide(CapacityStream<wchar_t>(wide_name, 0, 512), *choose_data->ascii);
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
-	data->current_path->AddStreamSafe(CapacityStream<wchar_t>(wide_name, choose_data->ascii->size, 512));
+	function::ConvertASCIIToWide(*data->current_path, *choose_data->ascii);
 
 	char ascii_path[512];
 	CapacityStream<char> ascii(ascii_path, 0, 512);

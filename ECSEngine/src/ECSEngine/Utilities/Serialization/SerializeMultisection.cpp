@@ -323,7 +323,7 @@ namespace ECSEngine {
 
 	size_t DeserializeMultisectionCount(uintptr_t stream, size_t header_size)
 	{
-		return *(size_t*)function::OffsetPointer((void*)stream, header_size);
+		return *(size_t*)function::OffsetPointer((void*)stream, header_size + sizeof(header_size));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------

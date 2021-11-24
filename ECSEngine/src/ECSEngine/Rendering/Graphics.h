@@ -75,6 +75,27 @@ namespace ECSEngine {
 		unsigned int misc_flag = 0u;
 	};
 
+	struct ECSENGINE_API GraphicsPipelineBlendState {
+		ID3D11BlendState* blend_state;
+		float blend_factors[4];
+		unsigned int sample_mask;
+	};
+
+	struct ECSENGINE_API GraphicsPipelineDepthStencilState {
+		ID3D11DepthStencilState* depth_stencil_state;
+		unsigned int stencil_ref;
+	};
+
+	struct ECSENGINE_API GraphicsPipelineRasterizerState {
+		ID3D11RasterizerState* rasterizer_state;
+	};
+
+	struct ECSENGINE_API GraphicsPipelineRenderState {
+		GraphicsPipelineBlendState blend_state;
+		GraphicsPipelineDepthStencilState depth_stencil_state;
+		GraphicsPipelineRasterizerState rasterizer_state;
+	};
+
 	struct ECSENGINE_API ShaderMacro {
 		const char* name;
 		const char* definition;
@@ -222,6 +243,8 @@ namespace ECSEngine {
 		// It will create an empty index buffer - must be populated afterwards
 		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, D3D11_USAGE usage = D3D11_USAGE_DEFAULT, unsigned int cpu_access = 0);
 
+		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, const void* data, D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, unsigned int cpu_access = 0);
+
 		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices);
 
 		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices);
@@ -329,14 +352,16 @@ namespace ECSEngine {
 		);
 
 		StandardBuffer CreateStandardBuffer(
-			size_t byte_size,
+			size_t element_size,
+			size_t element_count,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
 		);
 
 		StandardBuffer CreateStandardBuffer(
-			size_t byte_size,
+			size_t element_size,
+			size_t element_count,
 			const void* data,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
@@ -425,7 +450,7 @@ namespace ECSEngine {
 
 		DepthStencilView CreateDepthStencilView(Texture2D texture);
 
-		ResourceView CreateBufferView(StandardBuffer buffer);
+		ResourceView CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format);
 
 		ResourceView CreateBufferView(StructuredBuffer buffer);
 
@@ -450,8 +475,15 @@ namespace ECSEngine {
 
 #pragma region Resource release
 
+		// Releases the name if it has one and the shader interface
 		template<typename Shader>
 		void FreeShader(Shader shader);
+
+		// Releases the graphics resources and the name if it has one
+		void FreeMesh(const Mesh& mesh);
+
+		// Releases the name if it has one
+		void FreeSubmesh(const Submesh& submesh);
 
 #pragma endregion
 
@@ -473,13 +505,13 @@ namespace ECSEngine {
 
 		void DisableCulling(GraphicsContext* context, bool wireframe = false);
 
-		void Draw(UINT vertex_count, UINT start_slot = 0u);
+		void Draw(unsigned int vertex_count, unsigned int vertex_offset = 0u);
 
-		void DrawIndexed(unsigned int index_count, UINT start_index = 0u, INT base_vertex_location = 0);
+		void DrawIndexed(unsigned int index_count, unsigned int start_index = 0u, unsigned int base_vertex_location = 0);
 
-		void DrawInstanced(unsigned int vertex_count, unsigned int instance_count, unsigned int start_slot = 0u);
+		void DrawInstanced(unsigned int vertex_count, unsigned int instance_count, unsigned int vertex_buffer_offset = 0u, unsigned int instance_offset = 0u);
 
-		void DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, unsigned int start_slot = 0u);
+		void DrawIndexedInstanced(unsigned int index_count, unsigned int instance_count, unsigned int index_buffer_offset = 0u, unsigned int vertex_buffer_offset = 0u, unsigned int instance_offset = 0u);
 
 		void DrawIndexedInstancedIndirect(IndirectBuffer buffer);
 
@@ -515,7 +547,7 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region
+#pragma region Shader Reflection
 
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
@@ -552,15 +584,35 @@ namespace ECSEngine {
 
 		GraphicsContext* CreateDeferredContext(UINT context_flags = 0u);
 
+		void FreeAllocatedBuffer(const void* buffer);
+
+		void* GetAllocatorBuffer(size_t size);
+
 		GraphicsDevice* GetDevice();
 
 		GraphicsContext* GetContext();
 
 		GraphicsContext* GetDeferredContext();
 
+		GraphicsPipelineBlendState GetBlendState() const;
+
+		GraphicsPipelineDepthStencilState GetDepthStencilState() const;
+
+		GraphicsPipelineRasterizerState GetRasterizerState() const;
+
+		GraphicsPipelineRenderState GetRenderState() const;
+
 		void GetWindowSize(unsigned int& width, unsigned int& height) const;
 
 		void GetWindowSize(uint2& size) const;
+
+		void RestoreBlendState(GraphicsPipelineBlendState state);
+
+		void RestoreDepthStencilState(GraphicsPipelineDepthStencilState state);
+
+		void RestoreRasterizerState(GraphicsPipelineRasterizerState state);
+
+		void RestoreRenderState(GraphicsPipelineRenderState state);
 
 		void ResizeSwapChainSize(HWND hWnd, float width, float height);
 
@@ -746,9 +798,9 @@ namespace ECSEngine {
 		GraphicsContext* context
 	);
 
-	ECSENGINE_API void Draw(unsigned int vertex_count, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void Draw(unsigned int vertex_count, GraphicsContext* context, unsigned int vertex_offset = 0u);
 
-	ECSENGINE_API void DrawIndexed(unsigned int index_count, GraphicsContext* context, UINT start_index = 0u, INT base_vertex_location = 0);
+	ECSENGINE_API void DrawIndexed(unsigned int index_count, GraphicsContext* context, unsigned int start_index = 0u, unsigned int base_vertex_location = 0);
 
 	ECSENGINE_API void DrawInstanced(
 		unsigned int vertex_count, 
@@ -762,8 +814,8 @@ namespace ECSEngine {
 		unsigned int index_count,
 		unsigned int instance_count,
 		GraphicsContext* context,
-		unsigned int vertex_offset = 0u,
 		unsigned int index_offset = 0u,
+		unsigned int vertex_offset = 0u,
 		unsigned int instance_offset = 0u
 	);
 
@@ -772,6 +824,14 @@ namespace ECSEngine {
 	ECSENGINE_API void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
 
 	ECSENGINE_API ID3D11CommandList* FinishCommandList(GraphicsContext* context, bool restore_state = false);
+
+	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsPipelineDepthStencilState GetDepthStencilState(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsPipelineRasterizerState GetRasterizerState(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsPipelineRenderState GetRenderState(GraphicsContext* context);
 
 	// It must be unmapped manually
 	ECSENGINE_API void* MapBuffer(
@@ -811,6 +871,14 @@ namespace ECSEngine {
 		unsigned int map_flags = 0
 	);
 
+	ECSENGINE_API void RestoreBlendState(GraphicsContext* context, GraphicsPipelineBlendState blend_state);
+
+	ECSENGINE_API void RestoreDepthStencilState(GraphicsContext* context, GraphicsPipelineDepthStencilState depth_stencil_state);
+
+	ECSENGINE_API void RestoreRasterizerState(GraphicsContext* context, GraphicsPipelineRasterizerState rasterizer_state);
+
+	ECSENGINE_API void RestoreRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state);
+
 	ECSENGINE_API void UpdateBuffer(
 		ID3D11Buffer* buffer,
 		const void* data,
@@ -840,10 +908,16 @@ namespace ECSEngine {
 	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh
 	// and the submeshes - the offsets into the buffers; it will release the initial mesh 
 	// buffers; The meshes must have the same index buffer int size
+	// The mesh will have no name associated with it
+	// It will release the graphics resources of the meshes
+	// The submeshes will inherit the mesh name if it has one
 	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes);
 
 	// Same as the non mask variant - the difference is that it will only convert the meshes specified
 	// in the mesh mask
+	// The mesh will have no name associated with it
+	// It will release the graphics resources of the meshes
+	// The submeshes will inherit the mesh name if it has one
 	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes, containers::Stream<unsigned int> mesh_mask);
 
 #endif // ECSENGINE_DIRECTX11

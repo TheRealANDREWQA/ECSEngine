@@ -14,9 +14,16 @@ constexpr const char* BUILD_PROJECT_STRING = "/build";
 constexpr const char* CLEAN_PROJECT_STRING = "/clean";
 constexpr const char* REBUILD_PROJECT_STRING = "/rebuild";
 constexpr const char* CMD_BUILD_SYSTEM_LOG_FILE_COMMAND = "/out";
-constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_PATH = L"\\Debug\\Build.txt";
-constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILENAME = L"\\Debug\\Build";
+constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_PATH = L"\\Debug\\";
 constexpr const wchar_t* CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION = L".txt";
+
+constexpr const wchar_t* CMD_BUILD_SYSTEM_WIDE = L"devenv";
+constexpr const wchar_t* BUILD_PROJECT_STRING_WIDE = L"/build";
+constexpr const wchar_t* CLEAN_PROJECT_STRING_WIDE = L"/clean";
+constexpr const wchar_t* REBUILD_PROJECT_STRING_WIDE = L"/rebuild";
+constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_COMMAND_WIDE = L"/out";
+
+constexpr const wchar_t* CMD_BUILD_FLAG_FILE_EXTENSION = L".temp";
 
 constexpr const char* CMB_BUILD_SYSTEM_INCORRECT_PARAMETER = "The operation could not be completed. The parameter is incorrect.";
 
@@ -27,6 +34,62 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 	L"Source",
 	L"source"
 };
+
+constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 250;
+
+#define MODULE_BUILD_USING_SHELL
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
+	std::ifstream stream(std::wstring(log_path.buffer, log_path.buffer + log_path.size));
+
+	if (stream.good()) {
+		EDITOR_STATE(editor_state);
+
+		size_t file_size = function::GetFileByteSize(stream);
+		if (file_size != 0) {
+			char* allocation = (char*)editor_allocator->Allocate_ts(file_size + 1);
+			stream.read(allocation, file_size);
+
+			size_t gcount = stream.gcount();
+			allocation[file_size] = '\0';
+			char* failed_character = strrchr(allocation, 'f');
+			failed_character -= 2;
+
+			char _number_characters[256];
+			Stream<char> number_characters(_number_characters, 0);
+			while (function::IsNumberCharacter(*failed_character)) {
+				number_characters.Add(*failed_character);
+				failed_character--;
+			}
+			number_characters.SwapContents();
+			size_t number = function::ConvertCharactersToInt<size_t>(number_characters);
+
+			editor_allocator->Deallocate_ts(allocation);
+			if (number > 0) {
+				ECS_FORMAT_TEMP_STRING(error_message, "{0} module/s have failed to build. Check the {1} log.", number, CMD_BUILD_SYSTEM);
+				EditorSetConsoleError(editor_state, error_message);
+				return false;
+			}
+			else {
+				size_t string_size = strlen(CMB_BUILD_SYSTEM_INCORRECT_PARAMETER);
+				if (function::CompareStrings(Stream<char>(allocation + 1, string_size), Stream<char>(CMB_BUILD_SYSTEM_INCORRECT_PARAMETER, string_size))) {
+					ECS_FORMAT_TEMP_STRING(error_message, "{0} could not complete the command. Incorrect parameter. Most likely, the module is missing the current configuration. Open the {1} log for more information.", CMD_BUILD_SYSTEM, CMD_BUILD_SYSTEM);
+					EditorSetConsoleError(editor_state, error_message);
+					return false;
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+	else {
+		ECS_FORMAT_TEMP_STRING(error_message, "Could not open {0} to read the log. Open the file externally to check the command status.", log_path);
+		EditorSetConsoleWarn(editor_state, error_message);
+		return false;
+	}
+}
 
 // -------------------------------------------------------------------------------------------------------------------------
 
@@ -84,44 +147,70 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void WriteModuleLogDelimitator(std::ofstream& stream) {
-	constexpr const char* STRING = "\n------------------------------------------- Module end -------------------------------------------------\n\n";
-	stream.write(STRING, strlen(STRING));
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
-void WriteModuleLogDelimitator(Stream<wchar_t> log_path) {
-	std::ofstream stream(log_path.buffer, std::ios::app);
-
-	if (stream.good()) {
-		WriteModuleLogDelimitator(stream);
-	}
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
-struct ThreadTaskData {
+struct BuildThreadTaskData {
 	EditorState* editor_state;
 	unsigned int index;
 	ConditionVariable* condition_variable;
-	bool* success;
 };
 
-template<bool (*function)(EditorState* editor_state, unsigned int index, unsigned int thread_index)>
+template<void (*function)(EditorState* editor_state, unsigned int index)>
 void BuildThreadTask(unsigned int thread_index, World* world, void* _data) {
-	ThreadTaskData* data = (ThreadTaskData*)_data;
-	bool success = function(data->editor_state, data->index, thread_index);
+	BuildThreadTaskData* data = (BuildThreadTaskData*)_data;
+	 function(data->editor_state, data->index);
 	data->condition_variable->Notify();
-	*data->success = success;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+struct CheckBuildStatusThreadData {
+	EditorState* editor_state;
+	Stream<wchar_t> path;
+};
+
+void CheckBuildStatusThreadTask(unsigned int thread_index, World* world, void* _data) {
+	CheckBuildStatusThreadData* data = (CheckBuildStatusThreadData*)_data;
+
+	while (!ExistsFileOrFolder(data->path)) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(CHECK_FILE_STATUS_THREAD_SLEEP_TICK));
+	}
+	bool succeded = PrintCommandStatus(data->editor_state, data->path);
+	if (succeded) {
+		// Extract the library name and the configuration
+		Stream<wchar_t> filename = function::PathFilename(data->path);
+		const wchar_t* underscore = wcsrchr(filename.buffer, '_');
+		if (underscore != nullptr) {
+			const wchar_t* forward_slash = wcsrchr(filename.buffer, '/');
+			Stream<wchar_t> library_name(filename.buffer, underscore - filename.buffer);
+			if (forward_slash) {
+				Stream<wchar_t> configuration(underscore + 1, forward_slash - underscore);
+				Stream<wchar_t> command(forward_slash, filename.buffer + filename.size - forward_slash);
+
+				ECS_FORMAT_TEMP_STRING(console_string, "Command {0} for module {1} with configuration {2} completed successfully.", command, library_name, configuration);
+				EditorSetConsoleInfoFocus(data->editor_state, console_string);
+			}
+			else {
+				EditorSetConsoleWarn(data->editor_state, ToStream("Could not deduce build command type or configuration."));
+				ECS_FORMAT_TEMP_STRING(console_string, "Module {0} completed successfully in build.", library_name);
+				EditorSetConsoleInfo(data->editor_state, console_string);
+			}
+		}
+		else {
+			EditorSetConsoleWarn(data->editor_state, ToStream("Could not deduce build command type, library name or configuration."));
+			EditorSetConsoleInfo(data->editor_state, ToStream("A module finished building successfully."));
+		}
+	}
+
+	// The path must be deallocated
+	data->editor_state->editor_allocator->Deallocate_ts(data->path.buffer);
+	ECS_ASSERT(RemoveFile(data->path));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
 // Returns the index of the thread that is executing the task
-unsigned int PushBuildThreadTask(EditorState* editor_state, unsigned int index, ConditionVariable* condition_variable, bool* success_status, ThreadFunction function) {
+unsigned int PushBuildThreadTask(EditorState* editor_state, unsigned int index, ConditionVariable* condition_variable, ThreadFunction function) {
 	EDITOR_STATE(editor_state);
-	ThreadTaskData data = { editor_state, index, condition_variable, success_status };
+	BuildThreadTaskData data = { editor_state, index, condition_variable };
 	return task_manager->AddDynamicTaskAndWake({ function, &data }, sizeof(data));
 }
 
@@ -133,10 +222,6 @@ void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
 
 	// Clear the log file first
 	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
-	wchar_t temp_memory[256];
-	Stream<wchar_t> log_path(temp_memory, 0);
-	GetProjectModuleBuildLogPath(editor_state, log_path);
-	ClearFile(log_path);
 
 	// Create a condition variable that will be used by the main thread (this one) 
 	// in order to sleep while the threads are doing their task/s
@@ -145,65 +230,43 @@ void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
 	// Prepare thread indices for log file merge at the end and failed task indices
 	size_t module_count = project_modules->size;
 	unsigned int thread_indices[MAX_THREADS];
-	bool successful_tasks[MAX_THREADS];
-	for (size_t index = 0; index < module_count; index++) {
-		successful_tasks[index] = true;
-		thread_indices[index] = PushBuildThreadTask(editor_state, index, &condition_variable, successful_tasks + index, function);
+	// The graphics module located at 1 must be skipped if it is not set
+	bool starting_index = project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size == 0;
+	for (size_t index = starting_index; index < module_count; index++) {
+		thread_indices[index] = PushBuildThreadTask(editor_state, index, &condition_variable, function);
 	}
 
-	// Wait while the threads are doing their task/s
-	condition_variable.Wait(module_count);
+	//// Wait while the threads are doing their task/s; Remove the graphics module from the count if it doesn't exist
+	//condition_variable.Wait(module_count - starting_index);
 
-	// Check failed modules and print the console output accordingly
-	// This avoids pedantic console messages that add up when many modules are being
-	// built; only successful tasks need to be printed because the build task
-	// will print the error message 
-	ECS_TEMP_ASCII_STRING(console_output, 512);
-	unsigned int successful_task_count = 0;
-	for (size_t index = 0; index < module_count; index++) {
-		successful_task_count += successful_tasks[index];
-	}
-	console_output.size = function::FormatString(console_output.buffer, "{0} commands have executed successfully. The modules are:", successful_task_count);
-	for (size_t index = 0; index < module_count; index++) {
-		if (successful_tasks[index]) {
-			console_output.Add(' ');
-			function::ConvertWideCharsToASCII(project_modules->buffer[index].library_name, console_output);
-			console_output.AddSafe(',');
-		}
-	}
-	// Last character will always be a ,
-	console_output[console_output.size - 1] = '.';
-	if (successful_task_count > 0) {
-		EditorSetConsoleInfoFocus(editor_state, console_output);
-	}
-
-	// Merge thread build outputs to the main log
-	std::ofstream log_stream(log_path.buffer, std::ios::trunc);
-	wchar_t _thread_log_path[256];
-	Stream<wchar_t> thread_log_path(_thread_log_path, 0);
-
-	unsigned int thread_count = task_manager->GetThreadCount();
-	unsigned int iteration_count = function::Select<unsigned int>(module_count > thread_count, thread_count, module_count);
-	for (size_t index = 0; index < iteration_count; index++) {
-		thread_log_path.size = 0;
-		GetProjectModuleThreadBuildLogPath(editor_state, thread_log_path, thread_indices[index]);
-		if (ExistsFileOrFolder(thread_log_path)) {
-			std::ifstream thread_stream(thread_log_path.buffer);
-			size_t file_size = function::GetFileByteSize(thread_stream);
-			char* allocation = (char*)_malloca(file_size);
-			thread_stream.read(allocation, file_size);
-			size_t read_count = thread_stream.gcount();
-			log_stream.write(allocation, read_count);
-
-			thread_stream.close();
-			OS::DeleteFileWithError(thread_log_path, console);
-		}
-	}
+	//// Check failed modules and print the console output accordingly
+	//// This avoids pedantic console messages that add up when many modules are being
+	//// built; only successful tasks need to be printed because the build task
+	//// will print the error message 
+	//ECS_TEMP_ASCII_STRING(console_output, 512);
+	//unsigned int successful_task_count = 0;
+	//for (size_t index = starting_index; index < module_count; index++) {
+	//	successful_task_count += successful_tasks[index];
+	//}
+	//console_output.size = function::FormatString(console_output.buffer, "{0} commands have executed successfully. The modules are:", successful_task_count);
+	//for (size_t index = starting_index; index < module_count; index++) {
+	//	if (successful_tasks[index]) {
+	//		console_output.Add(' ');
+	//		function::ConvertWideCharsToASCII(project_modules->buffer[index].library_name, console_output);
+	//		console_output.AddSafe(',');
+	//	}
+	//}
+	//// Last character will always be a ,
+	//console_output[console_output.size - 1] = '.';
+	//if (successful_task_count > 0) {
+	//	EditorSetConsoleInfoFocus(editor_state, console_output);
+	//}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void CommandLineString(CapacityStream<char> string, Stream<wchar_t> solution_path, Stream<char> command, Stream<char> configuration, Stream<wchar_t> log_file) {
+// For system() - the CRT function
+void CommandLineString(CapacityStream<char>& string, Stream<wchar_t> solution_path, Stream<char> command, Stream<char> configuration, Stream<wchar_t> log_file) {
 	string.Copy(ToStream(CMB_BUILD_SYSTEM_PATH));
 	string.AddStream(ToStream(" && "));
 	string.AddStream(ToStream(CMD_BUILD_SYSTEM));
@@ -217,109 +280,97 @@ void CommandLineString(CapacityStream<char> string, Stream<wchar_t> solution_pat
 	string.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_COMMAND));
 	string.Add(' ');
 	function::ConvertWideCharsToASCII(log_file, string);
-	string.AddSafe('\0');
+	string[string.size] = '\0';
+}
+
+// For ShellExecute() - Win32 API
+void CommandLineString(const EditorState* editor_state, CapacityStream<wchar_t>& string, unsigned int module_index, Stream<wchar_t> command, Stream<wchar_t> log_file) {
+	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
+	
+	string.Copy(ToStream(L"/c "));
+	string.AddStream(ToStream(CMD_BUILD_SYSTEM_WIDE));
+	string.Add(L' ');
+	string.AddStream(modules->buffer[module_index].solution_path);
+	string.Add(L' ');
+	string.AddStream(command);
+	string.Add(L' ');
+	string.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)modules->buffer[module_index].configuration]));
+	string.Add(L' ');
+	string.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_COMMAND_WIDE));
+	string.Add(L' ');
+	string.AddStreamSafe(log_file);
+	string.AddStream(ToStream(L" & copy con "));
+	GetProjectDebugFilePath(editor_state, string);
+	string.Add(ECS_OS_PATH_SEPARATOR);
+	GetProjectModuleBuildFlagFile(editor_state, module_index, command, string);
+	string[string.size] = '\0';
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool PrintCommandStatus(EditorState* editor_state, Stream<char> configuration, Stream<wchar_t> log_path) {
-	std::ifstream stream(std::wstring(log_path.buffer, log_path.buffer + log_path.size));
-
-	if (stream.good()) {
-		EDITOR_STATE(editor_state);
-		
-		size_t file_size = function::GetFileByteSize(stream);
-		char* allocation = (char*)editor_allocator->Allocate_ts(file_size + 1);
-		stream.read(allocation, file_size);
-
-		size_t gcount = stream.gcount();
-		allocation[file_size] = '\0';
-		char* failed_character = strrchr(allocation, 'f');
-		failed_character -= 2;
-
-		char _number_characters[256];
-		Stream<char> number_characters(_number_characters, 0);
-		while (function::IsNumberCharacter(*failed_character)) {
-			number_characters.Add(*failed_character);
-			failed_character--;
-		}
-		number_characters.SwapContents();
-		size_t number = function::ConvertCharactersToInt<size_t>(number_characters);
-
-		editor_allocator->Deallocate_ts(allocation);
-		if (number > 0) {
-			ECS_FORMAT_TEMP_STRING(error_message, "{0} module/s have failed to build. Check the {1} log.", number, CMD_BUILD_SYSTEM);
-			EditorSetConsoleError(editor_state, error_message);
-			return false;
-		}
-		else {
-			size_t string_size = strlen(CMB_BUILD_SYSTEM_INCORRECT_PARAMETER);
-			if (function::CompareStrings(Stream<char>(allocation + 1, string_size), Stream<char>(CMB_BUILD_SYSTEM_INCORRECT_PARAMETER, string_size))) {
-				ECS_FORMAT_TEMP_STRING(error_message, "{0} could not complete the command. Incorrect parameter. Most likely, the module is missing the configuration {1}. Open the {2} log for more information.", CMD_BUILD_SYSTEM, configuration, CMD_BUILD_SYSTEM);
-				EditorSetConsoleError(editor_state, error_message);
-				return false;
-			}
-			return true;
-		}
-	}
-	else {
-		ECS_FORMAT_TEMP_STRING(error_message, "Could not open {0} to read the log. Open the file externally to check the command status.", log_path);
-		EditorSetConsoleWarn(editor_state, error_message);
-		return false;
-	}
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
-bool RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<char> command, unsigned int thread_index) {
+void RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t> command) {
 	EDITOR_STATE(editor_state);
 
-	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	Stream<wchar_t> solution_path;
-	Stream<wchar_t> library_name;
-	Stream<char> configuration;
-
-	solution_path = modules->buffer[index].solution_path;
-	library_name = modules->buffer[index].library_name;
-	configuration = editor_state->module_configuration_definitions[(unsigned int)modules->buffer[index].configuration];
-
 	// Construct the system string
+#ifdef MODULE_BUILD_USING_CRT
 	ECS_TEMP_ASCII_STRING(command_string, 512);
+#else
+	ECS_TEMP_STRING(command_string, 512);
+#endif
+
 	wchar_t _log_path[512];
 	Stream<wchar_t> log_path(_log_path, 0);
-	if (thread_index == -1) {
-		GetProjectModuleBuildLogPath(editor_state, log_path);
-		// Clear the log file
-		ClearFile(log_path);
-	}
-	else {
-		GetProjectModuleThreadBuildLogPath(editor_state, log_path, thread_index);
-	}
+	GetProjectModuleBuildLogPath(editor_state, index, command, log_path);
+	// Clear the log file
+	ClearFile(log_path);
+
+#ifdef MODULE_BUILD_USING_CRT
+	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
+	Stream<wchar_t> solution_path = modules->buffer[index].solution_path;
+	Stream<wchar_t> library_name = modules->buffer[index].library_name;
+	Stream<char> configuration = editor_state->module_configuration_definitions[(unsigned int)modules->buffer[index].configuration];
+
 	CommandLineString(command_string, solution_path, command, configuration, log_path);
+#else
+	CommandLineString(editor_state, command_string, index, command, log_path);
+#endif
 	
 	// Run the command
+#ifdef MODULE_BUILD_USING_CRT
 	system(command_string.buffer);
-	
-	// Log the command status
-	bool succeded = PrintCommandStatus(editor_state, configuration, log_path);
 
-	if (succeded && thread_index == -1) {
+	// Log the command status
+	bool succeded = PrintCommandStatus(editor_state, log_path);
+
+	if (succeded) {
 		ECS_FORMAT_TEMP_STRING(console_string, "Command {0} for module {1} ({2}) with configuration {3} completed successfully.", command, library_name, solution_path, configuration);
 		EditorSetConsoleInfoFocus(editor_state, console_string);
 	}
+#else
+	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE", SW_HIDE);
+	if ((uint64_t)value < 32) {
+		EditorSetConsoleError(editor_state, ToStream("An error occured when creating the command prompt that builds the module."));
+	}
+	else {
+		ECS_TEMP_STRING(flag_file, 256);
+		GetProjectModuleBuildFlagFile(editor_state, index, command, flag_file);
 
-	WriteModuleLogDelimitator(log_path);
-	return succeded;
+		// Log the command status
+		CheckBuildStatusThreadData check_data;
+		check_data.editor_state = editor_state;
+		check_data.path = function::StringCopyTs(editor_state->editor_allocator, flag_file);
+		task_manager->AddDynamicTaskAndWake({ CheckBuildStatusThreadTask, &check_data, "Check build status" }, sizeof(check_data));
+	}
+#endif
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool BuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
+void BuildProjectModule(EditorState* editor_state, unsigned int index) {
 	ProjectModules* modules = (ProjectModules*)editor_state->project_modules;
 	if (UpdateProjectModuleLastWrite(editor_state, index) || modules->buffer[index].load_status != EditorModuleLoadStatus::Good) {
-		return RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING), thread_index);
+		RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING_WIDE));
 	}
-	return true;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -331,8 +382,8 @@ void BuildProjectModules(EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool CleanProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
-	return RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING), thread_index);
+void CleanProjectModule(EditorState* editor_state, unsigned int index) {
+	RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING_WIDE));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -343,8 +394,8 @@ void CleanProjectModules(EditorState* editor_state) {
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool RebuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index) {
-	return RunCmdCommand(editor_state, index, ToStream(REBUILD_PROJECT_STRING), thread_index);
+void RebuildProjectModule(EditorState* editor_state, unsigned int index) {
+	RunCmdCommand(editor_state, index, ToStream(REBUILD_PROJECT_STRING_WIDE));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -420,25 +471,31 @@ unsigned int ProjectModuleIndexFromName(const EditorState* editor_state, Stream<
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetProjectModuleBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path)
+void GetProjectModuleBuildFlagFile(const EditorState* editor_state, unsigned int module_index, Stream<wchar_t> command, CapacityStream<wchar_t>& temp_file)
 {
-	EDITOR_STATE(editor_state);
-
-	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
-	log_path.Copy(project_file->path);
-	log_path.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
-	log_path[log_path.size] = L'\0';
+	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
+	temp_file.AddStreamSafe(modules->buffer[module_index].library_name);
+	temp_file.Add(L'_');
+	temp_file.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)modules->buffer[module_index].configuration]));
+	temp_file.AddStream(command);
+	temp_file.AddStream(ToStream(CMD_BUILD_FLAG_FILE_EXTENSION));
+	temp_file[temp_file.size] = L'\0';
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetProjectModuleThreadBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path, unsigned int thread_index)
+void GetProjectModuleBuildLogPath(const EditorState* editor_state, unsigned int index, Stream<wchar_t> command, Stream<wchar_t>& log_path)
 {
 	EDITOR_STATE(editor_state);
+
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
+	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
 	log_path.Copy(project_file->path);
-	log_path.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILENAME));
-	function::ConvertIntToChars(log_path, thread_index);
+	log_path.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_PATH));
+	log_path.AddStream(modules->buffer[index].library_name);
+	log_path.Add(L'_');
+	log_path.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)modules->buffer[index].configuration]));
+	log_path.AddStream(command);
 	log_path.AddStream(ToStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION));
 	log_path[log_path.size] = L'\0';
 }

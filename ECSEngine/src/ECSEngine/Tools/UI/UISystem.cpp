@@ -1506,7 +1506,7 @@ namespace ECSEngine {
 			}
 
 			for (size_t index = 0; index < character_count; index++) {
-				unsigned int character_uv_index = FindCharacterUVFromAtlas(characters[index]);
+				unsigned int character_uv_index = FindCharacterType(characters[index]);
 
 				size_t buffer_index;
 				if constexpr (!invert_order) {
@@ -4349,7 +4349,7 @@ namespace ECSEngine {
 				m_descriptors.dockspaces.close_x_scale_y
 			);
 			float2 expanded_close_x_scale = { close_x_scale.x * 1.35f, close_x_scale.y * 1.15f };
-			unsigned int x_sprite_offset = FindCharacterUVFromAtlas('X');
+			unsigned int x_sprite_offset = FindCharacterType('X');
 
 			if (dockspace->borders[border_index].draw_region_header) {
 				bool is_focused_dockspace = m_focused_window_data.dockspace == dockspace;
@@ -5336,62 +5336,14 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::FindCharacterUVFromAtlas(char character) const {
-			if ( character >= '!' && character <= '~')
-				return character - '!';
-			if (character == ' ')
-				return (unsigned int)CharacterUVIndex::Space;
-			if (character == '\t')
-				return (unsigned int)CharacterUVIndex::Tab;
-			return (unsigned int)CharacterUVIndex::Unknown;
+		unsigned int UISystem::FindCharacterType(char character) const {
+			return function::GetAlphabetIndex(character);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::FindCharacterUVFromAtlas(char character, CharacterType& character_type) const {
-			unsigned int uv_index = character - '!';
-			if (character == ' ') {
-				character_type = CharacterType::Space;
-				return uv_index;
-			}
-			if (character < '!') {
-				character_type = CharacterType::Unknown;
-				return uv_index;
-			}
-			if (character < '0') {
-				character_type = CharacterType::Symbol;
-				return uv_index;
-			}
-			if (character <= '9') {
-				character_type = CharacterType::Digit;
-				return uv_index;
-			}
-			if (character < 'A') {
-				character_type = CharacterType::Symbol;
-				return uv_index;
-			}
-			if (character <= 'Z') {
-				character_type = CharacterType::CapitalLetter;
-				return uv_index;
-			}
-			if (character < 'a') {
-				character_type = CharacterType::Symbol;
-				return uv_index;
-			}
-			if (character <= 'z') {
-				character_type = CharacterType::LowercaseLetter;
-				return uv_index;
-			}
-			if (character <= '~') {
-				character_type = CharacterType::Symbol;
-				return uv_index;
-			}
-			if (character == '\t') {
-				character_type = CharacterType::Tab;
-				return (unsigned int)CharacterUVIndex::Tab;
-			}
-			character_type = CharacterType::Unknown;
-			return (unsigned int)CharacterUVIndex::Unknown;
+		unsigned int UISystem::FindCharacterType(char character, CharacterType& character_type) const {
+			return function::GetAlphabetIndex(character, character_type);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5564,7 +5516,7 @@ namespace ECSEngine {
 
 		float UISystem::GetSpaceXSpan(float font_size_x)
 		{
-			unsigned int uv_index = FindCharacterUVFromAtlas(' ');
+			unsigned int uv_index = FindCharacterType(' ');
 			uv_index *= 2;
 
 			float2 atlas_dimensions = m_font_character_uvs[m_descriptors.font.texture_dimensions];
@@ -5575,7 +5527,7 @@ namespace ECSEngine {
 
 		float UISystem::GetUnknownCharacterXSpan(float font_size_x)
 		{
-			unsigned int uv_index = FindCharacterUVFromAtlas('\n');
+			unsigned int uv_index = FindCharacterType('\n');
 			uv_index *= 2;
 
 			float2 atlas_dimensions = m_font_character_uvs[m_descriptors.font.texture_dimensions];
@@ -6017,7 +5969,7 @@ namespace ECSEngine {
 			}
 
 			for (size_t index = 0; index < character_count; index++) {
-				unsigned int character_uv_index = FindCharacterUVFromAtlas(characters[index]);
+				unsigned int character_uv_index = FindCharacterType(characters[index]);
 
 				size_t character_index = character_uv_index * 2;
 				// they are in uv space
@@ -7176,7 +7128,7 @@ namespace ECSEngine {
 
 		float4 UISystem::GetUVForCharacter(char character) const
 		{
-			unsigned int uv_index = FindCharacterUVFromAtlas(character);
+			unsigned int uv_index = FindCharacterType(character);
 			return float4(m_font_character_uvs[uv_index * 2].x, m_font_character_uvs[uv_index * 2].y, m_font_character_uvs[uv_index * 2 + 1].x, m_font_character_uvs[uv_index * 2 + 1].y);
 		}
 
@@ -8647,11 +8599,37 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::PushDestroyWindowHandler(unsigned int window_index)
+		{
+			PushSystemHandler({ DestroyWindowSystemHandler, &window_index, sizeof(window_index) });
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::PushDestroyCallbackWindowHandler(unsigned int window_index, UIActionHandler handler)
+		{
+			DestroyWindowCallbackSystemHandlerData data;
+			data.window_index = window_index;
+			data.callback = handler;
+
+			// + 8 for alignment
+			PushSystemHandler({ DestroyWindowCallbackSystemHandler, &data, (unsigned int)sizeof(data) + handler.data_size + 8 });
+			if (handler.data_size > 0) {
+				UIActionHandler system_handler;
+				m_handler_stack.Peek(system_handler);
+				DestroyWindowCallbackSystemHandlerData* system_handler_data = (DestroyWindowCallbackSystemHandlerData*)system_handler.data;
+				void* handler_data = (void*)function::align_pointer((uintptr_t)function::OffsetPointer(system_handler_data, sizeof(DestroyWindowCallbackSystemHandlerData)), 8);
+				system_handler_data->callback.data = handler_data;
+				memcpy(handler_data, handler.data, handler.data_size);
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::ReadFontDescriptionFile(const char* filename) {
 			// loading font uv descriptor;
 			size_t size = 2000;
-			unsigned int handle;
-			void* uv_buffer = m_resource_manager->LoadTextFileTemporary(filename, size, handle);
+			void* uv_buffer = m_resource_manager->LoadTextFile(filename, size);
 			char* uv_character_buffer = (char*)uv_buffer;
 			unsigned int uvs[1024];
 			size_t numbers = function::ParseNumbersFromCharString(Stream<char>(uv_character_buffer, size), uvs);
@@ -8682,7 +8660,8 @@ namespace ECSEngine {
 				);           // bottom right
 				number_count += 2;
 			}
-			m_resource_manager->UnloadTextFileTemporary(handle);
+
+			m_resource_manager->UnloadTextFile(filename);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10275,9 +10254,9 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool destroy_dockspace_if_last>
-		void UISystem::RemoveWindowFromDockspaceRegion(UIDockspace* dockspace, DockspaceType type, unsigned int border_index, unsigned int window_index) {
-			dockspace->borders[border_index].window_indices.RemoveSwapBack(window_index);
-			if (dockspace->borders[border_index].active_window == window_index)
+		void UISystem::RemoveWindowFromDockspaceRegion(UIDockspace* dockspace, DockspaceType type, unsigned int border_index, unsigned int in_border_index) {
+			dockspace->borders[border_index].window_indices.RemoveSwapBack(in_border_index);
+			if (dockspace->borders[border_index].active_window == in_border_index)
 				dockspace->borders[border_index].active_window = 0;
 
 			if constexpr (destroy_dockspace_if_last) {
@@ -10294,6 +10273,25 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, UISystem::RemoveWindowFromDockspaceRegion, UIDockspace*, DockspaceType, unsigned int, unsigned int);
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		template<bool destroy_dockspace_if_last>
+		void UISystem::RemoveWindowFromDockspaceRegion(unsigned int window_index)
+		{
+			DockspaceType type;
+			unsigned int border_index;
+			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
+			if (dockspace != nullptr) {
+				for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
+					if (dockspace->borders[border_index].window_indices[index] == window_index) {
+						RemoveWindowFromDockspaceRegion(dockspace, type, border_index, index);
+					}
+				}
+			}
+		}
+
+		ECS_TEMPLATE_FUNCTION_BOOL(void, UISystem::RemoveWindowFromDockspaceRegion, unsigned int);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -11413,7 +11411,7 @@ namespace ECSEngine {
 			);
 			
 			float2 expanded_close_x_scale = { close_x_scale.x * 1.35f, close_x_scale.y * 1.15f };
-			unsigned int x_sprite_offset = system->FindCharacterUVFromAtlas('X');
+			unsigned int x_sprite_offset = system->FindCharacterType('X');
 
 			// close window X; adding it to the text sprite stream
 			float2 close_x_position = float2(
@@ -12054,7 +12052,7 @@ namespace ECSEngine {
 							system->m_descriptors.dockspaces.close_x_scale_y
 						);
 
-						unsigned int x_sprite_offset = system->FindCharacterUVFromAtlas('X');
+						unsigned int x_sprite_offset = system->FindCharacterType('X');
 						SetSpriteRectangle(
 							float2(
 								position.x + scale.x - system->m_descriptors.dockspaces.close_x_position_x_left,
@@ -12226,6 +12224,31 @@ namespace ECSEngine {
 
 			action_data->data = &data->tool_tip_data;
 			TextTooltipHoverable(action_data);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void DestroyWindowSystemHandler(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			unsigned int* window_index = (unsigned int*)_data;
+			system->RemoveWindowFromDockspaceRegion(*window_index);
+			system->PopSystemHandler();
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void DestroyWindowCallbackSystemHandler(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			DestroyWindowCallbackSystemHandlerData* data = (DestroyWindowCallbackSystemHandlerData*)_data;
+			action_data->data = data->callback.data;
+			data->callback.action(action_data);
+
+			system->RemoveWindowFromDockspaceRegion(data->window_index);
+			system->PopSystemHandler();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

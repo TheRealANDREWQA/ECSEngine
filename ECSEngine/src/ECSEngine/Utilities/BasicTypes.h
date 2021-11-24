@@ -4,6 +4,122 @@
 
 namespace ECSEngine {
 
+#pragma region Alphabet and character type
+
+	// Helper Visualing enum
+	enum class ECSENGINE_API AlphabetIndex : unsigned char
+	{
+		ExclamationMark = 0x00,
+		Quotes = 0x01,
+		Tag = 0x02,
+		Dollar = 0x03,
+		Percent = 0x04,
+		BinaryAnd = 0x05,
+		SingleQuote = 0x06,
+		OpenParanthesis = 0x07,
+		ClosedParanthesis = 0x08,
+		MultiplyStar = 0x09,
+		Plus = 0x0A,
+		Comma = 0x0B,
+		Minus = 0x0C,
+		Dot = 0x0D,
+		ForwardSlash = 0x0E,
+		Zero = 0x0F,
+		One = 0x10,
+		Two = 0x11,
+		Three = 0x12,
+		Four = 0x13,
+		Five = 0x14,
+		Six = 0x15,
+		Seven = 0x16,
+		Eight = 0x17,
+		Nine = 0x18,
+		Colon = 0x19,
+		Semicolon = 0x1A,
+		Less = 0x1B,
+		Equal = 0x1C,
+		Greater = 0x1D,
+		QuestionMark = 0x1E,
+		EmailSign = 0x1F,
+		A = 0x20,
+		B = 0x21,
+		C = 0x22,
+		D = 0x23,
+		E = 0x24,
+		F = 0x25,
+		G = 0x26,
+		H = 0x27,
+		I = 0x28,
+		J = 0x29,
+		K = 0x2A,
+		L = 0x2B,
+		M = 0x2C,
+		N = 0x2D,
+		O = 0x2E,
+		P = 0x2F,
+		Q = 0x30,
+		R = 0x31,
+		S = 0x32,
+		T = 0x33,
+		U = 0x34,
+		V = 0x35,
+		W = 0x36,
+		X = 0x37,
+		Y = 0x38,
+		Z = 0x39,
+		OpenSquareParanthesis = 0x3A,
+		Backslash = 0x3B,
+		ClosedSquareParanthesis = 0x3C,
+		Exponential = 0x3D,
+		Underscore = 0x3E,
+		AngledSingleQuote = 0x3F,
+		a = 0x40,
+		b = 0x41,
+		c = 0x42,
+		d = 0x43,
+		e = 0x44,
+		f = 0x45,
+		g = 0x46,
+		h = 0x47,
+		i = 0x48,
+		j = 0x49,
+		k = 0x4A,
+		l = 0x4B,
+		m = 0x4C,
+		n = 0x4D,
+		o = 0x4E,
+		p = 0x4F,
+		q = 0x50,
+		r = 0x51,
+		s = 0x52,
+		t = 0x53,
+		u = 0x54,
+		v = 0x55,
+		w = 0x56,
+		x = 0x57,
+		y = 0x58,
+		z = 0x59,
+		OpenBracket = 0x5A,
+		LogicalOr = 0x5B,
+		ClosedBracket = 0x5C,
+		Tilder = 0x5D,
+		Space = 0x5E,
+		Tab = 0x5F,
+		Unknown = 0x60
+	};
+
+	enum class ECSENGINE_API CharacterType : unsigned char {
+		CapitalLetter,
+		LowercaseLetter,
+		Digit,
+		Space,
+		Symbol,
+		Tab,
+		Unknown
+	};
+
+#pragma endregion
+
 	/* Minimalist wrapper for simple structs composed of 2 fundamental types
 	* It overloads the common operators:
 	* ==, !=, +, -, *, /
@@ -56,6 +172,16 @@ namespace ECSEngine {
 		Base2& operator *= (const Base2& other) {
 			x *= other.x;
 			y *= other.y;
+			return *this;
+		}
+
+		Base2 operator * (float factor) const {
+			return *this * Splat(factor);
+		}
+
+		Base2 operator *= (float factor) {
+			x *= factor;
+			y *= factor;
 			return *this;
 		}
 
@@ -145,6 +271,17 @@ namespace ECSEngine {
 			x *= other.x;
 			y *= other.y;
 			z *= other.z;
+			return *this;
+		}
+
+		Base3 operator * (float factor) const {
+			return *this * Splat(factor);
+		}
+
+		Base3 operator *= (float factor) {
+			x *= factor;
+			y *= factor;
+			z *= factor;
 			return *this;
 		}
 
@@ -240,6 +377,18 @@ namespace ECSEngine {
 			y *= other.y;
 			z *= other.z;
 			w *= other.w;
+			return *this;
+		}
+
+		Base4 operator * (float factor) const {
+			return *this * Splat(factor);
+		}
+
+		Base4 operator *= (float factor) {
+			x *= factor;
+			y *= factor;
+			z *= factor;
+			w *= factor;
 			return *this;
 		}
 

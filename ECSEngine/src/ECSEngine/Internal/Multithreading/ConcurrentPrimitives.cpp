@@ -73,6 +73,7 @@ namespace ECSEngine {
 			return (signal_count.load(ECS_ACQUIRE) - current_count) >= count;
 		});
 		signal_count.store(0, ECS_RELEASE);
+		lock.unlock();
 	}
 
 	void ConditionVariable::Notify(unsigned int count) {
@@ -88,6 +89,7 @@ namespace ECSEngine {
 	}
 
 	void ConditionVariable::Reset() {
+		lock.unlock();
 		signal_count.store(0, ECS_RELEASE);
 	}
 

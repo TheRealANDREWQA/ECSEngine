@@ -512,6 +512,7 @@ namespace ECSEngine {
 		}
 
 		ID3D11Buffer* buffer;
+		size_t count;
 	};
 
 	struct ECSENGINE_API StructuredBuffer {
@@ -668,11 +669,12 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API Mesh {
-		Mesh() : mapping_count(0) {}
+		Mesh() : name(nullptr), mapping_count(0) {}
 
 		Mesh(const Mesh& other) = default;
 		Mesh& operator = (const Mesh& other) = default;
 
+		const char* name;
 		IndexBuffer index_buffer;
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
 		unsigned char mapping[ECS_MESH_BUFFER_COUNT];
@@ -680,16 +682,19 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API Submesh {
-		Submesh() : index_buffer_offset(0), vertex_buffer_offset(0) {}
-		Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset, unsigned int _index_count) : index_buffer_offset(_index_buffer_offset),
-			vertex_buffer_offset(_vertex_buffer_offset), index_count(_index_count) {}
+		Submesh() : name(nullptr), index_buffer_offset(0), vertex_buffer_offset(0), index_count(0), vertex_count(0) {}
+		Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset, unsigned int _index_count, unsigned int _vertex_count) 
+			: name(nullptr), index_buffer_offset(_index_buffer_offset), vertex_buffer_offset(_vertex_buffer_offset), index_count(_index_count), 
+		vertex_count(_vertex_count) {}
 
 		Submesh(const Submesh& other) = default;
 		Submesh& operator = (const Submesh& other) = default;
 
+		const char* name;
 		unsigned int index_buffer_offset;
 		unsigned int vertex_buffer_offset;
 		unsigned int index_count;
+		unsigned int vertex_count;
 	};
 
 	// Contains the actual pipeline objects that can be bound to the 
@@ -700,6 +705,7 @@ namespace ECSEngine {
 		Material(const Material& other) = default;
 		Material& operator = (const Material& other) = default;
 
+		const char* name;
 		InputLayout layout;
 		VertexShader vertex_shader;
 		PixelShader pixel_shader;
@@ -733,7 +739,7 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API PBRMaterial {
-		containers::Stream<char> name;
+		const char* name;
 		float metallic_factor;
 		float roughness_factor;
 		Color tint;
@@ -761,16 +767,16 @@ namespace ECSEngine {
 		PBRMaterialTextureIndex index;
 	};
 
-	// Each submesh has associated a material
-	struct PBRMesh {
+	struct CoallescedMesh {
 		Mesh mesh;
-		Submesh* submeshes;
-		PBRMaterial* materials;
-		size_t submesh_count;
+		containers::Stream<Submesh> submeshes;
 	};
 
-	// Releases the graphics resources of this mesh
-	ECSENGINE_API void FreeMesh(const Mesh& mesh);
+	// Each submesh has associated a material
+	struct PBRMesh {
+		CoallescedMesh mesh;
+		PBRMaterial* materials;
+	};
 
 	ECSENGINE_API void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, containers::Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index);
 
@@ -808,5 +814,10 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		containers::Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
 	);
+
+	ECSENGINE_API VertexBuffer GetMeshVertexBuffer(const Mesh& mesh, ECS_MESH_INDEX buffer_type);
+
+	// It does not release the vertex buffer that is being replaced
+	ECSENGINE_API void SetMeshVertexBuffer(Mesh& mesh, ECS_MESH_INDEX buffer_type, VertexBuffer buffer);
 
 }

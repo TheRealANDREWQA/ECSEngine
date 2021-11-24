@@ -434,7 +434,7 @@ namespace ECSEngine {
 		// the functions provided must take as parameter the pointer to the buffer element to act on
 		template<typename Function1, typename Function2, typename Buffer>
 		void SimdForLoop(Function1&& simd_function, Function2&& scalar_function, Buffer* buffer, size_t count, size_t vector_size) {
-			size_t regular_size = count & (-vector_size);
+			size_t regular_size = function::GetSimdCount(count, vector_size);
 			size_t index = 0;
 			for (; index < regular_size; index += vector_size) {
 				simd_function(buffer + regular_size);
@@ -714,16 +714,6 @@ namespace ECSEngine {
 				min = 0;
 				max = ULLONG_MAX;
 			}
-		}
-
-		template<typename Stream, typename Handler>
-		size_t Find(Stream stream, Handler&& handler) {
-			for (size_t index = 0; index < stream.size; index++) {
-				if (handler[stream[index]]) {
-					return index;
-				}
-			}
-			return -1;
 		}
 
 	}

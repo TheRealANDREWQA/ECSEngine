@@ -7,7 +7,7 @@ struct VS_INPUT
 
 struct VS_OUTPUT
 {
-    float3 color : COLOR;
+    float4 color : COLOR;
 };
 
 struct InstancedData

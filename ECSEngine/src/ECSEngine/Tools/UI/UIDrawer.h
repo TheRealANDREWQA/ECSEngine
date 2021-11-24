@@ -3289,14 +3289,24 @@ namespace ECSEngine {
 							float2 vertex_span = GetTextSpan(vertices);
 							prefix_scale = vertex_span.x;
 							position.x += prefix_scale;
+							scale.x -= prefix_scale;
 							TextLabelDrawer<new_configuration | UI_CONFIG_LABEL_TRANSPARENT>(config, &data->labels[*data->active_label], position, scale);
+
+							// Restore the position and scale for the collapsing header
+							position.x -= prefix_scale;
+							scale.x += prefix_scale;
 						}
 						else {
 							TextLabel<new_configuration | UI_CONFIG_UNAVAILABLE_TEXT>(config, data->prefix, position, scale);
 							float2 vertex_span = GetTextSpan(vertices);
 							prefix_scale = vertex_span.x;
 							position.x += prefix_scale;
+							scale.x -= prefix_scale;
 							TextLabelDrawer<new_configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_UNAVAILABLE_TEXT>(config, &data->labels[*data->active_label], position, scale);
+
+							// Restore the position and scale for the collapsing header;
+							position.x -= prefix_scale;
+							scale.x += prefix_scale;
 						}
 					}
 					else {
@@ -3308,9 +3318,6 @@ namespace ECSEngine {
 						else {
 							TextLabelDrawer<new_configuration | UI_CONFIG_UNAVAILABLE_TEXT>(config, &data->labels[*data->active_label], position, scale);
 						}
-					}
-					if constexpr (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
-						position.x -= prefix_scale;
 					}
 
 					float2 positions[2];
@@ -3358,7 +3365,7 @@ namespace ECSEngine {
 									// only y axis needs to be handled since to move on the x axis
 									// the left mouse button must be pressed
 									float2 window_scale = { scale.x, scale.y * data->label_display_count };
-									system->TrimPopUpWindow(data->window_index, window_position, window_scale, window_index, region_position, region_scale);
+									//system->TrimPopUpWindow(data->window_index, window_position, window_scale, window_index, region_position, region_scale);
 								}
 								else {
 									data->has_been_destroyed = false;
@@ -4078,10 +4085,10 @@ namespace ECSEngine {
 					}
 
 					if (state) {
-						SpriteRectangle<configuration>(position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE);
+						SpriteRectangle<configuration>(position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, color_theme.default_text);
 					}
 					else {
-						SpriteRectangle<configuration>(position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, ECS_COLOR_WHITE, { 1.0f, 0.0f }, { 0.0f, 1.0f });
+						SpriteRectangle<configuration>(position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, color_theme.default_text, { 1.0f, 0.0f }, { 0.0f, 1.0f });
 					}
 
 					position.x += triangle_scale.x;
@@ -6325,7 +6332,8 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data) {
-				size_t identifier_length = ParseStringIdentifier(identifier, strlen(identifier));
+				//size_t identifier_length = ParseStringIdentifier(identifier, strlen(identifier));
+				size_t identifier_length = strlen(identifier);
 				size_t temp_marker = GetTempAllocatorMarker();
 				char* temp_chars = (char*)GetTempBuffer(identifier_length + 1);
 				memcpy(temp_chars, identifier, identifier_length);
@@ -6390,7 +6398,8 @@ namespace ECSEngine {
 						UIDrawerSentenceNotCached data;
 						data.whitespace_characters = Stream<unsigned int>(new_whitespace_characters, 0);
 						SentenceNonCachedInitializerKernel(identifier, &data);
-						whitespace_characters.buffer = new_whitespace_characters;
+						whitespace_characters.buffer = data.whitespace_characters.buffer;
+						whitespace_characters.capacity = whitespace_characters.size;
 					}
 					else {
 						whitespace_characters.Add(ParseStringIdentifier(identifier, strlen(identifier)));
@@ -8064,7 +8073,7 @@ namespace ECSEngine {
 			void SpriteRectangle(
 				float2 position,
 				float2 scale,
-				LPCWSTR texture,
+				const wchar_t* texture,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -8353,7 +8362,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float GetXScaleUntilBorder(float position) const {
-				return region_scale.x - layout.next_row_padding - position + region_position.x /*- region_render_offset.x*/;
+				return region_limit.x - position;
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9288,7 +9297,12 @@ namespace ECSEngine {
 				// Add the transform
 				UIConfigAbsoluteTransform transform;
 				transform.position = { position.x + region_render_offset.x, position.y + region_render_offset.y };
-				transform.scale.x = collapsing_header_size - SIZE_INPUT_X_SCALE - layout.element_indentation;
+				if constexpr (~configuration & UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT) {
+					transform.scale.x = collapsing_header_size - SIZE_INPUT_X_SCALE - layout.element_indentation;
+				}
+				else {
+					transform.scale.x = collapsing_header_size;
+				}
 				transform.scale.y = scale.y;
 				header_config.AddFlag(transform);
 
@@ -9312,21 +9326,67 @@ namespace ECSEngine {
 					UIConfigAbsoluteTransform arrow_transform;
 					arrow_transform.scale = ARROW_SIZE;
 
+					const char* draw_element_name = temp_name.buffer;
+
+					auto select_name = [&](unsigned int index, CapacityStream<char> temporary_provided_name_string) {
+						if constexpr (configuration & UI_CONFIG_ARRAY_PROVIDE_NAMES) {
+							const UIConfigArrayProvideNames* provided_names = (const UIConfigArrayProvideNames*)config.GetParameter(UI_CONFIG_ARRAY_PROVIDE_NAME);
+							// Check each option
+							if (provided_names->char_names.buffer != nullptr) {
+								if (provided_names->char_names.size >= index) {
+									draw_element_name = provided_names->char_names[index];
+								}
+								else {
+									draw_element_name = temp_name.buffer;
+								}
+							}
+							else if (provided_names->stream_names.buffer != nullptr) {
+								if (provided_names->stream_names.size >= index) {
+									temporary_provided_name_string.Copy(provided_names->stream_names[index]);
+									temporary_provided_name_string.AddSafe('\0');
+								}
+								else {
+									draw_element_name = temp_name.buffer;
+								}
+							}
+							else if (provided_names->select_name_action != nullptr) {
+								if (provided_names->select_name_action_capacity >= index) {
+									UIConfigArrayProvideNameActionData config_action_data = { (char**)&draw_element_name, index };
+									ActionData action_data = GetDummyActionData();
+									action_data.data = provided_names->select_name_action_data;
+									action_data.additional_data = &config_action_data;
+									draw_element_name = temporary_provided_name_string.buffer;
+									provided_names->select_name_action(&action_data);
+								}
+								else {
+									draw_element_name = temp_name.buffer;
+								}
+							}
+						}
+						else {
+							draw_element_name = temp_name.buffer;
+						}
+					};
+
 					auto draw_row = [&](unsigned int index) {
 						arrow_transform.position.x = current_x;
 						// Indent the arrow position in order to align to row Y
 						Indent();
 						OffsetX(ARROW_SIZE.x);
 
+						ECS_TEMP_ASCII_STRING(provided_name_string, 256);
+
 						PushIdentifierStackRandom(index);
 						function::ConvertIntToChars(temp_name, index);
+						
+						select_name(index, provided_name_string);
 
 						UIDrawerArrayDrawData function_data;
 						function_data.additional_data = additional_data;
 						function_data.current_index = index;
 						function_data.element_data = elements->buffer + index;
 
-						draw_function(*this, temp_name.buffer, function_data);
+						draw_function(*this, draw_element_name, function_data);
 
 						// Get the row y scale
 						float row_y_scale = current_row_y_scale;
@@ -9360,6 +9420,10 @@ namespace ECSEngine {
 						Indent();
 						OffsetX(ARROW_SIZE.x);
 
+						ECS_TEMP_ASCII_STRING(provided_name_string, 256);
+
+						select_name(index, provided_name_string);
+
 						PushIdentifierStackRandom(index);
 						function::ConvertIntToChars(temp_name, index);
 
@@ -9368,7 +9432,7 @@ namespace ECSEngine {
 						function_data.current_index = index;
 						function_data.element_data = elements->buffer + index;
 
-						draw_function(*this, temp_name.buffer, function_data);
+						draw_function(*this, draw_element_name, function_data);
 
 						// Get the row y scale
 						float row_y_scale = current_row_y_scale;
@@ -9549,18 +9613,31 @@ namespace ECSEngine {
 						}
 					}
 
+					struct AddRemoveData {
+						CapacityStream<void>* data;
+						UIDrawerArrayData* array_data;
+					};
+
 					auto add_action = [](ActionData* action_data) {
 						UI_UNPACK_ACTION_DATA;
 
-						CapacityStream<void>* data = (CapacityStream<void>*)_data;
-						data->size += 1;
+						AddRemoveData* data = (AddRemoveData*)_data;
+						data->data->size += 1;
+						if (data->array_data->add_callback != nullptr) {
+							action_data->data = data->array_data->add_callback_data;
+							data->array_data->add_callback(action_data);
+						}
 					};
 
 					auto remove_action = [](ActionData* action_data) {
 						UI_UNPACK_ACTION_DATA;
 
-						CapacityStream<void>* data = (CapacityStream<void>*)_data;
-						data->size -= 1;
+						AddRemoveData* data = (AddRemoveData*)_data;
+						data->data->size -= 1;
+						if (data->array_data->remove_callback != nullptr) {
+							action_data->data = data->array_data->remove_callback_data;
+							data->array_data->remove_callback(action_data);
+						}
 					};
 
 					// The collapsing header had an absolute transform added, so remove it
@@ -9596,8 +9673,17 @@ namespace ECSEngine {
 
 					Color sprite_color = color_theme.default_text;
 					
+					AddRemoveData add_remove_data;
+					add_remove_data.data = (CapacityStream<void>*)elements;
+					add_remove_data.array_data = data;
+
 					if (elements->size < elements->capacity) {
-						AddDefaultClickableHoverable(button_position, button_scale, { add_action, elements, 0 }, color_theme.theme);
+						AddDefaultClickableHoverable(
+							button_position, 
+							button_scale, 
+							{ add_action, &add_remove_data, sizeof(add_remove_data), data->add_callback_phase },
+							color_theme.theme
+						);
 					}
 					else {
 						sprite_color.alpha *= color_theme.alpha_inactive_item;
@@ -9616,7 +9702,12 @@ namespace ECSEngine {
 					SolidColorRectangle<COLOR_RECTANGLE_CONFIGURATION>(header_config, color_theme.theme);
 					
 					if (elements->size > 0) {
-						AddDefaultClickableHoverable(button_position, button_scale, { remove_action, elements, 0 }, color_theme.theme);
+						AddDefaultClickableHoverable(
+							button_position,
+							button_scale,
+							{ remove_action, &add_remove_data, sizeof(add_remove_data), data->remove_callback_phase },
+							color_theme.theme
+						);
 						sprite_color.alpha = 255;
 					}
 					else {
@@ -9646,39 +9737,41 @@ namespace ECSEngine {
 					PopIdentifierStack();
 				});
 
-				ECS_TEMP_ASCII_STRING(temp_input_name, 256);
-				temp_input_name.Copy(ToStream(name));
-				temp_input_name.AddStream(ToStream("Size input"));
-				temp_input_name.AddSafe('\0');
+				if constexpr (~configuration & UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT) {
+					ECS_TEMP_ASCII_STRING(temp_input_name, 256);
+					temp_input_name.Copy(ToStream(name));
+					temp_input_name.AddStream(ToStream("Size input"));
+					temp_input_name.AddSafe('\0');
 
-				// Draw the size with the capacity set
-				if (header_config.associated_bits[header_config.flag_count - 1] == UI_CONFIG_ABSOLUTE_TRANSFORM) {
-					header_config.flag_count--;
-				}
-				transform.position.x += transform.scale.x + layout.element_indentation;
-				transform.scale.x = SIZE_INPUT_X_SCALE;
-				header_config.AddFlag(transform);
+					// Draw the size with the capacity set
+					if (header_config.associated_bits[header_config.flag_count - 1] == UI_CONFIG_ABSOLUTE_TRANSFORM) {
+						header_config.flag_count--;
+					}
+					transform.position.x += transform.scale.x + layout.element_indentation;
+					transform.scale.x = SIZE_INPUT_X_SCALE;
+					header_config.AddFlag(transform);
 
-				if constexpr (~configuration & UI_CONFIG_ARRAY_FIXED_SIZE) {
-					IntInput<NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE>(
-						header_config,
-						temp_input_name.buffer,
-						&elements->size,
-						(unsigned int)0,
-						(unsigned int)0
-					);
-				}
-				else {
-					UIConfigActiveState active_state;
-					active_state.state = false;
-					header_config.AddFlag(active_state);
-					IntInput<NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_ACTIVE_STATE>(
-						header_config,
-						temp_input_name.buffer,
-						&elements->size,
-						(unsigned int)0,
-						(unsigned int)0
-					);
+					if constexpr (~configuration & UI_CONFIG_ARRAY_FIXED_SIZE) {
+						IntInput<NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE>(
+							header_config,
+							temp_input_name.buffer,
+							&elements->size,
+							(unsigned int)0,
+							(unsigned int)0
+							);
+					}
+					else {
+						UIConfigActiveState active_state;
+						active_state.state = false;
+						header_config.AddFlag(active_state);
+						IntInput<NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_ACTIVE_STATE>(
+							header_config,
+							temp_input_name.buffer,
+							&elements->size,
+							(unsigned int)0,
+							(unsigned int)0
+						);
+					}
 				}
 
 				NextRow();
@@ -9709,6 +9802,40 @@ namespace ECSEngine {
 					data->drag_current_position = 0.0f;
 					data->row_y_scale = 0.0f;
 					data->previous_element_count = 0;
+					data->add_callback = nullptr;
+					data->add_callback_data = nullptr;
+					data->remove_callback = nullptr;
+					data->remove_callback_data = nullptr;
+					data->add_callback_phase = UIDrawPhase::Normal;
+					data->remove_callback_phase = UIDrawPhase::Normal;
+
+					if constexpr (configuration & UI_CONFIG_ARRAY_ADD_CALLBACK) {
+						const UIConfigArrayAddCallback* config_callback = (const UIConfigArrayAddCallback*)config.GetParameter(UI_CONFIG_ARRAY_ADD_CALLBACK);
+						if (config_callback->handler.data_size > 0) {
+							void* allocation = GetMainAllocatorBuffer(config_callback->handler.data_size);
+							memcpy(allocation, config_callback->handler.data, config_callback->handler.data_size);
+							data->add_callback_data = allocation;
+						}
+						else {
+							data->add_callback_data = config_callback->handler.data;
+						}
+						data->add_callback = config_callback->handler.action;
+						data->add_callback_phase = config_callback->handler.phase;
+					}
+
+					if constexpr (configuration & UI_CONFIG_ARRAY_REMOVE_CALLBACK) {
+						const UIConfigArrayRemoveCallback* config_callback = (const UIConfigArrayRemoveCallback*)config.GetParameter(UI_CONFIG_ARRAY_REMOVE_CALLBACK);
+						if (config_callback->handler.data_size > 0) {
+							void* allocation = GetMainAllocatorBuffer(config_callback->handler.data_size);
+							memcpy(allocation, config_callback->handler.data, config_callback->handler.data_size);
+							data->remove_callback_data = allocation;
+						}
+						else {
+							data->remove_callback_data = config_callback->handler.data;
+						}
+						data->remove_callback = config_callback->handler.action;
+						data->remove_callback_phase = config_callback->handler.phase;
+					}
 
 					return data;
 				});
@@ -10219,7 +10346,16 @@ namespace ECSEngine {
 					}
 
 					if (is_active) {
-						TextLabel<configuration>(config, text, position, scale);
+						if constexpr (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+							TextLabel<configuration>(config, text, position, scale);
+						}
+						else {
+							TextLabelWithCull<configuration>(config, text, position, scale);
+							if constexpr (configuration & UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE) {
+								position.y = AlignMiddle(position.y, current_row_y_scale, scale.y);
+							}
+							FinalizeRectangle<configuration>(position, scale);
+						}
 
 						if constexpr (~configuration & UI_CONFIG_BUTTON_HOVERABLE) {
 							Color label_color = HandleColor<configuration>(config);
@@ -10275,7 +10411,16 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						TextLabel<configuration | UI_CONFIG_UNAVAILABLE_TEXT>(config, text, position, scale);
+						if constexpr (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+							TextLabel<configuration | UI_CONFIG_UNAVAILABLE_TEXT>(config, text, position, scale);
+						}
+						else {
+							TextLabelWithCull<configuration | UI_CONFIG_UNAVAILABLE_TEXT>(config, text, position, scale);
+							if constexpr (configuration & UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE) {
+								position.y = AlignMiddle(position.y, current_row_y_scale, scale.y);
+							}
+							FinalizeRectangle<configuration>(position, scale);
+						}
 					}
 
 					if constexpr (configuration & UI_CONFIG_TOOL_TIP) {
@@ -10523,7 +10668,7 @@ namespace ECSEngine {
 
 						data->active_label = active_label;
 						float min_value = data->labels[data->biggest_label_x_index].scale.x * data->labels[data->biggest_label_x_index].GetInverseZoomX() * zoom_ptr->x 
-							+ system->NormalizeHorizontalToWindowDimensions(scale.y) + 2 * element_descriptor.label_horizontal_padd;
+							+ layout.element_indentation * 3.0f + element_descriptor.label_horizontal_padd * 2.0f;
 						min_value += data->prefix_x_scale * zoom_ptr->x;
 						scale.x = function::Select(min_value > scale.x, min_value, scale.x);
 
@@ -10668,6 +10813,7 @@ namespace ECSEngine {
 						UIDrawerCollapsingHeader* element = (UIDrawerCollapsingHeader*)GetResource(name);
 
 						CollapsingHeaderDrawer<configuration>(config, element, position, scale);
+						HandleDynamicResource<configuration>(name);
 						if (element->state) {
 							call_function();
 						}
@@ -10818,19 +10964,45 @@ namespace ECSEngine {
 
 				data->color_float = color;
 
+				constexpr size_t COLOR_INPUT_DRAWER_CONFIGURATION = configuration | UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW | UI_CONFIG_MAKE_SQUARE;
+
 				// Draw the color input
-				ColorInputDrawer<configuration | UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW | UI_CONFIG_MAKE_SQUARE>(
-					config, 
-					data->color_input,
-					position,
-					scale,
-					&data->base_color
-				);
+				if constexpr (~configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE) {
+					ColorInputDrawer<COLOR_INPUT_DRAWER_CONFIGURATION>(
+						config,
+						data->color_input,
+						position,
+						scale,
+						&data->base_color
+					);
+				}
+				else {
+					ColorInputDrawer<COLOR_INPUT_DRAWER_CONFIGURATION | UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE>(
+						config,
+						data->color_input,
+						position,
+						scale,
+						&data->base_color
+						);
+				}
 
 				// Draw the intensity
 				char intensity_input_name[256];
 				ColorFloatInputIntensityInputName(intensity_input_name, identifier);
-				FloatInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, intensity_input_name, &data->intensity, 0.0f, 10000.0f, { current_x - region_render_offset.x, position.y }, scale);
+				if constexpr (~configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE) {
+					FloatInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, intensity_input_name, &data->intensity, 0.0f, 10000.0f, { current_x - region_render_offset.x, position.y }, scale);
+				}
+				else {
+					FloatInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_NUMBER_INPUT_DEFAULT>(
+						config, 
+						intensity_input_name, 
+						&data->intensity,
+						0.0f,
+						10000.0f,
+						{ current_x - region_render_offset.x, position.y },
+						scale
+					);
+				}
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -10920,6 +11092,10 @@ namespace ECSEngine {
 					callback_data.callback_data = nullptr;
 					callback_data.input = input;
 					UIConfigColorInputCallback callback = { ColorFloatInputCallback, &callback_data, sizeof(callback_data) };
+
+					// Cringe MSVC bug - it does not set the callback data correctly
+					memset(&callback_data.callback, 0, 16);
+					memcpy(&callback_data.input, &input, sizeof(input));
 					config.AddFlag(callback);
 				}
 
@@ -11783,12 +11959,21 @@ namespace ECSEngine {
 			template<size_t configuration>
 			UIDrawerBufferState GetBufferState() {
 				UIDrawerBufferState state;
+
 				if constexpr (!initializer) {
 					state.solid_color_count = *HandleSolidColorCount<configuration>();
 					state.sprite_count = *HandleSpriteCount<configuration>();
 					state.text_sprite_count = *HandleTextSpriteCount<configuration>();
 					state.sprite_cluster_count = *HandleSpriteClusterCount<configuration>();
 				}
+				else {
+					state.solid_color_count = 0;
+					state.sprite_count = 0;
+					state.text_sprite_count = 0;
+					state.text_sprite_count = 0;
+					state.sprite_cluster_count = 0;
+				}
+
 				return state;
 			}
 
@@ -11801,6 +11986,11 @@ namespace ECSEngine {
 					state.hoverable_count = dockspace->borders[border_index].hoverable_handler.position_x.size;
 					state.clickable_count = dockspace->borders[border_index].clickable_handler.position_x.size;
 					state.general_count = dockspace->borders[border_index].general_handler.position_x.size;
+				}
+				else {
+					state.hoverable_count = 0;
+					state.clickable_count = 0;
+					state.general_count = 0;
 				}
 
 				return state;
@@ -14346,6 +14536,59 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			void SpriteRectangleDouble(
+				const wchar_t* texture0,
+				const wchar_t* texture1,
+				Color color0 = ECS_COLOR_WHITE,
+				Color color1 = ECS_COLOR_WHITE,
+				float2 top_left_uv0 = { 0.0f, 0.0f },
+				float2 bottom_right_uv0 = {1.0f, 1.0f},
+				float2 top_left_uv1 = {0.0f, 0.0f},
+				float2 bottom_right_uv1 = {1.0f, 1.0f}
+			) {
+				ECS_TOOLS_UI_DRAWER_DEFAULT_CONFIGURATION;
+				SpriteRectangleDouble<configuration>(null_config, texture0, texture1, color0, color1, top_left_uv0, bottom_right_uv0, top_left_uv1, bottom_right_uv1);
+			}
+
+			template<size_t configuration>
+			void SpriteRectangleDouble(
+				const UIDrawConfig& config,
+				const wchar_t* texture0,
+				const wchar_t* texture1,
+				Color color0 = ECS_COLOR_WHITE,
+				Color color1 = ECS_COLOR_WHITE,
+				float2 top_left_uv0 = { 0.0f, 0.0f },
+				float2 bottom_right_uv0 = { 1.0f, 1.0f },
+				float2 top_left_uv1 = { 0.0f, 0.0f },
+				float2 bottom_right_uv1 = { 1.0f, 1.0f }
+			) {
+				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+
+				if constexpr (!initializer) {
+					HandleFitSpaceRectangle<configuration>(position, scale);
+
+					if constexpr (configuration & UI_CONFIG_GET_TRANSFORM) {
+						UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
+						*get_transform->position = position;
+						*get_transform->scale = scale;
+					}
+
+					if (ValidatePosition<configuration>(position, scale)) {
+						SpriteRectangle<configuration>(position, scale, texture0, color0, top_left_uv0, bottom_right_uv0);
+						SpriteRectangle<configuration>(position, scale, texture1, color1, top_left_uv1, bottom_right_uv1);
+
+						HandleBorder<configuration>(config, position, scale);
+
+						HandleLateAndSystemDrawActionNullify<configuration>(position, scale);
+						HandleRectangleActions<configuration>(config, position, scale);
+					}
+				}
+
+				FinalizeRectangle<configuration>(position, scale);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14391,6 +14634,25 @@ namespace ECSEngine {
 
 					HandleFitSpaceRectangle<configuration>(position, scale);
 
+					float2 background_position;
+					float2 background_scale;
+					Color background_color;
+					if constexpr (configuration & UI_CONFIG_SPRITE_BUTTON_BACKGROUND) {
+						const UIConfigSpriteButtonBackground* background = (const UIConfigSpriteButtonBackground*)config.GetParameter(UI_CONFIG_SPRITE_BUTTON_BACKGROUND);
+						background_color = HandleColor<configuration>(config);
+						if (background->overwrite_color != ECS_COLOR_BLACK) {
+							background_color = background->overwrite_color;
+						}
+
+						background_position = { position.x + (scale.x - background->scale.x) * 0.5f, position.y + (scale.y - background->scale.y) * 0.5f };
+						background_scale = background->scale;
+
+						if constexpr (configuration & UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND) {
+							background_position = position;
+							position = AlignMiddle(background_position, background_scale, scale);
+						}
+					}
+
 					if constexpr (configuration & UI_CONFIG_GET_TRANSFORM) {
 						UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
 						*get_transform->position = position;
@@ -14399,7 +14661,7 @@ namespace ECSEngine {
 
 					if (ValidatePosition<configuration>(position, scale)) {
 						if (is_active) {
-							SpriteRectangle<configuration>(position, scale, texture, color, top_left_uv, bottom_right_uv);
+							SpriteRectangle<configuration | UI_CONFIG_LATE_DRAW>(position, scale, texture, color, top_left_uv, bottom_right_uv);
 
 							HandleBorder<configuration>(config, position, scale);
 							HandleLateAndSystemDrawActionNullify<configuration>(position, scale);
@@ -14413,8 +14675,7 @@ namespace ECSEngine {
 						}
 
 						if constexpr (configuration & UI_CONFIG_SPRITE_BUTTON_BACKGROUND) {
-							Color color = HandleColor<configuration>(config);
-							SolidColorRectangle<configuration>(position, scale, color);
+							SolidColorRectangle<configuration>(background_position, background_scale, background_color);
 						}
 					}
 

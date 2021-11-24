@@ -889,9 +889,9 @@ namespace ECSEngine {
 
 			void FinalizeElementDescriptor();
 
-			unsigned int FindCharacterUVFromAtlas(char character) const;
+			unsigned int FindCharacterType(char character) const;
 
-			unsigned int FindCharacterUVFromAtlas(char character, CharacterType& character_type) const;
+			unsigned int FindCharacterType(char character, CharacterType& character_type) const;
 
 			void* FindWindowResource(unsigned int window_index, const void* identifier, unsigned int identifier_size) const;
 
@@ -1293,6 +1293,10 @@ namespace ECSEngine {
 
 			void PushSystemHandler(UIActionHandler handler);
 
+			void PushDestroyWindowHandler(unsigned int window_index);
+
+			void PushDestroyCallbackWindowHandler(unsigned int window_index, UIActionHandler handler);
+
 			void ReadFontDescriptionFile(const char* filename);
 
 			void RegisterFocusedWindowClickableAction(
@@ -1368,7 +1372,12 @@ namespace ECSEngine {
 			void RestoreWindow(Stream<char> window_name, const UIWindowDescriptor& descriptor);
 
 			template<bool destroy_dockspace_if_last = true>
-			ECSENGINE_API void RemoveWindowFromDockspaceRegion(UIDockspace* dockspace, DockspaceType type, unsigned int border_index, unsigned int window_index);
+			ECSENGINE_API void RemoveWindowFromDockspaceRegion(UIDockspace* dockspace, DockspaceType type, unsigned int border_index, unsigned int in_border_index);
+
+			// It will infer what dockspace, border_index and dockspace type it has and the remove it from the border
+			// It does nothing if the window dockspace and border index could not be found
+			template<bool destroy_dockspace_if_last = true>
+			ECSENGINE_API void RemoveWindowFromDockspaceRegion(unsigned int window_index);
 
 			template<bool destroy_windows = true>
 			ECSENGINE_API void RemoveDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, DockspaceType type);
@@ -1759,13 +1768,13 @@ namespace ECSEngine {
 
 		ECSENGINE_API void SkipAction(ActionData* action_data);
 
-		void CloseXAction(ActionData* action_data);
+		ECSENGINE_API void CloseXAction(ActionData* action_data);
 
 		ECSENGINE_API void CloseXBorderClickableAction(ActionData* action_data);
 
-		void CloseXBorderHoverableAction(ActionData* action_data);
+		ECSENGINE_API void CloseXBorderHoverableAction(ActionData* action_data);
 
-		void CollapseTriangleClickableAction(ActionData* action_data);
+		ECSENGINE_API void CollapseTriangleClickableAction(ActionData* action_data);
 
 		ECSENGINE_API void DefaultHoverableAction(ActionData* action_data);
 
@@ -1793,9 +1802,15 @@ namespace ECSEngine {
 
 		ECSENGINE_API void DefaultHoverableWithToolTip(ActionData* action_data);
 
-		void DragDockspaceAction(ActionData* action_data);
+		// It will destroy the window and then pop itself from the system handler stack
+		ECSENGINE_API void DestroyWindowSystemHandler(ActionData* action_data);
 
-		void RegionHeaderAction(ActionData* action_data);
+		// It will call the callback and then destroy the window and then pop itself from the system handler stack
+		ECSENGINE_API void DestroyWindowCallbackSystemHandler(ActionData* action_data);
+
+		ECSENGINE_API void DragDockspaceAction(ActionData* action_data);
+
+		ECSENGINE_API void RegionHeaderAction(ActionData* action_data);
 
 #pragma endregion
 
