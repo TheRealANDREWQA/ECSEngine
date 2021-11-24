@@ -16,11 +16,8 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 // Runs on multiple threads
 void BuildProjectModules(EditorState* editor_state);
 
-// Editor state is needed in order to print to console; thread_index -1 means
-// that it runs in a single threaded environment and that it will clear the log file
-// and write in it
-// Returns whether or not it succeded
-bool BuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index = -1);
+// Editor state is needed in order to print to console
+void BuildProjectModule(EditorState* editor_state, unsigned int index);
 
 // Runs on multiple threads
 void CleanProjectModules(EditorState* editor_state);
@@ -29,7 +26,7 @@ void CleanProjectModules(EditorState* editor_state);
 // that it runs in a single threaded environment and that it will clear the log file
 // and write in it; 
 // Returns whether or not it succeded
-bool CleanProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index = -1);
+void CleanProjectModule(EditorState* editor_state, unsigned int index);
 
 // Runs on multiple threads
 void RebuildProjectModules(EditorState* editor_state);
@@ -38,7 +35,7 @@ void RebuildProjectModules(EditorState* editor_state);
 // that it runs in a single threaded environment and that it will clear the log file
 // and write in it
 // Returns whether or not it succeded
-bool RebuildProjectModule(EditorState* editor_state, unsigned int index, unsigned int thread_index = -1);
+void RebuildProjectModule(EditorState* editor_state, unsigned int index);
 
 void ChangeProjectModuleConfiguration(EditorState* editor_state, unsigned int index, EditorModuleConfiguration new_configuration);
 
@@ -48,9 +45,9 @@ unsigned int ProjectModuleIndex(const EditorState* editor_state, Stream<wchar_t>
 
 unsigned int ProjectModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_Name);
 
-void GetProjectModuleBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path);
+void GetProjectModuleBuildFlagFile(const EditorState* editor_state, unsigned int module_index, Stream<wchar_t> command, CapacityStream<wchar_t>& temp_file);
 
-void GetProjectModuleThreadBuildLogPath(const EditorState* editor_state, Stream<wchar_t>& log_path, unsigned int thread_index);
+void GetProjectModuleBuildLogPath(const EditorState* editor_state, unsigned int module_index, Stream<wchar_t> command, Stream<wchar_t>& log_path);
 
 void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
 

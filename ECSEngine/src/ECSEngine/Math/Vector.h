@@ -800,6 +800,16 @@ namespace ECSEngine {
 		return SIMDHelpers::Normalize<ReciprocalLength3>(vector);
 	}
 
+	ECS_INLINE float3 Normalize(float3 vector) {
+		float3 value;
+
+		Vector4 simd_vector(vector);
+		simd_vector = Normalize3(simd_vector);
+		simd_vector.StorePartialConstant<3>(&value);
+
+		return value;
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 #pragma endregion
 
@@ -984,6 +994,7 @@ namespace ECSEngine {
 #pragma endregion
 
 #pragma region Angle
+
 	// --------------------------------------------------------------------------------------------------------------
 	
 	namespace SIMDHelpers {
@@ -1024,35 +1035,121 @@ namespace ECSEngine {
 		}
 	}
 
-	// Operates on the full vector
-	ECS_INLINE Vector4 ECS_VECTORCALL Angle(Vector4 a, Vector4 b) {
+	// Operates on the full vector; The value of the angle between the 2 vectors in radians
+	ECS_INLINE Vector4 ECS_VECTORCALL AngleBetweenVectors(Vector4 a, Vector4 b) {
 		return SIMDHelpers::Angle<ReciprocalLength, Dot>(a, b);
 	}
 
-	// Operates on the full vector
-	ECS_INLINE Vector8 ECS_VECTORCALL Angle(Vector8 a, Vector8 b) {
+	// Operates on the full vector; The value of the angle between the 2 vectors in radians
+	ECS_INLINE Vector8 ECS_VECTORCALL AngleBetweenVectors(Vector8 a, Vector8 b) {
 		return SIMDHelpers::Angle<ReciprocalLength, Dot>(a, b);
 	}
 	
-	// Operates on the first 3 elements
-	ECS_INLINE Vector4 ECS_VECTORCALL Angle3(Vector4 a, Vector4 b) {
+	// Operates on the first 3 elements; The value of the angle between the 2 vectors in radians
+	ECS_INLINE Vector4 ECS_VECTORCALL AngleBetweenVectors3(Vector4 a, Vector4 b) {
 		return SIMDHelpers::Angle<ReciprocalLength3, Dot3>(a, b);
 	}
 
-	// Operates on the first 3 elements
-	ECS_INLINE Vector8 ECS_VECTORCALL Angle3(Vector8 a, Vector8 b) {
+	// Operates on the first 3 elements; The value of the angle between the 2 vectors in radians
+	ECS_INLINE Vector8 ECS_VECTORCALL AngleBetweenVectors3(Vector8 a, Vector8 b) {
 		return SIMDHelpers::Angle<ReciprocalLength3, Dot3>(a, b);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
-#pragma region
-	// --------------------------------------------------------------------------------------------------------------
-
-
+#pragma region Fmod
 
 	// --------------------------------------------------------------------------------------------------------------
+
+	// x % y
+	ECS_INLINE Vector4 ECS_VECTORCALL VectorFmod(Vector4 x, Vector4 y) {
+		// Formula x - truncate(x / y) * y;
+
+		// Fmadd version might have better precision but slightly slower because of the _mm_set1_ps
+		//return Fmadd(truncate(x / y), -y, x);
+		 
+		// Cannot use approximate reciprocal of y and multiply instead of division
+		// since the error is big enough that it will break certain use cases
+		return x - Vector4(truncate(x / y) * y);
+	}
+
+	// x % y
+	ECS_INLINE Vector8 ECS_VECTORCALL VectorFmod(Vector8 x, Vector8 y) {
+		// Formula x - truncate(x / y) * y;
+
+		// Fmadd version might have better precision but slightly slower because of the _mm256_set1_ps
+		//return Fmadd(truncate(x / y), -y, x);
+
+		// Cannot use approximate reciprocal of y and multiply instead of division
+		// since the error is big enough that it will break certain use cases
+		return x - Vector8(truncate(x / y) * y);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
+
+#pragma region Direction To Rotation
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// Returns the euler angles in radians that correspond to that direction
+	ECS_INLINE Vector4 ECS_VECTORCALL DirectionToRotationRad(Vector4 direction) {
+		/* Scalar algorithm
+		float x_angle = fmod(atan2(direction.y, direction.z), PI);
+		float y_angle = fmod(atan2(direction.z, direction.x), PI);
+		float z_angle = fmod(atan2(direction.y, direction.x), PI);*/
+
+		Vector4 tangent_numerator = permute4<1, 2, 1, V_DC>(direction);
+		Vector4 tangent_denominator = permute4<2, 0, 0, V_DC>(direction);
+
+		Vector4 radians = atan2(tangent_numerator, tangent_denominator);
+		return VectorFmod(radians, Vector4(PI));
+	}
+
+	// Returns the euler angles in angles that correspond to that direction
+	ECS_INLINE Vector4 ECS_VECTORCALL DirectionToRotation(Vector4 direction) {	
+		return RadToDeg(DirectionToRotationRad(direction));
+	}
+
+	// Returns the euler angles in radians that correspond to that direction; 2 packed direction
+	ECS_INLINE Vector8 ECS_VECTORCALL DirectionToRotationRad(Vector8 direction) {
+		/* Scalar algorithm
+		float x_angle = fmod(atan2(direction.y, direction.z), PI);
+		float y_angle = fmod(atan2(direction.z, direction.x), PI);
+		float z_angle = fmod(atan2(direction.y, direction.x), PI);*/
+
+		Vector8 tangent_numerator = permute8<1, 2, 1, V_DC, 5, 6, 5, V_DC>(direction);
+		Vector8 tangent_denominator = permute8<2, 0, 0, V_DC, 6, 0, 0, V_DC>(direction);
+
+		Vector8 radians = atan2(tangent_numerator, tangent_denominator);
+		return VectorFmod(radians, Vector8(PI));
+	}
+
+	// Returns the euler angles in angles that correspond to that direction; 2 packed direction
+	ECS_INLINE Vector8 ECS_VECTORCALL DirectionToRotation(Vector8 direction) {
+		return RadToDeg(DirectionToRotationRad(direction));
+	}
+
+	// Returns the euler angles in radians that correspond to that direction
+	ECS_INLINE float3 DirectionToRotation(float3 direction) {
+		float3 result;
+
+		Vector4 vector_dir(direction);
+		vector_dir = DirectionToRotation(vector_dir);
+		vector_dir.StorePartialConstant<3>(&result);
+
+		return result;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	// --------------------------------------------------------------------------------------------------------------
 
 }

@@ -393,6 +393,7 @@ namespace ECSEngine {
 		const cgltf_node* nodes, 
 		unsigned int node_index, 
 		unsigned int node_count, 
+		bool invert_z_axis,
 		CapacityStream<char>* error_message
 	) {
 		unsigned int primitive_count = nodes[node_index].mesh->primitives_count;
@@ -426,6 +427,31 @@ namespace ECSEngine {
 					mesh.indices[index_index] = cgltf_accessor_read_index(primitive->indices, index_index);
 				}
 			}
+
+			// Invert the z axis if necessary
+			if (invert_z_axis) {
+				// Invert the position Z axis
+				for (size_t subindex = 0; subindex < mesh.positions.size; subindex++) {
+					mesh.positions[subindex].z = -mesh.positions[subindex].z;
+				}
+
+				// Invert the normals Z axis
+				for (size_t subindex = 0; subindex < mesh.normals.size; subindex++) {
+					mesh.normals[subindex].z = -mesh.normals[subindex].z;
+				}
+
+				// Invert the tangents Z axis
+				for (size_t subindex = 0; subindex < mesh.tangents.size; subindex++) {
+					mesh.tangents[subindex].z = -mesh.tangents[subindex].z;
+				}
+
+				// The winding order of the vertices must be changed
+				// Start from 1 in order to avoid an add
+				for (size_t subindex = 1; subindex < mesh.indices.size; subindex += 3) {
+					// Swap the last the vertices of each triangle
+					mesh.indices.Swap(subindex, subindex + 1);
+				}
+			}
 		}
 		return true;
 	}
@@ -455,10 +481,10 @@ namespace ECSEngine {
 
 				auto add_mapping = [&](const char* name, PBRMaterialTextureIndex mapping) {
 					Stream<char> texture_name = ToStream(name);
+					unsigned int old_texture_size = temp_texture_names.size;
 					function::ConvertASCIIToWide(temp_texture_names, texture_name);
-					mappings[mapping_count].texture = { temp_texture_names.buffer + temp_texture_names.size, texture_name.size };
+					mappings[mapping_count].texture = { temp_texture_names.buffer + old_texture_size, old_texture_size };
 					mappings[mapping_count].index = mapping;
-					temp_texture_names.size += texture_name.size;
 					mapping_count++;
 				};
 
@@ -507,6 +533,7 @@ namespace ECSEngine {
 		GLTFMesh& mesh, 
 		AllocatorPolymorphic allocator,
 		unsigned int mesh_index, 
+		bool invert_z_axis,
 		CapacityStream<char>* error_message
 	) {
 		unsigned int node_count = data.data->nodes_count;
@@ -516,7 +543,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < node_count; index++) {
 			if (nodes[index].mesh != nullptr) {
 				if (mesh_index == current_mesh_index) {
-					return LoadMeshFromGLTF(mesh, allocator, nodes, index, node_count, error_message);
+					return LoadMeshFromGLTF(mesh, allocator, nodes, index, node_count, invert_z_axis, error_message);
 				}
 				current_mesh_index++;
 			}
@@ -557,6 +584,7 @@ namespace ECSEngine {
 		GLTFData data,
 		GLTFMesh* meshes,
 		AllocatorPolymorphic allocator,
+		bool invert_z_axis,
 		containers::CapacityStream<char>* error_message
 	) {
 		unsigned int node_count = data.data->nodes_count;
@@ -571,6 +599,7 @@ namespace ECSEngine {
 					nodes,
 					index,
 					node_count,
+					invert_z_axis,
 					error_message
 				);
 				if (!success) {
@@ -578,6 +607,7 @@ namespace ECSEngine {
 					error_message->AddStreamSafe(additional_info);
 					return false;
 				}
+				meshes[mesh_index].name = nodes[index].name;
 				mesh_index++;
 			}
 		}
@@ -624,7 +654,7 @@ namespace ECSEngine {
 		// If it already exists - do no reload it
 		bool exists = false;
 		for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
-			if (function::CompareStrings(material_name, materials[subindex].name)) {
+			if (function::CompareStrings(material_name, ToStream(materials[subindex].name))) {
 				submesh_material_index.Add(subindex);
 				exists = true;
 			}
@@ -677,6 +707,7 @@ namespace ECSEngine {
 		GLTFMesh* meshes, 
 		PBRMaterial* materials,
 		AllocatorPolymorphic allocator,
+		bool invert_z_axis,
 		CapacityStream<char>* error_message
 	)
 	{
@@ -692,6 +723,7 @@ namespace ECSEngine {
 					nodes,
 					index,
 					node_count,
+					invert_z_axis,
 					error_message
 				);
 
@@ -724,6 +756,7 @@ namespace ECSEngine {
 		Stream<PBRMaterial>& materials,
 		unsigned int* _submesh_material_index,
 		AllocatorPolymorphic allocator,
+		bool invert_z_axis,
 		CapacityStream<char>* error_message
 	)
 	{
@@ -740,6 +773,7 @@ namespace ECSEngine {
 					nodes,
 					index,
 					node_count,
+					invert_z_axis,
 					error_message
 				);
 
@@ -765,6 +799,13 @@ namespace ECSEngine {
 	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh)
 	{
 		Mesh mesh;
+
+		if (gltf_mesh.name != nullptr) {
+			mesh.name = function::StringCopy(graphics->m_allocator, gltf_mesh.name).buffer;
+		}
+		else {
+			mesh.name = nullptr;
+		}
 
 		// Positions
 		if (gltf_mesh.positions.buffer != nullptr) {
@@ -1043,6 +1084,15 @@ namespace ECSEngine {
 			}
 		}
 
+		// Propragate the names
+		for (size_t index = 0; index < count; index++) {
+			if (gltf_meshes[index].name != nullptr) {
+				submeshes[index].name = function::StringCopy(graphics->m_allocator, gltf_meshes[index].name).buffer;
+			}
+			else {
+				submeshes[index].name = nullptr;
+			}
+		}
 
 		size_t submesh_vertex_offset = 0;
 		size_t submesh_index_offset = 0;
@@ -1051,6 +1101,7 @@ namespace ECSEngine {
 			submeshes[index].index_buffer_offset = submesh_index_offset;
 			submeshes[index].vertex_buffer_offset = submesh_vertex_offset;
 			submeshes[index].index_count = material_counts[index].y;
+			submeshes[index].vertex_count = material_counts[index].x;
 			submesh_vertex_offset += material_counts[index].x;
 			submesh_index_offset += material_counts[index].y;
 		}

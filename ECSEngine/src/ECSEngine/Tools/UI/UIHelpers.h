@@ -16,17 +16,17 @@ namespace ECSEngine {
 			Element* buffer
 		);
 
-		void ECSENGINE_API SetTransformForLine(float2 position1, float2 position2, size_t count, UIVertexColor* buffer);
+		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, size_t count, UIVertexColor* buffer);
 
-		void ECSENGINE_API SetTransformForLine(float2 position1, float2 position2, size_t* counts, void** buffers, unsigned int material_offset = 0);
+		ECSENGINE_API void SetTransformForLine(float2 position1, float2 position2, size_t* counts, void** buffers, unsigned int material_offset = 0);
 
-		void ECSENGINE_API SetColorForLine(Color color, size_t count, UIVertexColor* buffer);
+		ECSENGINE_API void SetColorForLine(Color color, size_t count, UIVertexColor* buffer);
 
-		void ECSENGINE_API SetColorForLine(Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
+		ECSENGINE_API void SetColorForLine(Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
 
-		void ECSENGINE_API SetLine(float2 position1, float2 position2, Color color, size_t& count, UIVertexColor* buffer);
+		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, size_t& count, UIVertexColor* buffer);
 
-		void ECSENGINE_API SetLine(float2 position1, float2 position2, Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
+		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
 
 		template<typename Element>
 		void SetVertexColorForRectangle(
@@ -79,7 +79,7 @@ namespace ECSEngine {
 			Element* buffer
 		);
 
-		void ECSENGINE_API SetSolidColorRectangle(
+		ECSENGINE_API void SetSolidColorRectangle(
 			float2 position,
 			float2 scale,
 			Color color,
@@ -87,7 +87,7 @@ namespace ECSEngine {
 			size_t& count
 		);
 
-		void ECSENGINE_API SetSolidColorRectangle(
+		ECSENGINE_API void SetSolidColorRectangle(
 			float2 position,
 			float2 scale,
 			Color color,
@@ -96,7 +96,7 @@ namespace ECSEngine {
 			unsigned int material_offset
 		);
 
-		void ECSENGINE_API SetVertexColorRectangle(
+		ECSENGINE_API void SetVertexColorRectangle(
 			float2 position,
 			float2 scale,
 			Color top_left,
@@ -107,7 +107,7 @@ namespace ECSEngine {
 			size_t* count
 		);
 
-		void ECSENGINE_API SetVertexColorRectangle(
+		ECSENGINE_API void SetVertexColorRectangle(
 			float2 position,
 			float2 scale,
 			Color top_left,
@@ -119,7 +119,7 @@ namespace ECSEngine {
 			unsigned int material_offset
 		);
 
-		void ECSENGINE_API SetVertexColorRectangle(
+		ECSENGINE_API void SetVertexColorRectangle(
 			float2 position,
 			float2 scale,
 			const Color* colors,
@@ -127,7 +127,7 @@ namespace ECSEngine {
 			size_t* count
 		);
 
-		void ECSENGINE_API SetVertexColorRectangle(
+		ECSENGINE_API void SetVertexColorRectangle(
 			float2 position,
 			float2 scale,
 			const Color* colors,
@@ -136,7 +136,7 @@ namespace ECSEngine {
 			unsigned int material_offset
 		);
 
-		void ECSENGINE_API SetSpriteRectangle(
+		ECSENGINE_API void SetSpriteRectangle(
 			float2 position,
 			float2 scale,
 			Color color,
@@ -146,7 +146,7 @@ namespace ECSEngine {
 			size_t& count
 		);
 
-		void ECSENGINE_API SetSpriteRectangle(
+		ECSENGINE_API void SetSpriteRectangle(
 			float2 position,
 			float2 scale,
 			Color color,
@@ -158,7 +158,7 @@ namespace ECSEngine {
 			unsigned int material_offset
 		);
 
-		void ECSENGINE_API SetVertexColorSpriteRectangle(
+		ECSENGINE_API void SetVertexColorSpriteRectangle(
 			float2 position,
 			float2 scale,
 			const Color* colors,
@@ -168,7 +168,7 @@ namespace ECSEngine {
 			size_t& count
 		);
 
-		void ECSENGINE_API SetVertexColorSpriteRectangle(
+		ECSENGINE_API void SetVertexColorSpriteRectangle(
 			float2 position,
 			float2 scale,
 			const Color* colors,
@@ -180,7 +180,7 @@ namespace ECSEngine {
 			unsigned int material_offset
 		);
 
-		void ECSENGINE_API SetVertexColorSpriteRectangle(
+		ECSENGINE_API void SetVertexColorSpriteRectangle(
 			float2 position,
 			float2 scale,
 			const ColorFloat* colors,
@@ -190,7 +190,7 @@ namespace ECSEngine {
 			size_t& count
 		);
 
-		void ECSENGINE_API SetVertexColorSpriteRectangle(
+		ECSENGINE_API void SetVertexColorSpriteRectangle(
 			float2 position,
 			float2 scale,
 			const ColorFloat* colors,
@@ -202,18 +202,18 @@ namespace ECSEngine {
 			unsigned int material_offset
 		);
 
-		bool ECSENGINE_API IsPointInRectangle(
+		ECSENGINE_API bool IsPointInRectangle(
 			float2 point_position,
 			float2 rectangle_position,
 			float2 rectangle_scale
 		);
 
-		bool ECSENGINE_API IsPointInRectangle(
+		ECSENGINE_API bool IsPointInRectangle(
 			float2 point_position,
 			const UIElementTransform& transform
 		);
 
-		bool ECSENGINE_API IsPointInRectangle(
+		ECSENGINE_API bool IsPointInRectangle(
 			float point_position_x,
 			float point_position_y,
 			float rectangle_position_x,
@@ -222,19 +222,19 @@ namespace ECSEngine {
 			float rectangle_scale_y
 		);
 
-		bool ECSENGINE_API IsRectangleInRectangle(
+		ECSENGINE_API bool IsRectangleInRectangle(
 			const UIElementTransform& first,
 			const UIElementTransform& second
 		);
 
-		bool ECSENGINE_API IsRectangleInRectangle(
+		ECSENGINE_API bool IsRectangleInRectangle(
 			float2 first_position,
 			float2 first_scale,
 			float2 second_position,
 			float2 second_scale
 		);
 
-		bool ECSENGINE_API IsRectangleInRectangle(
+		ECSENGINE_API bool IsRectangleInRectangle(
 			unsigned short first_position_x,
 			unsigned short first_position_y,
 			unsigned short first_scale_x,
@@ -276,7 +276,7 @@ namespace ECSEngine {
 		// mode - 3; cull vertical if smaller
 		// returns the count of the valid vertices (multiple of 6)
 		template<size_t mode = 0, typename Stream>
-		static size_t CullTextSprites(Stream vertices, float bound) {
+		size_t CullTextSprites(Stream vertices, float bound) {
 			if constexpr (mode == 0) {
 				for (int64_t index = 1; index < vertices.size; index += 6) {
 					if (vertices[index].position.x > bound) {
@@ -393,38 +393,38 @@ namespace ECSEngine {
 		template<typename Element>
 		float GetMaxYRectangle(const Element* element, size_t size);
 
-		float2 ECSENGINE_API ExpandRectangle(
+		ECSENGINE_API float2 ExpandRectangle(
 			float2 position,
 			float2 scale,
 			float2 new_scale
 		);
 
-		float2 ECSENGINE_API ExpandRectangle(
+		ECSENGINE_API float2 ExpandRectangle(
 			float2 position,
 			float2 scale,
 			float2 resize_factor,
 			float2& new_scale
 		);
 
-		float2 ECSENGINE_API ExpandRectangle(
+		ECSENGINE_API float2 ExpandRectangle(
 			float2 position,
 			float2 scale,
 			float new_scale_factor
 		);
 
-		void ECSENGINE_API ExpandRectangle(float2* element_transforms, float2 new_scale_factor, size_t count);
+		ECSENGINE_API void ExpandRectangle(float2* element_transforms, float2 new_scale_factor, size_t count);
 
-		void ECSENGINE_API ExpandRectangle(float2* element_transforms, const float2* new_scale_factor, size_t count);
+		ECSENGINE_API void ExpandRectangle(float2* element_transforms, const float2* new_scale_factor, size_t count);
 
-		void ECSENGINE_API ExpandRectangle(Stream<float2> element_transforms, float2 new_scale_factor);
+		ECSENGINE_API void ExpandRectangle(Stream<float2> element_transforms, float2 new_scale_factor);
 
-		void ECSENGINE_API ExpandRectangle(Stream<float2> element_transforms, const float2* new_scale_factor);
+		ECSENGINE_API void ExpandRectangle(Stream<float2> element_transforms, const float2* new_scale_factor);
 
 		template<typename Value>
 		Value AlignMiddle(Value first, Value external_scale, Value element_scale);
 
 		// first is the position, second is scale
-		void ECSENGINE_API GetEncompassingRectangle(Stream<float2> values, float2* results);
+		ECSENGINE_API void GetEncompassingRectangle(Stream<float2> values, float2* results);
 
 		template<typename Stream>
 		float2 GetPositionFromLastRectangle(Stream vertices);
@@ -432,11 +432,11 @@ namespace ECSEngine {
 		template<typename Stream>
 		float2 GetScaleFromLastRectangle(Stream vertices);
 
-		float2 ECSENGINE_API CenterRectangle(float2 scale, float2 point);
+		ECSENGINE_API float2 CenterRectangle(float2 scale, float2 point);
 
-		void ECSENGINE_API CreateRectangleBorder(float2 position, float2 scale, float2 border_scale, float2* results);
+		ECSENGINE_API void CreateRectangleBorder(float2 position, float2 scale, float2 border_scale, float2* results);
 
-		void ECSENGINE_API CreateRectangleOuterBorder(float2 position, float2 scale, float2 border_scale, float2* results);
+		ECSENGINE_API void CreateRectangleOuterBorder(float2 position, float2 scale, float2 border_scale, float2* results);
 
 		template<bool is_inner = true>
 		void CreateSolidColorRectangleBorder(
@@ -459,7 +459,7 @@ namespace ECSEngine {
 			float2* results
 		);
 
-		void ECSENGINE_API DrawExpandedSolidColorRectangle(
+		ECSENGINE_API void DrawExpandedSolidColorRectangle(
 			float2 position,
 			float2 scale,
 			float2 new_scale_factor,
@@ -667,7 +667,7 @@ namespace ECSEngine {
 		);
 
 		// returns the number of valid characters
-		size_t ECSENGINE_API ParseStringIdentifier(const char* string, size_t string_length);
+		ECSENGINE_API size_t ParseStringIdentifier(const char* string, size_t string_length);
 
 		// returns the position of the lowest and highest vertex
 		template<typename Buffer>
@@ -676,7 +676,7 @@ namespace ECSEngine {
 		template<typename Buffer>
 		float2 GetRectangleSectionYBounds(const Buffer* buffer, size_t starting_index, size_t end_index);
 
-		bool ECSENGINE_API IsClickableTrigger(ActionData* action_data);
+		ECSENGINE_API bool IsClickableTrigger(ActionData* action_data);
 
 	}
 }

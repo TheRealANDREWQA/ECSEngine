@@ -20,6 +20,8 @@ void CreateInspector(EditorState* editor_state);
 
 void CreateInspectorAction(ActionData* action_data);
 
+void ChangeInspectorToNothing(EditorState* editor_state);
+
 void ChangeInspectorToFolder(EditorState* editor_state, Stream<wchar_t> path);
 
 void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path);
@@ -27,3 +29,5 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path);
 void ChangeInspectorToModule(EditorState* editor_state, unsigned int index);
 
 void ChangeInspectorToGraphicsModule(EditorState* editor_state);
+
+void ChangeInspectorToModuleConfigurationGroup(EditorState* editor_state, unsigned int index);

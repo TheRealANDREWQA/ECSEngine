@@ -344,6 +344,17 @@ void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* 
 
 // -------------------------------------------------------------------------------------------------------------------
 
+void GetProjectDebugFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path)
+{
+	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
+	path.AddStream(project_file->path);
+	path.Add(ECS_OS_PATH_SEPARATOR);
+	path.AddStream(ToStream(PROJECT_DEBUG_RELATIVE_PATH));
+	path[path.size] = L'\0';
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count) {
 	GetProjectCurrentUI(CapacityStream<wchar_t>(characters, 0, max_character_count), project_file);
 }

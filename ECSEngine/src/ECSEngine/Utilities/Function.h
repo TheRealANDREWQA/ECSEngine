@@ -60,12 +60,14 @@ namespace ECSEngine {
 			int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
 		}
 
-		inline void ConvertASCIIToWide(CapacityStream<wchar_t> wide_string, Stream<char> ascii_string) {
+		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
 			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+			wide_string.size += ascii_string.size;
 		}
 
-		inline void ConvertASCIIToWide(CapacityStream<wchar_t> wide_string, CapacityStream<char> ascii_string) {
+		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
 			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+			wide_string.size += ascii_string.size;
 		}
 
 		inline void ConcatenateCharPointers(
@@ -319,6 +321,10 @@ namespace ECSEngine {
 			return (unsigned int)(((uintptr_t)ptr >> 3) & 0x0000000000FFFFFF);
 		}
 
+		inline size_t GetSimdCount(size_t count, size_t vector_size) {
+			return count & (-vector_size);
+		}
+
 		template<bool is_delta = false, typename Value>
 		Value Lerp(Value a, Value b, float percentage) {
 			if constexpr (!is_delta) {
@@ -368,6 +374,10 @@ namespace ECSEngine {
 		Value ClampMax(Value value, Value max) {
 			return Select(value > max, max, value);
 		}
+
+		ECSENGINE_API unsigned int GetAlphabetIndex(char character);
+
+		ECSENGINE_API unsigned int GetAlphabetIndex(char character, CharacterType& type);
 
 	}
 

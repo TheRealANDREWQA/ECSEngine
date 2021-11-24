@@ -672,7 +672,7 @@ ECS_ASSERT(!table.Insert(hash, format, identifier));
 					}
 					else {
 						elements[current_index].InputSlotClass = D3D11_INPUT_PER_INSTANCE_DATA;
-						instance += strlen(STRING(ECS_REFLECT_INSTANCE)) + 2;
+						instance += strlen(STRING(ECS_REFLECT_INSTANCE)) + 1;
 						char* instance_step_rate_start = instance;
 						while (function::IsNumberCharacter(*instance)) {
 							instance++;

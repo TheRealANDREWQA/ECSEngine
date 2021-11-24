@@ -128,7 +128,6 @@ namespace ECSEngine {
 
 			ECS_TEMP_STRING(wide_name, 256);
 			function::ConvertASCIIToWide(wide_name, *new_name);
-			wide_name.size = new_name->size;
 
 			RenameFolderActionData rename_data;
 			rename_data.new_name = wide_name;
@@ -183,7 +182,6 @@ namespace ECSEngine {
 
 			ECS_TEMP_STRING(wide_name, 256);
 			function::ConvertASCIIToWide(wide_name, *new_name);
-			wide_name.size = new_name->size;
 
 			RenameFileActionData rename_data;
 			rename_data.new_name = wide_name;
@@ -238,7 +236,6 @@ namespace ECSEngine {
 
 			ECS_TEMP_STRING(wide_name, 256);
 			function::ConvertASCIIToWide(wide_name, *new_extension);
-			wide_name.size = new_extension->size;
 
 			ChangeFileExtensionActionData change_data;
 			change_data.new_extension = wide_name;

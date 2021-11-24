@@ -1790,10 +1790,16 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIDrawerArrayData {
 			bool collapsing_header_state;
 			bool drag_is_released;
+			UIDrawPhase add_callback_phase;
+			UIDrawPhase remove_callback_phase;
 			unsigned int drag_index;
 			float drag_current_position;
 			float row_y_scale;
 			unsigned int previous_element_count;
+			Action add_callback;
+			void* add_callback_data;
+			Action remove_callback;
+			void* remove_callback_data;
 		};
 
 		struct ECSENGINE_API UIDrawerArrayDrawData {
@@ -1807,6 +1813,87 @@ namespace ECSEngine {
 			const char* name;
 			ColorFloat* color;
 			ColorFloat default_color;
+		};
+
+		struct ECSENGINE_API UIConfigArrayProvideNameActionData {
+			char** name;
+			unsigned int index;
+		};
+
+		// The names must be unique for the window
+		// All fields are optional - at least one must be filled
+		// The action receives the data it wants in _data and a UIConfigArrayProvideNameActionData to
+		// retrieve the index from. It will default to Element + index
+		// for elements that are outside the boundary of the capacity
+		struct ECSENGINE_API UIConfigArrayProvideNames {
+			inline const void* GetParameters() const {
+				return this;
+			}
+
+			inline static constexpr size_t GetParameterCount() {
+				return sizeof(UIConfigArrayProvideNames);
+			}
+
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_ARRAY_PROVIDE_NAMES;
+			}
+
+			Stream<const char*> char_names = { nullptr, 0 };
+			Stream<Stream<char>> stream_names = { nullptr, 0 };
+			Action select_name_action = nullptr;
+			void* select_name_action_data = nullptr;
+			unsigned int select_name_action_capacity = 0;
+		};
+
+		struct ECSENGINE_API UIConfigArrayAddCallback {
+			inline const void* GetParameters() const {
+				return this;
+			}
+
+			inline static constexpr size_t GetParameterCount() {
+				return sizeof(UIConfigArrayAddCallback);
+			}
+
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_ARRAY_ADD_CALLBACK;
+			}
+
+			UIActionHandler handler;
+		};
+
+		struct ECSENGINE_API UIConfigArrayRemoveCallback {
+			inline const void* GetParameters() const {
+				return this;
+			}
+
+			inline static constexpr size_t GetParameterCount() {
+				return sizeof(UIConfigArrayRemoveCallback);
+			}
+
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_ARRAY_REMOVE_CALLBACK;
+			}
+
+			UIActionHandler handler;
+		};
+
+		// The background is centered at the center of the sprite
+		// Overwrite color black means ignore it - use the theme color
+		struct ECSENGINE_API UIConfigSpriteButtonBackground {
+			inline const void* GetParameters() const {
+				return this;
+			}
+
+			inline static constexpr size_t GetParameterCount() {
+				return sizeof(UIConfigSpriteButtonBackground);
+			}
+
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_SPRITE_BUTTON_BACKGROUND;
+			}
+
+			float2 scale;
+			Color overwrite_color = ECS_COLOR_BLACK;
 		};
 
 	}

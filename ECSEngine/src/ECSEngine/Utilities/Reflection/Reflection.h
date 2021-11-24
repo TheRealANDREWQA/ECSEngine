@@ -7,6 +7,7 @@
 #include "../../Internal/Multithreading/TaskManager.h"
 #include "../../Internal/InternalStructures.h"
 #include "../../Containers/HashTable.h"
+#include "../../Containers/AtomicStream.h"
 
 namespace ECSEngine {
 
@@ -147,7 +148,10 @@ namespace ECSEngine {
 			containers::ResizableStream<ReflectionFilteredFiles, MemoryManager> filtered_files;
 		};
 
-		struct ECSENGINE_API ReflectionManagerThreadTaskData {
+		constexpr size_t max_type_count = 1024;
+		constexpr size_t max_enum_count = 128;
+
+		struct ECSENGINE_API ReflectionManagerParseStructuresThreadTaskData {
 			CapacityStream<char> thread_memory;
 			containers::Stream<const wchar_t*> paths;
 			containers::CapacityStream<ReflectionType> types;
@@ -161,9 +165,6 @@ namespace ECSEngine {
 			void* allocated_buffer;
 		};
 
-		constexpr size_t max_type_count = 1024;
-		constexpr size_t max_enum_count = 128;
-
 		struct ECSENGINE_API ReflectionManager {
 			struct FolderHierarchy {
 				ReflectionFolderHierarchy hierarchy;
@@ -176,7 +177,7 @@ namespace ECSEngine {
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
 
 			void BindApprovedData(
-				const ReflectionManagerThreadTaskData* data,
+				const ReflectionManagerParseStructuresThreadTaskData* data,
 				unsigned int data_count,
 				unsigned int folder_index
 			);
@@ -187,7 +188,7 @@ namespace ECSEngine {
 			// Returns the current index; it may change if removals take place
 			unsigned int CreateFolderHierarchy(const wchar_t* root);
 
-			void DeallocateThreadTaskData(ReflectionManagerThreadTaskData& data);
+			void DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data);
 
 			void FreeFolderHierarchy(unsigned int folder_index);
 
@@ -203,8 +204,9 @@ namespace ECSEngine {
 			void InitializeFieldTable();
 			void InitializeTypeTable(size_t count);
 			void InitializeEnumTable(size_t count);
+
 			// It will not set the paths that need to be searched; thread memory will be allocated from the heap, must be freed manually
-			void InitializeThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerThreadTaskData& data, containers::CapacityStream<char>* error_message = nullptr);
+			void InitializeParseThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerParseStructuresThreadTaskData& data, containers::CapacityStream<char>* error_message = nullptr);
 
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
@@ -236,12 +238,23 @@ namespace ECSEngine {
 			//ReflectionBasicFieldTable basic_field_table;
 		};
 
+		struct ECSENGINE_API ReflectionManagerHasReflectStructuresThreadTaskData {
+			ReflectionManager* reflection_manager;
+			unsigned int folder_index;
+			unsigned int starting_path_index;
+			unsigned int ending_path_index;
+			containers::AtomicStream<unsigned int>* valid_paths;
+			Semaphore* semaphore;
+		};
+
 		ECSENGINE_API size_t PtrDifference(const void* ptr1, const void* ptr2);
 
-		ECSENGINE_API void ReflectionManagerThreadTask(unsigned int thread_id, World* world, void* data);
+		ECSENGINE_API void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* data);
+
+		ECSENGINE_API void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* data);
 
 		ECSENGINE_API void AddEnumDefinition(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* opening_parenthese,
 			const char* closing_parenthese,
 			const char* name,
@@ -249,7 +262,7 @@ namespace ECSEngine {
 		);
 
 		ECSENGINE_API void AddTypeDefinition(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* opening_parenthese,
 			const char* closing_parenthese,
 			const char* name,
@@ -258,7 +271,7 @@ namespace ECSEngine {
 
 		// returns whether or not the field read succeded
 		ECSENGINE_API bool AddFieldType(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* last_line_character,
@@ -266,7 +279,7 @@ namespace ECSEngine {
 		);
 
 		ECSENGINE_API bool DeduceFieldType(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -277,7 +290,7 @@ namespace ECSEngine {
 		// It returns false when there is no such definition, but returns true independently of success status,
 		// If error message is nullptr, then it means processing succeded, else failure
 		ECSENGINE_API bool CheckFieldExplicitDefinition(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* new_line_character
@@ -285,7 +298,7 @@ namespace ECSEngine {
 
 		// It will check macro tokens in order to check if it is explicitely given the type
 		ECSENGINE_API bool DeduceFieldTypeFromMacros(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -294,7 +307,7 @@ namespace ECSEngine {
 
 		// Checks to see if it is a pointer type, not from macros
 		ECSENGINE_API bool DeduceFieldTypePointer(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -302,7 +315,7 @@ namespace ECSEngine {
 		);
 
 		ECSENGINE_API bool DeduceFieldTypeStream(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -310,14 +323,14 @@ namespace ECSEngine {
 		);
 
 		ECSENGINE_API void DeduceFieldTypeExtended(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			unsigned short& pointer_offset,
 			const char* last_type_character,
 			ReflectionField& info
 		);
 
 		ECSENGINE_API void GetReflectionFieldInfo(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* basic_type,
 			ReflectionField& info
 		);

@@ -1178,6 +1178,18 @@ namespace ECSEngine {
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
 			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+
+			// If enter is pressed, confirm the action
+			if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
+				auto system_handler_wrapper = [](ActionData* action_data) {
+					UI_UNPACK_ACTION_DATA;
+
+					ConfirmWindowOKAction(action_data);
+					system->PopSystemHandler();
+				};
+
+				drawer.system->PushSystemHandler({ system_handler_wrapper, data, 0 });
+			}
 		}
 
 		ECS_TEMPLATE_FUNCTION_BOOL(void, ConfirmWindowDraw, void*, void*);
@@ -2843,7 +2855,13 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			InjectValuesActionData* data = (InjectValuesActionData*)_data;
-			CreateInjectValuesWindow(system, data->data, data->name, data->is_pop_up_window);
+			unsigned int window_index = system->GetWindowFromName(data->name);
+			if (window_index == -1) {
+				CreateInjectValuesWindow(system, data->data, data->name, data->is_pop_up_window);
+			}
+			else {
+				system->SetActiveWindow(window_index);
+			}
 		}
 
 		// -------------------------------------------------------------------------------------------------------

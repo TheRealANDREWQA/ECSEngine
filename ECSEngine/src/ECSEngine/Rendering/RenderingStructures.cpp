@@ -295,15 +295,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	void FreeMesh(const Mesh& mesh) {
-		mesh.index_buffer.buffer->Release();
-		for (size_t subindex = 0; subindex < mesh.mapping_count; subindex++) {
-			mesh.vertex_buffers[subindex].buffer->Release();
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
 		void* base_address = (void*)function::align_pointer(
 			(uintptr_t)function::OffsetPointer(material, sizeof(Stream<char>) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
@@ -336,8 +327,11 @@ namespace ECSEngine {
 		void* allocation = Allocate(allocator, total_allocation_size, alignof(wchar_t));
 
 		uintptr_t ptr = (uintptr_t)allocation;
-		material.name.InitializeFromBuffer(ptr, name.size);
-		material.name.Copy(name);
+		char* mutable_ptr = (char*)ptr;
+		memcpy(mutable_ptr, name.buffer, (name.size + 1) * sizeof(char));
+		mutable_ptr[name.size] = '\0';
+		material.name = (const char*)ptr;
+		ptr += sizeof(char) * (name.size + 1);
 
 		ptr = function::align_pointer(ptr, alignof(wchar_t));
 
@@ -350,7 +344,9 @@ namespace ECSEngine {
 
 	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
 	{
-		Deallocate(allocator, material.name.buffer);
+		if (material.name != nullptr) {
+			Deallocate(allocator, material.name);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -366,7 +362,6 @@ namespace ECSEngine {
 		ECS_TEMP_STRING(wide_base_name, 512);
 		ECS_ASSERT(texture_base_name.size < 512);
 		function::ConvertASCIIToWide(wide_base_name, texture_base_name);
-		wide_base_name.size = texture_base_name.size;
 
 		return CreatePBRMaterialFromName(material_name, wide_base_name, search_directory, allocator, texture_mask);
 	}
@@ -476,9 +471,11 @@ namespace ECSEngine {
 		void* allocation = Allocate(allocator, total_size, alignof(wchar_t));
 
 		uintptr_t buffer = (uintptr_t)allocation;
-		material.name.InitializeFromBuffer(buffer, material_name.size);
-		material.name.Copy(material_name);
-		
+		char* mutable_char = (char*)buffer;
+		memcpy(mutable_char, material_name.buffer, sizeof(char)* (material_name.size + 1));
+		material.name = mutable_char;
+		buffer += (material_name.size + 1) * sizeof(char);
+
 		buffer = function::align_pointer(buffer, alignof(wchar_t));
 		for (size_t index = 0; index < valid_textures.size; index++) {
 			SetPBRMaterialTexture(&material, buffer, valid_textures[index].texture, valid_textures[index].index);
@@ -494,6 +491,28 @@ namespace ECSEngine {
 		geometry_texture_count(0), unordered_view_count(0), domain_shader(nullptr), hull_shader(nullptr), geometry_shader(nullptr) {}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
+
+	VertexBuffer GetMeshVertexBuffer(const Mesh& mesh, ECS_MESH_INDEX buffer_type)
+	{
+		for (size_t index = 0; index < mesh.mapping_count; index++) {
+			if (mesh.mapping[index] == buffer_type) {
+				return mesh.vertex_buffers[index];
+			}
+		}
+		return VertexBuffer();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+	
+	void SetMeshVertexBuffer(Mesh& mesh, ECS_MESH_INDEX buffer_type, VertexBuffer buffer)
+	{
+		for (size_t index = 0; index < mesh.mapping_count; index++) {
+			if (mesh.mapping[index] == buffer_type) {
+				mesh.vertex_buffers[index] = buffer;
+				return;
+			}
+		}
+	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 

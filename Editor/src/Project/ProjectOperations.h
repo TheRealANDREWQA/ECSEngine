@@ -11,6 +11,8 @@ constexpr const wchar_t* PROJECT_ASSETS_RELATIVE_PATH = L"Assets";
 constexpr const char* PROJECT_ASSETS_RELATIVE_PATH_ASCII = "Assets";
 constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH = L"Modules";
 constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII = "Modules";
+constexpr const wchar_t* PROJECT_DEBUG_RELATIVE_PATH = L"Debug";
+constexpr const char* PROJECT_DEBUG_RELATIVE_PATH_ASCII = "Debug";
 
 constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DEBUG = L"Modules\\Debug";
 constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_DEBUG = "Modules\\Debug";
@@ -93,6 +95,8 @@ void GetProjectFilePath(wchar_t* characters, const ProjectFile* project_file, si
 
 // It will make the concatenation between path and project name
 void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* project_file);
+
+void GetProjectDebugFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path);
 
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count = 256);
 

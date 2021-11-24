@@ -33,14 +33,20 @@ EDITOR_EXPORT void EditorConsoleInfoFocus(EditorState* editor_state, void* ECS_R
 
 EDITOR_EXPORT void EditorConsoleTrace(EditorState* editor_state, void* ECS_RESTRICT data);
 
+// Thread safe
 EDITOR_EXPORT void EditorSetError(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);
 
+// Thread safe
 EDITOR_EXPORT void EditorSetConsoleError(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);
 
+// Thread safe
 EDITOR_EXPORT void EditorSetConsoleWarn(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);
 
+// Thread safe
 EDITOR_EXPORT void EditorSetConsoleInfo(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);
 
+// Thread safe
 EDITOR_EXPORT void EditorSetConsoleInfoFocus(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);
 
+// Thread safe
 EDITOR_EXPORT void EditorSetConsoleTrace(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);

@@ -5,6 +5,8 @@
 
 namespace ECSEngine {
 
+	struct Graphics;
+
 	inline unsigned int GraphicsResourceRelease(Texture1D resource) {
 		resource.tex->Release();
 	}
@@ -93,7 +95,8 @@ namespace ECSEngine {
 	// By default, it relies on the immediate context to copy the contents but a context
 	// can be specified in order to make the copy happen on a separate command list
 	// If it fails, the returned interface will be nullptr
-	// Available template arguments: StandardBuffer, StructuredBuffer, UABuffer
+	// Available template arguments: StandardBuffer, StructuredBuffer, UABuffer, IndexBuffer
+	// VertexBuffer 
 	template<typename Buffer>
 	ECSENGINE_API Buffer ToStaging(Buffer buffer, GraphicsContext* context = nullptr);
 
@@ -184,5 +187,8 @@ namespace ECSEngine {
 		ResizeTextureFlag resize_flag = ECS_RESIZE_TEXTURE_FILTER_LINEAR,
 		GraphicsContext* context = nullptr
 	);
+
+	// It will invert the mesh on the Z axis
+	ECSENGINE_API void InvertMeshZAxis(Graphics* graphics, Mesh& mesh);
 
 }

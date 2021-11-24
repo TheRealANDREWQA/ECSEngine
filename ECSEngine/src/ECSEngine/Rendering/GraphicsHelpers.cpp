@@ -302,6 +302,7 @@ namespace ECSEngine {
 	Buffer ToStaging(Buffer buffer, GraphicsContext* context) {
 		Buffer new_buffer;
 
+		memcpy(&new_buffer, &buffer, sizeof(Buffer));
 		GraphicsDevice* device = nullptr;
 		D3D11_BUFFER_DESC buffer_descriptor;
 
@@ -310,15 +311,13 @@ namespace ECSEngine {
 
 		buffer_descriptor.Usage = D3D11_USAGE_STAGING;
 		buffer_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+		buffer_descriptor.BindFlags = 0;
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, nullptr, &_new_buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Could not create a staging buffer!", true);
 
-		new_buffer = Buffer(_new_buffer);
-		if (FAILED(result)) {
-			return new_buffer;
-		}
-
+		new_buffer.buffer = _new_buffer;
 		if (context == nullptr) {
 			device->GetImmediateContext(&context);
 		}
@@ -332,6 +331,8 @@ namespace ECSEngine {
 	EXPORT(StandardBuffer);
 	EXPORT(StructuredBuffer);
 	EXPORT(UABuffer);
+	EXPORT(IndexBuffer);
+	EXPORT(VertexBuffer);
 
 #undef EXPORT
 
@@ -777,6 +778,102 @@ namespace ECSEngine {
 
 		new_texture = _new_texture;
 		return new_texture;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void InvertMeshZAxis(Graphics* graphics, Mesh& mesh)
+	{
+		// Invert positions, normals, tangents and winding order
+		VertexBuffer position_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_POSITION);
+		VertexBuffer normal_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_NORMAL);
+		VertexBuffer tangent_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_TANGENT);
+
+		// Inverts the z axis of a buffer and returns a new one
+		auto invert_z = [](Graphics* graphics, VertexBuffer buffer) {
+			// Create a staging one with its data
+			VertexBuffer staging = ToStaging(buffer);
+
+			// Map the buffer
+			float3* data = (float3*)graphics->MapBuffer(staging.buffer, D3D11_MAP_READ_WRITE);
+
+			// Modify the data
+			for (size_t index = 0; index < staging.size; index++) {
+				data[index].z = -data[index].z;
+			}
+
+			// Create a copy of the staging data into a GPU resource
+			D3D11_BUFFER_DESC buffer_descriptor;
+			buffer.buffer->GetDesc(&buffer_descriptor);
+
+			VertexBuffer new_buffer = graphics->CreateVertexBuffer(buffer.stride, buffer.size, data, buffer_descriptor.Usage, buffer_descriptor.CPUAccessFlags, buffer_descriptor.MiscFlags);
+
+			// Unmap the buffer
+			graphics->UnmapBuffer(staging.buffer);
+
+			// Release the old one and the staging
+			buffer.buffer->Release();
+			staging.buffer->Release();
+
+			return new_buffer;
+		};
+
+		if (position_buffer.buffer != nullptr) {
+			SetMeshVertexBuffer(mesh, ECS_MESH_POSITION, invert_z(graphics, position_buffer));
+		}
+		if (normal_buffer.buffer != nullptr) {
+			SetMeshVertexBuffer(mesh, ECS_MESH_NORMAL, invert_z(graphics, normal_buffer));
+		}
+		if (tangent_buffer.buffer != nullptr) {
+			SetMeshVertexBuffer(mesh, ECS_MESH_TANGENT, invert_z(graphics, tangent_buffer));
+		}
+
+		// Invert the winding order
+		IndexBuffer staging_index = ToStaging(mesh.index_buffer);
+
+		void* _indices = graphics->MapBuffer(staging_index.buffer, D3D11_MAP_READ_WRITE);
+
+		// Create an index buffer with the same specification
+		D3D11_BUFFER_DESC index_descriptor;
+		mesh.index_buffer.buffer->GetDesc(&index_descriptor);
+		if (staging_index.int_size == 1) {
+			// U char
+			unsigned char* indices = (unsigned char*)_indices;
+			// Start from 1 because only the last 2 vertices must be swapped for the winding order
+			for (size_t index = 1; index < staging_index.count; index += 3) {
+				unsigned char copy = indices[index];
+				indices[index] = indices[index + 1];
+				indices[index + 1] = copy;
+			}
+		}
+		else if (staging_index.int_size == 2) {
+			// U short
+			unsigned short* indices = (unsigned short*)_indices;
+			// Start from 1 because only the last 2 vertices must be swapped for the winding order
+			for (size_t index = 1; index < staging_index.count; index += 3) {
+				unsigned short copy = indices[index];
+				indices[index] = indices[index + 1];
+				indices[index + 1] = copy;
+			}
+		}
+		else if (staging_index.int_size == 4) {
+			// U int
+			unsigned int* indices = (unsigned int*)_indices;
+			// Start from 1 because only the last 2 vertices must be swapped for the winding order
+			for (size_t index = 1; index < staging_index.count; index += 3) {
+				unsigned int copy = indices[index];
+				indices[index] = indices[index + 1];
+				indices[index + 1] = copy;
+			}
+		}
+
+		IndexBuffer new_indices = graphics->CreateIndexBuffer(staging_index.int_size, staging_index.count, index_descriptor.Usage, index_descriptor.CPUAccessFlags);
+
+		// Release the old buffers
+		staging_index.buffer->Release();
+		mesh.index_buffer.buffer->Release();
+
+		mesh.index_buffer = new_indices;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

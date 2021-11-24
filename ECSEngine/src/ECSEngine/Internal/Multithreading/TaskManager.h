@@ -54,10 +54,10 @@ namespace ECSEngine {
 		unsigned int AddDynamicTaskAndWake(ThreadTask task, size_t task_data_size = 0);
 
 		// does not affect last thread id used
-		void AddDynamicTask(ThreadTask task, unsigned int thread_id, size_t task_data_size = 0);
+		void AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size = 0);
 
 		// does not affect last thread id used
-		void AddDynamicTaskAndWake(ThreadTask task, unsigned int thread_id, size_t task_data_size = 0);
+		void AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size = 0);
 
 		void ChangeStaticWrapperMode(TaskManagerWrapper wrapper_mode, void* wrapper_data = nullptr, size_t wrapper_data_size = 0, ThreadFunctionWrapper custom_function = nullptr);
 

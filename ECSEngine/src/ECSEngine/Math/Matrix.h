@@ -844,6 +844,17 @@ namespace ECSEngine {
 		return MatrixVectorMultiply(direction, rotation_matrix);
 	}
 
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation, Vector8 direction) {
+		Matrix rotation_matrix = MatrixRotation(rotation);
+		return MatrixVectorMultiply(direction, rotation_matrix);
+	}
+
+	ECS_INLINE Vector8 ECS_VECTORCALL RotateVectorSIMD(float3 rotation0, float3 rotation1, Vector8 direction) {
+		Matrix rotation_matrix0 = MatrixRotation(rotation0);
+		Matrix rotation_matrix1 = MatrixRotation(rotation1);
+		return MatrixVectorMultiply(direction, rotation_matrix0, rotation_matrix1);
+	}
+
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE float3 ECS_VECTORCALL GetRightVector(float3 rotation) {

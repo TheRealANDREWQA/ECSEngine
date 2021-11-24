@@ -33,14 +33,14 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::BindApprovedData(
-			const ReflectionManagerThreadTaskData* data,
+			const ReflectionManagerParseStructuresThreadTaskData* data,
 			unsigned int data_count,
 			unsigned int folder_index
 		)
 		{
 			size_t total_memory = 0;
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
-				total_memory += data->total_memory;
+				total_memory += data[data_index].total_memory;
 			}
 
 			void* allocation = folders.allocator->Allocate(total_memory);
@@ -149,7 +149,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerThreadTaskData& data)
+		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data)
 		{
 			free(data.thread_memory.buffer);
 			folders.allocator->Deallocate(data.types.buffer);
@@ -335,10 +335,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::InitializeThreadTaskData(
+		void ReflectionManager::InitializeParseThreadTaskData(
 			size_t thread_memory,
 			size_t path_count, 
-			ReflectionManagerThreadTaskData& data, 
+			ReflectionManagerParseStructuresThreadTaskData& data, 
 			CapacityStream<char>* error_message
 		)
 		{
@@ -393,7 +393,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
-			ReflectionManagerThreadTaskData thread_data;
+			ReflectionManagerParseStructuresThreadTaskData thread_data;
 
 			constexpr size_t thread_memory = 20'000'000;
 			// Paths that need to be searched will not be assigned here
@@ -401,7 +401,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			if (error_message == nullptr) {
 				error_message = &temp_error_message;
 			}
-			InitializeThreadTaskData(thread_memory, folders[index].hierarchy.filtered_files[0].files.size, thread_data, error_message);
+			InitializeParseThreadTaskData(thread_memory, folders[index].hierarchy.filtered_files[0].files.size, thread_data, error_message);
 
 			ConditionVariable condition_variable;
 			thread_data.condition_variable = &condition_variable;
@@ -410,7 +410,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				thread_data.paths[path_index] = folders[index].hierarchy.filtered_files[0].files[path_index];
 			}
 
-			ReflectionManagerThreadTask(0, nullptr, &thread_data);
+			ReflectionManagerParseThreadTask(0, nullptr, &thread_data);
 			if (thread_data.success == true) {
 				BindApprovedData(&thread_data, 1, index);
 			}
@@ -422,33 +422,63 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool ReflectionManager::ProcessFolderHierarchy(
-			unsigned int index, 
+			unsigned int folder_index, 
 			TaskManager* task_manager, 
 			CapacityStream<char>* error_message
 		) {
 			unsigned int thread_count = task_manager->GetThreadCount();
-			ReflectionManagerThreadTaskData* thread_data = (ReflectionManagerThreadTaskData*)folders.allocator->Allocate(sizeof(ReflectionManagerThreadTaskData) * thread_count);
 
 			// Preparsing the files in order to have thread act only on files that actually need to process
 			// Otherwise unequal distribution of files will result in poor multithreaded performance
-			unsigned int path_count = 0;
 
-			unsigned int* path_indices_buffer = (unsigned int*)folders.allocator->Allocate(sizeof(unsigned int) * folders[index].hierarchy.filtered_files[0].files.size, alignof(unsigned int));
-			Stream<unsigned int> path_indices = Stream<unsigned int>(path_indices_buffer, 0);
-			for (size_t path_index = 0; path_index < folders[index].hierarchy.filtered_files[0].files.size; path_index++) {
-				bool has_reflect = HasReflectStructures(folders[index].hierarchy.filtered_files[0].files[path_index]);
-				if (has_reflect) {
-					path_count++;
-					path_indices.Add(path_index);
-				}
+			unsigned int files_count = folders[folder_index].hierarchy.filtered_files[0].files.size;
+			unsigned int* path_indices_buffer = (unsigned int*)folders.allocator->Allocate(sizeof(unsigned int) * files_count, alignof(unsigned int));
+			AtomicStream<unsigned int> path_indices = AtomicStream<unsigned int>(path_indices_buffer, 0, files_count);
+
+			// Calculate the thread start and thread end
+			unsigned int reflect_per_thread_data = files_count / thread_count;
+			unsigned int reflect_remainder_tasks = files_count % thread_count;
+
+			// If there is more than a task per thread - launch all
+			// If per thread data is 0, then launch as many threads as remainder
+			unsigned int reflect_thread_count = function::Select(reflect_per_thread_data == 0, reflect_remainder_tasks, thread_count);
+			ReflectionManagerHasReflectStructuresThreadTaskData* reflect_thread_data = (ReflectionManagerHasReflectStructuresThreadTaskData*)ECS_STACK_ALLOC(
+				sizeof(ReflectionManagerHasReflectStructuresThreadTaskData) * reflect_thread_count
+			);
+			Semaphore reflect_semaphore;
+			reflect_semaphore.SetTarget(reflect_thread_count);
+
+			unsigned int reflect_current_path_start = 0;
+			for (size_t thread_index = 0; thread_index < reflect_thread_count; thread_index++) {
+				bool has_remainder = reflect_remainder_tasks > 0;
+				reflect_remainder_tasks -= has_remainder;
+				unsigned int current_thread_start = reflect_current_path_start;
+				unsigned int current_thread_end = reflect_current_path_start + reflect_per_thread_data + has_remainder;
+
+				// Increase the total count of paths
+				reflect_current_path_start += reflect_per_thread_data + has_remainder;
+
+				reflect_thread_data[thread_index].ending_path_index = current_thread_end;
+				reflect_thread_data[thread_index].starting_path_index = current_thread_start;
+				reflect_thread_data[thread_index].folder_index = folder_index;
+				reflect_thread_data[thread_index].reflection_manager = this;
+				reflect_thread_data[thread_index].valid_paths = &path_indices;
+				reflect_thread_data[thread_index].semaphore = &reflect_semaphore;
+
+				// Launch the task
+				ThreadTask task;
+				task.function = ReflectionManagerHasReflectStructuresThreadTask;
+				task.data = reflect_thread_data + thread_index;
+				//ReflectionManagerHasReflectStructuresThreadTask(0, task_manager->m_world, reflect_thread_data + thread_index);
+				task_manager->AddDynamicTaskAndWake(task);
 			}
 
-			unsigned int thread_paths = path_count / thread_count;
-			unsigned int thread_paths_remainder = path_count % thread_count;
+			reflect_semaphore.SpinWait();
+
+			unsigned int parse_per_thread_paths = path_indices.size / thread_count;
+			unsigned int parse_thread_paths_remainder = path_indices.size % thread_count;
 
 			constexpr size_t thread_memory = 10'000'000;
-
-			unsigned int total_paths_counted = 0;
 			ConditionVariable condition_variable;
 
 			ECS_TEMP_ASCII_STRING(temp_error_message, 1024);
@@ -456,58 +486,62 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				error_message = &temp_error_message;
 			}
 
-			for (size_t thread_index = 0; thread_index < thread_count; thread_index++) {
-				unsigned int should_add_remainder = 0;
-				if (thread_paths_remainder > 0) {
-					should_add_remainder = 1;
-					thread_paths_remainder--;
-				}
+			unsigned int parse_thread_count = function::Select(parse_per_thread_paths == 0, parse_thread_paths_remainder, thread_count);
+			ReflectionManagerParseStructuresThreadTaskData* parse_thread_data = (ReflectionManagerParseStructuresThreadTaskData*)ECS_STACK_ALLOC(
+				sizeof(ReflectionManagerParseStructuresThreadTaskData) * thread_count
+			);
 
-				unsigned int thread_current_paths = thread_paths + should_add_remainder;
+			unsigned int parse_thread_start = 0;
+			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
+				bool has_remainder = parse_thread_paths_remainder > 0;
+				parse_thread_paths_remainder -= has_remainder;
+				unsigned int thread_current_paths = parse_per_thread_paths + has_remainder;
 				// initialize data with buffers
-				InitializeThreadTaskData(thread_memory, thread_current_paths, thread_data[thread_index], error_message);
-				thread_data[thread_index].condition_variable = &condition_variable;
+				InitializeParseThreadTaskData(thread_memory, thread_current_paths, parse_thread_data[thread_index], error_message);
+				parse_thread_data[thread_index].condition_variable = &condition_variable;
 
 				// Set thread paths
-				for (size_t path_index = total_paths_counted; path_index < total_paths_counted + thread_current_paths; path_index++) {
-					thread_data[thread_index].paths[path_index - total_paths_counted] = folders[index].hierarchy.filtered_files[0].files[path_indices[path_index]];
+				for (size_t path_index = parse_thread_start; path_index < parse_thread_start + thread_current_paths; path_index++) {
+					parse_thread_data[thread_index].paths[path_index - parse_thread_start] = folders[folder_index].hierarchy.filtered_files[0].files[path_indices[path_index]];
 				}
-				total_paths_counted += thread_current_paths;
+				parse_thread_start += thread_current_paths;
 			}
 
+			condition_variable.Reset();
+
 			// Push thread execution
-			for (size_t thread_index = 0; thread_index < thread_count; thread_index++) {
+			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
 				ThreadTask task;
-				task.function = ReflectionManagerThreadTask;
-				task.data = thread_data + thread_index;
-				task_manager->AddDynamicTaskAndWake(task, thread_index);
+				task.function = ReflectionManagerParseThreadTask;
+				task.data = parse_thread_data + thread_index;
+				task_manager->AddDynamicTaskAndWake(task);
+				//ReflectionManagerParseThreadTask(0, task_manager->m_world, parse_thread_data + thread_index);
 			}
 
 			// Wait until threads are done
-			condition_variable.Wait(thread_count);
+			condition_variable.Wait(parse_thread_count);
 
 			bool success = true;
 			
 			size_t path_index = 0;
 			// Check every thread for success and return the first error if there is such an error
-			for (size_t thread_index = 0; thread_index < thread_count; thread_index++) {
-				if (thread_data[thread_index].success == false) {
+			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
+				if (parse_thread_data[thread_index].success == false) {
 					success = false;
 					break;
 				}
-				path_index += thread_data[thread_index].paths.size;
+				path_index += parse_thread_data[thread_index].paths.size;
 			}
 
 			if (success) {
-				BindApprovedData(thread_data, thread_count, index);
+				BindApprovedData(parse_thread_data, parse_thread_count, folder_index);
 			}
 
 			// Free the previously allocated memory
-			for (size_t thread_index = 0; thread_index < thread_count; thread_index++) {
-				DeallocateThreadTaskData(thread_data[thread_index]);
+			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
+				DeallocateThreadTaskData(parse_thread_data[thread_index]);
 			}
 			folders.allocator->Deallocate(path_indices_buffer);
-			folders.allocator->Deallocate(thread_data);
 
 			return success;
 		}
@@ -746,7 +780,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void WriteErrorMessage(ReflectionManagerThreadTaskData* data, const char* message, unsigned int path_index) {
+		void WriteErrorMessage(ReflectionManagerParseStructuresThreadTaskData* data, const char* message, unsigned int path_index) {
 			data->success = false;
 			data->error_message_lock.lock();
 			data->error_message->AddStream(ToStream(message));
@@ -760,8 +794,22 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManagerThreadTask(unsigned int thread_id, World* world, void* _data) {
-			ReflectionManagerThreadTaskData* data = (ReflectionManagerThreadTaskData*)_data;
+		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data) {
+			ReflectionManagerHasReflectStructuresThreadTaskData* data = (ReflectionManagerHasReflectStructuresThreadTaskData*)_data;
+			for (unsigned int path_index = data->starting_path_index; path_index < data->ending_path_index; path_index++) {
+				bool has_reflect = HasReflectStructures(data->reflection_manager->folders[data->folder_index].hierarchy.filtered_files[0].files[path_index]);
+				if (has_reflect) {
+					data->valid_paths->Add(path_index);
+				}
+			}
+
+			data->semaphore->Enter();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data) {
+			ReflectionManagerParseStructuresThreadTaskData* data = (ReflectionManagerParseStructuresThreadTaskData*)_data;
 
 			constexpr size_t word_max_count = 1024;
 			constexpr size_t line_character_count = 4096;
@@ -898,7 +946,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void AddEnumDefinition(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* opening_parenthese, 
 			const char* closing_parenthese,
 			const char* name,
@@ -954,7 +1002,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void AddTypeDefinition(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			const char* opening_parenthese,
 			const char* closing_parenthese, 
 			const char* name,
@@ -1010,7 +1058,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool AddFieldType(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* last_line_character, 
@@ -1156,7 +1204,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool DeduceFieldType(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -1204,7 +1252,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool CheckFieldExplicitDefinition(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type, 
 			unsigned short& pointer_offset,
 			const char* last_line_character
@@ -1264,7 +1312,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool DeduceFieldTypeFromMacros(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -1447,7 +1495,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool DeduceFieldTypePointer(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
 			const char* field_name,
@@ -1497,7 +1545,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// The stream will store the contained element byte size inside the additional flags component
 		bool DeduceFieldTypeStream(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset, 
 			const char* field_name, 
@@ -1632,7 +1680,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void DeduceFieldTypeExtended(
-			ReflectionManagerThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			unsigned short& pointer_offset,
 			const char* last_type_character, 
 			ReflectionField& field
@@ -1681,7 +1729,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void GetReflectionFieldInfo(ReflectionManagerThreadTaskData* data, const char* basic_type, ReflectionField& field)
+		void GetReflectionFieldInfo(ReflectionManagerParseStructuresThreadTaskData* data, const char* basic_type, ReflectionField& field)
 		{
 			const char* field_name = field.name;
 			field = GetReflectionFieldInfo(data->field_table, basic_type);

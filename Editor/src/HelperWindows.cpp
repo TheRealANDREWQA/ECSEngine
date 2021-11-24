@@ -169,7 +169,6 @@ void RenameFileWizardCallback(ActionData* action_data) {
 
 	ECS_TEMP_STRING(wide_name, 256);
 	function::ConvertASCIIToWide(wide_name, *new_name);
-	wide_name.size = new_name->size;
 
 	RenameFileActionData rename_data;
 	rename_data.new_name = wide_name;
@@ -209,7 +208,6 @@ void RenameFolderWizardCallback(ActionData* action_data) {
 
 	ECS_TEMP_STRING(wide_name, 256);
 	function::ConvertASCIIToWide(wide_name, *new_name);
-	wide_name.size = new_name->size;
 
 	RenameFolderActionData rename_data;
 	rename_data.new_name = wide_name;
