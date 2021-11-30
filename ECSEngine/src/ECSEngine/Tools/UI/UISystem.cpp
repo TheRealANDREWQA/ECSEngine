@@ -3576,13 +3576,6 @@ namespace ECSEngine {
 			m_previous_mouse_position = mouse_position;
 			m_frame_index++;
 
-			m_resources.texture_eviction_frame_count++;
-			if (m_resources.texture_eviction_frame_count == m_resources.texture_eviction_frame_target) {
-				m_resources.texture_eviction_frame_count = 0;
-
-				
-			}
-
 			return m_frame_pacing;
 		}
 

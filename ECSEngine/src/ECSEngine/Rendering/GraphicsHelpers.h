@@ -8,35 +8,39 @@ namespace ECSEngine {
 	struct Graphics;
 
 	inline unsigned int GraphicsResourceRelease(Texture1D resource) {
-		resource.tex->Release();
+		return resource.tex->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(Texture2D resource) {
-		resource.tex->Release();
+		return resource.tex->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(Texture3D resource) {
-		resource.tex->Release();
+		return resource.tex->Release();
+	}
+
+	inline unsigned int GraphicsResourceRelease(TextureCube resource) {
+		return resource.tex->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(ResourceView resource) {
-		resource.view->Release();
+		return resource.view->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(RenderTargetView resource) {
-		resource.target->Release();
+		return resource.target->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(DepthStencilView resource) {
-		resource.view->Release();
+		return resource.view->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(VertexBuffer resource) {
-		resource.buffer->Release();
+		return resource.buffer->Release();
 	}
 
 	inline unsigned int GraphicsResourceRelease(ConstantBuffer resource) {
-		resource.buffer->Release();
+		return resource.buffer->Release();
 	}
 
 	ECSENGINE_API ID3D11Resource* GetResource(Texture1D texture);
@@ -44,6 +48,8 @@ namespace ECSEngine {
 	ECSENGINE_API ID3D11Resource* GetResource(Texture2D texture);
 
 	ECSENGINE_API ID3D11Resource* GetResource(Texture3D texture);
+
+	ECSENGINE_API ID3D11Resource* GetResource(TextureCube texture);
 	
 	ECSENGINE_API ID3D11Resource* GetResource(ResourceView ps_view);
 
@@ -70,6 +76,11 @@ namespace ECSEngine {
 
 	// It will release the view and the resource associated with it
 	ECSENGINE_API void ReleaseUAView(UAView view);
+
+	// It will release the view and the resource associated with it
+	ECSENGINE_API void ReleaseRenderView(RenderTargetView view);
+
+	ECSENGINE_API void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer);
 
 	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture);
 
@@ -190,5 +201,38 @@ namespace ECSEngine {
 
 	// It will invert the mesh on the Z axis
 	ECSENGINE_API void InvertMeshZAxis(Graphics* graphics, Mesh& mesh);
+
+	// It will use the immediate context if none specified.
+	// It will create a texture cube and then CopySubresourceRegion into it
+	// It will have default usage and all mips will be copied
+	// All textures must have the same size
+	ECSENGINE_API TextureCube ConvertTexturesToCube(
+		Texture2D x_positive,
+		Texture2D x_negative,
+		Texture2D y_positive,
+		Texture2D y_negative,
+		Texture2D z_positive,
+		Texture2D z_negative,
+		GraphicsContext* context = nullptr
+	);
+
+	// Expects all the textures to be in the correct order
+	// All the constraints that apply to the 6 texture parameter version apply to this one aswell
+	ECSENGINE_API TextureCube ConvertTexturesToCube(const Texture2D* textures, GraphicsContext* context = nullptr);
+
+	// Equirectangular to cube map
+	// Involves setting up multiple renders
+	// It will overwrite most of the pipeline; rebind resources if needed again
+	ECSENGINE_API TextureCube ConvertTextureToCube(
+		ResourceView texture_view,
+		Graphics* graphics,
+		DXGI_FORMAT cube_format,
+		uint2 face_size
+	);
+
+	// Creates a new cube texture that will contain the diffuse lambertian part of the BRDF
+	// for IBL use; dimensions specifies the size of this new generated map
+	// Environment must be a resource view of a texture cube
+	ECSENGINE_API TextureCube ConvertEnvironmentMapToDiffuseIBL(ResourceView environment, Graphics* graphics, uint2 dimensions, unsigned int sample_count);
 
 }

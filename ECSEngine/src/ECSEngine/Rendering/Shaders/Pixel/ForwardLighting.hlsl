@@ -1,6 +1,7 @@
 #include "../LightingUtilities.hlsli"
 
 Texture2D ColorMap : register(t0);
+Texture2D NormalMap : register(t1);
 SamplerState Sampler : register(s0);
 
 cbuffer HemisphericConstants : register(b0) 
@@ -54,12 +55,21 @@ cbuffer CapsuleLightBuffer : register(b5)
     float CapsuleLightAttenuation : packoffset(c2.w);
 }
 
+cbuffer NormalStrength : register(b6)
+{
+    float NormalStrength;
+}
+
+cbuffer CameraPosition : register(b7)
+{
+    float3 CameraPosition;
+}
+
 struct PS_INPUT
 {
     float2 uv : TEXCOORD0;
     float3 normal : NORMAL;
     float3 world_position : WORLD_POSITION;
-    float3 view_direction : VIEW_DIRECTION;
 };
 
 float4 main(in PS_INPUT input) : SV_TARGET
@@ -67,10 +77,14 @@ float4 main(in PS_INPUT input) : SV_TARGET
     float4 albedo = ColorMap.Sample(Sampler, input.uv);
     float3 normalized_normal = normalize(input.normal);
     
+    float3 pixel_normal_sample = NormalMap.Sample(Sampler, input.uv);
+   
+    normalized_normal = ComputePixelNormal(pixel_normal_sample, input.world_position, input.normal, input.uv, NormalStrength);
+    
     float3 light_direction = DirectionalLightDirection;
     
     float3 normalized_light_direction = normalize(light_direction);
-    float3 normalized_view_direction = normalize(input.view_direction);
+    float3 normalized_view_direction = normalize(CameraPosition - input.world_position);
     
     float3 ambient_color = CalculateAmbient(normalized_normal, albedo.xyz, AmbientDown, AmbientUp);
     float3 directional_color = CalculateBlinnPhong(
@@ -128,5 +142,5 @@ float4 main(in PS_INPUT input) : SV_TARGET
         SpecularIntensity
     );
     
-    return float4(ambient_color + directional_color /*+ point_light*/ /*+ spot_light*/ /*+ capsule_light*/, 1.0f);
+    return float4(ambient_color + directional_color /*+ point_light + spot_light*/ /*+ capsule_light*/, 1.0f);
 }

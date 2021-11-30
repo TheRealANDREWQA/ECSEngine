@@ -378,8 +378,6 @@ namespace ECSEngine {
 			UIDrawResources system_draw;
 			Semaphore texture_semaphore;
 			SpinLock texture_spinlock;
-			unsigned int texture_eviction_frame_target;
-			unsigned int texture_eviction_frame_count;
 		};
 
 		struct ECSENGINE_API UIHandler {

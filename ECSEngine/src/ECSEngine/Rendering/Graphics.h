@@ -9,6 +9,8 @@
 
 #define ECS_PIXEL_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\" TEXT(STRING(name.hlsl))
 #define ECS_VERTEX_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\" TEXT(STRING(name.hlsl))
+#define ECS_COMPUTE_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Compute\\" TEXT(STRING(name.hlsl))
+#define ECS_SHADER_DIRECTORY L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders"
 
 namespace ECSEngine {
 
@@ -75,6 +77,21 @@ namespace ECSEngine {
 		unsigned int misc_flag = 0u;
 	};
 
+	struct ECSENGINE_API GraphicsTextureCubeDescriptor {
+		uint2 size;
+		struct {
+			const void* initial_data = nullptr;
+			unsigned int memory_pitch = 0;
+			unsigned int memory_slice_pitch = 0;
+		};
+		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
+		unsigned int mip_levels = 0u;
+		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
+		D3D11_CPU_ACCESS_FLAG cpu_flag = static_cast<D3D11_CPU_ACCESS_FLAG>(0);
+		D3D11_BIND_FLAG bind_flag = D3D11_BIND_SHADER_RESOURCE;
+		unsigned int misc_flag = 0u;
+	};
+
 	struct ECSENGINE_API GraphicsPipelineBlendState {
 		ID3D11BlendState* blend_state;
 		float blend_factors[4];
@@ -96,14 +113,23 @@ namespace ECSEngine {
 		GraphicsPipelineRasterizerState rasterizer_state;
 	};
 
+	struct ECSENGINE_API GraphicsViewport {
+		float top_left_x;
+		float top_left_y; 
+		float width;
+		float height;
+		float min_depth;
+		float max_depth;
+	};
+
 	struct ECSENGINE_API ShaderMacro {
 		const char* name;
 		const char* definition;
 	};
 
 	enum ECSENGINE_API ShaderTarget : unsigned char {
-		ECS_SHADER_TARGET_4,
-		ECS_SHADER_TARGET_5,
+		ECS_SHADER_TARGET_5_0,
+		ECS_SHADER_TARGET_5_1,
 		ECS_SHADER_TARGET_COUNT
 	};
 
@@ -119,8 +145,31 @@ namespace ECSEngine {
 	// Default is no macros, shader target 5 and no compile flags
 	struct ECSENGINE_API ShaderFromSourceOptions {
 		Stream<ShaderMacro> macros = {nullptr, 0};
-		ShaderTarget target = ECS_SHADER_TARGET_5;
+		ShaderTarget target = ECS_SHADER_TARGET_5_0;
 		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
+	};
+
+	enum TextureCubeFace {
+		ECS_TEXTURE_CUBE_X_POS,
+		ECS_TEXTURE_CUBE_X_NEG,
+		ECS_TEXTURE_CUBE_Y_POS,
+		ECS_TEXTURE_CUBE_Y_NEG,
+		ECS_TEXTURE_CUBE_Z_POS,
+		ECS_TEXTURE_CUBE_Z_NEG
+	};
+
+	enum GraphicsShaderHelpers {
+		ECS_GRAPHICS_SHADER_HELPER_CREATE_TEXTURE_CUBE,
+		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE,
+		ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT,
+		ECS_GRAPHICS_SHADER_HELPER_COUNT
+	};
+
+	struct GraphicsShaderHelper {
+		VertexShader vertex;
+		PixelShader pixel;
+		InputLayout input_layout;
+		SamplerState pixel_sampler;
 	};
 
 	/* It has an immediate and a deferred context. The deferred context can be used to generate CommandLists */
@@ -208,8 +257,6 @@ namespace ECSEngine {
 
 		void BindSamplerStates(Stream<SamplerState> samplers, UINT start_slot = 0u);
 
-		void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view);
-
 		void BindPixelUAView(UAView view, UINT start_slot = 0u);
 
 		void BindPixelUAViews(Stream<UAView> views, UINT start_slot = 0u);
@@ -222,7 +269,11 @@ namespace ECSEngine {
 
 		void BindRenderTargetViewFromInitialViews(GraphicsContext* context);
 
+		void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view);
+
 		void BindViewport(float top_left_x, float top_left_y, float width, float height, float min_depth, float max_depth);
+
+		void BindViewport(GraphicsViewport viewport);
 
 		void BindDefaultViewport();
 
@@ -233,6 +284,8 @@ namespace ECSEngine {
 		void BindMesh(const Mesh& mesh, Stream<ECS_MESH_INDEX> mapping);
 
 		void BindMaterial(const Material& material);
+
+		void BindHelperShader(GraphicsShaderHelpers helper);
 
 #pragma endregion
 
@@ -408,13 +461,15 @@ namespace ECSEngine {
 
 		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count);
 
-		SamplerState CreateSamplerState(D3D11_SAMPLER_DESC descriptor);
+		SamplerState CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor);
 
 		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor);
 
 		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor);
 
 		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor);
+
+		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
@@ -446,7 +501,19 @@ namespace ECSEngine {
 
 		ResourceView CreateTextureShaderViewResource(Texture3D texture);
 
+		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
+		ResourceView CreateTextureShaderView(
+			TextureCube texture, 
+			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT, 
+			unsigned int most_detailed_mip = 0u, 
+			unsigned int mip_levels = -1
+		);
+
+		ResourceView CreateTextureShaderViewResource(TextureCube texture);
+
 		RenderTargetView CreateRenderTargetView(Texture2D texture);
+
+		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0);
 
 		DepthStencilView CreateDepthStencilView(Texture2D texture);
 
@@ -505,6 +572,10 @@ namespace ECSEngine {
 
 		void DisableCulling(GraphicsContext* context, bool wireframe = false);
 
+		void Dispatch(uint3 dispatch_size);
+		
+		void DispatchIndirect(IndirectBuffer indirect_buffer);
+
 		void Draw(unsigned int vertex_count, unsigned int vertex_offset = 0u);
 
 		void DrawIndexed(unsigned int index_count, unsigned int start_index = 0u, unsigned int base_vertex_location = 0);
@@ -524,6 +595,18 @@ namespace ECSEngine {
 		void EnableDepth();
 
 		void EnableDepth(GraphicsContext* context);
+
+		void EnableCulling(bool wireframe = false);
+
+		void EnableCulling(GraphicsContext* context, bool wireframe = false);
+
+		void GenerateMips(ResourceView view);
+
+		RenderTargetView GetBoundRenderTarget() const;
+
+		DepthStencilView GetBoundDepthStencil() const;
+
+		GraphicsViewport GetBoundViewport() const;
 
 		void* MapBuffer(ID3D11Buffer* buffer, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
@@ -586,7 +669,11 @@ namespace ECSEngine {
 
 		void FreeAllocatedBuffer(const void* buffer);
 
+		void FreeAllocatedBufferTs(const void* buffer);
+
 		void* GetAllocatorBuffer(size_t size);
+
+		void* GetAllocatorBufferTs(size_t size);
 
 		GraphicsDevice* GetDevice();
 
@@ -622,6 +709,8 @@ namespace ECSEngine {
 
 		void SetNewSize(HWND hWnd, unsigned int width, unsigned int height);
 
+		void SetShaderDirectory(Stream<wchar_t> shader_directory);
+
 #pragma endregion
 
 	//private:
@@ -639,6 +728,8 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11BlendState> m_blend_enabled;
 		ShaderReflection m_shader_reflection;
 		MemoryManager* m_allocator;
+		containers::Stream<wchar_t> m_shader_directory;
+		containers::CapacityStream<GraphicsShaderHelper> m_shader_helpers;
 	};
 
 	ECSENGINE_API void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot = 0u);
@@ -744,6 +835,9 @@ namespace ECSEngine {
 	template<typename Resource>
 	ECSENGINE_API void CopyGraphicsResource(Resource destination, Resource source, GraphicsContext* context);
 
+	// It will copy the whole texture into the destination face
+	ECSENGINE_API void CopyGraphicsResource(TextureCube destination, Texture2D source, TextureCubeFace face, GraphicsContext* context, unsigned int mip_level = 0);
+
 	// Available types - IndexBuffer, VertexBuffer, ConstantBuffer, StandardBuffer, StructuredBuffer 
 	// and UABuffer
 	// For vertex buffers and index buffers offsets and sizes are in element quantities
@@ -797,6 +891,22 @@ namespace ECSEngine {
 		unsigned int source_subresource_index,
 		GraphicsContext* context
 	);
+
+	ECSENGINE_API void CopyTextureSubresource(
+		TextureCube texture,
+		uint2 destination_offset,
+		unsigned int mip_level,
+		TextureCubeFace face,
+		Texture2D source,
+		uint2 source_offset,
+		uint2 source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	);
+
+	ECSENGINE_API void Dispatch(uint3 dispatch_size, GraphicsContext* context);
+
+	ECSENGINE_API void DispatchIndirect(IndirectBuffer buffer, GraphicsContext* context);
 
 	ECSENGINE_API void Draw(unsigned int vertex_count, GraphicsContext* context, unsigned int vertex_offset = 0u);
 
@@ -879,6 +989,20 @@ namespace ECSEngine {
 
 	ECSENGINE_API void RestoreRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state);
 
+	template<typename Texture>
+	ECSENGINE_API void UpdateTexture(
+		Texture texture,
+		const void* data,
+		size_t data_size,
+		GraphicsContext* context,
+		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		unsigned int map_flags = 0u,
+		unsigned int subresource_index = 0
+	);
+
+	template<typename Texture>
+	ECSENGINE_API void UpdateTextureResource(Texture texture, const void* data, size_t data_size, GraphicsContext* context, unsigned int subresource_index = 0);
+
 	ECSENGINE_API void UpdateBuffer(
 		ID3D11Buffer* buffer,
 		const void* data,
@@ -893,7 +1017,8 @@ namespace ECSEngine {
 		ID3D11Buffer* buffer,
 		const void* data,
 		size_t data_size,
-		GraphicsContext* context
+		GraphicsContext* context,
+		unsigned int subresource_index = 0
 	);
 
 	ECSENGINE_API void UnmapBuffer(ID3D11Buffer* buffer, GraphicsContext* context, unsigned int subresource_index = 0);

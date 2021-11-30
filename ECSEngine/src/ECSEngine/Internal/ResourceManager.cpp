@@ -5,6 +5,13 @@
 #include "../Utilities/FunctionInterfaces.h"
 #include "../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
 #include "../GLTFLoader/GLTFLoader.h"
+#include "../Utilities/Path.h"
+
+#define ECS_RESOURCE_MANAGER_CHECK_RESOURCE
+
+constexpr size_t ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT = 256;
+constexpr size_t ECS_RESOURCE_MANAGER_MAX_THREAD_PATH = 8;
+constexpr size_t ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS = 128;
 
 namespace ECSEngine {
 
@@ -336,17 +343,13 @@ namespace ECSEngine {
 	ResourceManager::ResourceManager(
 		ResourceManagerAllocator* memory,
 		Graphics* graphics,
-		unsigned int thread_count,
-		const char* resource_folder_path
+		unsigned int thread_count
 	) : m_memory(memory), m_graphics(graphics) {
 		size_t total_memory = 0;
 
-		total_memory += sizeof(char) * ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS * thread_count;
+		total_memory += sizeof(unsigned int) * ECS_RESOURCE_MANAGER_MAX_THREAD_PATH * thread_count;
 		total_memory += sizeof(wchar_t) * ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS * thread_count;
-		total_memory += sizeof(unsigned int) * ECS_RESOURCE_MANAGER_MAX_FOLDER_COUNT * thread_count;
-
-		total_memory += sizeof(wchar_t*) * thread_count;
-		total_memory += sizeof(ResourceFolder) * thread_count;
+		total_memory += sizeof(ThreadPath) * thread_count;
 		
 		// for alignment
 		total_memory += 16;
@@ -357,26 +360,10 @@ namespace ECSEngine {
 
 		uintptr_t buffer = (uintptr_t)allocation;
 
-		m_resource_folder_path.InitializeFromBuffer((void*)buffer, thread_count, thread_count);
-		buffer += sizeof(CapacityStream<char>) * thread_count;
-		size_t resource_folder_path_length = strnlen_s(resource_folder_path, 64);
-
-		wchar_t wide_folder_path[ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS];
-		function::ConvertASCIIToWide(wide_folder_path, resource_folder_path, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
+		m_folder_path.InitializeFromBuffer(buffer, thread_count, thread_count);
 		for (size_t index = 0; index < thread_count; index++) {
-			m_resource_folder_path[index].characters.buffer = (char*)buffer;
-			m_resource_folder_path[index].characters.size = resource_folder_path_length;
-			m_resource_folder_path[index].characters.capacity = ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS;
-			memcpy(m_resource_folder_path[index].characters.buffer, resource_folder_path, m_resource_folder_path.size);
-			buffer += sizeof(char) * ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS;
-
-			m_resource_folder_path[index].folder_offsets.InitializeFromBuffer((void*)buffer, ECS_RESOURCE_MANAGER_MAX_FOLDER_COUNT);
-			buffer += sizeof(unsigned int) * ECS_RESOURCE_MANAGER_MAX_FOLDER_COUNT;
-
-			buffer = function::align_pointer(buffer, alignof(wchar_t));
-			m_resource_folder_path[index].wide_characters = (wchar_t*)buffer;
-			memcpy(m_resource_folder_path[index].wide_characters, wide_folder_path, sizeof(wchar_t) * resource_folder_path_length);
-			buffer += sizeof(wchar_t) * ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS;
+			m_folder_path[index].characters.InitializeFromBuffer(buffer, 0, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
+			m_folder_path[index].offsets.InitializeFromBuffer(buffer, 0, ECS_RESOURCE_MANAGER_MAX_THREAD_PATH);
 		}
 
 		m_resource_types = ResizableStream<InternalResourceType, ResourceManagerAllocator>(m_memory, 0);
@@ -395,37 +382,23 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	void ResourceManager::AddResourcePath(const char* subpath, unsigned int thread_index) {
-		size_t filename_size = strnlen_s(subpath, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);;
-		CapacityStream<char>& characters = m_resource_folder_path[thread_index].characters;
-		
-		ECS_ASSERT(characters.size + filename_size < ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS, "Not enough characters in the resource folder path");
-		ECS_ASSERT(m_resource_folder_path[thread_index].folder_offsets.HasSpace(1), "Too many resource folders");
-		function::ConcatenateCharPointers(characters.buffer, subpath, characters.size, filename_size);
-		function::ConvertASCIIToWide(m_resource_folder_path[thread_index].wide_characters + characters.size, subpath, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
-		
-		m_resource_folder_path[thread_index].folder_offsets.Push(characters.size);
-		characters.size += filename_size;
-		characters[characters.size] = '\0';
-		m_resource_folder_path[thread_index].wide_characters[characters.size] = L'\0';
+		size_t path_size = strnlen_s(subpath, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);;		
+		ECS_ASSERT(m_folder_path[thread_index].characters.size + path_size < m_folder_path[thread_index].characters.capacity, "Not enough characters in the resource folder path");
+
+		m_folder_path[thread_index].offsets.AddSafe(m_folder_path[thread_index].characters.size);
+		function::ConvertASCIIToWide(m_folder_path[thread_index].characters, Stream<char>(subpath, path_size));
+		m_folder_path[thread_index].characters[m_folder_path[thread_index].characters.size] = L'\0';
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	void ResourceManager::AddResourcePath(const wchar_t* subpath, unsigned int thread_index) {
-		size_t filename_size = wcsnlen_s(subpath, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
+		size_t path_size = wcsnlen_s(subpath, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);;
+		ECS_ASSERT(m_folder_path[thread_index].characters.size + path_size < m_folder_path[thread_index].characters.capacity, "Not enough characters in the resource folder path");
 
-		CapacityStream<char>& characters = m_resource_folder_path[thread_index].characters;
-
-		ECS_ASSERT(characters.size + filename_size < ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS, "Not enough characters in the resource folder path");
-		ECS_ASSERT(m_resource_folder_path[thread_index].folder_offsets.HasSpace(1), "Too many resource folders");
-		
-		function::ConcatenateWideCharPointers(m_resource_folder_path[thread_index].wide_characters, subpath, characters.size, filename_size);
-		size_t written_chars;
-		function::ConvertWideCharsToASCII(subpath, characters.buffer, filename_size, ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
-
-		m_resource_folder_path[thread_index].folder_offsets.Push(characters.size);
-		characters.size += filename_size;
-		m_resource_folder_path[thread_index].wide_characters[characters.size] = L'0';
+		m_folder_path[thread_index].offsets.AddSafe(m_folder_path[thread_index].characters.size);
+		m_folder_path[thread_index].characters.AddStream(Stream<wchar_t>(subpath, path_size));
+		m_folder_path[thread_index].characters[m_folder_path[thread_index].characters.size] = '\0';
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -496,9 +469,9 @@ namespace ECSEngine {
 
 	void ResourceManager::DeleteResourcePath(unsigned int thread_index)
 	{
-		unsigned int size;
-		ECS_ASSERT(m_resource_folder_path[thread_index].folder_offsets.Pop(size), "There is no path to pop");
-		m_resource_folder_path[thread_index].characters.size = size;
+		ECS_ASSERT(m_folder_path[thread_index].offsets.size > 0);
+		m_folder_path[thread_index].offsets.size--;
+		m_folder_path[thread_index].characters.size = m_folder_path[thread_index].offsets[m_folder_path[thread_index].offsets.size];
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -544,9 +517,38 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	size_t ResourceManager::GetThreadPath(wchar_t* characters, unsigned int thread_index) const
+	{
+		if (m_folder_path[thread_index].offsets.size > 0) {
+			m_folder_path[thread_index].characters.CopyTo(characters);
+			return m_folder_path[thread_index].characters.size;
+		}
+		return 0;
+	}
+
+	Stream<wchar_t> ResourceManager::GetThreadPath(wchar_t* characters, const wchar_t* current_path, unsigned int thread_index) const
+	{
+		size_t current_path_size = wcslen(current_path);
+		size_t offset = GetThreadPath(characters, thread_index);
+		memcpy(characters + offset, current_path, sizeof(wchar_t) * current_path_size);
+		characters[offset + current_path_size] = L'\0';
+		return { characters, offset + current_path_size };
+	}
+
+	Stream<wchar_t> ResourceManager::GetThreadPath(wchar_t* characters, const char* current_path, unsigned int thread_index) const
+	{
+		size_t current_path_size = strlen(current_path);
+		size_t offset = GetThreadPath(characters, thread_index);
+		function::ConvertASCIIToWide(characters + offset, { current_path, current_path_size }, 512);
+		characters[offset + current_path_size] = L'\0';
+		return { characters, offset + current_path_size };
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	void ResourceManager::InitializeDefaultTypes() {
 		for (size_t index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
-			AddResourceType(ECS_RESOURCE_TYPE_NAMES[index]);
+			AddResourceType(ECS_RESOURCE_TYPE_NAMES[index], ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT);
 		}
 	}
 
@@ -574,8 +576,8 @@ namespace ECSEngine {
 		const char* filename, 
 		size_t& size, 
 		size_t load_flags,
-		bool* reference_counted_is_loaded,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index,
+		bool* reference_counted_is_loaded
 	)
 	{
 		return (char*)AddResource<reference_counted>(
@@ -587,13 +589,13 @@ namespace ECSEngine {
 			reference_counted_is_loaded,
 			[=](void* parameter) {
 			std::ifstream input;
-			OpenFile(filename, input, resource_folder_path_index);
+			OpenFile(filename, input, thread_index);
 
 			return LoadTextFileImplementation(input, (size_t*)parameter);
 		});
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(char*, ResourceManager::LoadTextFile, const char*, size_t&, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(char*, ResourceManager::LoadTextFile, const char*, size_t&, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -602,8 +604,8 @@ namespace ECSEngine {
 		const wchar_t* filename,
 		size_t& size, 
 		size_t load_flags,
-		bool* reference_counted_is_loaded,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index,
+		bool* reference_counted_is_loaded
 	)
 	{
 		return (char*)AddResource<reference_counted>(
@@ -615,14 +617,14 @@ namespace ECSEngine {
 			reference_counted_is_loaded,
 			[=](void* parameter) {
 				std::ifstream input;
-				OpenFile(filename, input, resource_folder_path_index);
+				OpenFile(filename, input, thread_index);
 				
 				return LoadTextFileImplementation(input, (size_t*)parameter);
 			}
 		);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(char*, ResourceManager::LoadTextFile, const wchar_t*, size_t&, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(char*, ResourceManager::LoadTextFile, const wchar_t*, size_t&, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -649,32 +651,22 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::OpenFile(const char* filename, std::ifstream& input, unsigned int resource_folder_path_index)
+	void ResourceManager::OpenFile(const char* filename, std::ifstream& input, unsigned int thread_index)
 	{
-		if (resource_folder_path_index != -1) {
-			AddResourcePath(filename, resource_folder_path_index);
-			input.open(m_resource_folder_path[resource_folder_path_index].characters.buffer, std::ifstream::in);
-			DeleteResourcePath(resource_folder_path_index);
-		}
-		else {
-			input.open(filename, std::ifstream::in);
-		}
-
+		ECS_TEMP_STRING(path, 512);
+		Stream<wchar_t> current_path = GetThreadPath(path.buffer, filename, thread_index);
+		input.open(current_path.buffer, std::ifstream::in);
+		
 		ECS_ASSERT(input.good(), "Opening a file failed!");
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::OpenFile(const wchar_t* filename, std::ifstream& input, unsigned int resource_folder_path_index)
+	void ResourceManager::OpenFile(const wchar_t* filename, std::ifstream& input, unsigned int thread_index)
 	{
-		if (resource_folder_path_index != -1) {
-			AddResourcePath(filename, resource_folder_path_index);
-			input.open(m_resource_folder_path[resource_folder_path_index].characters.buffer, std::ifstream::in);
-			DeleteResourcePath(resource_folder_path_index);
-		}
-		else {
-			input.open(filename, std::ifstream::in);
-		}
+		ECS_TEMP_STRING(path, 512);
+		Stream<wchar_t> current_path = GetThreadPath(path.buffer, filename, thread_index);
+		input.open(current_path.buffer, std::ifstream::in);
 
 		ECS_ASSERT(input.good(), "Opening a file failed!");
 	}
@@ -686,8 +678,8 @@ namespace ECSEngine {
 		const wchar_t* filename,
 		ResourceManagerTextureDesc& descriptor,
 		size_t load_flags,
-		bool* reference_counted_is_loaded,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index,
+		bool* reference_counted_is_loaded
 	)
 	{
 		void* texture_view = AddResource<reference_counted>(
@@ -699,54 +691,100 @@ namespace ECSEngine {
 			reference_counted_is_loaded,
 			[=](void* parameter) {
 			ResourceManagerTextureDesc* reinterpretation = (ResourceManagerTextureDesc*)parameter;
-			return LoadTextureImplementation(filename, reinterpretation, resource_folder_path_index).view;
+			return LoadTextureImplementation(filename, reinterpretation, thread_index).view;
 		});
 
 		return (ID3D11ShaderResourceView*)texture_view;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(ResourceView, ResourceManager::LoadTexture, const wchar_t*, ResourceManagerTextureDesc&, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(ResourceView, ResourceManager::LoadTexture, const wchar_t*, ResourceManagerTextureDesc&, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	ResourceView ResourceManager::LoadTextureImplementation(
 		const wchar_t* filename,
 		ResourceManagerTextureDesc* descriptor,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index
 	)
 	{
 		ID3D11ShaderResourceView* texture_view = nullptr;
-
 		ID3D11Resource* resource = nullptr;
-		if (resource_folder_path_index != -1) {
-			AddResourcePath(filename, resource_folder_path_index);
-			HRESULT result;
-			result = DirectX::CreateWICTextureFromFileEx(
-				m_graphics->GetDevice(),
-				descriptor->context,
-				//nullptr,
-				m_resource_folder_path[resource_folder_path_index].wide_characters,
-				descriptor->max_size,
-				descriptor->usage,
-				descriptor->bindFlags,
-				descriptor->cpuAccessFlags,
-				descriptor->miscFlags,
-				descriptor->loader_flag,
-				&resource,
-				&texture_view
-			);
-			DeleteResourcePath(resource_folder_path_index);
-			if (FAILED(result)) {
-				return nullptr;
-			}
+
+		// Determine the texture extension - HDR textures must take a different path
+		Stream<wchar_t> texture_path = ToStream(filename);
+		Path2 extension = function::PathExtensionBoth(texture_path);
+		ECS_ASSERT(extension.absolute.size > 0 || extension.relative.size > 0, "No extension could be identified");
+
+		bool is_hdr_texture = false;
+		if (extension.absolute.size > 0) {
+			is_hdr_texture = function::CompareStrings(extension.absolute, ToStream(L".hdr"));
 		}
 		else {
-			HRESULT result;
+			is_hdr_texture = function::CompareStrings(extension.relative, ToStream(L".hdr"));
+		}
+
+		ECS_TEMP_STRING(_path, 512);
+		Stream<wchar_t> path = GetThreadPath(_path.buffer, filename, thread_index);
+		HRESULT result;
+		
+		if (is_hdr_texture) {
+			DirectX::ScratchImage image;
+			result = DirectX::LoadFromHDRFile(path.buffer, nullptr, image);
+			if (FAILED(result)) {
+				return nullptr;
+			}
+			
+			// Convert to a DX11 resource
+			GraphicsTexture2DDescriptor dx_descriptor;
+			auto metadata = image.GetMetadata();
+			dx_descriptor.format = metadata.format;
+			dx_descriptor.array_size = 1;
+			dx_descriptor.bind_flag = (D3D11_BIND_FLAG)descriptor->bindFlags;
+			dx_descriptor.cpu_flag = (D3D11_CPU_ACCESS_FLAG)descriptor->cpuAccessFlags;
+			dx_descriptor.initial_data = image.GetPixels();
+			size_t row_pitch, slice_pitch;
+			result = DirectX::ComputePitch(metadata.format, metadata.width, metadata.height, row_pitch, slice_pitch);
+			if (FAILED(result)) {
+				return nullptr;
+			}
+			dx_descriptor.memory_pitch = row_pitch;
+			dx_descriptor.memory_slice_pitch = slice_pitch;
+			dx_descriptor.misc_flag = descriptor->miscFlags;
+			dx_descriptor.usage = descriptor->usage;
+			dx_descriptor.size = { (unsigned int)metadata.width, (unsigned int)metadata.height };
+
+			// No context provided - don't generate mips
+			if (descriptor->context == nullptr) {
+				dx_descriptor.mip_levels = 1;
+				Texture2D texture = m_graphics->CreateTexture(&dx_descriptor);
+				texture_view = m_graphics->CreateTextureShaderViewResource(texture).view;
+			}
+			else {
+				ECS_ASSERT(descriptor->context == m_graphics->GetContext());
+
+				// Make the initial data nullptr
+				dx_descriptor.mip_levels = 0;
+				dx_descriptor.initial_data = nullptr;
+				dx_descriptor.memory_pitch = 0;
+				dx_descriptor.memory_slice_pitch = 0;
+				Texture2D texture = m_graphics->CreateTexture(&dx_descriptor);
+
+				// Update the mip 0
+				UpdateTextureResource(texture, image.GetPixels(), image.GetPixelsSize(), descriptor->context);
+
+				ResourceView view = m_graphics->CreateTextureShaderViewResource(texture);
+
+				// Generate mips
+				m_graphics->GenerateMips(view);
+				texture_view = view.view;
+			}
+			
+		}
+		else {
 			result = DirectX::CreateWICTextureFromFileEx(
 				m_graphics->GetDevice(),
 				descriptor->context,
-				//nullptr,
-				filename,
+				path.buffer,
 				descriptor->max_size,
 				descriptor->usage,
 				descriptor->bindFlags,
@@ -760,46 +798,6 @@ namespace ECSEngine {
 				return nullptr;
 			}
 		}
-
-		D3D11_TEXTURE2D_DESC mip_descriptor;
-		Texture2D mip_texture(resource);
-		mip_texture.tex->GetDesc(&mip_descriptor);
-
-		//if (mip_descriptor.Width > 1 && mip_descriptor.Height > 1) {
-		//	Texture2D staging_texture = ToStagingTexture(mip_texture);
-
-		//	DirectX::Image image;
-		//	image.pixels = (uint8_t*)m_graphics->MapTexture(staging_texture, D3D11_MAP_READ);
-		//	image.width = mip_descriptor.Width;
-		//	image.height = mip_descriptor.Height;
-		//	image.format = mip_descriptor.Format;
-		//	DirectX::ComputePitch(image.format, image.width, image.height, image.rowPitch, image.slicePitch);
-
-		//	DirectX::ScratchImage mip_chain;
-		//	HRESULT result = DirectX::GenerateMipMaps(image, DirectX::TEX_FILTER_DEFAULT, 0, mip_chain);
-		//	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Could not create mips.", true);
-
-		//	m_graphics->UnmapTexture(staging_texture);
-
-		//	unsigned int count = staging_texture.tex->Release();
-
-		//	ID3D11ShaderResourceView* this_resource;
-		//	result = DirectX::CreateShaderResourceView(m_graphics->GetDevice(), mip_chain.GetImages(), mip_chain.GetImageCount(), mip_chain.GetMetadata(), &this_resource);
-		//	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"could not create mips.", true);
-
-		//	mip_chain.Release();
-		//	count = mip_texture.tex->Release();
-		//	count = texture_view->Release();
-
-		//	ID3D11Resource* resourceu = ECSEngine::GetResource(this_resource);
-		//	count = resourceu->AddRef();
-		//	//count = resourceu->Release();
-
-		//	count = this_resource->AddRef();
-		//	count = this_resource->Release();
-
-		//	return this_resource;
-		//}
 
 		if ((unsigned char)descriptor->compression != (unsigned char)-1) {
 			Texture2D texture(resource);
@@ -821,8 +819,8 @@ namespace ECSEngine {
 	Stream<Mesh>* ResourceManager::LoadMeshes(
 		const wchar_t* filename,
 		size_t load_flags,
-		bool* reference_counted_is_loaded,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index,
+		bool* reference_counted_is_loaded
 	) {
 		void* meshes = AddResource<reference_counted>(
 			this,
@@ -832,19 +830,22 @@ namespace ECSEngine {
 			load_flags,
 			reference_counted_is_loaded,
 			[=](void* parameter) {
-				return LoadMeshImplementation(filename, load_flags, resource_folder_path_index);
+				return LoadMeshImplementation(filename, load_flags, thread_index);
 			});
 
 		return (Stream<Mesh>*)meshes;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Stream<Mesh>*, ResourceManager::LoadMeshes, const wchar_t*, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<Mesh>*, ResourceManager::LoadMeshes, const wchar_t*, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Loads all meshes from a gltf file
-	Stream<Mesh>* ResourceManager::LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index) {
-		GLTFData data = LoadGLTFFile(filename);
+	Stream<Mesh>* ResourceManager::LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index) {
+		ECS_TEMP_STRING(_path, 512);
+		Stream<wchar_t> path = GetThreadPath(_path.buffer, filename, thread_index);
+
+		GLTFData data = LoadGLTFFile(path);
 		// The load failed
 		if (data.data == nullptr) {
 			return nullptr;
@@ -889,7 +890,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	CoallescedMesh* ResourceManager::LoadCoallescedMesh(const wchar_t* filename, size_t load_flags, bool* reference_counted_is_loaded, unsigned int resource_folder_path_index)
+	CoallescedMesh* ResourceManager::LoadCoallescedMesh(const wchar_t* filename, size_t load_flags, unsigned int thread_index, bool* reference_counted_is_loaded)
 	{
 		void* meshes = AddResource<reference_counted>(
 			this,
@@ -899,19 +900,22 @@ namespace ECSEngine {
 			load_flags,
 			reference_counted_is_loaded,
 			[=](void* parameter) {
-				return LoadCoallescedMeshImplementation(filename, load_flags, resource_folder_path_index);
+				return LoadCoallescedMeshImplementation(filename, load_flags, thread_index);
 			});
 
 		return (CoallescedMesh*)meshes;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(CoallescedMesh*, ResourceManager::LoadCoallescedMesh, const wchar_t*, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(CoallescedMesh*, ResourceManager::LoadCoallescedMesh, const wchar_t*, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index)
+	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index)
 	{
-		GLTFData data = LoadGLTFFile(filename);
+		ECS_TEMP_STRING(_path, 512);
+		Stream<wchar_t> path = GetThreadPath(_path.buffer, filename, thread_index);
+
+		GLTFData data = LoadGLTFFile(path);
 		// The load failed
 		if (data.data == nullptr) {
 			return nullptr;
@@ -965,8 +969,8 @@ namespace ECSEngine {
 	Stream<PBRMaterial>* ResourceManager::LoadMaterials(
 		const wchar_t* filename,
 		size_t load_flags,
-		bool* reference_counted_is_loaded,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index,
+		bool* reference_counted_is_loaded
 	) {
 		void* materials = AddResource<reference_counted>(
 			this,
@@ -976,19 +980,22 @@ namespace ECSEngine {
 			load_flags,
 			reference_counted_is_loaded,
 			[=](void* parameter) {
-				return LoadMaterialsImplementation(filename, load_flags, resource_folder_path_index);
+				return LoadMaterialsImplementation(filename, load_flags, thread_index);
 			});
 
 		return (Stream<PBRMaterial>*)materials;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(Stream<PBRMaterial>*, ResourceManager::LoadMaterials, const wchar_t*, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(Stream<PBRMaterial>*, ResourceManager::LoadMaterials, const wchar_t*, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Loads all materials from a gltf file
-	Stream<PBRMaterial>* ResourceManager::LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index) {
-		GLTFData data = LoadGLTFFile(filename);
+	Stream<PBRMaterial>* ResourceManager::LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index) {
+		ECS_TEMP_STRING(_path, 512);
+		Stream<wchar_t> path = GetThreadPath(_path.buffer, filename, thread_index);
+
+		GLTFData data = LoadGLTFFile(path);
 		// The load failed
 		if (data.data == nullptr) {
 			return nullptr;
@@ -1032,8 +1039,8 @@ namespace ECSEngine {
 	PBRMesh* ResourceManager::LoadPBRMesh(
 		const wchar_t* filename,
 		size_t load_flags,
-		bool* reference_counted_is_loaded,
-		unsigned int resource_folder_path_index
+		unsigned int thread_index,
+		bool* reference_counted_is_loaded
 	) {
 		void* mesh = AddResource<reference_counted>(
 			this,
@@ -1043,19 +1050,22 @@ namespace ECSEngine {
 			load_flags,
 			reference_counted_is_loaded,
 			[=](void* parameter) {
-				return LoadPBRMeshImplementation(filename, load_flags, resource_folder_path_index);
+				return LoadPBRMeshImplementation(filename, load_flags, thread_index);
 			});
 
 		return (PBRMesh*)mesh;
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(PBRMesh*, ResourceManager::LoadPBRMesh, const wchar_t*, size_t, bool*, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(PBRMesh*, ResourceManager::LoadPBRMesh, const wchar_t*, size_t, unsigned int, bool*);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
-	PBRMesh* ResourceManager::LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index) {
-		GLTFData data = LoadGLTFFile(filename);
+	PBRMesh* ResourceManager::LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index) {
+		ECS_TEMP_STRING(_path, 512);
+		Stream<wchar_t> path = GetThreadPath(_path.buffer, filename, thread_index);
+
+		GLTFData data = LoadGLTFFile(path);
 		// The load failed
 		if (data.data == nullptr) {
 			return nullptr;

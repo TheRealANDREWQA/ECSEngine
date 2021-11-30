@@ -79,6 +79,10 @@ public:
 		}
 	}
 
+	void* GetOSWindowHandle() override {
+		return hWnd;
+	}
+
 	int Run() override {
 		using namespace ECSEngine;
 		using namespace ECSEngine::containers;
@@ -120,12 +124,18 @@ public:
 
 		GraphicsTexture2DDescriptor viewport_texture_descriptor;
 		viewport_texture_descriptor.size = graphics_descriptor.window_size;
-		viewport_texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		viewport_texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS);
 		viewport_texture_descriptor.mip_levels = 1u;
 		//viewport_texture_descriptor.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 
 		Texture2D viewport_texture = graphics.CreateTexture(&viewport_texture_descriptor);
 		RenderTargetView viewport_render_view = graphics.CreateRenderTargetView(viewport_texture);
+		UAView compute_shader_view = graphics.CreateUAView(viewport_texture);
+
+		UISpriteTexture viewport_sprite_texture;
+
+		//viewport_sprite_texture = graphics.CreateTextureShaderView(viewport_texture, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0, 1);
+		viewport_sprite_texture = graphics.CreateTextureShaderView(viewport_texture, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 1);
 
 		viewport_texture_descriptor.bind_flag = D3D11_BIND_DEPTH_STENCIL;
 		viewport_texture_descriptor.format = DXGI_FORMAT_D32_FLOAT;
@@ -136,7 +146,8 @@ public:
 		SystemManager system_manager = SystemManager(&task_manager, &memory_manager);
 		World editor_world = World(&global_memory_manager, nullptr, &system_manager, nullptr);
 		task_manager.m_world = &editor_world;
-		ResourceManager resource_manager(&memory_manager, &graphics, std::thread::hardware_concurrency(), "Resources\\");
+		ResourceManager ui_resource_manager(&memory_manager, &graphics, std::thread::hardware_concurrency());
+		ResourceManager resource_manager(&memory_manager, &graphics, std::thread::hardware_concurrency());
 
 		task_manager.ChangeDynamicWrapperMode(TaskManagerWrapper::CountTasks);
 
@@ -173,6 +184,7 @@ public:
 		task_manager.CreateThreads(temp_allocators, temp_memory_managers);
 
 		resource_manager.InitializeDefaultTypes();
+		ui_resource_manager.InitializeDefaultTypes();
 
 		ResizableMemoryArena resizable_arena = ResizableMemoryArena(
 			&global_memory_manager, 
@@ -211,7 +223,7 @@ public:
 			&keyboard,
 			&mouse,
 			&graphics,
-			&resource_manager,
+			&ui_resource_manager,
 			&task_manager,
 #if 1
 			FONT_PATH,
@@ -248,11 +260,6 @@ public:
 		project_file.source_dll_name.Initialize(&resizable_arena, 0, 64);
 		project_file.project_name.Initialize(&resizable_arena, 0, 64);
 		project_file.path.Initialize(&resizable_arena, 0, 256);
-
-		UISpriteTexture viewport_sprite_texture;
-	
-		//viewport_sprite_texture = graphics.CreateTextureShaderView(viewport_texture, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0, 1);
-		viewport_sprite_texture = graphics.CreateTextureShaderView(viewport_texture, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 1);
 
 		editor_state.hub_data = &hub_data;
 		editor_state.project_file = &project_file;
@@ -306,7 +313,7 @@ public:
 		IndexBuffer index_buffer;
 
 		ECS_TEMP_ASCII_STRING(ERROR_MESSAGE, 256);
-		GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2material.glb", &ERROR_MESSAGE);
+		GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2tangents_triangulate.glb", &ERROR_MESSAGE);
 		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2_flipped.glb", &ERROR_MESSAGE);
 		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\DebugPrimitives\\Alphabet.glb", &ERROR_MESSAGE);
 		GLTFMesh gltf_meshes[128];
@@ -333,8 +340,6 @@ public:
 
 		PBRMaterial created_material = CreatePBRMaterialFromName(ToStream("brown_planks"), ToStream("brown_planks_03"), ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"), allocator);
 
-		CreateCubeVertexBuffer(&graphics, 0.25f, vertex_buffer, index_buffer);
-
 		ShaderFromSourceOptions compile_options;
 		VertexShader cube_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(StaticMesh)), compile_options);
 		PixelShader pixel_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(StaticMesh)), compile_options);
@@ -342,8 +347,11 @@ public:
 
 		VertexShader forward_lighting_v_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(ForwardLighting)), compile_options);
 		PixelShader forward_lighting_p_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(ForwardLighting)), compile_options);
+		PixelShader forward_lighting_no_normal_p_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(ForwardLightingNoNormal)), compile_options);
 		InputLayout forward_lighting_layout = graphics.ReflectVertexShaderInput(forward_lighting_v_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(ForwardLighting)));
 		
+		PixelShader PBR_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(PBR)));
+
 		VertexShader debug_v_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)), compile_options);
 		InputLayout debug_layout = graphics.ReflectVertexShaderInput(debug_v_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)));
 
@@ -357,13 +365,15 @@ public:
 		ConstantBuffer point_light = Shaders::CreatePointLightBuffer(&graphics);
 		ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(&graphics);
 		ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(&graphics);
+		ConstantBuffer pbr_lights = graphics.CreateConstantBuffer(sizeof(float4) * 8 + sizeof(float4) * 4);
+		ConstantBuffer pbr_values = graphics.CreateConstantBuffer(sizeof(float2));
 
 		float* _specular_factors = (float*)graphics.MapBuffer(specular_factors.buffer);
-		_specular_factors[0] = 100.0f;
+		_specular_factors[0] = 20.0f;
 		_specular_factors[1] = 1.25f;
 		graphics.UnmapBuffer(specular_factors.buffer);
 
-		Shaders::SetHemisphericConstants(hemispheric_ambient_light, &graphics, ColorFloat(0.0f, 0.0f, 0.0f), ColorFloat(0.25f, 0.25f, 0.25f));
+		Shaders::SetHemisphericConstants(hemispheric_ambient_light, &graphics, ColorFloat(0.25f, 0.25f, 0.25f), ColorFloat(0.25f, 0.25f, 0.25f));
 
 		Shaders::SetCapsuleLight(capsule_light, &graphics, float3(0.0f, 0.0f, 20.0f), float3(0.0f, 1.0f, 0.0f), 10.0f, 1.0f, 2.0f, ColorFloat(50.0f, 50.0f, 50.0f));
 
@@ -391,7 +401,12 @@ public:
 		ResourceManagerTextureDesc plank_descriptor;
 		plank_descriptor.context = graphics.m_context.Get();
 		plank_descriptor.usage = D3D11_USAGE_DEFAULT;
-		ResourceView plank_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\Blender\\BlenderTextures\\Trireme\\textures\\brown_planks_03_diff_1k.jpg", plank_descriptor);
+		ResourceView plank_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", plank_descriptor);
+		ResourceView plank_normal_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_nor_dx_1k.jpg", plank_descriptor);
+		ResourceView plank_roughness = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_rough_1k.jpg", plank_descriptor);
+		//ResourceView plank_metallic = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", plank_descriptor);
+		ResourceView plank_ao = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_ao_1k.jpg", plank_descriptor);
+		ECS_ASSERT(plank_texture.view != nullptr && plank_normal_texture.view != nullptr && plank_roughness.view != nullptr && plank_ao.view != nullptr);
 
 		MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, &global_memory_manager);
 		DebugDrawer debug_drawer(&debug_drawer_memory, &graphics, 1);
@@ -400,7 +415,17 @@ public:
 
 		debug_drawer.InitializePrimitiveBuffers(&resource_manager);
 
-		InjectWindowElement inject_elements[2];
+		static bool normal_map = true;
+		static float normal_strength = 1.0f;
+		static float metallic = 0.0f;
+		static float roughness = 1.0f;
+		static float3 pbr_light_pos[4] = { float3(0.0f, 0.0f, 20.0f), float3(-3.0f, 0.0f, 20.0f), float3(3.0f, 0.0f, 20.0f), float3(5.0f, 2.0f, 20.0f) };
+		static ColorFloat pbr_light_color[4] = { ColorFloat(1.0f, 1.0f, 1.0f, 1.0f), ColorFloat(100.0f, 20.0f, 20.0f, 1.0f), ColorFloat(0.2f, 0.9f, 0.1f, 1.0f), ColorFloat(0.3f, 0.2f, 0.9f, 1.0f) };
+		static float pbr_light_range[4] = { 2.0f, 5.0f, 5.0f, 10.0f };
+
+		ConstantBuffer normal_strength_buffer = graphics.CreateConstantBuffer(sizeof(float));
+
+		InjectWindowElement inject_elements[10];
 		InjectWindowSection section[1];
 		section[0].elements = Stream<InjectWindowElement>(inject_elements, std::size(inject_elements));
 		section[0].name = "Directional Light";
@@ -415,9 +440,72 @@ public:
 		inject_elements[1].data = &LIGHT_INTENSITY;
 		inject_elements[1].stream_type = Reflection::ReflectionStreamFieldType::Basic;
 
+		inject_elements[2].name = "Normal map";
+		inject_elements[2].basic_type_string = STRING(bool);
+		inject_elements[2].data = &normal_map;
+
+		inject_elements[3].name = "Normal strength";
+		inject_elements[3].basic_type_string = STRING(float);
+		inject_elements[3].data = &normal_strength;
+
+		inject_elements[4].name = "Metallic";
+		inject_elements[4].basic_type_string = STRING(float);
+		inject_elements[4].data = &metallic;
+
+		inject_elements[5].name = "Roughness";
+		inject_elements[5].basic_type_string = STRING(float);
+		inject_elements[5].data = &roughness;
+
+		inject_elements[6].name = "PBR light positions";
+		inject_elements[6].basic_type_string = STRING(float3);
+		inject_elements[6].data = pbr_light_pos;
+		inject_elements[6].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
+		inject_elements[6].stream_capacity = 4;
+		inject_elements[6].stream_size = 4;
+
+		inject_elements[7].name = "PBR light colors";
+		inject_elements[7].basic_type_string = STRING(ColorFloat);
+		inject_elements[7].data = pbr_light_color;
+		inject_elements[7].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
+		inject_elements[7].stream_capacity = 4;
+		inject_elements[7].stream_size = 4;
+
+		inject_elements[8].name = "PBR light ranges";
+		inject_elements[8].basic_type_string = STRING(float);
+		inject_elements[8].data = pbr_light_range;
+		inject_elements[8].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
+		inject_elements[8].stream_capacity = 4;
+		inject_elements[8].stream_size = 4;
+
+		static bool cube_type = false;
+
+		inject_elements[9].name = "Environment map";
+		inject_elements[9].basic_type_string = STRING(bool);
+		inject_elements[9].data = &cube_type;
+
 		editor_state.inject_data.ui_reflection = editor_state.ui_reflection;
 		editor_state.inject_data.sections = Stream<InjectWindowSection>(section, std::size(section));
 		editor_state.inject_window_name = "Inject Window";
+
+		GraphicsTextureCubeDescriptor cube_descriptor;
+		cube_descriptor.mip_levels = 1;
+		cube_descriptor.size = { 256, 256 };
+		cube_descriptor.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		TextureCube cube = graphics.CreateTexture(&cube_descriptor);
+
+		ResourceManagerTextureDesc texture_desc;
+		ResourceView environment_map = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Winter_Forest\\WinterForest_Ref.hdr", texture_desc);
+		TextureCube converted_cube = ConvertTextureToCube(environment_map, &graphics, DXGI_FORMAT_R16G16B16A16_FLOAT, { 1024, 1024 });
+		ResourceView converted_cube_view = graphics.CreateTextureShaderViewResource(converted_cube);
+
+		VertexBuffer cube_v_buffer;
+		IndexBuffer cube_v_index;
+		CreateCubeVertexBuffer(&graphics, 10.0f, cube_v_buffer, cube_v_index);
+
+		TextureCube diffuse_environment = ConvertEnvironmentMapToDiffuseIBL(converted_cube_view, &graphics, { 64, 64 }, 200);
+		ResourceView diffuse_view = graphics.CreateTextureShaderViewResource(diffuse_environment);
+
+		ConstantBuffer converted_cube_constants = graphics.CreateConstantBuffer(sizeof(Matrix));
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -447,17 +535,42 @@ public:
 				keyboard.UpdateTracker();
 
 				graphics.ClearBackBuffer(0.0f, 0.0f, 0.0f);
-				const float colors[4] = { 0.2f, 0.5f, 0.8f, 1.0f };
+				const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
 				graphics.m_context->ClearDepthStencilView(viewport_depth_view.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 				graphics.m_context->ClearRenderTargetView(viewport_render_view.target, colors);
 
 				graphics.BindRenderTargetView(viewport_render_view, viewport_depth_view);
 
+				Matrix cube_matrix = MatrixTranspose(camera.GetProjectionViewMatrix());
+
+				graphics.DisableDepth();
+				graphics.DisableCulling();
+				graphics.BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE);
+				graphics.BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				graphics.BindVertexBuffer(cube_v_buffer);
+				graphics.BindIndexBuffer(cube_v_index);
+				if (cube_type) {
+					graphics.BindPixelResourceView(diffuse_view);
+				}
+				else {
+					graphics.BindPixelResourceView(converted_cube_view);
+				}
+				UpdateBufferResource(converted_cube_constants.buffer, &cube_matrix, sizeof(Matrix), graphics.GetContext());
+				graphics.BindVertexConstantBuffer(converted_cube_constants);
+				graphics.DrawIndexed(cube_v_index.count);
+				graphics.EnableDepth();
+				graphics.EnableCulling();
+
 				graphics.BindVertexShader(forward_lighting_v_shader);
-				graphics.BindPixelShader(forward_lighting_p_shader);
+				graphics.BindPixelShader(PBR_shader);
 				graphics.BindInputLayout(forward_lighting_layout);
 
 				graphics.BindPixelResourceView(plank_texture);
+				graphics.BindPixelResourceView(plank_normal_texture, 1);
+				//graphics.BindPixelResourceView(plank_metallic, 2);
+				graphics.BindPixelResourceView(plank_roughness, 3);
+				graphics.BindPixelResourceView(plank_ao, 4);
+				graphics.BindPixelResourceView(diffuse_view, 5);
 
 				unsigned int VALUE = 0;
 
@@ -515,32 +628,64 @@ public:
 
 				Shaders::SetCameraPosition(camera_position_buffer, &graphics, camera.translation);
 
-				ConstantBuffer vertex_constant_buffers[2];
+				ConstantBuffer vertex_constant_buffers[1];
 				vertex_constant_buffers[0] = obj_buffer;
-				vertex_constant_buffers[1] = camera_position_buffer;
 				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
 
 				Shaders::SetDirectionalLight(directional_light, &graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
 
 				Shaders::SetPointLight(point_light, &graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
-				ColorFloat spot_light_color = ColorFloat(11.0f, 11.0f, 11.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
+				ColorFloat spot_light_color = ColorFloat(3.0f, 3.0f, 3.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
 				Shaders::SetSpotLight(spot_light, &graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
 
-				ConstantBuffer pixel_constant_buffers[6];
+				float* normal_strength_data = (float*)graphics.MapBuffer(normal_strength_buffer.buffer);
+				*normal_strength_data = normal_strength;
+				graphics.UnmapBuffer(normal_strength_buffer.buffer);
+
+				/*ConstantBuffer pixel_constant_buffers[8];
 				pixel_constant_buffers[0] = hemispheric_ambient_light;
 				pixel_constant_buffers[1] = directional_light;
 				pixel_constant_buffers[2] = specular_factors;
 				pixel_constant_buffers[3] = point_light;
 				pixel_constant_buffers[4] = spot_light;
 				pixel_constant_buffers[5] = capsule_light;
+				pixel_constant_buffers[6] = normal_strength_buffer;
+				pixel_constant_buffers[7] = camera_position_buffer;
 
-				graphics.BindPixelConstantBuffers(Stream<ConstantBuffer>(pixel_constant_buffers, std::size(pixel_constant_buffers)));
+				graphics.BindPixelConstantBuffers(Stream<ConstantBuffer>(pixel_constant_buffers, std::size(pixel_constant_buffers)));*/
+
+				float2* _pbr_values = (float2*)graphics.MapBuffer(pbr_values.buffer);
+				*_pbr_values = { metallic, roughness };
+				graphics.UnmapBuffer(pbr_values.buffer);
+
+				float4* _pbr_lights = (float4*)graphics.MapBuffer(pbr_lights.buffer);
+				for (size_t index = 0; index < 4; index++) {
+					_pbr_lights[0] = { pbr_light_pos[index].x, pbr_light_pos[index].y, pbr_light_pos[index].z, 0.0f };
+					_pbr_lights++;
+				}
+				for (size_t index = 0; index < 4; index++) {
+					_pbr_lights[0] = { pbr_light_color[index].red, pbr_light_color[index].green, pbr_light_color[index].blue, pbr_light_color[index].alpha };
+					_pbr_lights++;
+				}
+				for (size_t index = 0; index < 4; index++) {
+					_pbr_lights[0].x = pbr_light_range[index];
+					_pbr_lights++;
+				}
+				graphics.UnmapBuffer(pbr_lights.buffer);
+
+				ConstantBuffer pixel_constant_buffer[4];
+				pixel_constant_buffer[0] = camera_position_buffer;
+				pixel_constant_buffer[1] = pbr_lights;
+				pixel_constant_buffer[2] = pbr_values;
+				pixel_constant_buffer[3] = directional_light;
+
+				graphics.BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
 
 				float ____value = ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y * new_width / new_height;
 				camera.SetPerspectiveProjectionFOV(60.0f, ____value, 0.05f, 1000.0f);
 
-				Matrix world_matrices[10];
-				for (size_t subindex = 0; subindex < 10; subindex++) {
+				Matrix world_matrices[1];
+				for (size_t subindex = 0; subindex < 1; subindex++) {
 					void* obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
 					float* reinter = (float*)obj_ptr;
 					DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
@@ -564,8 +709,8 @@ public:
 
 					ECS_MESH_INDEX mapping[3];
 					mapping[0] = ECS_MESH_POSITION;
-					mapping[1] = ECS_MESH_UV;
-					mapping[2] = ECS_MESH_NORMAL;
+					mapping[1] = ECS_MESH_NORMAL;
+					mapping[2] = ECS_MESH_UV;
 
 					//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME]);
 					/*for (size_t index = 53; index < 55; index++) {
@@ -578,7 +723,7 @@ public:
 						graphics.DrawIndexed(meshes[index].index_buffer.count);
 					}*/
 
-					graphics.BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, 3));
+					graphics.BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
 					graphics.DrawIndexed(normal_merged_mesh.index_buffer.count);
 				}
 				//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL]);
@@ -586,46 +731,46 @@ public:
 				auto previos_render_state = debug_drawer.GetPreviousRenderState();
 				debug_drawer.UpdateCameraMatrix(camera.GetProjectionViewMatrix());
 
-				debug_drawer.DrawNormals(GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_POSITION), GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_NORMAL), 0.05f, Color(200, 50, 40), { world_matrices, std::size(world_matrices) });
-
-				debug_drawer.AddLine({ 0.0f, 0.0f, 10.0f }, { 0.0f, 5.0f, 10.0f }, EDITOR_GREEN_COLOR);
-				debug_drawer.AddRectangle({ 0.0f, 0.0f, 20.0f }, { 2.5f, 5.0f, 20.0f }, Color(200, 200, 200));
-				debug_drawer.AddAABB({ 0.0f, 0.0f, 15.0f }, { 1.0f, 1.0f, 1.0f }, Color(120, 20, 10));
-				//debug_drawer.AddArrow({ 0.0f, 0.0f, 12.0f }, { cos(timer.GetDuration_ms() * 0.005f) * 2.0f, 0.0f, 12.0f + sin(timer.GetDuration_ms() * 0.005f) * 2.0f }, 0.5f, EDITOR_GREEN_COLOR);
-				//debug_drawer.AddArrowRotation({ -2.0f, 0.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 4.0f, 0.5f, EDITOR_GREEN_COLOR);
-				debug_drawer.AddAxes({ 0.0f, 0.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.1f, Color(180, 20, 30), Color(30, 150, 30), Color(20, 40, 160));
-				debug_drawer.AddAxes({ 0.0f, -2.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.2f, Color(180, 20, 30), Color(30, 150, 30), Color(20, 40, 160));
-				debug_drawer.AddCross({ 0.0f, 3.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.5f, EDITOR_GREEN_COLOR);
-				debug_drawer.AddOOBB({ 0.0f, -2.0f, 12.0f }, { 30.0f, 0.0f, 0.0f }, { 5.0f, 0.2f, 1.0f }, EDITOR_GREEN_COLOR);
-				debug_drawer.AddPoint({ -2.0f, 0.0f, 12.0f }, Color(30, 190, 40));
-				debug_drawer.AddSphere({ 0.0f, 0.0f, 5.0f }, 2.5f, EDITOR_GREEN_COLOR);
-				debug_drawer.AddTriangle({ 1.0f, 1.0f, 1.0f }, { 2.0f, 2.0f, 2.0f }, { -1.0f, 3.0f, 3.0f }, EDITOR_GREEN_COLOR);
-				debug_drawer.AddCircle({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 5.0f, EDITOR_GREEN_COLOR);
-
-				debug_drawer.AddString({ -0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 1.0f, ToStream("#pragma once\n"
-"#include \"ECSEngineMultithreading.h\"\n"
-"#include \"ECSEngineModule.h\"\n\n"
-				"constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {\n\tL\".dll\",\n\tL\".pdb\",\n\tL\".lib\",\n\tL\".exp\"\n};\n\n"
-				"namespace ECSEngine {\n\tstruct World;\n}\n\n"
-				"constexpr const char* MODULE_CONFIGURATION_DEBUG = \"Debug\";\n"
-				"constexpr const char* MODULE_CONFIGURATION_RELEASE = \"Release\";\n"
-				"constexpr const char* MODULE_CONFIGURATION_DISTRIBUTION = \"Distribution\";\n\n"
-				"constexpr const char* MODULE_CONFIGURATIONS[] = {\n\tMODULE_CONFIGURATION_DEBUG,\n\tMODULE_CONFIGURATION_RELEASE,\n\tMODULE_CONFIGURATION_DISTRIBUTION};\n\n"
-				"constexpr const wchar_t* MODULE_CONFIGURATION_DEBUG_WIDE = L\"Debug\";\n"
-				"constexpr const wchar_t* MODULE_CONFIGURATION_RELEASE_WIDE = L\"Release\";\n"
-				"constexpr const wchar_t* MODULE_CONFIGURATION_DISTRIBUTION_WIDE = L\"Distribution\";\n\n"
-				"constexpr const wchar_t* MODULE_CONFIGURATIONS_WIDE[] = {\n\tMODULE_CONFIGURATION_DEBUG_WIDE,\n\tMODULE_CONFIGURATION_RELEASE_WIDE,\n\tMODULE_CONFIGURATION_DISTRIBUTION_WIDE\n};\n\n"
-				"enum class EditorModuleConfiguration : unsigned char {\n\tDebug,\n\tRelease,\n\tDistribution,\n\tCount\n};\n\n"
-				"enum class EditorModuleLoadStatus : unsigned char {\n\tFailed,\n\tOutOfDate,\n\tGood\n};\n\n"
-				"struct EditorModule {"
-					"\n\tECSEngine::containers::Stream<wchar_t> solution_path;"
-					"\n\tECSEngine::containers::Stream<wchar_t> library_name;"
-					"\n\tECSEngine::Module ecs_module;"
-					"\n\tEditorModuleConfiguration configuration;"
-					"\n\tEditorModuleLoadStatus load_status;"
-					"\n\tsize_t solution_last_write_time;"
-					"\n\tsize_t library_last_write_time;\n};"), Color(200, 200, 200));
-				debug_drawer.DrawAll(1.0f);
+//				debug_drawer.DrawNormals(GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_POSITION), GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_NORMAL), 0.05f, Color(200, 50, 40), { world_matrices, std::size(world_matrices) });
+//
+//				debug_drawer.AddLine({ 0.0f, 0.0f, 10.0f }, { 0.0f, 5.0f, 10.0f }, EDITOR_GREEN_COLOR);
+//				debug_drawer.AddRectangle({ 0.0f, 0.0f, 20.0f }, { 2.5f, 5.0f, 20.0f }, Color(200, 200, 200));
+//				debug_drawer.AddAABB({ 0.0f, 0.0f, 15.0f }, { 1.0f, 1.0f, 1.0f }, Color(120, 20, 10));
+//				//debug_drawer.AddArrow({ 0.0f, 0.0f, 12.0f }, { cos(timer.GetDuration_ms() * 0.005f) * 2.0f, 0.0f, 12.0f + sin(timer.GetDuration_ms() * 0.005f) * 2.0f }, 0.5f, EDITOR_GREEN_COLOR);
+//				//debug_drawer.AddArrowRotation({ -2.0f, 0.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 4.0f, 0.5f, EDITOR_GREEN_COLOR);
+//				debug_drawer.AddAxes({ 0.0f, 0.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.1f, Color(180, 20, 30), Color(30, 150, 30), Color(20, 40, 160));
+//				debug_drawer.AddAxes({ 0.0f, -2.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.2f, Color(180, 20, 30), Color(30, 150, 30), Color(20, 40, 160));
+//				debug_drawer.AddCross({ 0.0f, 3.0f, 12.0f }, { 0.0f, 0.0f, 0.0f }, 0.5f, EDITOR_GREEN_COLOR);
+//				debug_drawer.AddOOBB({ 0.0f, -2.0f, 12.0f }, { 30.0f, 0.0f, 0.0f }, { 5.0f, 0.2f, 1.0f }, EDITOR_GREEN_COLOR);
+//				debug_drawer.AddPoint({ -2.0f, 0.0f, 12.0f }, Color(30, 190, 40));
+//				debug_drawer.AddSphere({ 0.0f, 0.0f, 5.0f }, 2.5f, EDITOR_GREEN_COLOR);
+//				debug_drawer.AddTriangle({ 1.0f, 1.0f, 1.0f }, { 2.0f, 2.0f, 2.0f }, { -1.0f, 3.0f, 3.0f }, EDITOR_GREEN_COLOR);
+//				debug_drawer.AddCircle({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 5.0f, EDITOR_GREEN_COLOR);
+//
+//				debug_drawer.AddString({ -0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, 0.25f, ToStream("#pragma once\n"
+//"#include \"ECSEngineMultithreading.h\"\n"
+//"#include \"ECSEngineModule.h\"\n\n"
+//				"constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {\n\tL\".dll\",\n\tL\".pdb\",\n\tL\".lib\",\n\tL\".exp\"\n};\n\n"
+//				"namespace ECSEngine {\n\tstruct World;\n}\n\n"
+//				"constexpr const char* MODULE_CONFIGURATION_DEBUG = \"Debug\";\n"
+//				"constexpr const char* MODULE_CONFIGURATION_RELEASE = \"Release\";\n"
+//				"constexpr const char* MODULE_CONFIGURATION_DISTRIBUTION = \"Distribution\";\n\n"
+//				"constexpr const char* MODULE_CONFIGURATIONS[] = {\n\tMODULE_CONFIGURATION_DEBUG,\n\tMODULE_CONFIGURATION_RELEASE,\n\tMODULE_CONFIGURATION_DISTRIBUTION};\n\n"
+//				"constexpr const wchar_t* MODULE_CONFIGURATION_DEBUG_WIDE = L\"Debug\";\n"
+//				"constexpr const wchar_t* MODULE_CONFIGURATION_RELEASE_WIDE = L\"Release\";\n"
+//				"constexpr const wchar_t* MODULE_CONFIGURATION_DISTRIBUTION_WIDE = L\"Distribution\";\n\n"
+//				"constexpr const wchar_t* MODULE_CONFIGURATIONS_WIDE[] = {\n\tMODULE_CONFIGURATION_DEBUG_WIDE,\n\tMODULE_CONFIGURATION_RELEASE_WIDE,\n\tMODULE_CONFIGURATION_DISTRIBUTION_WIDE\n};\n\n"
+//				"enum class EditorModuleConfiguration : unsigned char {\n\tDebug,\n\tRelease,\n\tDistribution,\n\tCount\n};\n\n"
+//				"enum class EditorModuleLoadStatus : unsigned char {\n\tFailed,\n\tOutOfDate,\n\tGood\n};\n\n"
+//				"struct EditorModule {"
+//					"\n\tECSEngine::containers::Stream<wchar_t> solution_path;"
+//					"\n\tECSEngine::containers::Stream<wchar_t> library_name;"
+//					"\n\tECSEngine::Module ecs_module;"
+//					"\n\tEditorModuleConfiguration configuration;"
+//					"\n\tEditorModuleLoadStatus load_status;"
+//					"\n\tsize_t solution_last_write_time;"
+//					"\n\tsize_t library_last_write_time;\n};"), Color(200, 200, 200));
+//				debug_drawer.DrawAll(1.0f);
 				debug_drawer.RestorePreviousRenderState(previos_render_state);
 
 				graphics.BindRenderTargetViewFromInitialViews();

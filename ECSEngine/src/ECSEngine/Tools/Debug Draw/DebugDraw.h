@@ -313,6 +313,26 @@ namespace ECSEngine {
 			DebugDrawCallOptions options = {}
 		);
 
+		// Draws the tangents for an object
+		void DrawTangents(
+			VertexBuffer model_position,
+			VertexBuffer model_tangents,
+			float size,
+			ColorFloat color,
+			Matrix world_matrix,
+			DebugDrawCallOptions options = {}
+		);
+
+		// Draws the tangents for multiple objects of the same type
+		void DrawTangents(
+			VertexBuffer model_position,
+			VertexBuffer model_tangents,
+			float size,
+			ColorFloat color,
+			containers::Stream<Matrix> world_matrices,
+			DebugDrawCallOptions options = {}
+		);
+
 #pragma endregion
 
 #pragma region Draw Deck elements

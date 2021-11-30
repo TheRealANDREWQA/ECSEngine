@@ -1,3 +1,7 @@
+#ifndef __LIGHTING_UTILITIES__
+#define __LIGHTING_UTILITIES__
+
+#include "Utilities.hlsli"
 // Useful constant buffers and structures
 
 /*
@@ -100,18 +104,7 @@ cbuffer CapsuleLightBuffer
 
 */
 
-float3 GetClosestPointToSegment(float3 original_point, float3 segment_point, float3 segment_normalized_direction, float segment_length)
-{
-    // Calculate the closest point from the line segment to the point
-    float3 point_to_segment = original_point - segment_point;
-    
-    // The percentage of the line segment size
-    float line_segment_size = dot(point_to_segment, segment_normalized_direction) / segment_length;
-    
-    // Saturate the segment size and multiply again with the light direction length
-    return segment_point + segment_normalized_direction * (saturate(line_segment_size) * segment_length);
-}
-
+// Hemispherical ambient lighting
 float3 CalculateAmbient(float3 normal, float3 color, float3 ambient_down_color, float3 ambient_up_color)
 {
     // Convert the normal from [-1, 1] to [0, 1]
@@ -292,3 +285,5 @@ float3 CalculateCapsuleLight(
         specular_intensity
     );
 }
+
+#endif

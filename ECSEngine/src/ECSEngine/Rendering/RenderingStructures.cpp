@@ -130,6 +130,21 @@ namespace ECSEngine {
 		tex = com_tex.Detach();
 	}
 
+
+	TextureCube::TextureCube() : tex(nullptr) {}
+
+	TextureCube::TextureCube(ID3D11Resource* _resource) {
+		Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
+		ptr.Attach(_resource);
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
+		HRESULT result = ptr.As(&com_tex);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture3D failed!", true);
+		tex = com_tex.Detach();
+	}
+
+	TextureCube::TextureCube(ID3D11Texture2D* _tex) : tex(_tex) {}
+
 	Translation::Translation() : x(0.0f), y(0.0f), z(0.0f) {}
 
 	Translation::Translation(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}

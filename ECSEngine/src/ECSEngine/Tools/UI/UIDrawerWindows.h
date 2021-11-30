@@ -374,6 +374,10 @@ namespace ECSEngine {
 			const char* name;
 			const char* basic_type_string;
 			Reflection::ReflectionStreamFieldType stream_type = Reflection::ReflectionStreamFieldType::Basic;
+			// It is used to express the capacity of the stream for stream types other than capacity stream
+			unsigned int stream_capacity = 0;
+			// It is used to express the initial capacity of non capacity streams
+			unsigned int stream_size = 0;
 		};
 
 		struct InjectWindowSection {

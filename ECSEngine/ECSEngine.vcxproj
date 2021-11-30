@@ -111,7 +111,7 @@
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
-      <ShaderModel>4.0</ShaderModel>
+      <ShaderModel>5.0</ShaderModel>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -152,7 +152,7 @@
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
-      <ShaderModel>4.0</ShaderModel>
+      <ShaderModel>5.0</ShaderModel>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
@@ -190,7 +190,7 @@
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
-      <ShaderModel>4.0</ShaderModel>
+      <ShaderModel>5.0</ShaderModel>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -368,7 +368,28 @@
     <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\SRGBToLinear.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">5.0</ShaderModel>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ColorMap.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ConvoluteDiffuseEnvironment.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
@@ -388,6 +409,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\EquirectangleToCube.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLighting.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
@@ -395,6 +421,16 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLightingNoNormal.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\PBR.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\SimpleShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -412,7 +448,17 @@
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\VisualizeCube.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ColorMap.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ConvoluteDiffuseEnvironment.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
@@ -428,6 +474,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugTransform.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\EquirectangleToCube.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
@@ -504,6 +555,11 @@
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\VisualizeCube.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />
@@ -525,7 +581,9 @@
   <ItemGroup>
     <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\UIViewportTransform.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\Utilities.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

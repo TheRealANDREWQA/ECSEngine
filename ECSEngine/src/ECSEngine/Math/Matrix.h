@@ -669,8 +669,6 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixLookTo(Vector4 origin, Vector4 direction, Vector4 up) {
-		ECS_ASSERT(origin != ZeroVector4());
-		ECS_ASSERT(up != ZeroVector4());
 		ECS_ASSERT(!IsInfinite(direction));
 		ECS_ASSERT(!IsInfinite(up));
 

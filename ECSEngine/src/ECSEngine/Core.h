@@ -19,6 +19,11 @@ constexpr size_t ECS_KB = 1 << 10;
 constexpr size_t ECS_MB = ECS_KB * ECS_KB;
 constexpr size_t ECS_GB = ECS_MB * ECS_KB;
 
+#define ECS_OS_PATH_SEPARATOR L'\\'
+#define ECS_OS_PATH_SEPARATOR_ASCII '\\'
+#define ECS_OS_PATH_SEPARATOR_REL L'/'
+#define ECS_OS_PATH_SEPARATOR_ASCII_REL '/'
+
 namespace ECSEngine {
 
 	static inline float DegToRad(float angle) {

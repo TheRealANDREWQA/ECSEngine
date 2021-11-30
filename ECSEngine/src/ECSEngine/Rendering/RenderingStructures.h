@@ -161,8 +161,6 @@ namespace ECSEngine {
 			return buffer;
 		}
 
-		//void Release();
-
 		unsigned int stride;
 		unsigned int size;
 		ID3D11Buffer* buffer;
@@ -184,7 +182,6 @@ namespace ECSEngine {
 		inline ID3D11Buffer* Resource() {
 			return buffer;
 		}
-		//void Release();
 
 		unsigned int count;
 		unsigned int int_size;
@@ -210,7 +207,6 @@ namespace ECSEngine {
 		void ReleaseByteCode() {
 			byte_code->Release();
 		}
-		//void Release();
 
 		containers::Stream<wchar_t> path;
 		ID3DBlob* byte_code;
@@ -229,7 +225,6 @@ namespace ECSEngine {
 			layout->GetDevice(&device);
 			return device;
 		}
-		//void Release();
 
 		ID3D11InputLayout* layout;
 	};
@@ -248,7 +243,6 @@ namespace ECSEngine {
 			shader->GetDevice(&device);
 			return device;
 		}
-		//void Release();
 
 		containers::Stream<wchar_t> path;
 		ID3D11PixelShader* shader;
@@ -350,7 +344,6 @@ namespace ECSEngine {
 		inline ID3D11Buffer* Resource() {
 			return buffer;
 		}
-		//void Release();
 
 		ID3D11Buffer* buffer;
 	};
@@ -359,7 +352,6 @@ namespace ECSEngine {
 	struct ECSENGINE_API ResourceView {
 		ResourceView();
 		ResourceView(ID3D11ShaderResourceView* _view);
-		//PSResourceView(Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> _view);
 
 		ResourceView(const ResourceView& other) = default;
 		ResourceView& operator = (const ResourceView& other) = default;
@@ -369,7 +361,6 @@ namespace ECSEngine {
 			view->GetDevice(&device);
 			return device;
 		}
-		//void Release();
 
 		ID3D11ShaderResourceView* view;
 	};
@@ -378,7 +369,6 @@ namespace ECSEngine {
 	struct ECSENGINE_API SamplerState {
 		SamplerState();
 		SamplerState(ID3D11SamplerState* _sampler);
-		//SamplerState(Microsoft::WRL::ComPtr<ID3D11SamplerState> _sampler);
 
 		SamplerState(const SamplerState& other) = default;
 		SamplerState& operator = (const SamplerState& other) = default;
@@ -388,7 +378,6 @@ namespace ECSEngine {
 			sampler->GetDevice(&device);
 			return device;
 		}
-		//void Release();
 
 		ID3D11SamplerState* sampler;
 	};
@@ -397,7 +386,6 @@ namespace ECSEngine {
 		Texture1D();
 		Texture1D(ID3D11Resource* _resource);
 		Texture1D(ID3D11Texture1D* _tex);
-		//Texture1D(Microsoft::WRL::ComPtr<ID3D11Texture1D> _tex);
 
 		Texture1D(const Texture1D& other) = default;
 		Texture1D& operator = (const Texture1D& other) = default;
@@ -411,7 +399,6 @@ namespace ECSEngine {
 		inline ID3D11Texture1D* Resource() {
 			return tex;
 		}
-		//void Release();
 
 		ID3D11Texture1D* tex;
 	};
@@ -420,7 +407,6 @@ namespace ECSEngine {
 		Texture2D();
 		Texture2D(ID3D11Resource* _resource);
 		Texture2D(ID3D11Texture2D* _tex);
-		//Texture2D(Microsoft::WRL::ComPtr<ID3D11Texture2D> _tex);
 
 		Texture2D(const Texture2D& other) = default;
 		Texture2D& operator = (const Texture2D& other) = default;
@@ -434,7 +420,6 @@ namespace ECSEngine {
 		inline ID3D11Texture2D* Resource() {
 			return tex;
 		}
-		//void Release();
 
 		ID3D11Texture2D* tex;
 	};
@@ -457,9 +442,30 @@ namespace ECSEngine {
 		inline ID3D11Texture3D* Resource() {
 			return tex;
 		}
-		//void Release();
 
 		ID3D11Texture3D* tex;
+	};
+
+	struct ECSENGINE_API TextureCube {
+		TextureCube();
+		TextureCube(ID3D11Resource* _resource);
+		TextureCube(ID3D11Texture2D* _text);
+
+		TextureCube(const TextureCube& other) = default;
+		TextureCube& operator = (const TextureCube& other) = default;
+
+		inline GraphicsDevice* GetDevice() {
+			GraphicsDevice* device;
+			tex->GetDevice(&device);
+			return device;
+		}
+
+		inline ID3D11Texture2D* Resource() {
+			return tex;
+		}
+
+
+		ID3D11Texture2D* tex;
 	};
 
 	struct ECSENGINE_API RenderTargetView {

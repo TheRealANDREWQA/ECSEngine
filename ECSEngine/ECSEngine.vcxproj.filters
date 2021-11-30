@@ -240,6 +240,16 @@
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugStructured.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\DebugNormalSingleDraw.hlsl" />
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\DebugNormalSingleDraw.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ForwardLightingNoNormal.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\PBR.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\SRGBToLinear.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\EquirectangleToCube.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\EquirectangleToCube.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\VisualizeCube.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\VisualizeCube.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\ConvoluteDiffuseEnvironment.hlsl" />
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\ConvoluteDiffuseEnvironment.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="src\TODO.txt" />
@@ -248,5 +258,7 @@
     <None Include="src\ECSEngine\Rendering\Shaders\UIViewportTransform.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\Utilities.hlsli" />
+    <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />
   </ItemGroup>
 </Project>

@@ -1043,8 +1043,8 @@ namespace ECSEngine {
 					}
 				}
 				else {
+					CapacityStream<void>** values = (CapacityStream<void>**)instance->datas[index].struct_data;
 					if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::CapacityStream) {
-						CapacityStream<void>** values = (CapacityStream<void>**)instance->datas[index].struct_data;
 						*values = (CapacityStream<void>*)ptr;
 					}
 					else if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::Pointer) {
@@ -1052,18 +1052,21 @@ namespace ECSEngine {
 						instance->datas[index].stream_data->buffer = (void*)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = 0;
+						*values = instance->datas[index].stream_data;
 					}
 					else if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
 						instance->datas[index].stream_data->buffer = (void*)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = reflect.fields[index].info.basic_type_count;
+						*values = instance->datas[index].stream_data;
 					}
 					else {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
 						instance->datas[index].stream_data->buffer = (void*)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = 0;
+						*values = instance->datas[index].stream_data;
 					}
 				}
 			}
@@ -1107,6 +1110,25 @@ namespace ECSEngine {
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
 				instance->datas[field_index].stream_data->capacity = data[index].capacity;
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceStreamInitialSize(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data)
+		{
+			UIReflectionInstance* instance = GetInstancePtr(instance_name);
+			BindInstanceStreamInitialSize(instance, data);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceStreamInitialSize(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < data.size; index++) {
+				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
+				instance->datas[field_index].stream_data->size = data[index].capacity;
 			}
 		}
 
@@ -1939,7 +1961,8 @@ namespace ECSEngine {
 
 				instance.datas[index].stream_data = nullptr;
 
-				switch (type->fields[index].reflection_index) {
+				if (type->fields[index].stream_type == UIReflectionStreamType::None) {
+					switch (type->fields[index].reflection_index) {
 					case UIReflectionIndex::DoubleInputGroup:
 					case UIReflectionIndex::DoubleSliderGroup:
 					case UIReflectionIndex::FloatInputGroup:
@@ -1951,6 +1974,7 @@ namespace ECSEngine {
 						data->values = (void**)allocator->Allocate(sizeof(void*) * data->count);
 					}
 					break;
+					}
 				}
 			}
 
