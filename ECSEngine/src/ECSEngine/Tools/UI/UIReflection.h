@@ -501,6 +501,9 @@ namespace ECSEngine {
 			void BindInstanceStreamCapacity(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			void BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
+			void BindInstanceStreamInitialSize(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
+			void BindInstanceStreamInitialSize(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
+
 			// It will fill in the count for each field
 			void CopyInstanceStreams(const char* instance_name, Stream<UIReflectionStreamCopy> data);
 			// It will fill in the count for each field

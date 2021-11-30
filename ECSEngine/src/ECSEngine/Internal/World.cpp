@@ -49,7 +49,7 @@ namespace ECSEngine {
 		}
 
 		// resource manager
-		resource_manager = new ResourceManager(temp_internal_memory, temp_graphics, descriptor.thread_count, "Resources\\");
+		resource_manager = new ResourceManager(temp_internal_memory, temp_graphics, descriptor.thread_count);
 
 		// task manager
 		task_manager = new TaskManager(descriptor.thread_count, internal_memory, descriptor.task_manager_max_dynamic_tasks);

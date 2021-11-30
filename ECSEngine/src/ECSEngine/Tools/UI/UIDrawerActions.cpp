@@ -100,9 +100,11 @@ namespace ECSEngine {
 			float initial_value = slider->slider_position;
 			if (mouse_tracker->LeftButton() == MBPRESSED) {
 				slider->interpolate_value = true;
+				SetCapture((HWND)system->m_application->GetOSWindowHandle());
 			}
 			else if (mouse_tracker->LeftButton() == MBRELEASED) {
 				slider->interpolate_value = false;
+				ReleaseCapture();
 			}
 
 			float2 previous_mouse = system->m_previous_mouse_position;

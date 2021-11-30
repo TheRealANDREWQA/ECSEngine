@@ -14,11 +14,6 @@
 #include "../Rendering/Compression/TextureCompressionTypes.h"
 #include "../Internal/Multithreading/TaskManager.h"
 
-constexpr size_t ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS = 128;
-constexpr size_t ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT = 256;
-constexpr size_t ECS_RESOURCE_MANAGER_TEMPORARY_ELEMENTS = 8;
-constexpr size_t ECS_RESOURCE_MANAGER_MAX_FOLDER_COUNT = 6;
-
 constexpr size_t ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT = (size_t)1 << 16;
 
 namespace ECSEngine {
@@ -62,19 +57,17 @@ namespace ECSEngine {
 			const char* name;
 			ResourceManagerTable table;
 		};
-		
-		struct ResourceFolder {
-			CapacityStream<char> characters;
-			wchar_t* wide_characters;
-			Stack<unsigned int> folder_offsets;
+
+		struct ThreadPath {
+			CapacityStream<wchar_t> characters;
+			CapacityStream<unsigned int> offsets;
 		};
 
 	//public:
 		ResourceManager(
 			ResourceManagerAllocator* memory,
 			Graphics* graphics,
-			unsigned int thread_count,
-			const char* resource_folder_path
+			unsigned int thread_count
 		);
 
 		// Each thread has its own resource path
@@ -83,8 +76,8 @@ namespace ECSEngine {
 		// Each thread has its own resource path
 		void AddResourcePath(const wchar_t* subpath, unsigned int thread_index = 0);
 
-		// Create a new resource type
-		void AddResourceType(const char* type_name, unsigned int resource_count = ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT);
+		// Create a new resource type - must be power of two size
+		void AddResourceType(const char* type_name, unsigned int resource_count);
 
 		void* Allocate(size_t size);
 
@@ -110,6 +103,15 @@ namespace ECSEngine {
 		// It will trigger an assert if the resource was not found
 		void* GetResource(ResourceIdentifier identifier, ResourceType type);
 
+		// Returns the amount of characters written
+		size_t GetThreadPath(wchar_t* characters, unsigned int thread_index = 0) const;
+
+		// Returns the complete path by concatenating the thread path and the given path
+		Stream<wchar_t> GetThreadPath(wchar_t* characters, const wchar_t* current_path, unsigned int thread_index = 0) const;
+
+		// Returns the complete path by concatenating the thread path and the given path
+		Stream<wchar_t> GetThreadPath(wchar_t* characters, const char* current_path, unsigned int thread_index = 0) const;
+
 		// It will create all resource types with default resource count
 		void InitializeDefaultTypes();
 
@@ -121,8 +123,8 @@ namespace ECSEngine {
 			const char* filename, 
 			size_t& size, 
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		// resource folder path different from -1 will use the folder in the specified thread position
@@ -131,15 +133,15 @@ namespace ECSEngine {
 			const wchar_t* filename,
 			size_t& size,
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		char* LoadTextFileImplementation(std::ifstream& input, size_t* size);
 
-		void OpenFile(const char* filename, std::ifstream& input, unsigned int resource_folder_path_index = -1);
+		void OpenFile(const char* filename, std::ifstream& input, unsigned int thread_index = 0);
 
-		void OpenFile(const wchar_t* filename, std::ifstream& input, unsigned int resource_folder_path_index = -1);
+		void OpenFile(const wchar_t* filename, std::ifstream& input, unsigned int thread_index = 0);
 
 		// In order to generate mip-maps, the context must be supplied
 		template<bool reference_counted = false>
@@ -147,15 +149,15 @@ namespace ECSEngine {
 			const wchar_t* filename,
 			ResourceManagerTextureDesc& descriptor,
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		// In order to generate mip-maps, the context must be supplied
 		ResourceView LoadTextureImplementation(
 			const wchar_t* filename, 
-			ResourceManagerTextureDesc* descriptor, 
-			unsigned int resource_folder_path_index = -1
+			ResourceManagerTextureDesc* descriptor,
+			unsigned int thread_index = 0
 		);
 
 		// Loads all meshes from a gltf file
@@ -163,52 +165,54 @@ namespace ECSEngine {
 		Stream<Mesh>* LoadMeshes(
 			const wchar_t* filename,
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		// Loads all meshes from a gltf file
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+		Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index = 0);
 
 		// Loads all meshes from a gltf file and creates a coallesced mesh
 		template<bool reference_counted = false>
 		CoallescedMesh* LoadCoallescedMesh(
 			const wchar_t* filename,
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		// Loads all meshes from a gltf file and creates a coallesced mesh
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		CoallescedMesh* LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+		CoallescedMesh* LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index = 0);
 
 		// Loads all materials from a gltf file
 		template<bool reference_counted = false>
-		containers::Stream<PBRMaterial>* LoadMaterials(
+		Stream<PBRMaterial>* LoadMaterials(
 			const wchar_t* filename,
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		// Loads all materials from a gltf file
-		containers::Stream<PBRMaterial>* LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+		Stream<PBRMaterial>* LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index = 0);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 		template<bool reference_counted = false>
 		PBRMesh* LoadPBRMesh(
 			const wchar_t* filename,
 			size_t load_flags = 1,
-			bool* reference_counted_is_loaded = nullptr,
-			unsigned int resource_folder_path_index = -1
+			unsigned int thread_index = 0,
+			bool* reference_counted_is_loaded = nullptr
 		);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		PBRMesh* LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int resource_folder_path_index = -1);
+		PBRMesh* LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags, unsigned int thread_index = 0);
 
+		// ---------------------------------------------------------------------------------------------------------------------------
+		
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed than reassigned
 		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource);
 
@@ -274,7 +278,7 @@ namespace ECSEngine {
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
 		ResizableStream<InternalResourceType, ResourceManagerAllocator> m_resource_types;
-		CapacityStream<ResourceFolder> m_resource_folder_path;
+		CapacityStream<ThreadPath> m_folder_path;
 	};
 
 #pragma region Free functions

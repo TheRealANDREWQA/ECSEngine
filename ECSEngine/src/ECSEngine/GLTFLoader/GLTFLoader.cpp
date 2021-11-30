@@ -50,6 +50,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
+		// Consider ignoring the tangents
 		bool MeshFromAttribute(
 			GLTFMesh& mesh,
 			const cgltf_attribute* attribute,
@@ -205,7 +206,7 @@ namespace ECSEngine {
 			}
 			case cgltf_attribute_type_tangent:
 			{
-				mesh.tangents = Stream<float3>(values.buffer, accessor_count);
+				mesh.tangents = Stream<float4>(values.buffer, accessor_count);
 				float matrix[16];
 				cgltf_node_transform_world(nodes + current_nodex_index, matrix);
 
@@ -224,7 +225,7 @@ namespace ECSEngine {
 						}
 
 						// Transform the tangent
-						//tangent = MatrixVectorMultiply(tangent, ecs_matrix);
+						tangent = MatrixVectorMultiply(tangent, ecs_matrix);
 
 						tangent = Normalize3(tangent);
 						tangent.StorePartialConstant<3>(mesh.tangents.buffer + index);
@@ -443,6 +444,7 @@ namespace ECSEngine {
 				// Invert the tangents Z axis
 				for (size_t subindex = 0; subindex < mesh.tangents.size; subindex++) {
 					mesh.tangents[subindex].z = -mesh.tangents[subindex].z;
+					mesh.tangents[subindex].w = -mesh.tangents[subindex].w;
 				}
 
 				// The winding order of the vertices must be changed
@@ -834,7 +836,7 @@ namespace ECSEngine {
 		// Tangents
 		if (gltf_mesh.tangents.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_TANGENT;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.tangents.size, gltf_mesh.tangents.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float4), gltf_mesh.tangents.size, gltf_mesh.tangents.buffer);
 		}
 
 		// Bone weights

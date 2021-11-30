@@ -2787,10 +2787,27 @@ namespace ECSEngine {
 						}
 						
 						type.fields[0].info.pointer_offset = 0;
+						// Single indirection for pointers
+						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
+							type.fields[0].info.basic_type_count = 1;
+						}
 
 						UIReflectionType* ui_type = data->ui_reflection->CreateType(type);
 						UIReflectionInstance* instance = data->ui_reflection->CreateInstance(type.name, ui_type);
 						data->ui_reflection->BindInstancePtrs(instance, data->sections[index].elements[subindex].data, type);
+
+						// Bind the stream capacity - if different from capacity stream
+						if (data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::CapacityStream && 
+							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Basic &&
+							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
+							UIReflectionBindStreamCapacity capacity;
+							capacity.capacity = data->sections[index].elements[subindex].stream_capacity;
+							capacity.field_name = data->sections[index].elements[subindex].name;
+							data->ui_reflection->BindInstanceStreamCapacity(instance, { &capacity, 1 });
+
+							capacity.capacity = data->sections[index].elements[subindex].stream_size;
+							data->ui_reflection->BindInstanceStreamInitialSize(instance, { &capacity, 1 });
+						}
 					}
 				}
 			}

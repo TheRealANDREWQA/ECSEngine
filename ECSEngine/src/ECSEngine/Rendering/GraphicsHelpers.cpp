@@ -64,6 +64,20 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	ID3D11Resource* GetResource(TextureCube texture)
+	{
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
+		com_tex.Attach(texture.tex);
+		HRESULT result = com_tex.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting TextureCube to resource failed!", true);
+
+		return _resource.Detach();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	ID3D11Resource* GetResource(RenderTargetView target)
 	{
 		ID3D11Resource* resource;
@@ -202,6 +216,48 @@ namespace ECSEngine {
 
 		// Release the resource
 		unsigned int resource_count = resource->Release();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void ReleaseRenderView(RenderTargetView view)
+	{
+		ID3D11Resource* resource = GetResource(view);
+		// Release the view
+		unsigned int view_count = view.target->Release();
+
+		// Release the resource
+		unsigned int resource_count = resource->Release();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer)
+	{
+		float negative_span = -positive_span;
+		float3 vertex_position[] = {
+			{negative_span, negative_span, negative_span},
+			{positive_span, negative_span, negative_span},
+			{negative_span, positive_span, negative_span},
+			{positive_span, positive_span, negative_span},
+			{negative_span, negative_span, positive_span},
+			{positive_span, negative_span, positive_span},
+			{negative_span, positive_span, positive_span},
+			{positive_span, positive_span, positive_span}
+		};
+
+		vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(vertex_position), vertex_position);
+
+		unsigned int indices[] = {
+			0, 2, 1,    2, 3, 1,
+			1, 3, 5,    3, 7, 5,
+			2, 6, 3,    3, 6, 7,
+			4, 5, 7,    4, 7, 6,
+			0, 4, 2,    2, 4, 6,
+			0, 1, 4,    1, 5, 4
+		};
+
+		index_buffer = graphics->CreateIndexBuffer(Stream<unsigned int>(indices, std::size(indices)));
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -874,6 +930,213 @@ namespace ECSEngine {
 		mesh.index_buffer.buffer->Release();
 
 		mesh.index_buffer = new_indices;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	TextureCube ConvertTexturesToCube(
+		Texture2D x_positive,
+		Texture2D x_negative, 
+		Texture2D y_positive,
+		Texture2D y_negative,  
+		Texture2D z_positive,
+		Texture2D z_negative,
+		GraphicsContext* context
+	)
+	{
+		GraphicsDevice* device = x_negative.GetDevice();
+		if (context == nullptr) {
+			device->GetImmediateContext(&context);
+		}
+
+		D3D11_TEXTURE2D_DESC texture_descriptor;
+		x_negative.tex->GetDesc(&texture_descriptor);
+
+		texture_descriptor.ArraySize = 6;
+		texture_descriptor.Usage = D3D11_USAGE_DEFAULT;
+		texture_descriptor.CPUAccessFlags = 0;
+		texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+		ID3D11Texture2D* texture = nullptr;
+		HRESULT result = device->CreateTexture2D(&texture_descriptor, nullptr, &texture);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting textures to cube textures failed.", true);
+		TextureCube cube_texture(texture);
+
+		// For every mip, copy the mip into the corresponding array resource
+		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
+			CopyGraphicsResource(cube_texture, x_negative, ECS_TEXTURE_CUBE_X_NEG, context, index);
+			CopyGraphicsResource(cube_texture, x_positive, ECS_TEXTURE_CUBE_X_POS, context, index);
+			CopyGraphicsResource(cube_texture, y_negative, ECS_TEXTURE_CUBE_Y_NEG, context, index);
+			CopyGraphicsResource(cube_texture, y_positive, ECS_TEXTURE_CUBE_Y_POS, context, index);
+			CopyGraphicsResource(cube_texture, z_negative, ECS_TEXTURE_CUBE_Z_NEG, context, index);
+			CopyGraphicsResource(cube_texture, z_positive, ECS_TEXTURE_CUBE_Z_POS, context, index);
+		}
+
+		return cube_texture;
+	}
+
+	TextureCube ConvertTexturesToCube(const Texture2D* textures, GraphicsContext* context)
+	{
+		return ConvertTexturesToCube(textures[0], textures[1], textures[2], textures[3], textures[4], textures[5], context);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	Matrix ProjectionMatrixTextureCube() {
+		return MatrixPerspectiveFOV(90.0f, 1.0f, 0.01f, 10.0f);
+	}
+
+	// For some reason, the matrices for up must be inverted - positive direction takes negative up
+	// and negative direction takes positive up
+	// These matrices are used in constructing the matrix for texture cube conversion and 
+	// diffuse environment convolution
+	Matrix VIEW_MATRICES_TEXTURE_CUBE[6] = {
+		MatrixLookAt(ZeroVector4(), VectorGlobals::RIGHT_4, VectorGlobals::UP_4),       // X positive
+		MatrixLookAt(ZeroVector4(), -VectorGlobals::RIGHT_4, VectorGlobals::UP_4),      // X negative
+		MatrixLookAt(ZeroVector4(), -VectorGlobals::UP_4, VectorGlobals::FORWARD_4),    // Y positive
+		MatrixLookAt(ZeroVector4(), VectorGlobals::UP_4, -VectorGlobals::FORWARD_4),    // Y negative
+		MatrixLookAt(ZeroVector4(), VectorGlobals::FORWARD_4, VectorGlobals::UP_4),     // Z positive
+		MatrixLookAt(ZeroVector4(), -VectorGlobals::FORWARD_4, VectorGlobals::UP_4)     // Z negative
+	};
+
+	TextureCube ConvertTextureToCube(ResourceView texture_view, Graphics* graphics, DXGI_FORMAT cube_format, uint2 face_size)
+	{
+		TextureCube cube;
+		
+		// Create the 6 faces as render targets
+		GraphicsTexture2DDescriptor texture_descriptor;
+		texture_descriptor.format = cube_format;
+		texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		texture_descriptor.size = face_size;
+		texture_descriptor.mip_levels = 1;
+
+		Texture2D cube_textures[6];
+		RenderTargetView render_views[6];
+		for (size_t index = 0; index < 6; index++) {
+			cube_textures[index] = graphics->CreateTexture(&texture_descriptor);
+			render_views[index] = graphics->CreateRenderTargetView(cube_textures[index]);
+		}
+
+		// Generate a unit cube vertex buffer
+		VertexBuffer vertex_buffer;
+		IndexBuffer index_buffer;
+		CreateCubeVertexBuffer(graphics, 0.5f, vertex_buffer, index_buffer);
+
+		// Bind a nullptr depth stencil view - remove depth
+		RenderTargetView current_render_view = graphics->GetBoundRenderTarget();
+		DepthStencilView current_depth_view = graphics->GetBoundDepthStencil();
+		GraphicsViewport current_viewport = graphics->GetBoundViewport();
+
+		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_CREATE_TEXTURE_CUBE);
+		graphics->BindVertexBuffer(vertex_buffer);
+		graphics->BindIndexBuffer(index_buffer);
+		graphics->BindTopology(Topology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST));
+		graphics->BindPixelResourceView(texture_view);
+
+		Matrix projection_matrix = ProjectionMatrixTextureCube();
+		
+
+		ConstantBuffer vertex_constants = graphics->CreateConstantBuffer(sizeof(Matrix));
+		graphics->BindVertexConstantBuffer(vertex_constants);
+		GraphicsViewport cube_viewport = { 0.0f, 0.0f, face_size.x, face_size.y, 0.0f, 1.0f };
+		graphics->BindViewport(cube_viewport);
+		graphics->DisableDepth();
+		graphics->DisableCulling();
+
+		for (size_t index = 0; index < 6; index++) {
+			Matrix current_matrix = MatrixTranspose(VIEW_MATRICES_TEXTURE_CUBE[index] * projection_matrix);
+			UpdateBufferResource(vertex_constants.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
+			graphics->BindRenderTargetView(render_views[index], nullptr);
+
+			graphics->DrawIndexed(index_buffer.count);
+		}
+		graphics->EnableDepth();
+		graphics->EnableCulling();
+
+		graphics->BindRenderTargetView(current_render_view, current_depth_view);
+		graphics->BindViewport(current_viewport);
+
+		cube = ConvertTexturesToCube(cube_textures, graphics->GetContext());
+
+		vertex_buffer.buffer->Release();
+		index_buffer.buffer->Release();
+		vertex_constants.buffer->Release();
+		for (size_t index = 0; index < 6; index++) {
+			ReleaseRenderView(render_views[index]);
+		}
+
+		return cube;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	TextureCube ConvertEnvironmentMapToDiffuseIBL(ResourceView environment, Graphics* graphics, uint2 dimensions, unsigned int sample_count)
+	{
+		TextureCube cube;
+
+		VertexBuffer cube_v_buffer;
+		IndexBuffer cube_i_buffer;
+		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer);
+
+		// The constant buffer for the projection view matrix
+		ConstantBuffer vc_buffer = graphics->CreateConstantBuffer(sizeof(Matrix));
+		ConstantBuffer pc_buffer = graphics->CreateConstantBuffer(sizeof(float));
+		// The buffer expects a float with the delta step - convert to a delta step
+		float step = PI * 2 / sample_count;
+		UpdateBufferResource(pc_buffer.buffer, &step, sizeof(float), graphics->GetContext());
+
+		// The format of the cube texture is RGBA16F
+		GraphicsTextureCubeDescriptor cube_descriptor;
+		cube_descriptor.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		cube_descriptor.size = dimensions;
+		cube_descriptor.mip_levels = 1;
+		cube_descriptor.bind_flag = (D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		cube = graphics->CreateTexture(&cube_descriptor);
+
+		RenderTargetView previous_target = graphics->GetBoundRenderTarget();
+		DepthStencilView previous_depth = graphics->GetBoundDepthStencil();
+		GraphicsViewport previous_viewport = graphics->GetBoundViewport();
+
+		RenderTargetView target_views[6];
+		for (size_t index = 0; index < 6; index++) {
+			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index);
+		}
+
+		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT);
+		graphics->BindVertexBuffer(cube_v_buffer);
+		graphics->BindIndexBuffer(cube_i_buffer);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		graphics->DisableCulling();
+		graphics->DisableDepth();
+		// Bind a viewport equal to the dimensions
+		graphics->BindViewport(0.0f, 0.0f, dimensions.x, dimensions.y, 0.0f, 1.0f);
+		graphics->BindVertexConstantBuffer(vc_buffer);
+		graphics->BindPixelResourceView(environment);
+		graphics->BindPixelConstantBuffer(pc_buffer);
+
+		Matrix projection_matrix = ProjectionMatrixTextureCube();
+		for (size_t index = 0; index < 6; index++) {
+			Matrix current_matrix = MatrixTranspose(VIEW_MATRICES_TEXTURE_CUBE[index] * projection_matrix);
+			UpdateBufferResource(vc_buffer.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
+			graphics->BindRenderTargetView(target_views[index], nullptr);
+
+			graphics->DrawIndexed(cube_i_buffer.count);
+		}
+
+		graphics->EnableCulling();
+		graphics->EnableDepth();
+		graphics->BindRenderTargetView(previous_target, previous_depth);
+		graphics->BindViewport(previous_viewport);
+
+		cube_v_buffer.buffer->Release();
+		cube_i_buffer.buffer->Release();
+		vc_buffer.buffer->Release();
+		pc_buffer.buffer->Release();
+
+		for (size_t index = 0; index < 6; index++) {
+			target_views[index].target->Release();
+		}
+
+		return cube;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

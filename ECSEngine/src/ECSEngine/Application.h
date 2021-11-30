@@ -26,13 +26,20 @@ namespace ECSEngine {
 	public:
 		Application();
 		virtual ~Application();
+		
 		virtual int Run();
+		
 		virtual void ChangeCursor(CursorType type);
+		
 		virtual CursorType GetCurrentCursor() const;
+		
 		// null terminated
 		virtual void WriteTextToClipboard(const char* text);
+		
 		// returns the count of characters written
 		virtual unsigned int CopyTextFromClipboard(char* text, unsigned int max_size);
+
+		virtual void* GetOSWindowHandle();
 	};
 
 	// To be defined in Client

@@ -3,6 +3,8 @@
 #include "../Utilities/FunctionInterfaces.h"
 #include "GraphicsHelpers.h"
 #include "../Utilities/Function.h"
+#include "../Utilities/File.h"
+#include "../Utilities/Path.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "D3DCompiler.lib")
@@ -27,18 +29,30 @@ namespace ECSEngine {
 	};
 
 	constexpr const char* SHADER_COMPILE_TARGET[] = {
-		"vs_4_0",
 		"vs_5_0",
-		"ps_4_0",
+		"vs_5_1",
 		"ps_5_0",
-		"ds_4_0",
+		"ps_5_1",
 		"ds_5_0",
-		"hs_4_0",
+		"ds_5_1",
 		"hs_5_0",
-		"gs_4_0",
+		"hs_5_1",
 		"gs_5_0",
-		"cs_4_0",
-		"cs_5_0"
+		"gs_5_1",
+		"cs_5_0",
+		"cs_5_1"
+	};
+
+	constexpr const wchar_t* SHADER_HELPERS_VERTEX[] = {
+		ECS_VERTEX_SHADER_SOURCE(EquirectangleToCube),
+		ECS_VERTEX_SHADER_SOURCE(VisualizeCube),
+		ECS_VERTEX_SHADER_SOURCE(ConvoluteDiffuseEnvironment)
+	};
+
+	constexpr const wchar_t* SHADER_HELPERS_PIXEL[] = {
+		ECS_PIXEL_SHADER_SOURCE(EquirectangleToCube),
+		ECS_PIXEL_SHADER_SOURCE(VisualizeCube),
+		ECS_PIXEL_SHADER_SOURCE(ConvoluteDiffuseEnvironment)
 	};
 
 #define CreateShaderFromBlob(shader_type, blob) HRESULT create_result; \
@@ -87,7 +101,7 @@ namespace ECSEngine {
 	memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size); \
 	macros[options.macros.size] = { NULL, NULL }; \
 \
-	const char* target = SHADER_COMPILE_TARGET[shader_order + options.target]; \
+	const char* target = SHADER_COMPILE_TARGET[shader_order * 2 + options.target]; \
 \
 	unsigned int compile_flags = 0; \
 	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); \
@@ -97,14 +111,87 @@ namespace ECSEngine {
 	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); \
 \
 	ID3DBlob* blob; \
-	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob); \
+	ShaderInclude include(this); \
+	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, &include, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob); \
+	const char* error_message; \
+	if (error_message_blob != nullptr) { \
+		error_message = (const char*)error_message_blob->GetBufferPointer(); \
+	} \
 	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling " TEXT(STRING(shader_type)) L" shader failed.", true); \
 	CreateShaderFromBlob(shader_type, blob); 
 
 
+
+	class ShaderInclude : public ID3DInclude {
+	public:
+		ShaderInclude(Graphics* _graphics) : graphics(_graphics) {}
+
+		HRESULT Open(D3D_INCLUDE_TYPE include_type, LPCSTR filename, LPCVOID parent_data, LPCVOID* data_pointer, UINT* byte_pointer) override
+		{
+			if (include_type != D3D_INCLUDE_LOCAL && include_type != D3D_INCLUDE_SYSTEM) {
+				return E_FAIL;
+			}
+
+			ECS_TEMP_STRING(current_path, 512);
+			ECS_TEMP_STRING(include_filename, 128);
+			Stream<char> include_filename_ascii = function::PathFilename(ToStream(filename), ECS_OS_PATH_SEPARATOR_ASCII_REL);
+			function::ConvertASCIIToWide(include_filename, include_filename_ascii);
+
+			struct SearchData {
+				LPCVOID* data_pointer;
+				UINT* byte_pointer;
+				Graphics* graphics;
+				Stream<wchar_t> include_filename;
+			};
+
+			SearchData search_data = { data_pointer, byte_pointer, graphics, include_filename };
+
+			// Search every directory for that file
+			auto search_file = [](const std::filesystem::path& path, void* _data) {
+				SearchData* data = (SearchData*)_data;
+
+				Stream<wchar_t> current_path = ToStream(path.c_str());
+				Stream<wchar_t> current_filename = function::PathFilename(current_path);
+
+				if (function::CompareStrings(current_filename, data->include_filename)) {
+					std::ifstream stream(std::wstring(current_path.buffer, current_path.buffer + current_path.size));
+					if (stream.good()) {
+						size_t file_size = function::GetFileByteSize(stream);
+						void* allocation = data->graphics->GetAllocatorBufferTs(file_size);
+						stream.read((char*)allocation, file_size);
+						size_t read_count = stream.gcount();
+
+						*data->data_pointer = allocation;
+						*data->byte_pointer = read_count;
+						return false;
+					}
+				}
+				return true;
+			};
+
+			const wchar_t* extension[1] = { L".hlsli" };
+			*byte_pointer = 0;
+			ForEachFileInDirectoryRecursiveWithExtension(graphics->m_shader_directory, { &extension, std::size(extension) }, & search_data, search_file);
+			if (*byte_pointer > 0) {
+				return S_OK;
+			}
+	
+			return E_FAIL;
+		}
+
+		HRESULT Close(LPCVOID data) override
+		{
+			graphics->FreeAllocatedBufferTs(data);
+			return S_OK;
+		}
+
+		Graphics* graphics;
+	};
+
+
 	Graphics::Graphics(HWND hWnd, const GraphicsDescriptor* descriptor) 
 		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
-		m_bound_targets(m_bound_render_targets, 1)
+		m_bound_targets(m_bound_render_targets, 1), m_shader_directory(nullptr, 0)
 	{
 		constexpr float resize_factor = 1.0f;
 		m_window_size.x = descriptor->window_size.x * resize_factor;
@@ -229,6 +316,23 @@ namespace ECSEngine {
 		m_device->CreateRasterizerState(&rasterizer_state, &state);
 
 		m_context->RSSetState(state);
+
+		SetShaderDirectory(ToStream(ECS_SHADER_DIRECTORY));
+
+		m_shader_helpers.Initialize(m_allocator, ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
+		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
+			m_shader_helpers[index].vertex = CreateVertexShaderFromSource(ToStream(SHADER_HELPERS_VERTEX[index]));
+			m_shader_helpers[index].pixel = CreatePixelShaderFromSource(ToStream(SHADER_HELPERS_PIXEL[index]));
+			m_shader_helpers[index].input_layout = ReflectVertexShaderInput(m_shader_helpers[index].vertex);
+		}
+		D3D11_SAMPLER_DESC sampler_descriptor = {};
+		sampler_descriptor.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_descriptor.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_descriptor.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_descriptor.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
+			m_shader_helpers[index].pixel_sampler = CreateSamplerState(sampler_descriptor);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -457,16 +561,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view)
-	{
-		ECSEngine::BindRenderTargetView(render_view, depth_stencil_view, m_context.Get());
-		m_bound_targets[0] = render_view;
-		m_bound_targets.size = 1;
-		m_current_depth_stencil = depth_stencil_view;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
 	void Graphics::BindPixelUAView(UAView view, UINT start_slot)
 	{
 		m_context->OMSetRenderTargetsAndUnorderedAccessViews(
@@ -526,9 +620,26 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view)
+	{
+		ECSEngine::BindRenderTargetView(render_view, depth_stencil_view, m_context.Get());
+		m_bound_targets[0] = render_view;
+		m_bound_targets.size = 1;
+		m_current_depth_stencil = depth_stencil_view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::BindViewport(float top_left_x, float top_left_y, float width, float height, float min_depth, float max_depth)
 	{
 		ECSEngine::BindViewport(top_left_x, top_left_y, width, height, min_depth, max_depth, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindViewport(GraphicsViewport viewport)
+	{
+		BindViewport(viewport.top_left_x, viewport.top_left_y, viewport.width, viewport.height, viewport.min_depth, viewport.max_depth);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -561,6 +672,16 @@ namespace ECSEngine {
 
 	void Graphics::BindMaterial(const Material& material) {
 		ECSEngine::BindMaterial(material, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::BindHelperShader(GraphicsShaderHelpers helper)
+	{
+		BindVertexShader(m_shader_helpers[helper].vertex);
+		BindPixelShader(m_shader_helpers[helper].pixel);
+		BindInputLayout(m_shader_helpers[helper].input_layout);
+		BindSamplerState(m_shader_helpers[helper].pixel_sampler);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1190,7 +1311,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	SamplerState Graphics::CreateSamplerState(D3D11_SAMPLER_DESC descriptor)
+	SamplerState Graphics::CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor)
 	{
 		SamplerState state;
 		HRESULT result = m_device->CreateSamplerState(&descriptor, &state.sampler);
@@ -1364,6 +1485,40 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
+
+	TextureCube Graphics::CreateTexture(const GraphicsTextureCubeDescriptor* ecs_descriptor) {
+		TextureCube resource;
+		D3D11_TEXTURE2D_DESC descriptor = { 0 };
+		descriptor.Format = ecs_descriptor->format;
+		descriptor.Width = ecs_descriptor->size.x;
+		descriptor.Height = ecs_descriptor->size.y;
+		descriptor.MipLevels = ecs_descriptor->mip_levels;
+		descriptor.ArraySize = 6;
+		descriptor.BindFlags = ecs_descriptor->bind_flag;
+		descriptor.CPUAccessFlags = ecs_descriptor->cpu_flag;
+		descriptor.MiscFlags = ecs_descriptor->misc_flag | D3D11_RESOURCE_MISC_TEXTURECUBE;
+		descriptor.SampleDesc.Count = 1;
+		descriptor.SampleDesc.Quality = 0;
+		descriptor.Usage = ecs_descriptor->usage;
+
+		HRESULT result;
+
+		if (ecs_descriptor->initial_data == nullptr) {
+			result = m_device->CreateTexture2D(&descriptor, nullptr, &resource.tex);
+		}
+		else {
+			D3D11_SUBRESOURCE_DATA subresource_data = {};
+			subresource_data.pSysMem = ecs_descriptor->initial_data;
+			subresource_data.SysMemPitch = ecs_descriptor->memory_pitch;
+			subresource_data.SysMemSlicePitch = ecs_descriptor->memory_slice_pitch;
+			result = m_device->CreateTexture2D(&descriptor, &subresource_data, &resource.tex);
+		}
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture Cube failed!", true);
+		return resource;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
 	
 	ResourceView Graphics::CreateTextureShaderView(
 		Texture1D texture, 
@@ -1485,6 +1640,44 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	ResourceView Graphics::CreateTextureShaderView(TextureCube texture, DXGI_FORMAT format, unsigned int most_detailed_mip, unsigned int mip_levels)
+	{
+		ResourceView view;
+
+		if (format == DXGI_FORMAT_FORCE_UINT) {
+			D3D11_TEXTURE2D_DESC descriptor;
+			texture.tex->GetDesc(&descriptor);
+			format = descriptor.Format;
+		}
+
+		ResourceView component;
+		D3D11_SHADER_RESOURCE_VIEW_DESC descriptor = { };
+		descriptor.Format = format;
+		descriptor.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+		descriptor.TextureCube.MipLevels = mip_levels;
+		descriptor.TextureCube.MostDetailedMip = most_detailed_mip;
+
+		HRESULT result;
+		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &component.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture Cube Shader View.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureShaderViewResource(TextureCube texture)
+	{
+		ResourceView view;
+
+		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture Cube Shader Entire View failed.", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	ResourceView Graphics::CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format)
 	{
 		ResourceView view;
@@ -1520,6 +1713,29 @@ namespace ECSEngine {
 
 		RenderTargetView view;
 		result = m_device->CreateRenderTargetView(texture.tex, nullptr, &view.target);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+
+		return view;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	RenderTargetView Graphics::CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level)
+	{
+		HRESULT result;
+
+		D3D11_TEXTURE2D_DESC descriptor;
+		cube.tex->GetDesc(&descriptor);
+
+		RenderTargetView view;
+		D3D11_RENDER_TARGET_VIEW_DESC view_descriptor;
+		view_descriptor.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+		view_descriptor.Format = descriptor.Format;
+		view_descriptor.Texture2DArray.ArraySize = 1;
+		view_descriptor.Texture2DArray.FirstArraySlice = face;
+		view_descriptor.Texture2DArray.MipSlice = mip_level
+			;
+		result = m_device->CreateRenderTargetView(cube.tex, &view_descriptor, &view.target);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
 
 		return view;
@@ -1669,6 +1885,8 @@ namespace ECSEngine {
 		return view;
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	Material Graphics::CreateMaterial(VertexShader v_shader, PixelShader p_shader, DomainShader d_shader, HullShader h_shader, GeometryShader g_shader)
 	{
 		constexpr size_t REFLECTED_BUFFER_COUNT = 32;
@@ -1804,6 +2022,20 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::Dispatch(uint3 dispatch_size)
+	{
+		ECSEngine::Dispatch(dispatch_size, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::DispatchIndirect(IndirectBuffer buffer)
+	{
+		ECSEngine::DispatchIndirect(buffer, m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::Draw(unsigned int vertex_count, unsigned int vertex_offset)
 	{
 		ECSEngine::Draw(vertex_count, m_context.Get(), vertex_offset);
@@ -1889,6 +2121,32 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::EnableCulling(bool wireframe)
+	{
+		EnableCulling(m_context.Get(), wireframe);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::EnableCulling(GraphicsContext* context, bool wireframe)
+	{
+		D3D11_RASTERIZER_DESC rasterizer_desc = {};
+		rasterizer_desc.AntialiasedLineEnable = TRUE;
+		rasterizer_desc.CullMode = D3D11_CULL_BACK;
+		rasterizer_desc.FillMode = wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
+		rasterizer_desc.DepthClipEnable = TRUE;
+		rasterizer_desc.FrontCounterClockwise = FALSE;
+
+		ID3D11RasterizerState* state;
+		HRESULT result = m_device->CreateRasterizerState(&rasterizer_desc, &state);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failed to disable culling.", true);
+		context->RSSetState(state);
+		state->Release();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	ID3D11CommandList* Graphics::FinishCommandList(bool restore_state) {
 		return ECSEngine::FinishCommandList(m_context.Get(), restore_state);
 	}
@@ -1942,6 +2200,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void Graphics::GenerateMips(ResourceView view)
+	{
+		m_context->GenerateMips(view.view);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void Graphics::GetWindowSize(unsigned int& width, unsigned int& height) const {
 		width = m_window_size.x;
 		height = m_window_size.y;
@@ -1969,11 +2234,22 @@ namespace ECSEngine {
 		m_allocator->Deallocate(buffer);
 	}
 
+	void Graphics::FreeAllocatedBufferTs(const void* buffer)
+	{
+		m_allocator->Deallocate_ts(buffer);
+	}
+
+
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void* Graphics::GetAllocatorBuffer(size_t size)
 	{
 		return m_allocator->Allocate(size);
+	}
+
+	void* Graphics::GetAllocatorBufferTs(size_t size)
+	{
+		return m_allocator->Allocate_ts(size);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1995,6 +2271,32 @@ namespace ECSEngine {
 	GraphicsPipelineRenderState Graphics::GetRenderState() const
 	{
 		return ECSEngine::GetRenderState(m_context.Get());
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	RenderTargetView Graphics::GetBoundRenderTarget() const
+	{
+		ECS_ASSERT(m_bound_targets.size > 0);
+		return m_bound_targets[0];
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DepthStencilView Graphics::GetBoundDepthStencil() const
+	{
+		return m_current_depth_stencil;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	GraphicsViewport Graphics::GetBoundViewport() const
+	{
+		D3D11_VIEWPORT viewport;
+		unsigned int viewport_count = 1;
+		m_context->RSGetViewports(&viewport_count, &viewport);
+
+		return { viewport.TopLeftX, viewport.TopLeftY, viewport.Width, viewport.Height, viewport.MinDepth, viewport.MaxDepth };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2071,6 +2373,16 @@ namespace ECSEngine {
 		m_window_size.x = width;
 		m_window_size.y = height;
 		ResizeSwapChainSize(hWnd, width, height);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::SetShaderDirectory(Stream<wchar_t> shader_directory)
+	{
+		if (m_shader_directory.size > 0) {
+			FreeAllocatedBuffer(m_shader_directory.buffer);
+		}
+		m_shader_directory = function::StringCopy(m_allocator, shader_directory);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2758,6 +3070,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void CopyGraphicsResource(TextureCube destination, Texture2D source, TextureCubeFace face, GraphicsContext* context, unsigned int mip_level)
+	{
+		D3D11_TEXTURE2D_DESC descriptor;
+		destination.tex->GetDesc(&descriptor);
+		// Clamp the width and height to 1
+		descriptor.Width = function::ClampMin<unsigned int>(descriptor.Width >> mip_level, 1);
+		descriptor.Height = function::ClampMin<unsigned int>(descriptor.Height >> mip_level, 1);
+		CopyTextureSubresource(Texture2D(destination.tex), { 0,0 }, mip_level + descriptor.MipLevels * face, source, { 0, 0 }, { descriptor.Width, descriptor.Height }, mip_level, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void CopyTextureSubresource(
 		Texture1D destination,
 		unsigned int destination_offset,
@@ -2772,7 +3096,8 @@ namespace ECSEngine {
 
 		box.left = source_offset;
 		box.right = source_offset + source_size;
-		box.top = box.bottom = box.back = box.front = 0;
+		box.top = box.front = 0;
+		box.back = box.bottom = 1;
 		context->CopySubresourceRegion(destination.tex, destination_subresource_index, destination_offset, 0, 0, source.tex, source_subresource_index, &box);
 	}
 
@@ -2794,7 +3119,8 @@ namespace ECSEngine {
 		box.right = box.left + source_size.x;
 		box.top = source_offset.y;
 		box.bottom = box.top + source_size.y;
-		box.back = box.front = 0;
+		box.front = 0;
+		box.back = 1;
 		context->CopySubresourceRegion(
 			destination.tex, 
 			destination_subresource_index, 
@@ -2837,6 +3163,38 @@ namespace ECSEngine {
 			source_subresource_index,
 			&box
 		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void CopyTextureSubresource(
+		TextureCube texture,
+		uint2 destination_offset,
+		unsigned int mip_level,
+		TextureCubeFace face,
+		Texture2D source,
+		uint2 source_offset,
+		uint2 source_size,
+		unsigned int source_subresource_index,
+		GraphicsContext* context
+	) {
+		D3D11_TEXTURE2D_DESC descriptor;
+		texture.tex->GetDesc(&descriptor);
+		CopyTextureSubresource(Texture2D(texture.tex), destination_offset, mip_level + descriptor.MipLevels * face, source, source_offset, source_size, source_subresource_index, context);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Dispatch(uint3 dispatch_size, GraphicsContext* context)
+	{
+		context->Dispatch(dispatch_size.x, dispatch_size.y, dispatch_size.z);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void DispatchIndirect(IndirectBuffer buffer, GraphicsContext* context)
+	{
+		context->DispatchIndirect(buffer.buffer, 0);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3061,6 +3419,54 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	template<typename Texture>
+	void UpdateTexture(
+		Texture texture,
+		const void* data,
+		size_t data_size,
+		GraphicsContext* context,
+		D3D11_MAP map_type,
+		unsigned int map_flags,
+		unsigned int subresource_index
+	) {
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		result = context->Map(texture.Resource(), subresource_index, map_type, map_flags, &mapped_subresource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating texture failed.", true);
+
+		memcpy(mapped_subresource.pData, data, data_size);
+		context->Unmap(texture.Resource(), subresource_index);
+	}
+
+	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
+	// be unrolled manually
+	ECS_TEMPLATE_FUNCTION(void, UpdateTexture, Texture1D, const void*, size_t, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void, UpdateTexture, Texture2D, const void*, size_t, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void, UpdateTexture, Texture3D, const void*, size_t, GraphicsContext*, D3D11_MAP, unsigned int, unsigned int);
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Texture>
+	void UpdateTextureResource(Texture texture, const void* data, size_t data_size, GraphicsContext* context, unsigned int subresource_index) {
+		HRESULT result;
+
+		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
+		result = context->Map(texture.Resource(), subresource_index, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating texture failed.", true);
+
+		memcpy(mapped_subresource.pData, data, data_size);
+		context->Unmap(texture.Resource(), subresource_index);
+	}
+
+	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
+	// be unrolled manually
+	ECS_TEMPLATE_FUNCTION(void, UpdateTextureResource, Texture1D, const void*, size_t, GraphicsContext*, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void, UpdateTextureResource, Texture2D, const void*, size_t, GraphicsContext*, unsigned int);
+	ECS_TEMPLATE_FUNCTION(void, UpdateTextureResource, Texture3D, const void*, size_t, GraphicsContext*, unsigned int);
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void UpdateBuffer(
 		ID3D11Buffer* buffer,
 		const void* data,
@@ -3081,20 +3487,23 @@ namespace ECSEngine {
 		context->Unmap(buffer, subresource_index);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void UpdateBufferResource(
 		ID3D11Buffer* buffer,
 		const void* data,
 		size_t data_size,
-		GraphicsContext* context
+		GraphicsContext* context,
+		unsigned int subresource_index
 	) {
 		HRESULT result;
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
-		result = context->Map(buffer, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped_subresource);
+		result = context->Map(buffer, subresource_index, D3D11_MAP_WRITE_DISCARD, 0u, &mapped_subresource);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating buffer resource failed.", true);
 
 		memcpy(mapped_subresource.pData, data, data_size);
-		context->Unmap(buffer, 0u);
+		context->Unmap(buffer, subresource_index);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

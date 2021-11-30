@@ -2787,7 +2787,7 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
@@ -2828,7 +2828,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_SLIDER_GROUP_NO_NAME)) {
@@ -2864,7 +2866,7 @@ namespace ECSEngine {
 					TextLabel<LABEL_CONFIGURATION>(config, group_name);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
@@ -2908,7 +2910,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_SLIDER_GROUP_NO_NAME)) {
@@ -4857,7 +4861,7 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
@@ -4900,7 +4904,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
@@ -4939,15 +4945,16 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
-					float lower_bound = -FLT_MAX, upper_bound = FLT_MAX, default_value;
+					float lower_bound = -FLT_MAX, upper_bound = FLT_MAX, default_value = *values[index];
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
+						default_value = default_values[0];
 					}
 					else {
 						if (lower_bounds != nullptr) {
@@ -4987,7 +4994,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
@@ -5019,7 +5028,7 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
@@ -5062,7 +5071,9 @@ namespace ECSEngine {
 					}
 				}
 				
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
@@ -5101,7 +5112,7 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
@@ -5150,7 +5161,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
@@ -5181,7 +5194,7 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
@@ -5226,7 +5239,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
@@ -5265,13 +5280,14 @@ namespace ECSEngine {
 					Indent(-1.0f);
 				}
 
-				PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				bool has_pushed_stack = PushIdentifierStackStringPattern();
 				PushIdentifierStack(group_name);
 
 				for (size_t index = 0; index < count; index++) {
 					HandleTransformFlags<configuration>(config, position, scale);
 					Integer lower_bound, upper_bound, default_value;
 					function::IntegerRange(lower_bound, upper_bound);
+					default_value = *values[index];
 					if constexpr (configuration & UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS) {
 						lower_bound = lower_bounds[0];
 						upper_bound = upper_bounds[0];
@@ -5315,7 +5331,9 @@ namespace ECSEngine {
 					}
 				}
 
-				PopIdentifierStack();
+				if (has_pushed_stack) {
+					PopIdentifierStack();
+				}
 				PopIdentifierStack();
 
 				if constexpr (IsElementNameAfter(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME)) {
@@ -9210,13 +9228,15 @@ namespace ECSEngine {
 				UIDrawerArrayDragFunction drag_function = nullptr
 			) {
 				ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+
+				name = HandleResourceIdentifier(name);
+				ECS_TEMP_ASCII_STRING(data_name, 256);
+				data_name.Copy(ToStream(name));
+				data_name.AddStream(ToStream(" data"));
+				data_name.AddSafe('\0');
+
 				if constexpr (!initializer) {				
 					if constexpr (~configuration & UI_CONFIG_DO_NOT_CACHE) {
-						name = HandleResourceIdentifier(name);
-						ECS_TEMP_ASCII_STRING(data_name, 256);
-						data_name.Copy(ToStream(name));
-						data_name.AddStream(ToStream(" data"));
-						data_name.AddSafe('\0');
 						UIDrawerArrayData* data = (UIDrawerArrayData*)GetResource(data_name.buffer);
 
 						ArrayDrawer<configuration | UI_CONFIG_DO_NOT_VALIDATE_POSITION>(
@@ -9230,10 +9250,14 @@ namespace ECSEngine {
 							position, 
 							scale
 						);
-						HandleDynamicResource<configuration>(name);
+						// Manual increment
+						if constexpr (configuration & UI_CONFIG_DYNAMIC_RESOURCE) {
+							system->IncrementWindowDynamicResource(window_index, name);
+						}
 					}
 					else {
-						bool exists = ExistsResource(name);
+						// Must check for the name manually
+						bool exists = system->ExistsWindowResource(window_index, data_name.buffer);
 						if (!exists) {
 							UIDrawerInitializeArrayElementData initialize_data;
 							initialize_data.config = (UIDrawConfig*)&config;
@@ -9315,8 +9339,14 @@ namespace ECSEngine {
 					temp_name.Copy(ToStream("Element "));
 					size_t base_name_size = temp_name.size;
 
+					// Set the draw mode to indent if it is different
+					UIDrawerMode old_draw_mode = draw_mode;
+					unsigned short old_draw_count = draw_mode_count;
+					unsigned short old_draw_target = draw_mode_target;
+					SetDrawMode(UIDrawerMode::Indent);
+
 					// Push onto the identifier stack the field name
-					PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+					bool has_pushed_stack = PushIdentifierStackStringPattern();
 					PushIdentifierStack(name);
 
 					UIDrawerArrayDragData drag_data;
@@ -9473,7 +9503,7 @@ namespace ECSEngine {
 					}
 
 					if (data->drag_index == -1) {
-						for (; index < elements->size && current_y - region_render_offset.y <= region_limit.y; index++) {
+						for (; index < elements->size && current_y - region_render_offset.y - data->row_y_scale <= region_limit.y; index++) {
 							draw_row(index);
 						}
 					}
@@ -9732,8 +9762,14 @@ namespace ECSEngine {
 #undef BUTTON_CONFIGURATION
 #undef COLOR_BUTTON_CONFIGURATION
 
+					draw_mode = old_draw_mode;
+					draw_mode_count = old_draw_count + 1;
+					draw_mode_target = old_draw_target;
+
 					// Pop the field name identifier
-					PopIdentifierStack();
+					if (has_pushed_stack) {
+						PopIdentifierStack();
+					}
 					PopIdentifierStack();
 				});
 
@@ -10934,19 +10970,10 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ColorFloatInputIntensityInputName(char* intensity_input_name, const char* identifier) {
-				size_t base_intensity_name = strlen("Intensity##");
-				memcpy(intensity_input_name, "Intensity##", base_intensity_name * sizeof(char));
-				size_t identifier_size = strlen(identifier);
-				size_t parsed_identifier_size = ParseStringIdentifier(identifier, identifier_size);
-				memcpy(intensity_input_name + base_intensity_name, identifier, parsed_identifier_size * sizeof(char));
-				if (parsed_identifier_size < identifier_size) {
-					memcpy(intensity_input_name + base_intensity_name + parsed_identifier_size, identifier + parsed_identifier_size + 2, identifier_size - parsed_identifier_size - 2);
-					intensity_input_name[base_intensity_name + identifier_size - 2] = '\0';
-				}
-				else {
-					intensity_input_name[base_intensity_name + identifier_size] = '\0';
-				}
+			void ColorFloatInputIntensityInputName(char* intensity_input_name) {
+				size_t base_intensity_name = strlen("Intensity");
+				memcpy(intensity_input_name, "Intensity", base_intensity_name * sizeof(char));
+				intensity_input_name[base_intensity_name] = '\0';
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -10957,10 +10984,13 @@ namespace ECSEngine {
 
 				// The resource must be taken from the table with manual parsing
 				char resource_name[512];
-				resource_name[0] = '\0';
-				strcpy(resource_name, identifier);
-				strcat(resource_name, " resource");
-				UIDrawerColorFloatInput* data = (UIDrawerColorFloatInput*)GetResource(resource_name);
+				size_t name_size = strlen(identifier);
+				memcpy(resource_name, identifier, sizeof(char) * name_size);
+				size_t resource_name_size = strlen(" resource");
+				memcpy(resource_name + name_size, " resource", sizeof(char) * resource_name_size);
+				name_size += resource_name_size;
+				resource_name[name_size] = '\0';
+				UIDrawerColorFloatInput* data = (UIDrawerColorFloatInput*)system->FindWindowResource(window_index, resource_name, name_size);
 
 				data->color_float = color;
 
@@ -10988,7 +11018,7 @@ namespace ECSEngine {
 
 				// Draw the intensity
 				char intensity_input_name[256];
-				ColorFloatInputIntensityInputName(intensity_input_name, identifier);
+				ColorFloatInputIntensityInputName(intensity_input_name);
 				if constexpr (~configuration & UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE) {
 					FloatInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, intensity_input_name, &data->intensity, 0.0f, 10000.0f, { current_x - region_render_offset.x, position.y }, scale);
 				}
@@ -11033,7 +11063,7 @@ namespace ECSEngine {
 
 				// The intensity will be controlled by number input - the reference must be made through the name
 				char intensity_input_name[256];
-				ColorFloatInputIntensityInputName(intensity_input_name, identifier);
+				ColorFloatInputIntensityInputName(intensity_input_name);
 				// Add the callback
 				UIConfigTextInputCallback callback;
 				callback.handler.action = ColorFloatInputIntensityCallback;
@@ -13472,6 +13502,17 @@ namespace ECSEngine {
 			void PushIdentifierStackRandom(size_t index) {
 				index = GetRandomIntIdentifier(index);
 				PushIdentifierStack(index);
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Returns whether or not it pushed onto the stack
+			bool PushIdentifierStackStringPattern() {
+				if (current_identifier.size < 2 || (current_identifier[0] != ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR && current_identifier[1] != ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR)) {
+					PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+					return true;
+				}
+				return false;
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------

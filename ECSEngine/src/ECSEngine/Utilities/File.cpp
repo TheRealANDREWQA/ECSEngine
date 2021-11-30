@@ -409,7 +409,8 @@ namespace ECSEngine {
 			if (entry.is_regular_file()) {
 				std::filesystem::path _path = entry.path();
 				if (_path.has_extension()) {
-					const wchar_t* extension = _path.extension().c_str();
+					auto std_extension = _path.extension();
+					const wchar_t* extension = std_extension.c_str();
 					Stream<wchar_t> stream_extension = ToStream(extension);
 					if (function::IsStringInStream(stream_extension, stream_extensions) != -1) {
 						if (!functor(_path, data)) {

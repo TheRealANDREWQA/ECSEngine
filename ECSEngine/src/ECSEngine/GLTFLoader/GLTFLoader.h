@@ -28,7 +28,7 @@ namespace ECSEngine {
 		containers::Stream<Color> colors;
 		containers::Stream<float4> skin_weights;
 		containers::Stream<uint4> skin_influences;
-		containers::Stream<float3> tangents;
+		containers::Stream<float4> tangents;
 		containers::Stream<unsigned int> indices;
 	};
 

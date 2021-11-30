@@ -30,4 +30,9 @@ namespace ECSEngine {
 	unsigned int Application::CopyTextFromClipboard(char* text, unsigned int max_size) {
 		return 0;
 	}
+	
+	void* Application::GetOSWindowHandle()
+	{
+		return nullptr;
+	}
 }

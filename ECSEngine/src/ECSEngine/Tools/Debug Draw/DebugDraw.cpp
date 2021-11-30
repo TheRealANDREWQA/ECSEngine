@@ -949,6 +949,134 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void DrawDebugVertexLine(
+		DebugDrawer* drawer,
+		VertexBuffer model_position,
+		VertexBuffer attribute, 
+		unsigned int float_step, 
+		float size, 
+		ColorFloat color,
+		Matrix world_matrix, 
+		DebugDrawCallOptions options
+	) {
+		// Draw them as lines
+
+		// Allocate temporary constant buffer and position buffers
+		ConstantBuffer constant_buffer = drawer->graphics->CreateConstantBuffer(sizeof(InstancedTransformData));
+		VertexBuffer line_position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(float3), attribute.size * 2);
+
+		// Create staging buffers for positions and normals
+		VertexBuffer staging_normals = ToStaging(attribute);
+		VertexBuffer staging_positions = ToStaging(model_position);
+
+		float* attribute_data = (float*)drawer->graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
+		float3* model_positions = (float3*)drawer->graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		void* constant_data = drawer->graphics->MapBuffer(constant_buffer.buffer);
+		float3* line_positions = (float3*)drawer->graphics->MapBuffer(line_position_buffer.buffer);
+
+		SetInstancedColor(constant_data, 0, color);
+		SetInstancedMatrix(constant_data, 0, MatrixTranspose(world_matrix * drawer->camera_matrix));
+
+		// Set the line positions
+		for (size_t index = 0; index < attribute.size; index++) {
+			size_t offset = index * 2;
+			size_t attribute_offset = index * float_step;
+			float3 direction = { attribute_data[attribute_offset], attribute_data[attribute_offset + 1], attribute_data[attribute_offset + 2] };
+			line_positions[offset] = model_positions[index];
+			line_positions[offset + 1] = model_positions[index] + direction * size;
+		}
+
+		// Unmap the constant buffer and the staging ones
+		drawer->graphics->UnmapBuffer(staging_normals.buffer);
+		drawer->graphics->UnmapBuffer(staging_positions.buffer);
+		drawer->graphics->UnmapBuffer(constant_buffer.buffer);
+		drawer->graphics->UnmapBuffer(line_position_buffer.buffer);
+
+		// Special shader
+		unsigned int shader_type = ECS_DEBUG_SHADER_NORMAL_SINGLE_DRAW;
+		drawer->BindShaders(shader_type);
+		HandleOptions(drawer, options);
+		drawer->graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+		// The positions will be taken from the model positions buffer
+		drawer->graphics->BindVertexBuffer(line_position_buffer);
+		drawer->graphics->BindVertexConstantBuffer(constant_buffer);
+
+		drawer->graphics->Draw(attribute.size * 2);
+
+		// Release the temporary buffer and the staging normals
+		staging_normals.buffer->Release();
+		staging_positions.buffer->Release();
+		constant_buffer.buffer->Release();
+		line_position_buffer.buffer->Release();
+	}
+
+	void DrawDebugVertexLine(
+		DebugDrawer* drawer,
+		VertexBuffer model_position,
+		VertexBuffer attribute,
+		unsigned int float_step,
+		float size,
+		ColorFloat color,
+		Stream<Matrix> world_matrices,
+		DebugDrawCallOptions options
+	) {
+		// Draw them as lines
+
+		// Allocate temporary instanced buffer and position buffers
+		VertexBuffer instanced_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedTransformData), world_matrices.size);
+		VertexBuffer line_position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(float3), attribute.size * 2);
+
+		// Create staging buffers for positions and normals
+		VertexBuffer staging_normals = ToStaging(attribute);
+		VertexBuffer staging_positions = ToStaging(model_position);
+
+		float* attribute_data = (float*)drawer->graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
+		float3* model_positions = (float3*)drawer->graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		void* instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
+		float3* line_positions = (float3*)drawer->graphics->MapBuffer(line_position_buffer.buffer);
+
+		// Set the line positions
+		for (size_t index = 0; index < attribute.size; index++) {
+			size_t offset = index * 2;
+			size_t attribute_offset = index * float_step;
+			float3 direction = { attribute_data[attribute_offset], attribute_data[attribute_offset + 1], attribute_data[attribute_offset + 2] };
+			line_positions[offset] = model_positions[index];
+			line_positions[offset + 1] = model_positions[index] + direction * size;
+		}
+
+		for (size_t index = 0; index < world_matrices.size; index++) {
+			SetInstancedColor(instanced_data, index, color);
+			SetInstancedMatrix(instanced_data, index, MatrixTranspose(world_matrices[index] * drawer->camera_matrix));
+		}
+
+		// Unmap the constant buffer and the staging ones
+		drawer->graphics->UnmapBuffer(staging_normals.buffer);
+		drawer->graphics->UnmapBuffer(staging_positions.buffer);
+		drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
+		drawer->graphics->UnmapBuffer(line_position_buffer.buffer);
+
+		// Instanced draw
+		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
+		drawer->BindShaders(shader_type);
+		HandleOptions(drawer, options);
+		drawer->graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+		// The positions will be taken from the model positions buffer
+		VertexBuffer vertex_buffers[2];
+		vertex_buffers[0] = line_position_buffer;
+		vertex_buffers[1] = instanced_buffer;
+		drawer->graphics->BindVertexBuffers({ vertex_buffers, std::size(vertex_buffers) });
+
+		drawer->graphics->DrawInstanced(attribute.size * 2, world_matrices.size);
+
+		// Release the temporary buffer and the staging normals
+		staging_normals.buffer->Release();
+		staging_positions.buffer->Release();
+		instanced_buffer.buffer->Release();
+		line_position_buffer.buffer->Release();
+	}
+
 	void DebugDrawer::DrawNormals(
 		VertexBuffer model_position,
 		VertexBuffer model_normals, 
@@ -958,54 +1086,7 @@ namespace ECSEngine {
 		DebugDrawCallOptions options
 	)
 	{
-		// Draw them as lines
-
-		// Allocate temporary constant buffer and position buffers
-		ConstantBuffer constant_buffer = graphics->CreateConstantBuffer(sizeof(InstancedTransformData));
-		VertexBuffer line_position_buffer = graphics->CreateVertexBuffer(sizeof(float3), model_normals.size * 2);
-
-		// Create staging buffers for positions and normals
-		VertexBuffer staging_normals = ToStaging(model_normals);
-		VertexBuffer staging_positions = ToStaging(model_position);
-
-		float3* normals = (float3*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
-		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
-		void* constant_data = graphics->MapBuffer(constant_buffer.buffer);
-		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
-
-		SetInstancedColor(constant_data, 0, color);
-		SetInstancedMatrix(constant_data, 0, MatrixTranspose(world_matrix * camera_matrix));
-
-		// Set the line positions
-		for (size_t index = 0; index < model_normals.size; index++) {
-			size_t offset = index * 2;
-			line_positions[offset] = model_positions[index];
-			line_positions[offset + 1] = model_positions[index] + normals[index] * size;
-		}
-
-		// Unmap the constant buffer and the staging ones
-		graphics->UnmapBuffer(staging_normals.buffer);
-		graphics->UnmapBuffer(staging_positions.buffer);
-		graphics->UnmapBuffer(constant_buffer.buffer);
-		graphics->UnmapBuffer(line_position_buffer.buffer);
-
-		// Special shader
-		unsigned int shader_type = ECS_DEBUG_SHADER_NORMAL_SINGLE_DRAW;
-		BindShaders(shader_type);
-		HandleOptions(this, options);
-		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-
-		// The positions will be taken from the model positions buffer
-		graphics->BindVertexBuffer(line_position_buffer);
-		graphics->BindVertexConstantBuffer(constant_buffer);
-
-		graphics->Draw(model_normals.size * 2);
-
-		// Release the temporary buffer and the staging normals
-		staging_normals.buffer->Release();
-		staging_positions.buffer->Release();
-		constant_buffer.buffer->Release();
-		line_position_buffer.buffer->Release();
+		DrawDebugVertexLine(this, model_position, model_normals, 3, size, color, world_matrix, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1018,58 +1099,35 @@ namespace ECSEngine {
 		containers::Stream<Matrix> world_matrices,
 		DebugDrawCallOptions options
 	) {
-		// Draw them as lines
+		DrawDebugVertexLine(this, model_position, model_normals, 3, size, color, world_matrices, options);
+	}
 
-		// Allocate temporary instanced buffer and position buffers
-		VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), world_matrices.size);
-		VertexBuffer line_position_buffer = graphics->CreateVertexBuffer(sizeof(float3), model_normals.size * 2);
+	// ----------------------------------------------------------------------------------------------------------------------
 
-		// Create staging buffers for positions and normals
-		VertexBuffer staging_normals = ToStaging(model_normals);
-		VertexBuffer staging_positions = ToStaging(model_position);
+	void DebugDrawer::DrawTangents(
+		VertexBuffer model_position,
+		VertexBuffer model_tangents,
+		float size, 
+		ColorFloat color, 
+		Matrix world_matrix, 
+		DebugDrawCallOptions options
+	)
+	{
+		DrawDebugVertexLine(this, model_position, model_tangents, 4, size, color, world_matrix, options);
+	}
 
-		float3* normals = (float3*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
-		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
-		void* instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
-		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
+	// ----------------------------------------------------------------------------------------------------------------------
 
-		// Set the line positions
-		for (size_t index = 0; index < model_normals.size; index++) {
-			size_t offset = index * 2;
-			line_positions[offset] = model_positions[index];
-			line_positions[offset + 1] = model_positions[index] + normals[index] * size;
-		}
-
-		for (size_t index = 0; index < world_matrices.size; index++) {
-			SetInstancedColor(instanced_data, index, color);
-			SetInstancedMatrix(instanced_data, index, MatrixTranspose(world_matrices[index] * camera_matrix));
-		}
-
-		// Unmap the constant buffer and the staging ones
-		graphics->UnmapBuffer(staging_normals.buffer);
-		graphics->UnmapBuffer(staging_positions.buffer);
-		graphics->UnmapBuffer(instanced_buffer.buffer);
-		graphics->UnmapBuffer(line_position_buffer.buffer);
-
-		// Instanced draw
-		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
-		BindShaders(shader_type);
-		HandleOptions(this, options);
-		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-
-		// The positions will be taken from the model positions buffer
-		VertexBuffer vertex_buffers[2];
-		vertex_buffers[0] = line_position_buffer;
-		vertex_buffers[1] = instanced_buffer;
-		graphics->BindVertexBuffers({vertex_buffers, std::size(vertex_buffers)});
-
-		graphics->DrawInstanced(model_normals.size * 2, world_matrices.size);
-
-		// Release the temporary buffer and the staging normals
-		staging_normals.buffer->Release();
-		staging_positions.buffer->Release();
-		instanced_buffer.buffer->Release();
-		line_position_buffer.buffer->Release();
+	void DebugDrawer::DrawTangents(
+		VertexBuffer model_position,
+		VertexBuffer model_tangents, 
+		float size,
+		ColorFloat color,
+		Stream<Matrix> world_matrices,
+		DebugDrawCallOptions options
+	)
+	{
+		DrawDebugVertexLine(this, model_position, model_tangents, 4, size, color, world_matrices, options);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -2342,8 +2400,19 @@ namespace ECSEngine {
 			current_indices = indices[SOLID_NO_DEPTH];
 			draw_call({ false, true });
 
-			// Update the duration and remove those elements that expired
-			UpdateElementDurations(deck_pointer, time_delta);
+			// Update the duration and remove those elements that expired;
+			// Also deallocate the string buffer
+			for (size_t index = 0; index < deck_pointer->buffers.size; index++) {
+				for (int64_t subindex = 0; subindex < deck_pointer->buffers[index].size; subindex++) {
+					deck_pointer->buffers[index][subindex].options.duration -= time_delta;
+					if (deck_pointer->buffers[index][subindex].options.duration < 0.0f) {
+						allocator->Deallocate(deck_pointer->buffers[index][subindex].text.buffer);
+						deck_pointer->buffers[index].RemoveSwapBack(subindex);
+						subindex--;
+					}
+				}
+			}
+			deck_pointer->RecalculateFreeChunks();
 
 			// Release the temporary vertex buffers and the temporary allocation
 			instanced_buffer.buffer->Release();
