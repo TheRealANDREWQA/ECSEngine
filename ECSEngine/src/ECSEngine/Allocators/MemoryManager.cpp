@@ -31,6 +31,20 @@ namespace ECSEngine {
 		m_allocator_count++;
 	}
 
+	void GlobalMemoryManager::Trim()
+	{
+		for (size_t index = 1; index < m_allocator_count; index++) {
+			if (m_allocators[index].IsEmpty()) {
+				delete[] m_allocators[index].GetAllocatedBuffer();
+				m_allocator_count--;
+				m_allocators[index] = m_allocators[m_allocator_count];
+				m_buffers[index] = m_buffers[m_allocator_count];
+				m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
+				index--;
+			}
+		}
+	}
+
 	void GlobalMemoryManager::ReleaseResources()
 	{
 		delete[] m_allocators;
@@ -54,6 +68,13 @@ namespace ECSEngine {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			if (m_buffers[index] <= block && (void*)((uintptr_t)m_buffers[index] + m_buffers_capacity[index]) > block) {
 				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
+				if (index > 0 && m_allocators[index].IsEmpty()) {
+					delete[] m_allocators[index].GetAllocatedBuffer();
+					m_allocator_count--;
+					m_allocators[index] = m_allocators[m_allocator_count];
+					m_buffers[index] = m_buffers[m_allocator_count];
+					m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
+				}
 				return;
 			}
 		}
@@ -138,6 +159,13 @@ namespace ECSEngine {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			if (m_buffers[index] <= block && (void*)((uintptr_t)m_buffers[index] + m_buffers_capacity[index]) > block) {
 				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
+				if (index > 0 && m_allocators[index].IsEmpty()) {
+					m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
+					m_allocator_count--;
+					m_allocators[index] = m_allocators[m_allocator_count];
+					m_buffers[index] = m_buffers[m_allocator_count];
+					m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
+				}
 				return;
 			}
 		}
@@ -160,6 +188,20 @@ namespace ECSEngine {
 	void MemoryManager::Unlock()
 	{
 		m_spin_lock.unlock();
+	}
+
+	void MemoryManager::Trim()
+	{
+		for (size_t index = 1; index < m_allocator_count; index++) {
+			if (m_allocators[index].IsEmpty()) {
+				m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
+				m_allocator_count--;
+				m_allocators[index] = m_allocators[m_allocator_count];
+				m_buffers[index] = m_buffers[m_allocator_count];
+				m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
+				index--;
+			}
+		}
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

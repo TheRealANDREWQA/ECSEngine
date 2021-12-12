@@ -413,9 +413,9 @@ namespace ECSEngine {
 			Stream<UIReflectionInstanceFieldData> datas;
 		};
 
-		using UIReflectionStringHash = HashFunctionMultiplyString;
-		using UIReflectionTypeTable = containers::IdentifierHashTable<UIReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo>;
-		using UIReflectionInstanceTable = containers::IdentifierHashTable<UIReflectionInstance, ResourceIdentifier, HashFunctionPowerOfTwo>;
+		using UIReflectionHash = HashFunctionMultiplyString;
+		using UIReflectionTypeTable = containers::HashTable<UIReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, UIReflectionHash>;
+		using UIReflectionInstanceTable = containers::HashTable<UIReflectionInstance, ResourceIdentifier, HashFunctionPowerOfTwo, UIReflectionHash>;
 
 		struct ECSENGINE_API UIReflectionBindDefaultValue {
 			const char* field_name;

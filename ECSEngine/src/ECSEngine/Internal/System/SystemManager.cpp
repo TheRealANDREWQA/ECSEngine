@@ -17,9 +17,8 @@ namespace ECSEngine {
 	void SystemManager::ActivateSystem(const char* name, const char* system_to_activate_after) {
 		for (size_t index = 0; index < m_deactivated_systems.size; index++) {
 			if (strcmp(name, m_deactivated_systems[index].buffer) == 0) {
-				unsigned int key = HashFunction::Hash(name);
 				size_t name_length = strlen(name);
-				SystemInternal system_to_activate = m_systems.GetValue<true>(key, ResourceIdentifier(name, name_length));
+				SystemInternal system_to_activate = m_systems.GetValue<true>(ResourceIdentifier(name, name_length));
 				
 				PushActiveSystem(system_to_activate_after, system_to_activate);
 				m_deactivated_systems.RemoveSwapBack(index);
@@ -32,9 +31,8 @@ namespace ECSEngine {
 	void SystemManager::ActivateSystemToLast(const char* name) {
 		for (size_t index = 0; index < m_deactivated_systems.size; index++) {
 			if (strcmp(name, m_deactivated_systems[index].buffer) == 0) {
-				unsigned int key = HashFunction::Hash(name);
 				size_t name_length = strlen(name);
-				SystemInternal system_to_activate = m_systems.GetValue<true>(key, ResourceIdentifier(name, name_length));
+				SystemInternal system_to_activate = m_systems.GetValue<true>(ResourceIdentifier(name, name_length));
 
 				PushActiveSystemToLast(system_to_activate);
 				m_deactivated_systems.RemoveSwapBack(index);
@@ -45,8 +43,6 @@ namespace ECSEngine {
 	}
 
 	void SystemManager::AddSystem(System system, const char* system_to_activate_after) {
-		unsigned int key = HashFunction::Hash(system.name);
-
 		// initializing the thread task stream
 		SystemInternal system_internal;
 		system_internal.data = nullptr;
@@ -63,13 +59,11 @@ namespace ECSEngine {
 		system_internal.name = (const char*)allocation;
 
 		// inserting
-		m_systems.Insert(key, system_internal, ResourceIdentifier(system_internal.name, name_length));
+		m_systems.Insert(system_internal, ResourceIdentifier(system_internal.name, name_length));
 		PushActiveSystem(system_to_activate_after, system_internal);
 	}
 
 	void SystemManager::AddSystemToLast(System system) {
-		unsigned int key = HashFunction::Hash(system.name);
-
 		// initializing the thread task stream
 		SystemInternal system_internal;
 		system_internal.data = nullptr;
@@ -86,13 +80,13 @@ namespace ECSEngine {
 		system_internal.name = (const char*)allocation;
 
 		// inserting
-		m_systems.Insert(key, system_internal, ResourceIdentifier(system_internal.name, name_length));
+		m_systems.Insert(system_internal, ResourceIdentifier(system_internal.name, name_length));
 		PushActiveSystemToLast(system_internal);
 	}
 
 	void SystemManager::BindSystemResource(const char* system_name, void* data, size_t data_size)
 	{
-		SystemInternal* system = m_systems.GetValuePtr<true>(HashFunction::Hash(system_name), ResourceIdentifier(system_name, strlen(system_name)));
+		SystemInternal* system = m_systems.GetValuePtr<true>(ResourceIdentifier(system_name, strlen(system_name)));
 		if (data_size > 0) {
 			if (system->data_size > 0) {
 				m_memory->Deallocate(system->data);
@@ -114,8 +108,7 @@ namespace ECSEngine {
 	void SystemManager::DeactivateSystem(const char* name) {
 		size_t previous_tasks = 0;
 		for (size_t index = 0; index < m_active_systems.size; index++) {
-			SystemInternal system = m_systems.GetValue<true>(HashFunction::Hash(m_active_systems[index].buffer),
-				ResourceIdentifier(m_active_systems[index].buffer, m_active_systems[index].size));
+			SystemInternal system = m_systems.GetValue<true>(ResourceIdentifier(m_active_systems[index].buffer, m_active_systems[index].size));
 			previous_tasks += system.tasks.size;
 			if (strcmp(name, m_active_systems[index].buffer) == 0) {
 				for (size_t subindex = previous_tasks, end = m_task_manager->GetTaskCount(); subindex < end; subindex++) {
@@ -130,7 +123,7 @@ namespace ECSEngine {
 	}
 
 	void* SystemManager::GetSystemResource(const char* system_name) const {
-		return m_systems.GetValue<true>(HashFunction::Hash(system_name), ResourceIdentifier(system_name, strlen(system_name))).data;
+		return m_systems.GetValue<true>(ResourceIdentifier(system_name, strlen(system_name))).data;
 	}
 
 	void SystemManager::PushActiveSystem(const char* system_to_activate_after, SystemInternal system_internal) {
@@ -151,8 +144,7 @@ namespace ECSEngine {
 
 		size_t previous_tasks = 0;
 		for (int64_t index = 0; index < (int64_t)push_down_index - 1; index++) {
-			unsigned int key = HashFunction::Hash(m_active_systems[index].buffer);
-			previous_tasks += m_systems.GetValue<true>(key, ResourceIdentifier(m_active_systems[index].buffer, m_active_systems[index].size)).tasks.size;
+			previous_tasks += m_systems.GetValue<true>(ResourceIdentifier(m_active_systems[index].buffer, m_active_systems[index].size)).tasks.size;
 		}
 		
 		m_task_manager->ReserveTasks(system_internal.tasks.size);

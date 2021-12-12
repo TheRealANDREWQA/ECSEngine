@@ -22,6 +22,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		using UIToolsAllocator = ECSEngine::ResizableMemoryArena;
+		using UIHash = ECSEngine::HashFunctionMultiplyString;
 
 #ifdef ECS_TOOLS_UI_MEMORY_ARENA
 		template<typename T, bool zero_memory = false>
@@ -531,7 +532,7 @@ namespace ECSEngine {
 
 #pragma region Window
 
-		using WindowTable = containers::IdentifierHashTable<void*, ResourceIdentifier, HashFunctionPowerOfTwo>;
+		using WindowTable = containers::HashTable<void*, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
 
 		struct ECSENGINE_API UIDrawerElementDrawData {
 			UIDrawerElementDraw draw;
@@ -554,7 +555,8 @@ namespace ECSEngine {
 			size_t LoadFromFile(const void* buffer, Stream<char>& name_stack);
 
 			float2 zoom;
-			float2 render_region;
+			float2 render_region_offset;
+			float2 drawer_draw_difference;
 			float max_zoom;
 			float min_zoom;
 			UIElementTransform transform;
@@ -565,7 +567,7 @@ namespace ECSEngine {
 			containers::Stream<UISpriteVertex> name_vertex_buffer;
 			UIDynamicStream<const char*> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
-			IdentifierHashTable<UIWindowDynamicResource, ResourceIdentifier, HashFunctionPowerOfTwo> dynamic_resources;
+			HashTable<UIWindowDynamicResource, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> dynamic_resources;
 			WindowDraw draw;
 			UIActionHandler private_handler;
 			UIActionHandler default_handler;

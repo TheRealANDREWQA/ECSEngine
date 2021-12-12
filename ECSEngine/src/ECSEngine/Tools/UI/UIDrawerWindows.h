@@ -15,6 +15,25 @@ namespace ECSEngine {
 
 	namespace Tools {
 
+		constexpr const wchar_t* CONSOLE_TEXTURE_ICONS[] = {
+			ECS_TOOLS_UI_TEXTURE_INFO_ICON,
+			ECS_TOOLS_UI_TEXTURE_WARN_ICON,
+			ECS_TOOLS_UI_TEXTURE_ERROR_ICON,
+			ECS_TOOLS_UI_TEXTURE_TRACE_ICON
+		};
+
+#define CONSOLE_INFO_COLOR Color(40, 170, 50)
+#define CONSOLE_WARN_COLOR Color(120, 130, 30)
+#define CONSOLE_ERROR_COLOR Color(160, 20, 20)
+#define CONSOLE_TRACE_COLOR Color(140, 30, 120)
+
+		const Color CONSOLE_COLORS[] = {
+			CONSOLE_INFO_COLOR,
+			CONSOLE_WARN_COLOR,
+			CONSOLE_ERROR_COLOR,
+			CONSOLE_TRACE_COLOR
+		};
+
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void WindowParameterReturnToDefaultButton(ActionData* action_data);
@@ -185,21 +204,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		constexpr const char* CONSOLE_WINDOW_NAME = "Console";
-
-		constexpr size_t CONSOLE_YEAR = 1 << 0;
-		constexpr size_t CONSOLE_MONTH = 1 << 1;
-		constexpr size_t CONSOLE_DAY = 1 << 2;
-		constexpr size_t CONSOLE_HOUR = 1 << 3;
-		constexpr size_t CONSOLE_MINUTES = 1 << 4;
-		constexpr size_t CONSOLE_SECONDS = 1 << 5;
-		constexpr size_t CONSOLE_MILLISECONDS = 1 << 6;
-
 		constexpr size_t CONSOLE_APPEREANCE_TABLE_COUNT = 256;
-
-		#define CONSOLE_INFO_COLOR Color(40, 170, 50)
-		#define CONSOLE_WARN_COLOR Color(120, 130, 30)
-		#define CONSOLE_ERROR_COLOR Color(160, 20, 20)
-		#define CONSOLE_TRACE_COLOR Color(140, 30, 120)
 
 #define CONSOLE_VERBOSITY_MINIMAL 0
 #define CONSOLE_VERBOSITY_MEDIUM 1
@@ -355,9 +360,11 @@ namespace ECSEngine {
 			bool system_filter_changed;
 			unsigned char previous_verbosity_level;
 			containers::ResizableStream<unsigned int, MemoryManager> filtered_message_indices;
-			containers::IdentifierHashTable<UniqueConsoleMessage, ResourceIdentifier, HashFunctionPowerOfTwo> unique_messages;
+			containers::HashTable<UniqueConsoleMessage, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> unique_messages;
 			bool* system_filter;
 		};
+
+		ECSENGINE_API void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer<false>& drawer);
 
 		ECSENGINE_API size_t GetSystemMaskFromConsoleWindowData(const ConsoleWindowData* data);
 

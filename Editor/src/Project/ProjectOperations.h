@@ -98,6 +98,8 @@ void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* 
 
 void GetProjectDebugFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path);
 
+void GetProjectDebugFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path);
+
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count = 256);
 
 void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile* project_file);

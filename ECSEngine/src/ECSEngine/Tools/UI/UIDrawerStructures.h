@@ -1355,7 +1355,7 @@ namespace ECSEngine {
 			Stream<char> active_label;
 			Stream<char> selected_label_temporary;
 			Stream<char> right_click_label_temporary;
-			IdentifierHashTable<UIDrawerLabelHierarchyLabelData, ResourceIdentifier, HashFunctionPowerOfTwo> label_states;
+			HashTable<UIDrawerLabelHierarchyLabelData, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> label_states;
 			Action selectable_callback;
 			void* selectable_callback_data;
 			Action right_click_callback;

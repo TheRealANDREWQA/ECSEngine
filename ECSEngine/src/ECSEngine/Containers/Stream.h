@@ -618,6 +618,12 @@ namespace ECSEngine {
 				memcpy(memory, buffer, size);
 			}
 
+			template<typename Allocator>
+			void Initialize(Allocator* allocator, size_t _size) {
+				buffer = allocator->Allocate(_size);
+				size = _size;
+			}
+
 			void InitializeFromBuffer(uintptr_t& _buffer, size_t _size) {
 				buffer = (void*)_buffer;
 				size = _size;
@@ -666,6 +672,13 @@ namespace ECSEngine {
 
 			void CopyTo(void* memory) const {
 				memcpy(memory, buffer, size);
+			}
+
+			template<typename Allocator>
+			void Initialize(Allocator* allocator, unsigned int _capacity) {
+				buffer = allocator->Allocate(_capacity);
+				size = 0;
+				capacity = _capacity;
 			}
 
 			void InitializeFromBuffer(uintptr_t& _buffer, unsigned int _size, unsigned int _capacity) {

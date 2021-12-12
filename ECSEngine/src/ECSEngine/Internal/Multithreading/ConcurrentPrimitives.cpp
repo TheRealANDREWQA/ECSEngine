@@ -36,12 +36,12 @@ namespace ECSEngine {
 
 	Semaphore::Semaphore(unsigned int _target) : count(0), target(_target) {}
 
-	void Semaphore::Exit() {
-		count.fetch_sub(1, ECS_ACQ_REL);
+	unsigned int Semaphore::Exit() {
+		return count.fetch_sub(1, ECS_ACQ_REL);
 	}
 
-	void Semaphore::Enter() {
-		count.fetch_add(1, ECS_ACQ_REL);
+	unsigned int Semaphore::Enter() {
+		return count.fetch_add(1, ECS_ACQ_REL);
 	}
 
 	void Semaphore::ClearCount() {

@@ -18,6 +18,7 @@ namespace ECSEngine {
 		ColorMapWithAlpha,
 		GrayscaleMap,
 		TangentSpaceNormalMap,
+		DoubleGrayscaleMap,
 		HDRMap,
 		ColorMapHighQuality
 	};

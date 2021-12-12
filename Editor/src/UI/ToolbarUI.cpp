@@ -342,7 +342,7 @@ void CreateToolbarUI(EditorState* editor_state) {
 	UIWindowDescriptor toolbar_window;
 	toolbar_window.initial_position_x = -1.0f;
 	toolbar_window.initial_position_y = -1.0f;
-	toolbar_window.initial_size_x = 2.0f;
+	toolbar_window.initial_size_x = 2.0f - ui_system->m_descriptors.dockspaces.border_size;
 	toolbar_window.initial_size_y = TOOLBAR_SIZE_Y;
 
 	size_t stack_memory[128];

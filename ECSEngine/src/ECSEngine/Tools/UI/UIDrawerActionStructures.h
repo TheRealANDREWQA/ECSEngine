@@ -343,7 +343,6 @@ namespace ECSEngine {
 			unsigned int window_index;
 			unsigned int biggest_label_x_index;
 			float label_y_scale;
-			float2 starting_position;
 			UIDrawerTextElement name;
 			Stream<UIDrawerTextElement> labels;
 			const char* prefix;
@@ -355,6 +354,7 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIDrawerComboBoxClickable {
 			UIDrawerComboBox* box;
 			UIDrawConfig config;
+			bool is_opened_on_press;
 		};
 
 		struct ECSENGINE_API UIDrawerComboBoxLabelHoverable {

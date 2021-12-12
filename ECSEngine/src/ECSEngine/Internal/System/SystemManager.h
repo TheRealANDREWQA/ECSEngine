@@ -59,7 +59,7 @@ namespace ECSEngine {
 	//private:
 		TaskManager* m_task_manager;
 		MemoryManager* m_memory;
-		IdentifierHashTable<SystemInternal, ResourceIdentifier, HashFunctionPowerOfTwo> m_systems;
+		HashTable<SystemInternal, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunction> m_systems;
 		ResizableStream<Stream<const char>, MemoryManager> m_deactivated_systems;
 		ResizableStream<Stream<const char>, MemoryManager> m_active_systems;
 	};

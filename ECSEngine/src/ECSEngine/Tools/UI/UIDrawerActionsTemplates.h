@@ -874,52 +874,54 @@ namespace ECSEngine {
 
 		template<size_t configuration>
 		void ComboBoxClickable(ActionData* action_data) {
+			constexpr const char* COMBO_BOX_WINDOW_NAME = "ComboBoxOpened";
+
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerComboBoxClickable* clickable_data = (UIDrawerComboBoxClickable*)_data;
 			UIDrawerComboBox* data = clickable_data->box;
+
+			unsigned int combo_index = system->GetWindowFromName(COMBO_BOX_WINDOW_NAME);
 			if (mouse_tracker->LeftButton() == MBPRESSED) {
-				data->initial_click_state = data->is_opened;
+				clickable_data->is_opened_on_press = combo_index != -1;
 			}
-			else if (mouse_tracker->LeftButton() == MBRELEASED) {
-				data->is_opened = !data->initial_click_state;
+			else if (IsClickableTrigger(action_data) && !clickable_data->is_opened_on_press) {
+				if (combo_index == -1) {
+					UIWindowDescriptor window_descriptor;
+					window_descriptor.draw = ComboBoxWindowDraw<false, configuration>;
+					window_descriptor.initialize = ComboBoxWindowDraw<true, configuration>;
+					window_descriptor.initial_position_x = position.x;
+					window_descriptor.initial_size_x = scale.x;
 
-				if (IsPointInRectangle(mouse_position, position, scale)) {
-					if (data->is_opened) {
-						data->has_been_destroyed = false;
+					float label_display_size = data->label_y_scale * data->label_display_count;
+					float position_displacement = position.y + scale.y + ECS_TOOLS_UI_COMBO_BOX_PADDING;
 
-						UIWindowDescriptor window_descriptor;
-						window_descriptor.draw = ComboBoxWindowDraw<false, configuration>;
-						window_descriptor.initialize = ComboBoxWindowDraw<true, configuration>;
-						window_descriptor.initial_position_x = position.x;
-						window_descriptor.initial_size_x = scale.x;
-						if (position.y + scale.y + ECS_TOOLS_UI_COMBO_BOX_PADDING > 1.0f) {
-							window_descriptor.initial_position_y = position.y - scale.y * data->label_display_count - ECS_TOOLS_UI_COMBO_BOX_PADDING;
-						}
-						else {
-							window_descriptor.initial_position_y = position.y + scale.y + ECS_TOOLS_UI_COMBO_BOX_PADDING;
-						}
-						window_descriptor.initial_size_y = scale.y * data->label_display_count;
-						window_descriptor.window_name = "ComboBoxOpened";
-						window_descriptor.window_data = clickable_data;
-						window_descriptor.window_data_size = sizeof(UIDrawerComboBoxClickable);
-
-						system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED 
-							| UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER);
-
-						UIPopUpWindowData handler_data;
-						handler_data.is_fixed = true;
-						handler_data.is_initialized = true;
-						handler_data.destroy_at_first_click = false;
-						handler_data.flag_destruction = &data->has_been_destroyed;
-						handler_data.name = "ComboBoxOpened";
-
-						UIActionHandler handler;
-						handler.action = PopUpWindowSystemHandler;
-						handler.data = &handler_data;
-						handler.data_size = sizeof(handler_data);
-						system->PushSystemHandler(handler);
+					if (position_displacement + label_display_size > 1.0f) {
+						window_descriptor.initial_position_y = position.y - label_display_size - ECS_TOOLS_UI_COMBO_BOX_PADDING;
 					}
+					else {
+						window_descriptor.initial_position_y = position_displacement;
+					}
+					window_descriptor.initial_size_y = label_display_size;
+					window_descriptor.window_name = COMBO_BOX_WINDOW_NAME;
+					window_descriptor.window_data = clickable_data;
+					window_descriptor.window_data_size = sizeof(UIDrawerComboBoxClickable);
+
+					system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED
+						| UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER);
+
+					UIPopUpWindowData handler_data;
+					handler_data.is_fixed = true;
+					handler_data.is_initialized = true;
+					handler_data.destroy_at_first_click = false;
+					handler_data.flag_destruction = &data->has_been_destroyed;
+					handler_data.name = COMBO_BOX_WINDOW_NAME;
+
+					UIActionHandler handler;
+					handler.action = PopUpWindowSystemHandler;
+					handler.data = &handler_data;
+					handler.data_size = sizeof(handler_data);
+					system->PushSystemHandler(handler);
 				}
 			}
 		}

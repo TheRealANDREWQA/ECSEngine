@@ -44,13 +44,13 @@ namespace ECSEngine {
 		Semaphore(const Semaphore& other) = default;
 		Semaphore& operator = (const Semaphore& other) = default;
 
-		void Enter();
+		unsigned int Enter();
 
 		void ClearTarget();
 
 		void ClearCount();
 
-		void Exit();
+		unsigned int Exit();
 
 		void SetTarget(unsigned int value);
 

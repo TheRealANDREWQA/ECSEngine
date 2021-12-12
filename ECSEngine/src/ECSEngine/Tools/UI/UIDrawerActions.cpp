@@ -1088,10 +1088,9 @@ namespace ECSEngine {
 				system->m_memory->Deallocate(menu->windows.buffer);
 
 				// Removing the menu drawer element and the menu from the window table
-				unsigned int hash = system->HashString(data->menu_resource_name);
 				ResourceIdentifier identifier(data->menu_resource_name, strlen(data->menu_resource_name));
 
-				unsigned int index = system->m_windows[window_index].table.Find(hash, identifier);
+				unsigned int index = system->m_windows[window_index].table.Find(identifier);
 				ECS_ASSERT(index != -1);
 
 				// Removing the persistent identifier from the table
@@ -1105,8 +1104,8 @@ namespace ECSEngine {
 				strcat(temp_characters, "##Separate");
 				identifier.ptr = (const wchar_t*)temp_characters;
 				identifier.size += std::size("##Separate") - 1;
-				hash = system->HashString(temp_characters);
-				index = system->m_windows[window_index].table.Find(hash, identifier);
+
+				index = system->m_windows[window_index].table.Find(identifier);
 				ECS_ASSERT(index != -1);
 				system->RemoveWindowMemoryResource(window_index, identifiers[index].ptr);
 				system->m_memory->Deallocate(identifiers[index].ptr);
@@ -1516,9 +1515,8 @@ namespace ECSEngine {
 			if (IsClickableTrigger(action_data)) {
 				UIDrawerLabelHierarchyChangeStateData* data = (UIDrawerLabelHierarchyChangeStateData*)_data;
 				ResourceIdentifier identifier(data->label.buffer, data->label.size);
-				unsigned int hash = HashFunctionMultiplyString::Hash(identifier);
 
-				UIDrawerLabelHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(hash, identifier);
+				UIDrawerLabelHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(identifier);
 				node->state = !node->state;
 				
 				PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));

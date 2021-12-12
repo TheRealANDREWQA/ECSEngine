@@ -1,6 +1,8 @@
 #ifndef __PBR__
 #define __PBR__
 
+#include "Utilities.hlsli"
+
 /* This file contains all the functions related to the PBR rendering
 *  Credit must be given to https://learnopengl.com/PBR/Theory for all the information presented here
 *  alongside all the researchers and persons involved in developing the PBR theory.
@@ -162,7 +164,8 @@ float3 FresnelSchlickRoughness(float cos_theta, float3 F0, float roughness)
 {
     // F(h, v, F0) = F0 + (1 - F0)[(1 - (h * v)) ^ 5]
     // Clamp the inverse to prevent black spots
-    return F0 + (max(float3(1.0f - roughness, 1.0f - roughness, 1.0f - roughness), F0) - F0) * pow(clamp(1 - cos_theta, 0.0f, 1.0f), 5);
+    float roughness_factor = 1.0f - roughness;
+    return F0 + (max(float3(roughness_factor, roughness_factor, roughness_factor), F0) - F0) * pow(clamp(1 - cos_theta, 0.0f, 1.0f), 5);
 }
 
 float3 FresnelEquation(float cos_theta, float3 F0)
@@ -173,9 +176,11 @@ float3 FresnelEquation(float cos_theta, float3 F0)
 }
 
 // Cook-Torrance BRDF
-float3 CalculateBRDF(float3 radiance, float3 surface_color, float3 normal, float3 view_direction, float3 light_direction, float3 halfway, float3 F0, float metallic, float roughness, float geometry_k_factor)
+float3 CalculateBRDF(float3 radiance, float3 surface_color, float3 normal, float3 view_direction, float3 light_direction, float3 halfway, float3 F0, float metallic, float roughness)
 {
 #ifdef COOK_TORRANCE_BRDF
+    float geometry_k_factor = GeometryFactorDirect(roughness);
+    
     float3 fresnel_factor = FresnelEquation(ClampedDot(halfway, view_direction), F0);
     float normal_distribution_factor = DistributionFunction(normal, halfway, roughness);
     float geometry_factor = GeometryFunction(normal, view_direction, light_direction, geometry_k_factor);
@@ -189,112 +194,8 @@ float3 CalculateBRDF(float3 radiance, float3 surface_color, float3 normal, float
     kD *= 1.0f - metallic;
     
     float n_dot_l = ClampedDot(normal, light_direction);
-    return (kD * surface_color / PI + specular) * radiance * n_dot_l; 
+    return (kD * surface_color / PI + specular) * radiance * n_dot_l;
 #endif
-}
-
-// Cook-Torrance BRDF
-float3 CalculateBRDFDirectLight(float3 radiance, float3 surface_color, float3 normal, float3 view_direction, float3 light_direction, float3 halfway, float3 F0, float metallic, float roughness)
-{
-    return CalculateBRDF(radiance, surface_color, normal, view_direction, light_direction, halfway, F0, metallic, roughness, GeometryFactorDirect(roughness));
-}
-
-// Cook-Torrance BRDF
-float3 CalculateBRDF_IBL(float3 radiance, float3 surface_color, float3 normal, float3 view_direction, float3 light_direction, float3 halfway, float3 F0, float metallic, float roughness)
-{
-    return CalculateBRDF(radiance, surface_color, normal, view_direction, light_direction, halfway, F0, metallic, roughness, GeometryFactorIBL(roughness));
-}
-
-float3 CalculateAmbientDiffuse(float3 radiance, float3 surface_color, float3 normal, float3 view_direction, float3 F0, float roughness)
-{
-    float3 kS = FresnelSchlickRoughness(ClampedDot(normal, view_direction), F0, roughness);
-    float3 kD = 1.0f - kS;
-    return radiance * surface_color * kD;
-}
-
-float3 TonemapReinhard(float3 irradiance)
-{
-    return irradiance / (irradiance + 1.0f);
-}
-
-// Tipical values for saturation_point : [4; 50]
-float3 TonemapReinhardModified(float3 irradiance, float3 saturation_point)
-{
-    return (irradiance * (float3(1.0f, 1.0f, 1.0f) + irradiance / saturation_point)) / (irradiance + 1);
-}
-
-// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
-float3 TonemapACES(float3 irradiance)
-{
-    const float a = 2.51f;
-    const float b = 0.03f;
-    const float c = 2.43f;
-    const float d = 0.59f;
-    const float e = 0.14f;
-    // Formula: (x * (a * x + b)) / (x * (c * x + d) + e); where x is irradiance
-    // and a, b, c, d, e are constants
-    return (irradiance * mad(irradiance, a, b)) / (irradiance * mad(irradiance, c, d) + e);
-}
-
-// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
-// Already has gamma correction applied
-float3 TonemapACESApproximation(float3 irradiance)
-{
-    return irradiance / (irradiance + 0.155f) * 1.019f;
-}
-
-// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
-float3 TonemapUchimura(float3 irradiance, float3 P, float3 a, float3 m, float3 l, float3 c, float3 b)
-{
-    float3 l0 = ((P - m) * l) / a;
-    float3 L0 = m - m / a;
-    float3 L1 = m + (1.0 - m) / a;
-    float3 S0 = m + l0;
-    float3 S1 = m + a * l0;
-    float3 C2 = (a * P) / (P - S1);
-    float3 CP = -C2 / P;
-
-    float3 w0 = 1.0 - smoothstep(0.0, m, irradiance);
-    float3 w2 = step(m + l0, irradiance);
-    float3 w1 = 1.0 - w0 - w2;
-
-    float3 T = m * pow(irradiance / m, c) + b;
-    float3 S = P - (P - S1) * exp(CP * (irradiance - S0));
-    float3 L = m + a * (irradiance - m);
-
-    return T * w0 + L * w1 + S * w2;
-}
-
-// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
-float3 TonemapUchimura(float3 irradiance)
-{
-    const float P = 1.0;
-    const float a = 1.0;
-    const float m = 0.22;
-    const float l = 0.4;
-    const float c = 1.33;
-    const float b = 0.0;
-    return TonemapUchimura(irradiance, P, a, m, l, c, b);
-}
-
-// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
-float3 TonemapLottes(float3 irradiance)
-{
-    // Lottes 2016, "Advanced Techniques and Optimization of HDR Color Pipelines"
-    const float a = 1.6f;
-    const float d = 0.977f;
-    const float hdrMax = 8.0f;
-    const float midIn = 0.18f;
-    const float midOut = 0.267f;
-
-    static const float b =
-        (-pow(midIn, a) + pow(hdrMax, a) * midOut) /
-        ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut);
-    static const float c =
-        (pow(hdrMax, a * d) * pow(midIn, a) - pow(hdrMax, a) * pow(midIn, a * d) * midOut) /
-        ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut);
-
-    return pow(irradiance, a) / (pow(irradiance, a * d) * b + c);
 }
 
 float PointLightAttenuation(float distance, float light_range)
@@ -304,6 +205,142 @@ float PointLightAttenuation(float distance, float light_range)
     numerator = numerator * numerator;
     float denominator = distance * distance + 1;
     return numerator / denominator;
+}
+
+float3 CalculatePointLight(
+    float3 light_position,
+    float3 light_color,
+    float light_range,
+    float3 world_position,
+    float3 surface_color,
+    float3 normal,
+    float3 view_direction,
+    float3 F0,
+    float metallic,
+    float roughness
+)
+{
+    float3 light_direction = normalize(light_position - world_position);
+    float3 halfway = normalize(light_direction + view_direction);
+        
+    float distance = length(light_position - world_position);
+    float attenuation = PointLightAttenuation(distance, light_range);
+        
+    float3 radiance = light_color * attenuation;
+        
+    return CalculateBRDF(radiance, surface_color, normal, view_direction, light_direction, halfway, F0, metallic, roughness);
+}
+
+float3 CalculateDirectionalLight(
+    float3 light_direction,
+    float3 view_direction,
+    float3 radiance,
+    float3 surface_color,
+    float3 normal,
+    float3 F0,
+    float metallic,
+    float roughness
+)
+{
+    light_direction = normalize(light_direction);
+    float3 halfway = normalize(light_direction + view_direction);
+    return CalculateBRDF(radiance, surface_color, normal, view_direction, light_direction, halfway, F0, metallic, roughness);
+}
+
+float3 CalculateAmbient(
+    float3 view_direction, 
+    float3 normal, 
+    float3 surface_color,
+    float3 F0, 
+    float roughness,
+    float metallic,
+    TextureCube<float4> environment_diffuse,
+    TextureCube<float4> environment_specular, 
+    Texture2D<float2> brdf_lut, 
+    SamplerState environment_sampler,
+    float environment_specular_max_mip,
+    float diffuse_factor,
+    float specular_factor
+)
+{
+    float v_dot_n = ClampedDot(view_direction, normal);
+    float3 specular_F = FresnelSchlickRoughness(v_dot_n, F0, roughness);
+    
+    // Diffuse IBL
+    float3 ambient_diffuse = environment_diffuse.Sample(environment_sampler, normal).rgb;
+   
+    // Specular IBL
+    float3 reflection_direction = reflect(-view_direction, normal);
+    float3 prefiltered_ambient_specular = environment_specular.SampleLevel(environment_sampler, reflection_direction, roughness * environment_specular_max_mip).rgb;
+    
+    float2 ambient_brdf = brdf_lut.Sample(environment_sampler, float2(v_dot_n, roughness)).rg;
+    float3 ambient_specular = prefiltered_ambient_specular * (specular_F * ambient_brdf.x + ambient_brdf.y);
+    
+    ambient_diffuse *= surface_color * (1.0f - specular_F) * (1.0f - metallic);
+    
+    return ambient_diffuse * diffuse_factor + ambient_specular * specular_factor;
+}
+
+// Returns a sample inside the specular lobe of the reflected light according to the roughness parameter
+// It will be biased using importance sampling
+// Xi is a low discrepancy sequence random number
+float3 ImportanceSampleGGX(float2 xi, float3 normal, float roughness)
+{
+    float a = roughness * roughness;
+    
+    float phi = 2 * PI * xi.x;
+    float cos_theta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+    float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
+    
+    // Transformation from spherical coordinates to cartesian coordinates using r as 1.0f
+    float3 cartesian_coordinates = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
+    
+    // Transform from tangent space into world space
+    float3 up = abs(normal.z) < 0.999f ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
+    float3 tangent = normalize(cross(up, normal));
+    float3 bitangent = normalize(cross(normal, tangent));
+    
+    float3 sample = cartesian_coordinates.x * tangent + cartesian_coordinates.y * bitangent + cartesian_coordinates.z * normal;
+    return normalize(sample);
+}
+
+float2 IntegrateBRDF(float n_dot_v, float roughness, uint sample_count)
+{
+    float3 view_direction;
+    // Sin theta
+    view_direction.x = sqrt(1.0f - n_dot_v * n_dot_v);
+    view_direction.y = 0.0f;
+    // Cos theta
+    view_direction.z = n_dot_v;
+
+    float x = 0.0f;
+    float y = 0.0f;
+
+    float3 normal = float3(0.0f, 0.0f, 1.0f);
+    
+    for (uint index = 0; index < sample_count; index++)
+    {
+        float2 xi = Hammersley(index, sample_count);
+        float3 halfway = ImportanceSampleGGX(xi, normal, roughness);
+        float3 light_direction = normalize(-reflect(halfway, normal));
+
+        float n_dot_l = ClampedDot(light_direction, normal);
+        float n_dot_h = ClampedDot(halfway, normal);
+        float v_dot_h = ClampedDot(view_direction, halfway);
+
+        if (n_dot_l > 0.0f)
+        {
+            float geometry = GeometryFunction(normal, view_direction, light_direction, GeometryFactorIBL(roughness));
+            float geometry_factored = (geometry * v_dot_h) / (n_dot_h * n_dot_v);
+            float fresnel_factor = pow(1.0f - v_dot_h, 5.0f);
+
+            x += (1.0f - fresnel_factor) * geometry_factored;
+            y += fresnel_factor * geometry_factored;
+        }
+    }
+    x /= float(sample_count);
+    y /= float(sample_count);
+    return float2(x, y);
 }
 
 #endif

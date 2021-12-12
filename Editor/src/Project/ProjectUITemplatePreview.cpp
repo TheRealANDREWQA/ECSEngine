@@ -11,6 +11,7 @@
 #include "..\HelperWindows.h"
 #include "..\UI\ModuleExplorer.h"
 #include "..\UI\Inspector.h"
+#include "..\UI\NotificationBar.h"
 
 using namespace ECSEngine;
 ECS_CONTAINERS;
@@ -101,6 +102,8 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor) {
 }
 
 void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+
 	UIWindowDescriptor descriptor;
 
 	size_t stack_memory[128];
@@ -108,7 +111,7 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y - ECS_TOOLS_UI_ONE_PIXEL_Y;
-	descriptor.initial_size_x = 2.0f;
+	descriptor.initial_size_x = 2.0f - ui_system->m_descriptors.dockspaces.border_size;
 	descriptor.initial_size_y = MISCELLANEOUS_BAR_SIZE_Y;
 	descriptor.window_data = nullptr;
 	descriptor.window_data_size = 0;
@@ -116,7 +119,6 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	descriptor.draw = MiscellaneousBarNoActions<false>;
 	descriptor.initialize = MiscellaneousBarNoActions<true>;
 
-	EDITOR_STATE(editor_state);
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 	 | UI_DOCKSPACE_BORDER_NOTHING);
 }
@@ -303,7 +305,7 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f;
-	descriptor.initial_size_x = 2.0f;
+	descriptor.initial_size_x = 2.0f - ui_system->m_descriptors.dockspaces.border_size;
 	descriptor.initial_size_y = TOOLBAR_SIZE_Y;
 
 	ToolbarPlaceholderData data;
@@ -326,6 +328,7 @@ void CreateProjectUITemplatePreview(EditorState* editor_state) {
 
 	CreateToolbarUIPlaceholder(editor_state);
 	CreateMiscellaneousBarNoActions(editor_state);
+	CreateNotificationBar(editor_state);
 	UIDockspace* main_dockspace = CreateProjectBackgroundDockspace(ui_system);
 	unsigned int viewport_window_index = CreatePlaceholderWindow(editor_state, GAME_WINDOW_NAME, {1.0f, 1.0f});
 	ui_system->AddWindowToDockspaceRegion(viewport_window_index, main_dockspace, 0);

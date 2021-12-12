@@ -207,6 +207,22 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		Path GetValidPath(Path2 paths)
+		{
+			if (paths.absolute.size > 0) {
+				return paths.absolute;
+			}
+			return paths.relative;
+		}
+
+		ASCIIPath GetValidPath(ASCIIPath2 paths)
+		{
+			if (paths.absolute.size > 0) {
+				return paths.absolute;
+			}
+			return paths.relative;
+		}
+
 		// --------------------------------------------------------------------------------------------------
 		
 		// --------------------------------------------------------------------------------------------------

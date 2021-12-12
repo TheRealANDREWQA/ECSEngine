@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "Function.h"
 #include "FunctionInterfaces.h"
+#include "../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
 
@@ -489,6 +490,135 @@ namespace ECSEngine {
 			}
 			character_type = CharacterType::Unknown;
 			return (unsigned int)AlphabetIndex::Unknown;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ConvertDateToString(Date date, Stream<char>& characters, size_t format_flags)
+		{
+			characters.Add('[');
+
+			auto flag = [&](size_t integer) {
+				char temp[256];
+				Stream<char> temp_stream = Stream<char>(temp, 0);
+				function::ConvertIntToChars(temp_stream, integer);
+				for (size_t index = 0; index < temp_stream.size; index++) {
+					characters.Add(temp_stream[index]);
+				}
+			};
+
+			bool has_hour = false;
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_HOUR)) {
+				flag(date.hour);
+				has_hour = true;
+			}
+
+			bool has_minutes = false;
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MINUTES)) {
+				if (has_hour) {
+					characters.Add(':');
+				}
+				has_minutes = true;
+				flag(date.minute);
+			}
+
+			bool has_seconds = false;
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_SECONDS)) {
+				if (has_minutes || has_hour) {
+					characters.Add(':');
+				}
+				has_seconds = true;
+				flag(date.seconds);
+			}
+
+			bool has_milliseconds = false;
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MILLISECONDS)) {
+				if (has_hour || has_minutes || has_seconds) {
+					characters.Add(':');
+				}
+				has_milliseconds = true;
+				flag(date.milliseconds);
+			}
+
+			bool has_hour_minutes_seconds_milliseconds = has_hour || has_minutes || has_seconds || has_milliseconds;
+			bool has_space_been_written = false;
+
+			bool has_day = false;
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_DAY)) {
+				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
+					characters.Add(' ');
+					has_space_been_written = true;
+				}
+				has_day = true;
+				flag(date.day);
+			}
+
+			bool has_month = false;
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MONTH)) {
+				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
+					characters.Add(' ');
+					has_space_been_written = true;
+				}
+				if (has_day) {
+					characters.Add('-');
+				}
+				has_month = true;
+				flag(date.month);
+			}
+
+			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_YEAR)) {
+				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
+					characters.Add(' ');
+					has_space_been_written = true;
+				}
+				if (has_day || has_month) {
+					characters.Add('-');
+				}
+				flag(date.year);
+			}
+
+			characters.Add(']');
+			characters.Add(' ');
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ConvertDateToString(Date date, CapacityStream<char>& characters, size_t format_flags)
+		{
+			Stream<char> stream(characters);
+			ConvertDateToString(date, stream, format_flags);
+			characters.size = stream.size;
+			characters.AssertCapacity();
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<void> ReadWholeFile(const wchar_t* path, AllocatorPolymorphic allocator, bool binary)
+		{
+			return ReadWholeFile(ToStream(path), allocator, binary);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<void> ReadWholeFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool binary)
+		{
+			unsigned int flag = std::ios::ate;
+			if (binary) {
+				flag |= std::ios::binary;
+			}
+
+			std::ifstream stream(std::wstring(path.buffer, path.buffer + path.size), flag);
+			if (stream.good()) {
+				size_t file_size = stream.tellg();
+				stream.seekg(std::ios::beg);
+				void* allocation = Allocate(allocator, file_size);
+				stream.read((char*)allocation, file_size);
+
+				// Tellg might report bigger file sizes - so make sure that the actual read count is used
+				return { allocation, (size_t)stream.gcount() };
+			}
+
+			return { nullptr, 0 };
 		}
 
 		// --------------------------------------------------------------------------------------------------

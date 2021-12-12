@@ -10,6 +10,7 @@
 #include "..\UI\Game.h"
 #include "..\UI\ModuleExplorer.h"
 #include "..\UI\Inspector.h"
+#include "..\UI\NotificationBar.h"
 
 using namespace ECSEngine;
 ECS_CONTAINERS;
@@ -22,6 +23,7 @@ void CreateProjectDefaultUI(EditorState* editor_state) {
 
 	CreateToolbarUI(editor_state);
 	CreateMiscellaneousBar(editor_state);
+	CreateNotificationBar(editor_state);
 	UIDockspace* main_dockspace = CreateProjectBackgroundDockspace(ui_system);
 	unsigned int viewport_window_index = CreateGameWindow(editor_state);
 	ui_system->AddWindowToDockspaceRegion(viewport_window_index, main_dockspace, 0);
@@ -31,8 +33,9 @@ void CreateProjectDefaultUI(EditorState* editor_state) {
 
 UIDockspace* CreateProjectBackgroundDockspace(UISystem* system)
 {
-	float2 dockspace_position = { -1.0f, -1.0f + TOOLBAR_SIZE_Y + MISCELLANEOUS_BAR_SIZE_Y - system->m_descriptors.dockspaces.border_size };
-	float2 dockspace_scale = { 2.0f, 1.0f - dockspace_position.y };
+	float border_size = system->m_descriptors.dockspaces.border_size;
+	float2 dockspace_position = { -1.0f, -1.0f + TOOLBAR_SIZE_Y + MISCELLANEOUS_BAR_SIZE_Y - border_size };
+	float2 dockspace_scale = { 2.0f - border_size, 1.0f - dockspace_position.y - NOTIFICATION_BAR_WINDOW_SIZE - border_size };
 	unsigned int dockspace_index = system->CreateFixedDockspace({ dockspace_position, dockspace_scale }, DockspaceType::FloatingVertical, 0, false, UI_DOCKSPACE_BACKGROUND);
 	UIDockspace* dockspace = system->GetDockspace(dockspace_index, DockspaceType::FloatingVertical);
 
@@ -106,6 +109,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			ToStream(editor_state->inject_window_name),
 			ToStream(TOOLBAR_WINDOW_NAME),
 			ToStream(MISCELLANEOUS_BAR_WINDOW_NAME),
+			ToStream(NOTIFICATION_BAR_WINDOW_NAME),
 			ToStream(CONSOLE_WINDOW_NAME),
 			ToStream(DIRECTORY_EXPLORER_WINDOW_NAME),
 			ToStream(FILE_EXPLORER_WINDOW_NAME),
@@ -120,6 +124,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			InjectWindowSetDescriptor,
 			ToolbarSetDescriptor,
 			MiscellaneousBarSetDescriptor,
+			NotificationBarSetDescriptor,
 			ConsoleSetDescriptor,
 			DirectoryExplorerSetDescriptor,
 			FileExplorerSetDescriptor,

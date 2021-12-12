@@ -21,6 +21,9 @@ namespace ECSEngine {
 
 		void CreateAllocator(size_t size, size_t maximum_pool_count);
 
+		// Removes the allocators that have currently no allocations active
+		void Trim();
+
 		void ReleaseResources();
 
 		// ----------------------------------------------------- Thread safe ---------------------------------------------
@@ -67,6 +70,9 @@ namespace ECSEngine {
 
 		// Unlocks the SpinLock
 		void Unlock();
+
+		// Removes the last allocators if they have currently no allocations active
+		void Trim();
 
 		// ---------------------------------------------------- Thread safe --------------------------------------------------
 

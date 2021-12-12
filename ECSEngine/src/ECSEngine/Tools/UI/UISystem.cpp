@@ -6,26 +6,13 @@
 #include "../../Rendering/Compression/TextureCompression.h"
 #include "../../Rendering/ColorMacros.h"
 #include "../../Internal/Multithreading/TaskManager.h"
-#include "../../Internal/ResourceManager.h"
+#include "../../Internal/Resources/ResourceManager.h"
 #include "../../Internal/InternalStructures.h"
-
-wchar_t* SOLID_COLOR_VERTEX_SHADER = L"Resources/CompiledShaders/Vertex/UIVertexColor.cso";
-wchar_t* SPRITE_VERTEX_SHADER = L"Resources/CompiledShaders/Vertex/UISpriteVertex.cso";
-wchar_t* TEXT_SPRITE_VERTEX_SHADER = L"Resources/CompiledShaders/Vertex/UITextSpriteVertex.cso";
-
-wchar_t* SOLID_COLOR_PIXEL_SHADER = L"Resources/CompiledShaders/Pixel/UIVertexColor.cso";
-wchar_t* SPRITE_PIXEL_SHADER = L"Resources/CompiledShaders/Pixel/UISpriteVertex.cso";
-wchar_t* TEXT_SPRITE_PIXEL_SHADER = L"Resources/CompiledShaders/Pixel/UITextSpriteVertex.cso";
-
-constexpr const wchar_t* SOLID_COLOR_VERTEX_SHADER_SOURCE = L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\UIVertexColor.hlsl";
-constexpr const wchar_t* TEXT_SPRITE_VERTEX_SHADER_SOURCE = L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\UITextSpriteVertex.hlsl";
 
 namespace ECSEngine {
 
 	ECS_CONTAINERS;
 	ECS_MICROSOFT_WRL;
-
-	using UISystemHash = HashFunctionMultiplyString;
 
 	//using namespace HID;
 
@@ -275,15 +262,12 @@ namespace ECSEngine {
 			// loading font atlas; font atlas does not keep track of texture indices
 			ResourceManagerTextureDesc texture_descriptor;
 			texture_descriptor.context = m_graphics->GetContext();
-			texture_descriptor.usage = D3D11_USAGE_DEFAULT;
 			ResourceView font_texture = m_resource_manager->LoadTexture(font_filename, texture_descriptor);
 			m_resources.font_texture = font_texture;
 
 			// loading and registering vertex and pixel shaders
 			RegisterPixelShaders();
-			RegisterVertexShaders();
-
-			RegisterInputLayouts();
+			RegisterVertexShadersAndLayouts();
 			RegisterSamplers();
 
 			// event
@@ -897,10 +881,9 @@ namespace ECSEngine {
 		void UISystem::AddWindowMemoryResourceToTable(void* resource, ResourceIdentifier identifier, unsigned int window_index)
 		{
 			WindowTable* table = GetWindowTable(window_index);
-			unsigned int hash = UISystemHash::Hash(identifier);
 
-			ECS_ASSERT(table->Find(hash, identifier) == -1);
-			ECS_ASSERT(!table->Insert(hash, resource, identifier));
+			ECS_ASSERT(table->Find(identifier) == -1);
+			ECS_ASSERT(!table->Insert(resource, identifier));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1249,8 +1232,8 @@ namespace ECSEngine {
 			// Copy the name
 			memcpy((void*)ptr, name, sizeof(char) * name_size);
 			ResourceIdentifier identifier{(void*)ptr, (unsigned int)name_size};
-			unsigned int hash = UISystemHash::Hash(identifier);
-			InsertToDynamicTable<UISystemHash>(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, { (void*)ptr, name_size });
+			unsigned int hash = UIHash::Hash(identifier);
+			InsertToDynamicTable(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, { (void*)ptr, name_size });
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2072,14 +2055,16 @@ namespace ECSEngine {
 		void UISystem::CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_texture)
 		{
 			ResourceManagerTextureDesc descriptor;
-			descriptor.usage = D3D11_USAGE_DEFAULT;
 			descriptor.loader_flag = DirectX::WIC_LOADER_FORCE_RGBA32;
 			ResourceView view = m_resource_manager->LoadTexture<true>(filename, descriptor);
 
 			Texture2D texture(GetResource(view));
 			uint2 dimensions = GetTextureDimensions(texture);
 
-			if (dimensions.x > 512 || dimensions.y > 512) {
+			*sprite_texture = view;
+
+			unsigned int total_pixels = dimensions.x * dimensions.y;
+			if (total_pixels > 512 * 512) {
 				m_resources.texture_semaphore.Enter();
 
 				ThreadTask process_texture_task;
@@ -2092,9 +2077,7 @@ namespace ECSEngine {
 				
 				process_texture_task.data = &data;
 				m_task_manager->AddDynamicTaskAndWake(process_texture_task, sizeof(data));
-			}
-			
-			*sprite_texture = view;
+			}	
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2111,7 +2094,8 @@ namespace ECSEngine {
 			// setting initial transform and render region
 			m_windows[window_index].transform.position = float2(descriptor.initial_position_x, descriptor.initial_position_y);
 			m_windows[window_index].transform.scale = float2(descriptor.initial_size_x, descriptor.initial_size_y);
-			m_windows[window_index].render_region = float2(0.0f, 0.0f);
+			m_windows[window_index].render_region_offset = float2(0.0f, 0.0f);
+			m_windows[window_index].drawer_draw_difference = { 0.0f, 0.0f };
 			// in order to not accidentally deallocate the name buffer when setting the name 
 			m_windows[window_index].name_vertex_buffer.buffer = nullptr;
 
@@ -2597,7 +2581,6 @@ namespace ECSEngine {
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
 			unsigned int count = m_windows[window_index].dynamic_resources.GetExtendedCapacity();
-			bool removed_element = false;
 			for (size_t index = 0; index < count; index++) {
 				if (m_windows[window_index].dynamic_resources.IsItemAt(index)) {
 					UIWindowDynamicResource* dynamic_resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
@@ -2606,16 +2589,8 @@ namespace ECSEngine {
 						// A new dynamic resource will replace this one; so decrement the current index in order to keep
 						// checking the right resource
 						RemoveWindowDynamicResource(window_index, index);
-						removed_element = true;
 					}
 				}
-			}
-
-			// If at least one resource has been deleted, recalculate the maximum count for both the dynamic table
-			// And the standard resource table
-			if (removed_element) {
-				m_windows[window_index].table.ResetProbeCount();
-				m_windows[window_index].dynamic_resources.ResetProbeCount();
 			}
 		}
 
@@ -3867,8 +3842,6 @@ namespace ECSEngine {
 			if (data->mouse_region.dockspace == data->dockspace && data->mouse_region.border_index == data->border_index && !m_execute_events && m_focused_window_data.locked_window == 0) {
 				if ((m_focused_window_data.clickable_handler.action == nullptr || m_mouse_tracker->LeftButton() != MBHELD) || (m_focused_window_data.always_hoverable)
 					&& data->dockspace->borders[data->border_index].hoverable_handler.position_x.buffer != nullptr) {
-					/*if (m_mouse_tracker.leftButton == MBState::PRESSED)
-					__debugbreak();*/
 
 					is_hoverable = DetectHoverables(
 						vertex_count,
@@ -3919,8 +3892,9 @@ namespace ECSEngine {
 				}
 			}
 
-			// Stall until texture processing is finished
-			// Because all threads use the immediate context to issue commands
+			// The spin wait for the texture resizing and compression must be done here - because the 
+			// threads use the immediate context
+			unsigned int semaphore_count = m_resources.texture_semaphore.count;
 			m_resources.texture_semaphore.SpinWait();
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(
@@ -3973,15 +3947,7 @@ namespace ECSEngine {
 #endif
 			);
 
-			/*SetViewport(
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-				m_resources.thread_resources[data->thread_id].deferred_context.Get(),
-#else
-				m_graphics->GetContext(),
-#endif
-				{region_position.x + m_descriptors.dockspaces.viewport_padding_x, region_position.y + m_descriptors.dockspaces.viewport_padding_y},
-				{region_half_scale.x - m_descriptors.dockspaces.viewport_padding_x, region_half_scale.y - m_descriptors.dockspaces.viewport_padding_y}
-			);*/
+			
 			SetViewport(
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 				m_resources.thread_resources[data->thread_id].deferred_context.Get(),
@@ -4195,17 +4161,13 @@ namespace ECSEngine {
 				HandleFocusedWindowGeneral(data->mouse_position, data->thread_id);
 			}
 
-			// Stall until texture processing is finished
-			// Because all threads use the immediate context to issue commands
+			// The spin wait for the texture resizing and compression must be done here - because the 
+			// threads use the immediate context
+			unsigned int semaphore_count = m_resources.texture_semaphore.count;
 			m_resources.texture_semaphore.SpinWait();
 
 			data->dockspace->borders[data->border_index].draw_resources.UnmapNormal(m_graphics->GetContext());
 
-			/*SetViewport(
-				m_graphics->GetContext(),
-				{ region_position.x + m_descriptors.dockspaces.viewport_padding_x, region_position.y + m_descriptors.dockspaces.viewport_padding_y },
-				{ region_half_scale.x - m_descriptors.dockspaces.viewport_padding_x, region_half_scale.y - m_descriptors.dockspaces.viewport_padding_y }
-			);*/
 			SetViewport(
 				m_graphics->GetContext(),
 				region_position,
@@ -4218,7 +4180,7 @@ namespace ECSEngine {
 			DrawPass<UIDrawPhase::Normal>(
 				data->dockspace->borders[data->border_index].draw_resources,
 				vertex_count,
-				{ region_position.x /*+ 0.0004f*/, region_position.y /*+ 0.0008f*/ },
+				{ region_position.x, region_position.y },
 				{ region_scale.x, region_scale.y },
 				m_graphics->GetContext()
 			);
@@ -5209,16 +5171,14 @@ namespace ECSEngine {
 		bool UISystem::ExistsWindowResource(unsigned int window_index, const char* name) const
 		{
 			ResourceIdentifier identifier(name, strlen(name));
-			unsigned int hash = UISystemHash::Hash(identifier);
-			return m_windows[window_index].table.Find<true>(hash, identifier) != -1;
+			return m_windows[window_index].table.Find<true>(identifier) != -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::ExistsWindowResource(unsigned int window_index, Stream<void> identifier_stream) const {
 			ResourceIdentifier identifier(identifier_stream);
-			unsigned int hash = UISystemHash::Hash(identifier);
-			return m_windows[window_index].table.Find<true>(hash, identifier) != -1;
+			return m_windows[window_index].table.Find<true>(identifier) != -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5343,8 +5303,7 @@ namespace ECSEngine {
 
 		void* UISystem::FindWindowResource(unsigned int window_index, const void* _identifier, unsigned int identifier_size) const {
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
-			unsigned int hash_index = UISystemHash::Hash(identifier);
-			return m_windows[window_index].table.GetValue<true>(hash_index, identifier);
+			return m_windows[window_index].table.GetValue<true>(identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7112,8 +7071,8 @@ namespace ECSEngine {
 		float2 UISystem::GetWindowRenderRegion(unsigned int window_index)
 		{
 			return { 
-				m_windows[window_index].render_region.x, 
-				m_windows[window_index].render_region.y
+				m_windows[window_index].render_region_offset.x, 
+				m_windows[window_index].render_region_offset.y
 			};
 		}
 
@@ -7823,13 +7782,13 @@ namespace ECSEngine {
 
 		unsigned int UISystem::HashString(const char* string) const
 		{
-			return UISystemHash::Hash(string);
+			return UIHash::Hash(string);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int UISystem::HashString(LPCWSTR string) const {
-			return UISystemHash::Hash(string);
+			return UIHash::Hash(string);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7837,8 +7796,7 @@ namespace ECSEngine {
 		void UISystem::IncrementWindowDynamicResource(unsigned int window_index, const char* name)
 		{
 			ResourceIdentifier identifier(name);
-			unsigned int hash = UISystemHash::Hash(identifier);
-			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtr(hash, identifier);
+			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtr(identifier);
 			resource->reference_count++;
 		}
 
@@ -8214,9 +8172,6 @@ namespace ECSEngine {
 				size_t stream_data_size = function::GetFileByteSize(stream);
 				void* allocation = malloc(stream_data_size);
 				stream.read((char*)allocation, stream_data_size);
-				if (!stream.good()) {
-					return false;
-				}
 
 				system->Clear();
 
@@ -8329,6 +8284,19 @@ namespace ECSEngine {
 				return true;
 			}
 			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::IsWindowDrawing(unsigned int window_index)
+		{
+			unsigned int border_index;
+			DockspaceType type;
+			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
+			if (dockspace == nullptr) {
+				return false;
+			}
+			return dockspace->borders[border_index].window_indices[dockspace->borders[border_index].active_window] == window_index;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9202,6 +9170,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::SetWindowDrawerDifferenceSpan(unsigned int window_index, float2 span)
+		{
+			m_windows[window_index].drawer_draw_difference = span;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::SetWindowOSSize(uint2 new_size)
 		{
 			m_window_os_size = new_size;
@@ -9247,34 +9222,17 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::RegisterInputLayouts() {
-			m_resources.input_layouts[ECS_TOOLS_UI_SOLID_COLOR] = m_graphics->ReflectVertexShaderInput(
-				m_resources.vertex_shaders[ECS_TOOLS_UI_SOLID_COLOR], 
-				ToStream(SOLID_COLOR_VERTEX_SHADER_SOURCE)
-			);
-
-			m_resources.input_layouts[ECS_TOOLS_UI_TEXT_SPRITE] = m_graphics->ReflectVertexShaderInput(
-				m_resources.vertex_shaders[ECS_TOOLS_UI_TEXT_SPRITE],
-				ToStream(TEXT_SPRITE_VERTEX_SHADER_SOURCE)
-			);
-			// copy this layout to the sprite one
-			m_resources.input_layouts[ECS_TOOLS_UI_SPRITE] = m_resources.input_layouts[ECS_TOOLS_UI_TEXT_SPRITE];
-			m_resources.input_layouts.size = m_descriptors.materials.count;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::RegisterPixelShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.pixel_shaders.size < m_resources.pixel_shaders.capacity);
-			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_graphics->CreatePixelShader(ToStream(filename));
+			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_resource_manager->LoadPixelShaderImplementation(filename);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::RegisterPixelShaders() {
-			RegisterPixelShader(SOLID_COLOR_PIXEL_SHADER);
-			RegisterPixelShader(SPRITE_PIXEL_SHADER);
-			RegisterPixelShader(TEXT_SPRITE_PIXEL_SHADER);
+			RegisterPixelShader(ECS_PIXEL_SHADER_SOURCE(UIVertexColor));
+			RegisterPixelShader(ECS_PIXEL_SHADER_SOURCE(UITextSpriteVertex));
+			RegisterPixelShader(ECS_PIXEL_SHADER_SOURCE(UISpriteVertex));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9296,33 +9254,38 @@ namespace ECSEngine {
 
 		void UISystem::RegisterWindowResource(size_t window_index, void* data, const void* _identifier, unsigned int identifier_size)
 		{
-			unsigned int hash_index = UISystemHash::Hash(_identifier, identifier_size);
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
-			m_windows[window_index].table.Insert(hash_index, data, identifier);
+			m_windows[window_index].table.Insert(data, identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::ReleaseWindowResource(size_t window_index, const void* _identifier, unsigned int identifier_size)
 		{
-			unsigned int hash_index = UISystemHash::Hash(_identifier, identifier_size);
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
-			m_windows[window_index].table.Erase<true>(hash_index, identifier);
+			m_windows[window_index].table.Erase<true>(identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::RegisterVertexShader(wchar_t* filename) {
+		void UISystem::RegisterVertexShaderAndLayout(wchar_t* filename) {
 			ECS_ASSERT(m_resources.vertex_shaders.size < m_resources.vertex_shaders.capacity);
-			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_graphics->CreateVertexShader(ToStream(filename));
+			Stream<char> shader_source;
+			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_resource_manager->LoadVertexShaderImplementation(
+				filename, 
+				&shader_source
+			);
+			m_resources.input_layouts[m_resources.input_layouts.size] = m_graphics->ReflectVertexShaderInput(m_resources.vertex_shaders[m_resources.input_layouts.size], shader_source);
+			m_resource_manager->Deallocate(shader_source.buffer);
+			m_resources.input_layouts.size++;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::RegisterVertexShaders() {
-			RegisterVertexShader(SOLID_COLOR_VERTEX_SHADER);
-			RegisterVertexShader(SPRITE_VERTEX_SHADER);
-			RegisterVertexShader(TEXT_SPRITE_VERTEX_SHADER);
+		void UISystem::RegisterVertexShadersAndLayouts() {
+			RegisterVertexShaderAndLayout(ECS_VERTEX_SHADER_SOURCE(UIVertexColor));
+			RegisterVertexShaderAndLayout(ECS_VERTEX_SHADER_SOURCE(UITextSpriteVertex));
+			RegisterVertexShaderAndLayout(ECS_VERTEX_SHADER_SOURCE(UISpriteVertex));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9387,8 +9350,7 @@ namespace ECSEngine {
 		void UISystem::RemoveWindowDynamicResource(unsigned int window_index, const char* name)
 		{
 			ResourceIdentifier identifier(name);
-			unsigned int hash = UISystemHash::Hash(identifier);
-			unsigned int index = m_windows[window_index].dynamic_resources.Find(hash, identifier);
+			unsigned int index = m_windows[window_index].dynamic_resources.Find(identifier);
 			ECS_ASSERT(index != -1);
 			RemoveWindowDynamicResource(window_index, index);
 		}
@@ -9408,8 +9370,7 @@ namespace ECSEngine {
 			}
 			for (size_t subindex = 0; subindex < resource->table_resources.size; subindex++) {
 				ResourceIdentifier identifier = resource->table_resources[subindex];
-				unsigned int hash = UISystemHash::Hash(identifier);
-				m_windows[window_index].table.Erase(hash, identifier);
+				m_windows[window_index].table.Erase(identifier);
 			}
 
 			// The element allocations contains the starting coallesced allocation
@@ -11267,11 +11228,17 @@ namespace ECSEngine {
 			Texture2D old_texture(GetResource(*data->texture));
 
 			data->system->m_resources.texture_spinlock.lock();
-			Texture2D new_texture = ResizeTextureWithStaging(old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX, data->system->m_graphics->GetContext());
+			Texture2D new_texture = ResizeTextureWithStaging(old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX);
 			data->system->m_resources.texture_spinlock.unlock();
 			if (new_texture.tex != nullptr) {
-				// Compress the texture
-				bool success = CompressTexture(new_texture, TextureCompressionExplicit::ColorMap, &data->system->m_resources.texture_spinlock);
+				uint2 texture_dimensions = GetTextureDimensions(old_texture);
+
+				bool success = true;
+				// Only compress the texture if it is multiple of 4 size in both dimensions
+				if ((texture_dimensions.x & 3) == 0 && (texture_dimensions.y & 3) == 0) {
+					// Compress the texture
+					success = CompressTexture(new_texture, TextureCompressionExplicit::ColorMap, &data->system->m_resources.texture_spinlock);
+				}
 
 				if (success) {
 					// Create a shader resource view
@@ -11286,6 +11253,9 @@ namespace ECSEngine {
 						data->system->m_resource_manager->RemoveReferenceCountForResource(data->filename, ResourceType::Texture);
 						*data->texture = new_view;
 					}
+				}
+				else {
+					new_texture.tex->Release();
 				}
 			}
 			data->system->m_resources.texture_semaphore.Exit();

@@ -4,6 +4,16 @@
 
 namespace ECSEngine {
 
+	struct Date {
+		unsigned char month;
+		unsigned char day;
+		unsigned char hour;
+		unsigned char minute;
+		unsigned char seconds;
+		unsigned short year;
+		unsigned short milliseconds;
+	};
+
 #pragma region Alphabet and character type
 
 	// Helper Visualing enum

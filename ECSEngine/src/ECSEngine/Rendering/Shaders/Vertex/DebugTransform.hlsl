@@ -1,4 +1,4 @@
-#include "..\Macros.hlsli"
+#include "../Macros.hlsli"
 
 // Color will be a color float since it must be aligned to 16 byte boundaries
 struct VS_INPUT

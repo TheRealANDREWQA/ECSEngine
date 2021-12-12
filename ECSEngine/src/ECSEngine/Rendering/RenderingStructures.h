@@ -204,12 +204,7 @@ namespace ECSEngine {
 			return device;
 		}
 
-		void ReleaseByteCode() {
-			byte_code->Release();
-		}
-
-		containers::Stream<wchar_t> path;
-		ID3DBlob* byte_code;
+		containers::Stream<void> byte_code;
 		ID3D11VertexShader* shader;
 	};
 
@@ -244,12 +239,11 @@ namespace ECSEngine {
 			return device;
 		}
 
-		containers::Stream<wchar_t> path;
 		ID3D11PixelShader* shader;
 	};
 
 	struct ECSENGINE_API GeometryShader {
-		GeometryShader() : path(nullptr, 0), shader(nullptr) {}
+		GeometryShader() : shader(nullptr) {}
 		GeometryShader(ID3D11GeometryShader* _shader) : shader(_shader) {}
 
 		GeometryShader(const GeometryShader& other) = default;
@@ -261,12 +255,11 @@ namespace ECSEngine {
 			return device;
 		}
 
-		containers::Stream<wchar_t> path;
 		ID3D11GeometryShader* shader;
 	};
 
 	struct ECSENGINE_API DomainShader {
-		DomainShader() : path(nullptr, 0), shader(nullptr) {}
+		DomainShader() : shader(nullptr) {}
 		DomainShader(ID3D11DomainShader* _shader) : shader(_shader) {}
 
 		DomainShader(const DomainShader& other) = default;
@@ -278,7 +271,6 @@ namespace ECSEngine {
 			return device;
 		}
 
-		containers::Stream<wchar_t> path;
 		ID3D11DomainShader* shader;
 	};
 
@@ -295,13 +287,12 @@ namespace ECSEngine {
 			return device;
 		}
 
-		containers::Stream<wchar_t> path;
 		ID3D11HullShader* shader;
 	};
 
 	// Path is stable and null terminated
 	struct ECSENGINE_API ComputeShader {
-		ComputeShader() : path(nullptr, 0), shader(nullptr) {}
+		ComputeShader() : shader(nullptr) {}
 
 		ComputeShader(const ComputeShader& other) = default;
 		ComputeShader& operator = (const ComputeShader& other) = default;
@@ -312,7 +303,6 @@ namespace ECSEngine {
 			return device;
 		}
 
-		containers::Stream<wchar_t> path;
 		ID3D11ComputeShader* shader;
 	};
 
@@ -466,6 +456,15 @@ namespace ECSEngine {
 
 
 		ID3D11Texture2D* tex;
+	};
+
+	enum TextureCubeFace {
+		ECS_TEXTURE_CUBE_X_POS,
+		ECS_TEXTURE_CUBE_X_NEG,
+		ECS_TEXTURE_CUBE_Y_POS,
+		ECS_TEXTURE_CUBE_Y_NEG,
+		ECS_TEXTURE_CUBE_Z_POS,
+		ECS_TEXTURE_CUBE_Z_NEG
 	};
 
 	struct ECSENGINE_API RenderTargetView {
@@ -754,8 +753,8 @@ namespace ECSEngine {
 		containers::Stream<wchar_t> normal_texture;
 		containers::Stream<wchar_t> metallic_texture;
 		containers::Stream<wchar_t> roughness_texture;
-		containers::Stream<wchar_t> emissive_texture;
 		containers::Stream<wchar_t> occlusion_texture;
+		containers::Stream<wchar_t> emissive_texture;
 	};
 
 	enum PBRMaterialTextureIndex : unsigned char {
@@ -763,8 +762,8 @@ namespace ECSEngine {
 		ECS_PBR_MATERIAL_NORMAL,
 		ECS_PBR_MATERIAL_METALLIC,
 		ECS_PBR_MATERIAL_ROUGHNESS,
-		ECS_PBR_MATERIAL_EMISSIVE,
 		ECS_PBR_MATERIAL_OCCLUSION,
+		ECS_PBR_MATERIAL_EMISSIVE,
 		ECS_PBR_MATERIAL_MAPPING_COUNT
 	};
 

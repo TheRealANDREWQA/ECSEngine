@@ -224,8 +224,7 @@ namespace ECSEngine {
 		EntityInfo** m_entity_infos;
 	};
 
-#define ECS_RESOURCE_IDENTIFIER(name) ResourceIdentifier identifier = ResourceIdentifier(name, strlen(name_size));
-#define ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, hash_function) size_t name_size = strlen(name); ResourceIdentifier identifier = ResourceIdentifier(name, name_size); unsigned int hash = hash_function::Hash(name, name_size);
+#define ECS_RESOURCE_IDENTIFIER(name) ResourceIdentifier identifier = ResourceIdentifier(name, strlen(name));
 
 	// filename can be used as a general purpose pointer if other identifier than the filename is used
 	// Compare function uses AVX2 32 byte SIMD char compare

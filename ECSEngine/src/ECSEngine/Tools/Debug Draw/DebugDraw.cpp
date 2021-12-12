@@ -1,8 +1,8 @@
 #include "ecspch.h"
 #include "DebugDraw.h"
-#include "..\..\Utilities\FunctionInterfaces.h"
-#include "..\..\Internal\ResourceManager.h"
-#include "..\..\Rendering\GraphicsHelpers.h"
+#include "../../Utilities/FunctionInterfaces.h"
+#include "../../Internal/Resources/ResourceManager.h"
+#include "../../Rendering/GraphicsHelpers.h"
 
 constexpr size_t SMALL_VERTEX_BUFFER_CAPACITY = 8;
 constexpr size_t PER_THREAD_RESOURCES = 128;
@@ -319,8 +319,8 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	DebugDrawer::DebugDrawer(MemoryManager* allocator, Graphics* graphics, size_t thread_count) {
-		Initialize(allocator, graphics, thread_count);
+	DebugDrawer::DebugDrawer(MemoryManager* allocator, ResourceManager* resource_manager, size_t thread_count) {
+		Initialize(allocator, resource_manager, thread_count);
 	}
 
 #pragma region Add to the queue - single threaded
@@ -2809,9 +2809,9 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::Initialize(MemoryManager* _allocator, Graphics* _graphics, size_t _thread_count) {
+	void DebugDrawer::Initialize(MemoryManager* _allocator, ResourceManager* resource_manager, size_t _thread_count) {
 		allocator = _allocator;
-		graphics = _graphics;
+		graphics = resource_manager->m_graphics;
 		thread_count = _thread_count;
 
 		// Initialize the small vertex buffers
@@ -2820,9 +2820,12 @@ namespace ECSEngine {
 		instanced_small_structured_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), SMALL_VERTEX_BUFFER_CAPACITY);
 		instanced_structured_view = graphics->CreateBufferView(instanced_small_structured_buffer);
 
-#define REGISTER_SHADER(index, name) vertex_shaders[index] = graphics->CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(name))); \
-		pixel_shaders[index] = graphics->CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(name))); \
-		layout_shaders[index] = graphics->ReflectVertexShaderInput(vertex_shaders[index]);
+		Stream<char> shader_source;
+
+#define REGISTER_SHADER(index, name) vertex_shaders[index] = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(name), &shader_source); \
+		pixel_shaders[index] = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(name)); \
+		layout_shaders[index] = resource_manager->m_graphics->ReflectVertexShaderInput(vertex_shaders[index], shader_source); \
+		resource_manager->Deallocate(shader_source.buffer);
 
 		// Initialize the shaders and input layouts
 		REGISTER_SHADER(ECS_DEBUG_SHADER_TRANSFORM, DebugTransform);
@@ -2955,14 +2958,10 @@ namespace ECSEngine {
 		oobbs.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 		strings.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 
-
 		string_character_bounds = (float2*)buffer;
-	}
 
-	// ----------------------------------------------------------------------------------------------------------------------
+#pragma region Primitive buffers
 
-	void DebugDrawer::InitializePrimitiveBuffers(ResourceManager* resource_manager)
-	{
 		// The string meshes - in the gltf mesh they are stored in reverse order.
 		// Change their order
 		string_mesh = resource_manager->LoadCoallescedMesh(STRING_MESH_FILE);
@@ -3038,7 +3037,7 @@ namespace ECSEngine {
 		}
 		// Copy the unknown character to the last character
 		string_character_bounds[(unsigned int)AlphabetIndex::Unknown - 1] = string_character_bounds[submesh_count - 1];
-		
+
 		// Place the space and tab dimensions
 		string_character_bounds[(unsigned int)AlphabetIndex::Space] = { -STRING_SPACE_SIZE, STRING_SPACE_SIZE };
 		string_character_bounds[(unsigned int)AlphabetIndex::Tab] = { -STRING_TAB_SIZE, STRING_TAB_SIZE };
@@ -3070,6 +3069,9 @@ namespace ECSEngine {
 		circle_positions[index] = circle_positions[0];
 
 		circle_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(circle_positions), circle_positions);
+
+#pragma endregion
+
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

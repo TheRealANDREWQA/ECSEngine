@@ -79,23 +79,12 @@ void EditorSetError(EditorState* editor_state, Stream<char> error_message) {
 	EditorAddEventWithPointer(editor_state, EditorError, allocation);
 }
 
-void ActivateConsole(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
-
-	unsigned int window_index = ui_system->GetWindowFromName(CONSOLE_WINDOW_NAME);
-	if (window_index != -1) {
-		ui_system->SetActiveWindow(window_index);
-		SetWindowVerticalSliderPosition(ui_system, window_index, 1.0f);
-	}
-}
-
 void EditorConsoleError(EditorState* editor_state, void* ECS_RESTRICT data)
 {
 	EDITOR_STATE(editor_state);
 
 	Stream<char>* error_message = (Stream<char>*)data;
 	console->Error(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
-	ActivateConsole(editor_state);
 }
 
 void EditorConsoleWarn(EditorState* editor_state, void* ECS_RESTRICT data) {
@@ -103,7 +92,6 @@ void EditorConsoleWarn(EditorState* editor_state, void* ECS_RESTRICT data) {
 
 	Stream<char>* error_message = (Stream<char>*)data;
 	console->Warn(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
-	ActivateConsole(editor_state);
 }
 
 void EditorConsoleInfo(EditorState* editor_state, void* ECS_RESTRICT data) {
@@ -111,14 +99,6 @@ void EditorConsoleInfo(EditorState* editor_state, void* ECS_RESTRICT data) {
 
 	Stream<char>* error_message = (Stream<char>*)data;
 	console->Info(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
-}
-
-void EditorConsoleInfoFocus(EditorState* editor_state, void* ECS_RESTRICT data) {
-	EDITOR_STATE(editor_state);
-
-	Stream<char>* error_message = (Stream<char>*)data;
-	console->Info(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
-	ActivateConsole(editor_state);
 }
 
 void EditorConsoleTrace(EditorState* editor_state, void* ECS_RESTRICT data) {
@@ -147,14 +127,6 @@ void EditorSetConsoleInfo(EditorState* editor_state, Stream<char> error_message)
 
 	void* allocation = AllocateErrorMessage(editor_state, error_message);
 	EditorAddEventWithPointer(editor_state, EditorConsoleInfo, allocation);
-}
-
-void EditorSetConsoleInfoFocus(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message)
-{
-	EDITOR_STATE(editor_state);
-
-	void* allocation = AllocateErrorMessage(editor_state, error_message);
-	EditorAddEventWithPointer(editor_state, EditorConsoleInfoFocus, allocation);
 }
 
 void EditorSetConsoleTrace(EditorState* editor_state, Stream<char> error_message) {

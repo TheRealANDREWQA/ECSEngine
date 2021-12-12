@@ -117,6 +117,14 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------
 
+		// Selects the path that has the size different from 0
+		ECSENGINE_API Path GetValidPath(Path2 paths);
+
+		// Selects the path that has the size different from 0
+		ECSENGINE_API ASCIIPath GetValidPath(ASCIIPath2 paths);
+
+		// -------------------------------------------------------------------------------------------------
+
 	}
 
 }

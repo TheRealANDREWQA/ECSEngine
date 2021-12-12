@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "UIDrawerWindows.h"
 #include "../../Internal/Multithreading/TaskManager.h"
+#include "../../Utilities/OSFunctions.h"
 
 namespace ECSEngine {
 
@@ -1023,7 +1024,13 @@ namespace ECSEngine {
 					dimming_value = function::Select(keyboard->IsKeyDown(HID::Key::RightShift), 0.02f, dimming_value);
 
 					if (scroll_amount != 0.0f) {
-						total_scroll = data->scroll_factor * ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_FACTOR * scroll_amount * dimming_value;
+						if (system->m_windows[window_index].drawer_draw_difference.y < ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_THRESHOLD) {
+							total_scroll = ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_STEP / system->m_windows[window_index].drawer_draw_difference.y * scroll_amount
+								* dimming_value;
+						}
+						else {
+							total_scroll = data->scroll_factor * ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_FACTOR * scroll_amount * dimming_value;
+						}
 						UIDrawerSlider* vertical_slider = (UIDrawerSlider*)data->vertical_slider;
 						vertical_slider->interpolate_value = true;
 						vertical_slider->slider_position -= total_scroll;
@@ -1719,13 +1726,6 @@ namespace ECSEngine {
 			console->Clear();
 		}
 
-		constexpr const wchar_t* ConsoleTextureIcons[] = {
-			ECS_TOOLS_UI_TEXTURE_INFO_ICON,
-			ECS_TOOLS_UI_TEXTURE_WARN_ICON,
-			ECS_TOOLS_UI_TEXTURE_ERROR_ICON,
-			ECS_TOOLS_UI_TEXTURE_TRACE_ICON
-		};
-
 		template<bool initialize>
 		void ConsoleWindowDraw(void* window_data, void* drawer_descriptor) {
 			UI_PREPARE_DRAWER(initialize);
@@ -1745,65 +1745,8 @@ namespace ECSEngine {
 
 #pragma region Recalculate counts
 
-			bool recalculate_counts = (data->console->messages.size != data->last_frame_message_count) || data->filter_message_type_changed
-				|| (data->console->verbosity_level != data->previous_verbosity_level) || data->system_filter_changed;
-			if (recalculate_counts) {
-				unsigned int dummy;
-				unsigned int* ptrs[] = { &data->info_count, &data->warn_count, &data->error_count, &data->trace_count, &dummy };
-				bool* type_ptrs = &data->filter_info;
-				data->filter_message_type_changed = false;
-				data->system_filter_changed = false;
-
-				auto update_kernel = [&](size_t starting_index) {
-					size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
-
-					for (size_t index = starting_index; index < data->console->messages.size; index++) {
-						(*ptrs[(unsigned int)data->console->messages[index].icon_type])++;
-						ResourceIdentifier identifier = {
-							data->console->messages[index].message.buffer + data->console->messages[index].client_message_start,
-							(unsigned int)data->console->messages[index].message.size - data->console->messages[index].client_message_start
-						};
-						unsigned int hash = ConsoleUIHashFunction::Hash(identifier.ptr, identifier.size);
-
-						int message_index = data->unique_messages.Find(hash, identifier);
-						if (message_index == -1) {
-							bool grow = data->unique_messages.Insert(hash, { data->console->messages[index], 1 }, identifier);
-							if (grow) {
-								size_t new_capacity = static_cast<size_t>(data->unique_messages.GetCapacity() * 1.5f + 1);
-								void* new_allocation = drawer.GetMainAllocatorBuffer(data->unique_messages.MemoryOf(new_capacity));
-								const void* old_allocation = data->unique_messages.Grow<ConsoleUIHashFunction>(new_allocation, new_capacity);
-								drawer.RemoveAllocation(old_allocation);
-							}
-						}
-						else {
-							UniqueConsoleMessage* message_ptr = data->unique_messages.GetValuePtrFromIndex(message_index);
-							message_ptr->counter++;
-						}
-
-						bool is_system_valid = (data->console->messages[index].system_filter & system_mask) != 0;
-						bool is_type_valid = type_ptrs[(unsigned int)data->console->messages[index].icon_type];
-						bool is_verbosity_valid = data->console->messages[index].verbosity <= data->console->verbosity_level;
-						if (is_system_valid && is_type_valid && is_verbosity_valid) {
-							data->filtered_message_indices.Add(index);
-						}
-
-					}
-				};
-
-				// if more messages have been added, only account for them
-				if (data->last_frame_message_count < data->console->messages.size) {
-					update_kernel(data->last_frame_message_count);
-				}
-				// else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
-				// or system filter changed
-				else {
-					*ptrs[0] = *ptrs[1] = *ptrs[2] = *ptrs[3] = 0;
-					data->unique_messages.Clear();
-					data->filtered_message_indices.FreeBuffer();
-
-					update_kernel(0);
-				}
-				data->last_frame_message_count = data->console->messages.size;
+			if constexpr (!initialize) {
+				ConsoleFilterMessages(data, drawer);
 			}
 
 #pragma endregion
@@ -1924,10 +1867,10 @@ namespace ECSEngine {
 				}
 				else {
 					if (console_message.icon_type == ConsoleMessageType::Error) {
-						drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, ConsoleTextureIcons[(unsigned int)ConsoleMessageType::Error]);
+						drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, CONSOLE_TEXTURE_ICONS[(unsigned int)ConsoleMessageType::Error]);
 					}
 					else {
-						drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, ConsoleTextureIcons[(unsigned int)console_message.icon_type], console_message.color);
+						drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.icon_type], console_message.color);
 					}
 				}
 				parameters.color = console_message.color;
@@ -2132,6 +2075,71 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
+		void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer<false>& drawer)
+		{
+			bool recalculate_counts = (data->console->messages.size != data->last_frame_message_count) || data->filter_message_type_changed
+				|| (data->console->verbosity_level != data->previous_verbosity_level) || data->system_filter_changed;
+			if (recalculate_counts) {
+				unsigned int dummy;
+				unsigned int* ptrs[] = { &data->info_count, &data->warn_count, &data->error_count, &data->trace_count, &dummy };
+				bool* type_ptrs = &data->filter_info;
+				data->filter_message_type_changed = false;
+				data->system_filter_changed = false;
+
+				auto update_kernel = [&](size_t starting_index) {
+					size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
+
+					for (size_t index = starting_index; index < data->console->messages.size; index++) {
+						(*ptrs[(unsigned int)data->console->messages[index].icon_type])++;
+						ResourceIdentifier identifier = {
+							data->console->messages[index].message.buffer + data->console->messages[index].client_message_start,
+							(unsigned int)data->console->messages[index].message.size - data->console->messages[index].client_message_start
+						};
+
+						int message_index = data->unique_messages.Find(identifier);
+						if (message_index == -1) {
+							bool grow = data->unique_messages.Insert({ data->console->messages[index], 1 }, identifier);
+							if (grow) {
+								size_t new_capacity = static_cast<size_t>(data->unique_messages.GetCapacity() * 1.5f + 1);
+								void* new_allocation = drawer.GetMainAllocatorBuffer(data->unique_messages.MemoryOf(new_capacity));
+								const void* old_allocation = data->unique_messages.Grow(new_allocation, new_capacity);
+								drawer.RemoveAllocation(old_allocation);
+							}
+						}
+						else {
+							UniqueConsoleMessage* message_ptr = data->unique_messages.GetValuePtrFromIndex(message_index);
+							message_ptr->counter++;
+						}
+
+						bool is_system_valid = (data->console->messages[index].system_filter & system_mask) != 0;
+						bool is_type_valid = type_ptrs[(unsigned int)data->console->messages[index].icon_type];
+						bool is_verbosity_valid = data->console->messages[index].verbosity <= data->console->verbosity_level;
+						if (is_system_valid && is_type_valid && is_verbosity_valid) {
+							data->filtered_message_indices.Add(index);
+						}
+
+					}
+				};
+
+				// if more messages have been added, only account for them
+				if (data->last_frame_message_count < data->console->messages.size) {
+					update_kernel(data->last_frame_message_count);
+				}
+				// else start from scratch; console has been cleared, type filter changed, verbosity filter changed,
+				// or system filter changed
+				else {
+					*ptrs[0] = *ptrs[1] = *ptrs[2] = *ptrs[3] = 0;
+					data->unique_messages.Clear();
+					data->filtered_message_indices.FreeBuffer();
+
+					update_kernel(0);
+				}
+				data->last_frame_message_count = data->console->messages.size;
+			}
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
 		size_t GetSystemMaskFromConsoleWindowData(const ConsoleWindowData* data)
 		{
 			size_t mask = 0;
@@ -2217,7 +2225,7 @@ namespace ECSEngine {
 		Console::Console(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* _dump_path) : allocator(allocator),
 			pause_on_error(false), verbosity_level(CONSOLE_VERBOSITY_DETAILED), dump_type(ConsoleDumpType::CountMessages),
 			task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
-			format = CONSOLE_HOUR | CONSOLE_MINUTES | CONSOLE_SECONDS;
+			format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
 			messages = containers::ResizableStream<ConsoleMessage, MemoryManager>(allocator, 0);
 			system_filter_strings = containers::ResizableStream<const char*, MemoryManager>(allocator, 0);
 
@@ -2267,13 +2275,13 @@ namespace ECSEngine {
 		size_t Console::GetFormatCharacterCount() const
 		{
 			size_t count = 0;
-			count += function::Select(function::HasFlag(format, CONSOLE_MILLISECONDS), 4, 0);
-			count += function::Select(function::HasFlag(format, CONSOLE_SECONDS), 3, 0);
-			count += function::Select(function::HasFlag(format, CONSOLE_MINUTES), 3, 0);
-			count += function::Select(function::HasFlag(format, CONSOLE_HOUR), 2, 0);
-			count += function::Select(function::HasFlag(format, CONSOLE_DAY), 3, 0);
-			count += function::Select(function::HasFlag(format, CONSOLE_MONTH), 3, 0);
-			count += function::Select(function::HasFlag(format, CONSOLE_YEAR), 5, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS), 4, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS), 3, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES), 3, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR), 2, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY), 3, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH), 3, 0);
+			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR), 5, 0);
 
 			count += 3;
 			return count;
@@ -2599,92 +2607,8 @@ namespace ECSEngine {
 
 		void Console::WriteFormatCharacters(Stream<char>& characters)
 		{
-			characters.Add('[');
-
-			SYSTEMTIME system_time;
-			GetLocalTime(&system_time);
-
-			auto flag = [&](size_t integer) {
-				char temp[256];
-				Stream<char> temp_stream = Stream<char>(temp, 0);
-				function::ConvertIntToChars(temp_stream, integer);
-				for (size_t index = 0; index < temp_stream.size; index++) {
-					characters.Add(temp_stream[index]);
-				}
-			};
-
-			bool has_hour = false;
-			if (function::HasFlag(format, CONSOLE_HOUR)) {
-				flag(system_time.wHour);
-				has_hour = true;
-			}
-
-			bool has_minutes = false;
-			if (function::HasFlag(format, CONSOLE_MINUTES)) {
-				if (has_hour) {
-					characters.Add(':');
-				}
-				has_minutes = true;
-				flag(system_time.wMinute);
-			}
-
-			bool has_seconds = false;
-			if (function::HasFlag(format, CONSOLE_SECONDS)) {
-				if (has_minutes || has_hour) {
-					characters.Add(':');
-				}
-				has_seconds = true;
-				flag(system_time.wSecond);
-			}
-
-			bool has_milliseconds = false;
-			if (function::HasFlag(format, CONSOLE_MILLISECONDS)) {
-				if (has_hour || has_minutes || has_minutes) {
-					characters.Add(':');
-				}
-				has_milliseconds = true;
-				flag(system_time.wMilliseconds);
-			}
-
-			bool has_hour_minutes_seconds_milliseconds = has_hour || has_minutes || has_seconds || has_milliseconds;
-			bool has_space_been_written = false;
-
-			bool has_day = false;
-			if (function::HasFlag(format, CONSOLE_DAY)) {
-				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-					characters.Add(' ');
-					has_space_been_written = true;
-				}
-				has_day = true;
-				flag(system_time.wDay);
-			}
-
-			bool has_month = false;
-			if (function::HasFlag(format, CONSOLE_MONTH)) {
-				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-					characters.Add(' ');
-					has_space_been_written = true;
-				}
-				if (has_day) {
-					characters.Add('-');
-				}
-				has_month = true;
-				flag(system_time.wMonth);
-			}
-
-			if (function::HasFlag(format, CONSOLE_YEAR)) {
-				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-					characters.Add(' ');
-					has_space_been_written = true;
-				}
-				if (has_day || has_month) {
-					characters.Add('-');
-				}
-				flag(system_time.wYear);
-			}
-
-			characters.Add(']');
-			characters.Add(' ');
+			Date current_date = OS::GetLocalTime();
+			function::ConvertDateToString(current_date, characters, format);
 		}
 
 		// -------------------------------------------------------------------------------------------------------

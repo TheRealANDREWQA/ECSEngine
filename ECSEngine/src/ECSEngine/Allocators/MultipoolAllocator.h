@@ -13,24 +13,11 @@ namespace ECSEngine {
 	class ECSENGINE_API MultipoolAllocator
 	{
 	public:
-		MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0) {}
-		MultipoolAllocator(unsigned char* buffer, size_t size, size_t pool_count)
-			: m_buffer((unsigned char*)((uintptr_t)buffer + containers::BlockRange::MemoryOf(pool_count))),
-			m_spin_lock(), m_size(size), m_range((unsigned int*)buffer, pool_count, size) {
-#ifdef ECSENGINE_DEBUG
-			m_initial_buffer = m_buffer;
-#endif
-		}
-		MultipoolAllocator(unsigned char* buffer, void* block_range_buffer, size_t size, size_t pool_count)
-			: m_buffer(buffer), m_spin_lock(), m_size(size),
-			m_range((unsigned int*)block_range_buffer, pool_count, size) {
-#ifdef ECSENGINE_DEBUG
-			m_initial_buffer = m_buffer;
-#endif
-		}
+		MultipoolAllocator();
+		MultipoolAllocator(unsigned char* buffer, size_t size, size_t pool_count);
+		MultipoolAllocator(unsigned char* buffer, void* block_range_buffer, size_t size, size_t pool_count);
 		
 		MultipoolAllocator& operator = (const MultipoolAllocator& other) = default;
-		MultipoolAllocator& operator = (MultipoolAllocator&& other) = default;
 		
 		void* Allocate(size_t size, size_t alignment = 8);
 
@@ -38,6 +25,11 @@ namespace ECSEngine {
 		void Deallocate(const void* block);
 
 		void Clear();
+
+		// Returns whether or not there is something currently allocated from this allocator
+		bool IsEmpty() const;
+
+		void* GetAllocatedBuffer() const;
 
 		// --------------------------------------------------- Thread safe variants ------------------------------------------
 
@@ -51,7 +43,7 @@ namespace ECSEngine {
 		static size_t MemoryOf(unsigned int pool_count);
 		static size_t MemoryOf(unsigned int pool_count, unsigned int size);
 
-	private:
+	//private:
 		unsigned char* m_buffer;
 #ifdef ECSENGINE_DEBUG
 		void* m_initial_buffer;

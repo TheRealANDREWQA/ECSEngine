@@ -159,7 +159,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < string.size; index++) {
 			sum += string[index] * index;
 		}
-		return (sum * (unsigned int)string.size) & 0x00FFFFFF;
+		return sum * (unsigned int)string.size;
 	}
 
 	unsigned int HashFunctionMultiplyString::Hash(Stream<const wchar_t> string) {
@@ -204,15 +204,15 @@ namespace ECSEngine {
 			size_t index = 0;
 			Vec32uc char_compare, other_char_compare;
 			while (size - index > char_compare.size()) {
-				char_compare.load(ptr);
-				other_char_compare.load(other.ptr);
+				char_compare.load(function::OffsetPointer(ptr, index));
+				other_char_compare.load(function::OffsetPointer(other.ptr, index));
 				if (horizontal_and(char_compare == other_char_compare) == false) {
 					return false;
 				}
 				index += char_compare.size();
 			}
-			char_compare.load_partial(size - index, ptr);
-			other_char_compare.load_partial(size - index, other.ptr);
+			char_compare.load_partial(size - index, function::OffsetPointer(ptr, index));
+			other_char_compare.load_partial(size - index, function::OffsetPointer(other.ptr, index));
 			return horizontal_and(char_compare == other_char_compare);
 		}
 	}

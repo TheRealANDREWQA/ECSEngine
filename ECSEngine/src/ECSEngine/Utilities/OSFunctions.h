@@ -2,9 +2,11 @@
 #include "../Core.h"
 #include "ecspch.h"
 #include "../Containers/Stream.h"
+#include "BasicTypes.h"
 
 ECS_CONTAINERS;
 
+// Forward the UISystem and Console
 namespace ECSEngine {
 
 	namespace Tools {
@@ -91,6 +93,12 @@ namespace ECSEngine {
 			Stream<wchar_t> path,
 			CapacityStream<char>* error_message = nullptr
 		);
+
+		// Local time
+		ECSENGINE_API Date GetLocalTime();
+
+		// Convinience function - if it fails it will return 0
+		ECSENGINE_API size_t GetFileLastWrite(const wchar_t* path);
 
 #pragma endregion
 

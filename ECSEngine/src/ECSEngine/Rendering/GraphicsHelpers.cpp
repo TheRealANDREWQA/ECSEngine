@@ -3,6 +3,10 @@
 #include "GraphicsHelpers.h"
 #include "Graphics.h"
 #include "../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
+#include "../Utilities/Path.h"
+#include "../Allocators/AllocatorPolymorphic.h"
+
+ECS_CONTAINERS;
 
 namespace ECSEngine {
 
@@ -262,7 +266,25 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture1D ToStaging(Texture1D texture, GraphicsContext* context)
+	VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right)
+	{
+		// a -- b
+		// |    |
+		// c -- d
+		float3 positions[] = {
+			top_left,                                           // a
+			{ bottom_right.x, top_left.y, bottom_right.z },     // b
+			{ top_left.x, bottom_right.y, top_left.z },         // c
+			{bottom_right.x, top_left.y, bottom_right.z},       // b
+			bottom_right,                                       // d
+			{top_left.x, bottom_right.y, top_left.z}            // c
+		};
+		return graphics->CreateVertexBuffer(sizeof(float3), std::size(positions), positions);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	Texture1D ToStaging(Texture1D texture)
 	{
 		Texture1D new_texture;
 
@@ -282,9 +304,8 @@ namespace ECSEngine {
 			return new_texture;
 		}
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		CopyGraphicsResource(new_texture, texture, context);
 		return new_texture;
@@ -292,7 +313,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ToStaging(Texture2D texture, GraphicsContext* context)
+	Texture2D ToStaging(Texture2D texture)
 	{
 		Texture2D new_texture;
 
@@ -314,9 +335,8 @@ namespace ECSEngine {
 			return new_texture;
 		}
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		CopyGraphicsResource(new_texture, texture, context);
 		return new_texture;
@@ -324,7 +344,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture3D ToStaging(Texture3D texture, GraphicsContext* context)
+	Texture3D ToStaging(Texture3D texture)
 	{
 		Texture3D new_texture;
 
@@ -344,9 +364,8 @@ namespace ECSEngine {
 			return new_texture;
 		}
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		CopyGraphicsResource(new_texture, texture, context);
 		return new_texture;
@@ -355,7 +374,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	Buffer ToStaging(Buffer buffer, GraphicsContext* context) {
+	Buffer ToStaging(Buffer buffer) {
 		Buffer new_buffer;
 
 		memcpy(&new_buffer, &buffer, sizeof(Buffer));
@@ -374,15 +393,14 @@ namespace ECSEngine {
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Could not create a staging buffer!", true);
 
 		new_buffer.buffer = _new_buffer;
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		CopyGraphicsResource(new_buffer, buffer, context);
 		return new_buffer;
 	}
 
-#define EXPORT(type) ECS_TEMPLATE_FUNCTION(type, ToStaging, type, GraphicsContext*);
+#define EXPORT(type) ECS_TEMPLATE_FUNCTION(type, ToStaging, type);
 
 	EXPORT(StandardBuffer);
 	EXPORT(StructuredBuffer);
@@ -396,7 +414,7 @@ namespace ECSEngine {
 
 	constexpr size_t MAX_SUBRESOURCES = 32;
 
-	Texture1D ToImmutableWithStaging(Texture1D texture, GraphicsContext* context) {
+	Texture1D ToImmutableWithStaging(Texture1D texture) {
 		Texture1D new_texture;
 
 		GraphicsDevice* device = nullptr;
@@ -407,14 +425,14 @@ namespace ECSEngine {
 		texture_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		texture_descriptor.CPUAccessFlags = 0;
 
-		Texture1D staging_texture = ToStaging(texture, context);
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
+
+		Texture1D staging_texture = ToStaging(texture);
 		if (staging_texture.tex == nullptr) {
 			return staging_texture;
 		}
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
@@ -438,7 +456,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ToImmutableWithStaging(Texture2D texture, GraphicsContext* context) {
+	Texture2D ToImmutableWithStaging(Texture2D texture) {
 		Texture2D new_texture;
 
 		GraphicsDevice* device = nullptr;
@@ -449,13 +467,12 @@ namespace ECSEngine {
 		texture_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		texture_descriptor.CPUAccessFlags = 0;
 
-		Texture2D staging_texture = ToStaging(texture, context);
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
+
+		Texture2D staging_texture = ToStaging(texture);
 		if (staging_texture.tex == nullptr) {
 			return staging_texture;
-		}
-
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
 		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
@@ -481,7 +498,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture3D ToImmutableWithStaging(Texture3D texture, GraphicsContext* context) {
+	Texture3D ToImmutableWithStaging(Texture3D texture) {
 		Texture3D new_texture;
 
 		GraphicsDevice* device = nullptr;
@@ -492,13 +509,12 @@ namespace ECSEngine {
 		texture_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		texture_descriptor.CPUAccessFlags = 0;
 
-		Texture3D staging_texture = ToStaging(texture, context);
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
+
+		Texture3D staging_texture = ToStaging(texture);
 		if (staging_texture.tex == nullptr) {
 			return staging_texture;
-		}
-
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
 		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
@@ -525,7 +541,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	Buffer ToImmutableWithStaging(Buffer buffer, GraphicsContext* context) {
+	Buffer ToImmutableWithStaging(Buffer buffer) {
 		Buffer new_buffer;
 
 		GraphicsDevice* device = nullptr;
@@ -536,13 +552,12 @@ namespace ECSEngine {
 		buffer_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		buffer_descriptor.CPUAccessFlags = 0;
 
-		Buffer staging_buffer = ToStaging(buffer, context);
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
+
+		Buffer staging_buffer = ToStaging(buffer);
 		if (staging_buffer.buffer == nullptr) {
 			return staging_buffer;
-		}
-
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
 		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data;
@@ -565,14 +580,14 @@ namespace ECSEngine {
 
 	// CRINGE Visual studio intellisense bug that fills the file with errors even tho no error is present
 	// Manual unroll
-	ECS_TEMPLATE_FUNCTION(StandardBuffer, ToImmutableWithStaging, StandardBuffer, GraphicsContext*);
-	ECS_TEMPLATE_FUNCTION(StructuredBuffer, ToImmutableWithStaging, StructuredBuffer, GraphicsContext*);
-	ECS_TEMPLATE_FUNCTION(UABuffer, ToImmutableWithStaging, UABuffer, GraphicsContext*);
-	ECS_TEMPLATE_FUNCTION(ConstantBuffer, ToImmutableWithStaging, ConstantBuffer, GraphicsContext*);
+	ECS_TEMPLATE_FUNCTION(StandardBuffer, ToImmutableWithStaging, StandardBuffer);
+	ECS_TEMPLATE_FUNCTION(StructuredBuffer, ToImmutableWithStaging, StructuredBuffer);
+	ECS_TEMPLATE_FUNCTION(UABuffer, ToImmutableWithStaging, UABuffer);
+	ECS_TEMPLATE_FUNCTION(ConstantBuffer, ToImmutableWithStaging, ConstantBuffer);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture1D ToImmutableWithMap(Texture1D texture, GraphicsContext* context)
+	Texture1D ToImmutableWithMap(Texture1D texture)
 	{
 		Texture1D new_texture;
 
@@ -580,9 +595,8 @@ namespace ECSEngine {
 		D3D11_TEXTURE1D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
@@ -605,7 +619,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ToImmutableWithMap(Texture2D texture, GraphicsContext* context)
+	Texture2D ToImmutableWithMap(Texture2D texture)
 	{
 		Texture2D new_texture;
 
@@ -613,9 +627,8 @@ namespace ECSEngine {
 		D3D11_TEXTURE2D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
@@ -638,7 +651,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture3D ToImmutableWithMap(Texture3D texture, GraphicsContext* context)
+	Texture3D ToImmutableWithMap(Texture3D texture)
 	{
 		Texture3D new_texture;
 
@@ -646,9 +659,8 @@ namespace ECSEngine {
 		D3D11_TEXTURE3D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
 
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
@@ -672,17 +684,16 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	Buffer ToImmutableWithMap(Buffer buffer, GraphicsContext* context)
+	Buffer ToImmutableWithMap(Buffer buffer)
 	{
 		Buffer new_buffer;
 
 		GraphicsDevice* device = buffer.GetDevice();
 		D3D11_BUFFER_DESC buffer_descriptor;
 		buffer.buffer->GetDesc(&buffer_descriptor);
-
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
+		
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
 
 		D3D11_SUBRESOURCE_DATA subresource_data;
 		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(buffer.buffer, context, D3D11_MAP_READ);
@@ -701,16 +712,43 @@ namespace ECSEngine {
 
 	// CRINGE Visual studio intellisense bug that fills the file with errors even tho no error is present
 	// Manual unroll
-	ECS_TEMPLATE_FUNCTION(StandardBuffer, ToImmutableWithMap, StandardBuffer, GraphicsContext*);
-	ECS_TEMPLATE_FUNCTION(StructuredBuffer, ToImmutableWithMap, StructuredBuffer, GraphicsContext*);
-	ECS_TEMPLATE_FUNCTION(UABuffer, ToImmutableWithMap, UABuffer, GraphicsContext*);
-	ECS_TEMPLATE_FUNCTION(ConstantBuffer, ToImmutableWithMap, ConstantBuffer, GraphicsContext*);
+	ECS_TEMPLATE_FUNCTION(StandardBuffer, ToImmutableWithMap, StandardBuffer);
+	ECS_TEMPLATE_FUNCTION(StructuredBuffer, ToImmutableWithMap, StructuredBuffer);
+	ECS_TEMPLATE_FUNCTION(UABuffer, ToImmutableWithMap, UABuffer);
+	ECS_TEMPLATE_FUNCTION(ConstantBuffer, ToImmutableWithMap, ConstantBuffer);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ResizeTextureWithStaging(Texture2D texture, size_t new_width, size_t new_height, ResizeTextureFlag resize_flag, GraphicsContext* context)
+	Texture2D ResizeTextureWithStaging(Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag)
 	{
-		Texture2D new_texture;
+		GraphicsDevice* device = texture.GetDevice();
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
+
+		Texture2D staging_texture = ToStaging(texture);
+		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, context, D3D11_MAP_READ);
+		Texture2D new_texture = ResizeTexture(first_mip.pData, texture, new_width, new_height, nullptr, { nullptr }, resize_flag);
+		UnmapTexture(staging_texture, context);
+		staging_texture.tex->Release();
+		return new_texture;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	Texture2D ResizeTextureWithMap(Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag)
+	{
+		GraphicsDevice* device = texture.GetDevice();
+		GraphicsContext* context;
+		device->GetImmediateContext(&context);
+
+		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, context, D3D11_MAP_READ);
+		return ResizeTexture(first_mip.pData, texture, new_width, new_height, nullptr, {nullptr}, resize_flag);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	Texture2D ResizeTexture(void* data, Texture2D texture, size_t new_width, size_t new_height, GraphicsContext* context, AllocatorPolymorphic allocator, size_t resize_flag) {
+		Texture2D new_texture = (ID3D11Texture2D*)nullptr;
 
 		GraphicsDevice* device = texture.GetDevice();
 		if (context == nullptr) {
@@ -720,19 +758,19 @@ namespace ECSEngine {
 		D3D11_TEXTURE2D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
 
-		Texture2D staging_texture = ToStaging(texture, context);
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, context, D3D11_MAP_READ);
-
 		DirectX::Image dx_image;
-		dx_image.pixels = (uint8_t*)first_mip.pData;
+		dx_image.pixels = (uint8_t*)data;
 		dx_image.format = texture_descriptor.Format;
 		dx_image.width = texture_descriptor.Width;
 		dx_image.height = texture_descriptor.Height;
-		dx_image.rowPitch = first_mip.RowPitch;
-		dx_image.slicePitch = first_mip.DepthPitch;
-		
+		HRESULT result = DirectX::ComputePitch(texture_descriptor.Format, texture_descriptor.Width, texture_descriptor.Height, dx_image.rowPitch, dx_image.slicePitch);
+		if (FAILED(result)) {
+			return Texture2D((ID3D11Texture2D*)nullptr);
+		}
+
 		DirectX::TEX_FILTER_FLAGS filter_flag = DirectX::TEX_FILTER_LINEAR;
-		switch (resize_flag) {
+		size_t filter_flags = function::ClearFlag(resize_flag, ECS_RESIZE_TEXTURE_MIP_MAPS);
+		switch (filter_flags) {
 		case ECS_RESIZE_TEXTURE_FILTER_BOX:
 			filter_flag = DirectX::TEX_FILTER_BOX;
 			break;
@@ -748,12 +786,12 @@ namespace ECSEngine {
 		}
 
 		DirectX::ScratchImage new_image;
-		HRESULT result = DirectX::Resize(dx_image, new_width, new_height, filter_flag, new_image);
-
-		UnmapTexture(staging_texture, context);
-		unsigned int count = staging_texture.tex->Release();
+		if (allocator.allocator != nullptr) {
+			new_image.SetAllocator(allocator.allocator, GetAllocateFunction(allocator), GetDeallocateMutableFunction(allocator));
+		}
+		result = DirectX::Resize(dx_image, new_width, new_height, filter_flag, new_image);
 		if (FAILED(result)) {
-			return (ID3D11Texture2D*)nullptr;
+			return new_texture;
 		}
 
 		const DirectX::Image* resized_image = new_image.GetImage(0, 0, 0);
@@ -762,11 +800,39 @@ namespace ECSEngine {
 		subresource_data.SysMemPitch = resized_image->rowPitch;
 		subresource_data.SysMemSlicePitch = resized_image->slicePitch;
 
+		ID3D11Texture2D* _new_texture;
 		texture_descriptor.MipLevels = 1;
 		texture_descriptor.Width = new_width;
 		texture_descriptor.Height = new_height;
-		ID3D11Texture2D* _new_texture;
+
 		result = device->CreateTexture2D(&texture_descriptor, &subresource_data, &_new_texture);
+		if (FAILED(result)) {
+			return new_texture;
+		}
+		if (function::HasFlag(resize_flag, ECS_RESIZE_TEXTURE_MIP_MAPS)) {
+			ID3D11Texture2D* first_mip = _new_texture;
+			texture_descriptor.MipLevels = 0;
+			texture_descriptor.BindFlags |= D3D11_BIND_RENDER_TARGET;
+			texture_descriptor.Usage = D3D11_USAGE_DEFAULT;
+			texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+			
+			result = device->CreateTexture2D(&texture_descriptor, nullptr, &_new_texture);
+			if (FAILED(result)) {
+				return new_texture;
+			}
+
+			CopyTextureSubresource(_new_texture, { 0, 0 }, 0, first_mip, { 0, 0 }, { (unsigned int)resized_image->width, (unsigned int)resized_image->height }, 0, context);
+			first_mip->Release();
+
+			ID3D11ShaderResourceView* resource_view;
+			result = device->CreateShaderResourceView(_new_texture, nullptr, &resource_view);
+			if (FAILED(result)) {
+				_new_texture->Release();
+				return new_texture;
+			}
+			context->GenerateMips(resource_view);
+			resource_view->Release();
+		}
 
 		new_texture = _new_texture;
 		return new_texture;
@@ -774,38 +840,27 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ResizeTextureWithMap(Texture2D texture, size_t new_width, size_t new_height, ResizeTextureFlag resize_flag, GraphicsContext* context)
+	Stream<void> ResizeTexture(void* texture_data, size_t current_width, size_t current_height, DXGI_FORMAT format, size_t new_width, size_t new_height, AllocatorPolymorphic allocator, size_t resize_flags)
 	{
-		Texture2D new_texture;
-
-		GraphicsDevice* device = texture.GetDevice();
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
-
-		D3D11_TEXTURE2D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, context, D3D11_MAP_READ);
+		Stream<void> data = { nullptr, 0 };
 
 		DirectX::Image dx_image;
-		dx_image.pixels = (uint8_t*)first_mip.pData;
-		dx_image.format = texture_descriptor.Format;
-		dx_image.width = texture_descriptor.Width;
-		dx_image.height = texture_descriptor.Height;
-		dx_image.rowPitch = first_mip.RowPitch;
-		dx_image.slicePitch = first_mip.DepthPitch;
+		dx_image.pixels = (uint8_t*)texture_data;
+		dx_image.format = format;
+		dx_image.width = current_width;
+		dx_image.height = current_height;
+		HRESULT result = DirectX::ComputePitch(dx_image.format, dx_image.width, dx_image.height, dx_image.rowPitch, dx_image.slicePitch);
+		if (FAILED(result)) {
+			return data;
+		}
 
 		DirectX::TEX_FILTER_FLAGS filter_flag = DirectX::TEX_FILTER_LINEAR;
-		switch (resize_flag) {
+		switch (resize_flags) {
 		case ECS_RESIZE_TEXTURE_FILTER_BOX:
 			filter_flag = DirectX::TEX_FILTER_BOX;
 			break;
 		case ECS_RESIZE_TEXTURE_FILTER_CUBIC:
 			filter_flag = DirectX::TEX_FILTER_CUBIC;
-			break;
-		case ECS_RESIZE_TEXTURE_FILTER_LINEAR:
-			filter_flag = DirectX::TEX_FILTER_LINEAR;
 			break;
 		case ECS_RESIZE_TEXTURE_FILTER_POINT:
 			filter_flag = DirectX::TEX_FILTER_POINT;
@@ -813,27 +868,17 @@ namespace ECSEngine {
 		}
 
 		DirectX::ScratchImage new_image;
-		HRESULT result = DirectX::Resize(dx_image, new_width, new_height, filter_flag, new_image);
-
-		UnmapTexture(texture, context);
+		if (allocator.allocator != nullptr) {
+			new_image.SetAllocator(allocator.allocator, GetAllocateFunction(allocator), GetDeallocateMutableFunction(allocator));
+		}
+		result = DirectX::Resize(dx_image, new_width, new_height, filter_flag, new_image);
 		if (FAILED(result)) {
-			return (ID3D11Texture2D*)nullptr;
+			return data;
 		}
 
-		const DirectX::Image* resized_image = new_image.GetImage(0, 0, 0);
-		D3D11_SUBRESOURCE_DATA subresource_data;
-		subresource_data.pSysMem = resized_image->pixels;
-		subresource_data.SysMemPitch = resized_image->rowPitch;
-		subresource_data.SysMemSlicePitch = resized_image->slicePitch;
-
-		texture_descriptor.MipLevels = 1;
-		texture_descriptor.Width = new_width;
-		texture_descriptor.Height = new_height;
-		ID3D11Texture2D* _new_texture;
-		result = device->CreateTexture2D(&texture_descriptor, &subresource_data, &_new_texture);
-
-		new_texture = _new_texture;
-		return new_texture;
+		data = { new_image.GetPixels(), new_image.GetPixelsSize() };
+		new_image.DetachPixels();
+		return data;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -955,7 +1000,7 @@ namespace ECSEngine {
 		texture_descriptor.ArraySize = 6;
 		texture_descriptor.Usage = D3D11_USAGE_DEFAULT;
 		texture_descriptor.CPUAccessFlags = 0;
-		texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+		texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE | D3D11_RESOURCE_MISC_GENERATE_MIPS;
 		ID3D11Texture2D* texture = nullptr;
 		HRESULT result = device->CreateTexture2D(&texture_descriptor, nullptr, &texture);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting textures to cube textures failed.", true);
@@ -981,23 +1026,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Matrix ProjectionMatrixTextureCube() {
-		return MatrixPerspectiveFOV(90.0f, 1.0f, 0.01f, 10.0f);
-	}
-
-	// For some reason, the matrices for up must be inverted - positive direction takes negative up
-	// and negative direction takes positive up
-	// These matrices are used in constructing the matrix for texture cube conversion and 
-	// diffuse environment convolution
-	Matrix VIEW_MATRICES_TEXTURE_CUBE[6] = {
-		MatrixLookAt(ZeroVector4(), VectorGlobals::RIGHT_4, VectorGlobals::UP_4),       // X positive
-		MatrixLookAt(ZeroVector4(), -VectorGlobals::RIGHT_4, VectorGlobals::UP_4),      // X negative
-		MatrixLookAt(ZeroVector4(), -VectorGlobals::UP_4, VectorGlobals::FORWARD_4),    // Y positive
-		MatrixLookAt(ZeroVector4(), VectorGlobals::UP_4, -VectorGlobals::FORWARD_4),    // Y negative
-		MatrixLookAt(ZeroVector4(), VectorGlobals::FORWARD_4, VectorGlobals::UP_4),     // Z positive
-		MatrixLookAt(ZeroVector4(), -VectorGlobals::FORWARD_4, VectorGlobals::UP_4)     // Z negative
-	};
-
 	TextureCube ConvertTextureToCube(ResourceView texture_view, Graphics* graphics, DXGI_FORMAT cube_format, uint2 face_size)
 	{
 		TextureCube cube;
@@ -1007,7 +1035,7 @@ namespace ECSEngine {
 		texture_descriptor.format = cube_format;
 		texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
 		texture_descriptor.size = face_size;
-		texture_descriptor.mip_levels = 1;
+		texture_descriptor.mip_levels = 0;
 
 		Texture2D cube_textures[6];
 		RenderTargetView render_views[6];
@@ -1016,7 +1044,8 @@ namespace ECSEngine {
 			render_views[index] = graphics->CreateRenderTargetView(cube_textures[index]);
 		}
 
-		// Generate a unit cube vertex buffer
+		// Generate a unit cube vertex buffer - a cube is needed instead of a rectangle because it will be rotated
+		// by the look at matrix
 		VertexBuffer vertex_buffer;
 		IndexBuffer index_buffer;
 		CreateCubeVertexBuffer(graphics, 0.5f, vertex_buffer, index_buffer);
@@ -1034,7 +1063,6 @@ namespace ECSEngine {
 
 		Matrix projection_matrix = ProjectionMatrixTextureCube();
 		
-
 		ConstantBuffer vertex_constants = graphics->CreateConstantBuffer(sizeof(Matrix));
 		graphics->BindVertexConstantBuffer(vertex_constants);
 		GraphicsViewport cube_viewport = { 0.0f, 0.0f, face_size.x, face_size.y, 0.0f, 1.0f };
@@ -1043,7 +1071,7 @@ namespace ECSEngine {
 		graphics->DisableCulling();
 
 		for (size_t index = 0; index < 6; index++) {
-			Matrix current_matrix = MatrixTranspose(VIEW_MATRICES_TEXTURE_CUBE[index] * projection_matrix);
+			Matrix current_matrix = MatrixTranspose(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
 			UpdateBufferResource(vertex_constants.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
 			graphics->BindRenderTargetView(render_views[index], nullptr);
 
@@ -1056,6 +1084,9 @@ namespace ECSEngine {
 		graphics->BindViewport(current_viewport);
 
 		cube = ConvertTexturesToCube(cube_textures, graphics->GetContext());
+		ResourceView cube_view = graphics->CreateTextureShaderViewResource(cube);
+		graphics->GenerateMips(cube_view);
+		cube_view.view->Release();
 
 		vertex_buffer.buffer->Release();
 		index_buffer.buffer->Release();
@@ -1069,77 +1100,120 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	TextureCube ConvertEnvironmentMapToDiffuseIBL(ResourceView environment, Graphics* graphics, uint2 dimensions, unsigned int sample_count)
+	uint2 GetTextureDimensions(const wchar_t* filename)
 	{
-		TextureCube cube;
+		uint2 dimensions = { 0,0 };
 
-		VertexBuffer cube_v_buffer;
-		IndexBuffer cube_i_buffer;
-		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer);
+		Stream<wchar_t> path = ToStream(filename);
+		Path2 extensions = function::PathExtensionBoth(path);
 
-		// The constant buffer for the projection view matrix
-		ConstantBuffer vc_buffer = graphics->CreateConstantBuffer(sizeof(Matrix));
-		ConstantBuffer pc_buffer = graphics->CreateConstantBuffer(sizeof(float));
-		// The buffer expects a float with the delta step - convert to a delta step
-		float step = PI * 2 / sample_count;
-		UpdateBufferResource(pc_buffer.buffer, &step, sizeof(float), graphics->GetContext());
+		if (extensions.absolute.size == 0 && extensions.relative.size == 0) {
+			return dimensions;
+		}
+		Stream<wchar_t> valid_extension = function::GetValidPath(extensions);
 
-		// The format of the cube texture is RGBA16F
-		GraphicsTextureCubeDescriptor cube_descriptor;
-		cube_descriptor.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		cube_descriptor.size = dimensions;
-		cube_descriptor.mip_levels = 1;
-		cube_descriptor.bind_flag = (D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
-		cube = graphics->CreateTexture(&cube_descriptor);
+		bool is_tga = false;
+		bool is_hdr = false;
 
-		RenderTargetView previous_target = graphics->GetBoundRenderTarget();
-		DepthStencilView previous_depth = graphics->GetBoundDepthStencil();
-		GraphicsViewport previous_viewport = graphics->GetBoundViewport();
+		is_tga = function::CompareStrings(valid_extension, ToStream(L".tga"));
+		is_hdr = function::CompareStrings(valid_extension, ToStream(L".hdr"));
 
-		RenderTargetView target_views[6];
-		for (size_t index = 0; index < 6; index++) {
-			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index);
+		DirectX::TexMetadata metadata;
+		HRESULT result;
+
+		if (is_tga) {
+			result = DirectX::GetMetadataFromTGAFile(filename, metadata);
+		}
+		else if (is_hdr) {
+			result = DirectX::GetMetadataFromHDRFile(filename, metadata);
+		}
+		else {
+			result = DirectX::GetMetadataFromWICFile(filename, DirectX::WIC_FLAGS_NONE, metadata);
 		}
 
-		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT);
-		graphics->BindVertexBuffer(cube_v_buffer);
-		graphics->BindIndexBuffer(cube_i_buffer);
-		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		graphics->DisableCulling();
-		graphics->DisableDepth();
-		// Bind a viewport equal to the dimensions
-		graphics->BindViewport(0.0f, 0.0f, dimensions.x, dimensions.y, 0.0f, 1.0f);
-		graphics->BindVertexConstantBuffer(vc_buffer);
-		graphics->BindPixelResourceView(environment);
-		graphics->BindPixelConstantBuffer(pc_buffer);
-
-		Matrix projection_matrix = ProjectionMatrixTextureCube();
-		for (size_t index = 0; index < 6; index++) {
-			Matrix current_matrix = MatrixTranspose(VIEW_MATRICES_TEXTURE_CUBE[index] * projection_matrix);
-			UpdateBufferResource(vc_buffer.buffer, &current_matrix, sizeof(Matrix), graphics->GetContext());
-			graphics->BindRenderTargetView(target_views[index], nullptr);
-
-			graphics->DrawIndexed(cube_i_buffer.count);
+		if (FAILED(result)) {
+			return dimensions;
 		}
 
-		graphics->EnableCulling();
-		graphics->EnableDepth();
-		graphics->BindRenderTargetView(previous_target, previous_depth);
-		graphics->BindViewport(previous_viewport);
-
-		cube_v_buffer.buffer->Release();
-		cube_i_buffer.buffer->Release();
-		vc_buffer.buffer->Release();
-		pc_buffer.buffer->Release();
-
-		for (size_t index = 0; index < 6; index++) {
-			target_views[index].target->Release();
-		}
-
-		return cube;
+		dimensions = { (unsigned int)metadata.width, (unsigned int)metadata.height };
+		return dimensions;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
+
+	uint2 GetTextureDimensions(containers::Stream<void> data, TextureExtension extension)
+	{
+		using function = uint2(*)(containers::Stream<void> data);
+		function functions[] = {
+			GetTextureDimensionsJPG,
+			GetTextureDimensionsPNG,
+			GetTextureDimensionsTIFF,
+			GetTextureDimensionsBMP,
+			GetTextureDimensionsTGA,
+			GetTextureDimensionsHDR
+		};
+
+		return functions[extension](data);
+	}
+
+	template<typename Handler>
+	uint2 GetTextureDimensionsExtension(containers::Stream<void> data, Handler&& handler) {
+		uint2 dimensions = { 0,0 };
+
+		DirectX::TexMetadata metadata;
+		HRESULT result;
+
+		result = handler(metadata);
+
+		if (FAILED(result)) {
+			return dimensions;
+		}
+
+		dimensions = { (unsigned int)metadata.width, (unsigned int)metadata.height };
+		return dimensions;
+	}
+
+	uint2 GetTextureDimensionsPNG(containers::Stream<void> data)
+	{
+		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
+			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
+		});
+	}
+
+	uint2 GetTextureDimensionsJPG(containers::Stream<void> data)
+	{
+		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
+			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
+			});
+	}
+
+	uint2 GetTextureDimensionsBMP(containers::Stream<void> data)
+	{
+		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
+			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
+			});
+	}
+
+	uint2 GetTextureDimensionsTIFF(containers::Stream<void> data)
+	{
+		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
+			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
+			});
+	}
+
+	uint2 GetTextureDimensionsTGA(containers::Stream<void> data)
+	{
+		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
+			return DirectX::GetMetadataFromTGAMemory(data.buffer, data.size, metadata);
+			});
+	}
+
+	uint2 GetTextureDimensionsHDR(containers::Stream<void> data)
+	{
+		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
+			return DirectX::GetMetadataFromHDRMemory(data.buffer, data.size, metadata);
+			});
+	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

@@ -7,6 +7,8 @@
 #include "..\Editor\EditorPalette.h"
 #include "..\Editor\EditorEvent.h"
 #include "ECSEngineUtilities.h"
+#include "ECSEngineRendering.h"
+#include "ECSEngineRenderingCompression.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -44,6 +46,7 @@ constexpr size_t FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY = 256;
 constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_COPIED_FILE_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
+constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT = 16;
 
 constexpr unsigned int FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT = 1 << 0;
 constexpr unsigned int FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES = 1 << 1;
@@ -51,6 +54,9 @@ constexpr unsigned int FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES = 1 << 2;
 constexpr unsigned int FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES = 1 << 3;
 
 constexpr int COLOR_CUT_ALPHA = 90;
+
+constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD = ECS_MB * 100;
+constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 600;
 
 enum FILE_RIGHT_CLICK_INDEX {
 	FILE_RIGHT_CLICK_OPEN,
@@ -158,7 +164,6 @@ struct SelectableData {
 
 void FileExplorerSetNewDirectory(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	ChangeFileExplorerDirectory(editor_state, path, index);
-	ChangeInspectorToFolder(editor_state, path);
 }
 
 void FileExplorerSetNewFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
@@ -252,7 +257,6 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 				if (function::IsStringInStream(data->selection, selected_files) == -1) {
 					FileExplorerResetSelectedFiles(explorer_data);
 					FileExplorerAllocateSelectedFile(explorer_data, data->selection);
-					ChangeInspectorToFolder(data->editor_state, data->selection);
 					FileExplorerSetShiftIndices(explorer_data, data->index);
 				}
 			}
@@ -417,8 +421,8 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 
 	FileExplorerData* data = (FileExplorerData*)_data;
 
-	unsigned int* _invalid_files = (unsigned int*)_malloca(data->selected_files.size * sizeof(unsigned int));
-	unsigned int* _valid_copy_files = (unsigned int*)_malloca(data->copied_files.size * sizeof(unsigned int));
+	unsigned int* _invalid_files = (unsigned int*)ECS_MALLOCA(data->selected_files.size * sizeof(unsigned int));
+	unsigned int* _valid_copy_files = (unsigned int*)ECS_MALLOCA(data->copied_files.size * sizeof(unsigned int));
 	Stream<unsigned int> invalid_files(_invalid_files, 0);
 	Stream<unsigned int> valid_copy_files(_valid_copy_files, 0);
 
@@ -455,7 +459,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 			total_size += data->selected_files[invalid_files[index]].size + 1;
 		}
 		// Safety padding
-		char* temp_allocation = (char*)_malloca(sizeof(char) * total_size + 8);
+		char* temp_allocation = (char*)ECS_MALLOCA(sizeof(char) * total_size + 8);
 		CapacityStream<char> error_message(temp_allocation, 0, total_size + 8);
 
 		error_message.Copy(ToStream(ERROR_MESSAGE));
@@ -465,7 +469,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		}
 
 		CreateErrorMessageWindow(system, error_message);
-		_freea(temp_allocation);
+		ECS_FREEA(temp_allocation);
 	}
 
 	if (valid_copy_files.size < data->copied_files.size) {
@@ -486,8 +490,8 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		data->copied_files = new_copy_files;
 	}
 
-	_freea(_valid_copy_files);
-	_freea(_invalid_files);
+	ECS_FREEA(_valid_copy_files);
+	ECS_FREEA(_invalid_files);
 	FileExplorerResetSelectedFiles(data);
 }
 
@@ -534,7 +538,7 @@ void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, Select
 	Path path_filename = function::PathFilename(current_path);
 	//path_filename.size -= extension_size;
 
-	char* allocation = (char*)data->allocator.Allocate((path_filename.size + 1) * sizeof(char), alignof(char));
+	char* allocation = (char*)data->temporary_allocator.Allocate((path_filename.size + 1) * sizeof(char), alignof(char));
 	CapacityStream<char> ascii_stream(allocation, 0, 512);
 	function::ConvertWideCharsToASCII(path_filename, ascii_stream);
 	ascii_stream[ascii_stream.size] = '\0';
@@ -717,7 +721,7 @@ constexpr Action filter_functors[] = { FilterNothing, FilterActive };
 
 #pragma endregion
 
-#pragma region Add Functions - for the plus
+#pragma region Add Functions - for plus
 
 void FileExplorerImportFile(ActionData* action_data) {
 
@@ -766,8 +770,7 @@ void FileExplorerDrag(ActionData* action_data) {
 			if (last_type_extension.size != 0) {
 				Action action;
 				ResourceIdentifier identifier(last_type_extension.buffer, last_type_extension.size * sizeof(wchar_t));
-				unsigned int hash = Hash::Hash(identifier);
-				bool success = explorer_data->file_functors.TryGetValue(hash, identifier, action);
+				bool success = explorer_data->file_functors.TryGetValue(identifier, action);
 				if (success) {
 					if (action == TextureDraw) {
 						texture_draw.Copy(last_file);
@@ -1027,6 +1030,204 @@ unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplor
 
 #pragma endregion
 
+#pragma region Preload textures
+
+struct FileExplorerPreloadTextureThreadTaskData {
+	EditorState* editor_state;
+	GlobalMemoryManager* global_allocator;
+	Semaphore* semaphore;
+	Stream<FileExplorerPreloadTexture> preload_textures;
+};
+
+void FileExplorerPreloadTextureThreadTask(unsigned int thread_id, World* world, void* _data) {
+	FileExplorerPreloadTextureThreadTaskData* data = (FileExplorerPreloadTextureThreadTaskData*)_data;
+	EDITOR_STATE(data->editor_state);
+	ResourceManager* resource_manager = ui_system->m_resource_manager;
+	FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+
+	// Load the texture normally - don't generate mip maps as that will require the immediate context
+	ResourceManagerTextureDesc descriptor;
+	AllocatorPolymorphic current_allocator = { data->global_allocator, AllocatorType::GlobalMemoryManager, AllocationType::MultiThreaded };
+	descriptor.allocator = current_allocator;
+
+	for (size_t index = 0; index < data->preload_textures.size; index++) {
+		// Load the file into a buffer
+		Stream<void> file_contents = function::ReadWholeFile(data->preload_textures[index].path, current_allocator);
+		// Only if it succeeded
+		if (file_contents.buffer != nullptr) {
+			DecodedTexture decoded_texture = DecodeTexture(file_contents, data->preload_textures[index].path.buffer, current_allocator);
+			// Deallocate the previous contents
+			data->global_allocator->Deallocate_ts(file_contents.buffer);
+
+			// Resize the texture
+			Stream<void> resized_texture = ResizeTexture(
+				decoded_texture.data.buffer, 
+				decoded_texture.width, 
+				decoded_texture.height, 
+				decoded_texture.format, 
+				256, 
+				256, 
+				current_allocator
+			);
+
+			// Release the old texture
+			data->global_allocator->Deallocate_ts(decoded_texture.data.buffer);
+
+			// Determine if the texture can be compressed
+			TextureCompressionExplicit compression_type = GetTextureCompressionType(decoded_texture.format);
+			if (IsTextureCompressionTypeValid(compression_type)) {
+				// Apply compression
+				
+			}
+		}
+	}
+}
+
+void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	ResourceManager* resource_manager = ui_system->m_resource_manager;
+
+	for (size_t index = 0; index < data->staging_preloaded_textures.size; index++) {
+		if (data->staging_preloaded_textures[index].size > 0) {
+			data->preloaded_textures.AddStream(data->staging_preloaded_textures[index]);
+			editor_allocator->Deallocate(data->staging_preloaded_textures[index].buffer);
+
+			// Now change the resource manager bindings
+			for (size_t subindex = 0; subindex < data->staging_preloaded_textures[index].size; subindex++) {
+				const wchar_t* texture_path = data->staging_preloaded_textures[index][subindex].path.buffer;
+				resource_manager->AddResource(texture_path, ResourceType::Texture, data->staging_preloaded_textures[index][subindex].texture.view);
+			}
+		}
+	}
+}
+
+void FileExplorerPreloadTextures(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	ResourceManager* resource_manager = ui_system->m_resource_manager;
+
+	bool* was_verified = (bool*)ECS_STACK_ALLOC(sizeof(bool) * data->preloaded_textures.size);
+	memset(was_verified, 0, sizeof(bool) * data->preloaded_textures.size);
+
+	constexpr size_t MAX_PRELOADS = 256;
+	FileExplorerPreloadTexture* _new_preloads = (FileExplorerPreloadTexture*)ECS_STACK_ALLOC(sizeof(FileExplorerPreloadTexture) * MAX_PRELOADS);
+	CapacityStream<FileExplorerPreloadTexture> new_preloads(_new_preloads, 0, MAX_PRELOADS);
+
+	struct FunctorData {
+		EditorState* editor_state;
+		FileExplorerData* explorer_data;
+		CapacityStream<FileExplorerPreloadTexture>* new_preloads;
+		bool* was_verified;
+	};
+
+	FunctorData functor_data = { editor_state, data, &new_preloads, was_verified };
+
+	auto functor = [](const std::filesystem::path& path, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
+		EDITOR_STATE(data->editor_state);
+
+		const wchar_t* c_path = path.c_str();
+		uint2 texture_dimensions = GetTextureDimensions(c_path);
+
+		// If it is big enough
+		unsigned int total_pixel_count = texture_dimensions.x * texture_dimensions.y;
+		if (total_pixel_count > 512 * 512) {
+			// Check to see if this texture already exists
+			Stream<wchar_t> stream_path = ToStream(c_path);
+			size_t file_last_write = OS::GetFileLastWrite(c_path);
+			bool is_alive = false;
+			for (unsigned int index = 0; index < data->explorer_data->preloaded_textures.size; index++) {
+				if (function::CompareStrings(stream_path, data->explorer_data->preloaded_textures[index].path)) {
+					// Only keep this texture alive if it wasn't changed since last time
+					data->was_verified[index] = file_last_write <= data->explorer_data->preloaded_textures[index].last_write_time;
+					is_alive = data->was_verified[index];
+					break;
+				}
+			}
+
+			// Add this texture to further processing only if it should not be kept alive and there is enough space in the new preloads stream
+			if (!is_alive && data->new_preloads->size < data->new_preloads->capacity) {
+				FileExplorerPreloadTexture preload_texture;
+				preload_texture.last_write_time = file_last_write;
+				preload_texture.path = function::StringCopy(editor_allocator, stream_path);
+				preload_texture.texture = nullptr;
+				data->new_preloads->Add(preload_texture);
+			}
+		}
+		return true;
+	};
+
+	ECS_TEMP_STRING(assests_folder, 256);
+	GetProjectDebugFolder(editor_state, assests_folder);
+	const wchar_t* extensions[] = {
+		L".jpg",
+		L".png",
+		L".tiff",
+		L".bmp",
+		L".hdr",
+		L".tga"
+	};
+	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { extensions, std::size(extensions) }, &functor_data, functor);
+
+	// Evict all the textures that must not be kept alive
+	for (size_t index = 0; index < data->preloaded_textures.size; index++) {
+		if (!was_verified[index]) {
+			// Deallocate the path
+			editor_allocator->Deallocate(data->preloaded_textures[index].path.buffer);
+
+			// Release the view
+			ReleaseShaderView(data->preloaded_textures[index].texture);
+
+			// Remove the texture from the resource manager
+			resource_manager->UnloadTexture(data->preloaded_textures[index].path.buffer);
+		}
+	}
+
+	unsigned int thread_count = task_manager->GetThreadCount();
+	unsigned int per_thread_textures = new_preloads.size / thread_count;
+	unsigned int per_thread_remainder = new_preloads.size % thread_count;
+	unsigned int total_texture_count = 0;
+
+	if (per_thread_textures > 0 || per_thread_remainder > 0) {
+		GlobalMemoryManager* global_allocator = (GlobalMemoryManager*)editor_allocator->Allocate(sizeof(GlobalMemoryManager));
+		Semaphore* semaphore = (Semaphore*)editor_allocator->Allocate(sizeof(Semaphore));
+		semaphore->ClearCount();
+		semaphore->ClearTarget();
+
+		for (size_t index = 0; index < thread_count; index++) {
+			bool has_remainder = per_thread_remainder > 0;
+			per_thread_remainder -= has_remainder;
+			unsigned int thread_texture_count = per_thread_textures + has_remainder;
+
+			if (thread_texture_count > 0) {
+				semaphore->SetTarget(semaphore->target + 1);
+
+				// Allocate from the editor allocator the tasks that this thread needs to process
+				FileExplorerPreloadTexture* thread_textures = (FileExplorerPreloadTexture*)editor_allocator->Allocate(
+					sizeof(FileExplorerPreloadTexture) * thread_texture_count
+				);
+				memcpy(thread_textures, new_preloads.buffer + total_texture_count, sizeof(FileExplorerPreloadTexture)* thread_texture_count);
+
+				FileExplorerPreloadTextureThreadTaskData* thread_data = (FileExplorerPreloadTextureThreadTaskData*)editor_allocator->Allocate(
+					sizeof(FileExplorerPreloadTextureThreadTaskData)
+				);
+				thread_data->preload_textures = { thread_textures, thread_texture_count };
+				thread_data->editor_state = editor_state;
+				thread_data->global_allocator = global_allocator;
+
+				ThreadTask thread_task;
+				thread_task.data = thread_data;
+				thread_task.function = FileExplorerPreloadTextureThreadTask;
+				task_manager->AddDynamicTaskAndWake(thread_task);
+			}
+		}
+	}
+
+}
+
+#pragma endregion
+
 // window_data is EditorState*
 template<bool initialize>
 void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
@@ -1047,7 +1248,7 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 			data->current_directory[data->current_directory.size] = L'\0';
 
 			void* allocation = drawer.GetMainAllocatorBuffer(ALLOCATOR_CAPACITY);
-			data->allocator = LinearAllocator(allocation, ALLOCATOR_CAPACITY);
+			data->temporary_allocator = LinearAllocator(allocation, ALLOCATOR_CAPACITY);
 
 			allocation = drawer.GetMainAllocatorBuffer(data->file_functors.MemoryOf(FILE_FUNCTORS_CAPACITY));
 			data->file_functors.InitializeFromBuffer(allocation, FILE_FUNCTORS_CAPACITY);
@@ -1119,11 +1320,14 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
 			unsigned int hash;
 
 #define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(ToStream(string)); \
-hash = Hash::Hash(identifier); \
-ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
+ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			ADD_FUNCTOR(TextureDraw, L".jpg");
 			ADD_FUNCTOR(TextureDraw, L".png");
+			ADD_FUNCTOR(TextureDraw, L".tiff");
+			ADD_FUNCTOR(TextureDraw, L".bmp");
+			ADD_FUNCTOR(TextureDraw, L".tga");
+			ADD_FUNCTOR(TextureDraw, L".hdr");
 			ADD_FUNCTOR(FileCDraw, L".c");
 			ADD_FUNCTOR(FileCppDraw, L".cpp");
 			ADD_FUNCTOR(FileCppDraw, L".h");
@@ -1231,7 +1435,10 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 	absolute_transform.position.x += drawer.layout.element_indentation;
 
 	if (data->current_directory.size > 0) {
+		// It will incorrectly set the min render bound - so restore it after the call
+		float min_x_render_bound = drawer.min_render_bounds.x;
 		drawer.Indent();
+		drawer.min_render_bounds.x = min_x_render_bound;
 
 		ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
 		char temp_characters[512];
@@ -1356,7 +1563,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			UIDrawer<false>* drawer = _data->drawer;
 
 			const wchar_t* c_path = _path.c_str();
-			Path path = function::StringCopy(&data->allocator, c_path);
+			Path path = function::StringCopy(&data->temporary_allocator, c_path);
 
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
@@ -1390,7 +1597,6 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 					unsigned int index = FileExplorerHasSelectedFile(data->editor_state, data->selection);
 					if (index == -1) {
 						ChangeFileExplorerFile(data->editor_state, data->selection, data->index);
-						ChangeInspectorToFolder(data->editor_state, data->selection);
 					}
 					else {
 						FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
@@ -1464,12 +1670,11 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			UIDrawer<false>* drawer = _data->drawer;
 
 			const wchar_t* c_path = _path.c_str();
-			Path path = function::StringCopy(&data->allocator, c_path);
+			Path path = function::StringCopy(&data->temporary_allocator, c_path);
 
 			Path extension = function::PathExtension(path);
 
 			ResourceIdentifier identifier(extension);
-			unsigned int hash = Hash::Hash(identifier);
 			Action functor;
 
 			SelectableData selectable_data;
@@ -1496,7 +1701,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 				functor_data.color_alpha = color_alpha;
 				action_data.additional_data = &functor_data;
 
-				if (data->file_functors.TryGetValue(hash, identifier, functor)) {
+				if (data->file_functors.TryGetValue(identifier, functor)) {
 					functor(&action_data);
 				}
 				else {
@@ -1595,7 +1800,7 @@ ECS_ASSERT(!data->file_functors.Insert(hash, action, identifier));
 			return true;
 		};
 
-		data->allocator.Clear();
+		data->temporary_allocator.Clear();
 
 		ECS_TEMP_STRING(mouse_element_path, 256);
 		for_each_data.mouse_element_path = &mouse_element_path;
@@ -1675,6 +1880,7 @@ void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager*
 	file_explorer_data->current_directory.Initialize(allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
 	file_explorer_data->selected_files.Initialize(allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
 	file_explorer_data->filter_stream.Initialize(allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
+	file_explorer_data->preloaded_textures.Initialize(allocator, FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT);
 
 	file_explorer_data->right_click_stream.buffer = nullptr;
 	file_explorer_data->right_click_stream.size = 0;

@@ -4,6 +4,7 @@
 #include "../Containers/Stream.h"
 #include "BasicTypes.h"
 #include "Assert.h"
+#include "../Allocators/AllocatorTypes.h"
 
 #define ECS_ASSERT_TRIGGER
 
@@ -14,6 +15,16 @@ ECSEngine::containers::CapacityStream<char> name(name##_temp_memory, 0, size);
 ECSEngine::containers::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 namespace ECSEngine {
+
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_HOUR = 1 << 0;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_MINUTES = 1 << 1;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_SECONDS = 1 << 2;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_MILLISECONDS = 1 << 3;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_DAY = 1 << 4;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_MONTH = 1 << 5;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_YEAR = 1 << 6;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_ALL = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS
+		| ECS_LOCAL_TIME_FORMAT_MILLISECONDS | ECS_LOCAL_TIME_FORMAT_DAY | ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR;
 
 	namespace function {
 
@@ -378,6 +389,18 @@ namespace ECSEngine {
 		ECSENGINE_API unsigned int GetAlphabetIndex(char character);
 
 		ECSENGINE_API unsigned int GetAlphabetIndex(char character, CharacterType& type);
+
+		ECSENGINE_API void ConvertDateToString(Date date, Stream<char>& characters, size_t format_flags);
+
+		ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<char>& characters, size_t format_flags);
+
+		// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
+		// If the read or the opening fails, it will return { nullptr, 0 }
+		ECSENGINE_API Stream<void> ReadWholeFile(const wchar_t* path, AllocatorPolymorphic allocator, bool binary = true);
+
+		// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
+		// If the read or the opening fails, it will return { nullptr, 0 }
+		ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool binary = true);
 
 	}
 
