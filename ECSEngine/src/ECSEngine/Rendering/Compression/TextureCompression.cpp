@@ -3,6 +3,7 @@
 #include "../../../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
 #include "../../Utilities/Function.h"
 #include "../GraphicsHelpers.h"
+#include "../../Utilities/Path.h"
 
 namespace ECSEngine {
 
@@ -31,6 +32,7 @@ namespace ECSEngine {
 		TextureCompression::BC1,
 		TextureCompression::BC3,
 		TextureCompression::BC4,
+		TextureCompression::BC5,
 		TextureCompression::BC5,
 		TextureCompression::BC6,
 		TextureCompression::BC7
@@ -105,7 +107,13 @@ namespace ECSEngine {
 
 		DirectX::ScratchImage initial_image;
 		initial_image.Initialize2D(texture_descriptor.Format, texture_descriptor.Width, texture_descriptor.Height, texture_descriptor.ArraySize, texture_descriptor.MipLevels);
-		DXGI_FORMAT compressed_format = COMPRESSED_FORMATS[(unsigned int)compression_type];
+		DXGI_FORMAT compressed_format;
+		if (function::HasFlag(flags, ECS_COMPRESS_TEXTURE_SRGB)) {
+			compressed_format = COMPRESSED_FORMATS_SRGB[(unsigned int)compression_type];
+		}
+		else {
+			compressed_format = COMPRESSED_FORMATS[(unsigned int)compression_type];
+		}
 		DirectX::ScratchImage final_image;
 
 		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
@@ -205,7 +213,9 @@ namespace ECSEngine {
 			return false;
 		}
 
-		unsigned int countu = old_texture->Release();
+		// Release the staging texture
+		unsigned int __count = staging_texture.tex->Release();
+		unsigned int _count = old_texture->Release();
 
 		return true;
 	}
@@ -234,25 +244,212 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, CapacityStream<char>* error_message) {
+	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, size_t flags, CapacityStream<char>* error_message) {
 		return CompressTexture(
 			texture, 
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
-			EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type],
+			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type],
 			error_message
 		);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, SpinLock* spin_lock, CapacityStream<char>* error_message) {
+	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, SpinLock* spin_lock, size_t flags, CapacityStream<char>* error_message) {
 		return CompressTexture(
 			texture,
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
 			spin_lock, 
-			EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type], 
+			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type], 
 			error_message
 		);
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	Texture2D CompressTexture(
+		GraphicsDevice* device,
+		Stream<Stream<void>> data,
+		size_t width, 
+		size_t height, 
+		TextureCompression compression_type, 
+		size_t flags,
+		CapacityStream<char>* error_message
+	)
+	{
+		Texture2D texture_result = (ID3D11Texture2D*)nullptr;
+
+		// Get the texture descriptor and fill the DirectX image
+		DXGI_FORMAT texture_format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		if (compression_type == TextureCompression::BC3) {
+			texture_format = DXGI_FORMAT_R8_UNORM;
+		}
+		else if (compression_type == TextureCompression::BC5) {
+			texture_format = DXGI_FORMAT_R8G8_UNORM;
+		}
+
+		// Check if the compression type conforms to the range
+		if ((unsigned int)compression_type > (unsigned int)TextureCompression::BC5) {
+			SetErrorMessage(error_message, "Incorrect compression type - out of range.");
+			return texture_result;
+		}
+
+		// Check to see that the dimensions are multiple of 4
+		if ((width & 3) != 0 || (height & 3) != 0) {
+			SetErrorMessage(error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
+			return texture_result;
+		}
+
+		DirectX::ScratchImage initial_image;
+		initial_image.Initialize2D(texture_format, width, height, 1, data.size);
+		DXGI_FORMAT compressed_format = COMPRESSED_FORMATS[(unsigned int)compression_type];
+		DirectX::ScratchImage final_image;
+
+		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
+		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, function::HasFlag(flags, ECS_TEXTURE_COMPRESSION_DISABLE_PERCEPTUAL_WEIGHTING));
+
+		for (size_t index = 0; index < data.size; index++) {
+			const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
+			if (image->rowPitch == data[index].size) {
+				memcpy(image->pixels, data[index].buffer, image->rowPitch * image->height);
+			}
+			else {
+				size_t offset = 0;
+				size_t mapping_offset = 0;
+				for (size_t subindex = 0; subindex < image->height; subindex++) {
+					memcpy(function::OffsetPointer(image->pixels, offset), function::OffsetPointer(data[index].buffer, mapping_offset), image->rowPitch);
+					offset += image->rowPitch;
+					mapping_offset += data[index].size;
+				}
+			}
+		}
+
+		HRESULT result = DirectX::Compress(
+			initial_image.GetImages(),
+			initial_image.GetImageCount(),
+			initial_image.GetMetadata(),
+			compressed_format,
+			compress_flag | DirectX::TEX_COMPRESS_PARALLEL,
+			DirectX::TEX_THRESHOLD_DEFAULT,
+			final_image
+		);
+
+		if (FAILED(result)) {
+			SetErrorMessage(error_message, "Texture compression failed during codec.");
+			return texture_result;
+		}
+
+		D3D11_SUBRESOURCE_DATA new_texture_data[32];
+		for (size_t index = 0; index < data.size; index++) {
+			const DirectX::Image* image = final_image.GetImage(index, 0, 0);
+			new_texture_data[index].pSysMem = image->pixels;
+			new_texture_data[index].SysMemPitch = image->rowPitch;
+			new_texture_data[index].SysMemSlicePitch = image->slicePitch;
+		}
+
+		D3D11_TEXTURE2D_DESC texture_descriptor = { 0 };
+		texture_descriptor.Usage = D3D11_USAGE_DEFAULT;
+		texture_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		texture_descriptor.Format = compressed_format;
+		texture_descriptor.Width = width;
+		texture_descriptor.Height = height;
+		texture_descriptor.MipLevels = data.size;
+		texture_descriptor.ArraySize = 1;
+		texture_descriptor.CPUAccessFlags = 0;
+		result = device->CreateTexture2D(&texture_descriptor, new_texture_data, &texture_result.tex);
+		if (FAILED(result)) {
+			SetErrorMessage(error_message, "Creating final texture after compression failed.");
+			return texture_result;
+		}
+
+		return texture_result;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	Texture2D CompressTexture(
+		GraphicsDevice* device,
+		Stream<Stream<void>> data, 
+		size_t width, 
+		size_t height, 
+		TextureCompressionExplicit compression_type,
+		size_t flags,
+		CapacityStream<char>* error_message
+	)
+	{
+		return CompressTexture(
+			device, 
+			data,
+			width, 
+			height,
+			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression_type], 
+			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type],
+			nullptr
+		);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	TextureCompressionExplicit GetTextureCompressionType(const wchar_t* texture)
+	{
+		Stream<wchar_t> path = ToStream(texture);
+		Path2 extensions = function::PathExtensionBoth(path);
+
+		// Fail
+		if (extensions.absolute.size == 0 && extensions.relative.size == 0) {
+			return (TextureCompressionExplicit)-1;
+		}
+
+		bool is_hdr = false;
+		bool is_tga = false;
+		if (extensions.absolute.size > 0) {
+			is_hdr = function::CompareStrings(extensions.absolute, ToStream(L".hdr"));
+			is_tga = function::CompareStrings(extensions.absolute, ToStream(L".tga"));
+		}
+		else {
+			is_hdr = function::CompareStrings(extensions.relative, ToStream(L".hdr"));
+			is_tga = function::CompareStrings(extensions.relative, ToStream(L".tga"));
+		}
+
+		if (is_hdr) {
+			return TextureCompressionExplicit::HDRMap;
+		}
+
+		DirectX::TexMetadata metadata;
+		HRESULT result;
+		if (is_tga) {
+			result = DirectX::GetMetadataFromTGAFile(texture, metadata);
+		}
+		else {
+			result = DirectX::GetMetadataFromWICFile(texture, DirectX::WIC_FLAGS_NONE, metadata);
+		}
+
+		if (FAILED(result)) {
+			return (TextureCompressionExplicit)-1;
+		}
+
+		return GetTextureCompressionType(metadata.format);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	TextureCompressionExplicit GetTextureCompressionType(DXGI_FORMAT format)
+	{
+		if (format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+			return TextureCompressionExplicit::ColorMap;
+		}
+		if (format == DXGI_FORMAT_R8_UNORM) {
+			return TextureCompressionExplicit::GrayscaleMap;
+		}
+		if (format == DXGI_FORMAT_R8G8_UNORM) {
+			return TextureCompressionExplicit::DoubleGrayscaleMap;
+		}
+		if (format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+			return TextureCompressionExplicit::HDRMap;
+		}
+		return (TextureCompressionExplicit)-1;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
 
 }

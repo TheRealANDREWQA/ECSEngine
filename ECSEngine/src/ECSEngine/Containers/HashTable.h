@@ -283,393 +283,79 @@ namespace ECSEngine {
 			}
 		};
 
-		/* Robin Hood hash table that stores in separate buffers keys and values. Keys are unsigned integers
-		* that have stored in the highest byte the robin hood distance in order to not create an additional metadata
-		* buffer, not get an extra cache miss and use SIMD probing. Distance 0 means empty slot, distance 1 means that 
-		* the key is where it hashed. The capacity should be set to a power of two when using power of two hash function.
-		* There are 256 padding elements at the end in order to eliminate wrap around and to effectively use only SIMD
-		* operations. Use MemoryOf to get the number of bytes needed for the buffers
+		/* Robin Hood hashing identifier hash table that stores in separate buffers keys and values. Keys are
+		* unsigned chars that have stored in the highest 5 bits the robin hood distance in order to not create an
+		* additional metadata buffer, not get an extra cache miss and use SIMD probing and in the other 3 bits the last bits of the hash key. 
+		* Distance 0 means empty slot, distance 1 means that the key is where it hashed. The maximum distance an element can have is 31. 
+		* The capacity should be set to a power of two when using power of two hash function. 
+		* There are 32 padding elements at the end in order to eliminate wrap around and to effectively use only SIMD operations.
+		* Use MemoryOf to get the number of bytes needed for the buffers. It does a identifier check when trying to retrieve the value.
+		* Identifier type must implement Compare function because it supports checking for equality with a user defined operation other
+		* than assignment operator e. g. for pointers, they might be equal if the data they point to is the same
+		* Identifier must be stable, this table only keeps the pointer, not the data pointed to.
 		*/
-		template<typename T, typename HashFunction>
+		template<typename T, typename Identifier, typename TableHashFunction, typename ObjectHashFunction>
 		struct HashTable {
 		public:
-			HashTable() : m_keys(nullptr), m_values(nullptr), m_capacity(0), m_count(0), m_maximum_probe_count(0),
-				m_function(HashFunction(0)) {}
-			HashTable(void* buffer, size_t capacity, size_t additional_info = 0) {
+#define ECS_HASH_TABLE_DISTANCE_MASK 0xF8
+#define ECS_HASH_TABLE_HASH_BITS_MASK 0x07
+
+			HashTable() : m_metadata(nullptr), m_values(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_function(TableHashFunction(0)) {}
+			HashTable(void* buffer, unsigned int capacity, size_t additional_info = 0) {
 				InitializeFromBuffer(buffer, capacity, additional_info);
 			}
 
 			HashTable(const HashTable& other) = default;
-			HashTable<T, HashFunction>& operator = (const HashTable<T, HashFunction>& other) = default;
+			HashTable<T, Identifier, TableHashFunction, ObjectHashFunction>& operator = (const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction>& other) = default;
 
 			void Clear() {
-				for (unsigned int index = 0; index < m_capacity + 256; index++) {
-					m_keys[index] = (unsigned int)0;
-				}
-				m_maximum_probe_count = 0;
-				m_count = 0;
-			}
-
-			int Find(unsigned int key) const {
-				// calculating the index for the array with the hash function
-				unsigned int index = m_function(key, m_capacity);
-				size_t i = index;
-
-				// preparing SIMD variables and to check 8 elements at once
-				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
-				Vec8ib match;
-				int flag = -1;
-
-				for (; flag == -1 && i < index + m_maximum_probe_count; i += elements.size()) {
-					elements.load(m_keys + i);
-					match = (elements & ignore_distance) == keys;
-					flag = horizontal_find_first(match);
-				}
-					
-				if (flag == -1) {
-					return -1;
-				}
-				return i + flag - elements.size();
-			}
-
-			// Use this if duplicates happen just for searching, erasing might not work for duplicates (can erase either of the duplicates)
-			// It will put all the values found in the stream
-			void FindAll(unsigned int key, Stream<T>& values) const {
-				// calculating the index for the array with the hash function
-				unsigned int index = m_function(key, m_capacity);
-				size_t i = index;
-
-				// preparing SIMD variables and to check 8 elements at once
-				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
-				Vec8ib match;
-				unsigned int temp[elements.size()];
-				int flag = -1;
-
-				for (; i < index + m_maximum_probe_count; i += elements.size()) {
-					elements.load(m_keys + i);
-					match = (elements & ignore_distance) == keys;
-					if (horizontal_or(match)) {
-						match.store(temp);
-						for (size_t _index = 0; _index < elements.size(); _index++) {
-							if (temp[_index] != 0) {
-								values.Add(m_values[i + _index]);
-							}
-						}
-					}
-				}
-			}
-
-			// the return value tells the caller if the hash table needs to grow or allocate another hash table
-			bool Insert(unsigned int key, T value) {
-				unsigned int dummy;
-				return Insert(key, value, dummy);
-			}
-
-			// the return value tells the caller if the hash table needs to grow or allocate another hash table
-			bool Insert(unsigned int key, T value, unsigned int& position) {
-				// calculating the index at which the key wants to be
-				unsigned int index = m_function(key, m_capacity);
-				unsigned int hash = index;
-				unsigned int distance = 1;
-
-				// probing the next slots
-				while (true) {
-					// getting the element's distance
-					unsigned int element_distance = (m_keys[index] & 0xFF000000) >> 24;
-
-					// if the element is "poorer" than us, we keep probing 
-					while (element_distance > distance) {
-						distance++;
-						index++;
-						element_distance = (m_keys[index] & 0xFF000000) >> 24;
-					}
-
-					// if the slot is empty, the key can be placed here
-					if (element_distance == 0) {
-						key |= (distance << 24);
-						m_keys[index] = key;
-						m_values[index] = value;
-						m_count++;
-						m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
-						position = index;
-						break;
-					}
-
-					// if it finds a richer slot than us, we swap the keys and keep searching to find 
-					// an empty slot for the richer slot
-					else {
-						unsigned int key_temp = m_keys[index];
-						T value_temp = m_values[index];
-						m_keys[index] = key | (distance << 24);
-						m_values[index] = value;
-						m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
-						distance = ((key_temp & 0xFF000000) >> 24) + 1;
-						key = key_temp & 0x00FFFFFF;
-						value = value_temp;
-						index++;
-					}
-				}
-				if (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR || m_maximum_probe_count == 255)
-					return true;
-				return false;
-			}
-
-			void Erase(unsigned int key) {
-				// determining the next index and clearing the current slot
-				int index = Find(key);
-				EraseFromIndex(index);
-			}
-
-			void EraseFromIndex(unsigned int index) {
-				// getting the distance of the next slot;
-				unsigned int distance = (m_keys[index] & 0xFF000000) >> 24;
-
-				// while we find a slot that is not empty and that is not in its ideal hash position
-				// backward shift the elements
-				while (distance > 1) {
-					distance--;
-					m_keys[index - 1] = (m_keys[index] & 0x00FFFFFF) | (distance << 24);
-					m_values[index - 1] = m_values[index];
-					index++;
-					distance = (m_keys[index] & 0xFF000000) >> 24;
-				}
-				m_keys[index - 1] = (unsigned int)0x00000000;
-				m_count--;
-			}
-
-			void ResetProbeCount() {
-				m_maximum_probe_count = 0;
-				// account for padding elements
-				for (unsigned int index = 0; index < m_capacity + 256; index++) {
-					unsigned int distance = (m_keys[index] & 0xFF000000) >> 24;
-					m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
-				}
-			}
-
-			void ResetProbeCountToZero() {
-				m_maximum_probe_count = 0;
-			}
-
-			bool IsItemAt(unsigned int index) const {
-				return m_keys[index] != 0;
-			}
-
-			const void* GetAllocatedBuffer() const {
-				return m_values;
-			}
-
-			T GetValue(unsigned int key) const {
-				int index = Find(key);
-				ECS_ASSERT(index != -1);
-				return m_values[index];
-			}
-
-			// The extended capacity is used to check bounds validity
-			T GetValueFromIndex(unsigned int index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
-				return m_values[index];
-			}
-
-			T* GetValuePtr(unsigned int key) const {
-				int index = Find(key);
-				ECS_ASSERT(index != -1);
-				return m_values + index;
-			}
-
-			// The extended capacity is used to check bounds validity
-			T* GetValuePtrFromIndex(unsigned int index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
-				return m_values + index;
-			}
-
-			size_t GetMaximumProbeCount() const {
-				return m_maximum_probe_count;
-			}
-
-			size_t GetCount() const {
-				return m_count;
-			}
-
-			const unsigned int* GetKeys() const {
-				return m_keys;
-			}
-
-			const T* GetValues() const {
-				return m_values;
-			}
-
-			size_t GetCapacity() const {
-				return m_capacity;
-			}
-
-			size_t GetExtendedCapacity() const {
-				return m_capacity + 256;
-			}
-
-			Stream<T> GetValueStream() {
-				return Stream<T>(m_values, m_capacity + 256);
-			}
-
-			void SetValueFromKey(unsigned int key, T value) {
-				int index = Find(key);
-				ECS_ASSERT(index != -1);
-
-				m_values[index] = value;
-			}
-
-			// The extended capacity is used to check bounds validity
-			void SetValue(unsigned int index, T value) {
-				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
-				m_values[index] = value;
-			}
-
-			bool TryGetValue(unsigned int key, T& value) const {
-				int index = Find(key);
-				if (index != -1) {
-					value = m_values[index];
-					return true;
-				}
-				else {
-					return false;
-				}
-			}
-
-			bool TryGetValuePtr(unsigned int key, T*& pointer) const {
-				int index = Find(key);
-				if (index != -1) {
-					pointer = m_values + index;
-					return true;
-				}
-				else {
-					return false;
-				}
-			}
-
-			static size_t MemoryOf(unsigned int number) {
-				return (sizeof(unsigned int) + sizeof(T)) * (number + 256);
-			}
-
-			template<typename Allocator>
-			void Initialize(Allocator* allocator, unsigned int max_element_count, size_t additional_info = 0) {
-				size_t memory_size = MemoryOf(max_element_count);
-				void* allocation = allocator->Allocate(max_element_count, 8);
-				InitializeFromBuffer(allocation, max_element_count, additional_info);
-			}
-
-			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
-				m_values = (T*)buffer;
-				uintptr_t ptr = (uintptr_t)buffer;
-				m_keys = (unsigned int*)(ptr + sizeof(T) * (capacity + 256));
-
-				// account for padding elements
-				for (unsigned int index = 0; index < capacity + 256; index++) {
-					m_keys[index] = (unsigned int)0;
-				}
-
-				m_capacity = capacity;
-				m_count = 0;
-				m_maximum_probe_count = 0;
-				m_function = HashFunction(additional_info);
-			}
-
-			void InitializeFromBuffer(uintptr_t& buffer, unsigned int capacity, size_t additional_info = 0) {
-				InitializeFromBuffer((void*)buffer, capacity, additional_info);
-				buffer += MemoryOf(capacity);
-			}
-
-		//private:
-			unsigned int* m_keys;
-			T* m_values;
-			unsigned int m_capacity;
-			unsigned int m_count;
-			unsigned int m_maximum_probe_count;
-			HashFunction m_function;
-		};
-
-		/* Robin Hood hashing identifier hash table that stores in separate buffers keys and values. Keys are
-		* unsigned integers that have stored in the highest byte the robin hood distance in order to not create an
-		* additional metadata buffer, not get an extra cache miss and use SIMD probing. Distance 0 means empty slot,
-		* distance 1 means that the key is where it hashed. The capacity should be set to a power of two when using
-		* power of two hash function. There are 256 padding elements at the end in order to eliminate wrap around and
-		* to effectively use only SIMD operations. Use MemoryOf to get the number of bytes needed for the buffers.
-		* It does a identifier check when trying to retrieve the value. Identifier type must implement Compare
-		* function because it supports checking for equality with a user defined operation other than assignment operator
-		* e. g. for pointers, they might be equal if the data they point to is the same
-		* Identifier must be stable, this table only keeps the pointer, not the data pointed to
-		*/
-		template<typename T, typename Identifier, typename HashFunction>
-		struct IdentifierHashTable {
-		public:
-			IdentifierHashTable() : m_keys(nullptr), m_values(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_maximum_probe_count(0),
-				m_function(HashFunction(0)) {}
-			IdentifierHashTable(void* buffer, unsigned int capacity, size_t additional_info = 0) {
-				InitializeFromBuffer(buffer, capacity, additional_info);
-			}
-
-			IdentifierHashTable(const IdentifierHashTable& other) = default;
-			IdentifierHashTable<T, Identifier, HashFunction>& operator = (const IdentifierHashTable<T, Identifier, HashFunction>& other) = default;
-
-			void Clear() {
-				for (size_t index = 0; index < m_capacity + 256; index++) {
-					m_keys[index] = (unsigned int)0;
+				for (size_t index = 0; index < m_capacity + 31; index++) {
+					m_metadata[index] = (unsigned char)0;
 				}
 				m_count = 0;
-				m_maximum_probe_count = 0;
-			}
-
-			unsigned int Find(unsigned int key) const {
-				// calculating the index for the array with the hash function
-				unsigned int index = m_function(key, m_capacity);
-				unsigned int subindex = index;
-
-				// preparing SIMD variables to check 8 elements at once
-				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
-				Vec8ib match;
-				int flag = -1;
-
-				for (; flag == -1 && subindex < index + m_maximum_probe_count; subindex += elements.size()) {
-					elements.load(m_keys + subindex);
-					match = (elements & ignore_distance) == keys;
-					if (horizontal_or(match)) {
-						flag = horizontal_find_first(match);
-					}
-				}
-
-				if (flag == -1) {
-					return -1;
-				}
-				return subindex + flag - elements.size();
 			}
 
 			template<bool use_compare_function = true>
-			unsigned int Find(unsigned int key, Identifier identifier) const {
+			unsigned int Find(Identifier identifier) const {
+				unsigned int key = ObjectHashFunction::Hash(identifier);
+
 				// calculating the index for the array with the hash function
 				unsigned int index = m_function(key, m_capacity);
-				unsigned int subindex = index;
 
-				// preparing SIMD variables to check 8 elements at once
-				Vec8ui elements, keys(key), ignore_distance(0x00FFFFFF);
-				Vec8ib match;
-				unsigned int temp[elements.size()];
-				int flag = -1;
+				unsigned char key_hash_bits = key;
+				key_hash_bits &= ECS_HASH_TABLE_HASH_BITS_MASK;
 
-				for (; flag == -1 && subindex < index + m_maximum_probe_count; subindex += elements.size()) {
-					elements.load(m_keys + subindex);
-					match = (elements & ignore_distance) == keys;
-					if (horizontal_or(match)) {
-						match.store(temp);
-						for (unsigned int vector_index = 0; vector_index < elements.size(); vector_index++) {
-							if constexpr (!use_compare_function) {
-								if (temp[vector_index] != 0 && m_identifiers[subindex + vector_index] == identifier) {
-									return subindex + vector_index;
-								}
-							}
-							else {
-								if (temp[vector_index] != 0 && m_identifiers[subindex + vector_index].Compare(identifier)) {
-									return subindex + vector_index;
-								}
+				Vec32uc key_bits(key_hash_bits), elements, ignore_distance(ECS_HASH_TABLE_HASH_BITS_MASK);
+				// Only elements that hashed to this slot should be checked
+				Vec32uc corresponding_distance(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
+
+				// Exclude elements that have distance different from the distance to the corrent slot
+				elements.load(m_metadata + index);				
+				Vec32uc element_hash_bits = elements & ignore_distance;
+				auto are_hashed_to_same_slot = (elements >> 3) == corresponding_distance;
+				auto match = element_hash_bits == key_bits;
+				match &= are_hashed_to_same_slot;
+
+				if (horizontal_or(match)) {
+					unsigned int match_bits = to_bits(match);
+					unsigned long vector_index = 0;
+					unsigned long offset = 0;
+
+					// Keep an offset because when a false positive is detected, that bit must be eliminated and in order to avoid
+					// using masks, shift to the right to make that bit 0
+					while (_BitScanForward(&vector_index, match_bits)) {
+						if constexpr (!use_compare_function) {
+							if (m_identifiers[index + offset + vector_index] == identifier) {
+								return index + offset + vector_index;
 							}
 						}
+						else {
+							if (m_identifiers[index + offset + vector_index].Compare(identifier)) {
+								return index + offset + vector_index;
+							}
+						}
+						match_bits >>= vector_index + 1;
+						offset += vector_index + 1;
 					}
 				}
 
@@ -677,38 +363,42 @@ namespace ECSEngine {
 			}
 
 			// the return value tells the caller if the hash table needs to grow or allocate another hash table
-			bool Insert(unsigned int key, T value, Identifier identifier) {
+			bool Insert(T value, Identifier identifier) {
 				unsigned int dummy;
-				return Insert(key, value, identifier, dummy);
+				return Insert(value, identifier, dummy);
 			}
 
 			// the return value tells the caller if the hash table needs to grow or allocate another hash table
-			bool Insert(unsigned int key, T value, Identifier identifier, unsigned int& position) {
+			bool Insert(T value, Identifier identifier, unsigned int& position) {
+				unsigned int key = ObjectHashFunction::Hash(identifier);
+
 				// calculating the index at which the key wants to be
 				unsigned int index = m_function(key, m_capacity);
 				unsigned int hash = index;
 				unsigned int distance = 1;
 
+				unsigned char hash_key_bits = key;
+				hash_key_bits &= ECS_HASH_TABLE_HASH_BITS_MASK;
+
 				// probing the next slots
 				while (true) {
 					// getting the element's distance
-					unsigned int element_distance = (m_keys[index] & 0xFF000000) >> 24;
+					unsigned int element_distance = GetElementDistance(index);
 
 					// if the element is "poorer" than us, we keep probing 
 					while (element_distance > distance) {
 						distance++;
 						index++;
-						element_distance = (m_keys[index] & 0xFF000000) >> 24;
+						element_distance = GetElementDistance(index);
 					}
 
 					// if the slot is empty, the key can be placed here
 					if (element_distance == 0) {
-						key |= (distance << 24);
-						m_keys[index] = key;
+						hash_key_bits |= distance << 3;
+						m_metadata[index] = hash_key_bits;
 						m_values[index] = value;
 						m_identifiers[index] = identifier;
 						m_count++;
-						m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
 						position = index;
 						break;
 					}
@@ -716,29 +406,28 @@ namespace ECSEngine {
 					// if it finds a richer slot than us, we swap the keys and keep searching to find 
 					// an empty slot for the richer slot
 					else {
-						unsigned int key_temp = m_keys[index];
+						unsigned char metadata_temp = m_metadata[index];
 						T value_temp = m_values[index];
 						Identifier identifier_temp = m_identifiers[index];
-						m_keys[index] = key | (distance << 24);
+						m_metadata[index] = hash_key_bits | (distance << 3);
 						m_values[index] = value;
 						m_identifiers[index] = identifier;
-						m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
-						distance = ((key_temp & 0xFF000000) >> 24) + 1;
-						key = key_temp & 0x00FFFFFF;
+						distance = (metadata_temp >> 3) + 1;
+						hash_key_bits = metadata_temp & ECS_HASH_TABLE_HASH_BITS_MASK;
 						value = value_temp;
 						identifier = identifier_temp;
 						index++;
 					}
 				}
-				if (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR || m_maximum_probe_count == 255)
+				if (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR || distance >= 32)
 					return true;
 				return false;
 			}
 
 			template<bool use_compare_function = true>
-			void Erase(unsigned int key, Identifier identifier) {
+			void Erase(Identifier identifier) {
 				// determining the next index and clearing the current slot
-				int index = Find<use_compare_function>(key, identifier);
+				int index = Find<use_compare_function>(identifier);
 				ECS_ASSERT(index != -1);
 				EraseFromIndex(index);
 			}
@@ -746,37 +435,24 @@ namespace ECSEngine {
 			void EraseFromIndex(unsigned int index) {
 				// getting the distance of the next slot;
 				index++;
-				unsigned int distance = (m_keys[index] & 0xFF000000) >> 24;
+				unsigned char distance = GetElementDistance(index);
 
 				// while we find a slot that is not empty and that is not in its ideal hash position
 				// backward shift the elements
 				while (distance > 1) {
 					distance--;
-					m_keys[index - 1] = (m_keys[index] & 0x00FFFFFF) | (distance << 24);
+					m_metadata[index - 1] = (distance << 3) | GetElementHash(index);
 					m_values[index - 1] = m_values[index];
 					m_identifiers[index - 1] = m_identifiers[index];
 					index++;
-					distance = (m_keys[index] & 0xFF000000) >> 24;
+					distance = GetElementDistance(index);
 				}
-				m_keys[index - 1] = (unsigned int)0x00000000;
+				m_metadata[index - 1] = 0;
 				m_count--;
 			}
 
-			void ResetProbeCount() {
-				m_maximum_probe_count = 0;
-				// account for padding elements
-				for (unsigned int index = 0; index < m_capacity + 256; index++) {
-					unsigned int distance = (m_keys[index] & 0xFF000000) >> 24;
-					m_maximum_probe_count = distance > m_maximum_probe_count ? distance : m_maximum_probe_count;
-				}
-			}
-
-			void ResetProbeCountToZero() {
-				m_maximum_probe_count = 0;
-			}
-
 			bool IsItemAt(unsigned int index) const {
-				return m_keys[index] != 0;
+				return m_metadata[index] != 0;
 			}
 
 			const void* GetAllocatedBuffer() const {
@@ -784,54 +460,59 @@ namespace ECSEngine {
 			}
 
 			template<bool use_compare_function = true> 
-			T GetValue(unsigned int key_or_index, Identifier identifier) const {
-				int index = Find<use_compare_function>(key_or_index, identifier);
+			T GetValue(Identifier identifier) const {
+				int index = Find<use_compare_function>(identifier);
 				ECS_ASSERT(index != -1);
 				return m_values[index];
 			}
 
 			template<bool use_compare_function = true>
-			T* GetValuePtr(unsigned int key, Identifier identifier) const {
-				int index = Find<use_compare_function>(key, identifier);
+			T* GetValuePtr(Identifier identifier) const {
+				int index = Find<use_compare_function>(identifier);
 				ECS_ASSERT(index != -1);
 				return m_values + index;
 			}
 
 			// The extended capacity is used to check bounds validity
 			T GetValueFromIndex(unsigned int index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
+				ECS_ASSERT(index <= GetExtendedCapacity());
 				return m_values[index];
 			}
 
 			// The extended capacity is used to check bounds validity
 			T* GetValuePtrFromIndex(unsigned int index) const {
-				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
+				ECS_ASSERT(index <= GetExtendedCapacity());
 				return m_values + index;
 			}
 
-
-			size_t GetMaximumProbeCount() const {
-				return m_maximum_probe_count;
-			}
-
-			size_t GetCount() const {
+			unsigned int GetCount() const {
 				return m_count;
 			}
 
-			size_t GetCapacity() const {
+			unsigned int GetCapacity() const {
 				return m_capacity;
 			}
 
-			size_t GetExtendedCapacity() const {
-				return m_capacity + 256;
+			unsigned int GetExtendedCapacity() const {
+				return m_capacity + 31;
 			}
 
-			unsigned int* GetKeys() {
-				return m_keys;
+			unsigned int* GetMetadata() {
+				return m_metadata;
 			}
 
-			const unsigned int* GetConstKeys() const {
-				return m_keys;
+			const unsigned int* GetConstMetadata() const {
+				return m_metadata;
+			}
+
+			unsigned char GetElementDistance(unsigned int index) const {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				return m_metadata[index] >> 3;
+			}
+
+			unsigned char GetElementHash(unsigned int index) const {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				return m_metadata[index] & ECS_HASH_TABLE_HASH_BITS_MASK;
 			}
 
 			T* GetValues() {
@@ -843,7 +524,7 @@ namespace ECSEngine {
 			}
 
 			Stream<T> GetValueStream() {
-				return Stream<T>(m_values, m_capacity + 256);
+				return Stream<T>(m_values, m_capacity + 31);
 			}
 
 			const Identifier* GetIdentifiers() const {
@@ -851,22 +532,22 @@ namespace ECSEngine {
 			}
 
 			template<bool use_compare_function = false>
-			void SetValue(T value, unsigned int key, Identifier identifier) {
-				int index = Find<use_compare_function>(key, identifier);
+			void SetValue(T value, Identifier identifier) {
+				int index = Find<use_compare_function>(identifier);
 				ECS_ASSERT(index != -1);
 
 				m_values[index] = value;
 			}
 
 			// The extended capacity is used to check bounds validity
-			void SetValue(size_t index, T value) {
-				ECS_ASSERT(index >= 0 && index < m_capacity + 256);
+			void SetValue(unsigned int index, T value) {
+				ECS_ASSERT(index <= GetExtendedCapacity());
 				m_values[index] = value;
 			}
 
 			template<bool use_compare_function = true>
-			bool TryGetValue(unsigned int key_or_index, Identifier identifier, T& value) const {
-				int index = Find<use_compare_function>(key_or_index, identifier);
+			bool TryGetValue(Identifier identifier, T& value) const {
+				int index = Find<use_compare_function>(identifier);
 				if (index != -1) {
 					value = m_values[index];
 					return true;
@@ -877,8 +558,8 @@ namespace ECSEngine {
 			}
 
 			template<bool use_compare_function = true>
-			bool TryGetValuePtr(unsigned int key, Identifier identifier, T*& pointer) const {
-				int index = Find<use_compare_function>(key, identifier);
+			bool TryGetValuePtr(Identifier identifier, T*& pointer) const {
+				int index = Find<use_compare_function>(identifier);
 				if (index != -1) {
 					pointer = m_values + index;
 					return true;
@@ -889,26 +570,25 @@ namespace ECSEngine {
 			}
 
 			static size_t MemoryOf(unsigned int number) {
-				return (sizeof(unsigned int) + sizeof(T) + sizeof(Identifier)) * (number + 256);
+				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + 31);
 			}
 
 			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
-				unsigned int extended_capacity = capacity + 256;
+				unsigned int extended_capacity = capacity + 31;
 
 				m_values = (T*)buffer;
 				uintptr_t ptr = (uintptr_t)buffer;
 				ptr += sizeof(T) * extended_capacity;
 				m_identifiers = (Identifier*)ptr;
 				ptr += sizeof(Identifier) * extended_capacity;
-				m_keys = (unsigned int*)ptr;
+				m_metadata = (unsigned char*)ptr;
 
 				// make distance 0 for keys, account for padding elements
-				memset(m_keys, 0, sizeof(unsigned int) * extended_capacity);
+				memset(m_metadata, 0, sizeof(unsigned char) * extended_capacity);
 
 				m_capacity = capacity;
 				m_count = 0;
-				m_maximum_probe_count = 0;
-				m_function = HashFunction(additional_info);
+				m_function = TableHashFunction(additional_info);
 			}
 
 			void InitializeFromBuffer(uintptr_t& buffer, unsigned int capacity, size_t additional_info = 0) {
@@ -924,21 +604,379 @@ namespace ECSEngine {
 			}
 
 			// The buffer given must be allocated with MemoryOf
-			template<typename IdentifierHashFunction>
 			const void* Grow(void* buffer, unsigned int new_capacity) {
-				const unsigned int* old_keys = m_keys;
+				const unsigned char* old_metadata = m_metadata;
 				const T* old_values = m_values;
 				const Identifier* old_identifiers = m_identifiers;
-				const HashFunction old_hash = m_function;
+				const TableHashFunction old_hash = m_function;
 				unsigned int old_capacity = m_capacity;
 
 				InitializeFromBuffer(buffer, new_capacity);
 				m_function = old_hash;
 
 				for (unsigned int index = 0; index < old_capacity; index++) {
-					bool is_item = old_keys[index] != 0;
+					bool is_item = old_metadata[index] != 0;
 					if (is_item) {
-						unsigned int hash = IdentifierHashFunction::Hash(old_identifiers[index]);
+						Insert(old_values[index], old_identifiers[index]);
+					}
+				}
+
+				return old_values;
+			}
+
+		//private:
+			unsigned char* m_metadata;
+			T* m_values;
+			Identifier* m_identifiers;
+			unsigned int m_capacity;
+			unsigned int m_count;
+			TableHashFunction m_function;
+
+#undef ECS_HASH_TABLE_DISTANCE_MASK
+#undef ECS_HASH_TABLE_HASH_BITS_MASK
+		};
+
+		/* Robin Hood hashing identifier hash table that stores in separate buffers keys and values. Keys are
+		* unsigned shorts that have stored the robin hood distance as the highest 6 bits and the other 10 bits for key bits
+		* in order to not create an additional metadata buffer, not get an extra cache miss and use SIMD probing.
+		* Distance 0 means empty slot, distance 1 means that the key is where it hashed. The maximum distance an element can have is 63.
+		* The capacity should be set to a power of two when using power of two hash function.
+		* There are 127 padding elements at the end in order to eliminate wrap around and to effectively use only SIMD operations.
+		* Use MemoryOf to get the number of bytes needed for the buffers. It does a identifier check when trying to retrieve the value.
+		* Identifier type must implement Compare function because it supports checking for equality with a user defined operation other
+		* than assignment operator e. g. for pointers, they might be equal if the data they point to is the same
+		* Identifier must be stable, this table only keeps the pointer, not the data pointed to.
+		*/
+		template<typename T, typename Identifier, typename TableHashFunction, typename ObjectHashFunction>
+		struct ExtendedHashTable {
+		public:
+#define ECS_EXTENDED_HASH_TABLE_DISTANCE_MASK 0xFB00
+#define ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK 0x03FF
+
+			ExtendedHashTable() : m_metadata(nullptr), m_values(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_function(TableHashFunction(0)) {}
+			ExtendedHashTable(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+				InitializeFromBuffer(buffer, capacity, additional_info);
+			}
+
+			ExtendedHashTable(const ExtendedHashTable& other) = default;
+			ExtendedHashTable<T, Identifier, TableHashFunction, ObjectHashFunction>& operator = (const ExtendedHashTable<T, Identifier, TableHashFunction, ObjectHashFunction>& other) = default;
+
+			void Clear() {
+				for (size_t index = 0; index < m_capacity + 63; index++) {
+					m_metadata[index] = (unsigned char)0;
+				}
+				m_count = 0;
+			}
+
+			template<bool use_compare_function = true>
+			unsigned int Find(Identifier identifier) const {
+				unsigned int key = ObjectHashFunction::Hash(identifier);
+
+				// calculating the index for the array with the hash function
+				unsigned int index = m_function(key, m_capacity);
+
+				unsigned short key_hash_bits = key;
+				key_hash_bits &= ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK;
+
+				Vec16us key_bits(key_hash_bits), elements, ignore_distance(ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK);
+				Vec16us zero = _mm256_setzero_si256();
+
+				// Using a lambda will introduce extra overhead - (calling convention?) - by checking the return explicitly
+				// Using a macro is kind of ugly - it is what it is tho
+				
+#define ITERATION(index) elements.load(m_metadata + index); \
+				Vec16us element_hash_bits = elements & ignore_distance; \
+				auto are_zero = elements == zero; \
+				auto match = element_hash_bits == key_bits; \
+				match &= ~are_zero; \
+\
+				if (horizontal_or(match)) { \
+					unsigned int match_bits = to_bits(match); \
+					unsigned long vector_index = 0; \
+					unsigned long offset = 0; \
+\
+					/* Keep an offset because when a false positive is detected, that bit must be eliminated and in order to avoid */ \
+					/* using masks, shift to the right to make that bit 0 */ \
+					while (_BitScanForward(&vector_index, match_bits)) { \
+						if constexpr (!use_compare_function) { \
+							if (m_identifiers[index + offset + vector_index] == identifier) { \
+								return index + offset + vector_index; \
+							} \
+						} \
+						else { \
+							if (m_identifiers[index + offset + vector_index].Compare(identifier)) { \
+								return index + offset + vector_index; \
+							} \
+						} \
+						match_bits >>= vector_index + 1; \
+						offset += vector_index + 1; \
+					} \
+				}
+
+				ITERATION(index);
+				ITERATION(index + 16);
+				ITERATION(index + 32);
+				ITERATION(index + 48);
+
+				return -1;
+			}
+
+			// the return value tells the caller if the hash table needs to grow or allocate another hash table
+			bool Insert(T value, Identifier identifier) {
+				unsigned int dummy;
+				return Insert(value, identifier, dummy);
+			}
+
+			// the return value tells the caller if the hash table needs to grow or allocate another hash table
+			bool Insert(T value, Identifier identifier, unsigned int& position) {
+				unsigned int key = ObjectHashFunction::Hash(identifier);
+
+				// calculating the index at which the key wants to be
+				unsigned int index = m_function(key, m_capacity);
+				unsigned int hash = index;
+				unsigned int distance = 1;
+
+				unsigned short hash_key_bits = key;
+				hash_key_bits &= ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK;
+
+				// probing the next slots
+				while (true) {
+					// getting the element's distance
+					unsigned int element_distance = GetElementDistance(index);
+
+					// if the element is "poorer" than us, we keep probing 
+					while (element_distance > distance) {
+						distance++;
+						index++;
+						element_distance = GetElementDistance(index);
+					}
+
+					// if the slot is empty, the key can be placed here
+					if (element_distance == 0) {
+						hash_key_bits |= distance << 10;
+						m_metadata[index] = hash_key_bits;
+						m_values[index] = value;
+						m_identifiers[index] = identifier;
+						m_count++;
+						position = index;
+						break;
+					}
+
+					// if it finds a richer slot than us, we swap the keys and keep searching to find 
+					// an empty slot for the richer slot
+					else {
+						unsigned char metadata_temp = m_metadata[index];
+						T value_temp = m_values[index];
+						Identifier identifier_temp = m_identifiers[index];
+						m_metadata[index] = hash_key_bits | (distance << 10);
+						m_values[index] = value;
+						m_identifiers[index] = identifier;
+						distance = (metadata_temp >> 10) + 1;
+						hash_key_bits = metadata_temp & ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK;
+						value = value_temp;
+						identifier = identifier_temp;
+						index++;
+					}
+				}
+				if (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR || distance >= 64)
+					return true;
+				return false;
+			}
+
+			template<bool use_compare_function = true>
+			void Erase(Identifier identifier) {
+				// determining the next index and clearing the current slot
+				int index = Find<use_compare_function>(identifier);
+				ECS_ASSERT(index != -1);
+				EraseFromIndex(index);
+			}
+
+			void EraseFromIndex(unsigned int index) {
+				// getting the distance of the next slot;
+				index++;
+				unsigned char distance = GetElementDistance(index);
+
+				// while we find a slot that is not empty and that is not in its ideal hash position
+				// backward shift the elements
+				while (distance > 1) {
+					distance--;
+					m_metadata[index - 1] = (distance << 10) | GetElementHash(index);
+					m_values[index - 1] = m_values[index];
+					m_identifiers[index - 1] = m_identifiers[index];
+					index++;
+					distance = GetElementDistance(index);
+				}
+				m_metadata[index - 1] = 0;
+				m_count--;
+			}
+
+			bool IsItemAt(unsigned int index) const {
+				return m_metadata[index] != 0;
+			}
+
+			const void* GetAllocatedBuffer() const {
+				return m_values;
+			}
+
+			template<bool use_compare_function = true>
+			T GetValue(Identifier identifier) const {
+				int index = Find<use_compare_function>(identifier);
+				ECS_ASSERT(index != -1);
+				return m_values[index];
+			}
+
+			template<bool use_compare_function = true>
+			T* GetValuePtr(Identifier identifier) const {
+				int index = Find<use_compare_function>(identifier);
+				ECS_ASSERT(index != -1);
+				return m_values + index;
+			}
+
+			// The extended capacity is used to check bounds validity
+			T GetValueFromIndex(unsigned int index) const {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				return m_values[index];
+			}
+
+			// The extended capacity is used to check bounds validity
+			T* GetValuePtrFromIndex(unsigned int index) const {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				return m_values + index;
+			}
+
+			unsigned int GetCount() const {
+				return m_count;
+			}
+
+			unsigned int GetCapacity() const {
+				return m_capacity;
+			}
+
+			unsigned int GetExtendedCapacity() const {
+				return m_capacity + 63;
+			}
+
+			unsigned short* GetMetadata() {
+				return m_metadata;
+			}
+
+			const unsigned short* GetConstMetadata() const {
+				return m_metadata;
+			}
+
+			unsigned char GetElementDistance(unsigned int index) const {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				return m_metadata[index] >> 10;
+			}
+
+			unsigned short GetElementHash(unsigned int index) const {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				return m_metadata[index] & ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK;
+			}
+
+			T* GetValues() {
+				return m_values;
+			}
+
+			const T* GetValues() const {
+				return m_values;
+			}
+
+			Stream<T> GetValueStream() {
+				return Stream<T>(m_values, m_capacity + 63);
+			}
+
+			const Identifier* GetIdentifiers() const {
+				return m_identifiers;
+			}
+
+			template<bool use_compare_function = false>
+			void SetValue(T value, Identifier identifier) {
+				int index = Find<use_compare_function>(identifier);
+				ECS_ASSERT(index != -1);
+
+				m_values[index] = value;
+			}
+
+			// The extended capacity is used to check bounds validity
+			void SetValue(unsigned int index, T value) {
+				ECS_ASSERT(index <= GetExtendedCapacity());
+				m_values[index] = value;
+			}
+
+			template<bool use_compare_function = true>
+			bool TryGetValue(Identifier identifier, T& value) const {
+				int index = Find<use_compare_function>(identifier);
+				if (index != -1) {
+					value = m_values[index];
+					return true;
+				}
+				else {
+					return false;
+				}
+			}
+
+			template<bool use_compare_function = true>
+			bool TryGetValuePtr(Identifier identifier, T*& pointer) const {
+				int index = Find<use_compare_function>(identifier);
+				if (index != -1) {
+					pointer = m_values + index;
+					return true;
+				}
+				else {
+					return false;
+				}
+			}
+
+			static size_t MemoryOf(unsigned int number) {
+				return (sizeof(unsigned short) + sizeof(T) + sizeof(Identifier)) * (number + 63);
+			}
+
+			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+				unsigned int extended_capacity = capacity + 63;
+
+				m_values = (T*)buffer;
+				uintptr_t ptr = (uintptr_t)buffer;
+				ptr += sizeof(T) * extended_capacity;
+				m_identifiers = (Identifier*)ptr;
+				ptr += sizeof(Identifier) * extended_capacity;
+				m_metadata = (unsigned short*)ptr;
+
+				// make distance 0 for keys, account for padding elements
+				memset(m_metadata, 0, sizeof(unsigned short) * extended_capacity);
+
+				m_capacity = capacity;
+				m_count = 0;
+				m_function = TableHashFunction(additional_info);
+			}
+
+			void InitializeFromBuffer(uintptr_t& buffer, unsigned int capacity, size_t additional_info = 0) {
+				InitializeFromBuffer((void*)buffer, capacity, additional_info);
+				buffer += MemoryOf(capacity);
+			}
+
+			template<typename Allocator>
+			void Initialize(Allocator* allocator, unsigned int capacity, size_t additional_info = 0) {
+				size_t memory_size = MemoryOf(capacity);
+				void* allocation = allocator->Allocate(memory_size, 8);
+				InitializeFromBuffer(allocation, capacity, additional_info);
+			}
+
+			// The buffer given must be allocated with MemoryOf
+			const void* Grow(void* buffer, unsigned int new_capacity) {
+				const unsigned short* old_metadata = m_metadata;
+				const T* old_values = m_values;
+				const Identifier* old_identifiers = m_identifiers;
+				const TableHashFunction old_hash = m_function;
+				unsigned int old_capacity = m_capacity;
+
+				InitializeFromBuffer(buffer, new_capacity);
+				m_function = old_hash;
+
+				for (unsigned int index = 0; index < old_capacity; index++) {
+					bool is_item = old_metadata[index] != 0;
+					if (is_item) {
+						unsigned int hash = ObjectHashFunction::Hash(old_identifiers[index]);
 						hash = m_function(hash, m_capacity);
 						Insert(hash, old_values[index], old_identifiers[index]);
 					}
@@ -947,26 +985,26 @@ namespace ECSEngine {
 				return old_values;
 			}
 
-		//private:
-			unsigned int* m_keys;
+			//private:
+			unsigned short* m_metadata;
 			T* m_values;
 			Identifier* m_identifiers;
 			unsigned int m_capacity;
 			unsigned int m_count;
-			unsigned int m_maximum_probe_count;
-			HashFunction m_function;
+			TableHashFunction m_function;
+
+#undef ECS_EXTENDED_HASH_TABLE_DISTANCE_MASK
+#undef ECS_EXTENDED_HASH_TABLE_HASH_BITS_MASK
 		};
 
 		// Helper function that eases the process of dynamic identifier hash tables; it takes care of allocating and
 		// deallocating when necessary
-		template<typename HashFunction, typename Table, typename Allocator, typename Value>
+		template<typename Table, typename Allocator, typename Value>
 		void InsertToDynamicTable(Table& table, Allocator* allocator, Value value, Stream<void> identifier) {
-			unsigned int hash = HashFunction::Hash(identifier);
-
-			if (table.Insert(hash, value, identifier)) {
+			if (table.Insert(value, identifier)) {
 				size_t new_capacity = (size_t)((float)table.GetCapacity() * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 1);
 				void* new_allocation = allocator->Allocate(table.MemoryOf(new_capacity));
-				const void* old_allocation = table.Grow<HashFunction>(new_allocation, new_capacity);
+				const void* old_allocation = table.Grow(new_allocation, new_capacity);
 				allocator->Deallocate(old_allocation);
 			}
 		}

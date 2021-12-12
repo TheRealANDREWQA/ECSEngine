@@ -1956,18 +1956,9 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						Stream<UISpriteVertex> vertices = GetTextStream<configuration>(element->text_vertices.size);
 						float2 font_size;
 						float character_spacing;
 						Color font_color;
-
-						HandleText<configuration>(config, font_color, font_size, character_spacing);
-						HandleTextCopyFromResource<configuration | UI_CONFIG_DISABLE_TRANSLATE_TEXT>(
-							element, 
-							position, 
-							font_color, 
-							ECS_TOOLS_UI_DRAWER_LABEL_SCALE
-						);
 
 						float2 label_scale = HandleLabelSize(element->scale);
 						if constexpr (~configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X) {
@@ -1992,27 +1983,31 @@ namespace ECSEngine {
 							if constexpr (configuration & UI_CONFIG_VERTICAL) {
 								if (vertical_alignment == TextAlignment::Bottom) {
 									TranslateText(x_position, y_position, element->text_vertices, element->text_vertices.size - 1, element->text_vertices.size - 3);
-									TranslateText(x_position, y_position, vertices, element->text_vertices.size - 1, element->text_vertices.size - 3);
 								}
 								else {
 									TranslateText(x_position, y_position, element->text_vertices, 0, 0);
-									TranslateText(x_position, y_position, vertices, 0, 0);
 								}
 							}
 							else {
 								if (horizontal_alignment == TextAlignment::Right) {
 									TranslateText(x_position, y_position, element->text_vertices, element->text_vertices.size - 1, element->text_vertices.size - 3);
-									TranslateText(x_position, y_position, vertices, element->text_vertices.size - 1, element->text_vertices.size - 3);
 								}
 								else {
 									TranslateText(x_position, y_position, element->text_vertices, 0, 0);
-									TranslateText(x_position, y_position, vertices, 0, 0);
 								}
 							}
 
 							element->position.x = x_position;
 							element->position.y = y_position;
 						}
+
+						HandleText<configuration>(config, font_color, font_size, character_spacing);
+						HandleTextCopyFromResource<configuration | UI_CONFIG_DISABLE_TRANSLATE_TEXT>(
+							element, 
+							position, 
+							font_color, 
+							ECS_TOOLS_UI_DRAWER_LABEL_SCALE
+						);
 					}
 
 					if constexpr (~configuration & UI_CONFIG_LABEL_TRANSPARENT) {
@@ -2276,7 +2271,7 @@ namespace ECSEngine {
 						config, 
 						identifier, 
 						&element->name,
-						{ position.x + scale.x + element_descriptor.label_horizontal_padd, position.y + scale.y + element_descriptor.label_vertical_padd }
+						{ element_descriptor.text_input_padding.x, element_descriptor.text_input_padding.y }
 					);
 
 					FinishFitTextToScale<configuration>(config, previous_parameters);
@@ -2289,7 +2284,7 @@ namespace ECSEngine {
 					element->current_selection = 0;
 					element->current_sprite_position = 0;
 					element->solid_color_y_scale = system->GetTextSpriteYScale(font_size.y) + 2.0f * element_descriptor.text_input_padding.y;
-					element->position = position;
+					element->position = { 0.0f, 0.0f };
 					element->padding = element_descriptor.text_input_padding;
 					element->text_color = font_color;
 					element->inverse_zoom = zoom_inverse;
@@ -3355,8 +3350,6 @@ namespace ECSEngine {
 						clickable_data.config = config;
 						clickable_data.box = data;
 						data->label_y_scale = scale.y;
-						data->starting_position.x = position.x;
-						data->starting_position.y = position.y + scale.y + element_descriptor.combo_box_padding;
 
 						AddDefaultHoverable(position, scale, positions, scales, colors, percentages, 2);
 						AddClickable(position, scale, { ComboBoxClickable<configuration>, &clickable_data, sizeof(clickable_data), UIDrawPhase::System });
@@ -3961,13 +3954,6 @@ namespace ECSEngine {
 
 					config.AddFlag(callback);
 
-					TextInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK, TextFilterHex>(
-						config,
-						data->hex_input,
-						position,
-						{ end_point.x - overall_start_position.x, scale.y}
-					);
-
 					if (!data->hex_input->is_currently_selected) {
 						char hex_characters[6];
 						Stream<char> temp(hex_characters, 0);
@@ -3975,6 +3961,13 @@ namespace ECSEngine {
 						data->hex_input->DeleteAllCharacters();
 						data->hex_input->InsertCharacters(hex_characters, 6, 0, GetSystem());
 					}
+
+					TextInputDrawer<configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK, TextFilterHex>(
+						config,
+						data->hex_input,
+						position,
+						{ end_point.x - overall_start_position.x, scale.y}
+					);
 				};
 
 				if constexpr (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
@@ -4471,15 +4464,14 @@ namespace ECSEngine {
 					tool_tip_stream = Stream<char>(tool_tip_characters, 0);
 
 					lambda(input, tool_tip_stream);
-				}
-				size_t text_count_before = *HandleTextSpriteCount<configuration>();
-				TextInputDrawer<configuration, TextFilterNumbers>(config, input, position, scale);
 
-				UISpriteVertex* text_buffer = HandleTextSpriteBuffer<configuration>();
-				size_t* text_count = HandleTextSpriteCount<configuration>();
+					size_t text_count_before = *HandleTextSpriteCount<configuration>();
+					TextInputDrawer<configuration, TextFilterNumbers>(config, input, position, scale);
 
-				// Only add the actions if it is visible in the y dimension
-				if (is_valid_y) {
+					UISpriteVertex* text_buffer = HandleTextSpriteBuffer<configuration>();
+					size_t* text_count = HandleTextSpriteCount<configuration>();
+
+					// Only add the actions if it is visible in the y dimension
 					if (text_count_before != *text_count) {
 						size_t name_length = input->name.text_vertices.size;
 						Stream<UISpriteVertex> stream;
@@ -4487,6 +4479,7 @@ namespace ECSEngine {
 						float2 text_span = { 0.0f, 0.0f };
 						float2 text_position = { 0.0f, 0.0f };
 						if constexpr (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+							name_length = function::ClampMax(name_length, *text_count);
 							stream = Stream<UISpriteVertex>(text_buffer + *text_count - name_length, name_length);
 							text_span = GetTextSpan(stream);
 							text_position = { stream[0].position.x, -stream[0].position.y };
@@ -7988,7 +7981,7 @@ namespace ECSEngine {
 				else {
 					UIDrawerSlider* slider = (UIDrawerSlider*)horizontal_slider;
 					slider->slider_position = 0.0f;
-					system->m_windows[window_index].render_region.x = 0.0f;
+					system->m_windows[window_index].render_region_offset.x = 0.0f;
 					system->m_windows[window_index].is_horizontal_render_slider = false;
 				}
 
@@ -8051,7 +8044,7 @@ namespace ECSEngine {
 				else {
 					UIDrawerSlider* slider = (UIDrawerSlider*)vertical_slider;
 					slider->slider_position = 0.0f;
-					system->m_windows[window_index].render_region.y = 0.0f;
+					system->m_windows[window_index].render_region_offset.y = 0.0f;
 					system->m_windows[window_index].is_vertical_render_slider = false;
 				}
 			}
@@ -8739,7 +8732,7 @@ namespace ECSEngine {
 						void* temp_horizontal_slider;
 						void* temp_vertical_slider;
 						ViewportRegionSliderInitializer(
-							&system->m_windows[window_index].render_region, 
+							&system->m_windows[window_index].render_region_offset, 
 							ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT,
 							&temp_horizontal_slider, 
 							&temp_vertical_slider
@@ -8759,6 +8752,11 @@ namespace ECSEngine {
 
 					render_span.x = function::Select(fabsf(stabilized_render_span.x - render_span.x) < STABILIZE_EPSILON.x && stabilized_render_span.x > 0.0f, stabilized_render_span.x, render_span.x);
 					render_span.y = function::Select(fabsf(stabilized_render_span.y - render_span.y) < STABILIZE_EPSILON.y && stabilized_render_span.y > 0.0f, stabilized_render_span.y, render_span.y);
+
+					float2 difference = render_span - render_zone;
+					difference.x = function::ClampMin(difference.x, 0.0f);
+					difference.y = function::ClampMin(difference.y, 0.0f);
+					system->SetWindowDrawerDifferenceSpan(window_index, difference);
 
 					if (export_scale != nullptr) {
 						float y_offset = dockspace->borders[border_index].draw_region_header * system->m_descriptors.misc.title_y_scale;
@@ -8795,7 +8793,7 @@ namespace ECSEngine {
 						"##VerticalSlider",
 						render_span,
 						render_zone,
-						&system->m_windows[window_index].render_region,
+						&system->m_windows[window_index].render_region_offset,
 						horizontal_slider_position,
 						horizontal_slider_scale,
 						vertical_slider_position,
@@ -9793,7 +9791,8 @@ namespace ECSEngine {
 							temp_input_name.buffer,
 							&elements->size,
 							(unsigned int)0,
-							(unsigned int)0
+							(unsigned int)0,
+							elements->capacity
 							);
 					}
 					else {
@@ -9805,7 +9804,8 @@ namespace ECSEngine {
 							temp_input_name.buffer,
 							&elements->size,
 							(unsigned int)0,
-							(unsigned int)0
+							(unsigned int)0,
+							elements->capacity
 						);
 					}
 				}
@@ -10734,7 +10734,7 @@ namespace ECSEngine {
 
 			template<size_t configuration>
 			void ComboBoxDropDownDrawer(const UIDrawConfig& config, UIDrawerComboBox* data) {
-				float2 position = { data->starting_position.x - region_render_offset.x, data->starting_position.y - region_render_offset.y };
+				float2 position = region_position;
 				float2 scale = { region_scale.x, data->label_y_scale };
 
 				constexpr size_t text_label_configuration = NullifyConfiguration(configuration, UI_CONFIG_GET_TRANSFORM) | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y 
@@ -12570,7 +12570,7 @@ namespace ECSEngine {
 				text_alignment.vertical = TextAlignment::Middle;
 				config.AddFlag(text_alignment);
 
-				IdentifierHashTable<unsigned int, ResourceIdentifier, HashFunctionPowerOfTwo> parent_hash_table;
+				HashTable<unsigned int, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> parent_hash_table;
 				size_t table_count = function::PowerOfTwoGreater(labels.size).x * 2;
 				parent_hash_table.InitializeFromBuffer(GetTempBuffer(parent_hash_table.MemoryOf(table_count)), table_count);
 
@@ -12583,18 +12583,15 @@ namespace ECSEngine {
 
 					if (parent_path_size != 0) {
 						ResourceIdentifier identifier(labels[index], parent_path_size);
-						unsigned int hash = UIDrawerLabelHierarchyHash::Hash(identifier);
-						parent_hash_table.TryGetValue(hash, identifier, current_parent_index);
+						parent_hash_table.TryGetValue(identifier, current_parent_index);
 					}
 
 					// check to see if it is inside the hash table; if it is, then 
 					// increase the activation count else introduce it
 					ResourceIdentifier identifier(labels[index], label_stream.size);
-					unsigned int hash = UIDrawerLabelHierarchyHash::Hash(identifier);
+					ECS_ASSERT(!parent_hash_table.Insert(index + 1, identifier));
 
-					ECS_ASSERT(!parent_hash_table.Insert(hash, index + 1, identifier));
-
-					unsigned int table_index = data->label_states.Find(hash, identifier);
+					unsigned int table_index = data->label_states.Find(identifier);
 
 					// get the label state for triangle drop down
 					bool label_state = false;
@@ -12615,7 +12612,7 @@ namespace ECSEngine {
 						current_data.activation_count = 5;
 						current_data.state = false;
 						label_states[index] = false;
-						ECS_ASSERT(!data->label_states.Insert(hash, current_data, identifier));
+						ECS_ASSERT(!data->label_states.Insert(current_data, identifier));
 					}
 					else {
 						UIDrawerLabelHierarchyLabelData* current_data = data->label_states.GetValuePtrFromIndex(table_index);
@@ -12664,8 +12661,7 @@ namespace ECSEngine {
 
 							if (next_parent_path_size != 0) {
 								ResourceIdentifier next_identifier(next_label_stream.buffer, next_parent_path_size);
-								unsigned int next_hash = UIDrawerLabelHierarchyHash::Hash(next_identifier);
-								parent_hash_table.TryGetValue(next_hash, next_identifier, next_parent_index);
+								parent_hash_table.TryGetValue(next_identifier, next_parent_index);
 							}
 							has_children = index < next_parent_index;
 						}

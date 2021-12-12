@@ -122,6 +122,7 @@ namespace ECSEngine {
 		float max_depth;
 	};
 
+
 	struct ECSENGINE_API ShaderMacro {
 		const char* name;
 		const char* definition;
@@ -143,25 +144,18 @@ namespace ECSEngine {
 	};
 
 	// Default is no macros, shader target 5 and no compile flags
-	struct ECSENGINE_API ShaderFromSourceOptions {
-		Stream<ShaderMacro> macros = {nullptr, 0};
+	struct ECSENGINE_API ShaderCompileOptions {
+		Stream<ShaderMacro> macros = { nullptr, 0 };
 		ShaderTarget target = ECS_SHADER_TARGET_5_0;
 		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
-	};
-
-	enum TextureCubeFace {
-		ECS_TEXTURE_CUBE_X_POS,
-		ECS_TEXTURE_CUBE_X_NEG,
-		ECS_TEXTURE_CUBE_Y_POS,
-		ECS_TEXTURE_CUBE_Y_NEG,
-		ECS_TEXTURE_CUBE_Z_POS,
-		ECS_TEXTURE_CUBE_Z_NEG
 	};
 
 	enum GraphicsShaderHelpers {
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_TEXTURE_CUBE,
 		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE,
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT,
+		ECS_GRAPHICS_SHADER_HELPER_CREATE_SPECULAR_ENVIRONEMNT,
+		ECS_GRAPHICS_SHADER_HELPER_BRDF_INTEGRATION,
 		ECS_GRAPHICS_SHADER_HELPER_COUNT
 	};
 
@@ -305,70 +299,46 @@ namespace ECSEngine {
 		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		PixelShader CreatePixelShader(Stream<wchar_t> byte_code);
+		PixelShader CreatePixelShader(Stream<void> byte_code);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		PixelShader CreatePixelShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
-
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
-		PixelShader CreatePixelShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
+		PixelShader CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		VertexShader CreateVertexShader(Stream<wchar_t> byte_code);
+		VertexShader CreateVertexShader(Stream<void> byte_code);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		VertexShader CreateVertexShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
-
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
-		VertexShader CreateVertexShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
+		VertexShader CreateVertexShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		DomainShader CreateDomainShader(Stream<wchar_t> byte_code);
+		DomainShader CreateDomainShader(Stream<void> byte_code);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		DomainShader CreateDomainShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
-
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
-		DomainShader CreateDomainShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
+		DomainShader CreateDomainShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		HullShader CreateHullShader(Stream<wchar_t> byte_code);
+		HullShader CreateHullShader(Stream<void> byte_code);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		HullShader CreateHullShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code_path);
-
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
-		HullShader CreateHullShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
+		HullShader CreateHullShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		GeometryShader CreateGeometryShader(Stream<wchar_t> byte_code);
+		GeometryShader CreateGeometryShader(Stream<void> byte_code);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		GeometryShader CreateGeometryShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code);
-
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
-		GeometryShader CreateGeometryShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
+		GeometryShader CreateGeometryShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		ComputeShader CreateComputeShader(Stream<wchar_t> path);
+		ComputeShader CreateComputeShader(Stream<void> path);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		ComputeShader CreateComputeShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code);
-
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
-		ComputeShader CreateComputeShaderFromSource(Stream<wchar_t> source_code_path, ShaderFromSourceOptions options = {});
+		ComputeShader CreateComputeShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
 
 		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader);
 
@@ -511,7 +481,7 @@ namespace ECSEngine {
 
 		ResourceView CreateTextureShaderViewResource(TextureCube texture);
 
-		RenderTargetView CreateRenderTargetView(Texture2D texture);
+		RenderTargetView CreateRenderTargetView(Texture2D texture, unsigned int mip_level = 0);
 
 		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0);
 
@@ -535,16 +505,9 @@ namespace ECSEngine {
 
 		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0);
 
-		// It assumes that the given shaders can be reflected
-		Material CreateMaterial(VertexShader v_shader, PixelShader p_shader, DomainShader d_shader = nullptr, HullShader h_shader = nullptr, GeometryShader g_shader = nullptr);
-
 #pragma endregion
 
 #pragma region Resource release
-
-		// Releases the name if it has one and the shader interface
-		template<typename Shader>
-		void FreeShader(Shader shader);
 
 		// Releases the graphics resources and the name if it has one
 		void FreeMesh(const Mesh& mesh);
@@ -635,25 +598,16 @@ namespace ECSEngine {
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
 		// Path nullptr means take the path from the shader
-		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path = {nullptr, 0});
+		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderBuffers(const wchar_t* path, CapacityStream<ShaderReflectedBuffer>& buffers);
+		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers);
-
-		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderTextures(const wchar_t* path, CapacityStream<ShaderReflectedTexture>& textures);
-
-		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures);
+		bool ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures);
 
 		// No memory needs to be allocated
-		bool ReflectVertexBufferMapping(const wchar_t* path, CapacityStream<ECS_MESH_INDEX>& mapping);
-
-		// No memory needs to be allocated
-		bool ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping);
+		bool ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping);
 
 #pragma endregion
 
@@ -709,8 +663,6 @@ namespace ECSEngine {
 
 		void SetNewSize(HWND hWnd, unsigned int width, unsigned int height);
 
-		void SetShaderDirectory(Stream<wchar_t> shader_directory);
-
 #pragma endregion
 
 	//private:
@@ -728,7 +680,6 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11BlendState> m_blend_enabled;
 		ShaderReflection m_shader_reflection;
 		MemoryManager* m_allocator;
-		containers::Stream<wchar_t> m_shader_directory;
 		containers::CapacityStream<GraphicsShaderHelper> m_shader_helpers;
 	};
 

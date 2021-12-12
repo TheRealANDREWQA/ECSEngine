@@ -32,3 +32,5 @@
 #define ECS_TOOLS_UI_TEXTURE_CLOCK L"Resources/Clock.png"
 #define ECS_TOOLS_UI_TEXTURE_ARROW L"Resources/Arrow.png"
 #define ECS_TOOLS_UI_TEXTURE_MINUS L"Resources/Minus.png"
+#define ECS_TOOLS_UI_TEXTURE_HORIZONTAL_DOTS L"Resources/HorizontalDots.png"
+#define ECS_TOOLS_UI_TEXTURE_VERTICAL_DOTS L"Resources/VerticalDots.png"

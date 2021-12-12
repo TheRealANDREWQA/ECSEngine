@@ -20,7 +20,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		// Bool acts as a placeholder, only interested to see if the resource existed previously
-		using UISystemAddDynamicWindowElementTable = IdentifierHashTable<bool, ResourceIdentifier, HashFunctionPowerOfTwo>;
+		using UISystemAddDynamicWindowElementTable = HashTable<bool, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
 
 		class ECSENGINE_API UISystem
 		{
@@ -1260,6 +1260,9 @@ namespace ECSEngine {
 
 			// Returns the index in the pop_up_windows stream
 			unsigned int IsPopUpWindow(const UIDockspaceBorder* border) const;
+
+			// Returns whether or not the window is currently drawing
+			bool IsWindowDrawing(unsigned int window_index);
 			
 			bool LoadUIFile(const wchar_t* filename, Stream<const char*>& window_names);
 
@@ -1308,11 +1311,9 @@ namespace ECSEngine {
 				UIDrawPhase phase
 			);
 
-			void RegisterInputLayouts();
+			void RegisterVertexShaderAndLayout(wchar_t* filename);
 
-			void RegisterVertexShader(wchar_t* filename);
-
-			void RegisterVertexShaders();
+			void RegisterVertexShadersAndLayouts();
 
 			void RegisterPixelShader(wchar_t* filename);
 
@@ -1570,6 +1571,8 @@ namespace ECSEngine {
 			void SetWindowMaxZoom(unsigned int window_index, float max_zoom);
 
 			void SetWindowMinZoom(unsigned int window_index, float min_zoom);
+
+			void SetWindowDrawerDifferenceSpan(unsigned int window_index, float2 span);
 
 			void SetWindowOSSize(uint2 new_size);
 

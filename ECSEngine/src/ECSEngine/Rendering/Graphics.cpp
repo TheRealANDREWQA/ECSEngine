@@ -5,6 +5,7 @@
 #include "../Utilities/Function.h"
 #include "../Utilities/File.h"
 #include "../Utilities/Path.h"
+#include "ShaderInclude.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "D3DCompiler.lib")
@@ -45,153 +46,24 @@ namespace ECSEngine {
 
 	constexpr const wchar_t* SHADER_HELPERS_VERTEX[] = {
 		ECS_VERTEX_SHADER_SOURCE(EquirectangleToCube),
-		ECS_VERTEX_SHADER_SOURCE(VisualizeCube),
-		ECS_VERTEX_SHADER_SOURCE(ConvoluteDiffuseEnvironment)
+		ECS_VERTEX_SHADER_SOURCE(Skybox),
+		ECS_VERTEX_SHADER_SOURCE(ConvoluteDiffuseEnvironment),
+		ECS_VERTEX_SHADER_SOURCE(ConvoluteSpecularEnvironment),
+		ECS_VERTEX_SHADER_SOURCE(BRDFIntegration)
 	};
 
 	constexpr const wchar_t* SHADER_HELPERS_PIXEL[] = {
 		ECS_PIXEL_SHADER_SOURCE(EquirectangleToCube),
-		ECS_PIXEL_SHADER_SOURCE(VisualizeCube),
-		ECS_PIXEL_SHADER_SOURCE(ConvoluteDiffuseEnvironment)
-	};
-
-#define CreateShaderFromBlob(shader_type, blob) HRESULT create_result; \
-	create_result = m_device->Create##shader_type##Shader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &shader.shader); \
-	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating " TEXT(STRING(shader_type)) L" shader failed.", true); \
-\
-	blob->Release(); 
-
-#define CreateShaderByteCode(shader_type) shader_type##Shader shader; \
-	shader.path = { nullptr,  0 }; \
-	HRESULT result; \
-	ID3DBlob* blob; \
-\
-	ECS_TEMP_STRING(null_terminated_path, 256); \
-	null_terminated_path.Copy(byte_code); \
-	null_terminated_path[byte_code.size] = L'\0'; \
-\
-	result = D3DReadFileToBlob(null_terminated_path.buffer, &blob); \
-	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading " TEXT(STRING(shader_type)) L" shader path failed.", true); \
-\
-	CreateShaderFromBlob(shader_type, blob)
-
-#define CreateShaderByteCodeWithPath(shader_type, path) shader_type##Shader shader; \
-	HRESULT result; \
-	ID3DBlob* blob; \
-\
-	result = D3DReadFileToBlob(path, &blob); \
-	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading " TEXT(STRING(shader_type)) L" shader path failed.", true); \
-\
-	CreateShaderFromBlob(shader_type, blob)
-
-#define CreateShaderByteCodeAndSourceCode(shader_type) wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts((source_code.size + 1) * sizeof(wchar_t), alignof(wchar_t)); \
-	memcpy(allocation, source_code.buffer, source_code.size * sizeof(wchar_t)); \
-	allocation[source_code.size] = L'\0'; \
-	CreateShaderByteCodeWithPath(shader_type, allocation) \
-	shader.path = { allocation, source_code.size }; 
-
-#define CreateShaderFromSourceCode(shader_type, shader_order) shader_type##Shader shader; \
-\
-	wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (source_code.size + 1), alignof(wchar_t)); \
-	memcpy(allocation, source_code.buffer, sizeof(wchar_t)* source_code.size); \
-	allocation[source_code.size] = L'\0'; \
-	shader.path = { allocation, source_code.size }; \
-\
-	D3D_SHADER_MACRO macros[32]; \
-	memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size); \
-	macros[options.macros.size] = { NULL, NULL }; \
-\
-	const char* target = SHADER_COMPILE_TARGET[shader_order * 2 + options.target]; \
-\
-	unsigned int compile_flags = 0; \
-	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); \
-	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); \
-	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); \
-	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); \
-	compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); \
-\
-	ID3DBlob* blob; \
-	ShaderInclude include(this); \
-	HRESULT result = D3DCompileFromFile(source_code.buffer, macros, &include, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob); \
-	const char* error_message; \
-	if (error_message_blob != nullptr) { \
-		error_message = (const char*)error_message_blob->GetBufferPointer(); \
-	} \
-	ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling " TEXT(STRING(shader_type)) L" shader failed.", true); \
-	CreateShaderFromBlob(shader_type, blob); 
-
-
-
-	class ShaderInclude : public ID3DInclude {
-	public:
-		ShaderInclude(Graphics* _graphics) : graphics(_graphics) {}
-
-		HRESULT Open(D3D_INCLUDE_TYPE include_type, LPCSTR filename, LPCVOID parent_data, LPCVOID* data_pointer, UINT* byte_pointer) override
-		{
-			if (include_type != D3D_INCLUDE_LOCAL && include_type != D3D_INCLUDE_SYSTEM) {
-				return E_FAIL;
-			}
-
-			ECS_TEMP_STRING(current_path, 512);
-			ECS_TEMP_STRING(include_filename, 128);
-			Stream<char> include_filename_ascii = function::PathFilename(ToStream(filename), ECS_OS_PATH_SEPARATOR_ASCII_REL);
-			function::ConvertASCIIToWide(include_filename, include_filename_ascii);
-
-			struct SearchData {
-				LPCVOID* data_pointer;
-				UINT* byte_pointer;
-				Graphics* graphics;
-				Stream<wchar_t> include_filename;
-			};
-
-			SearchData search_data = { data_pointer, byte_pointer, graphics, include_filename };
-
-			// Search every directory for that file
-			auto search_file = [](const std::filesystem::path& path, void* _data) {
-				SearchData* data = (SearchData*)_data;
-
-				Stream<wchar_t> current_path = ToStream(path.c_str());
-				Stream<wchar_t> current_filename = function::PathFilename(current_path);
-
-				if (function::CompareStrings(current_filename, data->include_filename)) {
-					std::ifstream stream(std::wstring(current_path.buffer, current_path.buffer + current_path.size));
-					if (stream.good()) {
-						size_t file_size = function::GetFileByteSize(stream);
-						void* allocation = data->graphics->GetAllocatorBufferTs(file_size);
-						stream.read((char*)allocation, file_size);
-						size_t read_count = stream.gcount();
-
-						*data->data_pointer = allocation;
-						*data->byte_pointer = read_count;
-						return false;
-					}
-				}
-				return true;
-			};
-
-			const wchar_t* extension[1] = { L".hlsli" };
-			*byte_pointer = 0;
-			ForEachFileInDirectoryRecursiveWithExtension(graphics->m_shader_directory, { &extension, std::size(extension) }, & search_data, search_file);
-			if (*byte_pointer > 0) {
-				return S_OK;
-			}
-	
-			return E_FAIL;
-		}
-
-		HRESULT Close(LPCVOID data) override
-		{
-			graphics->FreeAllocatedBufferTs(data);
-			return S_OK;
-		}
-
-		Graphics* graphics;
+		ECS_PIXEL_SHADER_SOURCE(Skybox),
+		ECS_PIXEL_SHADER_SOURCE(ConvoluteDiffuseEnvironment),
+		ECS_PIXEL_SHADER_SOURCE(ConvoluteSpecularEnvironment),
+		ECS_PIXEL_SHADER_SOURCE(BRDFIntegration)
 	};
 
 
 	Graphics::Graphics(HWND hWnd, const GraphicsDescriptor* descriptor) 
 		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
-		m_bound_targets(m_bound_render_targets, 1), m_shader_directory(nullptr, 0)
+		m_bound_targets(m_bound_render_targets, 1)
 	{
 		constexpr float resize_factor = 1.0f;
 		m_window_size.x = descriptor->window_size.x * resize_factor;
@@ -317,22 +189,55 @@ namespace ECSEngine {
 
 		m_context->RSSetState(state);
 
-		SetShaderDirectory(ToStream(ECS_SHADER_DIRECTORY));
-
 		m_shader_helpers.Initialize(m_allocator, ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
+		
+		auto load_source_code = [&](const wchar_t* path) {
+			std::ifstream stream(path);
+
+			if (stream.good()) {
+				size_t file_size = function::GetFileByteSize(stream);
+				void* allocation = m_allocator->Allocate(file_size);
+				stream.read((char*)allocation, file_size);
+				size_t read_count = stream.gcount();
+				return Stream<char>(allocation, read_count);
+			}
+			return Stream<char>(nullptr, 0);
+		};
+
+		ShaderIncludeFiles include(m_allocator, ToStream(ECS_SHADER_DIRECTORY));
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-			m_shader_helpers[index].vertex = CreateVertexShaderFromSource(ToStream(SHADER_HELPERS_VERTEX[index]));
-			m_shader_helpers[index].pixel = CreatePixelShaderFromSource(ToStream(SHADER_HELPERS_PIXEL[index]));
-			m_shader_helpers[index].input_layout = ReflectVertexShaderInput(m_shader_helpers[index].vertex);
+			Stream<char> vertex_source = load_source_code(SHADER_HELPERS_VERTEX[index]);
+			ECS_ASSERT(vertex_source.buffer != nullptr);
+
+			m_shader_helpers[index].vertex = CreateVertexShaderFromSource(vertex_source, &include);
+
+			Stream<char> pixel_source = load_source_code(SHADER_HELPERS_PIXEL[index]);
+			ECS_ASSERT(pixel_source.buffer != nullptr);
+
+			m_shader_helpers[index].pixel = CreatePixelShaderFromSource(pixel_source, &include);
+
+			m_shader_helpers[index].input_layout = ReflectVertexShaderInput(m_shader_helpers[index].vertex, vertex_source);
+
+			m_allocator->Deallocate(vertex_source.buffer);
+			m_allocator->Deallocate(pixel_source.buffer);
 		}
 		D3D11_SAMPLER_DESC sampler_descriptor = {};
 		sampler_descriptor.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_descriptor.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_descriptor.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_descriptor.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		sampler_descriptor.MinLOD = 0.0f;
+		sampler_descriptor.MaxLOD = D3D11_FLOAT32_MAX;
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-			m_shader_helpers[index].pixel_sampler = CreateSamplerState(sampler_descriptor);
+			if (index != ECS_GRAPHICS_SHADER_HELPER_BRDF_INTEGRATION) {
+				m_shader_helpers[index].pixel_sampler = CreateSamplerState(sampler_descriptor);
+			}
 		}
+		sampler_descriptor.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_descriptor.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_descriptor.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+		m_shader_helpers[ECS_GRAPHICS_SHADER_HELPER_BRDF_INTEGRATION].pixel_sampler = CreateSamplerState(sampler_descriptor);
+		
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -753,219 +658,168 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
-	
-	PixelShader Graphics::CreatePixelShader(Stream<wchar_t> byte_code)
-	{
-		CreateShaderByteCode(Pixel);
-		return shader;
-	}
 
-	// ------------------------------------------------------------------------------------------------------------------------
+	ID3DBlob* ShaderByteCode(GraphicsDevice* device, Stream<char> source_code, ShaderCompileOptions options, ID3DInclude* include_policy, SHADER_ORDER order) {
+		D3D_SHADER_MACRO macros[64];
+		ECS_ASSERT(options.macros.size <= 64 - 2);
+		memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size);
+		macros[options.macros.size] = { NULL, NULL };
 
-	PixelShader Graphics::CreatePixelShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code)
-	{
-		CreateShaderByteCodeAndSourceCode(Pixel);
-		return shader;
-	}
+		const char* target = SHADER_COMPILE_TARGET[order * ECS_SHADER_TARGET_COUNT + options.target];
 
-	// ------------------------------------------------------------------------------------------------------------------------
+		unsigned int compile_flags = 0;
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0);
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0);
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0);
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0);
+		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0);
 
-	PixelShader Graphics::CreatePixelShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options)
-	{
-		ID3DBlob* error_message_blob;
-		CreateShaderFromSourceCode(Pixel, ECS_SHADER_PIXEL);
+		ID3DBlob* blob;
+		ID3DBlob* error_message_blob = nullptr;
+		HRESULT result = D3DCompile(source_code.buffer, source_code.size, nullptr, macros, include_policy, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, &error_message_blob);
+
+		const char* error_message;
 		if (error_message_blob != nullptr) {
+			error_message = (char*)error_message_blob->GetBufferPointer();
 			error_message_blob->Release();
 		}
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling a shader failed.", true);
+
+		return blob;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+	
+	PixelShader Graphics::CreatePixelShader(Stream<void> byte_code)
+	{
+		PixelShader shader;
+
+		HRESULT result;
+		result = m_device->CreatePixelShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
+
+	PixelShader Graphics::CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options)
+	{
+		ID3DBlob* byte_code = ShaderByteCode(m_device.Get(), source_code, options, include_policy, ECS_SHADER_PIXEL);
+		PixelShader shader = CreatePixelShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() });
+		byte_code->Release();
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+	
 	// The vertex shader must not have the blob released
-	VertexShader Graphics::CreateVertexShader(Stream<wchar_t> byte_code) {
-		VertexShader shader;
-	
-		ECS_TEMP_STRING(null_terminated_path, 256);
-		null_terminated_path.Copy(byte_code);
-		null_terminated_path[byte_code.size] = L'\0';
-
-		HRESULT result;
-
-		result = D3DReadFileToBlob(null_terminated_path.buffer, &shader.byte_code);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading vertex shader location failed", true);
-
-		result = m_device->CreateVertexShader(
-			shader.byte_code->GetBufferPointer(),
-			shader.byte_code->GetBufferSize(),
-			nullptr,
-			&shader.shader
-		);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex shader failed", true);
-
-		return shader;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-	// The vertex shader must not have its blob released
-	VertexShader Graphics::CreateVertexShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
+	VertexShader Graphics::CreateVertexShader(Stream<void> byte_code) {
 		VertexShader shader;
 
-		wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (source_code.size + 1), alignof(wchar_t));
-		memcpy(allocation, source_code.buffer, sizeof(wchar_t) * source_code.size);
-		allocation[source_code.size] = L'\0';
-		shader.path = { allocation, source_code.size };
-
 		HRESULT result;
-
-		result = D3DReadFileToBlob(shader.path.buffer, &shader.byte_code);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Reading vertex shader location failed", true);
-
-		result = m_device->CreateVertexShader(
-			shader.byte_code->GetBufferPointer(),
-			shader.byte_code->GetBufferSize(),
-			nullptr,
-			&shader.shader
-		);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex shader failed", true);
-
-		return shader;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-	// The vertex shader must not have its blob released
-	VertexShader Graphics::CreateVertexShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
-		VertexShader shader; 
-			
-		wchar_t* allocation = (wchar_t*)m_allocator->Allocate_ts(sizeof(wchar_t) * (source_code.size + 1), alignof(wchar_t)); 
-		memcpy(allocation, source_code.buffer, sizeof(wchar_t) * source_code.size); 
-		allocation[source_code.size] = L'\0'; 
-		shader.path = { allocation, source_code.size }; 
-			
-		D3D_SHADER_MACRO macros[32]; 
-		memcpy(macros, options.macros.buffer, sizeof(const char*) * 2 * options.macros.size); 
-		macros[options.macros.size] = { NULL, NULL }; 
-			
-		const char* target = SHADER_COMPILE_TARGET[ECS_SHADER_VERTEX + options.target]; 
-			
-		unsigned int compile_flags = 0; 
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0); 
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0); 
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0); 
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0); 
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0); 
-			
-		ID3DBlob* blob; 
-		HRESULT result = D3DCompileFromFile(source_code.buffer, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, SHADER_ENTRY_POINT, target, compile_flags, 0, &blob, nullptr); 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling Vertex shader failed.", true); 
+		result = m_device->CreateVertexShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
 		
-		result = m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Vertex shader failed.", true);
-
-		shader.byte_code = blob;
+		shader.byte_code = { m_allocator->Allocate_ts(byte_code.size), byte_code.size };
+		memcpy(shader.byte_code.buffer, byte_code.buffer, byte_code.size);
 
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	DomainShader Graphics::CreateDomainShader(Stream<wchar_t> byte_code)
+	VertexShader Graphics::CreateVertexShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options) {
+		ID3DBlob* byte_code = ShaderByteCode(m_device.Get(), source_code, options, include_policy, ECS_SHADER_VERTEX);
+		VertexShader shader = CreateVertexShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() });
+		byte_code->Release();
+		return shader;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	DomainShader Graphics::CreateDomainShader(Stream<void> byte_code)
 	{
-		CreateShaderByteCode(Domain);
+		DomainShader shader;
+
+		HRESULT result; 
+		result = m_device->CreateDomainShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true); 
+			
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	DomainShader Graphics::CreateDomainShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code)
+	DomainShader Graphics::CreateDomainShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options)
 	{
-		CreateShaderByteCodeAndSourceCode(Domain);
+		ID3DBlob* byte_code = ShaderByteCode(m_device.Get(), source_code, options, include_policy, ECS_SHADER_DOMAIN);
+		DomainShader shader = CreateDomainShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() });
+		byte_code->Release();
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	DomainShader Graphics::CreateDomainShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options)
-	{
-		ID3DBlob* error_message_blob;
-		CreateShaderFromSourceCode(Domain, ECS_SHADER_DOMAIN);
-		if (error_message_blob != nullptr) {
-			error_message_blob->Release();
-		}
+	HullShader Graphics::CreateHullShader(Stream<void> byte_code) {
+		HullShader shader;
+
+		HRESULT result;
+		result = m_device->CreateHullShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Hull shader failed.", true);
+
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	HullShader Graphics::CreateHullShader(Stream<wchar_t> byte_code) {
-		CreateShaderByteCode(Hull);
+	HullShader Graphics::CreateHullShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options) {
+		ID3DBlob* byte_code = ShaderByteCode(m_device.Get(), source_code, options, include_policy, ECS_SHADER_HULL);
+		HullShader shader = CreateHullShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() });
+		byte_code->Release();
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	HullShader Graphics::CreateHullShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
-		CreateShaderByteCodeAndSourceCode(Hull);
+	GeometryShader Graphics::CreateGeometryShader(Stream<void> byte_code) {
+		GeometryShader shader;
+
+		HRESULT result;
+		result = m_device->CreateGeometryShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	HullShader Graphics::CreateHullShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
-		ID3DBlob* error_message_blob;
-		CreateShaderFromSourceCode(Hull, ECS_SHADER_HULL);
-		if (error_message_blob != nullptr) {
-			error_message_blob->Release();
-		}
+	GeometryShader Graphics::CreateGeometryShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options) {
+		ID3DBlob* byte_code = ShaderByteCode(m_device.Get(), source_code, options, include_policy, ECS_SHADER_GEOMETRY);
+		GeometryShader shader = CreateGeometryShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() });
+		byte_code->Release();
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	GeometryShader Graphics::CreateGeometryShader(Stream<wchar_t> byte_code) {
-		CreateShaderByteCode(Geometry);
+	ComputeShader Graphics::CreateComputeShader(Stream<void> byte_code) {
+		ComputeShader shader;
+
+		HRESULT result;
+		result = m_device->CreateComputeShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	GeometryShader Graphics::CreateGeometryShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
-		CreateShaderByteCodeAndSourceCode(Geometry);
-		return shader;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	GeometryShader Graphics::CreateGeometryShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
-		ID3DBlob* error_message_blob;
-		CreateShaderFromSourceCode(Geometry, ECS_SHADER_GEOMETRY);
-		if (error_message_blob != nullptr) {
-			error_message_blob->Release();
-		}
-		return shader;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	ComputeShader Graphics::CreateComputeShader(Stream<wchar_t> byte_code) {
-		CreateShaderByteCode(Compute);
-		return shader;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	ComputeShader Graphics::CreateComputeShader(Stream<wchar_t> byte_code, Stream<wchar_t> source_code) {
-		CreateShaderByteCodeAndSourceCode(Compute);
-		return shader;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	ComputeShader Graphics::CreateComputeShaderFromSource(Stream<wchar_t> source_code, ShaderFromSourceOptions options) {
-		ID3DBlob* error_message_blob;
-		CreateShaderFromSourceCode(Compute, ECS_SHADER_COMPUTE);
-		if (error_message_blob != nullptr) {
-			error_message_blob->Release();
-		}
+	ComputeShader Graphics::CreateComputeShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options) {
+		ID3DBlob* byte_code = ShaderByteCode(m_device.Get(), source_code, options, include_policy, ECS_SHADER_COMPUTE);
+		ComputeShader shader = CreateComputeShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() });
+		byte_code->Release();
 		return shader;
 	}
 
@@ -978,20 +832,19 @@ namespace ECSEngine {
 	{
 		InputLayout component;
 		HRESULT result;
-		auto byte_code = vertex_shader.byte_code;
-		
-		const void* byte_code_ptr = byte_code->GetBufferPointer();
-		size_t byte_code_size = byte_code->GetBufferSize();
 		
 		result = m_device->CreateInputLayout(
 			descriptor.buffer, 
 			descriptor.size, 
-			byte_code->GetBufferPointer(), 
-			byte_code->GetBufferSize(),
+			vertex_shader.byte_code.buffer, 
+			vertex_shader.byte_code.size,
 			&component.layout
 		);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating input layout failed", true);
-		vertex_shader.ReleaseByteCode();
+		
+		m_allocator->Deallocate_ts(vertex_shader.byte_code.buffer);
+		vertex_shader.byte_code = { nullptr, 0 };
+
 		return component;
 	}
 
@@ -1707,12 +1560,19 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	RenderTargetView Graphics::CreateRenderTargetView(Texture2D texture)
+	RenderTargetView Graphics::CreateRenderTargetView(Texture2D texture, unsigned int mip_level)
 	{
 		HRESULT result;
 
+		D3D11_TEXTURE2D_DESC texture_desc;
+		texture.tex->GetDesc(&texture_desc);
+
 		RenderTargetView view;
-		result = m_device->CreateRenderTargetView(texture.tex, nullptr, &view.target);
+		D3D11_RENDER_TARGET_VIEW_DESC descriptor;
+		descriptor.Format = texture_desc.Format;
+		descriptor.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		descriptor.Texture2D.MipSlice = mip_level;
+		result = m_device->CreateRenderTargetView(texture.tex, &descriptor, &view.target);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
 
 		return view;
@@ -1733,8 +1593,7 @@ namespace ECSEngine {
 		view_descriptor.Format = descriptor.Format;
 		view_descriptor.Texture2DArray.ArraySize = 1;
 		view_descriptor.Texture2DArray.FirstArraySlice = face;
-		view_descriptor.Texture2DArray.MipSlice = mip_level
-			;
+		view_descriptor.Texture2DArray.MipSlice = mip_level;
 		result = m_device->CreateRenderTargetView(cube.tex, &view_descriptor, &view.target);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
 
@@ -1884,47 +1743,6 @@ namespace ECSEngine {
 
 		return view;
 	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	Material Graphics::CreateMaterial(VertexShader v_shader, PixelShader p_shader, DomainShader d_shader, HullShader h_shader, GeometryShader g_shader)
-	{
-		constexpr size_t REFLECTED_BUFFER_COUNT = 32;
-		constexpr size_t REFLECTED_TEXTURE_COUNT = 32;
-
-		ShaderReflectedBuffer _reflected_buffers[REFLECTED_BUFFER_COUNT];
-		ShaderReflectedTexture _reflected_textures[REFLECTED_TEXTURE_COUNT];
-
-		CapacityStream<ShaderReflectedBuffer> reflected_buffers(_reflected_buffers, 0, REFLECTED_BUFFER_COUNT);
-		CapacityStream<ShaderReflectedTexture> reflected_textures(_reflected_textures, 0, REFLECTED_TEXTURE_COUNT);
-
-		// Reflect the vertex shader
-		bool success = ReflectShaderBuffers(v_shader.path, reflected_buffers);
-		success &= ReflectShaderTextures(v_shader.path, reflected_textures);
-		if (!success) {
-			return Material();
-		}
-
-
-		return Material();
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	template<typename Shader>
-	void Graphics::FreeShader(Shader shader) {
-		shader.shader->Release();
-		if (shader.path.buffer != nullptr) {
-			m_allocator->Deallocate(shader.path.buffer);
-		}
-	}
-
-	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, VertexShader);
-	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, PixelShader);
-	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, HullShader);
-	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, DomainShader);
-	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, GeometryShader);
-	ECS_TEMPLATE_FUNCTION(void, Graphics::FreeShader, ComputeShader);
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
@@ -2377,16 +2195,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::SetShaderDirectory(Stream<wchar_t> shader_directory)
-	{
-		if (m_shader_directory.size > 0) {
-			FreeAllocatedBuffer(m_shader_directory.buffer);
-		}
-		m_shader_directory = function::StringCopy(m_allocator, shader_directory);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
 	void Graphics::RestoreBlendState(GraphicsPipelineBlendState state)
 	{
 		ECSEngine::RestoreBlendState(GetContext(), state);
@@ -2447,7 +2255,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, Stream<wchar_t> path)
+	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code)
 	{
 		constexpr size_t MAX_INPUT_FIELDS = 128;
 		D3D11_INPUT_ELEMENT_DESC _element_descriptors[MAX_INPUT_FIELDS];
@@ -2456,11 +2264,7 @@ namespace ECSEngine {
 		constexpr size_t NAME_POOL_SIZE = 8192;
 		void* allocation = ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(allocation, 0, NAME_POOL_SIZE);
-		Stream<wchar_t> source_code_path = path;
-		if (path.buffer == nullptr) {
-			source_code_path = shader.path;
-		}
-		bool success = m_shader_reflection.ReflectVertexShaderInput(source_code_path, element_descriptors, name_pool);
+		bool success = m_shader_reflection.ReflectVertexShaderInputSource(source_code, element_descriptors, name_pool);
 
 		if (!success) {
 			return {};
@@ -2471,19 +2275,12 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::ReflectShaderBuffers(const wchar_t* path, CapacityStream<ShaderReflectedBuffer>& buffers)
-	{
-		return ReflectShaderBuffers(ToStream(path), buffers);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	bool Graphics::ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers) {
+	bool Graphics::ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers) {
 		constexpr size_t NAME_POOL_SIZE = 8192;
 		char* name_allocation = (char*)ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
 
-		bool success = m_shader_reflection.ReflectShaderBuffers(path, buffers, name_pool);
+		bool success = m_shader_reflection.ReflectShaderBuffersSource(source_code, buffers, name_pool);
 		if (!success) {
 			return false;
 		}
@@ -2503,20 +2300,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	bool Graphics::ReflectShaderTextures(const wchar_t* path, CapacityStream<ShaderReflectedTexture>& textures)
-	{
-		return ReflectShaderTextures(ToStream(path), textures);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	bool Graphics::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures)
+	bool Graphics::ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures)
 	{
 		constexpr size_t NAME_POOL_SIZE = 8192;
 		char* name_allocation = (char*)ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
 
-		bool success = m_shader_reflection.ReflectShaderTextures(path, textures, name_pool);
+		bool success = m_shader_reflection.ReflectShaderTexturesSource(source_code, textures, name_pool);
 		if (!success) {
 			//_freea(name_allocation);
 			return false;
@@ -2537,18 +2327,12 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
-
-	bool Graphics::ReflectVertexBufferMapping(const wchar_t* path, CapacityStream<ECS_MESH_INDEX>& mapping)
-	{
-		return m_shader_reflection.ReflectVertexBufferMapping(path, mapping);
+	
+	bool Graphics::ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) {
+		return m_shader_reflection.ReflectVertexBufferMappingSource(source_code, mapping);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
-	
-	bool Graphics::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping) {
-		return m_shader_reflection.ReflectVertexBufferMapping(path, mapping);
-	}
-
 
 #pragma region Free functions
 
@@ -3534,18 +3318,18 @@ namespace ECSEngine {
 		material.layout.layout->Release();
 
 		// Release the mandatory shaders - pixel and vertex.
-		graphics->FreeShader(material.vertex_shader);
-		graphics->FreeShader(material.pixel_shader);
+		material.vertex_shader.shader->Release();
+		material.pixel_shader.shader->Release();
 
 		// Release the mandatory shaders
 		if (material.domain_shader.shader != nullptr) {
-			graphics->FreeShader(material.domain_shader);
+			material.domain_shader.shader->Release();
 		}
 		if (material.hull_shader.shader != nullptr) {
-			graphics->FreeShader(material.hull_shader);
+			material.hull_shader.shader->Release();
 		}
 		if (material.geometry_shader.shader != nullptr) {
-			graphics->FreeShader(material.geometry_shader);
+			material.geometry_shader.shader->Release();
 		}
 
 		// Release the constant buffers - each one needs to be released

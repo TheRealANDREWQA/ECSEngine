@@ -7,7 +7,7 @@
 #include "../Rendering/Graphics.h"
 #include "../Internal/EntityManager.h"
 #include "../Internal/InternalStructures.h"
-#include "../Internal/ResourceManager.h"
+#include "../Internal/Resources/ResourceManager.h"
 #include "../Allocators/MemoryManager.h"
 #include "System/SystemManager.h"
 

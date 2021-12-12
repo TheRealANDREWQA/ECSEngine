@@ -3,7 +3,24 @@
 #include "MultipoolAllocator.h"
 
 namespace ECSEngine {
+	
+	MultipoolAllocator::MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0) {}
+	
+	MultipoolAllocator::MultipoolAllocator(unsigned char* buffer, size_t size, size_t pool_count)
+		: m_buffer((unsigned char*)((uintptr_t)buffer + containers::BlockRange::MemoryOf(pool_count))), m_spin_lock(),
+		m_size(size), m_range((unsigned int*)buffer, pool_count, size) {
+#ifdef ECSENGINE_DEBUG
+		m_initial_buffer = m_buffer;
+#endif
+	}
 
+	MultipoolAllocator::MultipoolAllocator(unsigned char* buffer, void* block_range_buffer, size_t size, size_t pool_count) : m_buffer(buffer), m_spin_lock(), m_size(size),
+		m_range((unsigned int*)block_range_buffer, pool_count, size) {
+#ifdef ECSENGINE_DEBUG
+		m_initial_buffer = m_buffer;
+#endif
+	}
+	
 	void* MultipoolAllocator::Allocate(size_t size, size_t alignment) {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
 		// To make sure that the allocation is aligned we are requesting a surplus of alignment from the block range.
@@ -34,6 +51,16 @@ namespace ECSEngine {
 
 	void MultipoolAllocator::Clear() {
 		m_range.Clear();
+	}
+
+	bool MultipoolAllocator::IsEmpty() const
+	{
+		return m_range.GetUsedBlockCount() == 0;
+	}
+
+	void* MultipoolAllocator::GetAllocatedBuffer() const
+	{
+		return (void*)m_range.GetAllocatedBuffer();
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {

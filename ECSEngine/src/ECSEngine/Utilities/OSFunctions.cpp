@@ -17,6 +17,8 @@ namespace ECSEngine {
 			return LaunchFileExplorer(Stream<wchar_t>(folder, wcslen(folder)));
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 		bool LaunchFileExplorer(Stream<wchar_t> folder) {
 			wchar_t temp_characters[1024];
 			CapacityStream<wchar_t> temp_stream(temp_characters, 0, 1024);
@@ -39,6 +41,8 @@ namespace ECSEngine {
 			}
 			return value;
 		}
+
+		// -----------------------------------------------------------------------------------------------------
 
 		bool GetFileTimesInternal(const wchar_t* ECS_RESTRICT path, FILETIME* filetime_creation, FILETIME* filetime_last_access, FILETIME* filetime_last_write) {
 			// Determine whether or not it is a file or directory
@@ -69,6 +73,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 		void ConvertSystemTimeToDate(const SYSTEMTIME* system_time, char* characters) {
 			Stream<char> stream(characters, 0);
 			function::ConvertIntToChars(stream, system_time->wDay);
@@ -84,6 +90,8 @@ namespace ECSEngine {
 			function::ConvertIntToChars(stream, system_time->wSecond);
 			stream[stream.size] = '\0';
 		}
+
+		// -----------------------------------------------------------------------------------------------------
 
 		bool GetFileTimes(
 			const wchar_t* ECS_RESTRICT path,
@@ -125,6 +133,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 		bool GetFileTimes(
 			const wchar_t* ECS_RESTRICT path,
 			wchar_t* ECS_RESTRICT creation_time,
@@ -154,6 +164,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------
 
 		bool GetFileTimes(const wchar_t* ECS_RESTRICT path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
 		{
@@ -196,6 +208,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------
 
 		bool GetRelativeFileTimes(
 			const wchar_t* ECS_RESTRICT path,
@@ -256,6 +270,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 		bool GetRelativeFileTimes(
 			const wchar_t* ECS_RESTRICT path,
 			char* ECS_RESTRICT creation_time,
@@ -288,6 +304,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 		bool GetRelativeFileTimes(
 			const wchar_t* ECS_RESTRICT path,
 			wchar_t* ECS_RESTRICT creation_time,
@@ -318,6 +336,8 @@ namespace ECSEngine {
 			}
 			return false;
 		}
+
+		// -----------------------------------------------------------------------------------------------------
 
 		bool OpenFileWithDefaultApplication(const wchar_t* path, CapacityStream<char>* error_message)
 		{
@@ -369,6 +389,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 		bool OpenFileWithDefaultApplication(
 			Stream<wchar_t> path,
 			CapacityStream<char>* error_message
@@ -385,11 +407,44 @@ namespace ECSEngine {
 			return OpenFileWithDefaultApplication(temp_path, error_message);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
+		Date GetLocalTime()
+		{
+			Date date;
+
+			SYSTEMTIME time;
+			GetLocalTime(&time);
+
+			date.year = time.wYear;
+			date.month = time.wMonth;
+			date.day = time.wDay;
+			date.hour = time.wHour;
+			date.minute = time.wMinute;
+			date.seconds = time.wSecond;
+			date.milliseconds = time.wMilliseconds;
+
+			return date;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		size_t GetFileLastWrite(const wchar_t* path)
+		{
+			size_t last_write = 0;
+			GetFileTimes(path, nullptr, nullptr, &last_write);
+			return last_write;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Error With Window Or Console
 
 		using FolderFunction = bool (*)(Stream<wchar_t> path);
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void ErrorWindow(Stream<wchar_t> path, UISystem* system, FolderFunction function, const char* error_string) {
 			bool success = function(path);
@@ -411,7 +466,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define LAUNCH_FILE_EXPLORER_ERROR_STRING "Launching file explorer at {0} failed. Incorrect path."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void LaunchFileExplorerWithError(containers::Stream<wchar_t> path, UISystem* system)
 		{
@@ -422,7 +481,11 @@ namespace ECSEngine {
 			ErrorConsole(path, console, OS::LaunchFileExplorer, LAUNCH_FILE_EXPLORER_ERROR_STRING);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define GET_FILE_TIMES_ERROR_STRING "Getting file {0} times failed!"
+
+		// -----------------------------------------------------------------------------------------------------
 
 		template<typename PointerType>
 		void GetFileTimesWithError(
@@ -478,6 +541,8 @@ namespace ECSEngine {
 		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
 		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, UISystem*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
+		// -----------------------------------------------------------------------------------------------------
+
 		template<typename PointerType>
 		void GetFileTimesWithError(
 			Stream<wchar_t> path,
@@ -504,6 +569,8 @@ namespace ECSEngine {
 		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
 		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
 		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+
+		// -----------------------------------------------------------------------------------------------------
 
 		template<typename PointerType>
 		void GetRelativeFileTimesWithError(
@@ -532,8 +599,11 @@ namespace ECSEngine {
 		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
 		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
+		// -----------------------------------------------------------------------------------------------------
 
 #define CLEAR_FILE_ERROR_STRING "Clearing file {0} failed. Incorrect path or access denied."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void ClearFileWithError(Stream<wchar_t> path, UISystem* system)
 		{
@@ -544,7 +614,11 @@ namespace ECSEngine {
 			ErrorConsole(path, console, ClearFile, CLEAR_FILE_ERROR_STRING);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define FILE_COPY_ERROR_STRING "Copying file {0} to {1} failed. Make sure that both file exist."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, UISystem* system) {
 			bool success = FileCopy(from, to);
@@ -566,7 +640,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define FOLDER_COPY_ERROR_STRING "Copying folder {0} to {1} failed. Make sure that both folders exist."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, UISystem* system) {
 			bool success = FolderCopy(from, to);
@@ -588,7 +666,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define CREATE_FOLDER_ERROR_STRING "Creating folder {0} failed. Incorrect path, access denied or folder already exists."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void CreateFolderWithError(Stream<wchar_t> path, UISystem* system)
 		{
@@ -599,7 +681,11 @@ namespace ECSEngine {
 			ErrorConsole(path, console, CreateFolder, CREATE_FOLDER_ERROR_STRING);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define DELETE_FOLDER_ERROR_STRING "Deleting folder {0} failed. Incorrect path, access denied or folder doesn't exist."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void DeleteFolderWithError(Stream<wchar_t> path, UISystem* system)
 		{
@@ -610,7 +696,11 @@ namespace ECSEngine {
 			ErrorConsole(path, console, RemoveFolder, DELETE_FOLDER_ERROR_STRING);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define DELETE_FILE_ERROR_STRING "Deleting file {0} failed. Incorrect path, access denied or file doesn't exist."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void DeleteFileWithError(Stream<wchar_t> path, UISystem* system) {
 			ErrorWindow(path, system, RemoveFile, DELETE_FILE_ERROR_STRING);
@@ -620,7 +710,11 @@ namespace ECSEngine {
 			ErrorConsole(path, console, RemoveFile, DELETE_FILE_ERROR_STRING);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define RENAME_FOLDER_ERROR_STRING "Renaming folder {0} to {1} failed. Incorrect path, invalid new name or access denied."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
 			bool success = RenameFolder(path, new_name);
@@ -642,7 +736,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define RENAME_FILE_ERROR_STRING "Renaming file {0} to {1} failed. Incorrect file, invalid new name or access denied."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
 			bool success = RenameFile(path, new_name);
@@ -664,7 +762,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define RESIZE_FILE_ERROR_STRING "Resizing file {0} to {1} size failed. Incorrect path or access denied"
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, UISystem* system) {
 			bool success = ResizeFile(path, new_size);
@@ -686,7 +788,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define CHANGE_FILE_EXTENSION_ERROR_STRING "Changing file {0} extension to {1} failed. Incorrect file, invalid extension or access denied."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> new_extension, UISystem* system) {
 			bool success = ChangeFileExtension(path, new_extension);
@@ -708,7 +814,11 @@ namespace ECSEngine {
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define EXISTS_FILE_OR_FOLDER_ERROR_STRING "File or folder {0} does not exists."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void ExistsFileOrFolderWithError(Stream<wchar_t> path, UISystem* system)
 		{
@@ -720,7 +830,11 @@ namespace ECSEngine {
 			ErrorConsole(path, console, ExistsFileOrFolder, EXISTS_FILE_OR_FOLDER_ERROR_STRING);
 		}
 
+		// -----------------------------------------------------------------------------------------------------
+
 #define DELETE_FOLDER_CONTENTS_ERROR_STRING "Deleting folder contents {0} failed."
+
+		// -----------------------------------------------------------------------------------------------------
 
 		void DeleteFolderContentsWithError(Stream<wchar_t> path, UISystem* system)
 		{
@@ -731,6 +845,8 @@ namespace ECSEngine {
 			ErrorConsole(path, console, DeleteFolderContents, DELETE_FOLDER_CONTENTS_ERROR_STRING);
 		}
 		
+		// -----------------------------------------------------------------------------------------------------
+
 		void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path, UISystem* system) {
 			ECS_TEMP_ASCII_STRING(error_message, 256);
 			bool success = OpenFileWithDefaultApplication(path, &error_message);
@@ -746,6 +862,8 @@ namespace ECSEngine {
 				console->Error(error_message);
 			}
 		}
+
+		// -----------------------------------------------------------------------------------------------------
 
 #pragma endregion
 

@@ -214,4 +214,19 @@ namespace ECSEngine {
 		return m_arenas[m_arenas.size - 1].Allocate(size, alignment);
 	}
 
+	template<bool trigger_error_if_not_found>
+	void ResizableMemoryArena::Deallocate_ts(const void* block)
+	{
+		uintptr_t block_reinterpretation = (uintptr_t)block;
+		for (int64_t index = m_arenas.size - 1; index >= 0; index--) {
+			uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
+			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocators.size * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
+				m_arenas[index].Deallocate_ts<trigger_error_if_not_found>(block);
+				break;
+			}
+		}
+	}
+
+	ECS_TEMPLATE_FUNCTION_BOOL(void, ResizableMemoryArena::Deallocate_ts, const void*);
+
 }

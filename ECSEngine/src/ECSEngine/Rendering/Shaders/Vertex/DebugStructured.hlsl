@@ -1,4 +1,4 @@
-#include "..\Macros.hlsli"
+#include "../Macros.hlsli"
 
 struct VS_INPUT
 {

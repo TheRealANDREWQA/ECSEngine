@@ -8,10 +8,12 @@ using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 ECS_CONTAINERS;
 
-constexpr size_t LINEAR_ALLOCATOR_SIZE = 50'000;
+constexpr size_t LINEAR_ALLOCATOR_SIZE = 25'000;
 constexpr size_t HASH_TABLE_CAPACITY = 256;
 constexpr size_t RIGHT_CLICK_ROW_COUNT = 5;
 constexpr const char* RIGHT_CLICK_LEFT_CHARACTERS = "Show in Explorer\nCreate\nDelete\nRename\nCopy Path";
+
+constexpr size_t LAZY_EVALUATION_MILLISECONDS_TICK = 500;
 
 constexpr const wchar_t* PROTECTED_FOLDERS[] = {
 	L"Assets"
@@ -24,8 +26,10 @@ struct DirectoryExplorerData {
 	CapacityStream<UIActionHandler> right_click_menu_handlers;
 	bool* right_click_menu_has_submenu;
 	UIDrawerMenuState* right_click_submenu_states;
-	bool is_right_click_window_opened;
 	UIDrawerLabelHierarchy* drawer_hierarchy;
+	Stream<const char*> directories_ptrs;
+	bool is_right_click_window_opened;
+	Timer timer;
 };
 
 bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
@@ -251,6 +255,8 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 		EditorState* editor_state = data->editor_state;
 		FileExplorerData* file_explorer_data = (FileExplorerData*)editor_state->file_explorer_data;
 		data->current_path = &file_explorer_data->current_directory;
+		data->directories_ptrs.Initialize(editor_allocator, HASH_TABLE_CAPACITY);
+		data->directories_ptrs.size = 0;
 
 		data->allocator = LinearAllocator(editor_allocator->Allocate(LINEAR_ALLOCATOR_SIZE), LINEAR_ALLOCATOR_SIZE);
 
@@ -309,50 +315,49 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 	EditorState* editor_state = data->editor_state;
 	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
 
-	data->allocator.Clear();
+	if (data->timer.GetDurationSinceMarker_ms() > LAZY_EVALUATION_MILLISECONDS_TICK) {
+		data->timer.SetMarker();
+		data->allocator.Clear();
+		data->directories_ptrs.size = 0;
 
-	const char* directories_ascii_ptrs[HASH_TABLE_CAPACITY];
-	Stream<const char*> directories_ptrs(directories_ascii_ptrs, 0);
+		wchar_t _folder_path_wide_stream[256];
+		Stream<wchar_t> folder_path_wide_stream(_folder_path_wide_stream, 0);
+		folder_path_wide_stream.AddStream(project_file->path);
+		folder_path_wide_stream.Add(ECS_OS_PATH_SEPARATOR);
+		size_t folder_path_wide_size_return = folder_path_wide_stream.size;
 
-	wchar_t _folder_path_wide_stream[256];
-	Stream<wchar_t> folder_path_wide_stream(_folder_path_wide_stream, 0);
-	folder_path_wide_stream.AddStream(project_file->path);
-	folder_path_wide_stream.Add(ECS_OS_PATH_SEPARATOR);
-	size_t folder_path_wide_size_return = folder_path_wide_stream.size;
+		for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
+			folder_path_wide_stream.size = folder_path_wide_size_return;
+			folder_path_wide_stream.AddStream(ToStream(PROTECTED_FOLDERS[index]));
+			folder_path_wide_stream[folder_path_wide_stream.size] = L'\0';
 
-	for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
-		folder_path_wide_stream.size = folder_path_wide_size_return;
-		folder_path_wide_stream.AddStream(ToStream(PROTECTED_FOLDERS[index]));
-		folder_path_wide_stream[folder_path_wide_stream.size] = L'\0';
+			Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
+			function::ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
 
-		Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
-		function::ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
+			data->directories_ptrs.Add(folder_path_stream.buffer + project_file->path.size + 1);
 
-		directories_ptrs.Add(folder_path_stream.buffer + project_file->path.size + 1);
+			struct ForEachData {
+				DirectoryExplorerData* data;
+				ProjectFile* project_file;
+			};
 
-		struct ForEachData {
-			Stream<const char*>* directories_ptrs;
-			DirectoryExplorerData* data;
-			ProjectFile* project_file;
-		};
+			ForEachData for_each_data;
+			for_each_data.data = data;
+			for_each_data.project_file = project_file;
 
-		ForEachData for_each_data;
-		for_each_data.data = data;
-		for_each_data.directories_ptrs = &directories_ptrs;
-		for_each_data.project_file = project_file;
+			ForEachDirectoryRecursive(folder_path_wide_stream, &for_each_data, [](const std::filesystem::path& path, void* _data) {
+				ForEachData* for_each_data = (ForEachData*)_data;
 
-		ForEachDirectoryRecursive(folder_path_wide_stream, &for_each_data, [](const std::filesystem::path& path, void* _data) {
-			ForEachData* for_each_data = (ForEachData*)_data;
+				const wchar_t* current_path = path.c_str();
+				size_t current_path_size = wcslen(current_path) + 1;
+				char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
+				function::ConvertWideCharsToASCII(current_path, ascii_current_path, current_path_size, current_path_size);
+				for_each_data->data->directories_ptrs.Add(ascii_current_path + for_each_data->project_file->path.size + 1);
 
-			const wchar_t* current_path = path.c_str();
-			size_t current_path_size = wcslen(current_path) + 1;
-			char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
-			function::ConvertWideCharsToASCII(current_path, ascii_current_path, current_path_size, current_path_size);
-			for_each_data->directories_ptrs->Add(ascii_current_path + for_each_data->project_file->path.size + 1);
+				return true;
+			});
 
-			return true;
-		});
-
+		}
 	}
 
 	UIDrawConfig config;
@@ -389,16 +394,15 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 
 		ASCIIPath parent_path = function::PathParent(ascii_stream);
 		ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
-		unsigned int hash = UIDrawerLabelHierarchyHash::Hash(identifier);
 
 		UIDrawerLabelHierarchyLabelData* label_data;
-		if (data->drawer_hierarchy->label_states.TryGetValuePtr(hash, identifier, label_data)) {
+		if (data->drawer_hierarchy->label_states.TryGetValuePtr(identifier, label_data)) {
 			label_data->state = true;
 		}
 	}
 
 	if constexpr (!initialize) {
-		data->drawer_hierarchy = drawer.LabelHierarchy<HIERARCHY_CONFIGURATION>(config, "Hierarchy", directories_ptrs);
+		data->drawer_hierarchy = drawer.LabelHierarchy<HIERARCHY_CONFIGURATION>(config, "Hierarchy", data->directories_ptrs);
 	}
 
 }

@@ -31,6 +31,7 @@
     <ClInclude Include="src\UI\InspectorData.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="src\Modules\ModuleConfigurationGroup.h" />
+    <ClInclude Include="src\UI\NotificationBar.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
@@ -55,6 +56,7 @@
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\UI\Inspector.cpp" />
     <ClCompile Include="src\Modules\ModuleConfigurationGroup.cpp" />
+    <ClCompile Include="src\UI\NotificationBar.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

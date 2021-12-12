@@ -7,7 +7,8 @@ namespace ECSEngine {
 
 	namespace containers {
 
-		// Atomic adds are atomic, the rest of operations are not - The equivalent of the CapacityStream<T>
+		// Atomic adds and requests are atomic, the rest of operations are not - The equivalent of the CapacityStream<T>
+		// Cannot create atomic streams with void as template argument - use char to express byte streams
 		template<typename T>
 		struct AtomicStream {
 			AtomicStream() : buffer(nullptr), size(0) {}
@@ -19,20 +20,22 @@ namespace ECSEngine {
 			AtomicStream<T>& operator = (const AtomicStream<T>&other) = default;
 
 			unsigned int Add(T element) {
-				unsigned int index = size.fetch_add(1, std::memory_order_relaxed);
+				unsigned int index = size.fetch_add(1, std::memory_order_acq_rel);
+				ECS_ASSERT(index <= capacity);
 				buffer[index] = element;
 				return index;
 			}
 
 			unsigned int Add(const T* element) {
-				unsigned int index = size.fetch_add(1, std::memory_order_relaxed);
+				unsigned int index = size.fetch_add(1, std::memory_order_acq_rel);
+				ECS_ASSERT(index <= capacity);
 				buffer[index] = *element;
 				return index;
 			}
 
 			// Returns the first index
 			unsigned int AddStream(Stream<T> other) {
-				unsigned int previous_size = size.fetch_add(other.size, std::memory_order_relaxed);
+				unsigned int previous_size = size.fetch_add(other.size, std::memory_order_acq_rel);
 				CopySlice(previous_size, other);
 				return previous_size;
 			}
@@ -66,6 +69,11 @@ namespace ECSEngine {
 				unsigned int current_size = size.load(std::memory_order_acquire);
 				memcpy((void*)memory, buffer, sizeof(T) * current_size);
 				memory += sizeof(T) * current_size;
+			}
+
+			Stream<T> Request(unsigned int count) {
+				unsigned int current_size = size.fetch_add(std::memory_order_acq_rel);
+				return { buffer + current_size, count };
 			}
 
 			void Remove(unsigned int index) {

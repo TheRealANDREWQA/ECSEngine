@@ -38,9 +38,11 @@ namespace ECSEngine {
 		DXGI_FORMAT formats[ECS_SHADER_REFLECTION_INTEGER_TABLE_COUNT];
 	};
 
-	using ShaderReflectionFormatTable = containers::IdentifierHashTable<DXGI_FORMAT, ResourceIdentifier, HashFunctionPowerOfTwo>;
-	using ShaderReflectionFloatFormatTable = containers::IdentifierHashTable<ShaderReflectionFloatExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo>;
-	using ShaderReflectionIntegerFormatTable = containers::IdentifierHashTable<ShaderReflectionIntegerExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo>;
+	using ShaderReflectionIdentifierHash = ECSEngine::HashFunctionMultiplyString;
+
+	using ShaderReflectionFormatTable = containers::HashTable<DXGI_FORMAT, ResourceIdentifier, HashFunctionPowerOfTwo, ShaderReflectionIdentifierHash>;
+	using ShaderReflectionFloatFormatTable = containers::HashTable<ShaderReflectionFloatExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo, ShaderReflectionIdentifierHash>;
+	using ShaderReflectionIntegerFormatTable = containers::HashTable<ShaderReflectionIntegerExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo, ShaderReflectionIdentifierHash>;
 
 	enum class ShaderBufferType {
 		Constant,
@@ -91,28 +93,28 @@ namespace ECSEngine {
 		ShaderReflection& operator = (const ShaderReflection& other) = default;
 
 		// Returns whether or not it succeded
-		bool ReflectVertexShaderInput(const wchar_t* path, containers::CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, containers::CapacityStream<char> semantic_name_pool);
+		bool ReflectVertexShaderInput(containers::Stream<wchar_t> path, containers::CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, containers::CapacityStream<char> semantic_name_pool);
 
 		// Returns whether or not it succeded
-		bool ReflectVertexShaderInput(containers::Stream<wchar_t> path, containers::CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, containers::CapacityStream<char> semantic_name_pool);;
-
-		// Returns whether or not it succeded
-		bool ReflectShaderBuffers(const wchar_t* path, containers::CapacityStream<ShaderReflectedBuffer>& buffers, containers::CapacityStream<char> name_pool);
+		bool ReflectVertexShaderInputSource(containers::Stream<char> source_code, containers::CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, containers::CapacityStream<char> semantic_name_pool);;
 
 		// Returns whether or not it succeded
 		bool ReflectShaderBuffers(containers::Stream<wchar_t> path, containers::CapacityStream<ShaderReflectedBuffer>& buffers, containers::CapacityStream<char> name_pool);
 
 		// Returns whether or not it succeded
-		bool ReflectShaderTextures(const wchar_t* path, containers::CapacityStream<ShaderReflectedTexture>& textures, containers::CapacityStream<char> name_pool);
+		bool ReflectShaderBuffersSource(containers::Stream<char> source_code, containers::CapacityStream<ShaderReflectedBuffer>& buffers, containers::CapacityStream<char> name_pool);
 
 		// Returns whether or not it succeded
 		bool ReflectShaderTextures(containers::Stream<wchar_t> path, containers::CapacityStream<ShaderReflectedTexture>& textures, containers::CapacityStream<char> name_pool);
 
 		// Returns whether or not it succeded
-		bool ReflectVertexBufferMapping(const wchar_t* path, containers::CapacityStream<ECS_MESH_INDEX>& mapping);
+		bool ReflectShaderTexturesSource(containers::Stream<char> source_code, containers::CapacityStream<ShaderReflectedTexture>& textures, containers::CapacityStream<char> name_pool);
 
 		// Returns whether or not it succeded
 		bool ReflectVertexBufferMapping(containers::Stream<wchar_t> path, containers::CapacityStream<ECS_MESH_INDEX>& mapping);
+
+		// Returns whether or not it succeded
+		bool ReflectVertexBufferMappingSource(containers::Stream<char> source_code, containers::CapacityStream<ECS_MESH_INDEX>& mapping);
 
 		// Returns the amount of bytes necessary to create an instance of this class
 		static size_t MemoryOf();

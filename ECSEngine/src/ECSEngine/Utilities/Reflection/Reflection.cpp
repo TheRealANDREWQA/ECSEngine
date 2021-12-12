@@ -81,8 +81,8 @@ namespace ECSEngine {
 						}
 					}
 
-					ECS_RESOURCE_IDENTIFIER_WITH_HASH(type.name, ReflectionStringHashFunction);
-					ECS_ASSERT(!type_definitions.Insert(hash, type, identifier));
+					ECS_RESOURCE_IDENTIFIER(type.name);
+					ECS_ASSERT(!type_definitions.Insert(type, identifier));
 				}
 
 				for (size_t index = 0; index < data[data_index].enums.size; index++) {
@@ -108,8 +108,8 @@ namespace ECSEngine {
 						ptr += sizeof(char) * field_size;
 					}
 
-					ECS_RESOURCE_IDENTIFIER_WITH_HASH(enum_.name, ReflectionStringHashFunction);
-					ECS_ASSERT(!enum_definitions.Insert(hash, enum_, identifier));
+					ECS_RESOURCE_IDENTIFIER(enum_.name);
+					ECS_ASSERT(!enum_definitions.Insert(enum_, identifier));
 				}
 			}
 
@@ -191,8 +191,7 @@ namespace ECSEngine {
 		{
 			size_t name_length = strlen(name);
 			ResourceIdentifier identifier = ResourceIdentifier(name, name_length);
-			unsigned int hash = ReflectionStringHashFunction::Hash(name, name_length);
-			return type_definitions.GetValue(hash, identifier);
+			return type_definitions.GetValue(identifier);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -200,8 +199,7 @@ namespace ECSEngine {
 		ReflectionEnum ReflectionManager::GetEnum(const char* name) const {
 			size_t name_length = strlen(name);
 			ResourceIdentifier identifier = ResourceIdentifier(name, name_length);
-			unsigned int hash = ReflectionStringHashFunction::Hash(name, name_length);
-			return enum_definitions.GetValue(hash, identifier);
+			return enum_definitions.GetValue(identifier);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -232,15 +230,15 @@ namespace ECSEngine {
 
 		bool ReflectionManager::TryGetType(const char* name, ReflectionType& type) const
 		{
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, ReflectionStringHashFunction);
-			return type_definitions.TryGetValue(hash, identifier, type);
+			ECS_RESOURCE_IDENTIFIER(name);
+			return type_definitions.TryGetValue(identifier, type);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool ReflectionManager::TryGetEnum(const char* name, ReflectionEnum& enum_) const {
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, ReflectionStringHashFunction);
-			return enum_definitions.TryGetValue(hash, identifier, enum_);
+			ECS_RESOURCE_IDENTIFIER(name);
+			return enum_definitions.TryGetValue(identifier, enum_);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -253,9 +251,9 @@ namespace ECSEngine {
 
 			// Initialize all values, helped by macros
 			ResourceIdentifier identifier;
-#define BASIC_TYPE(type, basic_type, stream_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, stream_type, sizeof(type), 1), identifier);
+#define BASIC_TYPE(type, basic_type, stream_type) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionFieldInfo(basic_type, stream_type, sizeof(type), 1), identifier);
 #define INT_TYPE(type, val) BASIC_TYPE(type, ReflectionBasicFieldType::val, ReflectionStreamFieldType::Basic)
-#define COMPLEX_TYPE(type, basic_type, stream_type, byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionStringHashFunction::Hash(identifier.ptr, identifier.size), ReflectionFieldInfo(basic_type, stream_type, byte_size, 1), identifier);
+#define COMPLEX_TYPE(type, basic_type, stream_type, byte_size) identifier = ResourceIdentifier(STRING(type), strlen(STRING(type))); field_table.Insert(ReflectionFieldInfo(basic_type, stream_type, byte_size, 1), identifier);
 
 #define TYPE_234(base, reflection_type) COMPLEX_TYPE(base##2, ReflectionBasicFieldType::reflection_type##2, ReflectionStreamFieldType::Basic, sizeof(base) * 2); \
 COMPLEX_TYPE(base##3, ReflectionBasicFieldType::reflection_type##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \
@@ -936,8 +934,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ReflectionFieldInfo info;
 
 			ResourceIdentifier identifier(extended_type_string);
-			unsigned int hash = ReflectionStringHashFunction::Hash(identifier);
-			bool success = reflection->field_table.TryGetValue(hash, identifier, info);
+			bool success = reflection->field_table.TryGetValue(identifier, info);
 			ECS_ASSERT(success, "Invalid type_string");
 
 			return info;
@@ -1746,9 +1743,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ReflectionField field;
 
 			ResourceIdentifier identifier = ResourceIdentifier(basic_type);
-			unsigned int hash = ReflectionStringHashFunction::Hash(identifier);
 
-			bool success = reflection_field_table->TryGetValue(hash, identifier, field.info);
+			bool success = reflection_field_table->TryGetValue(identifier, field.info);
 			field.definition = basic_type;
 			if (!success) {
 				field.info.stream_type = ReflectionStreamFieldType::Unknown;

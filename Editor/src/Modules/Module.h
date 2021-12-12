@@ -37,6 +37,8 @@ void RebuildProjectModules(EditorState* editor_state);
 // Returns whether or not it succeded
 void RebuildProjectModule(EditorState* editor_state, unsigned int index);
 
+void DeleteProjectModuleFlagFiles(EditorState* editor_state);
+
 void ChangeProjectModuleConfiguration(EditorState* editor_state, unsigned int index, EditorModuleConfiguration new_configuration);
 
 void InitializeModuleConfigurations(EditorState* editor_state);

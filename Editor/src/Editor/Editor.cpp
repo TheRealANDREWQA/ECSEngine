@@ -14,6 +14,7 @@
 #include "../UI/InspectorData.h"
 #include "EditorPalette.h"
 #include "EntryPoint.h"
+#include "../UI/NotificationBar.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -88,7 +89,7 @@ public:
 		using namespace ECSEngine::containers;
 		using namespace ECSEngine::Tools;
 #if 1
-		GlobalMemoryManager global_memory_manager(150'000'000, 256, 50'000'000);
+		GlobalMemoryManager global_memory_manager(200'000'000, 256, 75'000'000);
 		GraphicsDescriptor graphics_descriptor;
 		RECT window_rectangle;
 		GetClientRect(hWnd, &window_rectangle);
@@ -114,7 +115,7 @@ public:
 #endif
 
 		void* debug_allocation = global_memory_manager.Allocate(sizeof(unsigned int) * 1024);
-		MemoryManager memory_manager(100'000'000, 1024, 10'000'000, &global_memory_manager);
+		MemoryManager memory_manager(100'000'000, 1024, 50'000'000, &global_memory_manager);
 		memory_manager.SetDebugBuffer(debug_allocation);
 
 		graphics_descriptor.window_size = { new_width, new_height };
@@ -243,7 +244,7 @@ public:
 		reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 		reflection_manager.CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		bool success = reflection_manager.ProcessFolderHierarchy((unsigned int)0, &task_manager, &error_message);
+		bool success = reflection_manager.ProcessFolderHierarchy((unsigned int)0, &error_message);
 		success = reflection_manager.ProcessFolderHierarchy((unsigned int)1, &task_manager, &error_message);
 
 		UIReflectionDrawer ui_reflection(&resizable_arena, &reflection_manager);
@@ -313,7 +314,8 @@ public:
 		IndexBuffer index_buffer;
 
 		ECS_TEMP_ASCII_STRING(ERROR_MESSAGE, 256);
-		GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2tangents_triangulate.glb", &ERROR_MESSAGE);
+		GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2material.glb", &ERROR_MESSAGE);
+		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Cerberus.glb", &ERROR_MESSAGE);
 		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2_flipped.glb", &ERROR_MESSAGE);
 		//GLTFData gltf_data = LoadGLTFFile(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\Resources\\DebugPrimitives\\Alphabet.glb", &ERROR_MESSAGE);
 		GLTFMesh gltf_meshes[128];
@@ -338,22 +340,32 @@ public:
 		FreeGLTFMeshes(gltf_meshes, gltf_data.mesh_count, allocator);
 		FreeGLTFFile(gltf_data);
 
-		PBRMaterial created_material = CreatePBRMaterialFromName(ToStream("brown_planks"), ToStream("brown_planks_03"), ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"), allocator);
+		//PBRMaterial created_material = CreatePBRMaterialFromName(ToStream("Cerberus"), ToStream("Cerberus"), ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"), allocator);
+		//Material cerberus_material = PBRToMaterial(&resource_manager, created_material);
+		PBRMesh* cerberus = resource_manager.LoadPBRMesh(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\cerberus_textures.glb");
+		Material cerberus_material = PBRToMaterial(&resource_manager, cerberus->materials[0], ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"));
 
-		ShaderFromSourceOptions compile_options;
-		VertexShader cube_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(StaticMesh)), compile_options);
-		PixelShader pixel_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(StaticMesh)), compile_options);
-		InputLayout layout = graphics.ReflectVertexShaderInput(cube_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(StaticMesh)));
+		Stream<char> shader_source;
 
-		VertexShader forward_lighting_v_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(ForwardLighting)), compile_options);
-		PixelShader forward_lighting_p_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(ForwardLighting)), compile_options);
-		PixelShader forward_lighting_no_normal_p_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(ForwardLightingNoNormal)), compile_options);
-		InputLayout forward_lighting_layout = graphics.ReflectVertexShaderInput(forward_lighting_v_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(ForwardLighting)));
+		VertexShader forward_lighting_v_shader = resource_manager.LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(ForwardLighting), &shader_source);
+		PixelShader forward_lighting_p_shader = resource_manager.LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(ForwardLighting));
+		PixelShader forward_lighting_no_normal_p_shader = resource_manager.LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(ForwardLightingNoNormal));
+		InputLayout forward_lighting_layout = graphics.ReflectVertexShaderInput(forward_lighting_v_shader, shader_source);
+		resource_manager.DeallocateTs(shader_source.buffer);
 		
-		PixelShader PBR_shader = graphics.CreatePixelShaderFromSource(ToStream(ECS_PIXEL_SHADER_SOURCE(PBR)));
-
-		VertexShader debug_v_shader = graphics.CreateVertexShaderFromSource(ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)), compile_options);
-		InputLayout debug_layout = graphics.ReflectVertexShaderInput(debug_v_shader, ToStream(ECS_VERTEX_SHADER_SOURCE(DebugTransform)));
+		ShaderCompileOptions options;
+		ShaderMacro _macros[32];
+		Stream<ShaderMacro> macros(_macros, 0);
+		macros[0] = { "COLOR_TEXTURE", "" };
+		macros[1] = { "ROUGHNESS_TEXTURE", "" };
+		macros[2] = { "OCCLUSION_TEXTURE", "" };
+		macros[3] = { "NORMAL_TEXTURE", "" };
+		macros.size = 4;
+		options.macros = macros;
+		PixelShader PBR_pixel_shader = resource_manager.LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), nullptr, options);
+		VertexShader PBR_vertex_shader = resource_manager.LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), &shader_source);
+		InputLayout PBR_layout = graphics.ReflectVertexShaderInput(PBR_vertex_shader, shader_source);
+		resource_manager.DeallocateTs(shader_source.buffer);
 
 		ConstantBuffer obj_buffer = graphics.CreateConstantBuffer(sizeof(float) * 32);
 
@@ -366,14 +378,8 @@ public:
 		ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(&graphics);
 		ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(&graphics);
 		ConstantBuffer pbr_lights = graphics.CreateConstantBuffer(sizeof(float4) * 8 + sizeof(float4) * 4);
-		ConstantBuffer pbr_values = graphics.CreateConstantBuffer(sizeof(float2));
-
-		float* _specular_factors = (float*)graphics.MapBuffer(specular_factors.buffer);
-		_specular_factors[0] = 20.0f;
-		_specular_factors[1] = 1.25f;
-		graphics.UnmapBuffer(specular_factors.buffer);
-
-		Shaders::SetHemisphericConstants(hemispheric_ambient_light, &graphics, ColorFloat(0.25f, 0.25f, 0.25f), ColorFloat(0.25f, 0.25f, 0.25f));
+		ConstantBuffer pbr_pixel_values = Shaders::CreatePBRPixelConstants(&graphics);
+		ConstantBuffer pbr_vertex_values = Shaders::CreatePBRVertexConstants(&graphics);
 
 		Shaders::SetCapsuleLight(capsule_light, &graphics, float3(0.0f, 0.0f, 20.0f), float3(0.0f, 1.0f, 0.0f), 10.0f, 1.0f, 2.0f, ColorFloat(50.0f, 50.0f, 50.0f));
 
@@ -399,7 +405,7 @@ public:
 		camera.translation = { 0.0f, 0.0f, 0.0f };
 		//camera.SetPerspectiveProjectionFOV(45.0f, (float)width / (float)height, -1.0f, 1.0f);
 		ResourceManagerTextureDesc plank_descriptor;
-		plank_descriptor.context = graphics.m_context.Get();
+		//plank_descriptor.context = graphics.m_context.Get();
 		plank_descriptor.usage = D3D11_USAGE_DEFAULT;
 		ResourceView plank_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", plank_descriptor);
 		ResourceView plank_normal_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_nor_dx_1k.jpg", plank_descriptor);
@@ -409,23 +415,22 @@ public:
 		ECS_ASSERT(plank_texture.view != nullptr && plank_normal_texture.view != nullptr && plank_roughness.view != nullptr && plank_ao.view != nullptr);
 
 		MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, &global_memory_manager);
-		DebugDrawer debug_drawer(&debug_drawer_memory, &graphics, 1);
+		DebugDrawer debug_drawer(&debug_drawer_memory, &resource_manager, 1);
 		float3 LIGHT_DIRECTION(0.0f, -1.0f, 0.0f);
-		ColorFloat LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 1.0f);
+		ColorFloat LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 0.0f);
 
-		debug_drawer.InitializePrimitiveBuffers(&resource_manager);
 
 		static bool normal_map = true;
-		static float normal_strength = 1.0f;
-		static float metallic = 0.0f;
-		static float roughness = 1.0f;
+		static float normal_strength = 0.0f;
+		static float metallic = 1.0f;
+		static float roughness = 0.0f;
 		static float3 pbr_light_pos[4] = { float3(0.0f, 0.0f, 20.0f), float3(-3.0f, 0.0f, 20.0f), float3(3.0f, 0.0f, 20.0f), float3(5.0f, 2.0f, 20.0f) };
 		static ColorFloat pbr_light_color[4] = { ColorFloat(1.0f, 1.0f, 1.0f, 1.0f), ColorFloat(100.0f, 20.0f, 20.0f, 1.0f), ColorFloat(0.2f, 0.9f, 0.1f, 1.0f), ColorFloat(0.3f, 0.2f, 0.9f, 1.0f) };
-		static float pbr_light_range[4] = { 2.0f, 5.0f, 5.0f, 10.0f };
+		static float pbr_light_range[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
 		ConstantBuffer normal_strength_buffer = graphics.CreateConstantBuffer(sizeof(float));
 
-		InjectWindowElement inject_elements[10];
+		InjectWindowElement inject_elements[16];
 		InjectWindowSection section[1];
 		section[0].elements = Stream<InjectWindowElement>(inject_elements, std::size(inject_elements));
 		section[0].name = "Directional Light";
@@ -477,35 +482,81 @@ public:
 		inject_elements[8].stream_capacity = 4;
 		inject_elements[8].stream_size = 4;
 
-		static bool cube_type = false;
+		static bool diffuse_cube = false;
+		static bool specular_cube = false;
+		static float2 uv_tiling = { 10.0f, 10.0f };
+		static float2 uv_offsets = { 0.0f, 0.0f };
 
-		inject_elements[9].name = "Environment map";
+		inject_elements[9].name = "Diffuse Cube";
 		inject_elements[9].basic_type_string = STRING(bool);
-		inject_elements[9].data = &cube_type;
+		inject_elements[9].data = &diffuse_cube;
+
+		inject_elements[10].name = "Specular Cube";
+		inject_elements[10].basic_type_string = STRING(bool);
+		inject_elements[10].data = &specular_cube;
+
+		inject_elements[11].name = "UV tiling";
+		inject_elements[11].basic_type_string = STRING(float2);
+		inject_elements[11].data = &uv_tiling;
+
+		inject_elements[12].name = "UV offsets";
+		inject_elements[12].basic_type_string = STRING(float2);
+		inject_elements[12].data = &uv_offsets;
+
+		static Color tint = Color((unsigned char)255, 255, 255, 255);
+
+		inject_elements[13].name = "Tint";
+		inject_elements[13].basic_type_string = STRING(Color);
+		inject_elements[13].data = &tint;
+
+		static float environment_diffuse_factor = 1.0f;
+		static float environment_specular_factor = 1.0f;
+		
+		inject_elements[14].name = "Environment diffuse";
+		inject_elements[14].basic_type_string = STRING(float);
+		inject_elements[14].data = &environment_diffuse_factor;
+
+		inject_elements[15].name = "Environment specular";
+		inject_elements[15].basic_type_string = STRING(float);
+		inject_elements[15].data = &environment_specular_factor;
 
 		editor_state.inject_data.ui_reflection = editor_state.ui_reflection;
 		editor_state.inject_data.sections = Stream<InjectWindowSection>(section, std::size(section));
 		editor_state.inject_window_name = "Inject Window";
 
-		GraphicsTextureCubeDescriptor cube_descriptor;
-		cube_descriptor.mip_levels = 1;
-		cube_descriptor.size = { 256, 256 };
-		cube_descriptor.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		TextureCube cube = graphics.CreateTexture(&cube_descriptor);
-
 		ResourceManagerTextureDesc texture_desc;
-		ResourceView environment_map = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Winter_Forest\\WinterForest_Ref.hdr", texture_desc);
+		texture_desc.allocator = { &global_memory_manager, AllocatorType::GlobalMemoryManager, AllocationType::SingleThreaded };
+		ResourceView environment_map = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ice_Lake\\Ice_Lake_Ref.hdr", texture_desc);
+		//ResourceView environment_map = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ridgecrest_Road\\Ridgecrest_Road_Ref.hdr", texture_desc);
 		TextureCube converted_cube = ConvertTextureToCube(environment_map, &graphics, DXGI_FORMAT_R16G16B16A16_FLOAT, { 1024, 1024 });
 		ResourceView converted_cube_view = graphics.CreateTextureShaderViewResource(converted_cube);
 
+
 		VertexBuffer cube_v_buffer;
 		IndexBuffer cube_v_index;
-		CreateCubeVertexBuffer(&graphics, 10.0f, cube_v_buffer, cube_v_index);
+		CreateCubeVertexBuffer(&graphics, 30.0f, cube_v_buffer, cube_v_index);
 
 		TextureCube diffuse_environment = ConvertEnvironmentMapToDiffuseIBL(converted_cube_view, &graphics, { 64, 64 }, 200);
 		ResourceView diffuse_view = graphics.CreateTextureShaderViewResource(diffuse_environment);
 
+		TextureCube specular_environment = ConvertEnvironmentMapToSpecularIBL(converted_cube_view, &graphics, { 1024, 1024 }, 2048);
+		ResourceView specular_view = graphics.CreateTextureShaderViewResource(specular_environment);
+		D3D11_TEXTURE2D_DESC specular_descriptor;
+		specular_environment.tex->GetDesc(&specular_descriptor);
+
+		Texture2D brdf_lut = CreateBRDFIntegrationLUT(&graphics, { 512, 512 }, 1024);
+		ResourceView brdf_lut_view = graphics.CreateTextureShaderViewResource(brdf_lut);
+
 		ConstantBuffer converted_cube_constants = graphics.CreateConstantBuffer(sizeof(Matrix));
+		
+		float specular_max_mip = (float)specular_descriptor.MipLevels - 1.0f;
+		ConstantBuffer environment_constants = Shaders::CreatePBRPixelEnvironmentConstant(&graphics);
+
+		ConstantBuffer skybox_vertex_constant = Shaders::CreatePBRSkyboxVertexConstant(&graphics);
+
+		cerberus_material.pixel_textures[5] = diffuse_view;
+		cerberus_material.pixel_textures[6] = specular_view;
+		cerberus_material.pixel_textures[7] = brdf_lut_view;
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -534,6 +585,15 @@ public:
 				keyboard.UpdateState();
 				keyboard.UpdateTracker();
 
+				unsigned int VALUE = 0;
+
+				unsigned int window_index = ui.GetWindowFromName("Game");
+				if (window_index == -1)
+					window_index = 0;
+				float aspect_ratio = ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y * new_width / new_height;
+
+				Shaders::SetPBRPixelEnvironmentConstant(environment_constants, &graphics, { specular_max_mip, environment_diffuse_factor, environment_specular_factor });
+
 				graphics.ClearBackBuffer(0.0f, 0.0f, 0.0f);
 				const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
 				graphics.m_context->ClearDepthStencilView(viewport_depth_view.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -549,21 +609,26 @@ public:
 				graphics.BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				graphics.BindVertexBuffer(cube_v_buffer);
 				graphics.BindIndexBuffer(cube_v_index);
-				if (cube_type) {
+				if (diffuse_cube) {
 					graphics.BindPixelResourceView(diffuse_view);
+				}
+				else if (specular_cube) {
+					graphics.BindPixelResourceView(specular_view);
 				}
 				else {
 					graphics.BindPixelResourceView(converted_cube_view);
 				}
-				UpdateBufferResource(converted_cube_constants.buffer, &cube_matrix, sizeof(Matrix), graphics.GetContext());
-				graphics.BindVertexConstantBuffer(converted_cube_constants);
+				Shaders::SetPBRSkyboxVertexConstant(skybox_vertex_constant, &graphics, camera.rotation, camera.projection);
+				graphics.BindVertexConstantBuffer(skybox_vertex_constant);
 				graphics.DrawIndexed(cube_v_index.count);
 				graphics.EnableDepth();
 				graphics.EnableCulling();
 
-				graphics.BindVertexShader(forward_lighting_v_shader);
-				graphics.BindPixelShader(PBR_shader);
-				graphics.BindInputLayout(forward_lighting_layout);
+				graphics.BindVertexShader(PBR_vertex_shader);
+				graphics.BindPixelShader(PBR_pixel_shader);
+				graphics.BindInputLayout(PBR_layout);
+
+				graphics.BindSamplerState(graphics.m_shader_helpers[0].pixel_sampler, 1);
 
 				graphics.BindPixelResourceView(plank_texture);
 				graphics.BindPixelResourceView(plank_normal_texture, 1);
@@ -571,8 +636,8 @@ public:
 				graphics.BindPixelResourceView(plank_roughness, 3);
 				graphics.BindPixelResourceView(plank_ao, 4);
 				graphics.BindPixelResourceView(diffuse_view, 5);
-
-				unsigned int VALUE = 0;
+				graphics.BindPixelResourceView(specular_view, 6);
+				graphics.BindPixelResourceView(brdf_lut_view, 7);
 
 				if (mouse_state->MiddleButton()) {
 					float2 mouse_position = ui.GetNormalizeMousePosition();
@@ -621,15 +686,11 @@ public:
 					camera.translation += forward_vector * float3::Splat(scroll_delta * factor);
 				}
 
-				unsigned int window_index = ui.GetWindowFromName("Game");
-				if (window_index == -1)
-					window_index = 0;
-
 
 				Shaders::SetCameraPosition(camera_position_buffer, &graphics, camera.translation);
 
 				ConstantBuffer vertex_constant_buffers[1];
-				vertex_constant_buffers[0] = obj_buffer;
+				vertex_constant_buffers[0] = pbr_vertex_values;
 				graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
 
 				Shaders::SetDirectionalLight(directional_light, &graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
@@ -642,21 +703,9 @@ public:
 				*normal_strength_data = normal_strength;
 				graphics.UnmapBuffer(normal_strength_buffer.buffer);
 
-				/*ConstantBuffer pixel_constant_buffers[8];
-				pixel_constant_buffers[0] = hemispheric_ambient_light;
-				pixel_constant_buffers[1] = directional_light;
-				pixel_constant_buffers[2] = specular_factors;
-				pixel_constant_buffers[3] = point_light;
-				pixel_constant_buffers[4] = spot_light;
-				pixel_constant_buffers[5] = capsule_light;
-				pixel_constant_buffers[6] = normal_strength_buffer;
-				pixel_constant_buffers[7] = camera_position_buffer;
-
-				graphics.BindPixelConstantBuffers(Stream<ConstantBuffer>(pixel_constant_buffers, std::size(pixel_constant_buffers)));*/
-
-				float2* _pbr_values = (float2*)graphics.MapBuffer(pbr_values.buffer);
+				float2* _pbr_values = (float2*)graphics.MapBuffer(pbr_pixel_values.buffer);
 				*_pbr_values = { metallic, roughness };
-				graphics.UnmapBuffer(pbr_values.buffer);
+				graphics.UnmapBuffer(pbr_pixel_values.buffer);
 
 				float4* _pbr_lights = (float4*)graphics.MapBuffer(pbr_lights.buffer);
 				for (size_t index = 0; index < 4; index++) {
@@ -673,16 +722,25 @@ public:
 				}
 				graphics.UnmapBuffer(pbr_lights.buffer);
 
-				ConstantBuffer pixel_constant_buffer[4];
+				Shaders::PBRPixelConstants pixel_constants;
+				pixel_constants.tint = tint;
+				pixel_constants.normal_strength = normal_strength;
+				pixel_constants.metallic_factor = metallic;
+				pixel_constants.roughness_factor = roughness;
+				Shaders::SetPBRPixelConstants(pbr_pixel_values, &graphics, pixel_constants);
+
+				ConstantBuffer pixel_constant_buffer[5];
 				pixel_constant_buffer[0] = camera_position_buffer;
-				pixel_constant_buffer[1] = pbr_lights;
-				pixel_constant_buffer[2] = pbr_values;
-				pixel_constant_buffer[3] = directional_light;
+				pixel_constant_buffer[1] = environment_constants;
+				pixel_constant_buffer[2] = pbr_pixel_values;
+				pixel_constant_buffer[3] = pbr_lights;
+				pixel_constant_buffer[4] = directional_light;
 
 				graphics.BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
 
-				float ____value = ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y * new_width / new_height;
-				camera.SetPerspectiveProjectionFOV(60.0f, ____value, 0.05f, 1000.0f);
+				camera.SetPerspectiveProjectionFOV(60.0f, aspect_ratio, 0.05f, 1000.0f);
+
+				Matrix camera_matrix = camera.GetProjectionViewMatrix();
 
 				Matrix world_matrices[1];
 				for (size_t subindex = 0; subindex < 1; subindex++) {
@@ -690,21 +748,18 @@ public:
 					float* reinter = (float*)obj_ptr;
 					DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
 
-					Matrix matrix = MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) * MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
+					Matrix matrix = /*MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) **/ MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
 						* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
 					Matrix world_matrix = matrix;
 					world_matrices[subindex] = world_matrix;
 					Matrix transpose = MatrixTranspose(matrix);
 					transpose.Store(reinter);
-					Matrix camera_matrix = camera.GetProjectionViewMatrix();
 
 					Matrix MVP_matrix = matrix * camera_matrix;
 					matrix = MatrixTranspose(MVP_matrix);
 					matrix.Store(reinter + 16);
 
 					graphics.UnmapBuffer(obj_buffer.buffer);
-
-					graphics.EnableDepth();
 					graphics.BindSamplerState(sampler);
 
 					ECS_MESH_INDEX mapping[3];
@@ -712,26 +767,27 @@ public:
 					mapping[1] = ECS_MESH_NORMAL;
 					mapping[2] = ECS_MESH_UV;
 
-					//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME]);
-					/*for (size_t index = 53; index < 55; index++) {
-						ECS_MESH_INDEX mapping[3];
-						mapping[0] = ECS_MESH_POSITION;
-						mapping[1] = ECS_MESH_UV;
-						mapping[2] = ECS_MESH_NORMAL;
-						graphics.BindMesh(meshes[index], Stream<ECS_MESH_INDEX>(mapping, 3));
-
-						graphics.DrawIndexed(meshes[index].index_buffer.count);
-					}*/
+					Shaders::SetPBRVertexConstants(pbr_vertex_values, &graphics, MatrixTranspose(world_matrices[subindex]), MatrixTranspose(MVP_matrix), uv_tiling, uv_offsets);
 
 					graphics.BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
 					graphics.DrawIndexed(normal_merged_mesh.index_buffer.count);
 				}
+
+				graphics.BindMaterial(cerberus_material);
+
+				Matrix world_matrix = MatrixTransform({ -2.0f, 2.5f, 20.0f }, { 0.0f, 0.0f, 0.0f }, { 3.0f, 3.0f, 3.0f });
+				Shaders::SetPBRVertexConstants(cerberus_material.vc_buffers[0], &graphics, MatrixTranspose(world_matrix), MatrixTranspose(world_matrix * camera_matrix));
+				graphics.BindMesh(cerberus->mesh.mesh, { cerberus_material.vertex_buffer_mappings, cerberus_material.vertex_buffer_mapping_count });
+				graphics.DrawIndexed(cerberus->mesh.mesh.index_buffer.count);
+
 				//graphics.m_context->RSSetState(debug_drawer.rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL]);
 
 				auto previos_render_state = debug_drawer.GetPreviousRenderState();
 				debug_drawer.UpdateCameraMatrix(camera.GetProjectionViewMatrix());
 
-//				debug_drawer.DrawNormals(GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_POSITION), GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_NORMAL), 0.05f, Color(200, 50, 40), { world_matrices, std::size(world_matrices) });
+				//debug_drawer.DrawArrowRotation({ 0.0f, 0.0f, 0.0f }, { 45.0f, 90.0f, 0.0f }, 1.0f, 1.0f, EDITOR_GREEN_COLOR);
+
+				//debug_drawer.DrawNormals(GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_POSITION), GetMeshVertexBuffer(normal_merged_mesh, ECS_MESH_NORMAL), 0.05f, Color(200, 50, 40), { world_matrices, std::size(world_matrices) });
 //
 //				debug_drawer.AddLine({ 0.0f, 0.0f, 10.0f }, { 0.0f, 5.0f, 10.0f }, EDITOR_GREEN_COLOR);
 //				debug_drawer.AddRectangle({ 0.0f, 0.0f, 20.0f }, { 2.5f, 5.0f, 20.0f }, Color(200, 200, 200));
@@ -771,7 +827,7 @@ public:
 //					"\n\tsize_t solution_last_write_time;"
 //					"\n\tsize_t library_last_write_time;\n};"), Color(200, 200, 200));
 //				debug_drawer.DrawAll(1.0f);
-				debug_drawer.RestorePreviousRenderState(previos_render_state);
+				//debug_drawer.RestorePreviousRenderState(previos_render_state);
 
 				graphics.BindRenderTargetViewFromInitialViews();
 
@@ -783,7 +839,7 @@ public:
 				task_manager.ResetTaskAllocator();
 			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
+			//std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
 		}
 
 		task_manager.SleepUntilDynamicTasksFinish();

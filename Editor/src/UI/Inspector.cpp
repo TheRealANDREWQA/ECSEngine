@@ -38,20 +38,18 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 
 void AddInspectorTableFunction(InspectorTable* table, InspectorDrawFunction function, const wchar_t* _identifier) {
 	ResourceIdentifier identifier(_identifier);
-	unsigned int hash = HashFunction::Hash(identifier);
 
-	ECS_ASSERT(table->Find(hash, identifier) == -1);
-	ECS_ASSERT(!table->Insert(hash, function, identifier));
+	ECS_ASSERT(table->Find(identifier) == -1);
+	ECS_ASSERT(!table->Insert(function, identifier));
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorDrawFunction& function, Stream<wchar_t> _identifier) {
 	ResourceIdentifier identifier(_identifier.buffer, _identifier.size * sizeof(wchar_t));
-	unsigned int hash = HashFunction::Hash(identifier);
 
 	InspectorData* data = (InspectorData*)editor_state->inspector_data;
-	return data->table.TryGetValue(hash, identifier, function);
+	return data->table.TryGetValue(identifier, function);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -236,7 +234,7 @@ void InspectorDrawBlankFile(EditorState* editor_state, void* data, UIDrawer<fals
 		return;
 	}
 
-	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, drawer->color_theme.theme);
+	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, drawer->color_theme.default_text);
 	Stream<wchar_t> stream_path = ToStream(path);
 	InspectorIconNameAndPath(drawer, stream_path);
 
@@ -608,8 +606,10 @@ void InitializeInspector(EditorState* editor_state)
 
 	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".png");
 	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".jpg");
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".tiff");
 	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".bmp");
+	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".tiff");
+	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".tga");
+	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".hdr");
 	AddInspectorTableFunction(&data->table, InspectorDrawTextFile, L".txt");
 	AddInspectorTableFunction(&data->table, InspectorDrawTextFile, L".md");
 	AddInspectorTableFunction(&data->table, InspectorDrawCppTextFile, L".cpp");

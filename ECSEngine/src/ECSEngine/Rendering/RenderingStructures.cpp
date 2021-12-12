@@ -65,7 +65,7 @@ namespace ECSEngine {
 
 	InputLayout::InputLayout() : layout(nullptr) {}
 
-	VertexShader::VertexShader() : byte_code(nullptr), shader(nullptr) {}
+	VertexShader::VertexShader() : byte_code(nullptr, 0), shader(nullptr) {}
 
 	PixelShader::PixelShader() : shader(nullptr) {}
 
@@ -312,7 +312,7 @@ namespace ECSEngine {
 
 	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
 		void* base_address = (void*)function::align_pointer(
-			(uintptr_t)function::OffsetPointer(material, sizeof(Stream<char>) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
+			(uintptr_t)function::OffsetPointer(material, sizeof(const char*) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
 			alignof(Stream<wchar_t>)
 		);
 
@@ -322,6 +322,8 @@ namespace ECSEngine {
 		);
 		texture_name->InitializeFromBuffer(memory, texture.size);
 		texture_name->Copy(texture);
+		texture_name->buffer[texture_name->size] = L'\0';
+		memory += sizeof(wchar_t);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -336,7 +338,7 @@ namespace ECSEngine {
 		size_t total_allocation_size = name.size;
 
 		for (size_t index = 0; index < mappings.size; index++) {
-			total_allocation_size += mappings[index].texture.size * sizeof(wchar_t);
+			total_allocation_size += (mappings[index].texture.size + 1) * sizeof(wchar_t);
 		}
 
 		void* allocation = Allocate(allocator, total_allocation_size, alignof(wchar_t));
@@ -395,7 +397,7 @@ namespace ECSEngine {
 
 		material.tint = Color((unsigned char)255, 255, 255, 255);
 		material.emissive_factor = { 0.0f, 0.0f, 0.0f };
-		material.metallic_factor = 0.0f;
+		material.metallic_factor = 1.0f;
 		material.roughness_factor = 1.0f;
 
 		Stream<const wchar_t*> material_strings[ECS_PBR_MATERIAL_MAPPING_COUNT];

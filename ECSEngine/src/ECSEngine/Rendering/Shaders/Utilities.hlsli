@@ -115,4 +115,104 @@ float3 SphericalCoordinatesToCartesian(float r, float theta, float phi)
     return float3(r * sin_theta * cos_phi, r * sin_theta * sin_phi, r * cos_theta);
 }
 
+float RadicalInverseVanDerCorput(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // the same as dividing by 0x100000000
+}
+
+float2 Hammersley(uint index, uint sample_count)
+{
+    return float2(float(index) / float(sample_count), RadicalInverseVanDerCorput(index));
+}
+
+float3 TonemapReinhard(float3 irradiance)
+{
+    return irradiance / (irradiance + 1.0f);
+}
+
+// Tipical values for saturation_point : [4; 50]
+float3 TonemapReinhardModified(float3 irradiance, float3 saturation_point)
+{
+    return (irradiance * (float3(1.0f, 1.0f, 1.0f) + irradiance / saturation_point)) / (irradiance + 1);
+}
+
+// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
+float3 TonemapACES(float3 irradiance)
+{
+    const float a = 2.51f;
+    const float b = 0.03f;
+    const float c = 2.43f;
+    const float d = 0.59f;
+    const float e = 0.14f;
+    // Formula: (x * (a * x + b)) / (x * (c * x + d) + e); where x is irradiance
+    // and a, b, c, d, e are constants
+    return (irradiance * mad(irradiance, a, b)) / (irradiance * mad(irradiance, c, d) + e);
+}
+
+// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
+// Already has gamma correction applied
+float3 TonemapACESApproximation(float3 irradiance)
+{
+    return irradiance / (irradiance + 0.155f) * 1.019f;
+}
+
+// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
+float3 TonemapUchimura(float3 irradiance, float3 P, float3 a, float3 m, float3 l, float3 c, float3 b)
+{
+    float3 l0 = ((P - m) * l) / a;
+    float3 L0 = m - m / a;
+    float3 L1 = m + (1.0 - m) / a;
+    float3 S0 = m + l0;
+    float3 S1 = m + a * l0;
+    float3 C2 = (a * P) / (P - S1);
+    float3 CP = -C2 / P;
+
+    float3 w0 = 1.0 - smoothstep(0.0, m, irradiance);
+    float3 w2 = step(m + l0, irradiance);
+    float3 w1 = 1.0 - w0 - w2;
+
+    float3 T = m * pow(irradiance / m, c) + b;
+    float3 S = P - (P - S1) * exp(CP * (irradiance - S0));
+    float3 L = m + a * (irradiance - m);
+
+    return T * w0 + L * w1 + S * w2;
+}
+
+// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
+float3 TonemapUchimura(float3 irradiance)
+{
+    const float P = 1.0;
+    const float a = 1.0;
+    const float m = 0.22;
+    const float l = 0.4;
+    const float c = 1.33;
+    const float b = 0.0;
+    return TonemapUchimura(irradiance, P, a, m, l, c, b);
+}
+
+// Credit to https://www.shadertoy.com/view/WdjSW3 and https://bruop.github.io/tonemapping/
+float3 TonemapLottes(float3 irradiance)
+{
+    // Lottes 2016, "Advanced Techniques and Optimization of HDR Color Pipelines"
+    const float a = 1.6f;
+    const float d = 0.977f;
+    const float hdrMax = 8.0f;
+    const float midIn = 0.18f;
+    const float midOut = 0.267f;
+
+    static const float b =
+        (-pow(midIn, a) + pow(hdrMax, a) * midOut) /
+        ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut);
+    static const float c =
+        (pow(hdrMax, a * d) * pow(midIn, a) - pow(hdrMax, a) * pow(midIn, a * d) * midOut) /
+        ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut);
+
+    return pow(irradiance, a) / (pow(irradiance, a * d) * b + c);
+}
+
 #endif

@@ -121,10 +121,10 @@ namespace ECSEngine {
 			const char* filter_name;
 		};
 
-		using ReflectionFieldTable = containers::IdentifierHashTable<ReflectionFieldInfo, ResourceIdentifier, HashFunctionPowerOfTwo>;
-		using ReflectionTypeTable = containers::IdentifierHashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo>;
-		using ReflectionEnumTable = containers::IdentifierHashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo>;
-		using ReflectionStringHashFunction = HashFunctionMultiplyString;
+		using ReflectionHash = HashFunctionMultiplyString;
+		using ReflectionFieldTable = containers::HashTable<ReflectionFieldInfo, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
+		using ReflectionTypeTable = containers::HashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
+		using ReflectionEnumTable = containers::HashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 
 		struct ECSENGINE_API ReflectionFolderHierarchy {
 			ReflectionFolderHierarchy(MemoryManager* allocator);

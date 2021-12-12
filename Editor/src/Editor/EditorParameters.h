@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-constexpr size_t SLEEP_AMOUNT[] = { 16, 12, 8, 4 };
+constexpr size_t SLEEP_AMOUNT[] = { 10, 8, 6, 4 };
 constexpr size_t GLOBAL_MEMORY_COUNT = 20'000'000;
 constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 4'000'000;
 constexpr size_t UI_RESIZABLE_ARENA_INITIAL_MEMORY = 15'000'000;

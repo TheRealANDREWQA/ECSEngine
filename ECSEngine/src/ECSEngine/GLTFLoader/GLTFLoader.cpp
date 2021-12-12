@@ -420,6 +420,8 @@ namespace ECSEngine {
 				}
 			}
 
+			mesh.name = nodes[node_index].name;
+
 			if (primitive->indices != nullptr) {
 				unsigned int index_count = primitive->indices->count;
 
@@ -485,7 +487,7 @@ namespace ECSEngine {
 					Stream<char> texture_name = ToStream(name);
 					unsigned int old_texture_size = temp_texture_names.size;
 					function::ConvertASCIIToWide(temp_texture_names, texture_name);
-					mappings[mapping_count].texture = { temp_texture_names.buffer + old_texture_size, old_texture_size };
+					mappings[mapping_count].texture = { temp_texture_names.buffer + old_texture_size, texture_name.size };
 					mappings[mapping_count].index = mapping;
 					mapping_count++;
 				};
@@ -499,27 +501,91 @@ namespace ECSEngine {
 						if (gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name != nullptr) {
 							add_mapping(gltf_material->pbr_metallic_roughness.base_color_texture.texture->image->name, ECS_PBR_MATERIAL_COLOR);
 						}
-					}
-					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
-						if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
-							add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_ROUGHNESS);
+						// Set non existing texture
+						else {
+							material.color_texture = { nullptr,0 };
 						}
 					}
+					// Set non existing texture
+					else {
+						material.color_texture = { nullptr, 0 };
+					}
+
+					if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
+						if (gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name != nullptr) {
+							char* hyphon = strchr(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, '-');
+							if (hyphon != nullptr) {
+								*hyphon = '\0';
+								add_mapping(gltf_material->pbr_metallic_roughness.metallic_roughness_texture.texture->image->name, ECS_PBR_MATERIAL_METALLIC);
+								add_mapping(hyphon + 1, ECS_PBR_MATERIAL_ROUGHNESS);
+							}
+							// Do not add it at all if it isn't specified - could be roughness, could be roughness
+							// Set non existing texture
+							else {
+								material.metallic_texture = { nullptr, 0 };
+								material.roughness_texture = { nullptr, 0 };
+							}
+						}
+						// Set non existing texture
+						else {
+							material.metallic_texture = { nullptr, 0 };
+							material.roughness_texture = { nullptr, 0 };
+						}
+					}
+					// Set non existing texture
+					else {
+						material.metallic_texture = { nullptr, 0 };
+						material.roughness_texture = { nullptr, 0 };
+					}
+
 				}
+				// Set non existing textures
+				else {
+					material.color_texture = { nullptr, 0 };
+					material.metallic_texture = { nullptr, 0 };
+					material.roughness_texture = { nullptr, 0 };
+				}
+
 				if (gltf_material->emissive_texture.texture != nullptr) {
 					if (gltf_material->emissive_texture.texture->image->name != nullptr) {
 						add_mapping(gltf_material->emissive_texture.texture->image->name, ECS_PBR_MATERIAL_EMISSIVE);
 					}
+					// Set non existing texture
+					else {
+						material.emissive_texture = { nullptr, 0 };
+					}
 				}
+				// Set non existing texture
+				else {
+					material.emissive_texture = { nullptr, 0 };
+				}
+
 				if (gltf_material->normal_texture.texture != nullptr) {
 					if (gltf_material->normal_texture.texture->image->name != nullptr) {
 						add_mapping(gltf_material->normal_texture.texture->image->name, ECS_PBR_MATERIAL_NORMAL);
 					}
+					// Set non existing texture
+					else {
+						material.normal_texture = { nullptr, 0 };
+					}
 				}
+				// Set non existing texture
+				else {
+					material.normal_texture = { nullptr, 0 };
+				}
+
 				if (gltf_material->occlusion_texture.texture != nullptr) {
 					if (gltf_material->occlusion_texture.texture->image->name != nullptr) {
 						add_mapping(gltf_material->occlusion_texture.texture->image->name, ECS_PBR_MATERIAL_OCCLUSION);
 					}
+					// Set non existing texture
+					else {
+						material.occlusion_texture = { nullptr, 0 };
+					}
+				}
+				// Set non existing texture
+				else {
+					material.occlusion_texture = { nullptr,0 };
 				}
 
 				AllocatePBRMaterial(material, material_name, Stream<PBRMaterialMapping>(mappings, mapping_count), allocator);

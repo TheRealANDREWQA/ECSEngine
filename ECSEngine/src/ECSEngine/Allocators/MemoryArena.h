@@ -23,10 +23,7 @@ namespace ECSEngine {
 		);
 
 		MemoryArena(const MemoryArena& other) = default;
-		MemoryArena(MemoryArena&& other) = default;
-
 		MemoryArena& operator = (const MemoryArena& other) = default;
-		MemoryArena& operator = (MemoryArena&& other) = default;
 
 		void* Allocate(size_t size, size_t alignment = 8);
 		template<bool trigger_error_if_not_found = true>
@@ -65,10 +62,7 @@ namespace ECSEngine {
 		);
 
 		ResizableMemoryArena(const ResizableMemoryArena& other) = default;
-		ResizableMemoryArena(ResizableMemoryArena&& other) = default;
-
 		ResizableMemoryArena& operator = (const ResizableMemoryArena& other) = default;
-		ResizableMemoryArena& operator = (ResizableMemoryArena&& other) = default;
 
 		void* Allocate(size_t size, size_t alignment = 8);
 
@@ -82,16 +76,7 @@ namespace ECSEngine {
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
 		template<bool trigger_error_if_not_found = true>
-		void Deallocate_ts(const void* block) {
-			uintptr_t block_reinterpretation = (uintptr_t)block;
-			for (int64_t index = m_arenas.size - 1; index >= 0; index--) {
-				uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
-				if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocators.size * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
-					m_arenas[index].Deallocate_ts<trigger_error_if_not_found>(block);
-					break;
-				}
-			}
-		}
+		void Deallocate_ts(const void* block);
 
 	private:
 		GlobalMemoryManager* m_backup;

@@ -4,7 +4,7 @@
 struct EditorState;
 
 using InspectorDrawFunction = void (*)(EditorState* editor_state, void* data, ECSEngine::Tools::UIDrawer<false>* drawer);
-using InspectorTable = IdentifierHashTable<InspectorDrawFunction, ResourceIdentifier, HashFunctionPowerOfTwo>;
+using InspectorTable = ECSEngine::containers::HashTable<InspectorDrawFunction, ECSEngine::ResourceIdentifier, ECSEngine::containers::HashFunctionPowerOfTwo, ECSEngine::HashFunctionMultiplyString>;
 
 struct InspectorData {
 	InspectorDrawFunction draw_function;

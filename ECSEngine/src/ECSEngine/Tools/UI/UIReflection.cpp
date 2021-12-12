@@ -1406,8 +1406,8 @@ namespace ECSEngine {
 		UIReflectionType* UIReflectionDrawer::CreateType(const char* name)
 		{
 			{
-				ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-				ECS_ASSERT(type_definition.Find(hash, identifier) == -1);
+				ECS_RESOURCE_IDENTIFIER(name);
+				ECS_ASSERT(type_definition.Find(identifier) == -1);
 			}
 
 			return CreateType(reflection->GetType(name));
@@ -1917,9 +1917,9 @@ namespace ECSEngine {
 				type.fields.buffer = (UIReflectionTypeField*)new_allocation;
 			}
 
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(type.name, UIReflectionStringHash);
-			ECS_ASSERT(!type_definition.Insert(hash, type, identifier));
-			return type_definition.GetValuePtr(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(type.name);
+			ECS_ASSERT(!type_definition.Insert(type, identifier));
+			return type_definition.GetValuePtr(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1927,8 +1927,8 @@ namespace ECSEngine {
 		UIReflectionInstance* UIReflectionDrawer::CreateInstance(const char* name, const char* type_name)
 		{
 			{
-				ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-				ECS_ASSERT(instances.Find(hash, identifier) == -1);
+				ECS_RESOURCE_IDENTIFIER(name);
+				ECS_ASSERT(instances.Find(identifier) == -1);
 			}
 
 			UIReflectionType type = GetType(type_name);
@@ -1984,16 +1984,16 @@ namespace ECSEngine {
 
 			instance.datas.size = type->fields.size;
 
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(instance.name, UIReflectionStringHash);
-			ECS_ASSERT(!instances.Insert(hash, instance, identifier));
-			return instances.GetValuePtr(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(instance.name);
+			ECS_ASSERT(!instances.Insert(instance, identifier));
+			return instances.GetValuePtr(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		void UIReflectionDrawer::DestroyInstance(const char* name)
 		{
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
+			ECS_RESOURCE_IDENTIFIER(name);
 			UIReflectionInstance instance = GetInstance(name);
 
 			UIReflectionType type = GetType(instance.type_name);
@@ -2016,13 +2016,13 @@ namespace ECSEngine {
 				}
 				else {
 					if (instance.datas[index].stream_data != nullptr) {
-						allocator->Deallocate(instance.datas[index].stream_data->buffer);
+						allocator->Deallocate(instance.datas[index].stream_data);
 					}
 				}
 			}
 
 			allocator->Deallocate(instance.datas.buffer);
-			instances.Erase(hash, identifier);
+			instances.Erase(identifier);
 		}
 
 		// -------------------------------------------------------------------------------------------------------------------------------
@@ -2071,8 +2071,8 @@ namespace ECSEngine {
 			}
 			allocator->Deallocate(type.fields.buffer);
 
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-			type_definition.Erase(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(name);
+			type_definition.Erase(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -2133,31 +2133,31 @@ namespace ECSEngine {
 
 		UIReflectionType UIReflectionDrawer::GetType(const char* name) const
 		{
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-			return type_definition.GetValue(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(name);
+			return type_definition.GetValue(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		UIReflectionType* UIReflectionDrawer::GetTypePtr(const char* name) const
 		{
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-			return type_definition.GetValuePtr(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(name);
+			return type_definition.GetValuePtr(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 		
 		UIReflectionInstance UIReflectionDrawer::GetInstance(const char* name) const {
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-			return instances.GetValue(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(name);
+			return instances.GetValue(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		UIReflectionInstance* UIReflectionDrawer::GetInstancePtr(const char* name) const
 		{
-			ECS_RESOURCE_IDENTIFIER_WITH_HASH(name, UIReflectionStringHash);
-			return instances.GetValuePtr(hash, identifier);
+			ECS_RESOURCE_IDENTIFIER(name);
+			return instances.GetValuePtr(identifier);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------

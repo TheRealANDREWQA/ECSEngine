@@ -155,7 +155,7 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API DebugDrawer {
 		DebugDrawer() : allocator(nullptr), graphics(nullptr) {}
-		DebugDrawer(MemoryManager* allocator, Graphics* graphics, size_t thread_count);
+		DebugDrawer(MemoryManager* allocator, ResourceManager* manager, size_t thread_count);
 
 		DebugDrawer(const DebugDrawer& other) = default;
 		DebugDrawer& operator = (const DebugDrawer& other) = default;
@@ -489,10 +489,7 @@ namespace ECSEngine {
 #pragma region Initialize
 
 		// If creates with a default constructor or allocated
-		void Initialize(MemoryManager* allocator, Graphics* graphics, size_t thread_count);
-
-		// The circle vertex buffer is constructed by the drawer
-		void InitializePrimitiveBuffers(ResourceManager* resource_manager);
+		void Initialize(MemoryManager* allocator, ResourceManager* resource_manager, size_t thread_count);
 
 #pragma endregion
 
