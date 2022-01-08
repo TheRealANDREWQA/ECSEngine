@@ -79,7 +79,14 @@ namespace ECSEngine {
 		public:
 			Mouse();
 
+			Mouse(const Mouse& other) = default;
+			Mouse& operator =(const Mouse& other) = default;
+
 			void AttachToProcess(const MouseProcessAttachment& info);
+
+			void DisableRawInput();
+
+			void EnableRawInput();
 
 			MouseState* GetState();
 
@@ -97,6 +104,8 @@ namespace ECSEngine {
 
 			int GetScrollDelta() const;
 
+			bool GetRawInputStatus() const;
+
 			bool IsCursorVisible() const;
 
 			void UpdateTracker();
@@ -113,6 +122,10 @@ namespace ECSEngine {
 
 			void SetPreviousPositionAndScroll();
 
+			void SetPosition(int x, int y);
+
+			void AddDelta(int x, int y);
+
 			void ResetCursorWheel();
 
 			void ResetTracker();
@@ -120,9 +133,10 @@ namespace ECSEngine {
 			void Procedure(const MouseProcedureInfo& info);
 
 		//private:
-			std::unique_ptr<DirectX::Mouse> m_implementation;
+			DirectX::Mouse* m_implementation;
 			MouseState m_state;
 			MouseTracker m_tracker;
+			bool m_get_raw_input;
 		};
 
 	}

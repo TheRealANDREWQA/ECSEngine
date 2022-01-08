@@ -219,4 +219,18 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Precull horizontal find first
+
+	// Use horizontal or to precull the find first search
+	// Horizontal find first uses some SIMD and scalar instructions
+	// while horizontal or is mostly a single SIMD instruction
+	template<typename VectorType>
+	void ECS_VECTORCALL precull_horizontal_find_first(VectorType vector, int& flag) {
+		if (horizontal_or(vector)) {
+			flag = horizontal_find_first(vector);
+		}
+	}
+
+#pragma endregion
+
 }

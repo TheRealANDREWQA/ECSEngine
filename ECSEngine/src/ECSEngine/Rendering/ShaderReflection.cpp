@@ -1,7 +1,8 @@
 #include "ecspch.h"
 #include "ShaderReflection.h"
 #include "../Utilities/FunctionInterfaces.h"
-#include "Shaders\Macros.hlsli"
+#include "Shaders/Macros.hlsli"
+#include "../Utilities/File.h"
 
 constexpr size_t STRING_FORMAT_TABLE_CAPACITY = 128;
 constexpr size_t FLOAT_FORMAT_TABLE_CAPACITY = 256;
@@ -484,26 +485,25 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool)
-	{
-		std::ifstream stream(std::wstring(path.buffer, path.size));
-
-		if (stream.good()) {
-			// Read the whole file
-			size_t byte_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(byte_size);
-			stream.read(allocation, byte_size);
-
-			// Make sure to make \0 the last read character
-			// since read count may differ from byte size
-			size_t read_count = stream.gcount();
-			allocation[read_count] = '\0';
-
-			bool status = ReflectVertexShaderInputSource({ allocation, read_count }, elements, semantic_name_pool);
-			ECS_FREEA(allocation);
+	template<typename Functor>
+	bool ReflectProperty(ShaderReflection* reflection, Stream<wchar_t> path, Functor&& functor) {
+		Stream<char> file_contents = ReadWholeFileText(path);
+		if (file_contents.buffer != nullptr) {
+			// Make \0 the last character
+			file_contents[file_contents.size - 1] = '\0';
+			bool status = functor(file_contents);
+			free(file_contents.buffer);
 			return status;
 		}
+
 		return false;
+	}
+
+	bool ShaderReflection::ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool)
+	{
+		return ReflectProperty(this, path, [&](Stream<char> data) {
+			return ReflectVertexShaderInputSource(data, elements, semantic_name_pool);
+		});
 	}
 
 	bool ShaderReflection::ReflectVertexShaderInputSource(containers::Stream<char> source_code, containers::CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, containers::CapacityStream<char> semantic_name_pool)
@@ -739,24 +739,9 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// Returns whether or not it succeded
 	bool ShaderReflection::ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers, CapacityStream<char> name_pool) {
-		std::ifstream stream(std::wstring(path.buffer, path.size));
-
-		if (stream.good()) {
-			// Read the whole file
-			size_t file_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(file_size);
-			stream.read(allocation, file_size);
-
-			// Make sure to make \0 the last read character
-			// since read count may differ from byte size
-			size_t read_count = stream.gcount();
-			allocation[read_count] = '\0';
-
-			bool status = ReflectShaderBuffers({ allocation, read_count }, buffers, name_pool);
-			ECS_FREEA(allocation);
-			return status;
-		}
-		return false;
+		return ReflectProperty(this, path, [&](Stream<char> data) {
+			return ReflectShaderBuffersSource(data, buffers, name_pool);
+		});
 	}
 
 	bool ShaderReflection::ReflectShaderBuffersSource(containers::Stream<char> source_code, containers::CapacityStream<ShaderReflectedBuffer>& buffers, containers::CapacityStream<char> name_pool)
@@ -853,29 +838,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectShaderTextures(containers::Stream<wchar_t> path, containers::CapacityStream<ShaderReflectedTexture>& textures, containers::CapacityStream<char> name_pool)
+	bool ShaderReflection::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, CapacityStream<char> name_pool)
 	{
-		std::ifstream stream(std::wstring(path.buffer, path.size));
-
-		if (stream.good()) {
-			// Read the whole file
-			size_t file_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(file_size);
-			stream.read(allocation, file_size);
-
-			// Make sure to make \0 the last read character
-			// since read count may differ from byte size
-			size_t read_count = stream.gcount();
-			allocation[read_count] = '\0';
-
-			bool status = ReflectShaderTexturesSource({ allocation, read_count }, textures, name_pool);
-			ECS_FREEA(allocation);
-			return status;
-		}
-		return false;
+		return ReflectProperty(this, path, [&](Stream<char> data) {
+			return ReflectShaderTexturesSource(data, textures, name_pool);
+		});
 	}
 
-	bool ShaderReflection::ReflectShaderTexturesSource(containers::Stream<char> source_code, containers::CapacityStream<ShaderReflectedTexture>& textures, containers::CapacityStream<char> name_pool)
+	bool ShaderReflection::ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, CapacityStream<char> name_pool)
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';
@@ -907,26 +877,11 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectVertexBufferMapping(containers::Stream<wchar_t> path, containers::CapacityStream<ECS_MESH_INDEX>& mapping)
+	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, containers::CapacityStream<ECS_MESH_INDEX>& mapping)
 	{
-		std::ifstream stream(std::wstring(path.buffer, path.size));
-
-		if (stream.good()) {
-			// Read the whole file
-			size_t file_size = function::GetFileByteSize(stream);
-			char* allocation = (char*)ECS_MALLOCA(file_size);
-			stream.read(allocation, file_size);
-
-			// Make sure to make \0 the last read character
-			// since read count may differ from byte size
-			size_t read_count = stream.gcount();
-			allocation[read_count] = '\0';
-
-			bool status = ReflectVertexBufferMappingSource({ allocation, read_count }, mapping);
-			ECS_FREEA(allocation);
-			return status;
-		}
-		return false;
+		return ReflectProperty(this, path, [&](Stream<char> data) {
+			return ReflectVertexBufferMappingSource(data, mapping);
+		});
 	}
 
 	bool ShaderReflection::ReflectVertexBufferMappingSource(containers::Stream<char> source_code, containers::CapacityStream<ECS_MESH_INDEX>& mapping)

@@ -578,7 +578,7 @@ namespace ECSEngine {
 		containers::CapacityStream<DebugString>* thread_strings;
 		SpinLock** thread_locks;
 		unsigned int thread_count;
-		ID3D11RasterizerState* rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];
+		RasterizerState rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];
 		VertexBuffer positions_small_vertex_buffer;
 		VertexBuffer instanced_small_vertex_buffer;
 		StructuredBuffer instanced_small_structured_buffer;

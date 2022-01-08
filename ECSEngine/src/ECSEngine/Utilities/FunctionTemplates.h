@@ -426,11 +426,6 @@ namespace ECSEngine {
 			}
 		}
 
-		template<typename Type>
-		Type Select(bool condition, Type first_value, Type second_value) {
-			return condition ? first_value : second_value;
-		}
-
 		// the functions provided must take as parameter the pointer to the buffer element to act on
 		template<typename Function1, typename Function2, typename Buffer>
 		void SimdForLoop(Function1&& simd_function, Function2&& scalar_function, Buffer* buffer, size_t count, size_t vector_size) {

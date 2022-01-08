@@ -5,6 +5,11 @@
 
 namespace ECSEngine {
 
+	MemoryManager DefaultSystemManagerAllocator(GlobalMemoryManager* global_manager)
+	{
+		return MemoryManager(10'000, 1024, 10'000, global_manager);
+	}
+
 	SystemManager::SystemManager() {}
 	
 	SystemManager::SystemManager(TaskManager* task_manager, MemoryManager* memory_manager, size_t system_count) 

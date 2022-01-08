@@ -6,6 +6,7 @@
 #include "../../Containers/Queues.h"
 #include "TaskAllocator.h"
 #include "ThreadTask.h"
+#include "../../Allocators/MemoryManager.h"
 
 #ifndef ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 #define ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD 64
@@ -15,6 +16,14 @@
 #define ECS_TASK_MANAGER_ALLOCATOR_CAPACITY 10'000
 #endif
 
+#ifndef ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE
+#define ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE 1'000
+#endif
+
+#ifndef ECS_TASK_MANAGER_THREAD_MEMORY_MANAGER_SIZE
+#define ECS_TASK_MANAGER_THREAD_MEMORY_MANAGER_SIZE 1'000'000
+#endif
+
 #define ECS_END_THREAD -100000
 
 #define ECS_SET_TASK_FUNCTION(task, _function) task.function = _function; task.name = STRING(_function);
@@ -22,7 +31,6 @@
 namespace ECSEngine {
 
 	struct LinearAllocator;
-	struct MemoryManager;
 	struct ConditionVariable;
 
 	ECS_CONTAINERS;
@@ -40,8 +48,13 @@ namespace ECSEngine {
 		TaskManager(
 			size_t thread_count, 
 			MemoryManager* memory_manager,
+			size_t thread_linear_allocator_size = ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE,
+			size_t thread_memory_manager_size = ECS_TASK_MANAGER_THREAD_MEMORY_MANAGER_SIZE,
 			size_t max_dynamic_tasks = ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 		);
+
+		TaskManager(const TaskManager& other) = default;
+		TaskManager& operator = (const TaskManager& other) = default;
 
 		void AddTask(ThreadTask task, size_t task_data_size = 0);
 
@@ -69,7 +82,7 @@ namespace ECSEngine {
 
 		void ClearTaskIndex(unsigned int thread_id);
 
-		void CreateThreads(LinearAllocator** temp_allocators, MemoryManager** memory);
+		void CreateThreads();
 
 		void DecrementThreadTaskIndex(unsigned int thread_id);
 
@@ -128,6 +141,8 @@ namespace ECSEngine {
 		Timer m_timer;
 		TaskAllocator m_allocator;
 		unsigned int m_last_thread_index;
+		LinearAllocator** m_thread_linear_allocators;
+		MemoryManager** m_thread_memory_managers;
 #ifdef ECS_TASK_MANAGER_WRAPPER
 		TaskManagerWrapper m_static_wrapper_mode;
 		ThreadFunctionWrapper m_static_wrapper;
@@ -142,8 +157,6 @@ namespace ECSEngine {
 
 	 ECSENGINE_API void ThreadProcedure(
 		TaskManager* task_manager,
-		LinearAllocator* temp_thread_allocator,
-		MemoryManager* thread_allocator,
 		unsigned int thread_id
 	);
 

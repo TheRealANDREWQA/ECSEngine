@@ -3,74 +3,51 @@
 #include "UISystem.h"
 #include "../../Utilities/Keyboard.h"
 #include "UIDrawerStructures.h"
+#include "UIDrawConfig.h"
 
 namespace ECSEngine {
 
 	namespace Tools {
 
-		struct ECSENGINE_API UIDrawerTextInputFilterAll {
-			static bool Filter(char character, CharacterType type) {
-				return true;
-			}
-		};
+		inline bool UIDrawerTextInputFilterAll(char character, CharacterType type) {
+			return true;
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputFilterLetters {
-			static bool Filter(char character, CharacterType type) {
-				return type == CharacterType::LowercaseLetter || type == CharacterType::CapitalLetter || type == CharacterType::Space;
-			}
-		};
+		inline bool UIDrawerTextInputFilterLetters(char character, CharacterType type) {
+			return type == CharacterType::LowercaseLetter || type == CharacterType::CapitalLetter || type == CharacterType::Space;
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputFilterLowercaseLetters {
-			static bool Filter(char character, CharacterType type) {
-				return type == CharacterType::LowercaseLetter;
-			}
-		};
+		inline bool UIDrawerTextInputFilterLowercaseLetters(char character, CharacterType type) {
+			return type == CharacterType::LowercaseLetter;
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputFilterUppercaseLetters {
-			static bool Filter(char character, CharacterType type) {
-				return type == CharacterType::CapitalLetter;
-			}
-		};
+		inline bool UIDrawerTextInputFilterUppercaseLetters(char character, CharacterType type) {
+			return type == CharacterType::CapitalLetter;
+		}
 		
-		struct ECSENGINE_API UIDrawerTextInputFilterDigits {
-			static bool Filter(char character, CharacterType type) {
-				return type == CharacterType::Digit;
-			}
-		};
+		inline bool UIDrawerTextInputFilterDigits(char character, CharacterType type) {
+			return type == CharacterType::Digit;
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputFilterSymbols {
-			static bool Filter(char character, CharacterType type) {
-				return type == CharacterType::Symbol;
-			}
-		};
+		inline bool UIDrawerTextInputFilterInteger(char character, CharacterType type) {
+			return type == CharacterType::Digit || character == '-';
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputFilterLettersAndDigits {
-			static bool Filter(char character, CharacterType type) {
-				return UIDrawerTextInputFilterLetters::Filter(character, type) || UIDrawerTextInputFilterDigits::Filter(character, type);
-			}
-		};
+		inline bool UIDrawerTextInputFilterSymbols(char character, CharacterType type) {
+			return type == CharacterType::Symbol;
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputFilterNumbers {
-			static bool Filter(char character, CharacterType type) {
-				return type == CharacterType::Digit || character == '-' || character == '.';
-			}
-		};
+		inline bool UIDrawerTextInputFilterLettersAndDigits(char character, CharacterType type) {
+			return UIDrawerTextInputFilterLetters(character, type) || UIDrawerTextInputFilterDigits(character, type);
+		}
 
-		struct ECSENGINE_API UIDrawerTextInputHexFilter {
-			static bool Filter(char character, CharacterType type) {
-				return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
-			}
-		};
+		inline bool UIDrawerTextInputFilterNumbers(char character, CharacterType type) {
+			return type == CharacterType::Digit || character == '-' || character == '.';
+		}
 
-		using TextFilterAll = UIDrawerTextInputFilterAll;
-		using TextFilterLetters = UIDrawerTextInputFilterLetters;
-		using TextFilterDigits = UIDrawerTextInputFilterDigits;
-		using TextFilterLowercaseLetters = UIDrawerTextInputFilterLowercaseLetters;
-		using TextFilterUppercaseLetters = UIDrawerTextInputFilterUppercaseLetters;
-		using TextFilterSymbols = UIDrawerTextInputFilterSymbols;
-		using TextFilterLettersAndDigits = UIDrawerTextInputFilterLettersAndDigits;
-		using TextFilterNumbers = UIDrawerTextInputFilterNumbers;
-		using TextFilterHex = UIDrawerTextInputHexFilter;
+		inline bool UIDrawerTextInputHexFilter(char character, CharacterType type) {
+			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F');
+		}
 
 		struct ECSENGINE_API UIDrawerTextInput {
 			float2* TextPosition();
@@ -354,6 +331,7 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIDrawerComboBoxClickable {
 			UIDrawerComboBox* box;
 			UIDrawConfig config;
+			size_t configuration;
 			bool is_opened_on_press;
 		};
 
@@ -510,6 +488,11 @@ namespace ECSEngine {
 			size_t flag;
 		};
 
+		struct ECSENGINE_API UIChangeAtomicStateData {
+			std::atomic<size_t>* state;
+			size_t flag;
+		};
+
 		struct ECSENGINE_API UIDrawerStateTableAllButtonData {
 			bool all_true;
 			bool single_pointer;
@@ -544,6 +527,21 @@ namespace ECSEngine {
 			UIDrawerColorFloatInput* input;
 			Action callback;
 			void* callback_data;
+		};
+
+		struct ECSENGINE_API UIDrawerTextInputActionData {
+			bool IsTheSameData(const UIDrawerTextInputActionData* other) const;
+
+			UIDrawerTextInput* input;
+			UIDrawerTextInputFilter filter;
+		};
+
+		struct ECSENGINE_API UIDrawerSliderEnterValuesData {
+			bool IsTheSameData(const UIDrawerSliderEnterValuesData* other) const;
+
+			UIDrawerSlider* slider;
+			UIDrawerSliderConvertTextInput convert_input;
+			UIDrawerTextInputFilter filter_function;
 		};
 
 	}

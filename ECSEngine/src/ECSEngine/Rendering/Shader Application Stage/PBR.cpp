@@ -12,32 +12,32 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreatePBRVertexConstants(Graphics* graphics)
+		ConstantBuffer CreatePBRVertexConstants(Graphics* graphics, bool temporary)
 		{
-			return graphics->CreateConstantBuffer(sizeof(PBRVertexConstants));
+			return graphics->CreateConstantBuffer(sizeof(PBRVertexConstants), temporary);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreatePBRPixelConstants(Graphics* graphics)
+		ConstantBuffer CreatePBRPixelConstants(Graphics* graphics, bool temporary)
 		{
 			// 4 SIMD registers are used
-			return graphics->CreateConstantBuffer(sizeof(PBRPixelConstants));
+			return graphics->CreateConstantBuffer(sizeof(PBRPixelConstants), temporary);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreatePBRPixelEnvironmentConstant(Graphics* graphics)
+		ConstantBuffer CreatePBRPixelEnvironmentConstant(Graphics* graphics, bool temporary)
 		{
-			return graphics->CreateConstantBuffer(sizeof(PBRPixelEnvironmentConstants));
+			return graphics->CreateConstantBuffer(sizeof(PBRPixelEnvironmentConstants), temporary);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
 		// A rotation matrix combined with the projection must be used
-		ConstantBuffer CreatePBRSkyboxVertexConstant(Graphics* graphics)
+		ConstantBuffer CreatePBRSkyboxVertexConstant(Graphics* graphics, bool temporary)
 		{
-			return graphics->CreateConstantBuffer(sizeof(Matrix));
+			return graphics->CreateConstantBuffer(sizeof(Matrix), temporary);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ namespace ECSEngine {
 		void SetPBRSkyboxVertexConstant(void* data, float3 camera_rotation, Matrix projection_matrix)
 		{
 			Matrix combined_matrix = MatrixTranspose(MatrixRotationZ(-camera_rotation.z) * MatrixRotationY(-camera_rotation.y)
-				* MatrixRotationX(-camera_rotation.x) * /*MatrixPerspectiveFOV(90.0f, 1.0f, 0.1f, 1000.0f)*/ projection_matrix);
+				* MatrixRotationX(-camera_rotation.x) /** MatrixPerspectiveFOV(90.0f, 1.0f, 0.1f, 1000.0f)*/ * projection_matrix);
 			combined_matrix.Store(data);
 		}
 

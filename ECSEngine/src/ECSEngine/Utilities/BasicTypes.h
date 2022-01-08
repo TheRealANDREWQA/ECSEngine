@@ -130,6 +130,24 @@ namespace ECSEngine {
 
 #pragma endregion
 
+	template<typename T, void (*deallocate_function)(T)>
+	struct StackScope {
+		StackScope() {}
+		StackScope(T _value) : value(_value) {}
+		~StackScope() { deallocate_function(value); }
+
+		StackScope(const StackScope& other) = default;
+		StackScope& operator = (const StackScope& other) = default;
+
+		T value;
+	};
+
+	inline void ReleaseMalloca(void* buffer) {
+		ECS_FREEA(buffer);
+	}
+
+	using ScopedMalloca = StackScope<void*, ReleaseMalloca>;
+
 	/* Minimalist wrapper for simple structs composed of 2 fundamental types
 	* It overloads the common operators:
 	* ==, !=, +, -, *, /

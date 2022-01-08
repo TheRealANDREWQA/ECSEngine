@@ -9,6 +9,13 @@ namespace ECSEngine {
 
 	struct Graphics;
 
+	struct DecodedTexture {
+		containers::Stream<void> data;
+		size_t width;
+		size_t height;
+		DXGI_FORMAT format;
+	};
+
 	inline Matrix ProjectionMatrixTextureCube() {
 		return MatrixPerspectiveFOV(90.0f, 1.0f, 0.01f, 10.0f);
 	}
@@ -55,42 +62,6 @@ namespace ECSEngine {
 		return functions[face]();
 	}
 
-	inline unsigned int GraphicsResourceRelease(Texture1D resource) {
-		return resource.tex->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(Texture2D resource) {
-		return resource.tex->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(Texture3D resource) {
-		return resource.tex->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(TextureCube resource) {
-		return resource.tex->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(ResourceView resource) {
-		return resource.view->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(RenderTargetView resource) {
-		return resource.target->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(DepthStencilView resource) {
-		return resource.view->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(VertexBuffer resource) {
-		return resource.buffer->Release();
-	}
-
-	inline unsigned int GraphicsResourceRelease(ConstantBuffer resource) {
-		return resource.buffer->Release();
-	}
-
 	ECSENGINE_API ID3D11Resource* GetResource(Texture1D texture);
 
 	ECSENGINE_API ID3D11Resource* GetResource(Texture2D texture);
@@ -119,35 +90,17 @@ namespace ECSEngine {
 
 	ECSENGINE_API ID3D11Resource* GetResource(UAView view);
 
-	// It will release the view and the resource associated with it
-	ECSENGINE_API void ReleaseShaderView(ResourceView view);
+	ECSENGINE_API void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer, bool temporary = false);
 
-	// It will release the view and the resource associated with it
-	ECSENGINE_API void ReleaseUAView(UAView view);
-
-	// It will release the view and the resource associated with it
-	ECSENGINE_API void ReleaseRenderView(RenderTargetView view);
-
-	ECSENGINE_API void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer);
-
-	ECSENGINE_API VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right);
+	ECSENGINE_API VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right, bool temporary = false);
 
 	ECSENGINE_API uint2 GetTextureDimensions(Texture2D texture);
 
 	// It will make a staging texture that has copied the contents of the supplied texture
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture1D ToStaging(Texture1D texture);
-
-	// It will make a staging texture that has copied the contents of the supplied texture
-	// It relies on the immediate context to copy the contents - SINGLE THREADED
-	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture2D ToStaging(Texture2D texture);
-
-	// It will make a staging texture that has copied the contents of the supplied texture
-	// It relies on the immediate context to copy the contents - SINGLE THREADED
-	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture3D ToStaging(Texture3D texture);
+	template<typename Texture>
+	ECSENGINE_API Texture TextureToStaging(Graphics* graphics, Texture texture, bool temporary = true);
 
 	// It will make a buffer that has copied the contents of the supplied buffer
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
@@ -155,54 +108,39 @@ namespace ECSEngine {
 	// Available template arguments: StandardBuffer, StructuredBuffer, UABuffer, IndexBuffer
 	// VertexBuffer 
 	template<typename Buffer>
-	ECSENGINE_API Buffer ToStaging(Buffer buffer);
+	ECSENGINE_API Buffer BufferToStaging(Graphics* graphics, Buffer buffer, bool temporary = true);
 
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// It will create a staging texture, than copy the contents back on the cpu
 	// then create an immutable texture from it - a lot of round trip
 	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture1D ToImmutableWithStaging(Texture1D texture);
-
-	// It relies on the immediate context to copy the contents - SINGLE THREADED
-	// It will create a staging texture, than copy the contents back on the cpu
-	// then create an immutable texture from it - a lot of round trip
-	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture2D ToImmutableWithStaging(Texture2D texture);
+	template<typename Texture>
+	ECSENGINE_API Texture TextureToImmutableWithStaging(Graphics* graphics, Texture texture, bool temporary = false);
 
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture3D ToImmutableWithStaging(Texture3D texture);
-
-	// It relies on the immediate context to copy the contents - SINGLE THREADED
-	// If it fails, the returned interface will be nullptr
+	// The Buffer will not be tracked by graphics
 	// Available template arguments: StandardBuffer, StructuredBuffer, UABuffer,
 	// ConstantBuffer
 	template<typename Buffer>
-	ECSENGINE_API Buffer ToImmutableWithStaging(Buffer buffer);
+	ECSENGINE_API Buffer BufferToImmutableWithStaging(Graphics* graphics, Buffer buffer, bool temporary = false);
 
 	// It will make a staging texture that has copied the contents
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// It will map the current texture using D3D11_MAP_READ
 	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture1D ToImmutableWithMap(Texture1D texture);
-
-	// It relies on the immediate context to copy the contents - SINGLE THREADED
-	// It will map the current texture using D3D11_MAP_READ
-	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture2D ToImmutableWithMap(Texture2D texture);
-
-	// It relies on the immediate context to copy the contents - SINGLE THREADED
-	// It will map the current texture using D3D11_MAP_READ
-	// If it fails, the returned interface will be nullptr
-	ECSENGINE_API Texture3D ToImmutableWithMap(Texture3D texture);
+	// The texture will not be tracked by graphics
+	template<typename Texture>
+	ECSENGINE_API Texture TextureToImmutableWithMap(Graphics* graphics, Texture texture, bool temporary = false);
 
 	// It relies on the immediate context to copy the contents - SINGLE THREADED
 	// It will map the current buffer using D3D11_MAP_READ
 	// If it fails, the returned interface will be nullptr
+	// The Buffer will not be tracked by graphics
 	// Available template arguments: StandardBuffer, StructuredBuffer, UABuffer,
 	// ConstantBuffer
 	template<typename Buffer>
-	ECSENGINE_API Buffer ToImmutableWithMap(Buffer buffer);
+	ECSENGINE_API Buffer BufferToImmutableWithMap(Graphics* graphics, Buffer buffer, bool temporary = false);
 
 	enum ResizeTextureFlag {
 		ECS_RESIZE_TEXTURE_FILTER_POINT = 1 << 0, // Nearest neighbour, weakest and fastest filter method
@@ -218,10 +156,12 @@ namespace ECSEngine {
 	// mip map chain
 	// If it fails, it will return nullptr
 	ECSENGINE_API Texture2D ResizeTextureWithStaging(
+		Graphics* graphics,
 		Texture2D texture,
 		size_t new_width,
 		size_t new_height, 
-		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR
+		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR,
+		bool temporary = false
 	);
 
 	// Resizing is done on the CPU; the texture is mapped directly with D3D11_MAP_READ
@@ -230,10 +170,12 @@ namespace ECSEngine {
 	// mip map chain
 	// If it fails, it will return nullptr
 	ECSENGINE_API Texture2D ResizeTextureWithMap(
+		Graphics* graphics,
 		Texture2D texture,
 		size_t new_width,
 		size_t new_height,
-		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR
+		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR,
+		bool temporary = false
 	);
 
 	// Resizing is done on the CPU; it will not modify the given data and take parameters from the texture definition
@@ -241,13 +183,14 @@ namespace ECSEngine {
 	// mip map chain
 	// If it fails, it will return nullptr
 	ECSENGINE_API Texture2D ResizeTexture(
+		Graphics* graphics,
 		void* texture_data,
 		Texture2D texture,
 		size_t new_width,
 		size_t new_height,
-		GraphicsContext* context = nullptr,
 		AllocatorPolymorphic allocator = {nullptr},
-		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR
+		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR,
+		bool temporary = false
 	);
 
 	// Resizing is done on the CPU; an allocation will be made for the newly resized data
@@ -263,8 +206,27 @@ namespace ECSEngine {
 		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR
 	);
 
+	// Returns the section of the texture without the header - it will do internally another allocation for the 
+	// decompressed data; Momentarly there are no flags
+	// If it fails it returns a { nullptr, 0 } 
+	ECSENGINE_API DecodedTexture DecodeTexture(containers::Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags = 0);
+
+	// Returns the section of the texture without the header - it will do internally another allocation for the 
+	// decompressed data; Momentarly there are no flags. The filename is needed in for the texture extension
+	// If it fails it returns a { nullptr, 0 } 
+	ECSENGINE_API DecodedTexture DecodeTexture(containers::Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags = 0);
+
 	// It will invert the mesh on the Z axis
 	ECSENGINE_API void InvertMeshZAxis(Graphics* graphics, Mesh& mesh);
+
+	// Convert a texture from DXGI_FORMAT_R8_UNROM to DXGI_FORMAT_R8G8B8A8_UNORM texture
+	// Allocator nullptr means use malloc
+	ECSENGINE_API containers::Stream<containers::Stream<void>> ConvertSingleChannelTextureToGrayscale(
+		containers::Stream<containers::Stream<void>> mip_data,
+		size_t width,
+		size_t height,
+		AllocatorPolymorphic allocator = {nullptr}
+	);
 
 	// It will use the immediate context if none specified. If a deffered context is specified, the copy calls
 	// will be placed on the command list.
@@ -272,27 +234,29 @@ namespace ECSEngine {
 	// It will have default usage and all mips will be copied
 	// All textures must have the same size
 	ECSENGINE_API TextureCube ConvertTexturesToCube(
+		Graphics* graphics,
 		Texture2D x_positive,
 		Texture2D x_negative,
 		Texture2D y_positive,
 		Texture2D y_negative,
 		Texture2D z_positive,
 		Texture2D z_negative,
-		GraphicsContext* context = nullptr
+		bool temporary = false
 	);
 
 	// Expects all the textures to be in the correct order
 	// All the constraints that apply to the 6 texture parameter version apply to this one aswell
-	ECSENGINE_API TextureCube ConvertTexturesToCube(const Texture2D* textures, GraphicsContext* context = nullptr);
+	ECSENGINE_API TextureCube ConvertTexturesToCube(Graphics* graphics, const Texture2D* textures, bool temporary = false);
 
 	// Equirectangular to cube map
 	// Involves setting up multiple renders - can be used only in single thread circumstances
 	// It will overwrite most of the pipeline; rebind resources if needed again
 	ECSENGINE_API TextureCube ConvertTextureToCube(
-		ResourceView texture_view,
 		Graphics* graphics,
+		ResourceView texture_view,
 		DXGI_FORMAT cube_format,
-		uint2 face_size
+		uint2 face_size,
+		bool temporary = false
 	);
 
 	// Returns the dimensions of a texture from a file

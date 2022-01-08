@@ -3,6 +3,7 @@
 #include "Function.h"
 #include "../Tools/UI/UIDrawerWindows.h"
 #include "File.h"
+#include "Path.h"
 
 ECS_CONTAINERS;
 ECS_TOOLS;
@@ -712,12 +713,12 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define RENAME_FOLDER_ERROR_STRING "Renaming folder {0} to {1} failed. Incorrect path, invalid new name or access denied."
+#define RENAME_FOLDER_ERROR_STRING "Renaming file/folder {0} to {1} failed. Incorrect path, invalid new name or access denied."
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
-			bool success = RenameFolder(path, new_name);
+		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
+			bool success = RenameFolderOrFile(path, new_name);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
@@ -726,37 +727,11 @@ namespace ECSEngine {
 			}
 		}
 
-		void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console) {
-			bool success = RenameFolder(path, new_name);
+		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console) {
+			bool success = RenameFolderOrFile(path, new_name);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
-				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
-			}
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-#define RENAME_FILE_ERROR_STRING "Renaming file {0} to {1} failed. Incorrect file, invalid new name or access denied."
-
-		// -----------------------------------------------------------------------------------------------------
-
-		void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system) {
-			bool success = RenameFile(path, new_name);
-			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RENAME_FILE_ERROR_STRING, path, new_name);
-				ECS_ASSERT(written_characters < 512);
-				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
-			}
-		}
-
-		void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console) {
-			bool success = RenameFile(path, new_name);
-			if (!success) {
-				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RENAME_FILE_ERROR_STRING, path, new_name);
 				ECS_ASSERT(written_characters < 512);
 				console->Error(Stream<char>(temp_characters, written_characters));
 			}
@@ -772,7 +747,7 @@ namespace ECSEngine {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RENAME_FILE_ERROR_STRING, path, new_size);
+				size_t written_characters = function::FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
 				ECS_ASSERT(written_characters < 512);
 				CreateErrorMessageWindow(system, Stream<char>(temp_characters, written_characters));
 			}
@@ -782,7 +757,7 @@ namespace ECSEngine {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
 				char temp_characters[512];
-				size_t written_characters = function::FormatString(temp_characters, RENAME_FILE_ERROR_STRING, path, new_size);
+				size_t written_characters = function::FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
 				ECS_ASSERT(written_characters < 512);
 				console->Error(Stream<char>(temp_characters, written_characters));
 			}

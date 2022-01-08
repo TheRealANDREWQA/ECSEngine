@@ -7,6 +7,7 @@
 #include "../../GLTFLoader/GLTFLoader.h"
 #include "../../Utilities/Path.h"
 #include "../../Utilities/File.h"
+#include "../../Utilities/ForEachFiles.h"
 #include "../../Rendering/ShaderInclude.h"
 #include "../../Rendering/Shader Application Stage/PBR.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
@@ -191,11 +192,13 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	template<bool reference_counted, typename Handler>
-	void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags, Handler&& handler) {
+	template<bool reference_counted>
+	void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
 		DataPointer data_pointer = resource_manager->m_resource_types[type_int].table.GetValueFromIndex(index);
+
+		void (*handler)(void*, ResourceManager*) = UNLOAD_FUNCTIONS[type_int];
 
 		auto delete_resource = [=]() {
 			const ResourceIdentifier* identifiers = resource_manager->m_resource_types[type_int].table.GetIdentifiers();
@@ -219,16 +222,14 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	// The handler must implement a void* parameter as this is how it receives the resource
-	// and the ResourceManager* pointer
-	template<bool reference_counted, typename Handler>
-	void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags, Handler&& handler) {
+	template<bool reference_counted>
+	void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
 		int hashed_position = resource_manager->m_resource_types[type_int].table.Find<true>(identifier);
 		ECS_ASSERT(hashed_position != -1, "Trying to delete a resource that has not yet been loaded!");
 
-		DeleteResource<reference_counted>(resource_manager, hashed_position, type, flags, handler);
+		DeleteResource<reference_counted>(resource_manager, hashed_position, type, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -240,7 +241,7 @@ namespace ECSEngine {
 
 	void UnloadTextureHandler(void* parameter, ResourceManager* resource_manager) {
 		ID3D11ShaderResourceView* reinterpretation = (ID3D11ShaderResourceView*)parameter;
-		ReleaseShaderView(reinterpretation);
+		resource_manager->m_graphics->FreeShaderView(reinterpretation);
 	}
 
 	void DeleteTexture(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -316,7 +317,7 @@ namespace ECSEngine {
 
 	void UnloadVertexShaderHandler(void* parameter, ResourceManager* resource_manager) {
 		VertexShader* shader = (VertexShader*)parameter;
-		shader->shader->Release();
+		resource_manager->m_graphics->FreeResource(*shader);
 		if (shader->byte_code.buffer != nullptr) {
 			resource_manager->Deallocate(shader->byte_code.buffer);
 		}
@@ -326,12 +327,13 @@ namespace ECSEngine {
 		manager->UnloadVertexShader<false>(index, flags);
 	}
 
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadPixelShaderHandler(void* parameter, ResourceManager* resource_manager) {
-		PixelShader* shader = (PixelShader*)parameter;
-		shader->shader->Release();
+	template<typename ShaderType>
+	void UnloadShaderHandler(void* parameter, ResourceManager* resource_manager) {
+		ShaderType* shader = (ShaderType*)parameter;
+		resource_manager->m_graphics->FreeResource(*shader);
 	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
 
 	void DeletePixelShader(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadPixelShader<false>(index, flags);
@@ -339,21 +341,11 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadHullShaderHandler(void* parameter, ResourceManager* resource_manager) {
-		HullShader* shader = (HullShader*)parameter;
-		shader->shader->Release();
-	}
-
 	void DeleteHullShader(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadHullShader<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadDomainShaderHandler(void* parameter, ResourceManager* resource_manager) {
-		DomainShader* shader = (DomainShader*)parameter;
-		shader->shader->Release();
-	}
 
 	void DeleteDomainShader(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadDomainShader<false>(index, flags);
@@ -361,21 +353,11 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void UnloadGeometryShaderHandler(void* parameter, ResourceManager* resource_manager) {
-		GeometryShader* shader = (GeometryShader*)parameter;
-		shader->shader->Release();
-	}
-
 	void DeleteGeometryShader(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadGeometryShader<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void UnloadComputeShaderHandler(void* parameter, ResourceManager* resource_manager) {
-		ComputeShader* shader = (ComputeShader*)parameter;
-		shader->shader->Release();
-	}
 
 	void DeleteComputeShader(ResourceManager* manager, unsigned int index, size_t flags) {
 		manager->UnloadComputeShader<false>(index, flags);
@@ -406,11 +388,11 @@ namespace ECSEngine {
 		UnloadMaterialsHandler,
 		UnloadPBRMeshHandler,
 		UnloadVertexShaderHandler,
-		UnloadPixelShaderHandler,
-		UnloadHullShaderHandler,
-		UnloadDomainShaderHandler,
-		UnloadGeometryShaderHandler,
-		UnloadComputeShaderHandler
+		UnloadShaderHandler<PixelShader>,
+		UnloadShaderHandler<HullShader>,
+		UnloadShaderHandler<DomainShader>,
+		UnloadShaderHandler<GeometryShader>,
+		UnloadShaderHandler<ComputeShader>
 	};
 
 	static_assert(std::size(DELETE_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
@@ -421,8 +403,7 @@ namespace ECSEngine {
 	ResourceManager::ResourceManager(
 		ResourceManagerAllocator* memory,
 		Graphics* graphics,
-		unsigned int thread_count,
-		unsigned int temporary_memory
+		unsigned int thread_count
 	) : m_memory(memory), m_graphics(graphics) {
 		size_t total_memory = 0;
 
@@ -510,7 +491,11 @@ namespace ECSEngine {
 		DataPointer data;
 		data.SetPointer(resource);
 		data.SetData(reference_count);
-		ECS_ASSERT(!m_resource_types[(unsigned int)resource_type].table.Insert(data, identifier));
+
+		// The identifier needs to be allocated
+		void* allocation = m_memory->Allocate(identifier.size, 2);
+		memcpy(allocation, identifier.ptr, identifier.size);
+		ECS_ASSERT(!m_resource_types[(unsigned int)resource_type].table.Insert(data, {allocation, identifier.size}));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -531,7 +516,7 @@ namespace ECSEngine {
 
 	AllocatorPolymorphic ResourceManager::Allocator()
 	{
-		return { m_memory, AllocatorType::MemoryManager, AllocationType::SingleThreaded };
+		return GetAllocatorPolymorphic(m_memory);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -680,34 +665,6 @@ namespace ECSEngine {
 
 	template<bool reference_counted>
 	char* ResourceManager::LoadTextFile(
-		const char* filename, 
-		size_t& size, 
-		size_t load_flags,
-		unsigned int thread_index,
-		bool* reference_counted_is_loaded
-	)
-	{
-		return (char*)LoadResource<reference_counted>(
-			this, 
-			filename,
-			ResourceType::TextFile,
-			(void*)&size,
-			load_flags, 
-			reference_counted_is_loaded,
-			[=](void* parameter) {
-			std::ifstream input;
-			OpenFile(filename, input, thread_index);
-
-			return LoadTextFileImplementation(input, (size_t*)parameter);
-		});
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(char*, ResourceManager::LoadTextFile, const char*, size_t&, size_t, unsigned int, bool*);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	char* ResourceManager::LoadTextFile(
 		const wchar_t* filename,
 		size_t& size, 
 		size_t load_flags,
@@ -723,10 +680,7 @@ namespace ECSEngine {
 			load_flags, 
 			reference_counted_is_loaded,
 			[=](void* parameter) {
-				std::ifstream input;
-				OpenFile(filename, input, thread_index);
-				
-				return LoadTextFileImplementation(input, (size_t*)parameter);
+				return LoadTextFileImplementation(filename, (size_t*)parameter);
 			}
 		);
 	}
@@ -735,47 +689,27 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	char* ResourceManager::LoadTextFileImplementation(std::ifstream& input, size_t* parameter)
+	char* ResourceManager::LoadTextFileImplementation(const wchar_t* file, size_t* parameter)
 	{
-		constexpr size_t temp_characters = 4096;
-
-		size_t size = *parameter;
-		if (size == 0) {
-			size = function::GetFileByteSize(input);
+		Stream<char> contents = ReadWholeFileText(file, Allocator());
+		if (contents.buffer != nullptr) {
+			*parameter = contents.size;
+			return contents.buffer;
 		}
-		void* allocation = m_memory->Allocate(size, 1);
-		if (allocation == nullptr) {
-			return (char*)nullptr;
-		}
-
-		input.seekg(0, std::ifstream::beg);
-		input.read((char*)allocation, 10'000'000'000);
-		size_t gcount = input.gcount();
-		ECS_ASSERT(gcount <= size);
-		*(size_t*)parameter = input.gcount();
-		return (char*)allocation;
+		return nullptr;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::OpenFile(const char* filename, std::ifstream& input, unsigned int thread_index)
+	bool ResourceManager::OpenFile(const wchar_t* filename, ECS_FILE_HANDLE* input, bool binary, unsigned int thread_index)
 	{
 		ECS_TEMP_STRING(path, 512);
 		Stream<wchar_t> current_path = GetThreadPath(path.buffer, filename, thread_index);
-		input.open(current_path.buffer, std::ifstream::in);
-		
-		ECS_ASSERT(input.good(), "Opening a file failed!");
-	}
+		ECS_FILE_ACCESS_FLAGS access_flags = binary ? ECS_FILE_ACCESS_BINARY : ECS_FILE_ACCESS_TEXT;
+		access_flags |= ECS_FILE_ACCESS_READ_ONLY;
+		ECS_FILE_STATUS_FLAGS status = ECSEngine::OpenFile(filename, input, access_flags);
 
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void ResourceManager::OpenFile(const wchar_t* filename, std::ifstream& input, unsigned int thread_index)
-	{
-		ECS_TEMP_STRING(path, 512);
-		Stream<wchar_t> current_path = GetThreadPath(path.buffer, filename, thread_index);
-		input.open(current_path.buffer, std::ifstream::in);
-
-		ECS_ASSERT(input.good(), "Opening a file failed!");
+		return status == ECS_FILE_STATUS_OK;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -798,7 +732,7 @@ namespace ECSEngine {
 			reference_counted_is_loaded,
 			[=](void* parameter) {
 			ResourceManagerTextureDesc* reinterpretation = (ResourceManagerTextureDesc*)parameter;
-			return LoadTextureImplementation(filename, reinterpretation, thread_index).view;
+			return LoadTextureImplementation(filename, reinterpretation, load_flags, thread_index).view;
 		});
 
 		return (ID3D11ShaderResourceView*)texture_view;
@@ -811,6 +745,7 @@ namespace ECSEngine {
 	ResourceView ResourceManager::LoadTextureImplementation(
 		const wchar_t* filename,
 		ResourceManagerTextureDesc* descriptor,
+		size_t load_flags,
 		unsigned int thread_index
 	)
 	{
@@ -819,19 +754,11 @@ namespace ECSEngine {
 
 		// Determine the texture extension - HDR textures must take a different path
 		Stream<wchar_t> texture_path = ToStream(filename);
-		Path2 extension = function::PathExtensionBoth(texture_path);
-		ECS_ASSERT(extension.absolute.size > 0 || extension.relative.size > 0, "No extension could be identified");
+		Path extension = function::PathExtensionBoth(texture_path);
+		ECS_ASSERT(extension.size > 0, "No extension could be identified");
 
-		bool is_hdr_texture = false;
-		bool is_tga_texture = false;
-		if (extension.absolute.size > 0) {
-			is_hdr_texture = function::CompareStrings(extension.absolute, ToStream(L".hdr"));
-			is_tga_texture = function::CompareStrings(extension.absolute, ToStream(L".tga"));
-		}
-		else {
-			is_hdr_texture = function::CompareStrings(extension.relative, ToStream(L".hdr"));
-			is_tga_texture = function::CompareStrings(extension.relative, ToStream(L".tga"));
-		}
+		bool is_hdr_texture = function::CompareStrings(extension, ToStream(L".hdr"));
+		bool is_tga_texture = function::CompareStrings(extension, ToStream(L".tga"));
 
 		ECS_TEMP_STRING(_path, 512);
 		Stream<wchar_t> path = GetThreadPath(_path.buffer, filename, thread_index);
@@ -845,6 +772,11 @@ namespace ECSEngine {
 			allocate_function = GetAllocateFunction(descriptor->allocator);
 			deallocate_function = GetDeallocateMutableFunction(descriptor->allocator);
 		}
+
+		Texture2D texture;
+		bool is_compression = (unsigned char)descriptor->compression != (unsigned char)-1;
+		bool temporary = function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY);
+		temporary &= is_compression;
 
 		if (is_hdr_texture) {
 			DirectX::ScratchImage image;
@@ -861,14 +793,9 @@ namespace ECSEngine {
 			dx_descriptor.array_size = 1;
 			dx_descriptor.bind_flag = (D3D11_BIND_FLAG)descriptor->bindFlags;
 			dx_descriptor.cpu_flag = (D3D11_CPU_ACCESS_FLAG)descriptor->cpuAccessFlags;
-			dx_descriptor.initial_data = image.GetPixels();
-			size_t row_pitch, slice_pitch;
-			result = DirectX::ComputePitch(metadata.format, metadata.width, metadata.height, row_pitch, slice_pitch);
-			if (FAILED(result)) {
-				return nullptr;
-			}
-			dx_descriptor.memory_pitch = row_pitch;
-			dx_descriptor.memory_slice_pitch = slice_pitch;
+			Stream<void> image_data = { image.GetPixels(), image.GetPixelsSize() };
+			dx_descriptor.mip_data = { &image_data, 1 };
+			
 			dx_descriptor.misc_flag = descriptor->miscFlags;
 			dx_descriptor.usage = descriptor->usage;
 			dx_descriptor.size = { (unsigned int)metadata.width, (unsigned int)metadata.height };
@@ -876,29 +803,26 @@ namespace ECSEngine {
 			// No context provided - don't generate mips
 			if (descriptor->context == nullptr) {
 				dx_descriptor.mip_levels = 1;
-				Texture2D texture = m_graphics->CreateTexture(&dx_descriptor);
-				texture_view = m_graphics->CreateTextureShaderViewResource(texture).view;
+				texture = m_graphics->CreateTexture(&dx_descriptor, temporary);
+				texture_view = m_graphics->CreateTextureShaderViewResource(texture, true).view;
 			}
 			else {
 				ECS_ASSERT(descriptor->context == m_graphics->GetContext());
 
 				// Make the initial data nullptr
 				dx_descriptor.mip_levels = 0;
-				dx_descriptor.initial_data = nullptr;
-				dx_descriptor.memory_pitch = 0;
-				dx_descriptor.memory_slice_pitch = 0;
-				Texture2D texture = m_graphics->CreateTexture(&dx_descriptor);
+				dx_descriptor.mip_data = { nullptr,0 };
+				texture = m_graphics->CreateTexture(&dx_descriptor, temporary);
 
 				// Update the mip 0
 				UpdateTextureResource(texture, image.GetPixels(), image.GetPixelsSize(), descriptor->context);
 
-				ResourceView view = m_graphics->CreateTextureShaderViewResource(texture);
+				ResourceView view = m_graphics->CreateTextureShaderViewResource(texture, true);
 
 				// Generate mips
 				m_graphics->GenerateMips(view);
 				texture_view = view.view;
 			}
-			
 		}
 		else if (is_tga_texture) {
 			DirectX::ScratchImage image;
@@ -915,14 +839,9 @@ namespace ECSEngine {
 			dx_descriptor.array_size = 1;
 			dx_descriptor.bind_flag = (D3D11_BIND_FLAG)descriptor->bindFlags;
 			dx_descriptor.cpu_flag = (D3D11_CPU_ACCESS_FLAG)descriptor->cpuAccessFlags;
-			dx_descriptor.initial_data = image.GetPixels();
-			size_t row_pitch, slice_pitch;
-			result = DirectX::ComputePitch(metadata.format, metadata.width, metadata.height, row_pitch, slice_pitch);
-			if (FAILED(result)) {
-				return nullptr;
-			}
-			dx_descriptor.memory_pitch = row_pitch;
-			dx_descriptor.memory_slice_pitch = slice_pitch;
+
+			Stream<void> image_data = { image.GetPixels(), image.GetPixelsSize() };
+			dx_descriptor.mip_data = { &image_data, 1 };
 			dx_descriptor.misc_flag = descriptor->miscFlags;
 			dx_descriptor.usage = descriptor->usage;
 			dx_descriptor.size = { (unsigned int)metadata.width, (unsigned int)metadata.height };
@@ -930,23 +849,21 @@ namespace ECSEngine {
 			// No context provided - don't generate mips
 			if (descriptor->context == nullptr) {
 				dx_descriptor.mip_levels = 1;
-				Texture2D texture = m_graphics->CreateTexture(&dx_descriptor);
-				texture_view = m_graphics->CreateTextureShaderViewResource(texture).view;
+				texture = m_graphics->CreateTexture(&dx_descriptor, temporary);
+				texture_view = m_graphics->CreateTextureShaderViewResource(texture, true).view;
 			}
 			else {
 				ECS_ASSERT(descriptor->context == m_graphics->GetContext());
 
 				// Make the initial data nullptr
 				dx_descriptor.mip_levels = 0;
-				dx_descriptor.initial_data = nullptr;
-				dx_descriptor.memory_pitch = 0;
-				dx_descriptor.memory_slice_pitch = 0;
-				Texture2D texture = m_graphics->CreateTexture(&dx_descriptor);
+				dx_descriptor.mip_data = { nullptr, 0 };
+				texture = m_graphics->CreateTexture(&dx_descriptor, temporary);
 
 				// Update the mip 0
 				UpdateTextureResource(texture, image.GetPixels(), image.GetPixelsSize(), descriptor->context);
 
-				ResourceView view = m_graphics->CreateTextureShaderViewResource(texture);
+				ResourceView view = m_graphics->CreateTextureShaderViewResource(texture, true);
 
 				// Generate mips
 				m_graphics->GenerateMips(view);
@@ -973,19 +890,25 @@ namespace ECSEngine {
 			if (FAILED(result)) {
 				return nullptr;
 			}
+			texture = Texture2D(resource);
+
+			if (!temporary) {
+				m_graphics->AddInternalResource(texture);
+			}
 		}
 
-		if ((unsigned char)descriptor->compression != (unsigned char)-1) {
-			Texture2D texture(resource);
+		if (is_compression) {
 			// Release the old view
 			unsigned int count = texture_view->Release();
-			texture_view = nullptr;
-			bool success = CompressTexture(texture, descriptor->compression);
+			bool success = CompressTexture(m_graphics, texture, descriptor->compression);
 			if (!success) {
-				return texture_view;
+				return nullptr;
 			}
 
-			texture_view = m_graphics->CreateTextureShaderView(texture).view;
+			texture_view = m_graphics->CreateTextureShaderViewResource(texture, true).view;
+		}
+		if (!temporary) {
+			m_graphics->AddInternalResource(ResourceView(texture_view));
 		}
 
 		return texture_view;
@@ -1108,6 +1031,7 @@ namespace ECSEngine {
 
 		bool has_invert = !function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 		bool success = LoadMeshesFromGLTF(data, gltf_meshes, allocator, has_invert);
+
 		// The load failed
 		if (!success) {
 			// The gltf data must be freed
@@ -1308,45 +1232,27 @@ namespace ECSEngine {
 		ECS_TEMP_STRING(path, 512);
 		Stream<wchar_t> stream_filename = manager->GetThreadPath(path.buffer, filename, thread_index);
 
-		Path2 path_extension = function::PathExtensionBoth(stream_filename);
-		bool is_byte_code = false;
-		if (path_extension.absolute.size > 0) {
-			is_byte_code = function::CompareStrings(path_extension.absolute, ToStream(L".cso"));
-		}
-		else if (path_extension.relative.size > 0) {
-			is_byte_code = function::CompareStrings(path_extension.relative, ToStream(L".cso"));
-		}
+		Path path_extension = function::PathExtensionBoth(stream_filename);
+		bool is_byte_code = function::CompareStrings(path_extension, ToStream(L".cso"));
 
-		// Load the binary data and create
-		std::ifstream stream;
+		Stream<void> contents = { nullptr, 0 };
+		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(manager->m_memory, AllocationType::MultiThreaded);
+
 		if (is_byte_code) {
-			stream.open(stream_filename.buffer, std::ios::binary);
+			contents = ReadWholeFileBinary(stream_filename.buffer, allocator_polymorphic);
+			shader = byte_code_handler(contents);
 		}
-		// Load the source code and compile it
 		else {
-			stream.open(stream_filename.buffer);
+			Stream<char> source_code = ReadWholeFileText(stream_filename.buffer, allocator_polymorphic);
+			shader = source_handler(source_code, options);
+			contents = source_code;
 		}
 
-		if (stream.good()) {
-			size_t file_size = function::GetFileByteSize(stream);
-			Stream<void> data;
-			data.buffer = manager->m_memory->Allocate_ts(file_size);
-			stream.read((char*)data.buffer, file_size);
-			data.size = stream.gcount();
-
-			if (is_byte_code) {
-				shader = byte_code_handler(data);
-			}
-			else {
-				shader = source_handler({ data.buffer, data.size }, options);
-			}
-
-			if (shader_source_code == nullptr) {
-				manager->m_memory->Deallocate_ts(data.buffer);
-			}
-			else {
-				*shader_source_code = { data.buffer, data.size };
-			}
+		if (shader_source_code == nullptr) {
+			manager->m_memory->Deallocate_ts(contents.buffer);
+		}
+		else {
+			*shader_source_code = Stream<char>(contents.buffer, contents.size);
 		}
 
 		return shader;
@@ -1394,11 +1300,11 @@ namespace ECSEngine {
 	)
 	{
 		return LoadShaderImplementation<VertexShader>(this, filename, options, load_flags, thread_index, shader_source_code, [&](Stream<void> byte_code) {
-			return m_graphics->CreateVertexShader(byte_code);
+			return m_graphics->CreateVertexShader(byte_code, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 		},
 		[&](Stream<char> source_code, ShaderCompileOptions options) {
 			ShaderIncludeFiles include(m_memory, m_shader_directory);
-			VertexShader shader = m_graphics->CreateVertexShaderFromSource(source_code, &include, options);
+			VertexShader shader = m_graphics->CreateVertexShaderFromSource(source_code, &include, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY), options);
 			return shader;
 		});
 	}
@@ -1445,12 +1351,12 @@ namespace ECSEngine {
 	)
 	{
 		return LoadShaderImplementation<PixelShader>(this, filename, options, load_flags, thread_index, shader_source_code, [&](Stream<void> byte_code) {
-			return m_graphics->CreatePixelShader(byte_code);
+			return m_graphics->CreatePixelShader(byte_code, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 			},
 			[&](Stream<char> source_code, ShaderCompileOptions options) {
 				ShaderIncludeFiles include(m_memory, m_shader_directory);
-				return m_graphics->CreatePixelShaderFromSource(source_code, &include, options);
-			});
+				return m_graphics->CreatePixelShaderFromSource(source_code, &include, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY), options);
+		});
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1495,11 +1401,11 @@ namespace ECSEngine {
 	)
 	{
 		return LoadShaderImplementation<HullShader>(this, filename, options, load_flags, thread_index, shader_source_code, [&](Stream<void> byte_code) {
-			return m_graphics->CreateHullShader(byte_code);
+			return m_graphics->CreateHullShader(byte_code, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 			},
 			[&](Stream<char> source_code, ShaderCompileOptions options) {
 				ShaderIncludeFiles include(m_memory, m_shader_directory);
-				return m_graphics->CreateHullShaderFromSource(source_code, &include, options);
+				return m_graphics->CreateHullShaderFromSource(source_code, &include, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY), options);
 			});
 	}
 
@@ -1545,11 +1451,11 @@ namespace ECSEngine {
 	)
 	{
 		return LoadShaderImplementation<DomainShader>(this, filename, options, load_flags, thread_index, shader_source_code, [&](Stream<void> byte_code) {
-			return m_graphics->CreateDomainShader(byte_code);
+			return m_graphics->CreateDomainShader(byte_code, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 			},
 			[&](Stream<char> source_code, ShaderCompileOptions options) {
 				ShaderIncludeFiles include(m_memory, m_shader_directory);
-				return m_graphics->CreateDomainShaderFromSource(source_code, &include, options);
+				return m_graphics->CreateDomainShaderFromSource(source_code, &include, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY), options);
 			});
 	}
 
@@ -1595,11 +1501,11 @@ namespace ECSEngine {
 	)
 	{
 		return LoadShaderImplementation<GeometryShader>(this, filename, options, load_flags, thread_index, shader_source_code, [&](Stream<void> byte_code) {
-			return m_graphics->CreateGeometryShader(byte_code);
+			return m_graphics->CreateGeometryShader(byte_code, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 			},
 			[&](Stream<char> source_code, ShaderCompileOptions options) {
 				ShaderIncludeFiles include(m_memory, m_shader_directory);
-				return m_graphics->CreateGeometryShaderFromSource(source_code, &include, options);
+				return m_graphics->CreateGeometryShaderFromSource(source_code, &include, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY), options);
 			});
 	}
 
@@ -1645,11 +1551,11 @@ namespace ECSEngine {
 	)
 	{
 		return LoadShaderImplementation<ComputeShader>(this, filename, options, load_flags, thread_index, shader_source_code, [&](Stream<void> byte_code) {
-			return m_graphics->CreateComputeShader(byte_code);
+			return m_graphics->CreateComputeShader(byte_code, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY));
 			},
 			[&](Stream<char> source_code, ShaderCompileOptions options) {
 				ShaderIncludeFiles include(m_memory, m_shader_directory);
-				return m_graphics->CreateComputeShaderFromSource(source_code, &include, options);
+				return m_graphics->CreateComputeShaderFromSource(source_code, &include, function::HasFlag(load_flags, ECS_RESOURCE_MANAGER_TEMPORARY), options);
 			});
 	}
 
@@ -1712,24 +1618,16 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadTextFile(const char* filename, size_t flags)
-	{
-		DeleteResource<reference_counted>(this, { filename, (unsigned int)strlen(filename) }, ResourceType::TextFile, flags, UnloadTextFileHandler);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadTextFile, const char*, size_t);
-
-	template<bool reference_counted>
 	void ResourceManager::UnloadTextFile(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::TextFile, flags, UnloadTextFileHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::TextFile, flags);
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadTextFile, const wchar_t*, size_t);
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadTextFile(unsigned int index, size_t flags) {
-		DeleteResource<reference_counted>(this, index, ResourceType::TextFile, flags, UnloadTextFileHandler);
+		UnloadResource<reference_counted>(index, ResourceType::TextFile, flags);
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadTextFile, unsigned int, size_t);
@@ -1739,26 +1637,26 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadTexture(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::Texture, flags, UnloadTextureHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::Texture, flags);
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadTexture, const wchar_t*, size_t);
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadTexture(unsigned int index, size_t flags) {
-		DeleteResource<reference_counted>(this, index, ResourceType::Texture, flags, UnloadTextureHandler);
+		UnloadResource<reference_counted>(index, ResourceType::Texture, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadMeshes(const wchar_t* filename, size_t flags) {
-		DeleteResource<reference_counted>(this, filename, ResourceType::Mesh, flags, UnloadMeshesHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::Mesh, flags);
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMeshes(unsigned int index, size_t flags) {
-		DeleteResource<reference_counted>(this, index, ResourceType::Mesh, flags, UnloadMeshesHandler);
+	void ResourceManager::UnloadMeshes(unsigned int index, size_t flags) {;
+		UnloadResource<reference_counted>(index, ResourceType::Mesh, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1766,37 +1664,37 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadCoallescedMesh(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::CoallescedMesh, flags, UnloadCoallescedMeshHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::CoallescedMesh, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadCoallescedMesh(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::CoallescedMesh, flags, UnloadCoallescedMeshHandler);
+		UnloadResource<reference_counted>(index, ResourceType::CoallescedMesh, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadMaterials(const wchar_t* filename, size_t flags) {
-		DeleteResource<reference_counted>(this, filename, ResourceType::Material, flags, UnloadMaterialsHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::Material, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadMaterials(unsigned int index, size_t flags) {
-		DeleteResource<reference_counted>(this, index, ResourceType::Material, flags, UnloadMaterialsHandler);
+		UnloadResource<reference_counted>(index, ResourceType::Material, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadPBRMesh(const wchar_t* filename, size_t flags) {
-		DeleteResource<reference_counted>(this, filename, ResourceType::PBRMesh, flags, UnloadPBRMeshHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::PBRMesh, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadPBRMesh(unsigned int index, size_t flags) {
-		DeleteResource<reference_counted>(this, index, ResourceType::PBRMesh, flags, UnloadPBRMeshHandler);
+		UnloadResource<reference_counted>(index, ResourceType::PBRMesh, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1804,13 +1702,13 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadVertexShader(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::VertexShader, flags, UnloadVertexShaderHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::VertexShader, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadVertexShader(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::VertexShader, flags, UnloadVertexShaderHandler);
+		UnloadResource<reference_counted>(index, ResourceType::VertexShader, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1818,13 +1716,13 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadPixelShader(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::PixelShader, flags, UnloadPixelShaderHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::PixelShader, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadPixelShader(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::PixelShader, flags, UnloadPixelShaderHandler);
+		UnloadResource<reference_counted>(index, ResourceType::PixelShader, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1832,13 +1730,13 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadHullShader(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::HullShader, flags, UnloadHullShaderHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::HullShader, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadHullShader(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::HullShader, flags, UnloadHullShaderHandler);
+		UnloadResource<reference_counted>(index, ResourceType::HullShader, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1846,13 +1744,13 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadDomainShader(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::DomainShader, flags, UnloadDomainShaderHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::DomainShader, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadDomainShader(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::DomainShader, flags, UnloadDomainShaderHandler);
+		UnloadResource<reference_counted>(index, ResourceType::DomainShader, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1860,13 +1758,13 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadGeometryShader(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::GeometryShader, flags, UnloadGeometryShaderHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::GeometryShader, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadGeometryShader(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::GeometryShader, flags, UnloadGeometryShaderHandler);
+		UnloadResource<reference_counted>(index, ResourceType::GeometryShader, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1874,13 +1772,40 @@ namespace ECSEngine {
 	template<bool reference_counted>
 	void ResourceManager::UnloadComputeShader(const wchar_t* filename, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, filename, ResourceType::ComputeShader, flags, UnloadComputeShaderHandler);
+		UnloadResource<reference_counted>(filename, ResourceType::ComputeShader, flags);
 	}
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadComputeShader(unsigned int index, size_t flags)
 	{
-		DeleteResource<reference_counted>(this, index, ResourceType::ComputeShader, flags, UnloadComputeShaderHandler);
+		UnloadResource<reference_counted>(index, ResourceType::ComputeShader, flags);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadResource(const wchar_t* filename, ResourceType type, size_t flags)
+	{
+		DeleteResource<reference_counted>(this, filename, type, flags);
+	}
+
+	template<bool reference_counted>
+	void ResourceManager::UnloadResource(unsigned int index, ResourceType type, size_t flags)
+	{
+		DeleteResource<reference_counted>(this, index, type, flags);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::UnloadAll(ResourceType resource_type)
+	{
+		unsigned int int_type = (unsigned int)resource_type;
+		unsigned int count = m_resource_types[int_type].table.GetExtendedCapacity();
+		for (unsigned int index = 0; index < count; index++) {
+			if (m_resource_types[int_type].table.IsItemAt(index)) {
+				UnloadResource(index, resource_type);
+			}
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1888,6 +1813,13 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 #pragma region Free functions
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	MemoryManager DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator)
+	{
+		return MemoryManager(100'000, 2048, 100'000, global_allocator);
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -1970,11 +1902,10 @@ namespace ECSEngine {
 		};
 
 		// Search the directory for the textures
-		auto search_functor = [](const std::filesystem::path& path, void* _data) {
+		auto search_functor = [](const wchar_t* path, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
 
-			const wchar_t* c_path = path.c_str();
-			Stream<wchar_t> stream_path = ToStream(c_path);
+			Stream<wchar_t> stream_path = ToStream(path);
 			Stream<wchar_t> filename = function::PathStem(stream_path);
 
 			for (size_t index = 0; index < data->mappings->size; index++) {
@@ -1991,7 +1922,7 @@ namespace ECSEngine {
 
 		size_t texture_count = mappings.size;
 		FunctorData functor_data = { &temporary_allocator, &mappings };
-		ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, std::size(texture_extensions) }, & functor_data, search_functor);
+		ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, std::size(texture_extensions) }, &functor_data, search_functor);
 		ECS_ASSERT(mappings.size == 0);
 		if (mappings.size != 0) {
 			return result;
@@ -2043,64 +1974,6 @@ namespace ECSEngine {
 		result.name = function::StringCopyTs(resource_manager->m_memory, pbr.name).buffer;
 
 		return result;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags)
-	{
-		DecodedTexture new_data = { { nullptr, 0 }, 0, 0, DXGI_FORMAT_FORCE_UINT };
-
-		DirectX::ScratchImage image;
-		image.SetAllocator(allocator.allocator, GetAllocateFunction(allocator), GetDeallocateMutableFunction(allocator));
-
-		HRESULT result;
-		DirectX::TexMetadata metadata;
-		if (extension == ECS_TEXTURE_EXTENSION_HDR) {
-			result = DirectX::LoadFromHDRMemory(data.buffer, data.size, &metadata, image);
-		}
-		else if (extension == ECS_TEXTURE_EXTENSION_TGA) {
-			result = DirectX::LoadFromTGAMemory(data.buffer, data.size, &metadata, image);
-		}
-		else {
-			DirectX::WIC_FLAGS wic_flags = DirectX::WIC_FLAGS_FORCE_RGB;
-			result = DirectX::LoadFromWICMemory(data.buffer, data.size, wic_flags, &metadata, image);
-		}
-		
-		if (FAILED(result)) {
-			return new_data;
-		}
-
-		new_data.data = { image.GetPixels(), image.GetPixelsSize() };
-		new_data.format = metadata.format;
-		new_data.height = metadata.height;
-		new_data.width = metadata.width;
-		image.DetachPixels();
-		return new_data;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	DecodedTexture DecodeTexture(Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags)
-	{
-		Path2 extensions = function::PathExtensionBoth(ToStream(filename));
-
-		TextureExtension extension;
-
-		Stream<wchar_t> extension_to_compare = extensions.absolute;
-		if (extensions.relative.size > 0) {
-			extension_to_compare = extensions.relative;
-		}
-		
-		if (function::CompareStrings(extension_to_compare, ToStream(L".hdr"))) {
-			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_HDR, allocator, flags);
-		}
-		if (function::CompareStrings(extension_to_compare, ToStream(L".tga"))) {
-			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_TGA, allocator, flags);
-		}
-
-		// The remaining textures don't matter exactly the type - they will all get mapped to the WIC path
-		return DecodeTexture(data, ECS_TEXTURE_EXTENSION_JPG, allocator, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

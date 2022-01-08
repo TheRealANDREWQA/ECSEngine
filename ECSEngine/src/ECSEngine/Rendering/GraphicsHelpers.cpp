@@ -202,41 +202,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void ReleaseShaderView(ResourceView view) {
-		ID3D11Resource* resource = GetResource(view);
-		// Release the view
-		unsigned int view_count = view.view->Release();
-
-		// Release the resource
-		unsigned int resource_count = resource->Release();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void ReleaseUAView(UAView view) {
-		ID3D11Resource* resource = GetResource(view);
-		// Release the view
-		unsigned int view_count = view.view->Release();
-
-		// Release the resource
-		unsigned int resource_count = resource->Release();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void ReleaseRenderView(RenderTargetView view)
-	{
-		ID3D11Resource* resource = GetResource(view);
-		// Release the view
-		unsigned int view_count = view.target->Release();
-
-		// Release the resource
-		unsigned int resource_count = resource->Release();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer)
+	void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer, bool temporary)
 	{
 		float negative_span = -positive_span;
 		float3 vertex_position[] = {
@@ -250,7 +216,7 @@ namespace ECSEngine {
 			{positive_span, positive_span, positive_span}
 		};
 
-		vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(vertex_position), vertex_position);
+		vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), std::size(vertex_position), vertex_position, temporary);
 
 		unsigned int indices[] = {
 			0, 2, 1,    2, 3, 1,
@@ -261,12 +227,12 @@ namespace ECSEngine {
 			0, 1, 4,    1, 5, 4
 		};
 
-		index_buffer = graphics->CreateIndexBuffer(Stream<unsigned int>(indices, std::size(indices)));
+		index_buffer = graphics->CreateIndexBuffer(Stream<unsigned int>(indices, std::size(indices)), temporary);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right)
+	VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right, bool temporary)
 	{
 		// a -- b
 		// |    |
@@ -279,110 +245,50 @@ namespace ECSEngine {
 			bottom_right,                                       // d
 			{top_left.x, bottom_right.y, top_left.z}            // c
 		};
-		return graphics->CreateVertexBuffer(sizeof(float3), std::size(positions), positions);
+		return graphics->CreateVertexBuffer(sizeof(float3), std::size(positions), positions, temporary);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture1D ToStaging(Texture1D texture)
-	{
-		Texture1D new_texture;
+#define EXPORT_TEXTURE_TEMPLATE(function_name) ECS_TEMPLATE_FUNCTION(Texture1D, function_name, Graphics*, Texture1D, bool);  \
+ECS_TEMPLATE_FUNCTION(Texture2D, function_name, Graphics*, Texture2D, bool); \
+ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
-		GraphicsDevice* device = nullptr;
-		D3D11_TEXTURE1D_DESC texture_descriptor;
+	template<typename Texture>
+	Texture TextureToStaging(Graphics* graphics, Texture texture, bool temporary) {
+		Texture new_texture;
+
+		GraphicsDevice* device = graphics->GetDevice();
+		Texture::RawDescriptor texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
-		device = texture.GetDevice();
-
-		texture_descriptor.Usage = D3D11_USAGE_STAGING;
-		texture_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
-
-		ID3D11Texture1D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture1D(&texture_descriptor, nullptr, &_new_texture);
-
-		new_texture = Texture1D(_new_texture);
-		if (FAILED(result)) {
-			return new_texture;
-		}
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		CopyGraphicsResource(new_texture, texture, context);
-		return new_texture;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Texture2D ToStaging(Texture2D texture)
-	{
-		Texture2D new_texture;
-
-		GraphicsDevice* device = nullptr;
-		D3D11_TEXTURE2D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-		device = texture.GetDevice();
 
 		texture_descriptor.BindFlags = 0;
 		texture_descriptor.Usage = D3D11_USAGE_STAGING;
 		texture_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 		texture_descriptor.MiscFlags = 0;
 
-		ID3D11Texture2D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture2D(&texture_descriptor, nullptr, &_new_texture);
+		new_texture = Texture::RawCreate(device, &texture_descriptor);
 
-		new_texture = Texture2D(_new_texture);
-		if (FAILED(result)) {
-			return new_texture;
+		CopyGraphicsResource(new_texture, texture, graphics->GetContext());
+		if (!temporary) {
+			graphics->AddInternalResource(new_texture);
 		}
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		CopyGraphicsResource(new_texture, texture, context);
 		return new_texture;
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Texture3D ToStaging(Texture3D texture)
-	{
-		Texture3D new_texture;
-
-		GraphicsDevice* device = nullptr;
-		D3D11_TEXTURE3D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-		device = texture.GetDevice();
-
-		texture_descriptor.Usage = D3D11_USAGE_STAGING;
-		texture_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
-
-		ID3D11Texture3D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture3D(&texture_descriptor, nullptr, &_new_texture);
-
-		new_texture = Texture3D(_new_texture);
-		if (FAILED(result)) {
-			return new_texture;
-		}
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		CopyGraphicsResource(new_texture, texture, context);
-		return new_texture;
-	}
+	EXPORT_TEXTURE_TEMPLATE(TextureToStaging);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	Buffer ToStaging(Buffer buffer) {
+	Buffer BufferToStaging(Graphics* graphics, Buffer buffer, bool temporary) {
 		Buffer new_buffer;
 
 		memcpy(&new_buffer, &buffer, sizeof(Buffer));
-		GraphicsDevice* device = nullptr;
+		GraphicsDevice* device = graphics->GetDevice();
 		D3D11_BUFFER_DESC buffer_descriptor;
 
 		buffer.buffer->GetDesc(&buffer_descriptor);
-		device = buffer.GetDevice();
 
 		buffer_descriptor.Usage = D3D11_USAGE_STAGING;
 		buffer_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
@@ -393,14 +299,15 @@ namespace ECSEngine {
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Could not create a staging buffer!", true);
 
 		new_buffer.buffer = _new_buffer;
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
 
-		CopyGraphicsResource(new_buffer, buffer, context);
+		CopyGraphicsResource(new_buffer, buffer, graphics->GetContext());
+		if (!temporary) {
+			graphics->AddInternalResource(new_buffer);
+		}
 		return new_buffer;
 	}
 
-#define EXPORT(type) ECS_TEMPLATE_FUNCTION(type, ToStaging, type);
+#define EXPORT(type) ECS_TEMPLATE_FUNCTION(type, BufferToStaging, Graphics*, type, bool);
 
 	EXPORT(StandardBuffer);
 	EXPORT(StructuredBuffer);
@@ -414,289 +321,139 @@ namespace ECSEngine {
 
 	constexpr size_t MAX_SUBRESOURCES = 32;
 
-	Texture1D ToImmutableWithStaging(Texture1D texture) {
-		Texture1D new_texture;
+	template<typename Texture>
+	Texture TextureToImmutableWithStaging(Graphics* graphics, Texture texture, bool temporary) {
+		Texture new_texture;
 
-		GraphicsDevice* device = nullptr;
-		D3D11_TEXTURE1D_DESC texture_descriptor;
+		GraphicsDevice* device = graphics->GetDevice();
+		Texture::RawDescriptor texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
-		device = texture.GetDevice();
 
 		texture_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		texture_descriptor.CPUAccessFlags = 0;
+		texture_descriptor.BindFlags = 0;
 
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		Texture1D staging_texture = ToStaging(texture);
-		if (staging_texture.tex == nullptr) {
-			return staging_texture;
-		}
-
-
-		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, context, D3D11_MAP_READ, index, 0);
-			subresource_data[index].pSysMem = resource.pData;
-			subresource_data[index].SysMemPitch = resource.RowPitch;
-			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
-		}
-
-		ID3D11Texture1D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture1D(&texture_descriptor, subresource_data, &_new_texture);
-
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			UnmapTexture(staging_texture, context, index);
-		}
-		unsigned int count = staging_texture.tex->Release();
-
-		new_texture = _new_texture;
-		return new_texture;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Texture2D ToImmutableWithStaging(Texture2D texture) {
-		Texture2D new_texture;
-
-		GraphicsDevice* device = nullptr;
-		D3D11_TEXTURE2D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-		device = texture.GetDevice();
-
-		texture_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
-		texture_descriptor.CPUAccessFlags = 0;
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		Texture2D staging_texture = ToStaging(texture);
+		Texture staging_texture = TextureToStaging(graphics, texture);
 		if (staging_texture.tex == nullptr) {
 			return staging_texture;
 		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, context, D3D11_MAP_READ, index, 0);
+			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, graphics->GetContext(), D3D11_MAP_READ, index, 0);
 			subresource_data[index].pSysMem = resource.pData;
 			subresource_data[index].SysMemPitch = resource.RowPitch;
 			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
 		}
 
-		ID3D11Texture2D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture2D(&texture_descriptor, subresource_data, &_new_texture);
+		new_texture = Texture::RawCreate(device, &texture_descriptor, subresource_data);
 
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			UnmapTexture(staging_texture, context, index);
+			UnmapTexture(staging_texture, graphics->GetContext(), index);
 		}
-		unsigned int count = staging_texture.tex->Release();
+		staging_texture.Release();
 
-		new_texture = _new_texture;
+		if (!temporary) {
+			graphics->AddInternalResource(new_texture);
+		}
 		return new_texture;
-
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Texture3D ToImmutableWithStaging(Texture3D texture) {
-		Texture3D new_texture;
-
-		GraphicsDevice* device = nullptr;
-		D3D11_TEXTURE3D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-		device = texture.GetDevice();
-
-		texture_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
-		texture_descriptor.CPUAccessFlags = 0;
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		Texture3D staging_texture = ToStaging(texture);
-		if (staging_texture.tex == nullptr) {
-			return staging_texture;
-		}
-
-		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, context, D3D11_MAP_READ, index, 0);
-			subresource_data[index].pSysMem = resource.pData;
-			subresource_data[index].SysMemPitch = resource.RowPitch;
-			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
-		}
-
-		ID3D11Texture3D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture3D(&texture_descriptor, subresource_data, &_new_texture);
-
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			UnmapTexture(staging_texture, context, index);
-		}
-		unsigned int count = staging_texture.tex->Release();
-
-		new_texture = _new_texture;
-		return new_texture;
-
-	}
+	EXPORT_TEXTURE_TEMPLATE(TextureToImmutableWithStaging);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	Buffer ToImmutableWithStaging(Buffer buffer) {
+	Buffer BufferToImmutableWithStaging(Graphics* graphics, Buffer buffer, bool temporary) {
 		Buffer new_buffer;
 
-		GraphicsDevice* device = nullptr;
+		GraphicsDevice* device = graphics->GetDevice();
 		D3D11_BUFFER_DESC buffer_descriptor;
 		buffer.buffer->GetDesc(&buffer_descriptor);
-		device = buffer.GetDevice();
 
 		buffer_descriptor.Usage = D3D11_USAGE_IMMUTABLE;
 		buffer_descriptor.CPUAccessFlags = 0;
 
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		Buffer staging_buffer = ToStaging(buffer);
+		Buffer staging_buffer = BufferToStaging(graphics, buffer);
 		if (staging_buffer.buffer == nullptr) {
 			return staging_buffer;
 		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data;
-		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(staging_buffer.buffer, context, D3D11_MAP_READ);
+		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(staging_buffer.buffer, graphics->GetContext(), D3D11_MAP_READ);
 		subresource_data.pSysMem = resource.pData;
 		subresource_data.SysMemPitch = resource.RowPitch;
 		subresource_data.SysMemSlicePitch = resource.DepthPitch;
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, &subresource_data, &_new_buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting a buffer to immutable with staging buffer failed.", true);
 
-		UnmapBuffer(staging_buffer.buffer, context);
-		unsigned int count = staging_buffer.buffer->Release();
+		UnmapBuffer(staging_buffer.buffer, graphics->GetContext());
+		staging_buffer.Release();
 
 		new_buffer = _new_buffer;
+		if (!temporary) {
+			graphics->AddInternalResource(new_buffer);
+		}
 		return new_buffer;
 	}
 
-//#define EXPORT_BUFFER(type) ECS_TEMPLATE_FUNCTION(type, ECSEngine::ToImmutableWithStaging, type, GraphicsContext*);
+//#define EXPORT_BUFFER(type) ECS_TEMPLATE_FUNCTION(type, ECSEngine::BufferToImmutableWithStaging, Graphics*, type, bool);
 
 	// CRINGE Visual studio intellisense bug that fills the file with errors even tho no error is present
 	// Manual unroll
-	ECS_TEMPLATE_FUNCTION(StandardBuffer, ToImmutableWithStaging, StandardBuffer);
-	ECS_TEMPLATE_FUNCTION(StructuredBuffer, ToImmutableWithStaging, StructuredBuffer);
-	ECS_TEMPLATE_FUNCTION(UABuffer, ToImmutableWithStaging, UABuffer);
-	ECS_TEMPLATE_FUNCTION(ConstantBuffer, ToImmutableWithStaging, ConstantBuffer);
+	ECS_TEMPLATE_FUNCTION(StandardBuffer, BufferToImmutableWithStaging, Graphics*, StandardBuffer, bool);
+	ECS_TEMPLATE_FUNCTION(StructuredBuffer, BufferToImmutableWithStaging, Graphics*, StructuredBuffer, bool);
+	ECS_TEMPLATE_FUNCTION(UABuffer, BufferToImmutableWithStaging, Graphics*, UABuffer, bool);
+	ECS_TEMPLATE_FUNCTION(ConstantBuffer, BufferToImmutableWithStaging, Graphics*, ConstantBuffer, bool);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture1D ToImmutableWithMap(Texture1D texture)
-	{
-		Texture1D new_texture;
+	template<typename Texture>
+	Texture TextureToImmutableWithMap(Graphics* graphics, Texture texture, bool temporary) {
+		Texture new_texture;
 
-		GraphicsDevice* device = texture.GetDevice();
-		D3D11_TEXTURE1D_DESC texture_descriptor;
+		GraphicsDevice* device = graphics->GetDevice();
+		Texture::RawDescriptor texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, context, D3D11_MAP_READ, index, 0);
+			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, graphics->GetContext(), D3D11_MAP_READ, index, 0);
 			subresource_data[index].pSysMem = resource.pData;
 			subresource_data[index].SysMemPitch = resource.RowPitch;
 			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
 		}
 
-		ID3D11Texture1D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture1D(&texture_descriptor, subresource_data, &_new_texture);
+		new_texture = Texture::RawCreate(device, &texture_descriptor, subresource_data);
 
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			UnmapTexture(texture, context, index);
+			UnmapTexture(texture, graphics->GetContext(), index);
 		}
 
-		new_texture = _new_texture;
+		if (!temporary) {
+			graphics->AddInternalResource(new_texture);
+		}
 		return new_texture;
 	}
 
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Texture2D ToImmutableWithMap(Texture2D texture)
-	{
-		Texture2D new_texture;
-
-		GraphicsDevice* device = texture.GetDevice();
-		D3D11_TEXTURE2D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, context, D3D11_MAP_READ, index, 0);
-			subresource_data[index].pSysMem = resource.pData;
-			subresource_data[index].SysMemPitch = resource.RowPitch;
-			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
-		}
-
-		ID3D11Texture2D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture2D(&texture_descriptor, subresource_data, &_new_texture);
-
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			UnmapTexture(texture, context, index);
-		}
-
-		new_texture = _new_texture;
-		return new_texture;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Texture3D ToImmutableWithMap(Texture3D texture)
-	{
-		Texture3D new_texture;
-
-		GraphicsDevice* device = texture.GetDevice();
-		D3D11_TEXTURE3D_DESC texture_descriptor;
-		texture.tex->GetDesc(&texture_descriptor);
-
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, context, D3D11_MAP_READ, index, 0);
-			subresource_data[index].pSysMem = resource.pData;
-			subresource_data[index].SysMemPitch = resource.RowPitch;
-			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
-		}
-
-		ID3D11Texture3D* _new_texture = nullptr;
-		HRESULT result = device->CreateTexture3D(&texture_descriptor, subresource_data, &_new_texture);
-
-		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			UnmapTexture(texture, context, index);
-		}
-
-		new_texture = _new_texture;
-		return new_texture;
-	}
+	EXPORT_TEXTURE_TEMPLATE(TextureToImmutableWithMap);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	Buffer ToImmutableWithMap(Buffer buffer)
+	Buffer BufferToImmutableWithMap(Graphics* graphics, Buffer buffer, bool temporary)
 	{
 		Buffer new_buffer;
 
-		GraphicsDevice* device = buffer.GetDevice();
+		GraphicsDevice* device = graphics->GetDevice();
 		D3D11_BUFFER_DESC buffer_descriptor;
 		buffer.buffer->GetDesc(&buffer_descriptor);
-		
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
+	
 
 		D3D11_SUBRESOURCE_DATA subresource_data;
-		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(buffer.buffer, context, D3D11_MAP_READ);
+		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(buffer.buffer, graphics->GetContext(), D3D11_MAP_READ);
 		subresource_data.pSysMem = resource.pData;
 		subresource_data.SysMemPitch = resource.RowPitch;
 		subresource_data.SysMemSlicePitch = resource.DepthPitch;
@@ -704,56 +461,59 @@ namespace ECSEngine {
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, &subresource_data, &_new_buffer);
 
-		UnmapBuffer(buffer.buffer, context);
+		UnmapBuffer(buffer.buffer, graphics->GetContext());
 
 		new_buffer = _new_buffer;
+		if (!temporary) {
+			graphics->AddInternalResource(new_buffer);
+		}
 		return new_buffer;
 	}
 
 	// CRINGE Visual studio intellisense bug that fills the file with errors even tho no error is present
 	// Manual unroll
-	ECS_TEMPLATE_FUNCTION(StandardBuffer, ToImmutableWithMap, StandardBuffer);
-	ECS_TEMPLATE_FUNCTION(StructuredBuffer, ToImmutableWithMap, StructuredBuffer);
-	ECS_TEMPLATE_FUNCTION(UABuffer, ToImmutableWithMap, UABuffer);
-	ECS_TEMPLATE_FUNCTION(ConstantBuffer, ToImmutableWithMap, ConstantBuffer);
+	ECS_TEMPLATE_FUNCTION(StandardBuffer, BufferToImmutableWithMap, Graphics*, StandardBuffer, bool);
+	ECS_TEMPLATE_FUNCTION(StructuredBuffer, BufferToImmutableWithMap, Graphics*, StructuredBuffer, bool);
+	ECS_TEMPLATE_FUNCTION(UABuffer, BufferToImmutableWithMap, Graphics*, UABuffer, bool);
+	ECS_TEMPLATE_FUNCTION(ConstantBuffer, BufferToImmutableWithMap, Graphics*, ConstantBuffer, bool);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ResizeTextureWithStaging(Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag)
+	Texture2D ResizeTextureWithStaging(Graphics* graphics, Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag, bool temporary)
 	{
-		GraphicsDevice* device = texture.GetDevice();
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
-
-		Texture2D staging_texture = ToStaging(texture);
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, context, D3D11_MAP_READ);
-		Texture2D new_texture = ResizeTexture(first_mip.pData, texture, new_width, new_height, nullptr, { nullptr }, resize_flag);
-		UnmapTexture(staging_texture, context);
-		staging_texture.tex->Release();
+		Texture2D staging_texture = TextureToStaging(graphics, texture);
+		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, graphics->GetContext(), D3D11_MAP_READ);
+		Texture2D new_texture = ResizeTexture(graphics, first_mip.pData, texture, new_width, new_height, { nullptr }, resize_flag, temporary);
+		UnmapTexture(staging_texture, graphics->GetContext());
+		staging_texture.Release();
 		return new_texture;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ResizeTextureWithMap(Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag)
+	Texture2D ResizeTextureWithMap(Graphics* graphics, Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag, bool temporary)
 	{
-		GraphicsDevice* device = texture.GetDevice();
-		GraphicsContext* context;
-		device->GetImmediateContext(&context);
+		Texture2D result;
 
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, context, D3D11_MAP_READ);
-		return ResizeTexture(first_mip.pData, texture, new_width, new_height, nullptr, {nullptr}, resize_flag);
+		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, graphics->GetContext(), D3D11_MAP_READ);
+		result = ResizeTexture(graphics, first_mip.pData, texture, new_width, new_height, {nullptr}, resize_flag, temporary);
+		UnmapTexture(texture, graphics->GetContext());
+		return result;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Texture2D ResizeTexture(void* data, Texture2D texture, size_t new_width, size_t new_height, GraphicsContext* context, AllocatorPolymorphic allocator, size_t resize_flag) {
+	Texture2D ResizeTexture(
+		Graphics* graphics,
+		void* data, 
+		Texture2D texture, 
+		size_t new_width,
+		size_t new_height, 
+		AllocatorPolymorphic allocator,
+		size_t resize_flag,
+		bool temporary
+	) {
 		Texture2D new_texture = (ID3D11Texture2D*)nullptr;
-
-		GraphicsDevice* device = texture.GetDevice();
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
 
 		D3D11_TEXTURE2D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
@@ -805,7 +565,7 @@ namespace ECSEngine {
 		texture_descriptor.Width = new_width;
 		texture_descriptor.Height = new_height;
 
-		result = device->CreateTexture2D(&texture_descriptor, &subresource_data, &_new_texture);
+		result = graphics->GetDevice()->CreateTexture2D(&texture_descriptor, &subresource_data, &_new_texture);
 		if (FAILED(result)) {
 			return new_texture;
 		}
@@ -816,25 +576,28 @@ namespace ECSEngine {
 			texture_descriptor.Usage = D3D11_USAGE_DEFAULT;
 			texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
 			
-			result = device->CreateTexture2D(&texture_descriptor, nullptr, &_new_texture);
+			result = graphics->GetDevice()->CreateTexture2D(&texture_descriptor, nullptr, &_new_texture);
 			if (FAILED(result)) {
 				return new_texture;
 			}
 
-			CopyTextureSubresource(_new_texture, { 0, 0 }, 0, first_mip, { 0, 0 }, { (unsigned int)resized_image->width, (unsigned int)resized_image->height }, 0, context);
+			CopyTextureSubresource(_new_texture, { 0, 0 }, 0, first_mip, { 0, 0 }, { (unsigned int)resized_image->width, (unsigned int)resized_image->height }, 0, graphics->GetContext());
 			first_mip->Release();
 
 			ID3D11ShaderResourceView* resource_view;
-			result = device->CreateShaderResourceView(_new_texture, nullptr, &resource_view);
+			result = graphics->GetDevice()->CreateShaderResourceView(_new_texture, nullptr, &resource_view);
 			if (FAILED(result)) {
 				_new_texture->Release();
 				return new_texture;
 			}
-			context->GenerateMips(resource_view);
+			graphics->GenerateMips(resource_view);
 			resource_view->Release();
 		}
 
 		new_texture = _new_texture;
+		if (!temporary){
+			graphics->AddInternalResource(new_texture);
+		}
 		return new_texture;
 	}
 
@@ -881,6 +644,57 @@ namespace ECSEngine {
 		return data;
 	}
 
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags)
+	{
+		DecodedTexture new_data = { { nullptr, 0 }, 0, 0, DXGI_FORMAT_FORCE_UINT };
+
+		DirectX::ScratchImage image;
+		SetInternalImageAllocator(&image, allocator);
+
+		HRESULT result;
+		DirectX::TexMetadata metadata;
+		if (extension == ECS_TEXTURE_EXTENSION_HDR) {
+			result = DirectX::LoadFromHDRMemory(data.buffer, data.size, &metadata, image);
+		}
+		else if (extension == ECS_TEXTURE_EXTENSION_TGA) {
+			result = DirectX::LoadFromTGAMemory(data.buffer, data.size, &metadata, image);
+		}
+		else {
+			DirectX::WIC_FLAGS wic_flags = DirectX::WIC_FLAGS_FORCE_RGB;
+			result = DirectX::LoadFromWICMemory(data.buffer, data.size, wic_flags, &metadata, image);
+		}
+
+		if (FAILED(result)) {
+			return new_data;
+		}
+
+		new_data.data = { image.GetPixels(), image.GetPixelsSize() };
+		new_data.format = metadata.format;
+		new_data.height = metadata.height;
+		new_data.width = metadata.width;
+		image.DetachPixels();
+		return new_data;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	DecodedTexture DecodeTexture(Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags)
+	{
+		Path extension = function::PathExtensionBoth(ToStream(filename));
+
+		if (function::CompareStrings(extension, ToStream(L".hdr"))) {
+			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_HDR, allocator, flags);
+		}
+		if (function::CompareStrings(extension, ToStream(L".tga"))) {
+			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_TGA, allocator, flags);
+		}
+
+		// The remaining textures don't matter exactly the type - they will all get mapped to the WIC path
+		return DecodeTexture(data, ECS_TEXTURE_EXTENSION_JPG, allocator, flags);
+	}
+
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void InvertMeshZAxis(Graphics* graphics, Mesh& mesh)
@@ -893,7 +707,7 @@ namespace ECSEngine {
 		// Inverts the z axis of a buffer and returns a new one
 		auto invert_z = [](Graphics* graphics, VertexBuffer buffer) {
 			// Create a staging one with its data
-			VertexBuffer staging = ToStaging(buffer);
+			VertexBuffer staging = BufferToStaging(graphics, buffer);
 
 			// Map the buffer
 			float3* data = (float3*)graphics->MapBuffer(staging.buffer, D3D11_MAP_READ_WRITE);
@@ -907,14 +721,22 @@ namespace ECSEngine {
 			D3D11_BUFFER_DESC buffer_descriptor;
 			buffer.buffer->GetDesc(&buffer_descriptor);
 
-			VertexBuffer new_buffer = graphics->CreateVertexBuffer(buffer.stride, buffer.size, data, buffer_descriptor.Usage, buffer_descriptor.CPUAccessFlags, buffer_descriptor.MiscFlags);
+			VertexBuffer new_buffer = graphics->CreateVertexBuffer(
+				buffer.stride,
+				buffer.size,
+				data, 
+				false, 
+				buffer_descriptor.Usage,
+				buffer_descriptor.CPUAccessFlags, 
+				buffer_descriptor.MiscFlags
+			);
 
 			// Unmap the buffer
 			graphics->UnmapBuffer(staging.buffer);
 
 			// Release the old one and the staging
-			buffer.buffer->Release();
-			staging.buffer->Release();
+			graphics->FreeResource(buffer);
+			staging.Release();
 
 			return new_buffer;
 		};
@@ -930,7 +752,7 @@ namespace ECSEngine {
 		}
 
 		// Invert the winding order
-		IndexBuffer staging_index = ToStaging(mesh.index_buffer);
+		IndexBuffer staging_index = BufferToStaging(graphics, mesh.index_buffer);
 
 		void* _indices = graphics->MapBuffer(staging_index.buffer, D3D11_MAP_READ_WRITE);
 
@@ -968,32 +790,111 @@ namespace ECSEngine {
 			}
 		}
 
-		IndexBuffer new_indices = graphics->CreateIndexBuffer(staging_index.int_size, staging_index.count, index_descriptor.Usage, index_descriptor.CPUAccessFlags);
+		IndexBuffer new_indices = graphics->CreateIndexBuffer(staging_index.int_size, staging_index.count, false, index_descriptor.Usage, index_descriptor.CPUAccessFlags);
 
 		// Release the old buffers
-		staging_index.buffer->Release();
-		mesh.index_buffer.buffer->Release();
+		staging_index.Release();
+		graphics->FreeResource(mesh.index_buffer);
 
 		mesh.index_buffer = new_indices;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	template<int index>
+	Vec32uc ECS_VECTORCALL ConvertSingleChannelTextureToGrayscaleSplat(Vec32uc samples) {
+		return permute32<index, index, index, V_DC, index + 1, index + 1, index + 1, V_DC, index + 2, index + 2, index + 2, V_DC, index + 3, index + 3, index + 3, V_DC,
+			index + 4, index + 4, index + 4, V_DC, index + 5, index + 5, index + 5, V_DC, index + 6, index + 6, index + 6, V_DC, index + 7, index + 7, index + 7, V_DC>(samples);
+	}
+
+	Vec32uc ECS_VECTORCALL ConvertSingleChannelTextureToGrayscaleBlend(Vec32uc values, Vec32uc alpha) {
+		return blend32<0, 1, 2, 35, 4, 5, 6, 39, 8, 9, 10, 43, 12, 13, 14, 47, 16, 17, 18, 51, 20, 21, 22, 55, 24, 25, 26, 59, 28, 29, 30, 63>(values, alpha);
+	}
+
+	Stream<Stream<void>> ConvertSingleChannelTextureToGrayscale(Stream<Stream<void>> mip_data, size_t width, size_t height, AllocatorPolymorphic allocator)
+	{
+		// First determine the total amount of memory needed to transform the mip maps
+		size_t total_data_size = 0;
+		for (size_t index = 0; index < mip_data.size; index++) {
+			total_data_size += mip_data[index].size * 4;
+		}
+
+		// Add the streams necessary to the allocation
+		total_data_size += sizeof(Stream<void>) * mip_data.size;
+
+		Stream<void>* streams = (Stream<void>*)AllocateEx(allocator, total_data_size);
+
+		uintptr_t buffer = (uintptr_t)streams;
+		buffer += sizeof(Stream<void>) * mip_data.size;
+
+		// Initialize the streams
+		for (size_t index = 0; index < mip_data.size; index++) {
+			streams[index].InitializeFromBuffer(buffer, mip_data[index].size * 4);
+		}
+
+		Vec32uc samples;
+		Vec32uc alpha(255);
+		// Now copy the data - use SIMD instructions
+		for (size_t index = 0; index < mip_data.size; index++) {
+			size_t width_times_height = width * height;
+			size_t steps = width_times_height / samples.size();
+			size_t remainder = width_times_height % samples.size();
+			if (remainder == 0) {
+				for (size_t step = 0; step < steps; step++) {
+					// Load the data into the register
+					samples.load(function::OffsetPointer(mip_data[index].buffer, samples.size() * step));
+
+					// Splat the values 8 at a time - but set the alpha to 255
+					Vec32uc splat0 = ConvertSingleChannelTextureToGrayscaleSplat<0>(samples);
+					Vec32uc splat1 = ConvertSingleChannelTextureToGrayscaleSplat<8>(samples);
+					Vec32uc splat2 = ConvertSingleChannelTextureToGrayscaleSplat<16>(samples);
+					Vec32uc splat3 = ConvertSingleChannelTextureToGrayscaleSplat<24>(samples);
+
+					// Blend with the alpha
+					Vec32uc values0 = ConvertSingleChannelTextureToGrayscaleBlend(splat0, alpha);
+					Vec32uc values1 = ConvertSingleChannelTextureToGrayscaleBlend(splat1, alpha);
+					Vec32uc values2 = ConvertSingleChannelTextureToGrayscaleBlend(splat2, alpha);
+					Vec32uc values3 = ConvertSingleChannelTextureToGrayscaleBlend(splat3, alpha);
+
+					void* base_pointer = function::OffsetPointer(streams[index].buffer, samples.size() * step * 4);
+					// Write the values
+					values0.store(base_pointer);
+					values1.store(function::OffsetPointer(base_pointer, samples.size()));
+					values2.store(function::OffsetPointer(base_pointer, samples.size() * 2));
+					values3.store(function::OffsetPointer(base_pointer, samples.size() * 3));
+				}
+			}
+			else {
+				// Scalar version
+				unsigned char* source_data = (unsigned char*)mip_data[index].buffer;
+				unsigned char* destination_data = (unsigned char*)streams[index].buffer;
+				for (size_t subindex = 0; subindex < mip_data[index].size; subindex++) {
+					size_t dest_offset = subindex * 4;
+					destination_data[dest_offset] = source_data[subindex];
+					destination_data[dest_offset + 1] = source_data[subindex];
+					destination_data[dest_offset + 2] = source_data[subindex];
+					// Alpha
+					destination_data[dest_offset + 3] = 255;
+				}
+			}
+		}
+
+		return { streams, mip_data.size };
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	TextureCube ConvertTexturesToCube(
+		Graphics* graphics,
 		Texture2D x_positive,
 		Texture2D x_negative, 
 		Texture2D y_positive,
 		Texture2D y_negative,  
 		Texture2D z_positive,
 		Texture2D z_negative,
-		GraphicsContext* context
+		bool temporary
 	)
 	{
-		GraphicsDevice* device = x_negative.GetDevice();
-		if (context == nullptr) {
-			device->GetImmediateContext(&context);
-		}
-
 		D3D11_TEXTURE2D_DESC texture_descriptor;
 		x_negative.tex->GetDesc(&texture_descriptor);
 
@@ -1002,10 +903,11 @@ namespace ECSEngine {
 		texture_descriptor.CPUAccessFlags = 0;
 		texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE | D3D11_RESOURCE_MISC_GENERATE_MIPS;
 		ID3D11Texture2D* texture = nullptr;
-		HRESULT result = device->CreateTexture2D(&texture_descriptor, nullptr, &texture);
+		HRESULT result = graphics->GetDevice()->CreateTexture2D(&texture_descriptor, nullptr, &texture);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting textures to cube textures failed.", true);
 		TextureCube cube_texture(texture);
 
+		GraphicsContext* context = graphics->GetContext();
 		// For every mip, copy the mip into the corresponding array resource
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
 			CopyGraphicsResource(cube_texture, x_negative, ECS_TEXTURE_CUBE_X_NEG, context, index);
@@ -1016,17 +918,20 @@ namespace ECSEngine {
 			CopyGraphicsResource(cube_texture, z_positive, ECS_TEXTURE_CUBE_Z_POS, context, index);
 		}
 
+		if (!temporary) {
+			graphics->AddInternalResource(cube_texture);
+		}
 		return cube_texture;
 	}
 
-	TextureCube ConvertTexturesToCube(const Texture2D* textures, GraphicsContext* context)
+	TextureCube ConvertTexturesToCube(Graphics* graphics, const Texture2D* textures, bool temporary)
 	{
-		return ConvertTexturesToCube(textures[0], textures[1], textures[2], textures[3], textures[4], textures[5], context);
+		return ConvertTexturesToCube(graphics, textures[0], textures[1], textures[2], textures[3], textures[4], textures[5], temporary);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	TextureCube ConvertTextureToCube(ResourceView texture_view, Graphics* graphics, DXGI_FORMAT cube_format, uint2 face_size)
+	TextureCube ConvertTextureToCube(Graphics* graphics, ResourceView texture_view, DXGI_FORMAT cube_format, uint2 face_size, bool temporary)
 	{
 		TextureCube cube;
 		
@@ -1040,15 +945,15 @@ namespace ECSEngine {
 		Texture2D cube_textures[6];
 		RenderTargetView render_views[6];
 		for (size_t index = 0; index < 6; index++) {
-			cube_textures[index] = graphics->CreateTexture(&texture_descriptor);
-			render_views[index] = graphics->CreateRenderTargetView(cube_textures[index]);
+			cube_textures[index] = graphics->CreateTexture(&texture_descriptor, true);
+			render_views[index] = graphics->CreateRenderTargetView(cube_textures[index], 0, true);
 		}
 
 		// Generate a unit cube vertex buffer - a cube is needed instead of a rectangle because it will be rotated
 		// by the look at matrix
 		VertexBuffer vertex_buffer;
 		IndexBuffer index_buffer;
-		CreateCubeVertexBuffer(graphics, 0.5f, vertex_buffer, index_buffer);
+		CreateCubeVertexBuffer(graphics, 0.5f, vertex_buffer, index_buffer, true);
 
 		// Bind a nullptr depth stencil view - remove depth
 		RenderTargetView current_render_view = graphics->GetBoundRenderTarget();
@@ -1063,7 +968,7 @@ namespace ECSEngine {
 
 		Matrix projection_matrix = ProjectionMatrixTextureCube();
 		
-		ConstantBuffer vertex_constants = graphics->CreateConstantBuffer(sizeof(Matrix));
+		ConstantBuffer vertex_constants = graphics->CreateConstantBuffer(sizeof(Matrix), true);
 		graphics->BindVertexConstantBuffer(vertex_constants);
 		GraphicsViewport cube_viewport = { 0.0f, 0.0f, face_size.x, face_size.y, 0.0f, 1.0f };
 		graphics->BindViewport(cube_viewport);
@@ -1083,16 +988,17 @@ namespace ECSEngine {
 		graphics->BindRenderTargetView(current_render_view, current_depth_view);
 		graphics->BindViewport(current_viewport);
 
-		cube = ConvertTexturesToCube(cube_textures, graphics->GetContext());
-		ResourceView cube_view = graphics->CreateTextureShaderViewResource(cube);
+		cube = ConvertTexturesToCube(graphics, cube_textures, temporary);
+		ResourceView cube_view = graphics->CreateTextureShaderViewResource(cube, true);
 		graphics->GenerateMips(cube_view);
-		cube_view.view->Release();
+		cube_view.Release();
 
-		vertex_buffer.buffer->Release();
-		index_buffer.buffer->Release();
-		vertex_constants.buffer->Release();
+		vertex_buffer.Release();
+		index_buffer.Release();
+		vertex_constants.Release();
 		for (size_t index = 0; index < 6; index++) {
-			ReleaseRenderView(render_views[index]);
+			render_views[index].Release();
+			cube_textures[index].Release();
 		}
 
 		return cube;
@@ -1105,18 +1011,17 @@ namespace ECSEngine {
 		uint2 dimensions = { 0,0 };
 
 		Stream<wchar_t> path = ToStream(filename);
-		Path2 extensions = function::PathExtensionBoth(path);
+		Path extension = function::PathExtensionBoth(path);
 
-		if (extensions.absolute.size == 0 && extensions.relative.size == 0) {
+		if (extension.size == 0) {
 			return dimensions;
 		}
-		Stream<wchar_t> valid_extension = function::GetValidPath(extensions);
 
 		bool is_tga = false;
 		bool is_hdr = false;
 
-		is_tga = function::CompareStrings(valid_extension, ToStream(L".tga"));
-		is_hdr = function::CompareStrings(valid_extension, ToStream(L".hdr"));
+		is_tga = function::CompareStrings(extension, ToStream(L".tga"));
+		is_hdr = function::CompareStrings(extension, ToStream(L".hdr"));
 
 		DirectX::TexMetadata metadata;
 		HRESULT result;

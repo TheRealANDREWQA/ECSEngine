@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "Game.h"
 #include "..\Editor\EditorState.h"
 #include "ToolbarUI.h"
@@ -21,14 +22,13 @@ struct GameData {
 	unsigned int active_camera;
 };
 
-template<bool initialize>
-void GameWindowDraw(void* window_data, void* drawer_descriptor) {
+void GameWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	GameData* data = (GameData*)window_data;
 	EDITOR_STATE(data->editor_state);
 
-	if constexpr (!initialize) {
+	if (!initialize) {
 		drawer.system->SetSprite(drawer.dockspace, drawer.border_index, *viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
 	}
 }
@@ -67,8 +67,7 @@ void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state,
 	memset(game_data, 0, sizeof(*game_data));
 	game_data->editor_state = editor_state;
 
-	descriptor.draw = GameWindowDraw<false>;
-	descriptor.initialize = GameWindowDraw<true>;
+	descriptor.draw = GameWindowDraw;
 
 	descriptor.window_name = GAME_WINDOW_NAME;
 	descriptor.window_data = game_data;
@@ -91,5 +90,5 @@ unsigned int CreateGameWindow(EditorState* editor_state) {
 	float window_size_y = 0.7f;
 	float2 window_size = ui_system->GetSquareScale(window_size_y);
 
-	return CreateDefaultWindow(GAME_WINDOW_NAME, editor_state, window_size, GameWindowDraw<false>, GameWindowDraw<true>);
+	return CreateDefaultWindow(GAME_WINDOW_NAME, editor_state, window_size, GameWindowDraw);
 }

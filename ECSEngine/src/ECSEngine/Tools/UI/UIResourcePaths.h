@@ -34,3 +34,5 @@
 #define ECS_TOOLS_UI_TEXTURE_MINUS L"Resources/Minus.png"
 #define ECS_TOOLS_UI_TEXTURE_HORIZONTAL_DOTS L"Resources/HorizontalDots.png"
 #define ECS_TOOLS_UI_TEXTURE_VERTICAL_DOTS L"Resources/VerticalDots.png"
+#define ECS_TOOLS_UI_TEXTURE_LOCKED_PADLOCK L"Resources/LockedPadlock.png"
+#define ECS_TOOLS_UI_TEXTURE_UNLOCKED_PADLOCK L"Resources/UnlockedPadlock.png"

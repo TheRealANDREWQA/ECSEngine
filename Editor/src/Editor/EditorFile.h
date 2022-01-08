@@ -1,5 +1,6 @@
 #pragma once
 #include "EditorParameters.h"
+#include "editorpch.h"
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;

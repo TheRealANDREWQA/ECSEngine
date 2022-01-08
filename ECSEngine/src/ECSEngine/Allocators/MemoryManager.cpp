@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "MemoryManager.h"
 #include "../Utilities/Assert.h"
+#include "../Utilities/Function.h"
 
 #ifndef ECS_GLOBAL_MANAGER_SIZE
 #define ECS_GLOBAL_MANAGER_SIZE 8
@@ -16,8 +17,6 @@ namespace ECSEngine {
 
 	GlobalMemoryManager::GlobalMemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size) : m_allocator_count(0) {
 		m_allocators = new MultipoolAllocator[ECS_GLOBAL_MANAGER_SIZE];
-		m_buffers = new void* [ECS_GLOBAL_MANAGER_SIZE];
-		m_buffers_capacity = new size_t[ECS_GLOBAL_MANAGER_SIZE];
 		m_new_allocation_size = new_allocation_size;
 		m_maximum_pool_count = maximum_pool_count;
 		CreateAllocator(size, maximum_pool_count);
@@ -25,9 +24,8 @@ namespace ECSEngine {
 
 	void GlobalMemoryManager::CreateAllocator(size_t size, size_t maximum_pool_count) {
 		ECS_ASSERT(m_allocator_count < ECS_GLOBAL_MANAGER_SIZE);
-		m_buffers[m_allocator_count] = (void*) (new unsigned char[MultipoolAllocator::MemoryOf(maximum_pool_count, size)]);
-		m_buffers_capacity[m_allocator_count] = size;
-		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)m_buffers[m_allocator_count], size, maximum_pool_count);
+		void* allocation = (void*) (new unsigned char[MultipoolAllocator::MemoryOf(maximum_pool_count, size)]);
+		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)allocation, size, maximum_pool_count);
 		m_allocator_count++;
 	}
 
@@ -38,8 +36,6 @@ namespace ECSEngine {
 				delete[] m_allocators[index].GetAllocatedBuffer();
 				m_allocator_count--;
 				m_allocators[index] = m_allocators[m_allocator_count];
-				m_buffers[index] = m_buffers[m_allocator_count];
-				m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
 				index--;
 			}
 		}
@@ -47,9 +43,10 @@ namespace ECSEngine {
 
 	void GlobalMemoryManager::ReleaseResources()
 	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			delete[] m_allocators[index].GetAllocatedBuffer();
+		}
 		delete[] m_allocators;
-		delete[] m_buffers_capacity;
-		delete[] m_buffers;
 	}
 
 	void* GlobalMemoryManager::Allocate(size_t size, size_t alignment) {
@@ -66,14 +63,14 @@ namespace ECSEngine {
 	template<bool trigger_error_if_not_found>
 	void GlobalMemoryManager::Deallocate(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			if (m_buffers[index] <= block && (void*)((uintptr_t)m_buffers[index] + m_buffers_capacity[index]) > block) {
+			const void* buffer = m_allocators[index].GetAllocatedBuffer();
+			size_t capacity = m_allocators[index].GetSize();
+			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
 				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
 					delete[] m_allocators[index].GetAllocatedBuffer();
 					m_allocator_count--;
 					m_allocators[index] = m_allocators[m_allocator_count];
-					m_buffers[index] = m_buffers[m_allocator_count];
-					m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
 				}
 				return;
 			}
@@ -103,7 +100,9 @@ namespace ECSEngine {
 	template<bool trigger_error_if_not_found>
 	void GlobalMemoryManager::Deallocate_ts(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			if (m_buffers[index] <= block && (void*)((uintptr_t)m_buffers[index] + m_buffers_capacity[index]) > block) {
+			const void* buffer = m_allocators[index].GetAllocatedBuffer();
+			size_t capacity = m_allocators[index].GetSize();
+			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
 				m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
 				return;
 			}
@@ -117,12 +116,12 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------- Memory Manager ---------------------------------------------------
 
+	MemoryManager::MemoryManager() : m_backup(nullptr), m_allocators(nullptr), m_new_allocation_size(0), m_maximum_pool_count(0), m_allocator_count(0) {}
+
 	MemoryManager::MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, GlobalMemoryManager* backup) : m_allocator_count(0) {
 		m_backup = backup;
 		void* allocation = backup->Allocate((sizeof(MultipoolAllocator) + sizeof(void*) + sizeof(size_t)) * ECS_MEMORY_MANAGER_SIZE, alignof(MultipoolAllocator));
 		m_allocators = (MultipoolAllocator*)allocation;
-		m_buffers = (void**)((uintptr_t)allocation + sizeof(MultipoolAllocator) * ECS_MEMORY_MANAGER_SIZE);
-		m_buffers_capacity = (size_t*)((uintptr_t)m_buffers + sizeof(void*) * ECS_MEMORY_MANAGER_SIZE);
 		m_new_allocation_size = new_allocation_size;
 		m_maximum_pool_count = maximum_pool_count;
 		CreateAllocator(size, maximum_pool_count);
@@ -130,16 +129,15 @@ namespace ECSEngine {
 
 	void MemoryManager::Free() {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			m_backup->Deallocate(m_buffers[index]);
+			m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
 		}
 		m_backup->Deallocate((void*)m_allocators);
 	}
 
 	void MemoryManager::CreateAllocator(size_t size, size_t maximum_pool_count) {
 		ECS_ASSERT(m_allocator_count < ECS_MEMORY_MANAGER_SIZE);
-		m_buffers[m_allocator_count] = m_backup->Allocate(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
-		m_buffers_capacity[m_allocator_count] = size;
-		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)m_buffers[m_allocator_count], size, maximum_pool_count);
+		void* allocation = m_backup->Allocate(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
+		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)allocation, size, maximum_pool_count);
 		m_allocator_count++;
 	}
 
@@ -157,14 +155,14 @@ namespace ECSEngine {
 	template<bool trigger_error_if_not_found>
 	void MemoryManager::Deallocate(const void* block) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			if (m_buffers[index] <= block && (void*)((uintptr_t)m_buffers[index] + m_buffers_capacity[index]) > block) {
+			const void* buffer = m_allocators[index].GetAllocatedBuffer();
+			size_t capacity = m_allocators[index].GetSize();
+			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
 				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
 					m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
 					m_allocator_count--;
 					m_allocators[index] = m_allocators[m_allocator_count];
-					m_buffers[index] = m_buffers[m_allocator_count];
-					m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
 				}
 				return;
 			}
@@ -175,10 +173,6 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryManager::Deallocate, const void*);
-
-	void MemoryManager::SetDebugBuffer(void* buffer, unsigned int group_count) {
-		m_allocators[group_count].SetDebugBuffer((unsigned int*)buffer);
-	}
 
 	void MemoryManager::Lock()
 	{
@@ -197,8 +191,6 @@ namespace ECSEngine {
 				m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
 				m_allocator_count--;
 				m_allocators[index] = m_allocators[m_allocator_count];
-				m_buffers[index] = m_buffers[m_allocator_count];
-				m_buffers_capacity[index] = m_buffers_capacity[m_allocator_count];
 				index--;
 			}
 		}
@@ -207,8 +199,8 @@ namespace ECSEngine {
 	// ---------------------- Thread safe variants -----------------------------
 
 	void* MemoryManager::Allocate_ts(size_t size, size_t alignment) {
-		for (int i = 0; i < m_allocator_count; i++) {
-			void* allocation = m_allocators[i].Allocate_ts(size, alignment);
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			void* allocation = m_allocators[index].Allocate_ts(size, alignment);
 			if (allocation != nullptr)
 				return allocation;
 		}
@@ -221,9 +213,11 @@ namespace ECSEngine {
 
 	template<bool trigger_error_if_not_found>
 	void MemoryManager::Deallocate_ts(const void* block) {
-		for (int i = 0; i < m_allocator_count; i++) {
-			if (m_buffers[i] <= block && (void*)((uintptr_t)m_buffers[i] + m_buffers_capacity[i]) > block) {
-				m_allocators[i].Deallocate_ts<trigger_error_if_not_found>(block);
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			const void* buffer = m_allocators[index].GetAllocatedBuffer();
+			size_t capacity = m_allocators[index].GetSize();
+			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
+				m_allocators[index].Deallocate_ts<trigger_error_if_not_found>(block);
 				return;
 			}
 		}

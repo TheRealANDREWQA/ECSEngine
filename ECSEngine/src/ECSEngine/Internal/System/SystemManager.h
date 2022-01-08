@@ -14,6 +14,8 @@ namespace ECSEngine {
 
 	ECS_CONTAINERS;
 
+	ECSENGINE_API MemoryManager DefaultSystemManagerAllocator(GlobalMemoryManager* global_manager);
+
 	struct ECSENGINE_API System {
 		Stream<ThreadTask> tasks;
 		const char* name;

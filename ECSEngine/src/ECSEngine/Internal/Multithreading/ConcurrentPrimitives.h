@@ -34,6 +34,8 @@ namespace ECSEngine {
 		
 		void unlock();
 
+		bool is_locked() const;
+
 		std::atomic<bool> value = { 0 };
 	};
 

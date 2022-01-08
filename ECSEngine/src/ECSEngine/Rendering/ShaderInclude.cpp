@@ -3,6 +3,8 @@
 #include "../Utilities/File.h"
 #include "../Utilities/Function.h"
 #include "../Utilities/Path.h"
+#include "../Allocators/AllocatorPolymorphic.h"
+#include "../Utilities/ForEachFiles.h"
 
 ECS_CONTAINERS;
 
@@ -35,24 +37,19 @@ namespace ECSEngine {
 		SearchData search_data = { data_pointer, byte_pointer, memory, include_filename };
 
 		// Search every directory for that file
-		auto search_file = [](const std::filesystem::path& path, void* _data) {
+		auto search_file = [](const wchar_t* path, void* _data) {
 			SearchData* data = (SearchData*)_data;
 
-			Stream<wchar_t> current_path = ToStream(path.c_str());
+			Stream<wchar_t> current_path = ToStream(path);
 			Stream<wchar_t> current_filename = function::PathFilename(current_path);
 
 			if (function::CompareStrings(current_filename, data->include_filename)) {
-				std::ifstream stream(std::wstring(current_path.buffer, current_path.buffer + current_path.size));
-				if (stream.good()) {
-					size_t file_size = function::GetFileByteSize(stream);
-					void* allocation = data->manager->Allocate_ts(file_size);
-					stream.read((char*)allocation, file_size);
-					size_t read_count = stream.gcount();
-
-					*data->data_pointer = allocation;
-					*data->byte_pointer = read_count;
-					return false;
+				Stream<char> file_data = ReadWholeFileText(current_path, GetAllocatorPolymorphic(data->manager, AllocationType::MultiThreaded));
+				if (file_data.buffer != nullptr) {
+					*data->byte_pointer = file_data.size;
+					*data->data_pointer = file_data.buffer;
 				}
+				return false;
 			}
 			return true;
 		};

@@ -4,6 +4,8 @@
 #include "../../Utilities/Function.h"
 #include "../GraphicsHelpers.h"
 #include "../../Utilities/Path.h"
+#include "../../Allocators/AllocatorPolymorphic.h"
+#include "../Graphics.h"
 
 namespace ECSEngine {
 
@@ -87,8 +89,23 @@ namespace ECSEngine {
 		return (DirectX::TEX_COMPRESS_FLAGS)((unsigned int)initial | ((unsigned int)flag * state));
 	}
 
+	DirectX::TEX_COMPRESS_FLAGS GetCompressionFlag(size_t flags) {
+		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
+		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, function::HasFlag(flags, ECS_TEXTURE_COMPRESSION_DISABLE_PERCEPTUAL_WEIGHTING));
+		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_PARALLEL, !function::HasFlag(flags, ECS_TEXTURE_COMPRESS_DISABLE_MULTICORE));
+		return compress_flag;
+	}
+
 	template<typename void (*LockFunction)(SpinLock*), typename void (*UnlockFunction)(SpinLock*)>
-	bool CompressTextureImplementation(Texture2D& texture, TextureCompression compression_type, SpinLock* spin_lock, size_t flags, CapacityStream<char>* error_message) {
+	bool CompressTextureImplementation(
+		Graphics* graphics,
+		Texture2D& texture, 
+		TextureCompression compression_type, 
+		SpinLock* spin_lock,
+		AllocatorPolymorphic allocator,
+		size_t flags,
+		CapacityStream<char>* error_message
+	) {
 		// Get the texture descriptor and fill the DirectX image
 		D3D11_TEXTURE2D_DESC texture_descriptor;
 		texture.tex->GetDesc(&texture_descriptor);
@@ -106,9 +123,11 @@ namespace ECSEngine {
 		}
 
 		DirectX::ScratchImage initial_image;
+		SetInternalImageAllocator(&initial_image, allocator);
+
 		initial_image.Initialize2D(texture_descriptor.Format, texture_descriptor.Width, texture_descriptor.Height, texture_descriptor.ArraySize, texture_descriptor.MipLevels);
 		DXGI_FORMAT compressed_format;
-		if (function::HasFlag(flags, ECS_COMPRESS_TEXTURE_SRGB)) {
+		if (function::HasFlag(flags, ECS_TEXTURE_COMPRESS_SRGB)) {
 			compressed_format = COMPRESSED_FORMATS_SRGB[(unsigned int)compression_type];
 		}
 		else {
@@ -116,20 +135,17 @@ namespace ECSEngine {
 		}
 		DirectX::ScratchImage final_image;
 
-		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
-		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, function::HasFlag(flags, ECS_TEXTURE_COMPRESSION_DISABLE_PERCEPTUAL_WEIGHTING));
+		DirectX::TEX_COMPRESS_FLAGS compress_flag = GetCompressionFlag(flags);
 
-		GraphicsDevice* device = nullptr;
-		texture.tex->GetDevice(&device);
-		GraphicsContext* context = nullptr;
-		device->GetImmediateContext(&context);
+		GraphicsDevice* device = graphics->m_device;
+		GraphicsContext* context = graphics->m_context;
 
 		D3D11_MAPPED_SUBRESOURCE mapping;
 
 		// Create a staging resource that will copy the original texture and map every mip level
 		// For compression
 		LockFunction(spin_lock);
-		Texture2D staging_texture = ToStaging(texture);
+		Texture2D staging_texture = TextureToStaging(graphics, texture);
 		if (staging_texture.tex == nullptr) {
 			SetErrorMessage(error_message, "Failed compressing a texture. Could not create staging texture.");
 			UnlockFunction(spin_lock);
@@ -168,7 +184,7 @@ namespace ECSEngine {
 				initial_image.GetImageCount(),
 				initial_image.GetMetadata(),
 				compressed_format,
-				compress_flag | DirectX::TEX_COMPRESS_PARALLEL,
+				compress_flag,
 				DirectX::TEX_THRESHOLD_DEFAULT,
 				final_image
 			);
@@ -205,7 +221,9 @@ namespace ECSEngine {
 
 		ID3D11Texture2D* old_texture = texture.tex;
 		texture_descriptor.Format = compressed_format;
-		texture_descriptor.BindFlags = function::ClearFlag(texture_descriptor.BindFlags, D3D11_BIND_RENDER_TARGET);
+		if (!function::HasFlag(flags, ECS_TEXTURE_COMPRESS_BIND_RENDER_TARGET)) {
+			texture_descriptor.BindFlags = function::ClearFlag(texture_descriptor.BindFlags, D3D11_BIND_RENDER_TARGET);
+		}
 		texture_descriptor.MiscFlags = function::ClearFlag(texture_descriptor.MiscFlags, D3D11_RESOURCE_MISC_GENERATE_MIPS);
 		result = device->CreateTexture2D(&texture_descriptor, new_texture_data, &texture.tex);
 		if (FAILED(result)) {
@@ -214,8 +232,10 @@ namespace ECSEngine {
 		}
 
 		// Release the staging texture
-		unsigned int __count = staging_texture.tex->Release();
-		unsigned int _count = old_texture->Release();
+		staging_texture.Release();
+		old_texture->Release();
+		graphics->RemovePossibleResourceFromTracking(old_texture);
+		graphics->AddInternalResource(texture);
 
 		return true;
 	}
@@ -232,22 +252,46 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	bool CompressTexture(Texture2D& texture, TextureCompression compression_type, size_t flags, CapacityStream<char>* error_message) {
-		return CompressTextureImplementation<NothingSpinLock, NothingSpinLock>(texture, compression_type, nullptr, flags, error_message);
+	bool CompressTexture(
+		Graphics* graphics, 
+		Texture2D& texture, 
+		TextureCompression compression_type,
+		AllocatorPolymorphic allocator,
+		size_t flags,
+		CapacityStream<char>* error_message
+	) {
+		return CompressTextureImplementation<NothingSpinLock, NothingSpinLock>(graphics, texture, compression_type, nullptr, allocator, flags, error_message);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	bool CompressTexture(Texture2D& texture, TextureCompression compression_type, SpinLock* spin_lock, size_t flags, CapacityStream<char>* error_message) {
-		return CompressTextureImplementation<LockSpinLock, UnlockSpinLock>(texture, compression_type, spin_lock, flags, error_message);
+	bool CompressTexture(
+		Graphics* graphics,
+		Texture2D& texture,
+		TextureCompression compression_type,
+		SpinLock* spin_lock, 
+		AllocatorPolymorphic allocator,
+		size_t flags,
+		CapacityStream<char>* error_message
+	) {
+		return CompressTextureImplementation<LockSpinLock, UnlockSpinLock>(graphics, texture, compression_type, spin_lock, allocator, flags, error_message);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, size_t flags, CapacityStream<char>* error_message) {
+	bool CompressTexture(
+		Graphics* graphics,
+		Texture2D& texture, 
+		TextureCompressionExplicit explicit_compression_type, 
+		AllocatorPolymorphic allocator, 
+		size_t flags, 
+		CapacityStream<char>* error_message
+	) {
 		return CompressTexture(
+			graphics,
 			texture, 
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
+			allocator,
 			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type],
 			error_message
 		);
@@ -255,11 +299,21 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
-	bool CompressTexture(Texture2D& texture, TextureCompressionExplicit explicit_compression_type, SpinLock* spin_lock, size_t flags, CapacityStream<char>* error_message) {
+	bool CompressTexture(
+		Graphics* graphics,
+		Texture2D& texture, 
+		TextureCompressionExplicit explicit_compression_type, 
+		SpinLock* spin_lock,
+		AllocatorPolymorphic allocator,
+		size_t flags,
+		CapacityStream<char>* error_message
+	) {
 		return CompressTexture(
+			graphics,
 			texture,
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)explicit_compression_type], 
 			spin_lock, 
+			allocator,
 			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)explicit_compression_type], 
 			error_message
 		);
@@ -268,11 +322,12 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
 	Texture2D CompressTexture(
-		GraphicsDevice* device,
+		Graphics* graphics,
 		Stream<Stream<void>> data,
 		size_t width, 
 		size_t height, 
 		TextureCompression compression_type, 
+		AllocatorPolymorphic allocator,
 		size_t flags,
 		CapacityStream<char>* error_message
 	)
@@ -286,6 +341,9 @@ namespace ECSEngine {
 		}
 		else if (compression_type == TextureCompression::BC5) {
 			texture_format = DXGI_FORMAT_R8G8_UNORM;
+		}
+		else if (compression_type == TextureCompression::BC6) {
+			texture_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		}
 
 		// Check if the compression type conforms to the range
@@ -301,16 +359,19 @@ namespace ECSEngine {
 		}
 
 		DirectX::ScratchImage initial_image;
+		SetInternalImageAllocator(&initial_image, allocator);
+
 		initial_image.Initialize2D(texture_format, width, height, 1, data.size);
 		DXGI_FORMAT compressed_format = COMPRESSED_FORMATS[(unsigned int)compression_type];
 		DirectX::ScratchImage final_image;
+		SetInternalImageAllocator(&final_image, allocator);
 
-		DirectX::TEX_COMPRESS_FLAGS compress_flag = DirectX::TEX_COMPRESS_DEFAULT;
-		compress_flag = AddCompressionFlag(compress_flag, DirectX::TEX_COMPRESS_UNIFORM, function::HasFlag(flags, ECS_TEXTURE_COMPRESSION_DISABLE_PERCEPTUAL_WEIGHTING));
+		DirectX::TEX_COMPRESS_FLAGS compress_flag = GetCompressionFlag(flags);
 
 		for (size_t index = 0; index < data.size; index++) {
 			const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
-			if (image->rowPitch == data[index].size) {
+			size_t row_pitch = data[index].size / image->height;
+			if (image->rowPitch == row_pitch) {
 				memcpy(image->pixels, data[index].buffer, image->rowPitch * image->height);
 			}
 			else {
@@ -319,7 +380,7 @@ namespace ECSEngine {
 				for (size_t subindex = 0; subindex < image->height; subindex++) {
 					memcpy(function::OffsetPointer(image->pixels, offset), function::OffsetPointer(data[index].buffer, mapping_offset), image->rowPitch);
 					offset += image->rowPitch;
-					mapping_offset += data[index].size;
+					mapping_offset += row_pitch;
 				}
 			}
 		}
@@ -329,7 +390,7 @@ namespace ECSEngine {
 			initial_image.GetImageCount(),
 			initial_image.GetMetadata(),
 			compressed_format,
-			compress_flag | DirectX::TEX_COMPRESS_PARALLEL,
+			compress_flag,
 			DirectX::TEX_THRESHOLD_DEFAULT,
 			final_image
 		);
@@ -347,17 +408,15 @@ namespace ECSEngine {
 			new_texture_data[index].SysMemSlicePitch = image->slicePitch;
 		}
 
-		D3D11_TEXTURE2D_DESC texture_descriptor = { 0 };
-		texture_descriptor.Usage = D3D11_USAGE_DEFAULT;
-		texture_descriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-		texture_descriptor.Format = compressed_format;
-		texture_descriptor.Width = width;
-		texture_descriptor.Height = height;
-		texture_descriptor.MipLevels = data.size;
-		texture_descriptor.ArraySize = 1;
-		texture_descriptor.CPUAccessFlags = 0;
-		result = device->CreateTexture2D(&texture_descriptor, new_texture_data, &texture_result.tex);
-		if (FAILED(result)) {
+		GraphicsTexture2DDescriptor descriptor;
+		descriptor.bind_flag = D3D11_BIND_SHADER_RESOURCE;
+		descriptor.format = compressed_format;
+		descriptor.usage = D3D11_USAGE_DEFAULT;
+		descriptor.size = { (unsigned int)width, (unsigned int)height };
+		descriptor.mip_levels = data.size;
+
+		texture_result = graphics->CreateTexture(&descriptor);
+		if (texture_result.tex == nullptr) {
 			SetErrorMessage(error_message, "Creating final texture after compression failed.");
 			return texture_result;
 		}
@@ -368,23 +427,143 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------------
 
 	Texture2D CompressTexture(
-		GraphicsDevice* device,
+		Graphics* graphics,
 		Stream<Stream<void>> data, 
 		size_t width, 
 		size_t height, 
 		TextureCompressionExplicit compression_type,
+		AllocatorPolymorphic allocator,
 		size_t flags,
 		CapacityStream<char>* error_message
 	)
 	{
 		return CompressTexture(
-			device, 
+			graphics, 
 			data,
 			width, 
 			height,
 			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression_type], 
+			allocator,
 			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type],
-			nullptr
+			error_message
+		);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	Stream<Stream<void>> CompressTexture(
+		Stream<Stream<void>> data, 
+		size_t width,
+		size_t height, 
+		TextureCompression compression_type, 
+		AllocatorPolymorphic allocator, 
+		size_t flags, 
+		CapacityStream<char>* error_message
+	)
+	{
+		Stream<Stream<void>> compressed_data = { nullptr, 0 };
+		
+		// Get the texture descriptor and fill the DirectX image
+		DXGI_FORMAT texture_format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		if (compression_type == TextureCompression::BC4) {
+			texture_format = DXGI_FORMAT_R8_UNORM;
+		}
+		else if (compression_type == TextureCompression::BC5) {
+			texture_format = DXGI_FORMAT_R8G8_UNORM;
+		}
+		else if (compression_type == TextureCompression::BC6) {
+			texture_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		}
+
+		// Check if the compression type conforms to the range
+		if ((unsigned int)compression_type > (unsigned int)TextureCompression::BC5) {
+			SetErrorMessage(error_message, "Incorrect compression type - out of range.");
+			return compressed_data;
+		}
+
+		// Check to see that the dimensions are multiple of 4
+		if ((width & 3) != 0 || (height & 3) != 0) {
+			SetErrorMessage(error_message, "Cannot compress textures that do not have dimensions multiple of 4.");
+			return compressed_data;
+		}
+
+		DirectX::ScratchImage initial_image;
+		SetInternalImageAllocator(&initial_image, allocator);
+
+		initial_image.Initialize2D(texture_format, width, height, 1, data.size);
+		DXGI_FORMAT compressed_format = COMPRESSED_FORMATS[(unsigned int)compression_type];
+		DirectX::ScratchImage final_image;
+		SetInternalImageAllocator(&final_image, allocator);
+
+		DirectX::TEX_COMPRESS_FLAGS compress_flag = GetCompressionFlag(flags);
+
+		for (size_t index = 0; index < data.size; index++) {
+			const DirectX::Image* image = initial_image.GetImage(index, 0, 0);
+			size_t row_pitch = data[index].size / image->height;
+			if (image->rowPitch == row_pitch) {
+				memcpy(image->pixels, data[index].buffer, image->rowPitch * image->height);
+			}
+			else {
+				size_t offset = 0;
+				size_t mapping_offset = 0;
+				for (size_t subindex = 0; subindex < image->height; subindex++) {
+					memcpy(function::OffsetPointer(image->pixels, offset), function::OffsetPointer(data[index].buffer, mapping_offset), image->rowPitch);
+					offset += image->rowPitch;
+					mapping_offset += row_pitch;
+				}
+			}
+		}
+
+		HRESULT result = DirectX::Compress(
+			initial_image.GetImages(),
+			initial_image.GetImageCount(),
+			initial_image.GetMetadata(),
+			compressed_format,
+			compress_flag,
+			DirectX::TEX_THRESHOLD_DEFAULT,
+			final_image
+		);
+
+		if (FAILED(result)) {
+			SetErrorMessage(error_message, "Texture compression failed during codec.");
+			return compressed_data;
+		}
+
+		Stream<void>* streams = (Stream<void>*)Allocate(allocator, sizeof(Stream<void>) * data.size + final_image.GetPixelsSize());
+		uintptr_t ptr = (uintptr_t)streams;
+		ptr += sizeof(Stream<void>) * data.size;
+
+		for (size_t index = 0; index < data.size; index++) {
+			const DirectX::Image* image = final_image.GetImage(index, 0, 0);
+			// The row pitch must be divided by 4 because the function returns the byte count of 4 scanlines - not for a single one
+			streams[index] = { image->pixels, image->rowPitch * height };
+		}
+
+		final_image.DetachPixels();
+		compressed_data = { streams, data.size };
+		return compressed_data;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	Stream<Stream<void>> CompressTexture(
+		Stream<Stream<void>> data,
+		size_t width,
+		size_t height, 
+		TextureCompressionExplicit compression_type,
+		AllocatorPolymorphic allocator, 
+		size_t flags, 
+		CapacityStream<char>* error_message
+	)
+	{
+		return CompressTexture(
+			data,
+			width,
+			height,
+			EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression_type],
+			allocator,
+			flags | EXPLICIT_COMPRESSION_FLAGS[(unsigned int)compression_type],
+			error_message
 		);
 	}
 
@@ -393,23 +572,17 @@ namespace ECSEngine {
 	TextureCompressionExplicit GetTextureCompressionType(const wchar_t* texture)
 	{
 		Stream<wchar_t> path = ToStream(texture);
-		Path2 extensions = function::PathExtensionBoth(path);
+		Path extension = function::PathExtensionBoth(path);
 
 		// Fail
-		if (extensions.absolute.size == 0 && extensions.relative.size == 0) {
+		if (extension.size == 0) {
 			return (TextureCompressionExplicit)-1;
 		}
 
 		bool is_hdr = false;
 		bool is_tga = false;
-		if (extensions.absolute.size > 0) {
-			is_hdr = function::CompareStrings(extensions.absolute, ToStream(L".hdr"));
-			is_tga = function::CompareStrings(extensions.absolute, ToStream(L".tga"));
-		}
-		else {
-			is_hdr = function::CompareStrings(extensions.relative, ToStream(L".hdr"));
-			is_tga = function::CompareStrings(extensions.relative, ToStream(L".tga"));
-		}
+		is_hdr = function::CompareStrings(extension, ToStream(L".hdr"));
+		is_tga = function::CompareStrings(extension, ToStream(L".tga"));
 
 		if (is_hdr) {
 			return TextureCompressionExplicit::HDRMap;
@@ -448,6 +621,29 @@ namespace ECSEngine {
 			return TextureCompressionExplicit::HDRMap;
 		}
 		return (TextureCompressionExplicit)-1;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	DXGI_FORMAT GetCompressedRenderFormat(TextureCompression compression, bool srgb)
+	{
+		DXGI_FORMAT compressed_format;
+
+		if (srgb) {
+			compressed_format = COMPRESSED_FORMATS_SRGB[(unsigned int)compression];
+		}
+		else {
+			compressed_format = COMPRESSED_FORMATS[(unsigned int)compression];
+		}
+
+		return compressed_format;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------------
+
+	DXGI_FORMAT GetCompressedRenderFormat(TextureCompressionExplicit compression, bool srgb)
+	{
+		return GetCompressedRenderFormat(EXPLICIT_COMPRESSION_MAPPING[(unsigned int)compression], srgb);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "ModuleConfigurationGroup.h"
 #include "../Editor/EditorState.h"
 #include "Module.h"
@@ -215,108 +216,102 @@ bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(file_path, 256);
 	GetModuleConfigurationGroupFilePath(editor_state, file_path);
 
-	std::ifstream stream(std::wstring(file_path.buffer, file_path.buffer + file_path.size), std::ios::binary);
-	if (stream.good()) {
+	Stream<void> contents = ReadWholeFileBinary(file_path, GetAllocatorPolymorphic(editor_state->editor_allocator));
+	if (contents.buffer != nullptr) {
 		// Read the whole file into a temporary buffer
-		size_t file_size = function::GetFileByteSize(stream);
-		ECS_ASSERT(file_size < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_BYTE_SIZE);
-		void* allocation = editor_state->editor_allocator->Allocate(file_size);
-		stream.read((char*)allocation, file_size);
+		ECS_ASSERT(contents.size < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_BYTE_SIZE);
 
-		if (stream.good()) {
-			uintptr_t file_ptr = (uintptr_t)allocation;
+		uintptr_t file_ptr = (uintptr_t)contents.buffer;
 
-			// Make sure it is the correct file version
-			char header[64];
-			CapacityStream<void> header_stream(header, 0, 64);
-			DeserializeMultisectionHeader(file_ptr, header_stream);
-			unsigned int* header_version = (unsigned int*)header;
-			ECS_ASSERT(*header_version == MODULE_CONFIGURATION_GROUP_FILE_VERSION);
+		// Make sure it is the correct file version
+		char header[64];
+		CapacityStream<void> header_stream(header, 0, 64);
+		DeserializeMultisectionHeader(file_ptr, header_stream);
+		unsigned int* header_version = (unsigned int*)header;
+		ECS_ASSERT(*header_version == MODULE_CONFIGURATION_GROUP_FILE_VERSION);
 
-			// Get the count of groups and the count of libraries for each group
-			size_t group_count = DeserializeMultisectionCount(file_ptr, header_stream.size);
-			ECS_ASSERT(group_count < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_GROUPS);
+		// Get the count of groups and the count of libraries for each group
+		size_t group_count = DeserializeMultisectionCount(file_ptr, header_stream.size);
+		ECS_ASSERT(group_count < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_GROUPS);
 
-			size_t* _group_stream_counts = (size_t*)ECS_STACK_ALLOC(sizeof(size_t) * group_count);
-			size_t* _group_byte_size = (size_t*)ECS_STACK_ALLOC(sizeof(size_t) * group_count);
-			CapacityStream<size_t> group_stream_counts(_group_stream_counts, 0, group_count);
-			CapacityStream<size_t> group_byte_size(_group_byte_size, 0, group_count);
-			DeserializeMultisectionStreamCount(file_ptr, group_stream_counts);
+		size_t* _group_stream_counts = (size_t*)ECS_STACK_ALLOC(sizeof(size_t) * group_count);
+		size_t* _group_byte_size = (size_t*)ECS_STACK_ALLOC(sizeof(size_t) * group_count);
+		CapacityStream<size_t> group_stream_counts(_group_stream_counts, 0, group_count);
+		CapacityStream<size_t> group_byte_size(_group_byte_size, 0, group_count);
+		DeserializeMultisectionStreamCount(file_ptr, group_stream_counts);
 
-			// The first section of each group is the name, followed by the configurations and
-			// finally the library names. The stream of streams of library names is not stored directly
-			// The count of libraries can be infered from the total number of sections
-			DeserializeMultisectionPerSectionSize(file_ptr, group_byte_size);
+		// The first section of each group is the name, followed by the configurations and
+		// finally the library names. The stream of streams of library names is not stored directly
+		// The count of libraries can be infered from the total number of sections
+		DeserializeMultisectionPerSectionSize(file_ptr, group_byte_size);
 
-			// Get the total stream count
-			size_t total_stream_count = 0;
-			for (size_t index = 0; index < group_count; index++) {
-				total_stream_count += group_stream_counts[index];
-			}
-			void* stream_allocation = editor_state->editor_allocator->Allocate(sizeof(Stream<void>) * total_stream_count + sizeof(Stream<Stream<void>>) * group_count);
-			CapacityStream<SerializeMultisectionData> multisections(stream_allocation, 0, group_count);
-			uintptr_t stream_allocation_ptr = (uintptr_t)stream_allocation;
-			stream_allocation_ptr += sizeof(Stream<Stream<void>>) * group_count;
-			for (size_t index = 0; index < group_count; index++) {
-				multisections[index].data.InitializeFromBuffer(stream_allocation_ptr, group_stream_counts[index]);
-			}
-
-			void* _group_per_stream_size = editor_state->editor_allocator->Allocate(sizeof(size_t) * total_stream_count + sizeof(Stream<size_t>) * group_count);
-			uintptr_t group_per_stream_size_ptr = (uintptr_t)_group_per_stream_size;
-			CapacityStream<Stream<size_t>> group_per_stream_size;
-			// The deserialization call will need the size set to 0 at first
-			group_per_stream_size.InitializeFromBuffer(group_per_stream_size_ptr, 0, group_count);
-			for (size_t index = 0; index < group_count; index++) {
-				group_per_stream_size[index].InitializeFromBuffer(group_per_stream_size_ptr, group_stream_counts[index]);
-			}
-			DeserializeMultisectionStreamSizes(file_ptr, group_per_stream_size);
-
-			ModuleConfigurationGroup* groups = (ModuleConfigurationGroup*)ECS_STACK_ALLOC(sizeof(ModuleConfigurationGroup) * group_count);
-
-			// Allocate the count of bytes for each group separately
-			for (size_t index = 0; index < group_count; index++) {
-				size_t library_count = group_stream_counts[index] - 2;
-				void* group_allocation = editor_state->editor_allocator->Allocate(group_byte_size[index] + sizeof(Stream<Stream<wchar_t>>) * library_count);
-				// First the library buffer must be set
-				uintptr_t group_ptr = (uintptr_t)group_allocation;
-				group_ptr += sizeof(Stream<wchar_t>) * library_count;
-				Stream<wchar_t>* libraries = (Stream<wchar_t>*)group_allocation;
-
-				// Then each individual library
-				for (size_t library_index = 2; library_index < group_stream_counts[index]; library_index++) {
-					multisections[index].data[library_index].buffer = (void*)group_ptr;
-					libraries[library_index - 2].InitializeFromBuffer(group_ptr, group_per_stream_size[index][library_index] / sizeof(wchar_t));
-				}
-				// The name - located at index 0 
-				multisections[index].data[0].buffer = (void*)group_ptr;
-				groups[index].name = { (const char*)group_ptr, group_per_stream_size[index][0] };
-
-				// It will also load the null terminator - remove it from the size of the stream
-				groups[index].name.size--;
-				group_ptr += group_per_stream_size[index][0];
-
-				// The configurations
-				multisections[index].data[1].buffer = (void*)group_ptr;
-				groups[index].configurations = (EditorModuleConfiguration*)group_ptr;
-
-				groups[index].libraries = { libraries, library_count };
-			}
-			DeserializeMultisection(file_ptr, multisections);
-
-			ValidateModuleConfigurationGroups(editor_state, Stream<ModuleConfigurationGroup>(groups, group_count));
-			// Add the group only if it has at least a library
-			for (size_t index = 0; index < group_count; index++) {
-				if (groups[index].libraries.size > 0) {
-					AddModuleConfigurationGroup(editor_state, groups[index]);
-				}
-			}
-
-			editor_state->editor_allocator->Deallocate(_group_per_stream_size);
-			editor_state->editor_allocator->Deallocate(stream_allocation);
-			editor_state->editor_allocator->Deallocate(allocation);
-			return true;
+		// Get the total stream count
+		size_t total_stream_count = 0;
+		for (size_t index = 0; index < group_count; index++) {
+			total_stream_count += group_stream_counts[index];
 		}
-		editor_state->editor_allocator->Deallocate(allocation);
+		void* stream_allocation = editor_state->editor_allocator->Allocate(sizeof(Stream<void>) * total_stream_count + sizeof(Stream<Stream<void>>) * group_count);
+		CapacityStream<SerializeMultisectionData> multisections(stream_allocation, 0, group_count);
+		uintptr_t stream_allocation_ptr = (uintptr_t)stream_allocation;
+		stream_allocation_ptr += sizeof(Stream<Stream<void>>) * group_count;
+		for (size_t index = 0; index < group_count; index++) {
+			multisections[index].data.InitializeFromBuffer(stream_allocation_ptr, group_stream_counts[index]);
+		}
+
+		void* _group_per_stream_size = editor_state->editor_allocator->Allocate(sizeof(size_t) * total_stream_count + sizeof(Stream<size_t>) * group_count);
+		uintptr_t group_per_stream_size_ptr = (uintptr_t)_group_per_stream_size;
+		CapacityStream<Stream<size_t>> group_per_stream_size;
+		// The deserialization call will need the size set to 0 at first
+		group_per_stream_size.InitializeFromBuffer(group_per_stream_size_ptr, 0, group_count);
+		for (size_t index = 0; index < group_count; index++) {
+			group_per_stream_size[index].InitializeFromBuffer(group_per_stream_size_ptr, group_stream_counts[index]);
+		}
+		DeserializeMultisectionStreamSizes(file_ptr, group_per_stream_size);
+
+		ModuleConfigurationGroup* groups = (ModuleConfigurationGroup*)ECS_STACK_ALLOC(sizeof(ModuleConfigurationGroup) * group_count);
+
+		// Allocate the count of bytes for each group separately
+		for (size_t index = 0; index < group_count; index++) {
+			size_t library_count = group_stream_counts[index] - 2;
+			void* group_allocation = editor_state->editor_allocator->Allocate(group_byte_size[index] + sizeof(Stream<Stream<wchar_t>>) * library_count);
+			// First the library buffer must be set
+			uintptr_t group_ptr = (uintptr_t)group_allocation;
+			group_ptr += sizeof(Stream<wchar_t>) * library_count;
+			Stream<wchar_t>* libraries = (Stream<wchar_t>*)group_allocation;
+
+			// Then each individual library
+			for (size_t library_index = 2; library_index < group_stream_counts[index]; library_index++) {
+				multisections[index].data[library_index].buffer = (void*)group_ptr;
+				libraries[library_index - 2].InitializeFromBuffer(group_ptr, group_per_stream_size[index][library_index] / sizeof(wchar_t));
+			}
+			// The name - located at index 0 
+			multisections[index].data[0].buffer = (void*)group_ptr;
+			groups[index].name = { (const char*)group_ptr, group_per_stream_size[index][0] };
+
+			// It will also load the null terminator - remove it from the size of the stream
+			groups[index].name.size--;
+			group_ptr += group_per_stream_size[index][0];
+
+			// The configurations
+			multisections[index].data[1].buffer = (void*)group_ptr;
+			groups[index].configurations = (EditorModuleConfiguration*)group_ptr;
+
+			groups[index].libraries = { libraries, library_count };
+		}
+		DeserializeMultisection(file_ptr, multisections);
+
+		ValidateModuleConfigurationGroups(editor_state, Stream<ModuleConfigurationGroup>(groups, group_count));
+		// Add the group only if it has at least a library
+		for (size_t index = 0; index < group_count; index++) {
+			if (groups[index].libraries.size > 0) {
+				AddModuleConfigurationGroup(editor_state, groups[index]);
+			}
+		}
+
+		editor_state->editor_allocator->Deallocate(_group_per_stream_size);
+		editor_state->editor_allocator->Deallocate(stream_allocation);
+		editor_state->editor_allocator->Deallocate(contents.buffer);
+		return true;
 	}
 	return false;
 }
@@ -327,43 +322,39 @@ bool SaveModuleConfigurationGroupFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(file_path, 256);
 	GetModuleConfigurationGroupFilePath(editor_state, file_path);
 
-	std::ofstream stream(std::wstring(file_path.buffer, file_path.buffer + file_path.size), std::ios::binary | std::ios::trunc);
-	if (stream.good()) {
-		Stream<ModuleConfigurationGroup> groups(editor_state->module_configuration_groups.buffer, editor_state->module_configuration_groups.size);
+	Stream<ModuleConfigurationGroup> groups(editor_state->module_configuration_groups.buffer, editor_state->module_configuration_groups.size);
 
-		// Make the multisection allocation
-		SerializeMultisectionData* _multisections = (SerializeMultisectionData*)ECS_STACK_ALLOC(sizeof(SerializeMultisectionData) * groups.size);
-		// Calculate the total streams needed
-		size_t total_streams = 0;
-		for (size_t index = 0; index < groups.size; index++) {
-			total_streams += 2 + groups[index].libraries.size;
-		}
-		Stream<void>* streams = (Stream<void>*)ECS_STACK_ALLOC(sizeof(Stream<void>) * total_streams);
-		Stream<SerializeMultisectionData> multisections(_multisections, groups.size);
-
-		// Populate the multisections
-		for (size_t index = 0; index < groups.size; index++) {
-			size_t current_stream_count = groups[index].libraries.size + 2;
-			multisections[index].data.buffer = streams;
-			multisections[index].data.size = groups[index].libraries.size + 2;
-			streams += current_stream_count;
-
-			// First the name
-			multisections[index].data[0] = { groups[index].name.buffer, (groups[index].name.size + 1) * sizeof(char) };
-			multisections[index].data[1] = { groups[index].configurations, (groups[index].libraries.size + 1) * sizeof(EditorModuleConfiguration) };
-			for (size_t subindex = 0; subindex < groups[index].libraries.size; subindex++) {
-				multisections[index].data[subindex + 2] = groups[index].libraries[subindex];
-			}
-		}
-
-		char header[64];
-		unsigned int* header_version = (unsigned int*)header;
-		*header_version = MODULE_CONFIGURATION_GROUP_FILE_VERSION;
-
-		// Serialize
-		return SerializeMultisection(stream, multisections, { header, 64 });
+	// Make the multisection allocation
+	SerializeMultisectionData* _multisections = (SerializeMultisectionData*)ECS_STACK_ALLOC(sizeof(SerializeMultisectionData) * groups.size);
+	// Calculate the total streams needed
+	size_t total_streams = 0;
+	for (size_t index = 0; index < groups.size; index++) {
+		total_streams += 2 + groups[index].libraries.size;
 	}
-	return false;
+	Stream<void>* streams = (Stream<void>*)ECS_STACK_ALLOC(sizeof(Stream<void>) * total_streams);
+	Stream<SerializeMultisectionData> multisections(_multisections, groups.size);
+
+	// Populate the multisections
+	for (size_t index = 0; index < groups.size; index++) {
+		size_t current_stream_count = groups[index].libraries.size + 2;
+		multisections[index].data.buffer = streams;
+		multisections[index].data.size = groups[index].libraries.size + 2;
+		streams += current_stream_count;
+
+		// First the name
+		multisections[index].data[0] = { groups[index].name.buffer, (groups[index].name.size + 1) * sizeof(char) };
+		multisections[index].data[1] = { groups[index].configurations, (groups[index].libraries.size + 1) * sizeof(EditorModuleConfiguration) };
+		for (size_t subindex = 0; subindex < groups[index].libraries.size; subindex++) {
+			multisections[index].data[subindex + 2] = groups[index].libraries[subindex];
+		}
+	}
+
+	char header[64];
+	unsigned int* header_version = (unsigned int*)header;
+	*header_version = MODULE_CONFIGURATION_GROUP_FILE_VERSION;
+
+	// Serialize
+	return SerializeMultisection(file_path, multisections, { nullptr }, { header, 64 });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -489,14 +480,13 @@ void ModuleConfigurationGroupAddAction(ActionData* action_data) {
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
-template<bool initialize>
-void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descriptor) {
-	constexpr const char* NEW_MODULE_INDICES_NAME = "Resource";
-	constexpr const char* NEW_MODULE_CONFIGURATION_STATES = "States";
-	constexpr const char* NEW_MODULE_CONFIGURATIONS = "Configurations";
-	constexpr const char* NEW_MODULE_RESOURCE_NAME = "Module Name Input";
-	constexpr const char* ADD_BUTTON_TEXT = "Add";
-	constexpr const char* CANCEL_BUTTON_TEXT = "Cancel";
+void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descriptor, bool initialize) {
+	const const char* NEW_MODULE_INDICES_NAME = "Resource";
+	const const char* NEW_MODULE_CONFIGURATION_STATES = "States";
+	const const char* NEW_MODULE_CONFIGURATIONS = "Configurations";
+	const const char* NEW_MODULE_RESOURCE_NAME = "Module Name Input";
+	const const char* ADD_BUTTON_TEXT = "Add";
+	const const char* CANCEL_BUTTON_TEXT = "Cancel";
 
 	UI_PREPARE_DRAWER(initialize);
 
@@ -508,7 +498,7 @@ void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descripto
 	bool* new_module_configuration_states = nullptr;
 	unsigned char* new_module_configurations = nullptr;
 	CapacityStream<char>* new_module_name = nullptr;
-	if constexpr (initialize) {
+	if (initialize) {
 		unsigned short* _new_module_indices = (unsigned short*)ECS_STACK_ALLOC(sizeof(unsigned short) * project_modules->size);
 		Stream<unsigned short> new_module_indices_stream(_new_module_indices, project_modules->size);
 		function::MakeSequence(new_module_indices_stream);
@@ -573,7 +563,7 @@ void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descripto
 		ascii_library.size = 0;
 		function::ConvertWideCharsToASCII(project_modules->buffer[new_module_indices->buffer[index]].library_name, ascii_library);
 		ascii_library[ascii_library.size] = '\0';
-		drawer.CheckBox<UI_CONFIG_DO_NOT_CACHE>(config, ascii_library.buffer, new_module_configuration_states + index);
+		drawer.CheckBox(UI_CONFIG_DO_NOT_CACHE, config, ascii_library.buffer, new_module_configuration_states + index);
 		drawer.ComboBox(ascii_library.buffer, combo_labels, combo_labels.size, new_module_configurations + index);
 		drawer.NextRow();
 	}
@@ -617,7 +607,7 @@ void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descripto
 	callback_data.add_data.new_module_indices = new_module_indices;
 	callback_data.add_data.module_name = new_module_name;
 
-	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, ADD_BUTTON_TEXT, { add_action, &callback_data, sizeof(ModuleConfigurationAddActionData), UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, ADD_BUTTON_TEXT, { add_action, &callback_data, sizeof(ModuleConfigurationAddActionData), UIDrawPhase::System });
 	config.flag_count--;
 
 	// The cancel button
@@ -625,7 +615,7 @@ void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descripto
 	transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 	config.AddFlag(transform);
 
-	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, CANCEL_BUTTON_TEXT, { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM,config, CANCEL_BUTTON_TEXT, { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 
 	// Check to see if Enter was pressed - if it is, then call the add function
 	auto enter_callback = [](ActionData* action_data) {
@@ -635,12 +625,12 @@ void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descripto
 		ModuleConfigurationGroupAddAction(action_data);
 		if (callback_data->add_data.destroy_window) {
 			system->RemoveWindowFromDockspaceRegion(callback_data->window_index);
-			system->PopSystemHandler();
+			system->PopFrameHandler();
 		}
 	};
 
 	if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
-		drawer.system->PushSystemHandler({ enter_callback, &callback_data, sizeof(callback_data) });
+		drawer.system->PushFrameHandler({ enter_callback, &callback_data, sizeof(callback_data) });
 	}
 }
 
@@ -649,8 +639,7 @@ void ModuleConfigurationGroupAddWizard(void* window_data, void* drawer_descripto
 unsigned int CreateModuleConfigurationGroupAddWizard(EditorState* editor_state, unsigned int group_index) {
 	UIWindowDescriptor descriptor;
 
-	descriptor.draw = ModuleConfigurationGroupAddWizard<false>;
-	descriptor.initialize = ModuleConfigurationGroupAddWizard<true>;
+	descriptor.draw = ModuleConfigurationGroupAddWizard;
 	descriptor.destroy_action = ReleaseLockedWindow;
 
 	descriptor.initial_position_x = 0.0f;

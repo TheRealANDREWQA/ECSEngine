@@ -1,4 +1,6 @@
+#include "editorpch.h"
 #include "Hub.h"
+#include "HubData.h"
 #include "..\Editor\EditorParameters.h"
 #include "..\Editor\EditorState.h"
 #include "..\Project\ProjectUITemplatePreview.h"
@@ -18,7 +20,7 @@ void AddHubProject(EditorState* editor_state, const wchar_t* path)
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	EDITOR_STATE(editor_state);
 
-	HubData* hub = (HubData*)editor_state->hub_data;
+	HubData* hub = editor_state->hub_data;
 	ECS_ASSERT(hub->projects.size < hub->projects.capacity);
 
 	hub->projects[hub->projects.size].error_message = nullptr;
@@ -37,7 +39,7 @@ void DeallocateHubProjects(EditorState* editor_state)
 {
 	EDITOR_STATE(editor_state);
 
-	HubData* data = (HubData*)editor_state->hub_data;
+	HubData* data = editor_state->hub_data;
 	for (size_t index = 0; index < data->projects.size; index++) {
 		if (data->projects[index].error_message != nullptr) {
 			editor_allocator->Deallocate(data->projects[index].error_message);
@@ -74,7 +76,7 @@ void AddExistingProjectAction(ActionData* action_data) {
 void LoadHubProjects(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
-	HubData* hub_data = (HubData*)editor_state->hub_data;
+	HubData* hub_data = editor_state->hub_data;
 
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
 		hub_data->projects[index].data.path = function::PathParent(ToStream(hub_data->projects[index].path));
@@ -113,7 +115,7 @@ void ReloadHubProjectsAction(ActionData* action_data) {
 void ResetHubData(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
-	HubData* data = (HubData*)editor_state->hub_data;
+	HubData* data = editor_state->hub_data;
 	DeallocateHubProjects(editor_state);
 	data->projects.size = 0;
 }
@@ -127,7 +129,7 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 {
 	EDITOR_STATE(editor_state);
 
-	HubData* hub_data = (HubData*)editor_state->hub_data;
+	HubData* hub_data = editor_state->hub_data;
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
 		if (function::CompareStrings(path, ToStream(hub_data->projects[index].path))) {
 			editor_allocator->Deallocate(hub_data->projects[index].path);
@@ -145,7 +147,7 @@ void SortHubProjects(EditorState* editor_state)
 {
 	EDITOR_STATE(editor_state);
 
-	HubData* data = (HubData*)editor_state->hub_data;
+	HubData* data = editor_state->hub_data;
 
 	struct SortElement {
 		bool operator < (const SortElement& other) const {
@@ -183,12 +185,11 @@ void SortHubProjects(EditorState* editor_state)
 	}
 }
 
-template<bool initialize>
-void HubDraw(void* window_data, void* drawer_descriptor) {
+void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	EditorState* editor_state = (EditorState*)window_data;
-	HubData* data = (HubData*)editor_state->hub_data;
+	HubData* data = editor_state->hub_data;
 
 	UIFontDescriptor* font = drawer.GetFontDescriptor();
 	font->size *= INCREASE_FONT_SIZE_FACTOR;
@@ -198,7 +199,6 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 
 	drawer.DisableZoom();
 	drawer.DisablePaddingForRenderSliders();
-	//Color theme_color = drawer.GetColorThemeDescriptor()->theme;
 	UIDrawConfig config;
 	UIConfigTextParameters ecs_text;
 	ecs_text.size *= {1.75f, 1.75f};
@@ -212,7 +212,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 	ecs_characters[19 + version_size] = '\0';
 	config.AddFlag(ecs_text);
 
-	drawer.Text<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS>(config, ecs_characters);
+	drawer.Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS, config, ecs_characters);
 
 	UIConfigAbsoluteTransform transform;
 	transform.scale = { drawer.region_limit.x - drawer.current_x, drawer.current_row_y_scale };
@@ -229,23 +229,23 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 	size_t user_size = strlen(USER);
 	memcpy(user_characters + 6, USER, user_size);
 	user_characters[6 + user_size] = '\0';
-	drawer.TextLabel<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_ABSOLUTE_TRANSFORM
-		| UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS>(config, user_characters);
+	drawer.TextLabel(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_ABSOLUTE_TRANSFORM
+		| UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS, config, user_characters);
 
 	drawer.NextRow();
 	drawer.CrossLine();
-	drawer.Text<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS>(config, "Projects");
+	drawer.Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS, config, "Projects");
 
 	CreateProjectWizardData* wizard_data;
 	char* save_project_error_message = nullptr;
 
 	constexpr size_t error_message_size = 256;
-	if constexpr (initialize) {
+	if (initialize) {
 		wizard_data = drawer.GetMainAllocatorBufferAndStoreAsResource<CreateProjectWizardData>("Create project wizard data");
 		wizard_data->project_data.error_message.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * error_message_size), 0, error_message_size);
 		wizard_data->project_data.editor_state = editor_state;
 		wizard_data->copy_project_name_to_source_dll = true;
-		wizard_data->project_data.file_data = (ProjectFile*)editor_state->project_file;
+		wizard_data->project_data.file_data = editor_state->project_file;
 
 		save_project_error_message = (char*)drawer.GetMainAllocatorBufferAndStoreAsResource("Save project error message", error_message_size, alignof(char));
 	}
@@ -254,11 +254,11 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 		save_project_error_message = (char*)drawer.GetResource("Save project error message");
 	}
 
-	drawer.Button<UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE>(config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, UIDrawPhase::System });
-	drawer.Button<UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE>(config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, UIDrawPhase::System });
-	drawer.Button<UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE>(config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
+	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
 
-	drawer.Button<UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE>(config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, UIDrawPhase::System });
 
 #pragma endregion
 
@@ -277,7 +277,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 
 	UIDrawConfig table_config;
 	UIConfigAbsoluteTransform table_transform;
-	drawer.CrossLine<UI_CONFIG_LATE_DRAW>(table_config);
+	drawer.CrossLine(UI_CONFIG_LATE_DRAW, table_config);
 
 	UIConfigTextAlignment table_alignment;
 	table_alignment.horizontal = TextAlignment::Middle;
@@ -294,32 +294,32 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 	table_config.AddFlag(table_text);
 	table_config.AddFlag(table_transform);
 
-	constexpr size_t column_header_configuration = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS
+	const size_t COLUMN_HEADER_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS
 		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
-	drawer.TextLabel<column_header_configuration>(table_config, "Project Name");
+	drawer.TextLabel(COLUMN_HEADER_CONFIGURATION, table_config, "Project Name");
 
 	table_config.flag_count--;
 
 	table_transform.position.x += table_transform.scale.x;
 	table_transform.scale.x = SECOND_COLUMN_SCALE;
 	table_config.AddFlag(table_transform);
-	drawer.TextLabel<column_header_configuration>(table_config, "Version");
+	drawer.TextLabel(COLUMN_HEADER_CONFIGURATION, table_config, "Version");
 
 	table_config.flag_count--;
 	
 	table_transform.position.x += table_transform.scale.x;
 	table_transform.scale.x = THIRD_COLUMN_SCALE;
 	table_config.AddFlag(table_transform);
-	drawer.TextLabel<column_header_configuration>(table_config, "Platform");
+	drawer.TextLabel(COLUMN_HEADER_CONFIGURATION, table_config, "Platform");
 
 	table_config.flag_count--;
 
 	table_transform.position.x += table_transform.scale.x;
 	table_transform.scale.x = end_table_position - table_transform.position.x;
 	table_config.AddFlag(table_transform);
-	drawer.TextLabel<column_header_configuration>(table_config, "Last Time Modified");
+	drawer.TextLabel(COLUMN_HEADER_CONFIGURATION, table_config, "Last Time Modified");
 	drawer.NextRow(0.0f);
-	drawer.CrossLine<UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_ADVANCE>(config);
+	drawer.CrossLine(UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_ADVANCE, config);
 #pragma endregion
 
 #pragma region Rows
@@ -327,13 +327,13 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 	font->size /= INCREASE_FONT_SIZE_FACTOR;
 	font->character_spacing /= INCREASE_FONT_SIZE_FACTOR;
 
+	const size_t ROW_LABEL_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ABSOLUTE_TRANSFORM
+		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
+
 	unsigned int invalid_indices_buffer[128];
 	Stream<unsigned int> invalid_indices = Stream<unsigned int>(invalid_indices_buffer, 0);
 	auto row_lambda = [&](unsigned int index) {
 		float2 row_start_position = { table_start_position.x, drawer.GetCurrentPositionNonOffset().y };
-
-#define LABEL_CONFIGURATION UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X \
-			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y
 
 		auto row_project_name = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
 			char temp_characters[256];
@@ -351,17 +351,15 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			char ascii_name[256];
 			Stream<wchar_t> path_stem = function::PathStem(ToStream(data->projects[index].path));
 			function::ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
-			drawer.TextLabel<LABEL_CONFIGURATION>(config, ascii_name);
+			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, ascii_name);
 
 			alignment.vertical = TextAlignment::Bottom;
 			config.flag_count--;
 			config.AddFlag(alignment);
 
-			drawer.TextLabel<LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT>(config, temp_characters);
+			drawer.TextLabel(ROW_LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT, config, temp_characters);
 
 			config.flag_count -= 2;
-
-
 		};
 
 		auto row_platform_and_version = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
@@ -373,7 +371,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			transform.scale.x = SECOND_COLUMN_SCALE;
 			config.AddFlag(transform);
 
-			drawer.TextLabel<LABEL_CONFIGURATION>(config, data->projects[index].data.version_description);
+			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, data->projects[index].data.version_description);
 
 			config.flag_count--;
 
@@ -381,7 +379,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			transform.scale.x = THIRD_COLUMN_SCALE;
 			config.AddFlag(transform);
 
-			drawer.TextLabel<LABEL_CONFIGURATION>(config, data->projects[index].data.platform_description);
+			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, data->projects[index].data.platform_description);
 
 			config.flag_count--;
 		};
@@ -393,7 +391,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			config.AddFlag(transform);
 
 			drawer.NextRow(0.0f);
-			drawer.CrossLine<UI_CONFIG_LATE_DRAW | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(config);
+			drawer.CrossLine(UI_CONFIG_LATE_DRAW | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config);
 			config.flag_count--;
 		};
 
@@ -413,7 +411,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 				transform.scale.x = end_table_position - transform.position.x;
 				config.AddFlag(transform);
 
-				drawer.TextLabel<LABEL_CONFIGURATION>(config, last_write_time);
+				drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, last_write_time);
 				config.flag_count--;
 				
 				row_cross_line(config, transform);
@@ -429,7 +427,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 				transform.scale.x = end_table_position - transform.position.x;
 				config.AddFlag(transform);
 
-				drawer.TextLabel<LABEL_CONFIGURATION | UI_CONFIG_UNAVAILABLE_TEXT>(config, "Unable to read last write time");
+				drawer.TextLabel(ROW_LABEL_CONFIGURATION | UI_CONFIG_UNAVAILABLE_TEXT, config, "Unable to read last write time");
 				config.flag_count--;
 				
 				row_cross_line(config, transform);
@@ -444,8 +442,8 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			open_data.error_message.buffer = nullptr;
 			open_data.file_data = &data->projects[index].data;
 			open_data.editor_state = editor_state;
-			drawer.Button<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
-			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y>(config, "", { OpenProjectAction, &open_data, sizeof(open_data) });
+			drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
+				| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, "", { OpenProjectAction, &open_data, sizeof(open_data) });
 		}
 		else {
 			UIDrawConfig config;
@@ -461,7 +459,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 			transform.scale.x = end_table_position - transform.position.x;
 			config.AddFlag(transform);
 
-			drawer.TextLabel<LABEL_CONFIGURATION>(config, data->projects[index].error_message);
+			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, data->projects[index].error_message);
 			config.flag_count--;
 			
 			row_cross_line(config, transform);
@@ -490,9 +488,7 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 		};
 
 		RemoveProjectData remove_data = { editor_state, data->projects[index].path };
-		drawer.SpriteButton<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, { remove_project_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X, drawer.color_theme.default_text);
-
-#undef LABEL_CONFIGURATION
+		drawer.SpriteButton(UI_CONFIG_ABSOLUTE_TRANSFORM, config, { remove_project_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X, drawer.color_theme.default_text);
 	};
 
 	for (size_t index = 0; index < data->projects.size; index++) {
@@ -507,27 +503,15 @@ void HubDraw(void* window_data, void* drawer_descriptor) {
 
 	config.AddFlag(transform);
 
-	drawer.CrossLine<UI_CONFIG_VERTICAL | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER | UI_CONFIG_LATE_DRAW>(config);
+	drawer.CrossLine(UI_CONFIG_VERTICAL | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER | UI_CONFIG_LATE_DRAW, config);
 	transform.position.x = end_table_position;
 	config.flag_count = 0;
 	config.AddFlag(transform);
 	
-	drawer.CrossLine<UI_CONFIG_VERTICAL | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER | UI_CONFIG_LATE_DRAW>(config);
+	drawer.CrossLine(UI_CONFIG_VERTICAL | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CROSS_LINE_DO_NOT_INFER | UI_CONFIG_LATE_DRAW, config);
 
 #pragma endregion
 
-	/*ActionData action_data = drawer.GetDummyActionData();
-	action_data.buffers = drawer.buffers;
-	action_data.counts = drawer.counts;
-
-	if constexpr (!initialize) {
-		action_data.position = drawer.GetCurrentPosition();
-		const char* ALIGNED_TO_LEFT = "Tool tip 1\nTool tip 2\nXD\nYEA\BOY";
-		const char* ALIGNED_TO_RIGHT = "Ctrl+C\n\nCtrl+V\nShift+Ctrl+C";
-		UITooltipBaseData tool_tip_data;
-		tool_tip_data.next_row_offset = drawer.element_descriptor.label_vertical_padd;
-		drawer.system->DrawToolTipSentenceWithTextToRight(&action_data, ALIGNED_TO_LEFT, ALIGNED_TO_RIGHT, &tool_tip_data);
-	}*/
 }
 
 void Hub(EditorState* editor_state) {
@@ -535,8 +519,8 @@ void Hub(EditorState* editor_state) {
 	
 	UIWindowDescriptor window_descriptor;
 	window_descriptor.window_name = "Project";
-	window_descriptor.draw = HubDraw<false>;
-	window_descriptor.initialize = HubDraw<true>;
+	window_descriptor.draw = HubDraw;
+
 	window_descriptor.initial_position_x = -1.0f;
 	window_descriptor.initial_position_y = -1.0f;
 	window_descriptor.initial_size_x = 2.0f;
@@ -551,7 +535,11 @@ void Hub(EditorState* editor_state) {
 	window_descriptor.window_data_size = 0;
 	ui_system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_BORDER_NOTHING | UI_DOCKSPACE_BACKGROUND);
 
+	editor_state->editor_tick = EditorStateHubTick;
+
 	if (!success) {
 		CreateErrorMessageWindow(ui_system, "No editor file has been found or it has been corrupted.");
 	}
 }
+
+void HubTick(EditorState* editor_state) {}

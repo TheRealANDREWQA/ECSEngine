@@ -8,6 +8,8 @@
 #include "../../Internal/Multithreading/TaskManager.h"
 #include "../../Internal/Resources/ResourceManager.h"
 #include "../../Internal/InternalStructures.h"
+#include "../../Utilities/File.h"
+#include "../../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
 
@@ -98,6 +100,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager)
+		{
+			return UIToolsAllocator(global_manager, 15'000'000, 8, 512, 5'000'000, 4, 512);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		UISystem::UISystem(
 			Application* application,
 			UIToolsAllocator* memory,
@@ -107,7 +116,7 @@ namespace ECSEngine {
 			ResourceManager* resource,
 			TaskManager* task_manager,
 			const wchar_t* font_filename,
-			const char* font_uv_descriptor,
+			const wchar_t* font_uv_descriptor,
 			uint2 window_os_size,
 			GlobalMemoryManager* initial_allocator
 		) : m_graphics(graphics), m_mouse(mouse), m_mouse_tracker(mouse->GetTracker()), m_keyboard(keyboard), m_keyboard_tracker(keyboard->GetTracker()),
@@ -136,7 +145,7 @@ namespace ECSEngine {
 			// symbols in the font atlas; must store top_left and bottom right uvs
 			total_memory += sizeof(float2) * m_descriptors.font.symbol_count * 2;
 
-			total_memory += sizeof(UIActionHandler) * ECS_TOOLS_UI_SYSTEM_HANDLER_COUNT;
+			total_memory += sizeof(UIActionHandler) * ECS_TOOLS_UI_SYSTEM_HANDLER_FRAME_COUNT;
 
 #ifdef ECS_TOOLS_UI_MULTI_THREADED
 			total_memory += sizeof(UIRenderThreadResources) * m_task_manager->GetThreadCount();
@@ -239,24 +248,8 @@ namespace ECSEngine {
 
 			buffer += sizeof(UIDynamicStream<UISpriteTexture, true>) * ECS_TOOLS_UI_PASSES;
 
-			m_handler_stack = Stack<UIActionHandler>((void*)buffer, ECS_TOOLS_UI_SYSTEM_HANDLER_COUNT);
+			m_frame_handlers.InitializeFromBuffer(buffer, 0, ECS_TOOLS_UI_SYSTEM_HANDLER_FRAME_COUNT);
 			
-#ifdef ECS_TOOLS_UI_MULTI_THREADED
-			m_resources.window_draw_list.buffer = (ComPtr<ID3D11CommandList>*)m_memory->Allocate(sizeof(ComPtr<ID3D11CommandList>) * m_descriptors.misc.window_count);
-			memset(m_resources.window_draw_list.buffer, 0, sizeof(ComPtr<ID3D11CommandList>) * m_descriptors.misc.window_count);
-			m_resources.window_draw_list.size = 0;
-			m_resources.window_draw_list.capacity = m_descriptors.misc.window_count;
-			for (size_t index = 0; index < m_descriptors.misc.window_count; index++) {
-				m_resources.window_draw_list[index] = nullptr;
-			}
-#else
-			m_resources.window_draw_list.buffer = (ComPtr<ID3D11CommandList>*)m_memory->Allocate(sizeof(ComPtr<ID3D11CommandList>));
-			memset(m_resources.window_draw_list.buffer, 0, sizeof(ComPtr<ID3D11CommandList>));
-			m_resources.window_draw_list.size = 1;
-			m_resources.window_draw_list.capacity = 1;
-			m_resources.window_draw_list[0] = nullptr;
-#endif
-
 			ReadFontDescriptionFile(font_uv_descriptor);
 
 			// loading font atlas; font atlas does not keep track of texture indices
@@ -1238,6 +1231,16 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::AddFrameHandler(UIActionHandler handler)
+		{
+			if (handler.data_size > 0) {
+				handler.data = function::Copy(m_memory, handler.data, handler.data_size);
+			}
+			m_frame_handlers.AddSafe(handler);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::BindWindowHandler(Action action, Action data_initializer, size_t data_size)
 		{
 			m_window_handler.action = action;
@@ -1407,12 +1410,12 @@ namespace ECSEngine {
 			m_focused_window_data.ResetGeneralHandler();
 			m_focused_window_data.ResetHoverableHandler();
 
-			UIActionHandler handler;
-			while (m_handler_stack.Pop(handler)) {
-				if (handler.data_size > 0) {
-					m_memory->Deallocate(handler.data);
+			for (size_t index = 0; index < m_frame_handlers.size; index++) {
+				if (m_frame_handlers[index].data_size > 0) {
+					m_memory->Deallocate(m_frame_handlers[index].data);
 				}
 			}
+			m_frame_handlers.size = 0;
 
 			m_focused_window_data.locked_window = false;
 
@@ -2142,6 +2145,7 @@ namespace ECSEngine {
 			else {
 				m_windows[window_index].window_data = descriptor.window_data;
 			}
+			m_windows[window_index].window_data_size = descriptor.window_data_size;
 
 			// resource table
 			unsigned short resource_count = function::Select(descriptor.resource_count == 0, m_descriptors.misc.window_table_default_count, descriptor.resource_count);
@@ -2151,8 +2155,8 @@ namespace ECSEngine {
 			
 			m_windows[window_index].name_vertex_buffer.buffer = nullptr;
 			SetWindowName(window_index, descriptor.window_name);
-			if (descriptor.initialize != nullptr) {
-				InitializeWindowDraw(window_index, descriptor.initialize);
+			if (descriptor.draw != nullptr) {
+				InitializeWindowDraw(window_index, descriptor.draw);
 			}
 
 			m_windows[window_index].default_handler.action = m_window_handler.action;
@@ -2170,7 +2174,6 @@ namespace ECSEngine {
 		unsigned int UISystem::CreateEmptyWindow()
 		{
 			UIWindowDescriptor descriptor;
-			descriptor.initialize = nullptr;
 			descriptor.window_name = "Empty";
 			descriptor.draw = nullptr;
 
@@ -2276,7 +2279,7 @@ namespace ECSEngine {
 				m_windows[window_index].descriptors->layout.next_row_padding *= 0.5f;
 				m_windows[window_index].descriptors->layout.next_row_y_offset *= 0.5f;
 
-				descriptor.draw(m_windows[window_index].window_data, &drawer_descriptor);
+				descriptor.draw(m_windows[window_index].window_data, &drawer_descriptor, false);
 				UIDockspace* dockspace = GetDockspace(dockspace_index, type);
 				dockspace->transform.scale = new_scale;
 				dockspace->transform.scale.x += function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE) * m_descriptors.misc.render_slider_vertical_size;
@@ -2385,7 +2388,7 @@ namespace ECSEngine {
 		void UISystem::DeallocateDockspaceBorderResource(UIDockspace* dockspace, unsigned int border_index)
 		{
 			// releasing graphics objects
-			dockspace->borders[border_index].draw_resources.Release();
+			dockspace->borders[border_index].draw_resources.Release(m_graphics);
 
 			// main allocation
 			m_memory->Deallocate(dockspace->borders[border_index].draw_resources.buffers.buffer);
@@ -2479,9 +2482,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < vertex_buffer_count; index++) {
 				dockspace->borders[border_index].draw_resources.buffers[index] = m_graphics->CreateVertexBuffer(
 					m_descriptors.materials.strides[index],
-					m_descriptors.materials.vertex_buffer_count[index],
-					D3D11_USAGE_DYNAMIC,
-					D3D11_CPU_ACCESS_WRITE
+					m_descriptors.materials.vertex_buffer_count[index]
 				);
 			}
 
@@ -2780,6 +2781,10 @@ namespace ECSEngine {
 				m_memory->Deallocate(m_windows[window_index].private_handler.data);
 			}
 
+			if (m_windows[window_index].window_data_size > 0) {
+				m_memory->Deallocate(m_windows[window_index].window_data);
+			}
+
 			m_memory->Deallocate(m_windows[window_index].table.GetAllocatedBuffer());
 			m_memory->Deallocate(m_windows[window_index].name_vertex_buffer.GetAllocatedBuffer());
 
@@ -2807,14 +2812,6 @@ namespace ECSEngine {
 					// For pop up window
 					if (dockspace->borders.size == 2 && dockspace->borders[0].window_indices.size == 1 && !dockspace->borders[0].is_dock) {
 						RemoveDockspaceBorder(dockspace, border_index, type);
-						/*if (IsFixedDockspace(dockspace)) {
-							for (size_t index = 0; index < m_fixed_dockspaces.size; index++) {
-								if (GetConstDockspace(m_fixed_dockspaces[index]) == dockspace) {
-									m_fixed_dockspaces.RemoveSwapBack(index);
-									break;
-								}
-							}
-						}*/
 					}
 					else {
 						RemoveWindowFromDockspaceRegion(dockspace, type, border_index, window_index);
@@ -3331,7 +3328,6 @@ namespace ECSEngine {
 				data->is_fixed_default_when_border_zero = system->IsEmptyFixedDockspace(regions[index].dockspace);
 				data->mouse_region = { mouse_dockspace, mouse_dockspace_region, mouse_type };
 				data->mouse_position = mouse_position;
-				data->command_list = m_resources.window_draw_list[index].GetAddressOf();
 				data->system_buffers = system_buffers;
 				data->system_count = system_counts;
 				data->active_region_index = active_region_index;
@@ -3444,7 +3440,7 @@ namespace ECSEngine {
 
 			m_resources.system_draw.Map(buffers, m_graphics->GetContext());
 			m_resources.system_draw.sprite_textures[0].Reset();
-			m_frame_pacing = 0;
+			m_frame_pacing = ECS_UI_FRAME_PACING_NONE;
 
 			float2 mouse_position = GetNormalizeMousePosition();
 
@@ -3468,7 +3464,7 @@ namespace ECSEngine {
 				auto phase_copy = m_resources.thread_resources[0].phase;
 				HandleHoverable(mouse_position, 0, buffers, counts);
 				m_resources.thread_resources[0].phase = phase_copy;
-				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < 1, 1, m_frame_pacing);
+				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
 			}
 			if (m_focused_window_data.clickable_handler.phase == UIDrawPhase::System) {
 				if (m_mouse_tracker->LeftButton() == MBHELD || m_mouse_tracker->LeftButton() == MBPRESSED) {
@@ -3488,13 +3484,13 @@ namespace ECSEngine {
 					m_focused_window_data.clickable_handler.phase = UIDrawPhase::Normal;
 					m_resources.thread_resources[0].phase = phase_copy;
 				}
-				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < 2, 2, m_frame_pacing);
+				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
 			}
 			if (m_focused_window_data.general_handler.phase == UIDrawPhase::System) {
 				auto phase_copy = m_resources.thread_resources[0].phase;
 				HandleFocusedWindowGeneral(mouse_position, 0);
 				m_resources.thread_resources[0].phase = phase_copy;
-				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < 2, 2, m_frame_pacing);
+				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
 			}
 
 			if (m_focused_window_data.additional_general_data != nullptr && m_focused_window_data.general_handler.data_size > 0) {
@@ -3546,7 +3542,7 @@ namespace ECSEngine {
 			}
 
 			SetSystemDrawRegion({ {-1.0f, -1.0f}, {2.0f, 2.0f} });
-			HandleSystemHandler();
+			HandleFrameHandlers();
 
 			m_previous_mouse_position = mouse_position;
 			m_frame_index++;
@@ -3817,7 +3813,7 @@ namespace ECSEngine {
 				drawer_descriptor.do_not_initialize_viewport_sliders = false;
 				drawer_descriptor.do_not_allocate_buffers = false;
 				if (m_windows[drawer_descriptor.window_index].draw != nullptr)
-					m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor);
+					m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor, false);
 
 				DrawDockspaceRegionHeader(
 					data->thread_id,
@@ -3854,7 +3850,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < 1, 1, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
 				}
 
 				if (m_mouse_tracker->LeftButton() == MBPRESSED) {
@@ -3888,7 +3884,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_clicked || is_general && m_frame_pacing < 2, 2, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_clicked || is_general && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
 				}
 			}
 
@@ -4071,7 +4067,7 @@ namespace ECSEngine {
 				drawer_descriptor.do_not_initialize_viewport_sliders = false;
 				drawer_descriptor.do_not_allocate_buffers = false;
 				if (m_windows[drawer_descriptor.window_index].draw != nullptr)
-					m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor);
+					m_windows[drawer_descriptor.window_index].draw(m_windows[drawer_descriptor.window_index].window_data, &drawer_descriptor, false);
 				
 				DrawDockspaceRegionHeader(
 					data->thread_id,
@@ -4105,7 +4101,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < 1, 1, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
 				}
 				if (m_mouse_tracker->LeftButton() == MBPRESSED) {
 					DockspaceType floating_type;
@@ -4136,7 +4132,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_clickable && is_general && m_frame_pacing < 2, 2, m_frame_pacing);
+					m_frame_pacing = function::Select<unsigned int>(is_clickable && is_general && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
 				}
 			}
 
@@ -4724,10 +4720,10 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::DrawToolTipSentenceWithTextToRight(
-			ActionData* ECS_RESTRICT action_data,
-			const char* ECS_RESTRICT aligned_to_left_text,
-			const char* ECS_RESTRICT aligned_to_right_text,
-			UITooltipBaseData* ECS_RESTRICT data
+			ActionData* action_data,
+			const char* aligned_to_left_text,
+			const char* aligned_to_right_text,
+			UITooltipBaseData* data
 		)
 		{
 
@@ -4987,9 +4983,10 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::DrawToolTipSentenceWithTextToRightSize(
-			const char* ECS_RESTRICT aligned_to_left_text,
-			const char* ECS_RESTRICT aligned_to_right_text,
-			UITooltipBaseData* ECS_RESTRICT data)
+			const char* aligned_to_left_text,
+			const char* aligned_to_right_text,
+			UITooltipBaseData* data
+		)
 		{
 			ConfigureToolTipBase(data);
 			size_t left_character_count = strlen(aligned_to_left_text);
@@ -5225,7 +5222,7 @@ namespace ECSEngine {
 				}
 
 				UIDrawerDescriptor descriptor = GetDrawerDescriptor(index);
-				data[index].initialize(m_windows[index].window_data, &descriptor);
+				data[index].draw(m_windows[index].window_data, &descriptor, true);
 
 				// handler initialization with render sliders
 				Action data_initializer = (Action)m_window_handler.data;
@@ -5879,15 +5876,6 @@ namespace ECSEngine {
 		{
 			auto handler = GetDefaultWindowHandlerData(window_index);
 			return handler->PeekRevertCommand(command);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void* UISystem::GetLastSystemHandlerData()
-		{
-			UIActionHandler handler;
-			m_handler_stack.Peek(handler);
-			return handler.data;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6670,6 +6658,20 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void* UISystem::GetFrameHandlerData(unsigned int index) const
+		{
+			return m_frame_handlers[index].data;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UISystem::GetFrameHandlerCount() const
+		{
+			return m_frame_handlers.size;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetFixedDockspaceRegionsFromMouse(float2 mouse_position, UIDockspace** output_dockspaces, DockspaceType* types, unsigned int& count) const
 		{
 			UIDockspace* dockspaces[] = {
@@ -6782,7 +6784,7 @@ namespace ECSEngine {
 			
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler.phase;
 			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data);
-			m_frame_pacing = function::Select<unsigned int>(!m_execute_events && m_frame_pacing < 2, 2, m_frame_pacing);
+			m_frame_pacing = function::Select<unsigned int>(!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6808,7 +6810,7 @@ namespace ECSEngine {
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.hoverable_handler.phase;
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
-			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < 1, 1, m_frame_pacing);
+			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6832,7 +6834,7 @@ namespace ECSEngine {
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.general_handler.phase;
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
-			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < 2, 2, m_frame_pacing);
+			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -7749,12 +7751,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::HandleSystemHandler()
+		void UISystem::HandleFrameHandlers()
 		{
-			if (m_handler_stack.GetElementCount() > 0) {
-				UIActionHandler handler;
-				m_handler_stack.Peek(handler);
-				
+			if (m_frame_handlers.size > 0) {
 				ActionData data;
 				data.border_index = 0;
 				data.buffers = nullptr;
@@ -7762,7 +7761,6 @@ namespace ECSEngine {
 				data.dockspace = nullptr;
 				data.dockspace_mask = 0.0f;
 				data.keyboard = m_keyboard;
-				data.data = handler.data;
 				data.keyboard_tracker = m_keyboard_tracker;
 				data.mouse = m_mouse->GetState();
 				data.mouse_position = GetNormalizeMousePosition();
@@ -7773,8 +7771,16 @@ namespace ECSEngine {
 				data.system = this;
 				data.thread_id = 0;
 				data.type = DockspaceType::FloatingHorizontal;
-				
-				handler.action(&data);
+
+				// Create a temporary copy of those handlers - they might remove themselves and create bad dependencies
+				unsigned int frame_handler_count = m_frame_handlers.size;
+				UIActionHandler* handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * frame_handler_count);
+				m_frame_handlers.CopyTo(handlers);
+
+				for (size_t index = 0; index < frame_handler_count; index++) {
+					data.data = handlers[index].data;
+					handlers[index].action(&data);
+				}
 			}
 		}
 
@@ -8004,7 +8010,7 @@ namespace ECSEngine {
 			drawer_descriptor.do_not_allocate_buffers = false;
 			drawer_descriptor.export_scale = nullptr;
 			
-			initialize(m_windows[index].window_data, &drawer_descriptor);
+			initialize(m_windows[index].window_data, &drawer_descriptor, true);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8167,123 +8173,116 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool LoadUIFileBase(UISystem* system, std::ifstream& stream, AddToUIFileData* parameter, void (*handler)(AddToUIFileData*)) {
-			if (stream.good()) {
-				size_t stream_data_size = function::GetFileByteSize(stream);
-				void* allocation = malloc(stream_data_size);
-				stream.read((char*)allocation, stream_data_size);
+		bool LoadUIFileBase(UISystem* system, Stream<void> contents, AddToUIFileData* parameter, void (*handler)(AddToUIFileData*)) {
+			system->Clear();
 
-				system->Clear();
+			uintptr_t ptr = (uintptr_t)contents.buffer;
+			unsigned short versions[2];
+			memcpy(versions, (void*)ptr, sizeof(unsigned short) * 2);
+			ptr += sizeof(unsigned short) * 2;
 
-				uintptr_t ptr = (uintptr_t)allocation;
-				unsigned short versions[2];
-				memcpy(versions, allocation, sizeof(unsigned short) * 2);
-				ptr += sizeof(unsigned short) * 2;
-
-				unsigned char metadata[32];
-				memcpy(metadata, (void*)ptr, sizeof(unsigned char) * 32);
-				ptr += sizeof(unsigned char) * 32;
+			unsigned char metadata[32];
+			memcpy(metadata, (void*)ptr, sizeof(unsigned char) * 32);
+			ptr += sizeof(unsigned char) * 32;
 
 #pragma region Dockspaces
 
-				unsigned short dockspace_counts[4];
-				memcpy(dockspace_counts, (void*)ptr, sizeof(unsigned short) * 4);
-				ptr += sizeof(unsigned short) * 4;
+			unsigned short dockspace_counts[4];
+			memcpy(dockspace_counts, (void*)ptr, sizeof(unsigned short) * 4);
+			ptr += sizeof(unsigned short) * 4;
 
-				ECS_ASSERT(dockspace_counts[0] <= system->m_descriptors.dockspaces.count, "Horizontal dockspaces excedeed the limit");
-				ECS_ASSERT(dockspace_counts[1] <= system->m_descriptors.dockspaces.count, "Vertical dockspaces excedeed the limit");
-				ECS_ASSERT(dockspace_counts[2] <= system->m_descriptors.dockspaces.count, "Floating horizontal dockspaces excedeed the limit");
-				ECS_ASSERT(dockspace_counts[3] <= system->m_descriptors.dockspaces.count, "Floating vertical dockspaces excedeed the limit");
+			ECS_ASSERT(dockspace_counts[0] <= system->m_descriptors.dockspaces.count, "Horizontal dockspaces excedeed the limit");
+			ECS_ASSERT(dockspace_counts[1] <= system->m_descriptors.dockspaces.count, "Vertical dockspaces excedeed the limit");
+			ECS_ASSERT(dockspace_counts[2] <= system->m_descriptors.dockspaces.count, "Floating horizontal dockspaces excedeed the limit");
+			ECS_ASSERT(dockspace_counts[3] <= system->m_descriptors.dockspaces.count, "Floating vertical dockspaces excedeed the limit");
 
-				uintptr_t buffer = ptr;
-				unsigned char dockspace_border_count = 0;
+			uintptr_t buffer = ptr;
+			unsigned char dockspace_border_count = 0;
 
-				auto initialize_dockspace_type = [&](CapacityStream<UIDockspace>& dockspaces, DockspaceType type) {
-					dockspaces.size = 0;
-					for (size_t index = 0; index < dockspace_counts[(unsigned int)type]; index++) {
-						system->CreateEmptyDockspace(type);
-						buffer += dockspaces[index].LoadFromFile((const void*)buffer, dockspace_border_count);
-						dockspaces[index].borders[dockspace_border_count - 1] = dockspaces[index].borders[1];
-						if (type == DockspaceType::FloatingHorizontal || type == DockspaceType::Horizontal) {
-							dockspaces[index].borders[dockspace_border_count - 1].position = dockspaces[index].transform.scale.x;
-						}
-						else {
-							dockspaces[index].borders[dockspace_border_count - 1].position = dockspaces[index].transform.scale.y;
-						}
-						dockspaces[index].borders.size = dockspace_border_count;
-						for (size_t border_index = 1; border_index < dockspace_border_count - 1; border_index++) {
-							system->CreateEmptyDockspaceBorder(dockspaces.buffer + index, border_index);
-						}
-						buffer += dockspaces[index].LoadBordersFromFile((const void*)buffer);
+			auto initialize_dockspace_type = [&](CapacityStream<UIDockspace>& dockspaces, DockspaceType type) {
+				dockspaces.size = 0;
+				for (size_t index = 0; index < dockspace_counts[(unsigned int)type]; index++) {
+					system->CreateEmptyDockspace(type);
+					buffer += dockspaces[index].LoadFromFile((const void*)buffer, dockspace_border_count);
+					dockspaces[index].borders[dockspace_border_count - 1] = dockspaces[index].borders[1];
+					if (type == DockspaceType::FloatingHorizontal || type == DockspaceType::Horizontal) {
+						dockspaces[index].borders[dockspace_border_count - 1].position = dockspaces[index].transform.scale.x;
 					}
-				};
+					else {
+						dockspaces[index].borders[dockspace_border_count - 1].position = dockspaces[index].transform.scale.y;
+					}
+					dockspaces[index].borders.size = dockspace_border_count;
+					for (size_t border_index = 1; border_index < dockspace_border_count - 1; border_index++) {
+						system->CreateEmptyDockspaceBorder(dockspaces.buffer + index, border_index);
+					}
+					buffer += dockspaces[index].LoadBordersFromFile((const void*)buffer);
+				}
+			};
 
-				initialize_dockspace_type(system->m_horizontal_dockspaces, DockspaceType::Horizontal);
-				initialize_dockspace_type(system->m_vertical_dockspaces, DockspaceType::Vertical);
-				initialize_dockspace_type(system->m_floating_horizontal_dockspaces, DockspaceType::FloatingHorizontal);
-				initialize_dockspace_type(system->m_floating_vertical_dockspaces, DockspaceType::FloatingVertical);
+			initialize_dockspace_type(system->m_horizontal_dockspaces, DockspaceType::Horizontal);
+			initialize_dockspace_type(system->m_vertical_dockspaces, DockspaceType::Vertical);
+			initialize_dockspace_type(system->m_floating_horizontal_dockspaces, DockspaceType::FloatingHorizontal);
+			initialize_dockspace_type(system->m_floating_vertical_dockspaces, DockspaceType::FloatingVertical);
 
 #pragma endregion
 
 #pragma region Windows
-				const unsigned short* window_count = (const unsigned short*)buffer;
-				buffer += sizeof(unsigned short);
-				unsigned short window_count_value = *window_count;
-				system->m_windows.size = 0;
-				ECS_ASSERT(window_count_value <= system->m_windows.capacity);
+			const unsigned short* window_count = (const unsigned short*)buffer;
+			buffer += sizeof(unsigned short);
+			unsigned short window_count_value = *window_count;
+			system->m_windows.size = 0;
+			ECS_ASSERT(window_count_value <= system->m_windows.capacity);
 
-				char window_name_characters[128];
-				Stream<char> window_name_stream = Stream<char>(window_name_characters, 0);
-				for (size_t index = 0; index < window_count_value; index++) {
-					system->CreateEmptyWindow();
-					buffer += system->m_windows[index].LoadFromFile((const void*)buffer, window_name_stream);
-					system->SetWindowName(index, window_name_characters);
-					parameter->name = Stream<char>(system->m_windows[index].name, window_name_stream.size);
-					handler(parameter);
-				}
+			char window_name_characters[128];
+			Stream<char> window_name_stream = Stream<char>(window_name_characters, 0);
+			for (size_t index = 0; index < window_count_value; index++) {
+				system->CreateEmptyWindow();
+				buffer += system->m_windows[index].LoadFromFile((const void*)buffer, window_name_stream);
+				system->SetWindowName(index, window_name_characters);
+				parameter->name = Stream<char>(system->m_windows[index].name, window_name_stream.size);
+				handler(parameter);
+			}
 #pragma endregion
 
 #pragma region Dockspace layers
-				unsigned short layer_count = *(const unsigned short*)buffer;
-				buffer += sizeof(unsigned short);
-				system->m_dockspace_layers.size = layer_count;
+			unsigned short layer_count = *(const unsigned short*)buffer;
+			buffer += sizeof(unsigned short);
+			system->m_dockspace_layers.size = layer_count;
 
-				memcpy(system->m_dockspace_layers.buffer, (const void*)buffer, sizeof(UIDockspaceLayer) * layer_count);
-				buffer += sizeof(UIDockspaceLayer) * layer_count;
+			memcpy(system->m_dockspace_layers.buffer, (const void*)buffer, sizeof(UIDockspaceLayer) * layer_count);
+			buffer += sizeof(UIDockspaceLayer) * layer_count;
 #pragma endregion
 
 #pragma region Fixed dockspaces
-				unsigned short fixed_dockspace_count = *(const unsigned short*)buffer;
-				buffer += sizeof(unsigned short);
-				system->m_fixed_dockspaces.size = fixed_dockspace_count;
+			unsigned short fixed_dockspace_count = *(const unsigned short*)buffer;
+			buffer += sizeof(unsigned short);
+			system->m_fixed_dockspaces.size = fixed_dockspace_count;
 
-				memcpy(system->m_fixed_dockspaces.buffer, (const void*)buffer, sizeof(UIDockspaceLayer) * fixed_dockspace_count);
-				buffer += sizeof(UIDockspaceLayer) * fixed_dockspace_count;
+			memcpy(system->m_fixed_dockspaces.buffer, (const void*)buffer, sizeof(UIDockspaceLayer) * fixed_dockspace_count);
+			buffer += sizeof(UIDockspaceLayer) * fixed_dockspace_count;
 #pragma endregion
 
 #pragma region Background dockspaces
-				unsigned short background_dockspace_count = *(const unsigned short*)buffer;
-				buffer += sizeof(unsigned short);
-				system->m_background_dockspaces.size = background_dockspace_count;
+			unsigned short background_dockspace_count = *(const unsigned short*)buffer;
+			buffer += sizeof(unsigned short);
+			system->m_background_dockspaces.size = background_dockspace_count;
 
-				memcpy(system->m_background_dockspaces.buffer, (const void*)buffer, sizeof(UIDockspaceLayer) * background_dockspace_count);
-				buffer += sizeof(UIDockspaceLayer) * background_dockspace_count;
+			memcpy(system->m_background_dockspaces.buffer, (const void*)buffer, sizeof(UIDockspaceLayer) * background_dockspace_count);
+			buffer += sizeof(UIDockspaceLayer) * background_dockspace_count;
 #pragma endregion
 
-				system->UpdateDockspaceHierarchy();
-				if (system->m_floating_horizontal_dockspaces.size > 0) {
-					system->SearchAndSetNewFocusedDockspaceRegion(system->m_floating_horizontal_dockspaces.buffer, 0, DockspaceType::FloatingHorizontal);
-					system->SetNewFocusedDockspace(system->m_floating_horizontal_dockspaces.buffer, DockspaceType::FloatingHorizontal);
-				}
-				else {
-					system->SearchAndSetNewFocusedDockspaceRegion(system->m_floating_vertical_dockspaces.buffer, 0, DockspaceType::FloatingVertical);
-					system->SetNewFocusedDockspace(system->m_floating_vertical_dockspaces.buffer, DockspaceType::FloatingVertical);
-				}
-
-				free(allocation);
-				return true;
+			system->UpdateDockspaceHierarchy();
+			if (system->m_floating_horizontal_dockspaces.size > 0) {
+				system->SearchAndSetNewFocusedDockspaceRegion(system->m_floating_horizontal_dockspaces.buffer, 0, DockspaceType::FloatingHorizontal);
+				system->SetNewFocusedDockspace(system->m_floating_horizontal_dockspaces.buffer, DockspaceType::FloatingHorizontal);
 			}
-			return false;
+			else {
+				system->SearchAndSetNewFocusedDockspaceRegion(system->m_floating_vertical_dockspaces.buffer, 0, DockspaceType::FloatingVertical);
+				system->SetNewFocusedDockspace(system->m_floating_vertical_dockspaces.buffer, DockspaceType::FloatingVertical);
+			}
+
+			system->m_memory->Deallocate(contents.buffer);
+			return true;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8303,43 +8302,44 @@ namespace ECSEngine {
 
 		bool UISystem::LoadUIFile(const wchar_t* filename, Stream<const char*>& window_names)
 		{
-			std::ifstream stream(filename, std::ios::in | std::ios::binary);
+			Stream<void> contents = ReadWholeFileBinary(filename, GetAllocatorPolymorphic(m_memory));
 
 			AddToUIFileData data;
 			data.window_names = &window_names;
-			return LoadUIFileBase(this, stream, &data, AddToUIFileChar);
+			return LoadUIFileBase(this, contents, &data, AddToUIFileChar);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names)
 		{
-			wchar_t temp_buffer[512];
-			memcpy(temp_buffer, filename.buffer, sizeof(wchar_t) * filename.size);
-			temp_buffer[filename.size] = L'\0';
-			std::ifstream stream(temp_buffer, std::ios::in | std::ios::binary);
+			Stream<void> contents = ReadWholeFileBinary(filename, GetAllocatorPolymorphic(m_memory));
 
 			AddToUIFileData data;
 			data.window_names = &window_names;
-			return LoadUIFileBase(this, stream, &data, AddToUIFileStream);
+			return LoadUIFileBase(this, contents, &data, AddToUIFileStream);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::LoadDescriptorFile(const wchar_t* filename)
 		{
-			std::ifstream stream;
-			stream.open(filename, std::ios::in);
+			ECS_FILE_HANDLE file = 0;
+			ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_TEXT);
 
-			if (stream.good()) {
+			if (status == ECS_FILE_STATUS_OK) {
+				ScopedFile scoped_file(file);
+
 				unsigned int version = 0;
-				stream.read((char*)&version, 4);
+				bool success = ReadFile(file, { &version, sizeof(version) });
 				if (version == ECS_TOOLS_UI_DESCRIPTOR_FILE_VERSION) {
-					stream.read((char*)&m_descriptors, sizeof(UISystemDescriptors));
-					if (stream.good()) {
-						return true;
-					}
+					success &= ReadFile(file, { &m_descriptors, sizeof(UISystemDescriptors) });
 				}
+				else {
+					success = false;
+				}
+
+				return success;
 			}
 			return false;
 		}
@@ -8462,28 +8462,22 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		UIActionHandler UISystem::PeekSystemHandler() const
+		UIActionHandler UISystem::PeekFrameHandler() const
 		{
-			UIActionHandler handler;
-			ECS_ASSERT(!m_handler_stack.Peek(handler), "Nothing to peek");
-			return handler;
+			ECS_ASSERT(m_frame_handlers.size > 0, "Nothing to peek");
+			return m_frame_handlers[0];
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::PopSystemHandler()
+		void UISystem::PopFrameHandler()
 		{
-			UIActionHandler handler;
-			if (m_handler_stack.Pop(handler)) {
-				if (handler.data_size > 0) {
-					m_memory->Deallocate(handler.data);
-				}
-			}
+			RemoveFrameHandler((unsigned int)0);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::PopUpSystemHandler(
+		void UISystem::PopUpFrameHandler(
 			const char* name, 
 			bool is_fixed,
 			bool destroy_at_first_click,
@@ -8508,7 +8502,7 @@ namespace ECSEngine {
 			handler.action = PopUpWindowSystemHandler;
 			handler.data = &data;
 			handler.data_size = sizeof(data);
-			PushSystemHandler(handler);
+			PushFrameHandler(handler);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8546,23 +8540,22 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::PushSystemHandler(UIActionHandler handler)
+		void UISystem::PushFrameHandler(UIActionHandler handler)
 		{
-			void* data = nullptr;
-			if (handler.data_size != 0) {
-				data = m_memory->Allocate(handler.data_size);
-				memcpy(data, handler.data, handler.data_size);
-				handler.data = data;
+			if (handler.data_size > 0) {
+				handler.data = function::Copy(m_memory, handler.data, handler.data_size);
 			}
-
-			m_handler_stack.Push(handler);
+			m_frame_handlers.PushDownElements(0, m_frame_handlers.size);
+			m_frame_handlers[0] = handler;
+			m_frame_handlers.size++;
+			m_frame_handlers.AssertCapacity();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::PushDestroyWindowHandler(unsigned int window_index)
 		{
-			PushSystemHandler({ DestroyWindowSystemHandler, &window_index, sizeof(window_index) });
+			PushFrameHandler({ DestroyWindowSystemHandler, &window_index, sizeof(window_index) });
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8574,11 +8567,9 @@ namespace ECSEngine {
 			data.callback = handler;
 
 			// + 8 for alignment
-			PushSystemHandler({ DestroyWindowCallbackSystemHandler, &data, (unsigned int)sizeof(data) + handler.data_size + 8 });
+			PushFrameHandler({ DestroyWindowCallbackSystemHandler, &data, (unsigned int)sizeof(data) + handler.data_size + 8 });
 			if (handler.data_size > 0) {
-				UIActionHandler system_handler;
-				m_handler_stack.Peek(system_handler);
-				DestroyWindowCallbackSystemHandlerData* system_handler_data = (DestroyWindowCallbackSystemHandlerData*)system_handler.data;
+				DestroyWindowCallbackSystemHandlerData* system_handler_data = (DestroyWindowCallbackSystemHandlerData*)m_frame_handlers[0].data;
 				void* handler_data = (void*)function::align_pointer((uintptr_t)function::OffsetPointer(system_handler_data, sizeof(DestroyWindowCallbackSystemHandlerData)), 8);
 				system_handler_data->callback.data = handler_data;
 				memcpy(handler_data, handler.data, handler.data_size);
@@ -8587,7 +8578,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::ReadFontDescriptionFile(const char* filename) {
+		void UISystem::ReadFontDescriptionFile(const wchar_t* filename) {
 			// loading font uv descriptor;
 			size_t size = 2000;
 			void* uv_buffer = m_resource_manager->LoadTextFile(filename, size);
@@ -9036,7 +9027,7 @@ namespace ECSEngine {
 			m_windows[index].window_data = window_data;
 			m_windows[index].draw = descriptor.draw;
 			
-			InitializeWindowDraw(index, descriptor.initialize);
+			InitializeWindowDraw(index, descriptor.draw);
 
 			m_windows[index].private_handler = { descriptor.private_action, private_handler_data, (unsigned int)descriptor.private_action_data_size };
 			m_windows[index].destroy_handler = { descriptor.destroy_action, destroy_data, (unsigned int)descriptor.destroy_action_data_size };
@@ -9180,17 +9171,6 @@ namespace ECSEngine {
 		void UISystem::SetWindowOSSize(uint2 new_size)
 		{
 			m_window_os_size = new_size;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		unsigned int UISystem::StoreElementDrawName(unsigned int window_index, const char* name)
-		{
-			size_t name_length = strlen(name);
-			void* allocation = m_memory->Allocate(name_length + 1, alignof(char));
-			memcpy(allocation, name, name_length + 1);
-			AddWindowMemoryResource(allocation, window_index);
-			return m_windows[window_index].draw_element_names.Add((const char*)allocation);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9420,6 +9400,29 @@ namespace ECSEngine {
 
 		void UISystem::RemoveGeneralHandler(UIDockspace* dockspace, unsigned int border_index) {
 			dockspace->borders[border_index].general_handler.position_x.size--;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::RemoveFrameHandler(Action action, void* data)
+		{
+			for (size_t index = 0; index < m_frame_handlers.size; index++) {
+				if (m_frame_handlers[index].action == action && m_frame_handlers[index].data == data) {
+					RemoveFrameHandler(index);
+					return;
+				}
+			}
+			ECS_ASSERT(false);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::RemoveFrameHandler(unsigned int index)
+		{
+			if (m_frame_handlers[index].data_size > 0) {
+				m_memory->Deallocate(m_frame_handlers[index].data);
+			}
+			m_frame_handlers.RemoveSwapBack(index);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10902,23 +10905,39 @@ namespace ECSEngine {
 
 		bool UISystem::WriteDescriptorsFile(const wchar_t* filename) const
 		{
-			std::ofstream stream;
-			stream.open(filename, std::ios::out | std::ios::trunc);
+			ECS_FILE_HANDLE file = 0;
+			ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file, ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE);
 
-			unsigned int version = ECS_TOOLS_UI_DESCRIPTOR_FILE_VERSION;
-			stream.write((const char*)&version, sizeof(version));
-			stream.write((const char*)&m_descriptors, sizeof(UISystemDescriptors));
+			if (status == ECS_FILE_STATUS_OK) {
+				unsigned int version = ECS_TOOLS_UI_DESCRIPTOR_FILE_VERSION;
+				bool success = WriteFile(file, { &version, sizeof(version) });
+				success &= WriteFile(file, { &m_descriptors, sizeof(UISystemDescriptors) });
 
-			return stream.good();
+				CloseFile(file);
+				return success;
+			}
+
+			return false;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		bool UISystem::WriteUIFile(const wchar_t* filename, CapacityStream<char>& error_message) const
 		{
-			std::ofstream stream(filename, std::ios::trunc | std::ios::binary);
+			ECS_FILE_HANDLE file = 0;
+			CapacityStream<char>* open_file_error_message = error_message.buffer != nullptr ? &error_message : nullptr;
+			ECS_FILE_STATUS_FLAGS status = FileCreate(
+				filename,
+				&file,
+				ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_TRUNCATE_FILE,
+				ECS_FILE_CREATE_READ_WRITE,
+				open_file_error_message
+			);
 
-			if (stream.good()) {
+			if (status == ECS_FILE_STATUS_OK) {
+				// The file will be closed manually
+				const char* FIRST_ERROR = "Writing file contents to ";
+				const char* SECOND_ERROR = " failed!";
 
 #pragma region Header file - versions, metadata
 
@@ -10926,8 +10945,10 @@ namespace ECSEngine {
 
 				unsigned char metadata[32];
 
-				stream.write((const char*)versions, sizeof(unsigned short) * 2);
-				stream.write((const char*)metadata, sizeof(unsigned char) * 32);
+				bool success = true;
+
+				success &= WriteFile(file, { versions, sizeof(versions) });
+				success &= WriteFile(file, { metadata, sizeof(metadata) });
 
 #pragma endregion
 
@@ -10997,8 +11018,9 @@ namespace ECSEngine {
 
 #pragma region Dockspaces
 
-				constexpr size_t temp_memory_size = 8192;
-				stream.write((const char*)dockspace_counts, sizeof(unsigned short) * 4);
+				const size_t temp_memory_size = 8192;
+
+				success &= WriteFile(file, { dockspace_counts, sizeof(dockspace_counts) });
 				char temp_memory[temp_memory_size];
 
 				unsigned short _dockspace_window_replacement[256];
@@ -11034,37 +11056,33 @@ namespace ECSEngine {
 					}
 				};
 
-				// Std::ofstream uses buffered IO, so writing every single dockspace into a stack buffer
-				// and then into the stream should be OK in order to avoid using the allocator (which
-				// could be used during the UI frame when using asynchronous writing) or to the heap
-				// (which would be a bit costly and unnecessary since ofstream already uses buffered IO)
-				for (size_t index = 0; index < valid_horizontals.size; index++) {
+				for (size_t index = 0; index < valid_horizontals.size && success; index++) {
 					copy_border_window_indices(m_horizontal_dockspaces.buffer + valid_horizontals[index]);
 					solve_border_references(m_horizontal_dockspaces.buffer + valid_horizontals[index]);
 					size_t size = m_horizontal_dockspaces[valid_horizontals[index]].Serialize(temp_memory);
 					restore_border_window_indices(m_horizontal_dockspaces.buffer + valid_horizontals[index]);
-					stream.write((const char*)temp_memory, size);
+					success &= WriteFile(file, { temp_memory, size });
 				}
-				for (size_t index = 0; index < valid_verticals.size; index++) {
+				for (size_t index = 0; index < valid_verticals.size && success; index++) {
 					copy_border_window_indices(m_vertical_dockspaces.buffer + valid_verticals[index]);
 					solve_border_references(m_vertical_dockspaces.buffer + valid_verticals[index]);
 					size_t size = m_vertical_dockspaces[valid_verticals[index]].Serialize(temp_memory);
 					restore_border_window_indices(m_vertical_dockspaces.buffer + valid_verticals[index]);
-					stream.write((const char*)temp_memory, size);
+					success &= WriteFile(file, { temp_memory, size });
 				}
-				for (size_t index = 0; index < valid_floating_horizontals.size; index++) {
+				for (size_t index = 0; index < valid_floating_horizontals.size && success; index++) {
 					copy_border_window_indices(m_floating_horizontal_dockspaces.buffer + valid_floating_horizontals[index]);
 					solve_border_references(m_floating_horizontal_dockspaces.buffer + valid_floating_horizontals[index]);
 					size_t size = m_floating_horizontal_dockspaces[valid_floating_horizontals[index]].Serialize(temp_memory);
 					restore_border_window_indices(m_floating_horizontal_dockspaces.buffer + valid_floating_horizontals[index]);
-					stream.write((const char*)temp_memory, size);
+					success &= WriteFile(file, { temp_memory, size });
 				}
-				for (size_t index = 0; index < valid_floating_verticals.size; index++) {
+				for (size_t index = 0; index < valid_floating_verticals.size && success; index++) {
 					copy_border_window_indices(m_floating_vertical_dockspaces.buffer + valid_floating_verticals[index]);
 					solve_border_references(m_floating_vertical_dockspaces.buffer + valid_floating_verticals[index]);
 					size_t size = m_floating_vertical_dockspaces[valid_floating_verticals[index]].Serialize(temp_memory);
 					restore_border_window_indices(m_floating_vertical_dockspaces.buffer + valid_floating_verticals[index]);
-					stream.write((const char*)temp_memory, size);
+					success &= WriteFile(file, { temp_memory, size });
 				}
 
 #pragma endregion
@@ -11086,11 +11104,11 @@ namespace ECSEngine {
 				}
 
 				unsigned short window_count = valid_stream.size;
-				stream.write((const char*)&window_count, sizeof(unsigned short));
+				success &= WriteFile(file, { &window_count, sizeof(window_count) });
 
-				for (size_t index = 0; index < window_count; index++) {
+				for (size_t index = 0; index < window_count && success; index++) {
 					size_t size = m_windows[valid_stream[index]].Serialize(temp_memory);
-					stream.write((const char*)temp_memory, size);
+					success &= WriteFile(file, { temp_memory, size });
 				}
 
 #pragma endregion
@@ -11098,8 +11116,8 @@ namespace ECSEngine {
 #pragma region Dockspace layers
 
 				unsigned short dockspace_layers_count = valid_layers.size;
-				stream.write((const char*)&dockspace_layers_count, sizeof(unsigned short));
-				function::CopyStreamWithMask(stream, Stream<void>(stack_dockspace_layers.buffer, sizeof(UIDockspaceLayer)), valid_layers);
+				success &= WriteFile(file, { &dockspace_layers_count, sizeof(dockspace_layers_count) });
+				function::CopyStreamWithMask(file, Stream<void>(stack_dockspace_layers.buffer, sizeof(UIDockspaceLayer)), valid_layers);
 
 #pragma endregion
 
@@ -11119,8 +11137,8 @@ namespace ECSEngine {
 				}
 
 				unsigned short fixed_dockspaces_count = (unsigned short)valid_fixed.size;
-				stream.write((const char*)&fixed_dockspaces_count, sizeof(unsigned short));
-				function::CopyStreamWithMask(stream, Stream<void>(m_fixed_dockspaces.buffer, sizeof(UIDockspaceLayer)), valid_fixed);
+				success &= WriteFile(file, { &fixed_dockspaces_count, sizeof(fixed_dockspaces_count) });
+				function::CopyStreamWithMask(file, Stream<void>(m_fixed_dockspaces.buffer, sizeof(UIDockspaceLayer)), valid_fixed);
 
 #pragma endregion
 
@@ -11140,16 +11158,14 @@ namespace ECSEngine {
 				}
 
 				unsigned short background_dockspace_count = (unsigned short)valid_background.size;
-				stream.write((const char*)&background_dockspace_count, sizeof(unsigned short));
-				function::CopyStreamWithMask(stream, Stream<void>(m_background_dockspaces.buffer, sizeof(UIDockspaceLayer)), valid_background);
+				success &= WriteFile(file, { &background_dockspace_count, sizeof(background_dockspace_count) });
+				function::CopyStreamWithMask(file, Stream<void>(m_background_dockspaces.buffer, sizeof(UIDockspaceLayer)), valid_background);
 
-				if (!stream.good()) {
-#define FIRST_ERROR "Writing file contents to "
-#define SECOND_ERROR " failed!"
-
+				CloseFile(file);
+				if (!success) {
 					if (error_message.buffer != nullptr) {
-						Stream<char> first_error(FIRST_ERROR, std::size(FIRST_ERROR) - 1);
-						Stream<char> second_error(SECOND_ERROR, std::size(SECOND_ERROR) - 1);
+						Stream<char> first_error = ToStream(FIRST_ERROR);
+						Stream<char> second_error = ToStream(SECOND_ERROR);
 						error_message.AddStreamSafe(first_error);
 
 						char temp_characters[512];
@@ -11160,10 +11176,11 @@ namespace ECSEngine {
 						error_message[error_message.size] = '\0';
 					}
 
-					return false;
+					if (ExistsFileOrFolder(filename)) {
+						RemoveFile(filename);
+					}
 
-#undef FIRST_ERROR
-#undef SECOND_ERROR
+					return false;
 				}
 
 #pragma endregion
@@ -11171,12 +11188,12 @@ namespace ECSEngine {
 				return true;
 			}
 			else {
-#define FIRST_ERROR "Opening file "
-#define SECOND_ERROR " to write UI windows failed!"
+				const char* FIRST_ERROR = "Opening file ";
+				const char* SECOND_ERROR = " to write UI windows failed!";
 
 				if (error_message.buffer != nullptr) {
-					Stream<char> first_error(FIRST_ERROR, std::size(FIRST_ERROR) - 1);
-					Stream<char> second_error(SECOND_ERROR, std::size(SECOND_ERROR) - 1);
+					Stream<char> first_error = ToStream(FIRST_ERROR);
+					Stream<char> second_error = ToStream(SECOND_ERROR);
 					error_message.AddStreamSafe(first_error);
 
 					char temp_characters[512];
@@ -11189,9 +11206,6 @@ namespace ECSEngine {
 
 				return false;
 			}
-
-#undef FIRST_ERROR
-#undef SECOND_ERROR
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11228,7 +11242,7 @@ namespace ECSEngine {
 			Texture2D old_texture(GetResource(*data->texture));
 
 			data->system->m_resources.texture_spinlock.lock();
-			Texture2D new_texture = ResizeTextureWithStaging(old_texture, 256, 256, ECS_RESIZE_TEXTURE_FILTER_BOX);
+			Texture2D new_texture = ResizeTextureWithStaging(data->system->m_graphics, old_texture, 256, 256, { true }, ECS_RESIZE_TEXTURE_FILTER_BOX);
 			data->system->m_resources.texture_spinlock.unlock();
 			if (new_texture.tex != nullptr) {
 				uint2 texture_dimensions = GetTextureDimensions(old_texture);
@@ -11237,7 +11251,7 @@ namespace ECSEngine {
 				// Only compress the texture if it is multiple of 4 size in both dimensions
 				if ((texture_dimensions.x & 3) == 0 && (texture_dimensions.y & 3) == 0) {
 					// Compress the texture
-					success = CompressTexture(new_texture, TextureCompressionExplicit::ColorMap, &data->system->m_resources.texture_spinlock);
+					success = CompressTexture(data->system->m_graphics, new_texture, TextureCompressionExplicit::ColorMap, &data->system->m_resources.texture_spinlock);
 				}
 
 				if (success) {
@@ -11249,13 +11263,14 @@ namespace ECSEngine {
 						// Rebind the pointer in the resource manager; the old texture will be automatically deleted
 						// and remove the reference count since it will bottleneck the file explorer when many textures are loaded
 						// at the same time
-						data->system->m_resource_manager->RebindResource(data->filename, ResourceType::Texture, new_view.view);
-						data->system->m_resource_manager->RemoveReferenceCountForResource(data->filename, ResourceType::Texture);
+						ResourceIdentifier identifier(data->filename);
+						data->system->m_resource_manager->RebindResource(identifier, ResourceType::Texture, new_view.view);
+						data->system->m_resource_manager->RemoveReferenceCountForResource(identifier, ResourceType::Texture);
 						*data->texture = new_view;
 					}
 				}
 				else {
-					new_texture.tex->Release();
+					new_texture.Release();
 				}
 			}
 			data->system->m_resources.texture_semaphore.Exit();
@@ -11289,7 +11304,7 @@ namespace ECSEngine {
 							UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, type);
 							system->RemoveDockspaceBorder(dockspace, border_index, type);
 						}
-						system->PopSystemHandler();
+						system->PopFrameHandler();
 						if (data->flag_destruction != nullptr) {
 							*data->flag_destruction = true;
 						}
@@ -11297,7 +11312,7 @@ namespace ECSEngine {
 
 					if (data->reset_when_window_is_destroyed) {
 						if (system->GetWindowFromName(data->name) == -1) {
-							system->PopSystemHandler();
+							system->PopFrameHandler();
 							if (data->deallocate_name) {
 								system->m_memory->Deallocate(data->name);
 							}
@@ -11310,7 +11325,7 @@ namespace ECSEngine {
 					else {
 						unsigned int window_index = system->GetWindowFromName(data->name);
 						if (window_index == -1) {
-							system->PopSystemHandler();
+							system->PopFrameHandler();
 							if (data->deallocate_name) {
 								system->m_memory->Deallocate(data->name);
 							}
@@ -11856,7 +11871,6 @@ namespace ECSEngine {
 						break;
 					}
 				}
-				system->m_frame_pacing = function::Select<unsigned int>(system->m_frame_pacing < 3, 3, system->m_frame_pacing);
 			}
 
 			bool is_null = data->floating_dockspace == nullptr;
@@ -11871,6 +11885,7 @@ namespace ECSEngine {
 			if (!is_fixed) {
 				data->floating_dockspace->transform.position.x += mouse_delta.x;
 				data->floating_dockspace->transform.position.y += mouse_delta.y;
+				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 			}
 		}
 
@@ -12173,7 +12188,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void DefaultHoverableWithToolTip(ActionData* action_data)
+		void DefaultHoverableWithToolTipAction(ActionData* action_data)
 		{
 			UI_UNPACK_ACTION_DATA;
 
@@ -12197,7 +12212,7 @@ namespace ECSEngine {
 
 			unsigned int* window_index = (unsigned int*)_data;
 			system->RemoveWindowFromDockspaceRegion(*window_index);
-			system->PopSystemHandler();
+			system->PopFrameHandler();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12211,7 +12226,7 @@ namespace ECSEngine {
 			data->callback.action(action_data);
 
 			system->RemoveWindowFromDockspaceRegion(data->window_index);
-			system->PopSystemHandler();
+			system->PopFrameHandler();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12241,7 +12256,7 @@ namespace ECSEngine {
 			float delta_y = mouse_delta.y * data->move_y;
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.dockspace == data->dockspace && system->m_focused_window_data.border_index == data->border_index)) {
-				system->m_frame_pacing = function::Select<unsigned int>(system->m_frame_pacing < 2, 2, system->m_frame_pacing);
+				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 				
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					if (system->m_focused_window_data.general_handler.action != nullptr) {
@@ -12325,7 +12340,7 @@ namespace ECSEngine {
 			UIDockspace* dockspace = &dockspaces[(unsigned int)data->dockspace_type][data->dockspace_index];
 
 			if (system->m_focused_window_data.locked_window == 0 || (system->m_focused_window_data.dockspace == dockspace)) {
-				system->m_frame_pacing = function::Select<unsigned int>(system->m_frame_pacing < 2, 2, system->m_frame_pacing);
+				system->m_frame_pacing = ECS_UI_FRAME_PACING_INSTANT;
 				
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					// cleaning up the last action; signaling clean up call by marking the buffers and the counts as nullptr
@@ -12356,6 +12371,58 @@ namespace ECSEngine {
 
 				}
 
+				auto draw_color = [=]() {
+					float2 mouse_delta = system->GetMouseDelta({ normalized_mouse_x, normalized_mouse_y });
+					float delta_x = mouse_delta.x;
+					float delta_y = mouse_delta.y;
+
+					UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
+					if (data->border_hover.IsTop()) {
+						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Top);
+						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Top);
+						SetSolidColorRectangle(
+							border_position,
+							border_scale,
+							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
+							solid_color,
+							counts[ECS_TOOLS_UI_SOLID_COLOR]
+						);
+					}
+					else if (data->border_hover.IsBottom()) {
+						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Bottom);
+						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Bottom);
+						SetSolidColorRectangle(
+							border_position,
+							border_scale,
+							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
+							solid_color,
+							counts[ECS_TOOLS_UI_SOLID_COLOR]
+						);
+					}
+					if (data->border_hover.IsRight()) {
+						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Right);
+						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Right);
+						SetSolidColorRectangle(
+							border_position,
+							border_scale,
+							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
+							solid_color,
+							counts[ECS_TOOLS_UI_SOLID_COLOR]
+						);
+					}
+					else if (data->border_hover.IsLeft()) {
+						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Left);
+						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Left);
+						SetSolidColorRectangle(
+							border_position,
+							border_scale,
+							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
+							solid_color,
+							counts[ECS_TOOLS_UI_SOLID_COLOR]
+						);
+					}
+				};
+
 				if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBPRESSED) {
 					DockspaceType floating_type = DockspaceType::Horizontal;
 					UIDockspace* floating_dockspace = system->GetFloatingDockspaceFromDockspace(dockspace, system->GetDockspaceMaskFromType(data->dockspace_type), floating_type);
@@ -12364,113 +12431,12 @@ namespace ECSEngine {
 					}
 					system->SetNewFocusedDockspace(floating_dockspace, floating_type);
 					system->SearchAndSetNewFocusedDockspaceRegion(dockspace, 0, data->dockspace_type);
-					float2 mouse_delta = system->GetMouseDelta({ normalized_mouse_x, normalized_mouse_y });
-					float delta_x = mouse_delta.x;
-					float delta_y = mouse_delta.y;
-
-					UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-
-					if (data->border_hover.IsTop()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Top);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Top);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-						system->ResizeDockspace(data->dockspace_index, delta_y, BorderType::Top, data->dockspace_type);
-					}
-					else if (data->border_hover.IsBottom()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Bottom);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Bottom);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-						system->ResizeDockspace(data->dockspace_index, delta_y, BorderType::Bottom, data->dockspace_type);
-					}
-					if (data->border_hover.IsRight()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Right);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Right);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-						system->ResizeDockspace(data->dockspace_index, delta_x, BorderType::Right, data->dockspace_type);
-					}
-					else if (data->border_hover.IsLeft()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Left);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Left);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-						system->ResizeDockspace(data->dockspace_index, delta_x, BorderType::Left, data->dockspace_type);
-					}
+					draw_color();
 				}
 				else {
 					system->DeallocateEventData();
 					system->m_event = SkipEvent;
-					float2 mouse_delta = system->GetMouseDelta({ normalized_mouse_x, normalized_mouse_y });
-					float delta_x = mouse_delta.x;
-					float delta_y = mouse_delta.y;
-
-					UIVertexColor* solid_color = (UIVertexColor*)buffers[ECS_TOOLS_UI_SOLID_COLOR];
-					if (data->border_hover.IsTop()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Top);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Top);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-					}
-					else if (data->border_hover.IsBottom()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Bottom);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Bottom);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-					}
-					if (data->border_hover.IsRight()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Right);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Right);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-					}
-					else if (data->border_hover.IsLeft()) {
-						float2 border_position = system->GetOuterDockspaceBorderPosition(dockspace, BorderType::Left);
-						float2 border_scale = system->GetOuterDockspaceBorderScale(dockspace, BorderType::Left);
-						SetSolidColorRectangle(
-							border_position,
-							border_scale,
-							DarkenColor(system->m_descriptors.color_theme.hovered_borders, system->m_descriptors.color_theme.darken_hover_factor),
-							solid_color,
-							counts[ECS_TOOLS_UI_SOLID_COLOR]
-						);
-					}
+					draw_color();
 				}
 
 				if (data->border_hover.IsBottom()) {

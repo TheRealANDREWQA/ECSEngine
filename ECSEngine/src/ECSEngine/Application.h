@@ -26,6 +26,9 @@ namespace ECSEngine {
 	public:
 		Application();
 		virtual ~Application();
+
+		Application(const Application& other) = default;
+		Application& operator = (const Application& other) = default;
 		
 		virtual int Run();
 		
@@ -45,4 +48,5 @@ namespace ECSEngine {
 	// To be defined in Client
 	Application* CreateApplication(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow);
 	Application* CreateApplication();
+
 }

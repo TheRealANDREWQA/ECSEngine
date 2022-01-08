@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "NotificationBar.h"
 #include "../Editor/EditorState.h"
 
@@ -17,8 +18,7 @@ void NotificationBarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* e
 	NotificationBarData* data = (NotificationBarData*)stack_memory;
 	data->editor_state = editor_state;
 
-	descriptor.draw = NotificationBarDraw<false>;
-	descriptor.initialize = NotificationBarDraw<true>;
+	descriptor.draw = NotificationBarDraw;
 	descriptor.window_name = NOTIFICATION_BAR_WINDOW_NAME;
 
 	descriptor.window_data = data;
@@ -34,8 +34,7 @@ void FocusConsole(ActionData* action_data) {
 	CreateConsole(system, editor_state->console);
 }
 
-template<bool initialize>
-void NotificationBarDraw(void* window_data, void* drawer_descriptor) {
+void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	NotificationBarData* data = (NotificationBarData*)window_data;
@@ -59,10 +58,8 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor) {
 		// Because of lazy evaluation filtered message indices might be updated later than the actual messages
 		if (console_data != nullptr) {
 			// Tick the console filtering process since it may not be called when it is not visible
-			if constexpr (!initialize) {
-				if (!drawer.system->IsWindowDrawing(console_window)) {
-					ConsoleFilterMessages(console_data, drawer);
-				}
+			if (!initialize && !drawer.system->IsWindowDrawing(console_window)) {
+				ConsoleFilterMessages(console_data, drawer);
 			}
 
 			if (console_data->filtered_message_indices.size > 0 && console->messages.size > 0) {
@@ -92,7 +89,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor) {
 			sprite_color = CONSOLE_COLORS[(unsigned int)message->icon_type];
 		}
 
-		drawer.SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE>(config, CONSOLE_TEXTURE_ICONS[(unsigned int)message->icon_type], sprite_color);
+		drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)message->icon_type], sprite_color);
 
 		UIConfigWindowDependentSize text_size;
 		text_size.scale_factor = drawer.GetWindowSizeFactors(text_size.type, { NOTIFICATION_MESSAGE_SIZE, NOTIFICATION_BAR_WINDOW_SIZE });
@@ -108,9 +105,8 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor) {
 		text_alignment.horizontal = TextAlignment::Left;
 		config.AddFlag(text_alignment);
 
-		drawer.TextLabel<UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_PARAMETERS
-			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT>(
-			config, message->message.buffer);
+		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_PARAMETERS
+			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT, config, message->message.buffer);
 
 		float2 action_scale = { drawer.current_x - action_position.x, TEXT_LABEL_Y_SIZE };
 		drawer.AddClickable(action_position, action_scale, { FocusConsole, data->editor_state, 0 });
@@ -118,7 +114,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor) {
 		float2 notification_size = drawer.GetLabelScale(message->message.buffer);
 		if (notification_size.x > NOTIFICATION_MESSAGE_SIZE) {			
 			drawer.Indent(-1.0f);
-			drawer.SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE>(config, ECS_TOOLS_UI_TEXTURE_HORIZONTAL_DOTS, drawer.color_theme.default_text);
+			drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_HORIZONTAL_DOTS, drawer.color_theme.default_text);
 		}
 
 	}

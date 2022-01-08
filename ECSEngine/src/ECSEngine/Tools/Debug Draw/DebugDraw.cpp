@@ -154,7 +154,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void HandleOptions(DebugDrawer* drawer, DebugDrawCallOptions options) {
-		drawer->graphics->m_context->RSSetState(drawer->rasterizer_states[options.wireframe]);
+		drawer->graphics->BindRasterizerState(drawer->rasterizer_states[options.wireframe]);
 		if (options.ignore_depth) {
 			drawer->graphics->DisableDepth();
 		}
@@ -854,7 +854,7 @@ namespace ECSEngine {
 		Matrix scale_rotation = scale_matrix * rotation_matrix;
 
 		// Create the instanced vertex buffer
-		VertexBuffer instanced_data_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), text.size);
+		VertexBuffer instanced_data_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), text.size, true);
 
 		// Keep track of already checked elements - the same principle as the Eratosthenes sieve
 		bool* checked_characters = (bool*)ECS_STACK_ALLOC(sizeof(bool) * text.size);
@@ -931,7 +931,7 @@ namespace ECSEngine {
 		}
 
 		// Release the temporary buffer
-		instanced_data_buffer.buffer->Release();
+		instanced_data_buffer.Release();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -960,19 +960,20 @@ namespace ECSEngine {
 		DebugDrawCallOptions options
 	) {
 		// Draw them as lines
+		Graphics* graphics = drawer->graphics;
 
 		// Allocate temporary constant buffer and position buffers
-		ConstantBuffer constant_buffer = drawer->graphics->CreateConstantBuffer(sizeof(InstancedTransformData));
-		VertexBuffer line_position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(float3), attribute.size * 2);
+		ConstantBuffer constant_buffer = graphics->CreateConstantBuffer(sizeof(InstancedTransformData), true);
+		VertexBuffer line_position_buffer = graphics->CreateVertexBuffer(sizeof(float3), attribute.size * 2, true);
 
 		// Create staging buffers for positions and normals
-		VertexBuffer staging_normals = ToStaging(attribute);
-		VertexBuffer staging_positions = ToStaging(model_position);
+		VertexBuffer staging_normals = BufferToStaging(graphics, attribute);
+		VertexBuffer staging_positions = BufferToStaging(graphics, model_position);
 
-		float* attribute_data = (float*)drawer->graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
-		float3* model_positions = (float3*)drawer->graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
-		void* constant_data = drawer->graphics->MapBuffer(constant_buffer.buffer);
-		float3* line_positions = (float3*)drawer->graphics->MapBuffer(line_position_buffer.buffer);
+		float* attribute_data = (float*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
+		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		void* constant_data = graphics->MapBuffer(constant_buffer.buffer);
+		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
 
 		SetInstancedColor(constant_data, 0, color);
 		SetInstancedMatrix(constant_data, 0, MatrixTranspose(world_matrix * drawer->camera_matrix));
@@ -987,28 +988,28 @@ namespace ECSEngine {
 		}
 
 		// Unmap the constant buffer and the staging ones
-		drawer->graphics->UnmapBuffer(staging_normals.buffer);
-		drawer->graphics->UnmapBuffer(staging_positions.buffer);
-		drawer->graphics->UnmapBuffer(constant_buffer.buffer);
-		drawer->graphics->UnmapBuffer(line_position_buffer.buffer);
+		graphics->UnmapBuffer(staging_normals.buffer);
+		graphics->UnmapBuffer(staging_positions.buffer);
+		graphics->UnmapBuffer(constant_buffer.buffer);
+		graphics->UnmapBuffer(line_position_buffer.buffer);
 
 		// Special shader
 		unsigned int shader_type = ECS_DEBUG_SHADER_NORMAL_SINGLE_DRAW;
 		drawer->BindShaders(shader_type);
 		HandleOptions(drawer, options);
-		drawer->graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
 		// The positions will be taken from the model positions buffer
-		drawer->graphics->BindVertexBuffer(line_position_buffer);
-		drawer->graphics->BindVertexConstantBuffer(constant_buffer);
+		graphics->BindVertexBuffer(line_position_buffer);
+		graphics->BindVertexConstantBuffer(constant_buffer);
 
-		drawer->graphics->Draw(attribute.size * 2);
+		graphics->Draw(attribute.size * 2);
 
 		// Release the temporary buffer and the staging normals
-		staging_normals.buffer->Release();
-		staging_positions.buffer->Release();
-		constant_buffer.buffer->Release();
-		line_position_buffer.buffer->Release();
+		staging_normals.Release();
+		staging_positions.Release();
+		constant_buffer.Release();
+		line_position_buffer.Release();
 	}
 
 	void DrawDebugVertexLine(
@@ -1022,19 +1023,20 @@ namespace ECSEngine {
 		DebugDrawCallOptions options
 	) {
 		// Draw them as lines
+		Graphics* graphics = drawer->graphics;
 
 		// Allocate temporary instanced buffer and position buffers
-		VertexBuffer instanced_buffer = drawer->graphics->CreateVertexBuffer(sizeof(InstancedTransformData), world_matrices.size);
-		VertexBuffer line_position_buffer = drawer->graphics->CreateVertexBuffer(sizeof(float3), attribute.size * 2);
+		VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), world_matrices.size, true);
+		VertexBuffer line_position_buffer = graphics->CreateVertexBuffer(sizeof(float3), attribute.size * 2, true);
 
 		// Create staging buffers for positions and normals
-		VertexBuffer staging_normals = ToStaging(attribute);
-		VertexBuffer staging_positions = ToStaging(model_position);
+		VertexBuffer staging_normals = BufferToStaging(graphics, attribute);
+		VertexBuffer staging_positions = BufferToStaging(graphics, model_position);
 
-		float* attribute_data = (float*)drawer->graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
-		float3* model_positions = (float3*)drawer->graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
-		void* instanced_data = drawer->graphics->MapBuffer(instanced_buffer.buffer);
-		float3* line_positions = (float3*)drawer->graphics->MapBuffer(line_position_buffer.buffer);
+		float* attribute_data = (float*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
+		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		void* instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
+		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
 
 		// Set the line positions
 		for (size_t index = 0; index < attribute.size; index++) {
@@ -1051,30 +1053,30 @@ namespace ECSEngine {
 		}
 
 		// Unmap the constant buffer and the staging ones
-		drawer->graphics->UnmapBuffer(staging_normals.buffer);
-		drawer->graphics->UnmapBuffer(staging_positions.buffer);
-		drawer->graphics->UnmapBuffer(instanced_buffer.buffer);
-		drawer->graphics->UnmapBuffer(line_position_buffer.buffer);
+		graphics->UnmapBuffer(staging_normals.buffer);
+		graphics->UnmapBuffer(staging_positions.buffer);
+		graphics->UnmapBuffer(instanced_buffer.buffer);
+		graphics->UnmapBuffer(line_position_buffer.buffer);
 
 		// Instanced draw
 		unsigned int shader_type = ECS_DEBUG_SHADER_TRANSFORM;
 		drawer->BindShaders(shader_type);
 		HandleOptions(drawer, options);
-		drawer->graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+		graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
 		// The positions will be taken from the model positions buffer
 		VertexBuffer vertex_buffers[2];
 		vertex_buffers[0] = line_position_buffer;
 		vertex_buffers[1] = instanced_buffer;
-		drawer->graphics->BindVertexBuffers({ vertex_buffers, std::size(vertex_buffers) });
+		graphics->BindVertexBuffers({ vertex_buffers, std::size(vertex_buffers) });
 
-		drawer->graphics->DrawInstanced(attribute.size * 2, world_matrices.size);
+		graphics->DrawInstanced(attribute.size * 2, world_matrices.size);
 
 		// Release the temporary buffer and the staging normals
-		staging_normals.buffer->Release();
-		staging_positions.buffer->Release();
-		instanced_buffer.buffer->Release();
-		line_position_buffer.buffer->Release();
+		staging_normals.Release();
+		staging_positions.Release();
+		instanced_buffer.Release();
+		line_position_buffer.Release();
 	}
 
 	void DebugDrawer::DrawNormals(
@@ -1154,12 +1156,12 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data - each line has 2 endpoints
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 2);
-			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 2, true);
+			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffer and the structured buffer now
 			graphics->BindVertexBuffer(position_buffer);
-			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer);
+			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer, true);
 			graphics->BindVertexResourceView(instanced_view);
 
 			Matrix transposed_camera = MatrixTranspose(camera_matrix);
@@ -1231,9 +1233,9 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffer, structured buffer and the temporary allocation
-			position_buffer.buffer->Release();
-			instanced_view.view->Release();
-			instanced_buffer.buffer->Release();
+			position_buffer.Release();
+			instanced_view.Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1256,7 +1258,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindSphereBuffers(instanced_buffer);
@@ -1324,7 +1326,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1347,7 +1349,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindPointBuffers(instanced_buffer);
@@ -1415,7 +1417,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1438,12 +1440,12 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data - each rectangles has 6 vertices
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 6);
-			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 6, true);
+			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffer and the structured buffer now
 			graphics->BindVertexBuffer(position_buffer);
-			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer);
+			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer, true);
 			graphics->BindVertexResourceView(instanced_view);
 
 			Matrix transposed_camera = MatrixTranspose(camera_matrix);
@@ -1514,9 +1516,9 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffer, structured buffer and the temporary allocation
-			position_buffer.buffer->Release();
-			instanced_view.view->Release();
-			instanced_buffer.buffer->Release();
+			position_buffer.Release();
+			instanced_view.Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1539,7 +1541,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindCrossBuffers(instanced_buffer);
@@ -1607,7 +1609,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1630,7 +1632,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindCircleBuffers(instanced_buffer);
@@ -1698,7 +1700,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1721,7 +1723,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindArrowCylinderBuffers(instanced_buffer);
@@ -1836,7 +1838,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1859,7 +1861,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count * 3);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count * 3, true);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -1958,7 +1960,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -1981,12 +1983,12 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data - each triangle has 3 vertices
-			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 3);
-			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer position_buffer = graphics->CreateVertexBuffer(sizeof(float3), instance_count * 3, true);
+			StructuredBuffer instanced_buffer = graphics->CreateStructuredBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffer and the structured buffer now
 			graphics->BindVertexBuffer(position_buffer);
-			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer);
+			ResourceView instanced_view = graphics->CreateBufferView(instanced_buffer, true);
 			graphics->BindVertexResourceView(instanced_view);
 
 			Matrix transposed_camera = MatrixTranspose(camera_matrix);
@@ -2059,9 +2061,9 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffer, structured buffer and the temporary allocation
-			position_buffer.buffer->Release();
-			instanced_view.view->Release();
-			instanced_buffer.buffer->Release();
+			position_buffer.Release();
+			instanced_view.Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -2084,7 +2086,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindCubeBuffers(instanced_buffer);
@@ -2152,7 +2154,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -2175,7 +2177,7 @@ namespace ECSEngine {
 			unsigned int instance_count = GetMaximumCount(counts);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			// Bind the vertex buffers now
 			BindCubeBuffers(instanced_buffer);
@@ -2243,7 +2245,7 @@ namespace ECSEngine {
 			UpdateElementDurations(deck_pointer, time_delta);
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 		}
 	}
@@ -2273,7 +2275,7 @@ namespace ECSEngine {
 			ECS_ASSERT(instance_count < 10'000);
 
 			// Create temporary buffers to hold the data
-			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count);
+			VertexBuffer instanced_buffer = graphics->CreateVertexBuffer(sizeof(InstancedTransformData), instance_count, true);
 
 			unsigned int current_count = counts[WIREFRAME_DEPTH];
 			ushort2* current_indices = indices[WIREFRAME_DEPTH];
@@ -2415,7 +2417,7 @@ namespace ECSEngine {
 			deck_pointer->RecalculateFreeChunks();
 
 			// Release the temporary vertex buffers and the temporary allocation
-			instanced_buffer.buffer->Release();
+			instanced_buffer.Release();
 			allocator->Deallocate(type_indices);
 			allocator->Deallocate(horizontal_offsets);
 			allocator->Deallocate(vertical_offsets);
@@ -2842,19 +2844,16 @@ namespace ECSEngine {
 		rasterizer_desc.CullMode = D3D11_CULL_NONE;
 		rasterizer_desc.DepthClipEnable = TRUE;
 		rasterizer_desc.FillMode = D3D11_FILL_WIREFRAME;
-		HRESULT result = graphics->m_device->CreateRasterizerState(&rasterizer_desc, rasterizer_states + ECS_DEBUG_RASTERIZER_WIREFRAME);
-		ECS_ASSERT(!FAILED(result));
+		rasterizer_states[ECS_DEBUG_RASTERIZER_WIREFRAME] = graphics->CreateRasterizerState(rasterizer_desc);
 
 		// Solid - disable the back face culling
 		rasterizer_desc.FillMode = D3D11_FILL_SOLID;
 		rasterizer_desc.CullMode = D3D11_CULL_NONE;
-		result = graphics->m_device->CreateRasterizerState(&rasterizer_desc, rasterizer_states + ECS_DEBUG_RASTERIZER_SOLID);
-		ECS_ASSERT(!FAILED(result));
+		rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID] = graphics->CreateRasterizerState(rasterizer_desc);
 
 		// Solid - with back face culling
 		rasterizer_desc.CullMode = D3D11_CULL_BACK;
-		result = graphics->m_device->CreateRasterizerState(&rasterizer_desc, rasterizer_states + ECS_DEBUG_RASTERIZER_SOLID_CULL);
-		ECS_ASSERT(!FAILED(result));
+		rasterizer_states[ECS_DEBUG_RASTERIZER_SOLID_CULL] = graphics->CreateRasterizerState(rasterizer_desc);
 
 		size_t total_memory = 0;
 		size_t thread_capacity_stream_size = sizeof(CapacityStream<void>) * thread_count;
@@ -3016,7 +3015,7 @@ namespace ECSEngine {
 		}
 
 		// Transform the vertex buffer to a staging buffer and read the values
-		VertexBuffer staging_buffer = ToStaging(GetMeshVertexBuffer(string_mesh->mesh, ECS_MESH_POSITION));
+		VertexBuffer staging_buffer = BufferToStaging(graphics, GetMeshVertexBuffer(string_mesh->mesh, ECS_MESH_POSITION));
 
 		// Map the buffer
 		float3* values = (float3*)graphics->MapBuffer(staging_buffer.buffer, D3D11_MAP_READ);
@@ -3045,7 +3044,7 @@ namespace ECSEngine {
 		graphics->UnmapBuffer(staging_buffer.buffer);
 
 		// Release the staging buffer
-		staging_buffer.buffer->Release();
+		staging_buffer.Release();
 
 		for (size_t index = 0; index < ECS_DEBUG_VERTEX_BUFFER_COUNT; index++) {
 			primitive_meshes[index] = ((Stream<Mesh>*)resource_manager->LoadMeshes(PRIMITIVE_MESH_FILES[index]))->buffer;

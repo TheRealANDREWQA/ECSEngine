@@ -13,11 +13,11 @@ namespace ECSEngine {
 		// A unit cube is needed because instead of a rectangle because it will rotated by the look at matrices
 		VertexBuffer cube_v_buffer;
 		IndexBuffer cube_i_buffer;
-		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer);
+		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer, true);
 
 		// The constant buffer for the projection view matrix
-		ConstantBuffer vc_buffer = graphics->CreateConstantBuffer(sizeof(Matrix));
-		ConstantBuffer pc_buffer = graphics->CreateConstantBuffer(sizeof(float));
+		ConstantBuffer vc_buffer = graphics->CreateConstantBuffer(sizeof(Matrix), true);
+		ConstantBuffer pc_buffer = graphics->CreateConstantBuffer(sizeof(float), true);
 		// The buffer expects a float with the delta step - convert to a delta step
 		float step = PI * 2 / sample_count;
 		UpdateBufferResource(pc_buffer.buffer, &step, sizeof(float), graphics->GetContext());
@@ -36,7 +36,7 @@ namespace ECSEngine {
 
 		RenderTargetView target_views[6];
 		for (size_t index = 0; index < 6; index++) {
-			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index);
+			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, 0, true);
 		}
 
 		D3D11_SAMPLER_DESC sampler_descriptor = {};
@@ -46,7 +46,7 @@ namespace ECSEngine {
 		sampler_descriptor.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 		sampler_descriptor.MinLOD = 0;
 		sampler_descriptor.MaxLOD = D3D11_FLOAT32_MAX;
-		SamplerState sampler = graphics->CreateSamplerState(sampler_descriptor);
+		SamplerState sampler = graphics->CreateSamplerState(sampler_descriptor, true);
 
 		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT);
 		graphics->BindVertexBuffer(cube_v_buffer);
@@ -75,14 +75,14 @@ namespace ECSEngine {
 		graphics->BindRenderTargetView(previous_target, previous_depth);
 		graphics->BindViewport(previous_viewport);
 
-		cube_v_buffer.buffer->Release();
-		cube_i_buffer.buffer->Release();
-		vc_buffer.buffer->Release();
-		pc_buffer.buffer->Release();
-		sampler.sampler->Release();
+		cube_v_buffer.Release();
+		cube_i_buffer.Release();
+		vc_buffer.Release();
+		pc_buffer.Release();
+		sampler.Release();
 
 		for (size_t index = 0; index < 6; index++) {
-			target_views[index].target->Release();
+			target_views[index].Release();
 		}
 
 		return cube;
@@ -97,24 +97,24 @@ namespace ECSEngine {
 		// A unit cube is needed because instead of a rectangle because it will rotated by the look at matrices
 		VertexBuffer cube_v_buffer;
 		IndexBuffer cube_i_buffer;
-		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer);
+		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer, true);
 
 		// The constant buffer for the projection view matrix
-		ConstantBuffer vc_buffer = graphics->CreateConstantBuffer(sizeof(Matrix));
+		ConstantBuffer vc_buffer = graphics->CreateConstantBuffer(sizeof(Matrix), true);
 
 		// The roughness buffer
-		ConstantBuffer roughness_buffer = graphics->CreateConstantBuffer(sizeof(float));
+		ConstantBuffer roughness_buffer = graphics->CreateConstantBuffer(sizeof(float), true);
 
 		Texture2D environment_tex = GetResource(environment);
 		D3D11_TEXTURE2D_DESC environment_descriptor;
 		environment_tex.tex->GetDesc(&environment_descriptor);
 
 		// The sample buffer
-		ConstantBuffer sample_buffer = graphics->CreateConstantBuffer(sizeof(unsigned int), &sample_count);
+		ConstantBuffer sample_buffer = graphics->CreateConstantBuffer(sizeof(unsigned int), &sample_count, true);
 
 		// Main face resolution
 		float face_resolution = (float)environment_descriptor.Width;
-		ConstantBuffer resolution_buffer = graphics->CreateConstantBuffer(sizeof(float), &face_resolution);
+		ConstantBuffer resolution_buffer = graphics->CreateConstantBuffer(sizeof(float), &face_resolution, true);
 
 		D3D11_SAMPLER_DESC sampler_desc = {};
 		sampler_desc.MinLOD = 0;
@@ -123,7 +123,7 @@ namespace ECSEngine {
 		sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-		SamplerState sampler_state = graphics->CreateSamplerState(sampler_desc);
+		SamplerState sampler_state = graphics->CreateSamplerState(sampler_desc, true);
 
 		// The format of the cube texture is RGBA16F
 		GraphicsTextureCubeDescriptor cube_descriptor;
@@ -178,7 +178,7 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < 6; index++) {
 				// Create a render target view of the current face
-				RenderTargetView render_target_view = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, mip_level);
+				RenderTargetView render_target_view = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, mip_level, true);
 
 				// Update the vertex buffer
 				Matrix current_matrix = MatrixTranspose(ViewMatrixTextureCube((TextureCubeFace)index) * projection_matrix);
@@ -187,7 +187,7 @@ namespace ECSEngine {
 				graphics->BindRenderTargetView(render_target_view, nullptr);
 
 				graphics->DrawIndexed(cube_i_buffer.count);
-				render_target_view.target->Release();
+				render_target_view.Release();
 			}
 
 			dimensions.x = dimensions.x == 1 ? 1 : dimensions.x >> 1;
@@ -200,13 +200,13 @@ namespace ECSEngine {
 		graphics->BindRenderTargetView(previous_target, previous_depth);
 		graphics->BindViewport(previous_viewport);
 
-		cube_v_buffer.buffer->Release();
-		cube_i_buffer.buffer->Release();
-		vc_buffer.buffer->Release();
-		roughness_buffer.buffer->Release();
-		sample_buffer.buffer->Release();
-		resolution_buffer.buffer->Release();
-		sampler_state.sampler->Release();
+		cube_v_buffer.Release();
+		cube_i_buffer.Release();
+		vc_buffer.Release();
+		roughness_buffer.Release();
+		sample_buffer.Release();
+		resolution_buffer.Release();
+		sampler_state.Release();
 
 		return cube;
 	}
@@ -231,7 +231,7 @@ namespace ECSEngine {
 		IndexBuffer cube_i_buffer;
 		CreateCubeVertexBuffer(graphics, 1.0f, cube_v_buffer, cube_i_buffer);
 #else
-		VertexBuffer ndc_quad = CreateRectangleVertexBuffer(graphics, { -1.0f, -1.0f, 0.5f }, { 1.0f, 1.0f, 0.5f });
+		VertexBuffer ndc_quad = CreateRectangleVertexBuffer(graphics, { -1.0f, -1.0f, 0.5f }, { 1.0f, 1.0f, 0.5f }, true);
 
 		float2 uvs[] = {
 			{0.0f, 0.0f},
@@ -242,9 +242,9 @@ namespace ECSEngine {
 			{0.0f, 1.0f}
 		};
 
-		VertexBuffer uv_buffer = graphics->CreateVertexBuffer(sizeof(float2), std::size(uvs), uvs);
+		VertexBuffer uv_buffer = graphics->CreateVertexBuffer(sizeof(float2), std::size(uvs), uvs, true);
 #endif
-		ConstantBuffer sample_buffer = graphics->CreateConstantBuffer(sizeof(unsigned int), &sample_count);
+		ConstantBuffer sample_buffer = graphics->CreateConstantBuffer(sizeof(unsigned int), &sample_count, true);
 
 		RenderTargetView previous_target = graphics->GetBoundRenderTarget();
 		DepthStencilView previous_depth = graphics->GetBoundDepthStencil();
@@ -265,7 +265,7 @@ namespace ECSEngine {
 		graphics->BindPixelConstantBuffer(sample_buffer);
 		graphics->BindViewport(0.0f, 0.0f, dimensions.x, dimensions.y, 0.0f, 1.0f);
 
-		RenderTargetView render_view = graphics->CreateRenderTargetView(texture);
+		RenderTargetView render_view = graphics->CreateRenderTargetView(texture, 0, true);
 		graphics->BindRenderTargetView(render_view, nullptr);
 
 #ifdef CUBE
@@ -279,19 +279,19 @@ namespace ECSEngine {
 		graphics->BindRenderTargetView(previous_target, previous_depth);
 		graphics->BindViewport(previous_viewport);
 
-		ResourceView resource_view = graphics->CreateTextureShaderViewResource(texture);
+		ResourceView resource_view = graphics->CreateTextureShaderViewResource(texture, true);
 		graphics->GenerateMips(resource_view);
-		resource_view.view->Release();
+		resource_view.Release();
 
 #ifdef CUBE
 		cube_v_buffer.buffer->Release();
 		cube_i_buffer.buffer->Release();
 #else
-		ndc_quad.buffer->Release();
-		uv_buffer.buffer->Release();
+		ndc_quad.Release();
+		uv_buffer.Release();
 #endif
-		sample_buffer.buffer->Release();
-		render_view.target->Release();
+		sample_buffer.Release();
+		render_view.Release();
 
 		return texture;
 	}

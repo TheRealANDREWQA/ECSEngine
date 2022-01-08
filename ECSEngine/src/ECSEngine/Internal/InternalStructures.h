@@ -247,6 +247,7 @@ namespace ECSEngine {
 		const void* ptr;
 		unsigned int size;
 	};
+	
 
 	struct ECSENGINE_API HashFunctionMultiplyString {
 		static unsigned int Hash(Stream<const char> string);

@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "ProjectUITemplate.h"
 #include "..\Editor\EditorState.h"
 #include "ProjectOperations.h"
@@ -80,8 +81,7 @@ void SaveCurrentProjectUIAction(ActionData* action_data) {
 }
 
 void InjectWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
-	descriptor.draw = InjectValuesWindowDraw<false>;
-	descriptor.initialize = InjectValuesWindowDraw<true>;
+	descriptor.draw = InjectValuesWindowDraw;
 
 	descriptor.destroy_action = InjectWindowDestroyAction;
 	descriptor.window_data = &editor_state->inject_data;
@@ -152,7 +152,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	SaveProjectUIAutomaticallyData save_data;
 	save_data.editor_state = editor_state;
 	save_data.timer.SetMarker();
-	ui_system->PushSystemHandler({ SaveProjectUIAutomatically, &save_data, sizeof(save_data) });
+	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_data, sizeof(save_data) });
 	return true;
 }
 
@@ -175,8 +175,8 @@ void LoadProjectUITemplateAction(ActionData* action_data)
 	size_t stack_memory[256];
 	LoadProjectUITemplateData* data = (LoadProjectUITemplateData*)_data;
 	ECS_ASSERT(data->ui_template.ui_file.size < 500);
-	system->PushSystemHandler({ LoadProjectUITemplateSystemHandler, stack_memory, (unsigned int)(sizeof(LoadProjectUITemplateData) + sizeof(wchar_t) * data->ui_template.ui_file.size) });
-	LoadProjectUITemplateData* handler_data = (LoadProjectUITemplateData*)system->GetLastSystemHandlerData();
+	system->AddFrameHandler({ LoadProjectUITemplateSystemHandler, stack_memory, (unsigned int)(sizeof(LoadProjectUITemplateData) + sizeof(wchar_t) * data->ui_template.ui_file.size) });
+	LoadProjectUITemplateData* handler_data = (LoadProjectUITemplateData*)system->GetFrameHandlerData(system->GetFrameHandlerCount() - 1);
 	handler_data->editor_state = data->editor_state;
 	handler_data->ui_template.ui_file.InitializeFromBuffer(function::OffsetPointer(handler_data, sizeof(LoadProjectUITemplateData)), data->ui_template.ui_file.size, data->ui_template.ui_file.size);
 	memcpy(handler_data->ui_template.ui_file.buffer, data->ui_template.ui_file.buffer, sizeof(wchar_t) * data->ui_template.ui_file.size);

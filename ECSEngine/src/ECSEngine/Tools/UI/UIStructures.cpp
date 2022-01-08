@@ -431,12 +431,13 @@ namespace ECSEngine {
 			}
 		}
 
-		void UIDrawResources::Release()
+		void UIDrawResources::Release(Graphics* graphics)
 		{
-			region_viewport_info.buffer->Release();
+			graphics->FreeResource(region_viewport_info);
 			for (size_t index = 0; index < buffers.size; index++) {
-				buffers[index].buffer->Release();
+				graphics->FreeResource(buffers[index]);
 			}
+
 			for (size_t index = 0; index < sprite_textures.size; index++) {
 				sprite_textures[index].FreeBuffer();
 			}
@@ -458,7 +459,7 @@ namespace ECSEngine {
 			HandlerCommand deallocate_data;
 			deallocate_data.handler.action = nullptr;
 			deallocate_data.handler.data = nullptr;
-			if (revert_commands.GetElementCount() == revert_commands.GetCapacity()) {
+			if (revert_commands.GetSize() == revert_commands.GetCapacity()) {
 				const HandlerCommand* deallocate_command = revert_commands.PeekLastItem();
 				deallocate_data = *deallocate_command;
 			}
@@ -629,17 +630,11 @@ namespace ECSEngine {
 		size_t UIWindow::Serialize(void* buffer) const
 		{
 			/*	
-			float2 render_region;
-			float2 zoom;
 			UIWindowDrawerDescriptor descriptors;
 			unsigned short name_length;
 			*/
 
-			// render region and zoom
 			uintptr_t ptr = (uintptr_t)buffer;
-			memcpy(buffer, this, sizeof(float2) * 2);
-
-			ptr += sizeof(float2) * 2;
 			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count);
 		
 			// configured descriptors
@@ -681,9 +676,6 @@ namespace ECSEngine {
 		{
 			size_t size = 0;
 
-			// render region and zoom
-			size += sizeof(float2) * 2;
-
 			// configured descriptors
 			size += sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count;
 
@@ -712,10 +704,6 @@ namespace ECSEngine {
 		size_t UIWindow::LoadFromFile(const void* buffer, Stream<char>& name_stack)
 		{
 			uintptr_t ptr = (uintptr_t)buffer;
-
-			// render region and zoom
-			memcpy(this, (const void*)ptr, sizeof(float2) * 2);
-			ptr += sizeof(float2) * 2;
 
 			// descriptor configurations
 			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count);

@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "Editor\EditorState.h"
 #include "HelperWindows.h"
 
@@ -33,8 +34,7 @@ unsigned int CreateDefaultWindow(
 	const char* window_name,
 	EditorState* editor_state,
 	float2 window_size,
-	WindowDraw draw,
-	WindowDraw initialize
+	WindowDraw draw
 )
 {
 	EDITOR_STATE(editor_state);
@@ -46,7 +46,6 @@ unsigned int CreateDefaultWindow(
 	descriptor.initial_size_y = window_size.y;
 
 	descriptor.draw = draw;
-	descriptor.initialize = initialize;
 
 	descriptor.window_name = window_name;
 	descriptor.window_data = editor_state;
@@ -67,12 +66,11 @@ void ChooseDirectoryOrFileNameButtonAction(ActionData* action_data) {
 	CloseXBorderClickableAction(action_data);
 }
 
-template<bool initialize>
-void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor) {
+void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	ChooseDirectoryOrFileNameData* data = (ChooseDirectoryOrFileNameData*)window_data;
-	if constexpr (initialize) {
+	if (initialize) {
 		if (data->ascii == nullptr) {
 			data->ascii = drawer.GetMainAllocatorBuffer<CapacityStream<char>>();
 			if (data->wide != nullptr) {
@@ -118,8 +116,8 @@ void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor) {
 	size.scale_factor.x = 1.0f;
 	config.AddFlag(size);
 
-	drawer.TextInput<UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_HINT
-		| UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_NO_NAME>(config, "Name", data->ascii);
+	drawer.TextInput(UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_NO_NAME, 
+		config, "Name", data->ascii);
 	drawer.NextRow();
 
 	config.flag_count = 0;
@@ -130,14 +128,14 @@ void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor) {
 	absolute_transform.scale = label_size;
 
 	config.AddFlag(absolute_transform);
-	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "Finish", { ChooseDirectoryOrFileNameButtonAction, data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Finish", { ChooseDirectoryOrFileNameButtonAction, data, 0, UIDrawPhase::System });
 	config.flag_count--;
 	
 
 	absolute_transform.scale = drawer.GetLabelScale("Cancel");
 	absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
 	config.AddFlag(absolute_transform);
-	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM,config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 }
 
 unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDirectoryOrFileNameData data)
@@ -150,8 +148,7 @@ unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDi
 	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, CHOOSE_DIRECTORY_OR_FILE_NAME_SCALE.y);
 
 	descriptor.window_name = "Choose Name";
-	descriptor.draw = ChooseDirectoryOrFileName<false>;
-	descriptor.initialize = ChooseDirectoryOrFileName<true>;
+	descriptor.draw = ChooseDirectoryOrFileName;
 
 	descriptor.window_data = &data;
 	descriptor.window_data_size = sizeof(data);

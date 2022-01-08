@@ -172,13 +172,9 @@ namespace ECSEngine {
 
 		ECSENGINE_API void DeleteFileWithError(Stream<wchar_t> path, Console* console);
 
-		ECSENGINE_API void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system);
+		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system);
 
-		ECSENGINE_API void RenameFolderWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console);
-
-		ECSENGINE_API void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, UISystem* system);
-
-		ECSENGINE_API void RenameFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console);
+		ECSENGINE_API void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console);
 
 		ECSENGINE_API void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, UISystem* system);
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <stdio.h>
 #include <stdint.h>
 #include <math.h>
 #include <immintrin.h>
@@ -8,15 +9,16 @@
 #include <execution>
 #include <string>
 #include <chrono>
-#include <random>
-#include <sstream>
 #include <comdef.h>
 #include <atomic>
-#include <fstream>
 #include <condition_variable>
 #include <assert.h>
-#include <filesystem>
 #include <type_traits>
+#include <io.h>
+#include <direct.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "../../Dependencies/VCL-version2/vectorclass.h"
 #include "../../Dependencies/VCL-version2/vectormath_trig.h"
@@ -24,10 +26,6 @@
 #include "../../Dependencies/VCL-version2/vectormath_hyp.h"
 
 #ifdef ECSENGINE_PLATFORM_WINDOWS
-
-#include <wrl.h>
-#include <DirectXMath.h>
-#include "../../Dependencies/DirectXTK/Inc/WICTextureLoader.h"
 
 // target Windows 7 or later
 #define _WIN32_WINNT 0x0601
@@ -69,6 +67,10 @@
 #define NOTAPE
 
 #define STRICT
+
+#include <wrl.h>
+#include <DirectXMath.h>
+#include "../../Dependencies/DirectXTK/Inc/WICTextureLoader.h"
 
 #include <sdkddkver.h>
 #include <Windows.h>

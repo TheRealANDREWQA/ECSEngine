@@ -375,12 +375,7 @@ namespace ECSEngine {
 
 		bool UIDrawerSlider::IsTheSameData(const UIDrawerSlider* other) const
 		{
-			if (other != nullptr) {
-				return value_to_change == other->value_to_change;
-			}
-			else {
-				return false;
-			}
+			return other != nullptr && value_to_change == other->value_to_change;
 		}
 
 		float2* UIDrawerSlider::TextPosition()
@@ -537,6 +532,16 @@ namespace ECSEngine {
 		}
 
 
-	}
+		bool UIDrawerTextInputActionData::IsTheSameData(const UIDrawerTextInputActionData* other) const
+		{
+			return other != nullptr && input->IsTheSameData(other->input);
+		}
+
+		bool UIDrawerSliderEnterValuesData::IsTheSameData(const UIDrawerSliderEnterValuesData* other) const
+		{
+			return other != nullptr && slider->IsTheSameData(other->slider);
+		}
+
+}
 
 }

@@ -1,6 +1,8 @@
 #include "ecspch.h"
 #include "Reflection.h"
 #include "../File.h"
+#include "../../Allocators/AllocatorPolymorphic.h"
+#include "../ForEachFiles.h"
 
 namespace ECSEngine {
 
@@ -134,24 +136,17 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		unsigned int ReflectionManager::CreateFolderHierarchy(const wchar_t* root) {
-			folders.ReserveNewElements(1);
-			folders[folders.size++] = { ReflectionFolderHierarchy(folders.allocator, root), nullptr };
-
-			constexpr wchar_t* c_file_extensions[] = {
-				L".cpp",
-				L".hpp",
-				L".c",
-				L".h"
-			};
-			folders[folders.size - 1].hierarchy.AddFilterFiles("C++ files", Stream<const wchar_t*>((void*)c_file_extensions, 4));
-			return folders.size - 1;
+			unsigned int index = folders.ReserveNewElement();
+			folders[index] = { function::StringCopy(folders.allocator, root).buffer, nullptr };
+			folders.size++;
+			return index;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data)
 		{
-			free(data.thread_memory.buffer);
+			folders.allocator->Deallocate(data.thread_memory.buffer);
 			folders.allocator->Deallocate(data.types.buffer);
 			folders.allocator->Deallocate(data.enums.buffer);
 			folders.allocator->Deallocate(data.paths.buffer);
@@ -182,7 +177,6 @@ namespace ECSEngine {
 			}
 
 			folders.allocator->Deallocate(folders[folder_index].allocated_buffer);
-			folders[folder_index].hierarchy.FreeAllMemory();
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -200,6 +194,18 @@ namespace ECSEngine {
 			size_t name_length = strlen(name);
 			ResourceIdentifier identifier = ResourceIdentifier(name, name_length);
 			return enum_definitions.GetValue(identifier);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int ReflectionManager::GetHierarchyIndex(const wchar_t* hierarchy) const
+		{
+			for (unsigned int index = 0; index < folders.size; index++) {
+				if (wcscmp(folders[index].root, hierarchy) == 0) {
+					return index;
+				}
+			}
+			return -1;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -354,7 +360,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.types.InitializeFromBuffer(type_allocation, 0, max_types);
 			data.paths.InitializeFromBuffer(path_allocation, path_count);
 
-			void* thread_allocation = malloc(thread_memory);
+			void* thread_allocation = folders.allocator->Allocate(thread_memory);
 			data.thread_memory.InitializeFromBuffer(thread_allocation, 0, thread_memory);
 			data.field_table = &field_table;
 			data.success = true;
@@ -365,10 +371,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool ReflectionManager::ProcessFolderHierarchy(const wchar_t* root, CapacityStream<char>* error_message) {
-			for (size_t index = 0; index < folders.size; index++) {
-				if (wcscmp(folders[index].hierarchy.root, root) == 0) {
-					return ProcessFolderHierarchy(index, error_message);
-				}
+			unsigned int hierarchy_index = GetHierarchyIndex(root);
+			if (hierarchy_index != -1) {
+				return ProcessFolderHierarchy(hierarchy_index, error_message);
 			}
 			return false;
 		}
@@ -380,41 +385,65 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			TaskManager* task_manager, 
 			CapacityStream<char>* error_message
 		) {
-			for (size_t index = 0; index < folders.size; index++) {
-				if (wcscmp(folders[index].hierarchy.root, root) == 0) {
-					return ProcessFolderHierarchy(index, task_manager, error_message);
-				}
+			unsigned int hierarchy_index = GetHierarchyIndex(root);
+			if (hierarchy_index != -1) {
+				return ProcessFolderHierarchy(hierarchy_index, task_manager, error_message);
 			}
 			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
+		// It will deallocate the files
+		bool ProcessFolderHierarchyImplementation(ReflectionManager* manager, unsigned int folder_index, CapacityStream<const wchar_t*> files, CapacityStream<char>* error_message) {			
 			ReflectionManagerParseStructuresThreadTaskData thread_data;
 
-			constexpr size_t thread_memory = 20'000'000;
+			constexpr size_t thread_memory = 5'000'000;
 			// Paths that need to be searched will not be assigned here
 			ECS_TEMP_ASCII_STRING(temp_error_message, 1024);
 			if (error_message == nullptr) {
 				error_message = &temp_error_message;
 			}
-			InitializeParseThreadTaskData(thread_memory, folders[index].hierarchy.filtered_files[0].files.size, thread_data, error_message);
+			manager->InitializeParseThreadTaskData(thread_memory, files.size, thread_data, error_message);
 
 			ConditionVariable condition_variable;
 			thread_data.condition_variable = &condition_variable;
 			// Assigning paths
-			for (size_t path_index = 0; path_index < folders[index].hierarchy.filtered_files[0].files.size; path_index++) {
-				thread_data.paths[path_index] = folders[index].hierarchy.filtered_files[0].files[path_index];
+			for (size_t path_index = 0; path_index < files.size; path_index++) {
+				thread_data.paths[path_index] = files[path_index];
 			}
 
 			ReflectionManagerParseThreadTask(0, nullptr, &thread_data);
 			if (thread_data.success == true) {
-				BindApprovedData(&thread_data, 1, index);
+				manager->BindApprovedData(&thread_data, 1, folder_index);
 			}
 
-			DeallocateThreadTaskData(thread_data);
+			manager->DeallocateThreadTaskData(thread_data);
+			for (size_t index = 0; index < files.size; index++) {
+				manager->folders.allocator->Deallocate(files[index]);
+			}
+
 			return thread_data.success;
+		}
+
+		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
+			AllocatorPolymorphic allocator = GetAllocatorPolymorphic(folders.allocator);
+			const wchar_t* c_file_extensions[] = {
+				L".c",
+				L".cpp",
+				L".h",
+				L".hpp"
+			};
+
+			const size_t MAX_DIRECTORIES = ECS_KB;
+			const wchar_t** _files = (const wchar_t**)ECS_STACK_ALLOC(sizeof(const wchar_t*) * MAX_DIRECTORIES);
+			CapacityStream<const wchar_t*> files(_files, 0, MAX_DIRECTORIES);
+			bool status = GetDirectoryFileWithExtensionRecursive(folders[index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
+			if (!status) {
+				return false;
+			}
+
+			return ProcessFolderHierarchyImplementation(this, index, files, error_message);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -426,10 +455,31 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		) {
 			unsigned int thread_count = task_manager->GetThreadCount();
 
+			AllocatorPolymorphic allocator = GetAllocatorPolymorphic(folders.allocator);
+			const wchar_t* c_file_extensions[] = {
+				L".c",
+				L".cpp",
+				L".h",
+				L".hpp"
+			};
+
+			const size_t MAX_DIRECTORIES = ECS_KB;
+			const wchar_t** _files = (const wchar_t**)ECS_STACK_ALLOC(sizeof(const wchar_t*) * MAX_DIRECTORIES);
+			CapacityStream<const wchar_t*> files(_files, 0, MAX_DIRECTORIES);
+			bool status = GetDirectoryFileWithExtensionRecursive(folders[folder_index].root, allocator, files, { c_file_extensions, std::size(c_file_extensions) });
+			if (!status) {
+				return false;
+			}
+
 			// Preparsing the files in order to have thread act only on files that actually need to process
 			// Otherwise unequal distribution of files will result in poor multithreaded performance
+			unsigned int files_count = files.size;
 
-			unsigned int files_count = folders[folder_index].hierarchy.filtered_files[0].files.size;
+			// Process these files on separate threads only if their number is greater than thread count / 2
+			if (files_count < thread_count / 2) {
+				return ProcessFolderHierarchyImplementation(this, folder_index, files, error_message);
+			}
+
 			unsigned int* path_indices_buffer = (unsigned int*)folders.allocator->Allocate(sizeof(unsigned int) * files_count, alignof(unsigned int));
 			AtomicStream<unsigned int> path_indices = AtomicStream<unsigned int>(path_indices_buffer, 0, files_count);
 
@@ -462,12 +512,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				reflect_thread_data[thread_index].reflection_manager = this;
 				reflect_thread_data[thread_index].valid_paths = &path_indices;
 				reflect_thread_data[thread_index].semaphore = &reflect_semaphore;
+				reflect_thread_data[thread_index].files = files;
 
 				// Launch the task
 				ThreadTask task;
 				task.function = ReflectionManagerHasReflectStructuresThreadTask;
 				task.data = reflect_thread_data + thread_index;
-				//ReflectionManagerHasReflectStructuresThreadTask(0, task_manager->m_world, reflect_thread_data + thread_index);
 				task_manager->AddDynamicTaskAndWake(task);
 			}
 
@@ -500,7 +550,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 				// Set thread paths
 				for (size_t path_index = parse_thread_start; path_index < parse_thread_start + thread_current_paths; path_index++) {
-					parse_thread_data[thread_index].paths[path_index - parse_thread_start] = folders[folder_index].hierarchy.filtered_files[0].files[path_indices[path_index]];
+					parse_thread_data[thread_index].paths[path_index - parse_thread_start] = files[path_indices[path_index]];
 				}
 				parse_thread_start += thread_current_paths;
 			}
@@ -513,7 +563,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				task.function = ReflectionManagerParseThreadTask;
 				task.data = parse_thread_data + thread_index;
 				task_manager->AddDynamicTaskAndWake(task);
-				//ReflectionManagerParseThreadTask(0, task_manager->m_world, parse_thread_data + thread_index);
 			}
 
 			// Wait until threads are done
@@ -540,6 +589,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				DeallocateThreadTaskData(parse_thread_data[thread_index]);
 			}
 			folders.allocator->Deallocate(path_indices_buffer);
+			for (size_t index = 0; index < files.size; index++) {
+				folders.allocator->Deallocate(files[index]);
+			}
 
 			return success;
 		}
@@ -555,10 +607,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void ReflectionManager::RemoveFolderHierarchy(const wchar_t* root) {
-			for (size_t index = 0; index < folders.size; index++) {
-				if (wcscmp(folders[index].hierarchy.root, root) == 0) {
-					return RemoveFolderHierarchy(index);
-				}
+			unsigned int hierarchy_index = GetHierarchyIndex(root);
+			if (hierarchy_index != -1) {
+				RemoveFolderHierarchy(hierarchy_index);
+				return;
 			}
 			// error if not found
 			ECS_ASSERT(false);
@@ -569,17 +621,23 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		bool ReflectionManager::UpdateFolderHierarchy(unsigned int folder_index, CapacityStream<char>* error_message)
 		{
 			FreeFolderHierarchy(folder_index);
-			folders[folder_index].hierarchy.Recreate();
 			return ProcessFolderHierarchy(folder_index, error_message);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		bool ReflectionManager::UpdateFolderHierarchy(unsigned int folder_index, TaskManager* task_manager, containers::CapacityStream<char>* error_message)
+		{
+			FreeFolderHierarchy(folder_index);
+			return ProcessFolderHierarchy(folder_index, task_manager, error_message);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionManager::UpdateFolderHierarchy(const wchar_t* root, CapacityStream<char>* error_message) {
-			for (size_t index = 0; index < folders.size; index++) {
-				if (wcscmp(root, folders[index].hierarchy.root) == 0) {
-					return UpdateFolderHierarchy(index, error_message);
-				}
+			unsigned int hierarchy_index = GetHierarchyIndex(root);
+			if (hierarchy_index != -1) {
+				return UpdateFolderHierarchy(hierarchy_index, error_message);
 			}
 			// Fail if it was not found previously
 			ECS_ASSERT(false);
@@ -588,174 +646,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionFolderHierarchy::ReflectionFolderHierarchy(MemoryManager* allocator) : folders(allocator, 0), filtered_files(allocator, 0), root(nullptr) {}
-		ReflectionFolderHierarchy::ReflectionFolderHierarchy(MemoryManager* allocator, const wchar_t* path) : folders(allocator, 0), filtered_files(allocator, 0) {
-			CreateFromPath(path);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionFolderHierarchy::AddFilterFiles(const char* filter_name, containers::Stream<const wchar_t*> extensions)
+		bool ReflectionManager::UpdateFolderHierarchy(const wchar_t* root, TaskManager* task_manager, containers::CapacityStream<char>* error_message)
 		{
-			ReflectionFilteredFiles filter;
-			size_t filter_name_size = strlen(filter_name) + 1;
-			char* _filter_name = (char*)folders.allocator->Allocate(sizeof(char) * filter_name_size, alignof(char));
-			filter.filter_name = _filter_name;
-			memcpy(_filter_name, filter_name, filter_name_size + 1);
-
-			size_t extension_total_size = 0;
-			size_t extension_sizes[256];
-
-			ECS_ASSERT(extensions.size <= 256);
-			for (size_t index = 0; index < extensions.size; index++) {
-				extension_sizes[index] = wcslen(extensions[index]) + 1;
-				extension_total_size += extension_sizes[index];
+			unsigned int hierarchy_index = GetHierarchyIndex(root);
+			if (hierarchy_index != -1) {
+				return UpdateFolderHierarchy(hierarchy_index, task_manager, error_message);
 			}
-			void* batched_allocation = folders.allocator->Allocate(sizeof(wchar_t) * extension_total_size + sizeof(const wchar_t*) * extensions.size);
-			uintptr_t extension_ptr = (uintptr_t)batched_allocation;
-			filter.extensions.InitializeFromBuffer(batched_allocation, extensions.size);
-			extension_ptr += sizeof(const wchar_t*) * extensions.size;
-
-			for (size_t index = 0; index < extensions.size; index++) {
-				wchar_t* _extension = (wchar_t*)extension_ptr;
-				memcpy(_extension, extensions[index], sizeof(wchar_t) * extension_sizes[index]);
-				filter.extensions[index] = _extension;
-				extension_ptr += sizeof(wchar_t) * extension_sizes[index];
-			}
-
-			filter.files = ResizableStream<const wchar_t*, MemoryManager>(folders.allocator, 0);
-
-			struct ForEachData {
-				ReflectionFolderHierarchy* hierarchy;
-				ReflectionFilteredFiles* filter;
-			};
-
-			ForEachData for_each_data;
-			for_each_data.filter = &filter;
-			for_each_data.hierarchy = this;
-
-			for (size_t index = 0; index < folders.size; index++) {
-				ForEachFileInDirectoryWithExtension(folders[index], filter.extensions, &for_each_data, [](const std::filesystem::path& path, void* _data) {
-					ForEachData* data = (ForEachData*)_data;
-					const wchar_t* c_path = path.c_str();
-					size_t path_length = wcslen(c_path) + 1;
-					void* allocation = data->hierarchy->folders.allocator->Allocate(path_length * sizeof(wchar_t), alignof(wchar_t));
-					memcpy(allocation, c_path, sizeof(wchar_t) * path_length);
-					data->filter->files.Add((const wchar_t*)allocation);
-
-					return true;
-				});
-			}
-
-			ForEachFileInDirectoryWithExtension(root, filter.extensions, &for_each_data, [](const std::filesystem::path& path, void* _data) {
-				ForEachData* data = (ForEachData*)_data;
-				const wchar_t* c_path = path.c_str();
-				size_t path_length = wcslen(c_path) + 1;
-				void* allocation = data->hierarchy->folders.allocator->Allocate(path_length * sizeof(wchar_t), alignof(wchar_t));
-				memcpy(allocation, c_path, sizeof(wchar_t) * path_length);
-				data->filter->files.Add((const wchar_t*)allocation);
-
-				return true;
-			});
-
-			filtered_files.Add(filter);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionFolderHierarchy::FreeAllMemory() {
-			for (size_t index = 0; index < filtered_files.size; index++) {
-				RemoveFilterFiles(index);
-			}
-
-			for (size_t index = 0; index < folders.size; index++) {
-				folders.allocator->Deallocate(folders[index]);
-			}
-			folders.FreeBuffer();
-			filtered_files.FreeBuffer();
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionFolderHierarchy::Recreate()
-		{
-			// Copy filtered file extensions into a buffer
-			size_t total_memory = 0;
-			for (size_t index = 0; index < filtered_files.size; index++) {
-				// +1 for null terminator and +1 for alignment
-				total_memory += strlen(filtered_files[index].filter_name) + 1;
-				total_memory += sizeof(const wchar_t*) * filtered_files[index].extensions.size + 7;
-				for (size_t subindex = 0; subindex < filtered_files[index].extensions.size; subindex++) {
-					total_memory += sizeof(wchar_t) * (wcslen(filtered_files[index].extensions[subindex]) + 1);
-				}
-			}
-			total_memory += sizeof(ReflectionFilteredFiles) * filtered_files.size;
-
-			void* temp_allocation = folders.allocator->Allocate(total_memory);
-
-			// recreate strings
-			uintptr_t ptr = (uintptr_t)temp_allocation;
-			Stream<ReflectionFilteredFiles> filtered_stream = Stream<ReflectionFilteredFiles>((void*)ptr, filtered_files.size);
-			ptr += sizeof(ReflectionFilteredFiles) * filtered_files.size;
-
-			for (size_t index = 0; index < filtered_files.size; index++) {
-				size_t name_size = strlen(filtered_files[index].filter_name);
-				memcpy((void*)ptr, filtered_files[index].filter_name, name_size + 1);
-				filtered_stream[index].filter_name = (const char*)ptr;
-				ptr += name_size + 1;
-
-				ptr = function::align_pointer(ptr, alignof(const wchar_t*));
-				filtered_stream[index].extensions.InitializeFromBuffer((void*)ptr, filtered_files[index].extensions.size);
-				ptr += sizeof(const wchar_t*) * filtered_files[index].extensions.size;
-
-				for (size_t subindex = 0; subindex < filtered_files[index].extensions.size; subindex++) {
-					size_t extension_size = wcslen(filtered_files[index].extensions[subindex]) + 1;
-					memcpy((void*)ptr, filtered_files[index].extensions[subindex], sizeof(wchar_t) * extension_size);
-					filtered_stream[index].extensions[subindex] = (const wchar_t*)ptr;
-					ptr += sizeof(wchar_t) * extension_size;
-				}
-			}
-
-			FreeAllMemory();
-			CreateFromPath(root);
-			for (size_t index = 0; index < filtered_stream.size; index++) {
-				AddFilterFiles(filtered_stream[index].filter_name, filtered_stream[index].extensions);
-			}
-
-			folders.allocator->Deallocate(temp_allocation);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionFolderHierarchy::CreateFromPath(const wchar_t* path)
-		{
-			size_t root_size = wcslen(path) + 1;
-			void* allocation = folders.allocator->Allocate(root_size * sizeof(wchar_t), alignof(wchar_t));
-			memcpy(allocation, path, root_size * sizeof(wchar_t));
-			root = (const wchar_t*)allocation;
-			function::GetRecursiveDirectories(folders.allocator, path, folders);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionFolderHierarchy::RemoveFilterFiles(const char* filter_name)
-		{
-			for (size_t index = 0; index < filtered_files.size; index++) {
-				if (strcmp(filtered_files[index].filter_name, filter_name) == 0) {
-					RemoveFilterFiles(index);
-					break;
-				}
-			}
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		void ReflectionFolderHierarchy::RemoveFilterFiles(unsigned int index) {
-			folders.allocator->Deallocate(filtered_files[index].filter_name);
-			folders.allocator->Deallocate(filtered_files[index].extensions.buffer);
-			for (size_t subindex = 0; subindex < filtered_files[index].files.size; subindex++) {
-				folders.allocator->Deallocate(filtered_files[index].files[subindex]);
-			}
+			// Fail if it was not found previously
+			ECS_ASSERT(false);
+			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -795,7 +694,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data) {
 			ReflectionManagerHasReflectStructuresThreadTaskData* data = (ReflectionManagerHasReflectStructuresThreadTaskData*)_data;
 			for (unsigned int path_index = data->starting_path_index; path_index < data->ending_path_index; path_index++) {
-				bool has_reflect = HasReflectStructures(data->reflection_manager->folders[data->folder_index].hierarchy.filtered_files[0].files[path_index]);
+				bool has_reflect = HasReflectStructures(data->files[path_index]);
 				if (has_reflect) {
 					data->valid_paths->Add(path_index);
 				}
@@ -809,34 +708,61 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data) {
 			ReflectionManagerParseStructuresThreadTaskData* data = (ReflectionManagerParseStructuresThreadTaskData*)_data;
 
-			constexpr size_t word_max_count = 1024;
-			constexpr size_t line_character_count = 4096;
-			char line_characters[line_character_count];
-			unsigned int words_buffer[word_max_count];
+			const size_t WORD_MAX_COUNT = 1024;
+			unsigned int words_buffer[WORD_MAX_COUNT];
 			Stream<unsigned int> words = Stream<unsigned int>(words_buffer, 0);
 
 			size_t ecs_reflect_size = strlen(STRING(ECS_REFLECT));
+			const size_t MAX_FIRST_LINE_CHARACTERS = 512;
+			char first_line_characters[512];
 
 			// search every path
 			for (size_t index = 0; index < data->paths.size; index++) {
+				ECS_FILE_HANDLE file = 0;
 				// open the file from the beginning
-				std::ifstream stream(data->paths[index], std::ios::beg | std::ios::in);
+				ECS_FILE_STATUS_FLAGS status = OpenFile(data->paths[index], &file, ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_READ_ONLY);
 
 				// if access was granted
-				if (stream.good()) {
-					// read the first line in order to check if there is something to be reflected
-					stream.getline(line_characters, line_character_count);
-				
+				if (status == ECS_FILE_STATUS_OK) {
+					ScopedFile scoped_file(file);
+
+					const size_t MAX_FIRST_LINE_CHARACTERS = 512;
+					// Assume that the first line is at most MAX_FIRST_LINE characters
+					unsigned int first_line_count = ReadFromFile(file, { first_line_characters, MAX_FIRST_LINE_CHARACTERS });
+					if (first_line_count == -1) {
+						WriteErrorMessage(data, "Could not read first line. Faulty path: ", index);
+						return;
+					}
+					first_line_characters[first_line_count - 1] = '\0';
+
+					// read the first line in order to check if there is something to be reflected	
 					// if there is something to be reflected
-					if (strstr(line_characters, STRING(ECS_REFLECT)) != nullptr) {
+					const char* first_new_line = strchr(first_line_characters, '\n');
+					const char* has_reflect = strstr(first_line_characters, STRING(ECS_REFLECT));
+					if (first_new_line != nullptr && has_reflect != nullptr && has_reflect < first_new_line) {
 						// reset words stream
 						words.size = 0;
 
-						size_t before_size = data->thread_memory.size;
-						// read the whole text data by reading a very large number of bytes
-						constexpr size_t read_whole_file_byte_size = 1'000'000'000;
-						stream.read(data->thread_memory.buffer + data->thread_memory.size, read_whole_file_byte_size);
-						data->thread_memory.size += stream.gcount();
+						size_t file_size = GetFileByteSize(file);
+						if (file_size == 0) {
+							WriteErrorMessage(data, "Could not deduce file size. Faulty path: ", index);
+							return;
+						}
+						// Reset the file pointer and read again
+						SetFileCursor(file, 0, ECS_FILE_SEEK_BEG);
+
+						char* file_contents = data->thread_memory.buffer + data->thread_memory.size;
+						unsigned int bytes_read = ReadFromFile(file, { file_contents, file_size });
+						file_contents[bytes_read - 1] = '\0';
+
+						data->thread_memory.size += bytes_read;
+						// Skip the first line - it contains the flag ECS_REFLECT
+						const char* new_line = strchr(file_contents, '\n');
+						if (new_line == nullptr) {
+							WriteErrorMessage(data, "Could not skip ECS_REFLECT flag on first line. Faulty path: ", index);
+							return;
+						}
+						file_contents = (char*)new_line + 1;
 
 						// if there's not enough memory, fail
 						if (data->thread_memory.size > data->thread_memory.capacity) {
@@ -845,12 +771,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 
 						// search for more ECS_REFLECTs 
-						function::FindToken(data->thread_memory.buffer + before_size, STRING(ECS_REFLECT), words);
+						function::FindToken(file_contents, STRING(ECS_REFLECT), words);
 
 						size_t last_position = 0;
 						for (size_t index = 0; index < words.size; index++) {
 							// get the type name
-							const char* space = strchr(data->thread_memory.buffer + before_size + words[index] + ecs_reflect_size, ' ');
+							const char* space = strchr(file_contents + words[index] + ecs_reflect_size, ' ');
 
 							// if no space was found after the token, fail
 							if (space == nullptr) {
@@ -872,12 +798,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							*second_space_mutable = '\0';
 							data->total_memory += PtrDifference(space, second_space_mutable) + 1;
 
-							data->thread_memory[before_size + words[index]] = '\0';
+							file_contents[words[index]] = '\0';
 							// find the last new line character in order to speed up processing
-							const char* last_new_line = strrchr(data->thread_memory.buffer + before_size + last_position, '\n');
+							const char* last_new_line = strrchr(file_contents + last_position, '\n');
 
 							// if it failed, set it to the start of the processing block
-							last_new_line = (const char*)function::Select<uintptr_t>(last_new_line == nullptr, (uintptr_t)data->thread_memory.buffer + last_position, (uintptr_t)last_new_line);
+							last_new_line = (const char*)function::Select<uintptr_t>(last_new_line == nullptr, (uintptr_t)file_contents + last_position, (uintptr_t)last_new_line);
 
 							const char* opening_parenthese = strchr(second_space + 1, '{');
 							// if no opening curly brace was found, fail
@@ -893,7 +819,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								return;
 							}
 
-							last_position = PtrDifference(data->thread_memory.buffer + before_size, closing_parenthese + 1);
+							last_position = PtrDifference(file_contents, closing_parenthese + 1);
 
 							// enum declaration
 							const char* enum_ptr = strstr(last_new_line + 1, "enum");
@@ -1819,15 +1745,24 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		bool HasReflectStructures(const wchar_t* path)
 		{
-			constexpr size_t max_line_characters = 4096;
+			ECS_FILE_HANDLE file_handle = 0;
+
+			const size_t max_line_characters = 4096;
 			char line_characters[max_line_characters];
 			// open the file from the beginning
-			std::ifstream stream(path, std::ios::beg | std::ios::in);
+			ECS_FILE_STATUS_FLAGS status_flags = OpenFile(path, &file_handle, ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_READ_ONLY);
+			if (status_flags == ECS_FILE_STATUS_OK) {
+				// read the first line in order to check if there is something to be reflected
+				bool success = ReadFile(file_handle, { line_characters, max_line_characters });
+				bool has_reflect = false;
+				if (success) {
+					has_reflect = strstr(line_characters, STRING(ECS_REFLECT)) != nullptr;
+				}
+				CloseFile(file_handle);
+				return has_reflect;
+			}
 
-			// read the first line in order to check if there is something to be reflected
-			stream.getline(line_characters, max_line_characters);
-
-			return strstr(line_characters, STRING(ECS_REFLECT)) != nullptr;
+			return false;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

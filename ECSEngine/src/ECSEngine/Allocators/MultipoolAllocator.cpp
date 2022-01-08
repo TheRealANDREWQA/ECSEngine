@@ -7,19 +7,10 @@ namespace ECSEngine {
 	MultipoolAllocator::MultipoolAllocator() : m_buffer(nullptr), m_size(0), m_range(nullptr, 0, 0) {}
 	
 	MultipoolAllocator::MultipoolAllocator(unsigned char* buffer, size_t size, size_t pool_count)
-		: m_buffer((unsigned char*)((uintptr_t)buffer + containers::BlockRange::MemoryOf(pool_count))), m_spin_lock(),
-		m_size(size), m_range((unsigned int*)buffer, pool_count, size) {
-#ifdef ECSENGINE_DEBUG
-		m_initial_buffer = m_buffer;
-#endif
-	}
+		: m_buffer((unsigned char*)buffer), m_spin_lock(), m_size(size), m_range((unsigned int*)function::OffsetPointer(buffer, size), pool_count, size) {}
 
 	MultipoolAllocator::MultipoolAllocator(unsigned char* buffer, void* block_range_buffer, size_t size, size_t pool_count) : m_buffer(buffer), m_spin_lock(), m_size(size),
-		m_range((unsigned int*)block_range_buffer, pool_count, size) {
-#ifdef ECSENGINE_DEBUG
-		m_initial_buffer = m_buffer;
-#endif
-	}
+		m_range((unsigned int*)block_range_buffer, pool_count, size) {}
 	
 	void* MultipoolAllocator::Allocate(size_t size, size_t alignment) {
 		ECS_ASSERT(alignment <= ECS_CACHE_LINE_SIZE);
@@ -60,18 +51,16 @@ namespace ECSEngine {
 
 	void* MultipoolAllocator::GetAllocatedBuffer() const
 	{
-		return (void*)m_range.GetAllocatedBuffer();
+		return m_buffer;
+	}
+
+	size_t MultipoolAllocator::GetSize() const
+	{
+		return m_size;
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {
 		return containers::BlockRange::MemoryOf(pool_count) + size + 8;
-	}
-	
-	void MultipoolAllocator::SetDebugBuffer(unsigned int* buffer)
-	{
-#ifdef ECSENGINE_DEBUG
-		m_range.SetDebugBuffer(buffer);
-#endif
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count) {

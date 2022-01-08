@@ -1,3 +1,4 @@
+#include "editorpch.h"
 //#include "ECSEngine.h"
 //#include "EntyPoint.h"
 //#include "DrawFunction2.h"

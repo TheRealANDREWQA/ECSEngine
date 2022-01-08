@@ -16,20 +16,28 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------
 
+	// A temporary buffer will be allocated and filled with the serialization data and then commited to the file
+	// Allocator nullptr means use malloc
+	// It will return false if the file write fails
 	ECSENGINE_API bool SerializeSection(
 		const ReflectionManager* reflection,
-		const char* ECS_RESTRICT type_name,
-		std::ofstream& stream,
-		const void* ECS_RESTRICT data,
+		const char* type_name,
+		Stream<wchar_t> file,
+		const void* data,
+		AllocatorPolymorphic allocator = {nullptr},
 		Stream<void> header = {nullptr, 0}
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
+	// A temporary buffer will be allocated and filled with the serialization data and then commited to the file
+	// Allocator nullptr means use malloc
+	// It will return false if the file write fails
 	ECSENGINE_API bool SerializeSection(
 		ReflectionType type,
-		std::ofstream& stream,
-		const void* ECS_RESTRICT data,
+		Stream<wchar_t> file,
+		const void* data,
+		AllocatorPolymorphic allocator = {nullptr},
 		Stream<void> header = {nullptr, 0}
 	);
 
@@ -37,9 +45,9 @@ namespace ECSEngine {
 
 	ECSENGINE_API void SerializeSection(
 		const ReflectionManager* reflection,
-		const char* ECS_RESTRICT type_name,
-		CapacityStream<void>& stream,
-		const void* ECS_RESTRICT data,
+		const char* type_name,
+		uintptr_t& stream,
+		const void* data,
 		Stream<void> header = {nullptr, 0}
 	);
 
@@ -47,18 +55,21 @@ namespace ECSEngine {
 	
 	ECSENGINE_API void SerializeSection(
 		ReflectionType type,
-		CapacityStream<void>& stream,
-		const void* ECS_RESTRICT data,
+		uintptr_t& stream,
+		const void* data,
 		Stream<void> header = {nullptr, 0}
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool SerializeSection(std::ofstream& stream, Stream<SerializeSectionData> data, Stream<void> header = {nullptr, 0});
+	// A temporary buffer will be allocated and filled with the serialization data and then commited to the file
+	// Allocator nullptr means use malloc
+	// It will return false if the file write fails
+	ECSENGINE_API bool SerializeSection(Stream<wchar_t> stream, Stream<SerializeSectionData> data, AllocatorPolymorphic allocator = { nullptr }, Stream<void> header = { nullptr, 0 });
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void SerializeSection(CapacityStream<void>& stream, Stream<SerializeSectionData> data, Stream<void> header = {nullptr, 0});
+	ECSENGINE_API void SerializeSection(uintptr_t& stream, Stream<SerializeSectionData> data, Stream<void> header = {nullptr, 0});
 
 	// -------------------------------------------------------------------------------------------------------------------
 
@@ -70,126 +81,143 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	// Returns the amount of pointer data bytes, success_status must be true before calling this
-	ECSENGINE_API size_t DeserializeSection(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
-		CapacityStream<void>* header = nullptr,
-		bool* ECS_RESTRICT success_status = nullptr
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data bytes, success_status must be true before calling this
-	ECSENGINE_API size_t DeserializeSection(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* ECS_RESTRICT faulty_index = nullptr
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data bytes, success_status must be true before calling this
-	ECSENGINE_API size_t DeserializeSection(
-		ReflectionType type,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
-		CapacityStream<void>* header = nullptr,
-		bool* ECS_RESTRICT success_status = nullptr
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data bytes, preinitialize this to a specified value
-	ECSENGINE_API size_t DeserializeSection(
-		ReflectionType type,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* ECS_RESTRICT faulty_index = nullptr
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
 	// Returns the amount of pointer data bytes
+	// The pointer data will be placed into the memory pool
+	// The allocator is needed to read the file contents into a single temporary buffer
+	// Allocator nullptr means use malloc
+	// A value of -1 reports failure
 	ECSENGINE_API size_t DeserializeSection(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		uintptr_t& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		const ReflectionManager* reflection,
+		const char* type_name,
+		Stream<wchar_t> file,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& pointers,
+		AllocatorPolymorphic allocator = {nullptr},
 		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
+	// The pointer data will be written directly into where the pointers of address are set
+	// The allocator is needed to read the file contents into a single temporary buffer 
+	// Allocator nullptr means use malloc
+	// A value of -1 report failure
 	ECSENGINE_API size_t DeserializeSection(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		uintptr_t& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
+		const ReflectionManager* reflection,
+		const char* type_name,
+		Stream<wchar_t> file,
+		void* address,
+		AllocatorPolymorphic allocator = {nullptr},
 		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
+	// The pointer data will be placed into the memory pool
+	// The allocator is needed to read the file contents into a single temporary buffer
+	// Allocator nullptr means use malloc
+	// A value of -1 reports failure
 	ECSENGINE_API size_t DeserializeSection(
 		ReflectionType type,
-		uintptr_t& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
+		Stream<wchar_t> file,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& pointers,
+		AllocatorPolymorphic allocator = {nullptr},
 		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
+	// The pointer data will be written directly into where the pointers of address are set
+	// The allocator is needed to read the file contents into a single temporary buffer 
+	// Allocator nullptr means use malloc
+	// A value of -1 report failure
 	ECSENGINE_API size_t DeserializeSection(
 		ReflectionType type,
-		uintptr_t& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* ECS_RESTRICT faulty_index = nullptr
+		Stream<wchar_t> stream,
+		void* address,
+		AllocatorPolymorphic allocator = {nullptr},
+		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
+	// The pointer data will be placed into the memory pool
+	// A value of -1 report failure
 	ECSENGINE_API size_t DeserializeSection(
-		std::ifstream& ECS_RESTRICT stream,
+		const ReflectionManager* reflection,
+		const char* type_name,
+		uintptr_t& stream,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& pointers,
+		CapacityStream<void>* header = nullptr
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data bytes
+	// The pointer data will be written directly into where the pointers of address are set
+	// A value of -1 report failure
+	ECSENGINE_API size_t DeserializeSection(
+		const ReflectionManager* reflection,
+		const char* type_name,
+		uintptr_t& stream,
+		void* address,
+		CapacityStream<void>* header = nullptr
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data bytes
+	// The pointer data will be placed into the memory pool
+	// A value of -1 report failure
+	ECSENGINE_API size_t DeserializeSection(
+		ReflectionType type,
+		uintptr_t& stream,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& pointers,
+		CapacityStream<void>* header = nullptr
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data bytes
+	// The pointer data will be written directly into where the pointers of address are set
+	// A value of -1 report failure
+	ECSENGINE_API size_t DeserializeSection(
+		ReflectionType type,
+		uintptr_t& stream,
+		void* address,
+		CapacityStream<void>* header = nullptr
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data bytes
+	// The pointer data will be placed into the memory pool
+	// A value of -1 report failure
+	ECSENGINE_API size_t DeserializeSection(
+		Stream<wchar_t> file,
 		Stream<const char*> section_names,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT pointers,
-		CapacityStream<void>* header = nullptr,
-		bool* ECS_RESTRICT success_status = nullptr
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& pointers,
+		AllocatorPolymorphic allocator = {nullptr},
+		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
-	ECSENGINE_API size_t DeserializeSection(
-		std::ifstream& stream,
-		Stream<SerializeSectionData> data,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* ECS_RESTRICT faulty_index = nullptr
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data bytes
+	// The pointer data will be placed into the memory pool
+	// A value of -1 report failure
 	ECSENGINE_API size_t DeserializeSection(
 		uintptr_t& stream,
 		Stream<const char*> section_names,
@@ -201,41 +229,41 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
+	// A value of -1 report failure - the pointer data size was not big enough to hold the data
 	ECSENGINE_API size_t DeserializeSection(
 		uintptr_t& stream,
 		Stream<SerializeSectionData> data,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* ECS_RESTRICT faulty_index = nullptr
-	);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API size_t DeserializeSection(
-		uintptr_t& stream,
-		Stream<SerializeSectionData> data,
-		void* ECS_RESTRICT allocator,
-		AllocatorType allocator_type,
 		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
+	// Returns the amount of pointer data bytes
+	// The pointer data will be allocated individually from the allocator
 	ECSENGINE_API size_t DeserializeSection(
-		std::ifstream& stream,
+		uintptr_t& stream,
 		Stream<SerializeSectionData> data,
-		void* ECS_RESTRICT allocator,
-		AllocatorType allocator_type, 
-		CapacityStream<void>* header = nullptr,
-		bool* success = nullptr
+		AllocatorPolymorphic allocator,
+		CapacityStream<void>* header = nullptr
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data bytes
+	// The pointer data will be allocated individually from the allocator
+	// The allocator also will be used to create a temporary memory buffer into which the file contents
+	// will be placed
+	// A value of -1 report failure
+	ECSENGINE_API size_t DeserializeSection(
+		Stream<wchar_t> file,
+		Stream<SerializeSectionData> data,
+		AllocatorPolymorphic allocator,
+		CapacityStream<void>* header = nullptr
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API size_t DeserializeSectionCount(uintptr_t stream, size_t header_size = 0);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API size_t DeserializeSectionCount(std::ifstream& stream, size_t header_size = 0);
 
 	// -------------------------------------------------------------------------------------------------------------------
 
@@ -272,17 +300,8 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t DeserializeSectionHeaderSize(std::ifstream& stream);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
 	// It will not advance the stream so that calling deserialize will work as expected
 	ECSENGINE_API void DeserializeSectionHeader(uintptr_t data, CapacityStream<void>& header);
-
-	// -------------------------------------------------------------------------------------------------------------------
-
-	// It will not advance the stream so that calling deserialize will work as expected
-	ECSENGINE_API bool DeserializeSectionHeader(std::ifstream& stream, CapacityStream<void>& header);
 
 	// -------------------------------------------------------------------------------------------------------------------
 

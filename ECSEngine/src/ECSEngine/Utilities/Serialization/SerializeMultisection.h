@@ -2,6 +2,7 @@
 #include "../../Core.h"
 #include "../../Containers/Stream.h"
 #include "../../Allocators/AllocatorTypes.h"
+#include "../File.h"
 
 ECS_CONTAINERS;
 
@@ -16,45 +17,30 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool SerializeMultisection(std::ofstream& stream, Stream<SerializeMultisectionData> data, Stream<void> header = {nullptr, 0});
+	// The allocator polymorphic is needed to allocate the buffer to which the contents will be written and then commited to disk
+	// Allocator nullptr means use malloc
+	ECSENGINE_API bool SerializeMultisection(Stream<wchar_t> file, Stream<SerializeMultisectionData> data, AllocatorPolymorphic allocator = { nullptr }, Stream<void> header = {nullptr, 0});
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void SerializeMultisection(CapacityStream<void>& stream, Stream<SerializeMultisectionData> data, Stream<void> header = {nullptr, 0});
+	ECSENGINE_API void SerializeMultisection(uintptr_t& stream, Stream<SerializeMultisectionData> data, Stream<void> header = { nullptr, 0 });
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t SerializeMultisectionSize(Stream<SerializeMultisectionData> data);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data bytes
-	ECSENGINE_API size_t DeserializeMultisection(
-		std::ifstream& stream,
-		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		CapacityStream<void>* ECS_RESTRICT header = nullptr,
-		bool* success_status = nullptr
-	);
+	ECSENGINE_API size_t SerializeMultisectionSize(Stream<SerializeMultisectionData> data, Stream<void> header = { nullptr, 0 });
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Returns the amount of pointer data bytes
+	// The allocator is needed to read the whole file into the memory then process it
+	// Nullptr means use malloc
+	// A value of -1 bytes written means failure
 	ECSENGINE_API size_t DeserializeMultisection(
-		std::ifstream& stream,
+		Stream<wchar_t> file,
 		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* faulty_index = nullptr
-	);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Returns the amount of pointer data bytes
-	ECSENGINE_API size_t DeserializeMultisection(
-		uintptr_t& stream,
-		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		CapacityStream<void>* ECS_RESTRICT header = nullptr
+		CapacityStream<void>& memory_pool,
+		AllocatorPolymorphic allocator = {nullptr},
+		CapacityStream<void>* header = nullptr
 	);
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -63,40 +49,48 @@ namespace ECSEngine {
 	ECSENGINE_API size_t DeserializeMultisection(
 		uintptr_t& stream,
 		CapacityStream<SerializeMultisectionData>& data,
-		CapacityStream<void>* header = nullptr,
-		unsigned int* faulty_index = nullptr
+		CapacityStream<void>& memory_pool,
+		CapacityStream<void>* header = nullptr
+	);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// Returns the total amount of memory allocated
+	// A value of -1 bytes written means failure
+	// There are 2 allocators - one for the file when it will be read into the memory
+	// The other one is used to determine if the writes will happen directly into the buffers
+	// or if allocations will be made
+	ECSENGINE_API size_t DeserializeMultisection(
+		Stream<wchar_t> file,
+		CapacityStream<SerializeMultisectionData>& data,
+		AllocatorPolymorphic file_allocator = { nullptr },
+		AllocatorPolymorphic buffer_allocator = {nullptr},
+		CapacityStream<void>* header = nullptr
+	);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// Returns the total amount of memory allocated
+	// It will write directly into the buffers
+	ECSENGINE_API size_t DeserializeMultisection(
+		uintptr_t& stream,
+		CapacityStream<SerializeMultisectionData>& data,
+		CapacityStream<void>* header = nullptr
 	);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// Returns the total amount of memory allocated
 	ECSENGINE_API size_t DeserializeMultisection(
-		std::ifstream& stream,
-		CapacityStream<SerializeMultisectionData>& data,
-		void* ECS_RESTRICT allocator,
-		AllocatorType allocator_type,
-		CapacityStream<void>* header = nullptr,
-		bool* success = nullptr
-	);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Returns the total amount of memory allocated
-	ECSENGINE_API size_t DeserializeMultisection(
 		uintptr_t& stream,
 		CapacityStream<SerializeMultisectionData>& data,
-		void* ECS_RESTRICT allocator,
-		AllocatorType allocator_type,
+		AllocatorPolymorphic allocator,
 		CapacityStream<void>* header = nullptr
 	);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API size_t DeserializeMultisectionCount(uintptr_t stream, size_t header_size = 0);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API size_t DeserializeMultisectionCount(std::ifstream& stream, size_t header_size = 0);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
@@ -124,17 +118,8 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void DeserializeMultisectionStreamCount(std::ifstream& stream, CapacityStream<size_t>& multisection_stream_count);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
 	// These are byte sizes
 	ECSENGINE_API void DeserializeMultisectionStreamSizes(uintptr_t stream, CapacityStream<Stream<size_t>>& multisection_sizes);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// These are byte sizes
-	ECSENGINE_API void DeserializeMultisectionStreamSizes(std::ifstream& stream, CapacityStream<Stream<size_t>>& multisection_sizes);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
@@ -142,17 +127,8 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t DeserializeMultisectionHeaderSize(std::ifstream& stream);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
 	// It will not advance the stream so that calling deserialize will work as expected
 	ECSENGINE_API void DeserializeMultisectionHeader(uintptr_t stream, CapacityStream<void>& header);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// It will not advance the stream so that calling deserialize will work as expected
-	ECSENGINE_API bool DeserializeMultisectionHeader(std::ifstream& stream, CapacityStream<void>& header);
 
 	// ---------------------------------------------------------------------------------------------------------------
 

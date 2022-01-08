@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "ProjectOperations.h"
 #include "..\Editor\EditorParameters.h"
 #include "..\UI\ToolbarUI.h"
@@ -37,19 +38,8 @@ bool CreateProjectFile(ProjectOperationData* data) {
 	ProjectFile* file_data = data->file_data;
 
 	GetProjectFilePath(temp_stream, file_data);
-
-	std::ofstream stream(temp_characters);
-
-	if (!stream.good()) {
-		if (data->error_message.buffer != nullptr) {
-			data->error_message.size = function::FormatString(data->error_message.buffer, "Creating project file failed; {0} invalid path or access denied", temp_characters);
-			data->error_message.AssertCapacity();
-		}
-		return false;
-	}
-
-	Serialize(ui_reflection->reflection, STRING(ProjectFile), stream, file_data);
-	if (!stream.good()) {
+	bool success = Serialize(ui_reflection->reflection, STRING(ProjectFile), temp_stream, file_data);
+	if (!success) {
 		if (data->error_message.buffer != nullptr) {
 			data->error_message.size = function::FormatString(data->error_message.buffer, "Writing data to project file failed, {0} being the path", temp_characters);
 			data->error_message.AssertCapacity();
@@ -84,7 +74,7 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	save_automatically_data.editor_state = data->editor_state;;
 	save_automatically_data.timer = Timer();
 	save_automatically_data.timer.SetMarker();
-	ui_system->PushSystemHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
+	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -198,9 +188,9 @@ void CreateProject(ProjectOperationData* data)
 				EditorState* editor_state;
 			};
 
-			auto functor = [](const std::filesystem::path& path, void* _data) {
+			auto functor = [](const wchar_t* path, void* _data) {
 				ForEachData* data = (ForEachData*)_data;
-				Stream<wchar_t> ecs_path = ToStream(path.c_str());
+				Stream<wchar_t> ecs_path = ToStream(path);
 				*data->success &= RemoveFile(ecs_path);
 				RemoveHubProject(data->editor_state, ecs_path);
 
@@ -286,9 +276,9 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 		required_folders[index] = ToStream(PROJECT_DIRECTORIES[index]);
 	}
 
-	auto functor = [](const std::filesystem::path& path, void* data) {
+	auto functor = [](const wchar_t* path, void* data) {
 		Stream<Stream<wchar_t>>* required_folders = (Stream<Stream<wchar_t>>*)data;
-		unsigned int index = function::FindString(ToStream(path.c_str()), *required_folders);
+		unsigned int index = function::FindString(ToStream(path), *required_folders);
 		if (index != -1) {
 			required_folders->RemoveSwapBack(index);
 		}
@@ -312,7 +302,6 @@ void DeallocateCurrentProject(EditorState* editor_state)
 {
 	EDITOR_STATE(editor_state);
 
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
 	editor_state->project_file = nullptr;
 }
 
@@ -321,49 +310,6 @@ void DeallocateCurrentProject(EditorState* editor_state)
 bool ExistsProjectInFolder(const ProjectFile* project_file) {
 	return IsFileWithExtension(project_file->path, ToStream(PROJECT_EXTENSION));
 }
-
-// -------------------------------------------------------------------------------------------------------------------
-
-void GetProjectFilePath(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count)
-{
-	CapacityStream<wchar_t> temp_stream = CapacityStream<wchar_t>(characters, 0, max_character_count);
-	GetProjectFilePath(temp_stream, project_file);
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-
-void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* project_file) {
-	characters.AddStream(project_file->path);
-	characters.Add(ECS_OS_PATH_SEPARATOR);
-	characters.AddStream(project_file->project_name);
-	Stream<wchar_t> extension = Stream<wchar_t>(PROJECT_EXTENSION, std::size(PROJECT_EXTENSION) - 1);
-	characters.AddStreamSafe(extension);
-	characters[characters.size] = L'\0';
-	ECS_ASSERT(characters.size < characters.capacity);
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-
-void GetProjectDebugFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path)
-{
-	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
-	path.AddStream(project_file->path);
-	path.Add(ECS_OS_PATH_SEPARATOR);
-	path.AddStream(ToStream(PROJECT_DEBUG_RELATIVE_PATH));
-	path[path.size] = L'\0';
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-
-void GetProjectDebugFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path)
-{
-	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
-	path.AddStream(project_file->path);
-	path.Add(ECS_OS_PATH_SEPARATOR);
-	path.AddStream(ToStream(PROJECT_DEBUG_RELATIVE_PATH));
-	path[path.size] = L'\0';
-}
-
 // -------------------------------------------------------------------------------------------------------------------
 
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count) {
@@ -425,14 +371,13 @@ void CreateProjectDefaultValues(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------------
 
-template<bool initialize>
-void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
+void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	CreateProjectWizardData* data = (CreateProjectWizardData*)window_data;
 	EDITOR_STATE(data->project_data.editor_state);
 	EditorState* editor_state = data->project_data.editor_state;
-	ProjectFile* file_data = (ProjectFile*)editor_state->project_file;
+	ProjectFile* file_data = editor_state->project_file;
 	WorldDescriptor* world = &file_data->world_descriptor;
 
 	UIDrawConfig config;
@@ -447,7 +392,7 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 	const wchar_t* project_name_wide;
 	OSFileExplorerGetDirectoryActionData* get_directory_data;
 	
-	if constexpr (initialize) {
+	if (initialize) {
 		constexpr size_t project_name_stream_capacity = 128;
 		constexpr size_t directory_stream_capacity = 256;
 		constexpr size_t source_dll_directory_capacity = 64;
@@ -508,13 +453,13 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 
 	config.AddFlag(name_callback);
 
-	UIDrawerTextInput* project_input = drawer.TextInput<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, "Project name", project_name_stream);
+	UIDrawerTextInput* project_input = drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_CALLBACK, config, "Project name", project_name_stream);
 	drawer.NextRow();
 	config.flag_count--;
 	
-	UIDrawerTextInput* input = drawer.TextInput<UI_CONFIG_RELATIVE_TRANSFORM>(config, "Directory", directory_stream);
+	UIDrawerTextInput* input = drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM, config, "Directory", directory_stream);
 	get_directory_data->input = input;
-	drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, ECS_TOOLS_UI_TEXTURE_FOLDER);
+	drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_FOLDER);
 
 	float2 folder_position = drawer.GetLastSpriteRectanglePosition();
 	float2 folder_scale = drawer.GetLastSpriteRectangleScale();
@@ -525,7 +470,7 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 	convert_data.ascii = source_dll_name_stream->buffer;
 	convert_data.wide = &file_data->source_dll_name;
 	config.AddFlag(name_callback);
-	UIDrawerTextInput* source_dll_input = drawer.TextInput<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_CALLBACK>(config, "Source dll name", source_dll_name_stream);
+	UIDrawerTextInput* source_dll_input = drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_CALLBACK, config, "Source dll name", source_dll_name_stream);
 	config.flag_count--;
 	
 	if (!initialize) {
@@ -551,12 +496,12 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 	drawer.NextRow();
 
 	drawer.CollapsingHeader("Project Parameters", [&]() {
-		constexpr size_t input_configuration = UI_CONFIG_RELATIVE_TRANSFORM;
+		const size_t INPUT_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM;
 
 		drawer.SetDrawMode(UIDrawerMode::NextRow);
 		float default_x_before = drawer.layout.default_element_x;
 		drawer.layout.default_element_x *= 5.0f;
-		if constexpr (!initialize) {
+		if (!initialize) {
 			ui_reflection->DrawInstance("WorldDesc", drawer, config, "Default values");
 		}
 		drawer.layout.default_element_x = default_x_before;
@@ -570,13 +515,13 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor) {
 	bottom_button_transform.position = drawer.GetAlignedToBottom(drawer.GetElementDefaultScale().y);
 	bottom_button_transform.scale = drawer.GetElementDefaultScale();
 	config.AddFlag(bottom_button_transform);
-	drawer.Button<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X>(config, "Create", { CreateProjectAction, &data->project_data, sizeof(data->project_data), UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Create", { CreateProjectAction, &data->project_data, sizeof(data->project_data), UIDrawPhase::System });
 
 	config.flag_count = 0;
 	bottom_button_transform.position.x = drawer.GetAlignedToRight(drawer.GetElementDefaultScale().x).x;
 	config.AddFlag(bottom_button_transform);
 
-	drawer.Button<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -586,8 +531,7 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 
 	// launch wizard window
 	UIWindowDescriptor window_descriptor;
-	window_descriptor.draw = CreateProjectWizardDraw<false>;
-	window_descriptor.initialize = CreateProjectWizardDraw<true>;
+	window_descriptor.draw = CreateProjectWizardDraw;
 	window_descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, CREATE_PROJECT_WIZARD_SCALE.x);
 	window_descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, CREATE_PROJECT_WIZARD_SCALE.y);
 	window_descriptor.initial_size_x = CREATE_PROJECT_WIZARD_SCALE.x;
@@ -611,16 +555,8 @@ bool OpenProjectFile(ProjectOperationData data) {
 
 	ECS_TEMP_STRING(project_path, 256);
 	GetProjectFilePath(project_path, data.file_data);
-	std::ifstream stream(project_path.buffer, std::ios::in | std::ios::beg | std::ios::binary);
-	if (!stream.good()) {
-		if (data.error_message.buffer != nullptr) {
-			data.error_message.size = function::FormatString(data.error_message.buffer, "Opening project file failed, invalid path or access denied: {0}", project_path);
-			data.error_message.AssertCapacity();
-		}
-		return false;
-	}
 
-	constexpr size_t temp_memory_size = 1024;
+	const size_t temp_memory_size = 1024;
 	size_t temp_memory[temp_memory_size];
 
 	ProjectFile* file_data = data.file_data;
@@ -628,11 +564,13 @@ bool OpenProjectFile(ProjectOperationData data) {
 	function::CopyPointer copy_pointers[128];
 	Stream<function::CopyPointer> copy_pointer_stream = Stream<function::CopyPointer>(copy_pointers, 0);
 
-	size_t deserialization_size = Deserialize(ui_reflection->reflection, STRING(ProjectFile), stream, file_data, memory_pool, copy_pointer_stream);
+	bool success = true;
+	size_t deserialization_size = Deserialize(ui_reflection->reflection, STRING(ProjectFile), project_path, file_data, memory_pool, copy_pointer_stream);
+	success = deserialization_size != -1;
 	void* allocation = editor_allocator->Allocate(deserialization_size);
 	function::CopyPointersFromBuffer(copy_pointer_stream, allocation);
 
-	if (!stream.good()) {
+	if (!success) {
 		if (data.error_message.buffer != nullptr) {
 			data.error_message.size = function::FormatString(data.error_message.buffer, "Opening project file {0} failed; data could not be read (byte size might be too small)", project_path);
 			data.error_message.AssertCapacity();
@@ -671,6 +609,8 @@ void OpenProjectFileAction(ActionData* action_data) {
 bool OpenProject(ProjectOperationData data)
 {
 	EDITOR_STATE(data.editor_state);
+
+	function::SetFlagAtomic(data.editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS);
 
 	// Repair missing folders, if any
 	RepairProjectAuxiliaryDirectories(data);
@@ -758,8 +698,31 @@ bool OpenProject(ProjectOperationData data)
 	save_automatically_data.editor_state = data.editor_state;
 	save_automatically_data.timer = Timer();
 	save_automatically_data.timer.SetMarker();
-	ui_system->PushSystemHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
+	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
 
+	struct RemoveEditorStateDoNotAddTasksData {
+		EditorState* editor_state;
+		unsigned int frame_count;
+	};
+
+	RemoveEditorStateDoNotAddTasksData remove_data = { data.editor_state, 10 };
+
+	// Push a system handler that will remove the EDITOR_STATE_DO_NOT_ADD_TASKS flag after 1 frame
+	auto remove_editor_state_do_not_add_tasks = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		RemoveEditorStateDoNotAddTasksData* data = (RemoveEditorStateDoNotAddTasksData*)_data;
+		if (data->frame_count == 0) {
+			function::ClearFlagAtomic(data->editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS);
+			system->PopFrameHandler();
+		}
+		else {
+			data->frame_count--;
+		}
+	};
+	ui_system->PushFrameHandler({ remove_editor_state_do_not_add_tasks, &remove_data, sizeof(remove_data) });
+
+	data.editor_state->editor_tick = EditorStateProjectTick;
 	return true;
 }
 
@@ -771,7 +734,7 @@ void OpenProjectSystemHandlerAction(ActionData* action_data) {
 	ProjectOperationData* data = (ProjectOperationData*)_data;
 	bool success = OpenProject(*data);
 	if (!success) {
-		system->PopSystemHandler();
+		system->PopFrameHandler();
 		EditorSetConsoleError(data->editor_state, ToStream("Could not open project."));
 	}
 }
@@ -782,7 +745,7 @@ void OpenProjectAction(ActionData* action_data)
 {
 	UI_UNPACK_ACTION_DATA;
 
-	system->PushSystemHandler({ OpenProjectSystemHandlerAction, action_data->data, sizeof(ProjectOperationData) });
+	system->PushFrameHandler({ OpenProjectSystemHandlerAction, action_data->data, sizeof(ProjectOperationData) });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -811,19 +774,10 @@ bool SaveProjectFile(ProjectOperationData data) {
 	wchar_t temp_characters[256];
 	CapacityStream<wchar_t> project_path = CapacityStream<wchar_t>(temp_characters, 0, 256);
 	GetProjectFilePath(project_path, data.file_data);
-	std::ofstream stream(project_path.buffer, std::ios::trunc | std::ios::binary);
 
-	if (!stream.good()) {
-		if (data.error_message.buffer != nullptr) {
-			data.error_message.size = function::FormatString(data.error_message.buffer, "Saving project file failed; invalid path or access denied to {0}", project_path.buffer);
-			data.error_message.AssertCapacity();
-		}
-		return false;
-	}
-
-	Serialize(ui_reflection->reflection, STRING(ProjectFile), stream, data.file_data);
+	bool success = Serialize(ui_reflection->reflection, STRING(ProjectFile), project_path, data.file_data);
 	
-	if (!stream.good()) {
+	if (!success) {
 		if (data.error_message.buffer != nullptr) {
 			data.error_message.size = function::FormatString(data.error_message.buffer, "Saving project file failed; writing to {0}", project_path.buffer);
 			data.error_message.AssertCapacity();
@@ -921,7 +875,7 @@ bool SaveCurrentProjectConverted(EditorState* _editor_state, bool (*function)(Pr
 
 	ProjectOperationData data;
 	data.editor_state = _editor_state;
-	data.file_data = (ProjectFile*)data.editor_state->project_file;
+	data.file_data = data.editor_state->project_file;
 	data.error_message.buffer = nullptr;
 
 	return function(data);
@@ -1001,8 +955,7 @@ void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> 
 // -------------------------------------------------------------------------------------------------------------------
 
 void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
-	descriptor.draw = ConsoleWindowDraw<false>;
-	descriptor.initialize = ConsoleWindowDraw<true>;
+	descriptor.draw = ConsoleWindowDraw;
 
 	EDITOR_STATE(editor_state);
 
@@ -1019,7 +972,7 @@ void ConsoleSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_st
 void SaveProjectThreadTask(unsigned int thread_index, World* world, void* data) {
 	EDITOR_STATE(data);
 	EditorState* editor_state = (EditorState*)data;
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+	ProjectFile* project_file = editor_state->project_file;
 
 	ECS_TEMP_STRING(template_path, 256);
 	template_path.Copy(project_file->path);

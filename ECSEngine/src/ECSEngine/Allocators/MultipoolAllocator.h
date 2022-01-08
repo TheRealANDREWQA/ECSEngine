@@ -31,6 +31,8 @@ namespace ECSEngine {
 
 		void* GetAllocatedBuffer() const;
 
+		size_t GetSize() const;
+
 		// --------------------------------------------------- Thread safe variants ------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
@@ -38,16 +40,11 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 
-		void SetDebugBuffer(unsigned int* buffer);
-
 		static size_t MemoryOf(unsigned int pool_count);
 		static size_t MemoryOf(unsigned int pool_count, unsigned int size);
 
 	//private:
 		unsigned char* m_buffer;
-#ifdef ECSENGINE_DEBUG
-		void* m_initial_buffer;
-#endif
 		size_t m_size;
 		SpinLock m_spin_lock;
 		containers::BlockRange m_range;

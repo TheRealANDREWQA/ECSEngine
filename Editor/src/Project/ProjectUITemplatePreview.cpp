@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "ProjectUITemplatePreview.h"
 #include "ProjectUITemplate.h"
 #include "..\Editor\EditorState.h"
@@ -20,8 +21,7 @@ ECS_TOOLS;
 constexpr const char* SAVE_LAYOUT_WINDOW_NAME = "Save Layout";
 constexpr float2 SAVE_LAYOUT_WINDOW_SIZE = { 0.5f, 0.25f };
 
-template<bool initialize>
-void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor) {
+void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	drawer.DisablePaddingForRenderRegion();
@@ -49,9 +49,9 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor) {
 	transform.scale = button_scale;
 	config.AddFlag(transform);
 
-	constexpr size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_TOOL_TIP;
-	constexpr float triangle_scale_factor = 0.8f;
-	constexpr float stop_scale_factor = 0.45f;
+	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_TOOL_TIP;
+	const float triangle_scale_factor = 0.8f;
+	const float stop_scale_factor = 0.45f;
 
 	// Start button
 	UITooltipBaseData base_tool_tip;
@@ -59,13 +59,13 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor) {
 	base_tool_tip.offset_scale.y = true;
 	base_tool_tip.next_row_offset = 0.005f;
 
-	drawer.SolidColorRectangle<configuration>(config, drawer.color_theme.theme);
+	drawer.SolidColorRectangle(configuration, config, drawer.color_theme.theme);
 
 	float2 scaled_scale;
 	float2 scaled_position;
 
 	scaled_position = ExpandRectangle(transform.position, transform.scale, { triangle_scale_factor, triangle_scale_factor }, scaled_scale);
-	drawer.SpriteRectangle<configuration>(scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, border.color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
+	drawer.SpriteRectangle(configuration, scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, border.color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
 
 	scaled_position = ExpandRectangle(transform.position, transform.scale, { triangle_scale_factor, triangle_scale_factor }, scaled_scale);
 
@@ -74,15 +74,15 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor) {
 	config.AddFlag(transform);
 
 	// Pause button - two bars as mask textures
-	drawer.SolidColorRectangle<configuration>(config, drawer.color_theme.theme);
+	drawer.SolidColorRectangle(configuration, config, drawer.color_theme.theme);
 
 	float bar_scale_x = button_scale.x / 8;
 	constexpr float bar_scale_y = button_scale_y * 0.55f;
 
 	float2 bar_scale = { bar_scale_x, bar_scale_y };
 	float2 bar_position = { AlignMiddle(transform.position.x, button_scale.x, bar_scale_x * 3), AlignMiddle(transform.position.y, button_scale.y, bar_scale_y) };
-	drawer.SpriteRectangle<configuration>(bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, border.color);
-	drawer.SpriteRectangle<configuration>({ bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, border.color);
+	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, border.color);
+	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, border.color);
 	drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
 
 	transform.position.x += transform.scale.x;
@@ -90,12 +90,12 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor) {
 	config.AddFlag(transform);
 
 	// Frame button - triangle and bar
-	drawer.SolidColorRectangle<configuration>(config, drawer.color_theme.theme);
+	drawer.SolidColorRectangle(configuration, config, drawer.color_theme.theme);
 	float2 triangle_position = { scaled_position.x + transform.scale.x * 1.85f, scaled_position.y };
 
 	Color frame_color = drawer.color_theme.unavailable_text;
-	drawer.SpriteRectangle<configuration>(triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, frame_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
-	drawer.SpriteRectangle<configuration>({ triangle_position.x + scaled_scale.x, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, frame_color);
+	drawer.SpriteRectangle(configuration, triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, frame_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
+	drawer.SpriteRectangle(configuration, { triangle_position.x + scaled_scale.x, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, frame_color);
 
 #pragma endregion
 
@@ -116,8 +116,7 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	descriptor.window_data = nullptr;
 	descriptor.window_data_size = 0;
 
-	descriptor.draw = MiscellaneousBarNoActions<false>;
-	descriptor.initialize = MiscellaneousBarNoActions<true>;
+	descriptor.draw = MiscellaneousBarNoActions;
 
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 	 | UI_DOCKSPACE_BORDER_NOTHING);
@@ -129,17 +128,16 @@ void DeferredSystemClear(ActionData* action_data) {
 	ResetHubData((EditorState*)action_data->data);
 	system->Clear();
 	Hub((EditorState*)action_data->data);
-	system->PopSystemHandler();
+	system->PopFrameHandler();
 };
 
-template<bool initialize>
-void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor) {
+void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	auto exit = [](ActionData* action_data) {
 		UI_UNPACK_ACTION_DATA;
 
-		system->PushSystemHandler({ DeferredSystemClear, action_data->data, 0 });
+		system->PushFrameHandler({ DeferredSystemClear, action_data->data, 0 });
 	};
 
 	auto save_layout = [](ActionData* action_data) {
@@ -156,7 +154,7 @@ void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor) {
 			CreateErrorMessageWindow(system, error_message);
 		}
 		else {
-			system->PushSystemHandler({ DeferredSystemClear, action_data->data, 0 });
+			system->PushFrameHandler({ DeferredSystemClear, action_data->data, 0 });
 		}
 	};
 
@@ -167,9 +165,9 @@ void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor) {
 
 	config.AddFlag(size);
 
-	drawer.Button<UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X>(config, "Save", { save_layout, window_data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Save", { save_layout, window_data, 0, UIDrawPhase::System });
 	drawer.NextRow();
-	drawer.Button<UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X>(config, "Exit", { exit, window_data, 0 });
+	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Exit", { exit, window_data, 0 });
 }
 
 void CreateSaveLayoutWindow(void* _editor_state) {
@@ -181,8 +179,7 @@ void CreateSaveLayoutWindow(void* _editor_state) {
 	descriptor.window_data = _editor_state;
 	descriptor.window_data_size = 0;
 
-	descriptor.draw = SaveLayoutWindowDraw<false>;
-	descriptor.initialize = SaveLayoutWindowDraw<true>;
+	descriptor.draw = SaveLayoutWindowDraw;
 
 	EDITOR_STATE(_editor_state);
 
@@ -199,8 +196,7 @@ unsigned int CreatePlaceholderWindow(EditorState* editor_state, const char* wind
 
 	CenterWindowDescriptor(descriptor, size);
 
-	descriptor.draw = DrawNothing<false>;
-	descriptor.initialize = DrawNothing<true>;
+	descriptor.draw = DrawNothing;
 
 	descriptor.window_name = window_name;
 	descriptor.window_data = nullptr;
@@ -240,8 +236,7 @@ void CreatePlaceholderDockspaceAction(ActionData* action_data) {
 	}
 }
 
-template<bool initialize>
-void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor) {
+void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	drawer.DisablePaddingForRenderRegion();
@@ -253,7 +248,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor) 
 
 	ToolbarPlaceholderData* data = (ToolbarPlaceholderData*)window_data;
 
-	if constexpr (initialize) {
+	if (initialize) {
 		size_t total_size = sizeof(PlaceholderDockspaceActionData) * TOOLBAR_WINDOW_MENU_COUNT;
 		void* allocation = drawer.GetMainAllocatorBuffer(total_size);
 
@@ -276,6 +271,8 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor) 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_FILE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_MODULE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INSPECTOR);
+
+#undef SET_HANDLER
 	}
 
 	UIDrawerMenuState state;
@@ -293,7 +290,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor) 
 	UIDrawConfig config;
 	config.AddFlag(size);
 
-	drawer.Menu<UI_CONFIG_WINDOW_DEPENDENT_SIZE>(config, "Window", &state);
+	drawer.Menu(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Window", &state);
 }
 
 void CreateToolbarUIPlaceholder(EditorState* editor_state) {
@@ -314,8 +311,7 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 	descriptor.window_data = &data;
 	descriptor.window_data_size = sizeof(data);
 
-	descriptor.draw = ToolbarUIPlaceholderWindowDraw<false>;
-	descriptor.initialize = ToolbarUIPlaceholderWindowDraw<true>;
+	descriptor.draw = ToolbarUIPlaceholderWindowDraw;
 
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 		| UI_DOCKSPACE_BORDER_NOTHING);

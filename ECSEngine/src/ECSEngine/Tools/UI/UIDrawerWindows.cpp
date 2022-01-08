@@ -2,6 +2,8 @@
 #include "UIDrawerWindows.h"
 #include "../../Internal/Multithreading/TaskManager.h"
 #include "../../Utilities/OSFunctions.h"
+#include "../../Utilities/File.h"
+#include "UIDrawerActions.h"
 
 namespace ECSEngine {
 
@@ -40,9 +42,8 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void WindowParameterColorTheme(UIWindowDrawerDescriptor* descriptor, UIDrawer<initialize>& drawer) {
-			constexpr size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
+		void WindowParameterColorTheme(UIWindowDrawerDescriptor* descriptor, UIDrawer& drawer) {
+			size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigColorInputCallback color_input_callback;
@@ -61,27 +62,23 @@ namespace ECSEngine {
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.ColorInput<input_configuration>(config, "Theme", &theme->theme);
+			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme);
 
 			color_input_callback.callback = { WindowParameterColorInputCallback, descriptor, 0 };
-			drawer.ColorInput<input_configuration>(config, "Text", &theme->default_text);
-			drawer.ColorInput<input_configuration>(config, "Graph hover line", &theme->graph_hover_line);
-			drawer.ColorInput<input_configuration>(config, "Graph line", &theme->graph_line);
-			drawer.ColorInput<input_configuration>(config, "Graph sample circle", &theme->graph_sample_circle);
-			drawer.ColorInput<input_configuration>(config, "Histogram", &theme->histogram_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram hovered", &theme->histogram_hovered_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram text", &theme->histogram_text_color);
-			drawer.ColorInput<input_configuration>(config, "Unavailable text", &theme->unavailable_text);
+			drawer.ColorInput(input_configuration, config, "Text", &theme->default_text);
+			drawer.ColorInput(input_configuration, config, "Graph hover line", &theme->graph_hover_line);
+			drawer.ColorInput(input_configuration, config, "Graph line", &theme->graph_line);
+			drawer.ColorInput(input_configuration, config, "Graph sample circle", &theme->graph_sample_circle);
+			drawer.ColorInput(input_configuration, config, "Histogram", &theme->histogram_color);
+			drawer.ColorInput(input_configuration, config, "Histogram hovered", &theme->histogram_hovered_color);
+			drawer.ColorInput(input_configuration, config, "Histogram text", &theme->histogram_text_color);
+			drawer.ColorInput(input_configuration, config, "Unavailable text", &theme->unavailable_text);
 		}
-
-		template ECSENGINE_API void WindowParameterColorTheme<true>(UIWindowDrawerDescriptor*, UIDrawer<true>&);
-		template ECSENGINE_API void WindowParameterColorTheme<false>(UIWindowDrawerDescriptor*, UIDrawer<false>&);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void WindowParametersLayout(UIWindowDrawerDescriptor* descriptor, UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+		void WindowParametersLayout(UIWindowDrawerDescriptor* descriptor, UIDrawer& drawer) {
+			size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -99,24 +96,19 @@ namespace ECSEngine {
 
 			UILayoutDescriptor* layout = &descriptor->layout;
 			const UILayoutDescriptor* system_layout = &system->m_descriptors.window_layout;
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element x", &layout->default_element_x, 0.01f, 0.3f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element y", &layout->default_element_y, 0.01f, 0.15f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element x", &layout->default_element_x, 0.01f, 0.3f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element y", &layout->default_element_y, 0.01f, 0.15f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, 3);
 
-#undef SLIDER_CONFIGURATION
 		}
-
-		template ECSENGINE_API void WindowParametersLayout<true>(UIWindowDrawerDescriptor*, UIDrawer<true>&);
-		template ECSENGINE_API void WindowParametersLayout<false>(UIWindowDrawerDescriptor*, UIDrawer<false>&);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void WindowParametersElementDescriptor(UIWindowDrawerDescriptor* descriptor, UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+		void WindowParametersElementDescriptor(UIWindowDrawerDescriptor* descriptor, UIDrawer& drawer) {
+			size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -134,15 +126,16 @@ namespace ECSEngine {
 
 			UIElementDescriptor* elements = &descriptor->element_descriptor;
 			UIElementDescriptor* system_elements = &system->m_descriptors.element_descriptor;
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
 			float* float2_values[2];
 			float float2_lower_bounds[1];
 			float float2_upper_bounds[1];
 			const char* float2_names[2];
 
 			auto float2_sliders = [&](const char* group_name, size_t index) {
-				drawer.FloatSliderGroup<SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS>(
+				drawer.FloatSliderGroup(
+					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
 					config,
 					2,
 					group_name,
@@ -171,7 +164,8 @@ namespace ECSEngine {
 			float2_upper_bounds[0] = 0.02f;
 			float2_sliders("Graph padding", 2);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Graph reduce font",
 				&elements->graph_reduce_font,
@@ -180,7 +174,8 @@ namespace ECSEngine {
 				3
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Graph sample circle size",
 				&elements->graph_sample_circle_size,
@@ -189,7 +184,8 @@ namespace ECSEngine {
 				3
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Graph x axis space",
 				&elements->graph_x_axis_space,
@@ -198,7 +194,8 @@ namespace ECSEngine {
 				4
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Histogram bar min scale",
 				&elements->histogram_bar_min_scale,
@@ -206,7 +203,8 @@ namespace ECSEngine {
 				0.2f
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Histogram bar spacing",
 				&elements->histogram_bar_spacing,
@@ -221,7 +219,8 @@ namespace ECSEngine {
 			float2_upper_bounds[0] = 0.1f;
 			float2_sliders("Histogram padding", 3);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Histogram reduce font",
 				&elements->histogram_reduce_font,
@@ -230,7 +229,8 @@ namespace ECSEngine {
 				3
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Menu button padding",
 				&elements->menu_button_padding,
@@ -266,40 +266,32 @@ namespace ECSEngine {
 			float2_upper_bounds[0] = 0.1f;
 			float2_sliders("Text input padding", 8);
 
-#undef SLIDER_CONFIGURATION
 		}
-
-		template ECSENGINE_API void WindowParametersElementDescriptor<true>(UIWindowDrawerDescriptor*, UIDrawer<true>&);
-		template ECSENGINE_API void WindowParametersElementDescriptor<false>(UIWindowDrawerDescriptor*, UIDrawer<false>&);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void WindowParameterDraw(void* window_data, void* drawer_descriptor) {
+		void WindowParameterDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			UIWindowDrawerDescriptor* descriptors = (UIWindowDrawerDescriptor*)window_data;
 			drawer.SetDrawMode(UIDrawerMode::NextRow);
 			auto color_theme_lambda = [&]() {
-				WindowParameterColorTheme<initialize>(descriptors, drawer);
+				WindowParameterColorTheme(descriptors, drawer);
 			};
 			drawer.CollapsingHeader("Color theme", color_theme_lambda);
 
 			auto layout_lambda = [&]() {
-				WindowParametersLayout<initialize>(descriptors, drawer);
+				WindowParametersLayout(descriptors, drawer);
 			};
 
 			drawer.CollapsingHeader("Layout", layout_lambda);
 
 			auto element_lambda = [&]() {
-				WindowParametersElementDescriptor<initialize>(descriptors, drawer);
+				WindowParametersElementDescriptor(descriptors, drawer);
 			};
 
 			drawer.CollapsingHeader("Element descriptor", element_lambda);
 		}
-
-		template ECSENGINE_API void WindowParametersElementDescriptor<true>(UIWindowDrawerDescriptor*, UIDrawer<true>&);
-		template ECSENGINE_API void WindowParametersElementDescriptor<false>(UIWindowDrawerDescriptor*, UIDrawer<false>&);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -308,8 +300,7 @@ namespace ECSEngine {
 
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			UIWindowDescriptor descriptor;
-			descriptor.draw = WindowParameterDraw<false>;
-			descriptor.initialize = WindowParameterDraw<true>;
+			descriptor.draw = WindowParameterDraw;
 			descriptor.private_action = SkipAction;
 			descriptor.window_data = system->m_windows[window_index].descriptors;
 			descriptor.window_data_size = 0;
@@ -347,15 +338,14 @@ namespace ECSEngine {
 			handler.action = PopUpWindowSystemHandler;
 			handler.data = &system_handler_data;
 			handler.data_size = sizeof(system_handler_data);
-			system->PushSystemHandler(handler);
+			system->PushFrameHandler(handler);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParametersColorTheme(UIDrawer<initialize>& drawer) {
-			constexpr size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
-			constexpr size_t slider_configuration = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
+		void SystemParametersColorTheme(UIDrawer& drawer) {
+			const size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
+			const size_t slider_configuration = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigColorInputCallback color_input_callback;
@@ -374,46 +364,42 @@ namespace ECSEngine {
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			const UIColorThemeDescriptor* startup_theme = &system->m_startup_descriptors.color_theme;
-			drawer.ColorInput<input_configuration>(config, "Theme", &theme->theme);
+			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme);
 
 			color_input_callback.callback = { SystemParameterColorThemeCallback, nullptr, 0 };
-			drawer.ColorInput<input_configuration>(config, "Text", &theme->default_text);
-			drawer.ColorInput<input_configuration>(config, "Graph hover line", &theme->graph_hover_line);
-			drawer.ColorInput<input_configuration>(config, "Graph line", &theme->graph_line);
-			drawer.ColorInput<input_configuration>(config, "Graph sample circle", &theme->graph_sample_circle);
-			drawer.ColorInput<input_configuration>(config, "Histogram", &theme->histogram_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram hovered", &theme->histogram_hovered_color);
-			drawer.ColorInput<input_configuration>(config, "Histogram text", &theme->histogram_text_color);
-			drawer.ColorInput<input_configuration>(config, "Unavailable text", &theme->unavailable_text);
-			drawer.ColorInput<input_configuration>(config, "Background", &theme->background);
-			drawer.ColorInput<input_configuration>(config, "Borders", &theme->borders);
-			drawer.ColorInput<input_configuration>(config, "Collapse Triangle", &theme->collapse_triangle);
-			drawer.ColorInput<input_configuration>(config, "Docking gizmo background", &theme->docking_gizmo_background);
-			drawer.ColorInput<input_configuration>(config, "Docking gizmo border", &theme->docking_gizmo_border);
-			drawer.ColorInput<input_configuration>(config, "Hierarchy drag node bar", &theme->hierarchy_drag_node_bar);
-			drawer.ColorInput<input_configuration>(config, "Render sliders active part", &theme->render_sliders_active_part);
-			drawer.ColorInput<input_configuration>(config, "Render sliders background", &theme->render_sliders_background);
-			drawer.ColorInput<input_configuration>(config, "Region header X", &theme->region_header_x);
-			drawer.ColorInput<input_configuration>(config, "Region header hovered X", &theme->region_header_hover_x);
+			drawer.ColorInput(input_configuration, config, "Text", &theme->default_text);
+			drawer.ColorInput(input_configuration, config, "Graph hover line", &theme->graph_hover_line);
+			drawer.ColorInput(input_configuration, config, "Graph line", &theme->graph_line);
+			drawer.ColorInput(input_configuration, config, "Graph sample circle", &theme->graph_sample_circle);
+			drawer.ColorInput(input_configuration, config, "Histogram", &theme->histogram_color);
+			drawer.ColorInput(input_configuration, config, "Histogram hovered", &theme->histogram_hovered_color);
+			drawer.ColorInput(input_configuration, config, "Histogram text", &theme->histogram_text_color);
+			drawer.ColorInput(input_configuration, config, "Unavailable text", &theme->unavailable_text);
+			drawer.ColorInput(input_configuration, config, "Background", &theme->background);
+			drawer.ColorInput(input_configuration, config, "Borders", &theme->borders);
+			drawer.ColorInput(input_configuration, config, "Collapse Triangle", &theme->collapse_triangle);
+			drawer.ColorInput(input_configuration, config, "Docking gizmo background", &theme->docking_gizmo_background);
+			drawer.ColorInput(input_configuration, config, "Docking gizmo border", &theme->docking_gizmo_border);
+			drawer.ColorInput(input_configuration, config, "Hierarchy drag node bar", &theme->hierarchy_drag_node_bar);
+			drawer.ColorInput(input_configuration, config, "Render sliders active part", &theme->render_sliders_active_part);
+			drawer.ColorInput(input_configuration, config, "Render sliders background", &theme->render_sliders_background);
+			drawer.ColorInput(input_configuration, config, "Region header X", &theme->region_header_x);
+			drawer.ColorInput(input_configuration, config, "Region header hovered X", &theme->region_header_hover_x);
 
 			config.flag_count = 0;
 			UIConfigSliderChangedValueCallback callback;
 			callback.handler = { SystemParameterColorThemeCallback, nullptr, 0 };
 			config.AddFlag(callback);
-			drawer.FloatSlider<slider_configuration>(config, "Check box factor", &theme->check_box_factor, 1.2f, 2.0f, 3);
-			drawer.FloatSlider<slider_configuration>(config, "Select text factor", &theme->select_text_factor, 1.1f, 2.0f, 3);
-			drawer.FloatSlider<slider_configuration>(config, "Darken hover factor", &theme->darken_hover_factor, 0.2f, 0.9f, 3);
-			drawer.FloatSlider<slider_configuration>(config, "Slider lighten factor", &theme->slider_lighten_factor, 1.1f, 2.5f, 3);
+			drawer.FloatSlider(slider_configuration, config, "Check box factor", &theme->check_box_factor, 1.2f, 2.0f, 3);
+			drawer.FloatSlider(slider_configuration, config, "Select text factor", &theme->select_text_factor, 1.1f, 2.0f, 3);
+			drawer.FloatSlider(slider_configuration, config, "Darken hover factor", &theme->darken_hover_factor, 0.2f, 0.9f, 3);
+			drawer.FloatSlider(slider_configuration, config, "Slider lighten factor", &theme->slider_lighten_factor, 1.1f, 2.5f, 3);
 		}
-
-		template ECSENGINE_API void SystemParametersColorTheme<false>(UIDrawer<false>& drawer);
-		template ECSENGINE_API void SystemParametersColorTheme<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParametersLayout(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+		void SystemParametersLayout(UIDrawer& drawer) {
+			const size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -432,24 +418,18 @@ namespace ECSEngine {
 			button_data.system_descriptor = layout;
 			drawer.Button("Default values##1", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element x", &layout->default_element_x, 0.01f, 0.3f, system_layout->default_element_x);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Element y", &layout->default_element_y, 0.01f, 0.15f, system_layout->default_element_y);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, system_layout->element_indentation);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, system_layout->next_row_padding);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, system_layout->next_row_y_offset);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, system_layout->node_indentation);
-
-#undef SLIDER_CONFIGURATION
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element x", &layout->default_element_x, 0.01f, 0.3f, system_layout->default_element_x);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Element y", &layout->default_element_y, 0.01f, 0.15f, system_layout->default_element_y);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Indentation", &layout->element_indentation, 0.0f, 0.05f, system_layout->element_indentation);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row padding", &layout->next_row_padding, 0.0f, 0.05f, system_layout->next_row_padding);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Next row offset", &layout->next_row_y_offset, 0.0f, 0.05f, system_layout->next_row_y_offset);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Node indentation", &layout->node_indentation, 0.0f, 0.05f, system_layout->node_indentation);
 		}
-
-		template void ECSENGINE_API SystemParametersLayout<false>(UIDrawer<false>& drawer);
-		template void ECSENGINE_API SystemParametersLayout<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParametersElementDescriptor(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK
+		void SystemParametersElementDescriptor(UIDrawer& drawer) {
+			const size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
 			UIConfigSliderChangedValueCallback callback;
@@ -469,8 +449,8 @@ namespace ECSEngine {
 			drawer.Button("Default values##20", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
 			float* float2_values[2];
 			float float2_lower_bounds[1];
 			float float2_upper_bounds[1];
@@ -478,7 +458,8 @@ namespace ECSEngine {
 
 			auto float2_sliders = [&](const char* group_name, size_t index) {
 				drawer.PushIdentifierStackRandom(index);
-				drawer.FloatSliderGroup<SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS>(
+				drawer.FloatSliderGroup(
+					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
 					config,
 					2,
 					group_name,
@@ -508,7 +489,8 @@ namespace ECSEngine {
 			float2_upper_bounds[0] = 0.02f;
 			float2_sliders("Graph padding", 2);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Graph reduce font",
 				&elements->graph_reduce_font,
@@ -516,7 +498,8 @@ namespace ECSEngine {
 				1.0f
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Graph sample circle size",
 				&elements->graph_sample_circle_size,
@@ -524,7 +507,8 @@ namespace ECSEngine {
 				0.02f
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Graph x axis space",
 				&elements->graph_x_axis_space,
@@ -533,7 +517,8 @@ namespace ECSEngine {
 				4
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Histogram bar min scale",
 				&elements->histogram_bar_min_scale,
@@ -541,7 +526,8 @@ namespace ECSEngine {
 				0.2f
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Histogram bar spacing",
 				&elements->histogram_bar_spacing,
@@ -555,7 +541,8 @@ namespace ECSEngine {
 			float2_upper_bounds[0] = 0.1f;
 			float2_sliders("Histogram padding", 3);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Histogram reduce font",
 				&elements->histogram_reduce_font,
@@ -563,7 +550,8 @@ namespace ECSEngine {
 				1.0f
 			);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(
+			drawer.FloatSlider(
+				SLIDER_CONFIGURATION,
 				config,
 				"Menu button padding",
 				&elements->menu_button_padding,
@@ -600,17 +588,12 @@ namespace ECSEngine {
 			float2_sliders("Text input padding", 8);
 
 			drawer.PopIdentifierStack();
-#undef SLIDER_CONFIGURATION
 		}
-
-		template void ECSENGINE_API SystemParametersElementDescriptor<false>(UIDrawer<false>& drawer);
-		template void ECSENGINE_API SystemParametersElementDescriptor<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParameterFont(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
+		void SystemParameterFont(UIDrawer& drawer) {
+			const size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES;
 
 			UIDrawConfig config;
 			auto system = drawer.GetSystem();
@@ -626,19 +609,14 @@ namespace ECSEngine {
 			button_data.system_descriptor = font;
 			drawer.Button("Default values##32", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Character spacing", &font->character_spacing, 0.0f, 0.1f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Size", &font->size, 0.0007f, 0.003f, 5);
-#undef SLIDER_CONFIGURATION
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Character spacing", &font->character_spacing, 0.0f, 0.1f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Size", &font->size, 0.0007f, 0.003f, 5);
 		}
-
-		template void ECSENGINE_API SystemParameterFont<false>(UIDrawer<false>& drawer);
-		template void ECSENGINE_API SystemParameterFont<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParameterDockspace(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
+		void SystemParameterDockspace(UIDrawer& drawer) {
+			const size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES;
 			UIDrawConfig config;
 			auto system = drawer.GetSystem();
 
@@ -653,32 +631,26 @@ namespace ECSEngine {
 			button_data.system_descriptor = dockspace;
 			drawer.Button("Default values##41", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border clickable handler count", &dockspace->border_default_clickable_handler_count, (unsigned int)64, (unsigned int)1024);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border general handler count", &dockspace->border_default_general_handler_count, (unsigned int)16, (unsigned int)1024);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border hoverable handler count", &dockspace->border_default_hoverable_handler_count, (unsigned int)64, (unsigned int)1024);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Border sprite texture count", &dockspace->border_default_sprite_texture_count, (unsigned int)16, (unsigned int)1024);
-			drawer.IntSlider<SLIDER_CONFIGURATION>(config, "Dockspace count", &dockspace->count, (unsigned int)8, (unsigned int)64);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Max border count", &dockspace->max_border_count, 4, 16);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Max windows per border", &dockspace->max_windows_border, 4, 16);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border clickable handler count", &dockspace->border_default_clickable_handler_count, (unsigned int)64, (unsigned int)1024);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border general handler count", &dockspace->border_default_general_handler_count, (unsigned int)16, (unsigned int)1024);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border hoverable handler count", &dockspace->border_default_hoverable_handler_count, (unsigned int)64, (unsigned int)1024);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Border sprite texture count", &dockspace->border_default_sprite_texture_count, (unsigned int)16, (unsigned int)1024);
+			drawer.IntSlider(SLIDER_CONFIGURATION, config, "Dockspace count", &dockspace->count, (unsigned int)8, (unsigned int)64);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Max border count", &dockspace->max_border_count, 4, 16);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Max windows per border", &dockspace->max_windows_border, 4, 16);
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border margin", &dockspace->border_margin, 0.0f, 0.5f);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border minimum distance", &dockspace->border_minimum_distance, 0.0f, 0.5f);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Border size", &dockspace->border_size, 0.0005f, 0.01f, 7);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Mininum scale", &dockspace->mininum_scale, 0.01f, 0.5f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Viewport padding x", &dockspace->viewport_padding_x, 0.0f, 0.003f, 7);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Viewport padding y", &dockspace->viewport_padding_y, 0.0f, 0.003f, 7);
-
-#undef SLIDER_CONFIGURATION
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border margin", &dockspace->border_margin, 0.0f, 0.5f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border minimum distance", &dockspace->border_minimum_distance, 0.0f, 0.5f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border size", &dockspace->border_size, 0.0005f, 0.01f, 7);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Mininum scale", &dockspace->mininum_scale, 0.01f, 0.5f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Viewport padding x", &dockspace->viewport_padding_x, 0.0f, 0.003f, 7);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Viewport padding y", &dockspace->viewport_padding_y, 0.0f, 0.003f, 7);
 		}
-
-		template void ECSENGINE_API SystemParameterDockspace<false>(UIDrawer<false>& drawer);
-		template void ECSENGINE_API SystemParameterDockspace<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParameterMaterial(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
+		void SystemParameterMaterial(UIDrawer& drawer) {
+			const size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES;
 
 			auto system = drawer.GetSystem();
 
@@ -705,7 +677,7 @@ namespace ECSEngine {
 				UIDrawConfig config;
 				drawer.PushIdentifierStack("##1");
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &material->vertex_buffer_count[index], 256, 5'000'000);
+					drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, names[index], &material->vertex_buffer_count[index], 256, 5'000'000);
 				}
 				drawer.PopIdentifierStack();
 				});
@@ -714,24 +686,16 @@ namespace ECSEngine {
 				UIDrawConfig config;
 				drawer.PushIdentifierStack("##2");
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &material->vertex_buffer_count[ECS_TOOLS_UI_MATERIALS + index], 256, 5'000'000);
+					drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, names[index], &material->vertex_buffer_count[ECS_TOOLS_UI_MATERIALS + index], 256, 5'000'000);
 				}
 				drawer.PopIdentifierStack();
-				});
-
-
-
-#undef SLIDER_CONFIGURATION
+			});
 		}
-
-		template void ECSENGINE_API SystemParameterMaterial<false>(UIDrawer<false>& drawer);
-		template void ECSENGINE_API SystemParameterMaterial<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParameterMiscellaneous(UIDrawer<initialize>& drawer) {
-#define SLIDER_CONFIGURATION UI_CONFIG_SLIDER_ENTER_VALUES
+		void SystemParameterMiscellaneous(UIDrawer& drawer) {
+			const size_t SLIDER_CONFIGURATION = UI_CONFIG_SLIDER_ENTER_VALUES;
 
 			UIDrawConfig config;
 			auto system = drawer.GetSystem();
@@ -747,20 +711,20 @@ namespace ECSEngine {
 			button_data.system_descriptor = misc;
 			drawer.Button("Default values##100", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Drawer identifier memory", &misc->drawer_identifier_memory, 100, 1000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Drawer temp memory", &misc->drawer_temp_memory, 1'000, 1'000'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Hierarchy drag node hover time until drop", &misc->hierarchy_drag_node_hover_drop, 250, 5000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Hierarchy drag node time", &misc->hierarchy_drag_node_time, 100, 2'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Slider bring back start time", &misc->slider_bring_back_start, 50, 2'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Slider enter values duration", &misc->slider_enter_value_duration, 100, 2'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input caret display time", &misc->text_input_caret_display_time, 25, 5'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input coallesce command time", &misc->text_input_coallesce_command, 25, 1'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input start time", &misc->text_input_repeat_start_duration, 25, 1'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Text input repeat time", &misc->text_input_repeat_time, 25, 1'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Thread temp memory", &misc->thread_temp_memory, 128, 1'000'000);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned short>(config, "Window count", &misc->window_count, 8, 64);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, "Window handler revert command count", &misc->window_handler_revert_command_count, 32, 4096);
-			drawer.IntSlider<SLIDER_CONFIGURATION, unsigned short>(config, "Window table default resource count", &misc->window_table_default_count, 64, 1024);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Drawer identifier memory", &misc->drawer_identifier_memory, 100, 1000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Drawer temp memory", &misc->drawer_temp_memory, 1'000, 1'000'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Hierarchy drag node hover time until drop", &misc->hierarchy_drag_node_hover_drop, 250, 5000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Hierarchy drag node time", &misc->hierarchy_drag_node_time, 100, 2'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Slider bring back start time", &misc->slider_bring_back_start, 50, 2'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Slider enter values duration", &misc->slider_enter_value_duration, 100, 2'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input caret display time", &misc->text_input_caret_display_time, 25, 5'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input coallesce command time", &misc->text_input_coallesce_command, 25, 1'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input start time", &misc->text_input_repeat_start_duration, 25, 1'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Text input repeat time", &misc->text_input_repeat_time, 25, 1'000);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Thread temp memory", &misc->thread_temp_memory, 128, 1'000'000);
+			drawer.IntSlider<unsigned short>(SLIDER_CONFIGURATION, config, "Window count", &misc->window_count, 8, 64);
+			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Window handler revert command count", &misc->window_handler_revert_command_count, 32, 4096);
+			drawer.IntSlider<unsigned short>(SLIDER_CONFIGURATION, config, "Window table default resource count", &misc->window_table_default_count, 64, 1024);
 
 			const char* names[] = {
 				"Solid color",
@@ -772,9 +736,9 @@ namespace ECSEngine {
 
 			drawer.CollapsingHeader("System vertex buffer count", [&]() {
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
-					drawer.IntSlider<SLIDER_CONFIGURATION, unsigned int>(config, names[index], &misc->system_vertex_buffers[index], 128, 5'000'000);
+					drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, names[index], &misc->system_vertex_buffers[index], 128, 5'000'000);
 				}
-				});
+			});
 
 			float* float2_values[2];
 			float float2_lower_bounds[2];
@@ -785,7 +749,8 @@ namespace ECSEngine {
 
 			auto float2_lambda = [&](const char* group_name, size_t index) {
 				drawer.PushIdentifierStackRandom(index);
-				drawer.FloatSliderGroup<SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS>(
+				drawer.FloatSliderGroup(
+					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
 					config,
 					2,
 					group_name,
@@ -793,7 +758,7 @@ namespace ECSEngine {
 					float2_values,
 					float2_lower_bounds,
 					float2_upper_bounds
-					);
+				);
 				drawer.PopIdentifierStack();
 			};
 
@@ -827,9 +792,9 @@ namespace ECSEngine {
 
 			drawer.PopIdentifierStack();
 
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f, 3);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, 4);
-			drawer.FloatSlider<SLIDER_CONFIGURATION>(config, "Title y scale", &misc->title_y_scale, 0.01f, 0.1f);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Menu x padd", &misc->menu_x_padd, 0.0f, 0.1f, 3);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Hierarchy drag node rectangle size", &misc->rectangle_hierarchy_drag_node_dimension, 0.005f, 0.01f, 4);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Title y scale", &misc->title_y_scale, 0.01f, 0.1f);
 
 			drawer.ColorInput("Menu arrow color", &misc->menu_arrow_color);
 			drawer.ColorInput("Menu unavailable arrow color", &misc->menu_unavailable_arrow_color);
@@ -837,67 +802,58 @@ namespace ECSEngine {
 			drawer.ColorInput("Tool tip border", &misc->tool_tip_border_color);
 			drawer.ColorInput("Tool tip font", &misc->tool_tip_font_color);
 			drawer.ColorInput("Tool tip unavailable font", &misc->tool_tip_unavailable_font_color);
-
-#undef COLOR_CONFIGURATION
-#undef SLIDER_CONFIGURATION
 		}
-
-		template void ECSENGINE_API SystemParameterMiscellaneous<false>(UIDrawer<false>& drawer);
-		template void ECSENGINE_API SystemParameterMiscellaneous<true>(UIDrawer<true>& drawer);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void SystemParametersDraw(void* window_data, void* drawer_descriptor) {
+		void SystemParametersDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			UISystemDescriptors* descriptors = &drawer.GetSystem()->m_descriptors;
 			drawer.SetDrawMode(UIDrawerMode::NextRow);
 
 			auto color_theme_lambda = [&]() {
-				SystemParametersColorTheme<initialize>(drawer);
+				SystemParametersColorTheme(drawer);
 			};
 
 			drawer.CollapsingHeader("Color theme", color_theme_lambda);
 
 			auto layout_lambda = [&]() {
-				SystemParametersLayout<initialize>(drawer);
+				SystemParametersLayout(drawer);
 			};
 
 			drawer.CollapsingHeader("Layout", layout_lambda);
 
 			auto element_descriptor_lambda = [&]() {
-				SystemParametersElementDescriptor<initialize>(drawer);
+				SystemParametersElementDescriptor(drawer);
 			};
 
 			drawer.CollapsingHeader("Element descriptor", element_descriptor_lambda);
 
 			auto material_lambda = [&]() {
-				SystemParameterMaterial<initialize>(drawer);
+				SystemParameterMaterial(drawer);
 			};
 
 			drawer.CollapsingHeader("Materials", material_lambda);
 
 			auto font_lambda = [&]() {
-				SystemParameterFont<initialize>(drawer);
+				SystemParameterFont(drawer);
 			};
 
 			drawer.CollapsingHeader("Font", font_lambda);
 
 			auto dockspace_lambda = [&]() {
-				SystemParameterDockspace<initialize>(drawer);
+				SystemParameterDockspace(drawer);
 			};
 
 			drawer.CollapsingHeader("Dockspace", dockspace_lambda);
 
 			auto misc_lambda = [&]() {
-				SystemParameterMiscellaneous<initialize>(drawer);
+				SystemParameterMiscellaneous(drawer);
 			};
 
 			drawer.CollapsingHeader("Miscellaneous", misc_lambda);
 		}
-
-		ECS_TEMPLATE_FUNCTION_BOOL(void, SystemParametersDraw, void*, void*);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -907,11 +863,8 @@ namespace ECSEngine {
 			UIWindowDescriptor descriptor;
 			system->DestroyWindowIfFound("System Parameters");
 
-			descriptor.draw = SystemParametersDraw<false>;
-			descriptor.initialize = SystemParametersDraw<true>;
-			descriptor.private_action = SkipAction;
-			descriptor.window_data = nullptr;
-			descriptor.window_data_size = 0;
+			descriptor.draw = SystemParametersDraw;
+
 			descriptor.resource_count = 512;
 			descriptor.initial_position_x = mouse_position.x - 0.1f;
 			descriptor.initial_position_y = mouse_position.y - 0.1f;
@@ -938,11 +891,12 @@ namespace ECSEngine {
 			system_handler_data.flag_destruction = (bool*)dummy_allocation;
 			system_handler_data.name = "System Parameters";
 			system_handler_data.reset_when_window_is_destroyed = true;
+
 			UIActionHandler handler;
 			handler.action = PopUpWindowSystemHandler;
 			handler.data = &system_handler_data;
 			handler.data_size = sizeof(system_handler_data);
-			system->PushSystemHandler(handler);
+			system->PushFrameHandler(handler);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1069,18 +1023,14 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void DrawNothing(void* window_data, void* drawer_descriptor)
+		void DrawNothing(void* window_data, void* drawer_descriptor, bool initialize)
 		{
 			UI_PREPARE_DRAWER(initialize);
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL(void, DrawNothing, void*, void*);
-
 		// --------------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void ErrorMessageWindowDraw(void* window_data, void* drawer_descriptor) {
+		void ErrorMessageWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			drawer.DisablePaddingForRenderSliders();
@@ -1096,10 +1046,8 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "OK", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 		}
-
-		ECS_TEMPLATE_FUNCTION_BOOL(void, ErrorMessageWindowDraw, void*, void*);
 
 		// ------------------------------------------------------------------------------------
 
@@ -1113,8 +1061,7 @@ namespace ECSEngine {
 		unsigned int CreateErrorMessageWindow(UISystem* system, Stream<char> description)
 		{
 			UIWindowDescriptor descriptor;
-			descriptor.draw = ErrorMessageWindowDraw<false>;
-			descriptor.initialize = ErrorMessageWindowDraw<true>;
+			descriptor.draw = ErrorMessageWindowDraw;
 			descriptor.initial_position_x = 0.0f;
 			descriptor.initial_position_y = 0.0f;
 			descriptor.initial_size_x = 10000.0f;
@@ -1162,8 +1109,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		template<bool initialize>
-		void ConfirmWindowDraw(void* window_data, void* drawer_descriptor) {
+		void ConfirmWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			drawer.DisablePaddingForRenderSliders();
@@ -1178,13 +1124,13 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "OK", { ConfirmWindowOKAction, data, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { ConfirmWindowOKAction, data, 0, UIDrawPhase::System });
 
 			config.flag_count = 0;
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 
 			// If enter is pressed, confirm the action
 			if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
@@ -1192,22 +1138,19 @@ namespace ECSEngine {
 					UI_UNPACK_ACTION_DATA;
 
 					ConfirmWindowOKAction(action_data);
-					system->PopSystemHandler();
+					system->PopFrameHandler();
 				};
 
-				drawer.system->PushSystemHandler({ system_handler_wrapper, data, 0 });
+				drawer.system->PushFrameHandler({ system_handler_wrapper, data, 0 });
 			}
 		}
-
-		ECS_TEMPLATE_FUNCTION_BOOL(void, ConfirmWindowDraw, void*, void*);
 
 		// -------------------------------------------------------------------------------------------------------
 
 		unsigned int CreateConfirmWindow(UISystem* system, Stream<char> description, UIActionHandler handler)
 		{
 			UIWindowDescriptor descriptor;
-			descriptor.draw = ConfirmWindowDraw<false>;
-			descriptor.initialize = ConfirmWindowDraw<true>;
+			descriptor.draw = ConfirmWindowDraw;
 			descriptor.initial_position_x = 0.0f;
 			descriptor.initial_position_y = 0.0f;
 			descriptor.initial_size_x = 10000.0f;
@@ -1257,8 +1200,7 @@ namespace ECSEngine {
 		unsigned int CreateChooseOptionWindow(UISystem* system, ChooseOptionWindowData data)
 		{
 			UIWindowDescriptor descriptor;
-			descriptor.draw = ChooseOptionWindowDraw<false>;
-			descriptor.initialize = ChooseOptionWindowDraw<true>;
+			descriptor.draw = ChooseOptionWindowDraw;
 			descriptor.initial_position_x = 0.0f;
 			descriptor.initial_position_y = 0.0f;
 			descriptor.initial_size_x = 10000.0f;
@@ -1302,7 +1244,7 @@ namespace ECSEngine {
 
 			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_LOCK_WINDOW
 				| UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_DOCKSPACE_LOCK_WINDOW);
-			system->PopUpSystemHandler(ECS_TOOLS_UI_CHOOSE_WINDOW_NAME, false);
+			system->PopUpFrameHandler(ECS_TOOLS_UI_CHOOSE_WINDOW_NAME, false);
 			system->AddWindowMemoryResource(allocation, window_index);
 
 			unsigned int border_index;
@@ -1330,8 +1272,7 @@ namespace ECSEngine {
 			}
 		}
 
-		template<bool initialize>
-		void ChooseOptionWindowDraw(void* window_data, void* drawer_descriptor) {
+		void ChooseOptionWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			drawer.DisablePaddingForRenderSliders();
@@ -1351,14 +1292,14 @@ namespace ECSEngine {
 				ChooseOptionActionData index_data;
 				index_data.data = data;
 				index_data.index = index;
-				drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE>(config, data->button_names[index], { ChooseOptionAction, &index_data, sizeof(index_data), UIDrawPhase::System });
+				drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, data->button_names[index], { ChooseOptionAction, &index_data, sizeof(index_data), UIDrawPhase::System });
 				config.flag_count = 0;
 			}
 
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1375,14 +1316,13 @@ namespace ECSEngine {
 			CloseXBorderClickableAction(action_data);
 		}
 
-		template<bool initialize>
-		void TextInputWizard(void* window_data, void* drawer_descriptor)
+		void TextInputWizard(void* window_data, void* drawer_descriptor, bool initialize)
 		{
 			UI_PREPARE_DRAWER(initialize);
 
 			TextInputWizardData* data = (TextInputWizardData*)window_data;
 			
-			if constexpr (initialize) {
+			if (initialize) {
 				size_t input_name_size = strlen(data->input_name);
 				void* allocation = drawer.GetMainAllocatorBuffer(sizeof(char) * (input_name_size + 1));
 				memcpy(allocation, data->input_name, sizeof(char) * (input_name_size + 1));
@@ -1403,7 +1343,7 @@ namespace ECSEngine {
 			relative_transform.scale.x = 5.0f;
 			config.AddFlag(relative_transform);
 
-			drawer.TextInput<UI_CONFIG_RELATIVE_TRANSFORM>(config, data->input_name, &data->input_stream);
+			drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM, config, data->input_name, &data->input_stream);
 			drawer.NextRow();
 
 			UIConfigAbsoluteTransform absolute_transform;
@@ -1412,17 +1352,15 @@ namespace ECSEngine {
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "OK", { TextInputWizardConfirmAction, window_data, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { TextInputWizardConfirmAction, window_data, 0, UIDrawPhase::System });
 
 			absolute_transform.scale = drawer.GetLabelScale("Cancel");
 			absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 		}
-
-		ECS_TEMPLATE_FUNCTION_BOOL(void, TextInputWizard, void*, void*);
 
 		// Additional data is the window data that is TextInputWizardData*
 		void TextInputWizardPrivateHandler(ActionData* action_data) {
@@ -1438,8 +1376,7 @@ namespace ECSEngine {
 			UIWindowDescriptor descriptor;
 			
 			descriptor.window_name = data->window_name;
-			descriptor.draw = TextInputWizard<false>;
-			descriptor.initialize = TextInputWizard<true>;
+			descriptor.draw = TextInputWizard;
 			
 			descriptor.initial_position_x = 0.0f;
 			descriptor.initial_position_y = 0.0f;
@@ -1452,7 +1389,7 @@ namespace ECSEngine {
 
 			descriptor.private_action = TextInputWizardPrivateHandler;
 
-			system->PopUpSystemHandler(data->window_name, false, false, false);
+			system->PopUpFrameHandler(data->window_name, false, false, false);
 			return system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE
 				| UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_LOCK_WINDOW | UI_DOCKSPACE_NO_DOCKING);
 		}
@@ -1466,37 +1403,28 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void DrawTextFile(UIDrawer<false>* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset) {
+		void DrawTextFile(UIDrawer* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset) {
 			float2 current_position = drawer->GetCurrentPositionNonOffset();
 			drawer->OffsetNextRow(border_padding.x);
 			drawer->OffsetX(border_padding.x);
 			drawer->OffsetY(border_padding.y);
 
 			UIDrawConfig config;
-			std::ifstream file_stream(path);
+			Stream<char> contents = ReadWholeFileText(path);
 
 			bool draw_border = false;
-			if (file_stream.good()) {
-				size_t file_size = function::GetFileByteSize(file_stream);
-				if (file_size < ECS_MB) {
-					char* allocation = (char*)ECS_MALLOCA(file_size + 1);
-					file_stream.read(allocation, file_size);
-					size_t read_bytes = file_stream.gcount();
-					allocation[read_bytes] = '\0';
-					float old_next_row_y_offset = drawer->layout.next_row_y_offset;
-					drawer->OffsetY(old_next_row_y_offset);
-					drawer->SetNextRowYOffset(next_row_y_offset);
-					drawer->Sentence<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE>(config, allocation);
-					drawer->SetNextRowYOffset(old_next_row_y_offset);
-					draw_border = true;
-					ECS_FREEA(allocation);
-				}
-				else {
-					drawer->Text<UI_CONFIG_DO_NOT_CACHE>(config, "File is too big to be drawn");
-				}
+			if (contents.buffer != nullptr) {
+				contents[contents.size - 1] = '\0';
+				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
+				drawer->OffsetY(old_next_row_y_offset);
+				drawer->SetNextRowYOffset(next_row_y_offset);
+				drawer->Sentence(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
+				drawer->SetNextRowYOffset(old_next_row_y_offset);
+				draw_border = true;
+				free(contents.buffer);
 			}
 			else {
-				drawer->Text<UI_CONFIG_DO_NOT_CACHE>(config, "File could not be opened.");
+				drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "File could not be opened.");
 			}
 
 			if (draw_border) {
@@ -1510,61 +1438,36 @@ namespace ECSEngine {
 				UIConfigBorder border;
 				border.color = drawer->color_theme.borders;
 				config.AddFlag(border);
-				drawer->Rectangle<UI_CONFIG_BORDER | UI_CONFIG_ABSOLUTE_TRANSFORM>(config);
+				drawer->Rectangle(UI_CONFIG_BORDER | UI_CONFIG_ABSOLUTE_TRANSFORM, config);
 			}
 			drawer->OffsetNextRow(-border_padding.x);
 			drawer->NextRow();
 		}
 
-		float2* DrawTextFileEx(UIDrawer<false>* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset) {
+		void DrawTextFileEx(UIDrawer* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset) {
 			constexpr const char* STABILIZE_STRING_NAME = "Stabilized render span";
 
-			UISystem* system = drawer->system;
-			bool exists = system->ExistsWindowResource(drawer->window_index, STABILIZE_STRING_NAME);
-			float2* stabilized_render_span;
-			if (exists) {
-				stabilized_render_span = (float2*)system->FindWindowResource(drawer->window_index, STABILIZE_STRING_NAME, strlen(STABILIZE_STRING_NAME));
-				system->IncrementWindowDynamicResource(drawer->window_index, STABILIZE_STRING_NAME);
-			}
-			else {
-				ResourceIdentifier identifier(ToStream(STABILIZE_STRING_NAME));
-				stabilized_render_span = (float2*)system->m_memory->Allocate(sizeof(float2), alignof(float2));
-				system->AddWindowMemoryResource(stabilized_render_span, drawer->window_index);
-				system->AddWindowMemoryResourceToTable(stabilized_render_span, identifier, drawer->window_index);
-				system->AddWindowDrawerElement(drawer->window_index, STABILIZE_STRING_NAME, Stream<void*>(&stabilized_render_span, 1), Stream<ResourceIdentifier>(&identifier, 1));
-				*stabilized_render_span = { 0.0f, 0.0f };
-			}
-
 			float2 current_position = drawer->GetCurrentPositionNonOffset();
 			drawer->OffsetNextRow(border_padding.x);
 			drawer->OffsetX(border_padding.x);
 			drawer->OffsetY(border_padding.y);
 
 			UIDrawConfig config;
-			std::ifstream file_stream(path);
+			Stream<char> contents = ReadWholeFileText(path);
 
 			bool draw_border = false;
-			if (file_stream.good()) {
-				size_t file_size = function::GetFileByteSize(file_stream);
-				if (file_size < ECS_MB) {
-					char* allocation = (char*)ECS_MALLOCA(file_size + 1);
-					file_stream.read(allocation, file_size);
-					size_t read_bytes = file_stream.gcount();
-					allocation[read_bytes] = '\0';
-					float old_next_row_y_offset = drawer->layout.next_row_y_offset;
-					drawer->OffsetY(old_next_row_y_offset);
-					drawer->SetNextRowYOffset(next_row_y_offset);
-					drawer->Sentence<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE>(config, allocation);
-					drawer->SetNextRowYOffset(old_next_row_y_offset);
-					draw_border = true;
-					ECS_FREEA(allocation);
-				}
-				else {
-					drawer->Text<UI_CONFIG_DO_NOT_CACHE>(config, "File is too big to be drawn");
-				}
+			if (contents.buffer) {
+				contents[contents.size - 1] = '\0';
+				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
+				drawer->OffsetY(old_next_row_y_offset);
+				drawer->SetNextRowYOffset(next_row_y_offset);
+				drawer->Sentence(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
+				drawer->SetNextRowYOffset(old_next_row_y_offset);
+				draw_border = true;
+				free(contents.buffer);
 			}
 			else {
-				drawer->Text<UI_CONFIG_DO_NOT_CACHE>(config, "File could not be opened.");
+				drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "File could not be opened.");
 			}
 
 			if (draw_border) {
@@ -1578,25 +1481,20 @@ namespace ECSEngine {
 				UIConfigBorder border;
 				border.color = drawer->color_theme.borders;
 				config.AddFlag(border);
-				drawer->Rectangle<UI_CONFIG_BORDER | UI_CONFIG_ABSOLUTE_TRANSFORM>(config);
+				drawer->Rectangle(UI_CONFIG_BORDER | UI_CONFIG_ABSOLUTE_TRANSFORM, config);
 			}
 			drawer->OffsetNextRow(-border_padding.x);
 			drawer->NextRow();
-
-			drawer->StabilizeRenderSpan(*stabilized_render_span);
-			return stabilized_render_span;
 		}
 
-		template<bool initialize>
-		void TextFileDraw(void* window_data, void* drawer_descriptor)
+		void TextFileDraw(void* window_data, void* drawer_descriptor, bool initialize)
 		{
 			UI_PREPARE_DRAWER(initialize);
 
 			const TextFileDrawData* data = (const TextFileDrawData*)window_data;
 
-			if constexpr (!initialize) {
-				float2* stabilized_render_span = DrawTextFileEx(&drawer, data->path, data->border_padding, data->next_row_y_offset);
-				*stabilized_render_span = (drawer.GetRenderSpan() + *stabilized_render_span) * float2(0.5f, 0.5f);
+			if (!initialize) {
+				DrawTextFileEx(&drawer, data->path, data->border_padding, data->next_row_y_offset);
 			}
 		}
 
@@ -1607,8 +1505,7 @@ namespace ECSEngine {
 			descriptor.window_data_size = sizeof(data);
 			descriptor.window_name = window_name;
 
-			descriptor.draw = TextFileDraw<false>;
-			descriptor.initialize = TextFileDraw<true>;
+			descriptor.draw = TextFileDraw;
 			descriptor.initial_size_x = 1.0f;
 			descriptor.initial_size_y = 1.5f;
 			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, descriptor.initial_size_x);
@@ -1634,21 +1531,23 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void ConsoleAppendMessageToDump(std::ofstream& stream, unsigned int index, Console* console) {
+		bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console) {
 			// temporarly swap the \0 to \n in order to have it formatted correctly
 			char* mutable_ptr = (char*)console->messages[index].message.buffer;
 			mutable_ptr[console->messages[index].message.size] = '\n';
-			stream.write(mutable_ptr, console->messages[index].message.size + 1);
+			bool success = WriteFile(file, { mutable_ptr, console->messages[index].message.size + 1 });
 			mutable_ptr[console->messages[index].message.size] = '\0';
+			return success;
 		}
 
 		// ------------------------------------------------------------------------------------
 
 		void ConsoleDump(unsigned int thread_index, World* world, void* _data) {
 			ConsoleDumpData* data = (ConsoleDumpData*)_data;
-			std::ofstream stream(data->console->dump_path, std::ios::trunc);
+			ECS_FILE_HANDLE file = 0;
+			ECS_FILE_STATUS_FLAGS status = OpenFile(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
 
-			ECS_ASSERT(stream.good());
+			ECS_ASSERT(status == ECS_FILE_STATUS_OK);
 
 			data->console->dump_lock.lock();
 
@@ -1657,9 +1556,11 @@ namespace ECSEngine {
 			SYSTEMTIME system_time;
 			GetLocalTime(&system_time);
 
+			bool success = true;
 			const char header_annotation[] = "**********************************************\n";
 			size_t annotation_size = std::size(header_annotation) - 1;
-			stream.write(header_annotation, annotation_size);
+			success &= WriteFile(file, { header_annotation, annotation_size });
+
 			char time_characters[256];
 			Stream<char> time_stream = Stream<char>(time_characters, 0);
 			function::ConvertIntToChars(time_stream, system_time.wHour);
@@ -1678,15 +1579,16 @@ namespace ECSEngine {
 			time_stream.Add(' ');
 			const char description[] = "Console output\n";
 			time_stream.AddStream(Stream<char>(description, std::size(description) - 1));
-			stream.write(time_characters, time_stream.size);
-			stream.write(header_annotation, annotation_size);
+
+			success &= WriteFile(file, { time_characters, time_stream.size });
+			success &= WriteFile(file, { header_annotation, annotation_size });
 
 #pragma endregion
 
 #pragma region Messages
 
-			for (size_t index = 0; index < data->console->messages.size; index++) {
-				ConsoleAppendMessageToDump(stream, index, data->console);
+			for (size_t index = 0; index < data->console->messages.size && success; index++) {
+				success &= ConsoleAppendMessageToDump(file, index, data->console);
 			}
 
 			data->console->dump_lock.unlock();
@@ -1694,27 +1596,29 @@ namespace ECSEngine {
 
 #pragma endregion
 
-			ECS_ASSERT(stream.good());
-
+			CloseFile(file);
+			ECS_ASSERT(success);
 		}
 
 		void ConsoleAppendToDump(unsigned int thread_index, World* world, void* _data)
 		{
 			ConsoleDumpData* data = (ConsoleDumpData*)_data;
-			std::ofstream stream(data->console->dump_path, std::ios::ate | std::ios::_Nocreate);
+			ECS_FILE_HANDLE file = 0;
+			ECS_FILE_STATUS_FLAGS status = OpenFile(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_APEND | ECS_FILE_ACCESS_TEXT);
 
-			ECS_ASSERT(stream.good());
+			ECS_ASSERT(status == ECS_FILE_STATUS_OK);
 
 			data->console->dump_lock.lock();
 
-			for (size_t index = data->starting_index; index < data->console->messages.size; index++) {
-				ConsoleAppendMessageToDump(stream, index, data->console);
+			bool write_success = true;
+			for (size_t index = data->starting_index; index < data->console->messages.size && write_success; index++) {
+				write_success &= ConsoleAppendMessageToDump(file, index, data->console);
 			}
 			data->console->last_dumped_message += data->console->messages.size - data->starting_index;
 
 			data->console->dump_lock.unlock();
-
-			ECS_ASSERT(stream.good());
+			CloseFile(file);
+			ECS_ASSERT(write_success);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1726,16 +1630,24 @@ namespace ECSEngine {
 			console->Clear();
 		}
 
-		template<bool initialize>
-		void ConsoleWindowDraw(void* window_data, void* drawer_descriptor) {
+		// -------------------------------------------------------------------------------------------------------
+
+		MemoryManager DefaultConsoleAllocator(GlobalMemoryManager* global_manager)
+		{
+			return MemoryManager(500'000, 1024, 500'000, global_manager);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		void ConsoleWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
 			drawer.SetDrawMode(UIDrawerMode::FitSpace);
 			drawer.layout.next_row_padding = 0.005f;
 
-			if constexpr (initialize) {
-				constexpr size_t unique_message_default_capacity = 256;
+			if (initialize) {
+				const size_t unique_message_default_capacity = 256;
 				data->unique_messages.Initialize(drawer.system->m_memory, unique_message_default_capacity);
 				data->system_filter = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->console->system_filter_strings.size);
 				memset(data->system_filter, 1, sizeof(bool) * data->console->system_filter_strings.size);
@@ -1745,7 +1657,7 @@ namespace ECSEngine {
 
 #pragma region Recalculate counts
 
-			if constexpr (!initialize) {
+			if (!initialize) {
 				ConsoleFilterMessages(data, drawer);
 			}
 
@@ -1770,25 +1682,25 @@ namespace ECSEngine {
 			transform.scale = drawer.GetLabelScale("Clear");
 
 			config.AddFlag(transform);
-			drawer.Button<button_configuration>(config, "Clear", { ConsoleClearAction, data->console, 0 });
+			drawer.Button(button_configuration, config, "Clear", { ConsoleClearAction, data->console, 0 });
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Collapse");
 			config.AddFlag(transform);
-			drawer.StateButton<button_configuration>(config, "Collapse", &data->collapse);
+			drawer.StateButton(button_configuration, config, "Collapse", &data->collapse);
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Clear on play");
 			config.AddFlag(transform);
-			drawer.StateButton<button_configuration>(config, "Clear on play", &data->clear_on_play);
+			drawer.StateButton(button_configuration, config, "Clear on play", &data->clear_on_play);
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Pause on error");
 			config.AddFlag(transform);
-			drawer.StateButton<button_configuration>(config, "Pause on error", &data->console->pause_on_error);
+			drawer.StateButton(button_configuration, config, "Pause on error", &data->console->pause_on_error);
 			config.flag_count--;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1802,7 +1714,7 @@ namespace ECSEngine {
 			UIConfigFilterMenuNotify menu_notify;
 			menu_notify.notifier = &data->filter_message_type_changed;
 			config.AddFlag(menu_notify);
-			drawer.FilterMenu<filter_menu_configuration>(config, "Filter", filter_stream, &data->filter_info);
+			drawer.FilterMenu(filter_menu_configuration, config, "Filter", filter_stream, &data->filter_info);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1811,7 +1723,7 @@ namespace ECSEngine {
 			menu_notify.notifier = &data->system_filter_changed;
 			config.AddFlag(menu_notify);
 			Stream<const char*> system_filter_stream = Stream<const char*>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
-			drawer.FilterMenu<filter_menu_configuration>(config, "System", system_filter_stream, data->system_filter);
+			drawer.FilterMenu(filter_menu_configuration, config, "System", system_filter_stream, data->system_filter);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1823,10 +1735,17 @@ namespace ECSEngine {
 			UIConfigComboBoxPrefix verbosity_prefix;
 			verbosity_prefix.prefix = "Verbosity: ";
 			config.AddFlag(verbosity_prefix);
-			drawer.ComboBox<button_configuration | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_DO_NOT_CACHE>(config, "Verbosity", verbosity_label_stream, verbosity_label_stream.size, &data->console->verbosity_level);
+			drawer.ComboBox(
+				button_configuration | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_DO_NOT_CACHE,
+				config, 
+				"Verbosity",
+				verbosity_label_stream, 
+				verbosity_label_stream.size,
+				&data->console->verbosity_level
+			);
 			config.flag_count -= 2;
 
-			float2 verbosity_label_scale = drawer.GetLastSolidColorRectangleScale<UI_CONFIG_LATE_DRAW>(1);
+			float2 verbosity_label_scale = drawer.GetLastSolidColorRectangleScale(UI_CONFIG_LATE_DRAW, 1);
 			transform.position.x += verbosity_label_scale.x /*+ border_thickness.x*/;
 			transform.scale = drawer.GetLabelScale("Dump");
 			config.AddFlag(transform);
@@ -1843,9 +1762,14 @@ namespace ECSEngine {
 			dump_prefix.prefix = "Dump type: ";
 			config.AddFlag(dump_prefix);
 
-			drawer.ComboBox<button_configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_GET_TRANSFORM>(
-				config, "Dump", dump_labels, dump_labels.size, (unsigned char*)&data->console->dump_type
-				);
+			drawer.ComboBox(
+				button_configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_GET_TRANSFORM,
+				config, 
+				"Dump", 
+				dump_labels, 
+				dump_labels.size, 
+				(unsigned char*)&data->console->dump_type
+			);
 			config.flag_count -= 3;
 
 			transform.position.x = get_position.x + get_scale.x;
@@ -1867,17 +1791,20 @@ namespace ECSEngine {
 				}
 				else {
 					if (console_message.icon_type == ConsoleMessageType::Error) {
-						drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, CONSOLE_TEXTURE_ICONS[(unsigned int)ConsoleMessageType::Error]);
+						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ConsoleMessageType::Error]);
 					}
 					else {
-						drawer.SpriteRectangle<UI_CONFIG_MAKE_SQUARE>(config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.icon_type], console_message.color);
+						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.icon_type], console_message.color);
 					}
 				}
 				parameters.color = console_message.color;
 
 				config.AddFlag(parameters);
-				drawer.Sentence<UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE
-					| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS>(config, console_message.message.buffer);
+				drawer.Sentence(
+					UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS, 
+					config, 
+					console_message.message.buffer
+				);
 				config.flag_count--;
 			};
 
@@ -1915,10 +1842,12 @@ namespace ECSEngine {
 							absolute_transform.position = aligned_position;
 							absolute_transform.scale = label_scale;
 							config.AddFlags(parameters, absolute_transform);
-							drawer.TextLabel<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE
-								| UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_PARAMETERS>(
-									config, temp_characters
-									);
+							drawer.TextLabel(
+								UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE
+								| UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_PARAMETERS,
+								config,
+								temp_characters
+							);
 							config.flag_count -= 2;
 						}
 					}
@@ -1949,12 +1878,12 @@ namespace ECSEngine {
 				transform.position.x -= drawer.system->m_descriptors.misc.render_slider_vertical_size + ECS_TOOLS_UI_ONE_PIXEL_X;
 			}
 
-			size_t initial_text_sprite_count = *drawer.HandleTextSpriteCount<UI_CONFIG_LATE_DRAW>();
-			size_t initial_solid_color_count = *drawer.HandleSolidColorCount<UI_CONFIG_LATE_DRAW>();
-			size_t initial_sprite_count = *drawer.HandleSpriteCount<UI_CONFIG_LATE_DRAW>();
+			size_t initial_text_sprite_count = *drawer.HandleTextSpriteCount(UI_CONFIG_LATE_DRAW);
+			size_t initial_solid_color_count = *drawer.HandleSolidColorCount(UI_CONFIG_LATE_DRAW);
+			size_t initial_sprite_count = *drawer.HandleSpriteCount(UI_CONFIG_LATE_DRAW);
 
 			auto counter_backwards = [&](LPCWSTR texture, Color color, bool* filter_status, unsigned int counter) {
-				constexpr size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE 
+				const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE 
 					| UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_LATE_DRAW;
 
 				if (counter == 0 || !(*filter_status)) {
@@ -1970,21 +1899,21 @@ namespace ECSEngine {
 
 				transform.position.y += drawer.element_descriptor.label_vertical_padd;
 				config.AddFlag(transform);
-				drawer.Text<configuration | UI_CONFIG_DO_NOT_CACHE>(config, temp_characters);
+				drawer.Text(configuration | UI_CONFIG_DO_NOT_CACHE, config, temp_characters);
 				transform.position.y -= drawer.element_descriptor.label_vertical_padd;
 				config.flag_count--;
 
 				transform.position.x -= drawer.element_descriptor.label_horizontal_padd + sprite_scale.x;
 				transform.scale = sprite_scale;
 				config.AddFlag(transform);
-				drawer.SpriteRectangle<configuration>(config, texture, color);
+				drawer.SpriteRectangle(configuration, config, texture, color);
 				config.flag_count--;
 
 				transform.position.x -= drawer.element_descriptor.label_horizontal_padd;
 				transform.scale.x = { initial_x_position - transform.position.x };
 				config.AddFlag(transform);
 
-				drawer.SolidColorRectangle<configuration | UI_CONFIG_BORDER>(config, drawer.color_theme.theme);
+				drawer.SolidColorRectangle(configuration | UI_CONFIG_BORDER, config, drawer.color_theme.theme);
 				config.flag_count--;
 
 				UIDrawerStateTableBoolClickable clickable_data;
@@ -2015,13 +1944,13 @@ namespace ECSEngine {
 				transform.position.x += drawer.element_descriptor.label_horizontal_padd;
 				transform.scale = sprite_scale;
 				config.AddFlag(transform);
-				drawer.SpriteRectangle<configuration>(config, texture, color);
+				drawer.SpriteRectangle(configuration, config, texture, color);
 				config.flag_count--;
 
 				transform.position.x += sprite_scale.x + drawer.element_descriptor.label_horizontal_padd;
 				transform.position.y += drawer.element_descriptor.label_vertical_padd;
 				config.AddFlag(transform);
-				drawer.Text<configuration | UI_CONFIG_DO_NOT_CACHE>(config, temp_characters);
+				drawer.Text(configuration | UI_CONFIG_DO_NOT_CACHE, config, temp_characters);
 				transform.position.y -= drawer.element_descriptor.label_vertical_padd;
 				config.flag_count--;
 
@@ -2030,7 +1959,7 @@ namespace ECSEngine {
 				transform.position.x = initial_x_position;
 				config.AddFlag(transform);
 
-				drawer.SolidColorRectangle<configuration | UI_CONFIG_BORDER>(config, drawer.color_theme.theme);
+				drawer.SolidColorRectangle(configuration | UI_CONFIG_BORDER, config, drawer.color_theme.theme);
 				config.flag_count--;
 
 				UIDrawerStateTableBoolClickable clickable_data;
@@ -2045,7 +1974,7 @@ namespace ECSEngine {
 				transform.position.x += border_thickness.x + transform.scale.x;
 			};
 
-			UIDrawerBufferState drawer_state = drawer.GetBufferState<UI_CONFIG_LATE_DRAW>();
+			UIDrawerBufferState drawer_state = drawer.GetBufferState(UI_CONFIG_LATE_DRAW);
 			UIDrawerHandlerState handler_state = drawer.GetHandlerState();
 
 			counter_backwards(ECS_TOOLS_UI_TEXTURE_TRACE_ICON, CONSOLE_TRACE_COLOR, &data->filter_trace, data->trace_count);
@@ -2055,7 +1984,7 @@ namespace ECSEngine {
 
 			// if it overpassed the bound, revert to the initial state and redo the drawing from the bound
 			if (transform.position.x < counter_bound) {
-				drawer.RestoreBufferState<UI_CONFIG_LATE_DRAW>(drawer_state);
+				drawer.RestoreBufferState(UI_CONFIG_LATE_DRAW, drawer_state);
 				drawer.RestoreHandlerState(handler_state);
 
 				transform.position.x = counter_bound;
@@ -2071,11 +2000,9 @@ namespace ECSEngine {
 
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL(void, ConsoleWindowDraw, void*, void*);
-
 		// -------------------------------------------------------------------------------------------------------
 
-		void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer<false>& drawer)
+		void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer& drawer)
 		{
 			bool recalculate_counts = (data->console->messages.size != data->last_frame_message_count) || data->filter_message_type_changed
 				|| (data->console->verbosity_level != data->previous_verbosity_level) || data->system_filter_changed;
@@ -2154,8 +2081,7 @@ namespace ECSEngine {
 		unsigned int CreateConsoleWindow(UISystem* system, Console* console) {
 			UIWindowDescriptor descriptor;
 
-			descriptor.draw = ConsoleWindowDraw<false>;
-			descriptor.initialize = ConsoleWindowDraw<true>;
+			descriptor.draw = ConsoleWindowDraw;
 
 			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, CONSOLE_WINDOW_SIZE.x);
 			descriptor.initial_size_x = CONSOLE_WINDOW_SIZE.x;
@@ -2647,12 +2573,11 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		template<bool initializer>
-		void InjectValuesWindowDraw(void* window_data, void* drawer_descriptor) {
+		void InjectValuesWindowDraw(void* window_data, void* drawer_descriptor, bool initializer) {
 			UI_PREPARE_DRAWER(initializer);
 
 			InjectWindowData* data = (InjectWindowData*)window_data;
-			if constexpr (initializer) {
+			if (initializer) {
 				// Make a coallesced allocation for all streams
 				size_t allocation_size = 0;
 				allocation_size += sizeof(InjectWindowSection) * data->sections.size;
@@ -2739,7 +2664,7 @@ namespace ECSEngine {
 			UIDrawConfig config;
 			for (size_t index = 0; index < data->sections.size; index++) {
 				drawer.CollapsingHeader(data->sections[index].name, [&]() {
-					if constexpr (!initializer) {
+					if (!initializer) {
 						for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
 							data->ui_reflection->DrawInstance(data->sections[index].elements[subindex].name, drawer, config);
 						}
@@ -2748,8 +2673,6 @@ namespace ECSEngine {
 			}
 
 		}
-
-		ECS_TEMPLATE_FUNCTION_BOOL(void, InjectValuesWindowDraw, void*, void*);
 
 		// -------------------------------------------------------------------------------------------------------
 
@@ -2774,8 +2697,7 @@ namespace ECSEngine {
 
 			UIWindowDescriptor descriptor;
 
-			descriptor.draw = InjectValuesWindowDraw<false>;
-			descriptor.initialize = InjectValuesWindowDraw<true>;
+			descriptor.draw = InjectValuesWindowDraw;
 			descriptor.destroy_action = InjectWindowDestroyAction;
 
 			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, SIZE.x);

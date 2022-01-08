@@ -69,9 +69,14 @@ namespace ECSEngine {
 		void CheckWindowsFunctionErrorCode(HRESULT hr, LPCWSTR box_name, const char* filename, unsigned int line, bool do_exit) {
 			if (FAILED(hr)) {
 				_com_error error(hr);
-				std::ostringstream stream;
-				stream << "[File] " << filename << "\n" << "[Line] " << line << "\n";
-				wchar_t* converted_filename = function::ConvertASCIIToWide(stream.str().c_str());
+				ECS_TEMP_ASCII_STRING(temp_string, 512);
+				temp_string.Copy(ToStream("[File] "));
+				temp_string.AddStream(ToStream(filename));
+				temp_string.AddStreamSafe(ToStream("\n[Line] "));
+				function::ConvertIntToChars(temp_string, line);
+				temp_string.Add('\n');
+				temp_string.AddSafe('\0');
+				wchar_t* converted_filename = function::ConvertASCIIToWide(temp_string.buffer);
 #ifdef ECSENGINE_DEBUG
 				__debugbreak();
 #endif
@@ -184,17 +189,6 @@ namespace ECSEngine {
 			// equivalent perpendicular slope is to be negative
 			positions[1] = { b.x - difference.x, b.y - difference.y };
 			positions[3] = { b.x + difference.x, b.y + difference.y };
-		}
-
-		// --------------------------------------------------------------------------------------------------
-
-		size_t GetFileByteSize(std::ifstream& stream)
-		{
-			auto stream_start = stream.tellg();
-			stream.seekg(0, std::ios::end);
-			auto stream_end = stream.tellg();
-			stream.seekg(stream_start);
-			return stream_end - stream_start;
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -593,32 +587,20 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		Stream<void> ReadWholeFile(const wchar_t* path, AllocatorPolymorphic allocator, bool binary)
+		void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> message)
 		{
-			return ReadWholeFile(ToStream(path), allocator, binary);
+			if (error_message != nullptr) {
+				error_message->AddStreamSafe(message);
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		Stream<void> ReadWholeFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool binary)
+		void SetErrorMessage(CapacityStream<char>* error_message, const char* message)
 		{
-			unsigned int flag = std::ios::ate;
-			if (binary) {
-				flag |= std::ios::binary;
+			if (error_message != nullptr) {
+				error_message->AddStreamSafe(ToStream(message));
 			}
-
-			std::ifstream stream(std::wstring(path.buffer, path.buffer + path.size), flag);
-			if (stream.good()) {
-				size_t file_size = stream.tellg();
-				stream.seekg(std::ios::beg);
-				void* allocation = Allocate(allocator, file_size);
-				stream.read((char*)allocation, file_size);
-
-				// Tellg might report bigger file sizes - so make sure that the actual read count is used
-				return { allocation, (size_t)stream.gcount() };
-			}
-
-			return { nullptr, 0 };
 		}
 
 		// --------------------------------------------------------------------------------------------------

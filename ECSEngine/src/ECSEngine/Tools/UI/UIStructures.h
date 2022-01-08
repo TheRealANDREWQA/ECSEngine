@@ -85,7 +85,7 @@ namespace ECSEngine {
 		};
 
 		using Action = void (*)(ActionData* action_data);
-		using WindowDraw = void (*)(void* window_data, void* drawer_descriptor);
+		using WindowDraw = void (*)(void* window_data, void* drawer_descriptor, bool initializer);
 		using UIDrawerElementDraw = void (*)(void* element_data, void* drawer_ptr);
 
 		// data size 0 will be interpreted as take data as a pointer, with no data copy
@@ -353,7 +353,7 @@ namespace ECSEngine {
 			void Unmap(GraphicsContext* context, unsigned int starting_index, unsigned int end_index);
 
 			void ReleaseSpriteTextures();
-			void Release();
+			void Release(Graphics* graphics);
 
 			CapacityStream<VertexBuffer> buffers;
 			CapacityStream<UIDynamicStream<UISpriteTexture, true>> sprite_textures;
@@ -362,14 +362,13 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIRenderThreadResources {
-			Microsoft::WRL::ComPtr<GraphicsContext> deferred_context;
+			GraphicsContext* deferred_context;
 			LinearAllocator temp_allocator;
 			UIDrawPhase phase;
 		};
 
 		struct ECSENGINE_API UIRenderResources
 		{
-			CapacityStream<Microsoft::WRL::ComPtr<ID3D11CommandList>> window_draw_list;
 			Stream<UIRenderThreadResources> thread_resources;
 			CapacityStream<VertexShader> vertex_shaders;
 			CapacityStream<PixelShader> pixel_shaders;
@@ -493,7 +492,6 @@ namespace ECSEngine {
 			UIDockspaceRegion mouse_region;
 			float2 mouse_position;
 			Semaphore* texture_semaphore;
-			ID3D11CommandList** command_list;
 		};
 
 		enum class ECSENGINE_API BorderType {
@@ -564,6 +562,7 @@ namespace ECSEngine {
 			UIWindowDrawerDescriptor* descriptors;
 			char* name;
 			void* window_data;
+			size_t window_data_size;
 			containers::Stream<UISpriteVertex> name_vertex_buffer;
 			UIDynamicStream<const char*> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
@@ -579,8 +578,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIWindowSerializedMissingData {
-			WindowDraw draw = nullptr;
-			WindowDraw initialize;
+			WindowDraw draw;
 			Action private_action = nullptr;
 			void* private_action_data = nullptr;
 			size_t private_action_data_size = 0;
@@ -601,7 +599,6 @@ namespace ECSEngine {
 			void* window_data = nullptr;
 			size_t window_data_size = 0;
 			WindowDraw draw = nullptr;
-			WindowDraw initialize = nullptr;
 			Action private_action = nullptr;
 			void* private_action_data = nullptr;
 			size_t private_action_data_size = 0;

@@ -1,6 +1,6 @@
-// ECS_REFLECT
 #pragma once
 #include "../Reflection/Reflection.h"
+#include "../File.h"
 
 namespace ECSEngine {
 
@@ -14,157 +14,115 @@ namespace ECSEngine {
 	extern ECSENGINE_API const char* ECS_PLATFORM_STRINGS[];
 
 	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void ConstructPointerFieldsForType(Stream<function::CopyPointer>& ECS_RESTRICT pointer_fields, ReflectionType type, const void* ECS_RESTRICT data);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Write(std::ofstream& ECS_RESTRICT stream, const void* ECS_RESTRICT data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Write(CapacityStream<void>& ECS_RESTRICT stream, const void* ECS_RESTRICT data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Write(std::ofstream& stream, Stream<void> data);
-
-	// -----------------------------------------------------------------------------------------
 	
-	ECSENGINE_API void Write(CapacityStream<void>& stream, Stream<void> data);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Read(std::ifstream& ECS_RESTRICT stream, void* ECS_RESTRICT data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Read(std::istream& stream, CapacityStream<void>& data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Read(CapacityStream<void>& ECS_RESTRICT stream, void* ECS_RESTRICT data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Read(uintptr_t& ECS_RESTRICT stream, void* ECS_RESTRICT data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Read(uintptr_t& stream, CapacityStream<void>& data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Ignore(std::ifstream& stream, size_t byte_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Ignore(CapacityStream<void>& stream, size_t byte_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API void Ignore(uintptr_t& stream, size_t byte_size);
-
-	// -----------------------------------------------------------------------------------------
-
+	// It will serialize into a memory buffer and then commit to the file
+	// Allocator nullptr means use malloc
 	ECSENGINE_API bool Serialize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name, 
-		std::ofstream& ECS_RESTRICT stream, 
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name, 
+		Stream<wchar_t> file, 
+		const void* data,
+		AllocatorPolymorphic allocator = {nullptr}
 	);
 
+	// It will serialize into a memory buffer and then commit to the file
+	// Allocator nullptr means use malloc
 	ECSENGINE_API bool Serialize(
 		ReflectionType type,
-		std::ofstream& ECS_RESTRICT stream,
-		const void* ECS_RESTRICT data
+		Stream<wchar_t> file,
+		const void* data,
+		AllocatorPolymorphic allocator = {nullptr}
 	);
 
 	ECSENGINE_API void Serialize(
-		const ReflectionManager* ECS_RESTRICT reflection, 
-		const char* ECS_RESTRICT type_name,
-		CapacityStream<void>& ECS_RESTRICT stream, 
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection, 
+		const char* type_name,
+		uintptr_t& stream, 
+		const void* data
 	);
 
 	ECSENGINE_API void Serialize(
 		ReflectionType type,
-		CapacityStream<void>& ECS_RESTRICT stream,
-		const void* ECS_RESTRICT data
+		uintptr_t& stream,
+		const void* data
 	);
 
 	ECSENGINE_API size_t SerializeSize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name,
+		const void* data
 	);
 
-	ECSENGINE_API size_t SerializeSize(ReflectionType type, const void* ECS_RESTRICT data);
+	ECSENGINE_API size_t SerializeSize(ReflectionType type, const void* data);
 
 	// Returns the count of bytes written in the memory pool; type_pointers_to_copy will be filled
-	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation 
-	// should be used for it, success_status should be initialized with true
+	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation should be used for it
+	// It will read the whole file into a temporary memory buffer and then deserialize from memory
+	// Allocator nullptr means use malloc
+	// A value of -1 as return means failure to open and read the file
 	ECSENGINE_API size_t Deserialize(
-		const ReflectionManager* ECS_RESTRICT reflection, 
-		const char* ECS_RESTRICT type_name,
-		std::ifstream& ECS_RESTRICT stream, 
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy,
-		bool* ECS_RESTRICT success_status = nullptr
+		const ReflectionManager* reflection, 
+		const char* type_name,
+		Stream<wchar_t> file, 
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy,
+		AllocatorPolymorphic allocator = {nullptr}
 	);
 
 	// Returns the count of bytes written in the memory pool; type_pointers_to_copy will be filled
-	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation 
-	// should be used for it, success_status should be initialized with true
-	ECSENGINE_API size_t Deserialize(
-		ReflectionType type,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy,
-		bool* ECS_RESTRICT success_status = nullptr
-	);
-
-	// Returns the count of bytes written in the memory pool; type_pointers_to_copy will be filled
-	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation 
-	// should be used for it, success_status should be initialized with true
-	ECSENGINE_API size_t Deserialize(
-		const ReflectionManager* ECS_RESTRICT reflection, 
-		const char* ECS_RESTRICT type_name, 
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy
-	);
-
-	// Returns the count of bytes written in the memory pool; type_pointers_to_copy will be filled
-	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation 
-	// should be used for it, success_status should be initialized with true
+	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation should be used for it
+	// It will read the whole file into a temporary memory buffer and then deserialize from memory
+	// Allocator nullptr means use malloc
+	// A value of -1 as return means failure to open and read the file
 	ECSENGINE_API size_t Deserialize(
 		ReflectionType type,
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy
+		Stream<wchar_t> file,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy,
+		AllocatorPolymorphic allocator = {nullptr}
+	);
+
+	// Returns the count of bytes written in the memory pool; type_pointers_to_copy will be filled
+	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation should be used for it
+	// A value of -1 as return means failure to open and read the file
+	ECSENGINE_API size_t Deserialize(
+		const ReflectionManager* reflection, 
+		const char* type_name, 
+		uintptr_t& ptr_to_read,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy
+	);
+
+	// Returns the count of bytes written in the memory pool; type_pointers_to_copy will be filled
+	// if not nullptr with pointers to the memory pool data for each pointer field; stack allocation should be used for it
+	// A value of -1 as return means failure to open and read the file
+	ECSENGINE_API size_t Deserialize(
+		ReflectionType type,
+		uintptr_t& ptr_to_read,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy
 	);
 
 	ECSENGINE_API size_t DeserializeSize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address
+		const ReflectionManager* reflection,
+		const char* type_name,
+		uintptr_t ptr_to_read,
+		void* address
 	);
 
 	ECSENGINE_API size_t DeserializeSize(
 		ReflectionType type,
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address
+		uintptr_t ptr_to_read,
+		void* address
 	);
 
 	ECSENGINE_API size_t DeserializeSize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
+		const ReflectionManager* reflection,
+		const char* type_name,
 		uintptr_t ptr_to_read
 	);
 
@@ -175,16 +133,16 @@ namespace ECSEngine {
 
 	// Only accounts for their value range to be compliant
 	ECSENGINE_API bool ValidateEnums(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name,
+		const void* data
 	);
 
 	// Only accounts for their value range to be compliant
 	ECSENGINE_API bool ValidateEnums(
-		const ReflectionManager* ECS_RESTRICT reflection,
+		const ReflectionManager* reflection,
 		ReflectionType type,
-		const void* ECS_RESTRICT data
+		const void* data
 	);
 
 }

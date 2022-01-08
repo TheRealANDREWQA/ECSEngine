@@ -10,7 +10,7 @@ namespace ECSEngine {
 		Keyboard::Keyboard() : m_implementation(nullptr) {}
 
 		Keyboard::Keyboard(GlobalMemoryManager* allocator) {
-			m_implementation = std::make_unique<DirectX::Keyboard>();
+			m_implementation = new DirectX::Keyboard();
 			m_tracker.Reset();
 			m_character_queue = KeyboardCharacterQueue(allocator, ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
 			DoNotCaptureCharacters();

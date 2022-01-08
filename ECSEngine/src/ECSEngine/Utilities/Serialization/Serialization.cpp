@@ -1,5 +1,7 @@
 #include "ecspch.h"
 #include "Serialization.h"
+#include "SerializationHelpers.h"
+#include "../../Allocators/AllocatorPolymorphic.h"
 
 namespace ECSEngine {
 
@@ -37,96 +39,10 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	void Write(std::ofstream& ECS_RESTRICT stream, const void* ECS_RESTRICT data, size_t data_size) {
-		stream.write((const char*)data, data_size);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Write(CapacityStream<void>& ECS_RESTRICT stream, const void* ECS_RESTRICT data, size_t data_size) {
-		memcpy((void*)((uintptr_t)stream.buffer + stream.size), data, data_size);
-		stream.size += data_size;
-		ECS_ASSERT(stream.size < stream.capacity);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Write(std::ofstream& stream, Stream<void> data) {
-		stream.write((const char*)data.buffer, data.size);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Write(CapacityStream<void>& stream, Stream<void> data) {
-		stream.Add(data);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Read(std::ifstream& ECS_RESTRICT stream, void* ECS_RESTRICT data, size_t data_size) {
-		stream.read((char*)data, data_size);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Read(std::istream& stream, CapacityStream<void>& data, size_t data_size) {
-		stream.read((char*)((uintptr_t)data.buffer + data.size), data_size);
-		data.size += data_size;
-		ECS_ASSERT(data.size < data.capacity);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Read(CapacityStream<void>& ECS_RESTRICT stream, void* ECS_RESTRICT data, size_t data_size) {
-		memcpy(data, (const void*)((uintptr_t)stream.buffer + stream.size), data_size);
-		stream.size += data_size;
-		ECS_ASSERT(stream.size < stream.capacity);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Read(uintptr_t& ECS_RESTRICT stream, void* ECS_RESTRICT data, size_t data_size) {
-		memcpy(data, (const void*)stream, data_size);
-		stream += data_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Read(uintptr_t& stream, CapacityStream<void>& data, size_t data_size) {
-		memcpy((void*)((uintptr_t)data.buffer + data.size), (const void*)stream, data_size);
-		stream += data_size;
-		data.size += data_size;
-		ECS_ASSERT(data.size <= data.capacity);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Ignore(std::ifstream& stream, size_t byte_size)
-	{
-		stream.ignore(byte_size);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Ignore(CapacityStream<void>& stream, size_t byte_size)
-	{
-		stream.size += byte_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void Ignore(uintptr_t& stream, size_t byte_size)
-	{
-		stream += byte_size;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	template<typename StreamType>
-	bool SerializeInternal(
+	void SerializeInternal(
 		ReflectionType type,
-		StreamType& ECS_RESTRICT stream,
-		const void* ECS_RESTRICT data
+		uintptr_t& stream,
+		const void* data
 	) {
 		function::CopyPointer pointer_fields_buffer[128];
 		// It will contain pairs of pointer offset from the type base and total stream memory size
@@ -142,45 +58,29 @@ namespace ECSEngine {
 			Write(stream, &pointer_fields[index].data_size, sizeof(size_t));
 			Write(stream, pointer_fields[index].data, pointer_fields[index].data_size);
 		}
-
-		if constexpr (std::is_same_v<StreamType, std::ofstream>) {
-			if (!stream.good()) {
-				return false;
-			}
-		}
-		return true;
 	}
 	
 	// -----------------------------------------------------------------------------------------
 
-	template<typename StreamType>
 	size_t DeserializeInternal(
 		ReflectionType type,
-		StreamType& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointer_to_copy,
-		bool* ECS_RESTRICT success_status
+		uintptr_t& stream,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointer_to_copy
 	) {
+		unsigned int memory_pool_before_size = memory_pool.size;
+
 		for (size_t index = 0; index < type.fields.size; index++) {
 			Read(stream, function::OffsetPointer(address, type.fields[index].info.pointer_offset), type.fields[index].info.byte_size);
 		}
 
 		ConstructPointerFieldsForType(type_pointer_to_copy, type, address);
 
-		unsigned int memory_pool_before_size = memory_pool.size;
 		for (size_t index = 0; index < type_pointer_to_copy.size; index++) {
 			type_pointer_to_copy[index].data = function::OffsetPointer(memory_pool.buffer, memory_pool.size);
 			Read(stream, &type_pointer_to_copy[index].data_size, sizeof(size_t));
 			Read(stream, memory_pool, type_pointer_to_copy[index].data_size);
-		}
-
-		if constexpr (std::is_same_v<StreamType, std::ifstream>) {
-			if (!stream.good()) {
-				if (success_status != nullptr) {
-					*success_status = false;
-				}
-			}
 		}
 
 		return memory_pool.size - memory_pool_before_size;
@@ -189,33 +89,38 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	bool Serialize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		std::ofstream& ECS_RESTRICT stream,
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name,
+		Stream<wchar_t> file,
+		const void* data,
+		AllocatorPolymorphic allocator
 	)
 	{
 		ReflectionType type = reflection->GetType(type_name);
-		return SerializeInternal(type, stream, data);
+		return Serialize(type, file, data, allocator);
 	}
 	
 	// -----------------------------------------------------------------------------------------
 
 	bool Serialize(
 		ReflectionType type,
-		std::ofstream& ECS_RESTRICT stream,
-		const void* ECS_RESTRICT data
+		Stream<wchar_t> file,
+		const void* data,
+		AllocatorPolymorphic allocator
 	) {
-		return SerializeInternal(type, stream, data);
+		size_t serialize_size = SerializeSize(type, data);
+		return SerializeWriteFile(file, allocator, serialize_size, [=](uintptr_t& buffer) {
+			SerializeInternal(type, buffer, data);
+		});
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	void Serialize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		CapacityStream<void>& ECS_RESTRICT stream,
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name,
+		uintptr_t& stream,
+		const void* data
 	)
 	{
 		ReflectionType type = reflection->GetType(type_name);
@@ -224,7 +129,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	void Serialize(ReflectionType type, CapacityStream<void>& ECS_RESTRICT stream, const void* ECS_RESTRICT data)
+	void Serialize(ReflectionType type, uintptr_t& stream, const void* data)
 	{
 		SerializeInternal(type, stream, data);
 	}
@@ -233,7 +138,7 @@ namespace ECSEngine {
 
 	size_t SerializeSize(
 		ReflectionType type,
-		const void* ECS_RESTRICT data
+		const void* data
 	)
 	{
 		function::CopyPointer pointer_fields_buffer[128];
@@ -251,9 +156,9 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	size_t SerializeSize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name,
+		const void* data
 	)
 	{
 		ReflectionType type = reflection->GetType(type_name);
@@ -263,66 +168,68 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	size_t Deserialize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy,
-		bool* ECS_RESTRICT success_status
+		const ReflectionManager* reflection,
+		const char* type_name,
+		Stream<wchar_t> file,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy,
+		AllocatorPolymorphic allocator
 	)
 	{
 		ReflectionType type = reflection->GetType(type_name);
-		return DeserializeInternal(type, stream, address, memory_pool, type_pointers_to_copy, success_status);
+		return Deserialize(type, file, address, memory_pool, type_pointers_to_copy, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	size_t Deserialize(
 		ReflectionType type,
-		std::ifstream& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy,
-		bool* ECS_RESTRICT success_status
+		Stream<wchar_t> file,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy,
+		AllocatorPolymorphic allocator
 	)
 	{
-		return DeserializeInternal(type, stream, address, memory_pool, type_pointers_to_copy, success_status);
+		return DeserializeReadFile(file, allocator, [&](uintptr_t& buffer) {
+			return DeserializeInternal(type, buffer, address, memory_pool, type_pointers_to_copy);
+		});
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	size_t Deserialize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		uintptr_t& ECS_RESTRICT stream,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy
+		const ReflectionManager* reflection,
+		const char* type_name,
+		uintptr_t& stream,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy
 	) {
 		ReflectionType type = reflection->GetType(type_name);
-		return DeserializeInternal(type, stream, address, memory_pool, type_pointers_to_copy, nullptr);
+		return Deserialize(type, stream, address, memory_pool, type_pointers_to_copy);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	size_t Deserialize(
 		ReflectionType type,
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address,
-		CapacityStream<void>& ECS_RESTRICT memory_pool,
-		Stream<function::CopyPointer>& ECS_RESTRICT type_pointers_to_copy
+		uintptr_t& ptr_to_read,
+		void* address,
+		CapacityStream<void>& memory_pool,
+		Stream<function::CopyPointer>& type_pointers_to_copy
 	)
 	{
-		return DeserializeInternal(type, ptr_to_read, address, memory_pool, type_pointers_to_copy, nullptr);
+		return DeserializeInternal(type, ptr_to_read, address, memory_pool, type_pointers_to_copy);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	size_t DeserializeSize(
 		ReflectionType type,
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address
+		uintptr_t ptr_to_read,
+		void* address
 	)
 	{
 		size_t total_size = type.fields[type.fields.size - 1].info.pointer_offset + type.fields[type.fields.size - 1].info.byte_size;
@@ -350,22 +257,21 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------
 
 	size_t DeserializeSize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		uintptr_t& ECS_RESTRICT ptr_to_read,
-		void* ECS_RESTRICT address
+		const ReflectionManager* reflection,
+		const char* type_name,
+		uintptr_t ptr_to_read,
+		void* address
 	)
 	{
 		ReflectionType type = reflection->GetType(type_name);
-
 		return DeserializeSize(type, ptr_to_read, address);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	size_t DeserializeSize(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
+		const ReflectionManager* reflection,
+		const char* type_name,
 		uintptr_t ptr_to_read
 	)
 	{
@@ -401,16 +307,16 @@ namespace ECSEngine {
 	}
 
 	bool ValidateEnums(
-		const ReflectionManager* ECS_RESTRICT reflection,
-		const char* ECS_RESTRICT type_name,
-		const void* ECS_RESTRICT data
+		const ReflectionManager* reflection,
+		const char* type_name,
+		const void* data
 	)
 	{
 		ReflectionType type = reflection->GetType(type_name);
 		return ValidateEnums(reflection, type, data);
 	}
 
-	bool ValidateEnums(const ReflectionManager* ECS_RESTRICT reflection, ReflectionType type, const void* ECS_RESTRICT data)
+	bool ValidateEnums(const ReflectionManager* reflection, ReflectionType type, const void* data)
 	{
 		for (size_t index = 0; index < type.fields.size; index++) {
 			if (type.fields[index].info.basic_type == ReflectionBasicFieldType::Enum) {

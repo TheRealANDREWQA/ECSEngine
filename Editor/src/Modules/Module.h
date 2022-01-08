@@ -4,7 +4,6 @@
 
 using namespace ECSEngine;
 
-using ProjectModules = containers::ResizableStream<EditorModule, MemoryManager>;
 constexpr unsigned int GRAPHICS_MODULE_INDEX = 0;
 
 struct EditorState;
@@ -66,6 +65,10 @@ size_t GetProjectModuleLibraryLastWrite(const EditorState* editor_state, unsigne
 unsigned char* GetModuleConfigurationPtr(EditorState* editor_state, unsigned int index);
 
 unsigned char GetModuleConfigurationChar(const EditorState* editor_state, unsigned int index);
+
+// Returns whether or not it succeded in finding a corresponding source file - it will search for 
+// "src", "Src", "source", "Source"
+bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int index, containers::CapacityStream<wchar_t>& path);
 
 // The caller must use FreeModuleFunction in order to release the OS handle only if the call succeded
 void LoadEditorModule(EditorState* editor_state, unsigned int index);

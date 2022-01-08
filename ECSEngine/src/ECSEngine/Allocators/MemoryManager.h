@@ -35,8 +35,6 @@ namespace ECSEngine {
 	
 	private:
 		SpinLock m_spin_lock;
-		void** m_buffers;
-		size_t* m_buffers_capacity;
 		MultipoolAllocator* m_allocators;
 		size_t m_allocator_count;
 		size_t m_new_allocation_size;
@@ -50,8 +48,9 @@ namespace ECSEngine {
 	struct ECSENGINE_API MemoryManager
 	{
 	public:
+		MemoryManager();
 		MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, GlobalMemoryManager* backup);
-
+		
 		MemoryManager& operator = (const MemoryManager& other) = default;
 		
 		void* Allocate(size_t size, size_t alignment = 8);
@@ -62,8 +61,6 @@ namespace ECSEngine {
 		void CreateAllocator(size_t size, size_t maximum_pool_count);
 		// deallocates its buffers
 		void Free();
-
-		void SetDebugBuffer(void* buffer, unsigned int group_count = 0);
 
 		// Locks the SpinLock
 		void Lock();
@@ -83,8 +80,6 @@ namespace ECSEngine {
 	
 	//private:
 		SpinLock m_spin_lock;
-		void** m_buffers;
-		size_t* m_buffers_capacity;
 		MultipoolAllocator* m_allocators;
 		size_t m_allocator_count;
 		size_t m_new_allocation_size;

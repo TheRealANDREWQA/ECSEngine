@@ -126,28 +126,6 @@ namespace ECSEngine {
 		using ReflectionTypeTable = containers::HashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 		using ReflectionEnumTable = containers::HashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 
-		struct ECSENGINE_API ReflectionFolderHierarchy {
-			ReflectionFolderHierarchy(MemoryManager* allocator);
-			ReflectionFolderHierarchy(MemoryManager* allocator, const wchar_t* path);
-
-			ReflectionFolderHierarchy(const ReflectionFolderHierarchy& other) = default;
-			ReflectionFolderHierarchy& operator = (const ReflectionFolderHierarchy& other) = default;
-
-			void AddFilterFiles(const char* filter_name, containers::Stream<const wchar_t*> extensions);
-			void CreateFromPath(const wchar_t* path);
-
-			void FreeAllMemory();
-
-			void Recreate();
-
-			void RemoveFilterFiles(const char* filter_name);
-			void RemoveFilterFiles(unsigned int index);
-
-			const wchar_t* root;
-			containers::ResizableStream<const wchar_t*, MemoryManager> folders;
-			containers::ResizableStream<ReflectionFilteredFiles, MemoryManager> filtered_files;
-		};
-
 		constexpr size_t max_type_count = 1024;
 		constexpr size_t max_enum_count = 128;
 
@@ -159,15 +137,15 @@ namespace ECSEngine {
 			const ReflectionFieldTable* field_table;
 			CapacityStream<char>* error_message;
 			SpinLock error_message_lock;
-			bool success;
 			size_t total_memory;
 			ConditionVariable* condition_variable;
 			void* allocated_buffer;
+			bool success;
 		};
 
 		struct ECSENGINE_API ReflectionManager {
 			struct FolderHierarchy {
-				ReflectionFolderHierarchy hierarchy;
+				const wchar_t* root;
 				const void* allocated_buffer;
 			};
 
@@ -194,6 +172,9 @@ namespace ECSEngine {
 
 			ReflectionType GetType(const char* name) const;
 			ReflectionEnum GetEnum(const char* name) const;
+
+			// Returns -1 if it fails
+			unsigned int GetHierarchyIndex(const wchar_t* hierarchy) const;
 
 			void* GetTypeInstancePointer(const char* name, void* instance, unsigned int pointer_index = 0) const;
 			void* GetTypeInstancePointer(ReflectionType type, void* instance, unsigned int pointer_index = 0) const;
@@ -228,18 +209,26 @@ namespace ECSEngine {
 			// keeps reference intact, it is the same as removing all types from the respective folder hierarchy,
 			// calling recreate on the folder hierarchy and then process it
 			bool UpdateFolderHierarchy(unsigned int index, containers::CapacityStream<char>* error_message = nullptr);
+
+			// keeps reference intact, it is the same as removing all types from the respective folder hierarchy,
+			// calling recreate on the folder hierarchy and then process it
+			bool UpdateFolderHierarchy(unsigned int index, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
+
 			// keeps reference intact
 			bool UpdateFolderHierarchy(const wchar_t* root, containers::CapacityStream<char>* error_message = nullptr);
 
+			// keeps reference intact
+			bool UpdateFolderHierarchy(const wchar_t* root, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
+
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
-			containers::ResizableStream<FolderHierarchy, MemoryManager> folders;
 			ReflectionFieldTable field_table;
-			//ReflectionBasicFieldTable basic_field_table;
+			containers::ResizableStream<FolderHierarchy, MemoryManager> folders;
 		};
 
 		struct ECSENGINE_API ReflectionManagerHasReflectStructuresThreadTaskData {
 			ReflectionManager* reflection_manager;
+			Stream<const wchar_t*> files;
 			unsigned int folder_index;
 			unsigned int starting_path_index;
 			unsigned int ending_path_index;

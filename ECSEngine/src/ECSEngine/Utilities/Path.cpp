@@ -9,6 +9,40 @@ namespace ECSEngine {
 
 	namespace function {
 
+		// Selects the path that has the size different from 0
+		Path GetValidPath(Path path0, Path path1) {
+			return path0.size > 0 ? path0 : path1;
+		}
+
+		// Selects the path that has the size different from 0
+		ASCIIPath GetValidPath(ASCIIPath path0, ASCIIPath path1) {
+			return path0.size > 0 ? path0 : path1;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		bool PathIsRelative(Path path)
+		{
+			return path[1] != L':';
+		}
+
+		bool PathIsRelative(ASCIIPath path)
+		{
+			return path[1] != ':';
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		bool PathIsAbsolute(Path path)
+		{
+			return !PathIsRelative(path);
+		}
+
+		bool PathIsAbsolute(ASCIIPath path)
+		{
+			return !PathIsRelative(path);
+		}
+
 		// --------------------------------------------------------------------------------------------------
 
 		Path PathParent(Path path, wchar_t separator) {
@@ -25,14 +59,14 @@ namespace ECSEngine {
 			return ASCIIPath(path.buffer, function::Select<size_t>(path.size == 0, 0, path.size - 1));
 		}
 
-		Path2 PathParentBoth(Path path)
+		Path PathParentBoth(Path path)
 		{
-			return { PathParent(path), PathParent(path, ECS_OS_PATH_SEPARATOR_REL) };
+			return GetValidPath(PathParent(path), PathParent(path, ECS_OS_PATH_SEPARATOR_REL));
 		}
 
-		ASCIIPath2 PathParentBoth(ASCIIPath path)
+		ASCIIPath PathParentBoth(ASCIIPath path)
 		{
-			return { PathParent(path), PathParent(path, ECS_OS_PATH_SEPARATOR_ASCII_REL) };
+			return GetValidPath(PathParent(path), PathParent(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -51,14 +85,18 @@ namespace ECSEngine {
 			return Select<size_t>(path.size == 0, 0, path.size - 1);
 		}
 
-		ulong2 PathParentSizeBoth(Path path)
+		size_t PathParentSizeBoth(Path path)
 		{
-			return { PathParentSize(path), PathParentSize(path, ECS_OS_PATH_SEPARATOR_REL) };
+			size_t absolute = PathParentSize(path);
+			size_t relative = PathParentSize(path, ECS_OS_PATH_SEPARATOR_REL);
+			return absolute > 0 ? absolute : relative;
 		}
 
-		ulong2 PathParentSizeBoth(ASCIIPath path)
+		size_t PathParentSizeBoth(ASCIIPath path)
 		{
-			return { PathParentSize(path), PathParentSize(path, ECS_OS_PATH_SEPARATOR_ASCII_REL) };
+			size_t absolute = PathParentSize(path);
+			size_t relative = PathParentSize(path, ECS_OS_PATH_SEPARATOR_ASCII_REL);
+			return absolute > 0 ? absolute : relative;
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -101,14 +139,14 @@ namespace ECSEngine {
 			}
 		}
 
-		Path2 PathExtensionBoth(Path path)
+		Path PathExtensionBoth(Path path)
 		{
-			return { PathExtension(path), PathExtension(path, ECS_OS_PATH_SEPARATOR_REL) };
+			return GetValidPath(PathExtension(path), PathExtension(path, ECS_OS_PATH_SEPARATOR_REL));
 		}
 
-		ASCIIPath2 PathExtensionBoth(ASCIIPath path)
+		ASCIIPath PathExtensionBoth(ASCIIPath path)
 		{
-			return { PathExtension(path), PathExtension(path, ECS_OS_PATH_SEPARATOR_ASCII_REL) };
+			return GetValidPath(PathExtension(path), PathExtension(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -121,14 +159,18 @@ namespace ECSEngine {
 			return PathExtension(path, separator).size;
 		}
 
-		ulong2 PathExtensionSizeBoth(Path path)
+		size_t PathExtensionSizeBoth(Path path)
 		{
-			return { PathExtensionSize(path),  PathExtensionSize(path, ECS_OS_PATH_SEPARATOR_REL) };
+			size_t absolute = PathExtensionSize(path);
+			size_t relative = PathExtensionSize(path, ECS_OS_PATH_SEPARATOR_REL);
+			return absolute > 0 ? absolute : relative;
 		}
 
-		ulong2 PathExtensionSizeBoth(ASCIIPath path)
+		size_t PathExtensionSizeBoth(ASCIIPath path)
 		{
-			return { PathExtensionSize(path),  PathExtensionSize(path, ECS_OS_PATH_SEPARATOR_ASCII_REL) };
+			size_t absolute = PathExtensionSize(path);
+			size_t relative = PathExtensionSize(path, ECS_OS_PATH_SEPARATOR_ASCII_REL);
+			return absolute > 0 ? absolute : relative;
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -145,14 +187,14 @@ namespace ECSEngine {
 			return filename;
 		}
 
-		Path2 PathStemBoth(Path path)
+		Path PathStemBoth(Path path)
 		{
-			return { PathStem(path), PathStem(path, ECS_OS_PATH_SEPARATOR_REL) };
+			return GetValidPath(PathStem(path), PathStem(path, ECS_OS_PATH_SEPARATOR_REL));
 		}
 
-		ASCIIPath2 PathStemBoth(ASCIIPath path)
+		ASCIIPath PathStemBoth(ASCIIPath path)
 		{
-			return { PathStem(path), PathStem(path, ECS_OS_PATH_SEPARATOR_ASCII_REL) };
+			return GetValidPath(PathStem(path), PathStem(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -167,14 +209,14 @@ namespace ECSEngine {
 			return ASCIIPath(path.buffer + parent_size + (parent_size > 0), path.size - parent_size - (parent_size > 0));
 		}
 
-		Path2 PathFilenameBoth(Path path)
+		Path PathFilenameBoth(Path path)
 		{
-			return { PathFilename(path), PathFilename(path, ECS_OS_PATH_SEPARATOR_REL) };
+			return GetValidPath(PathFilename(path), PathFilename(path, ECS_OS_PATH_SEPARATOR_REL));
 		}
 
-		ASCIIPath2 PathFilenameBoth(ASCIIPath path)
+		ASCIIPath PathFilenameBoth(ASCIIPath path)
 		{
-			return { PathFilename(path), PathFilename(path, ECS_OS_PATH_SEPARATOR_ASCII_REL) };
+			return GetValidPath(PathFilename(path), PathFilename(path, ECS_OS_PATH_SEPARATOR_ASCII_REL));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -203,24 +245,6 @@ namespace ECSEngine {
 				path_directory = PathFilename(path);
 			}
 			return ASCIIPath(path.buffer + reference.size + 1, path_initial_size - reference.size - 1);
-		}
-
-		// --------------------------------------------------------------------------------------------------
-
-		Path GetValidPath(Path2 paths)
-		{
-			if (paths.absolute.size > 0) {
-				return paths.absolute;
-			}
-			return paths.relative;
-		}
-
-		ASCIIPath GetValidPath(ASCIIPath2 paths)
-		{
-			if (paths.absolute.size > 0) {
-				return paths.absolute;
-			}
-			return paths.relative;
 		}
 
 		// --------------------------------------------------------------------------------------------------
