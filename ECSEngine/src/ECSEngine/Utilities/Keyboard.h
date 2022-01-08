@@ -37,6 +37,9 @@ namespace ECSEngine {
 			Keyboard();
 			Keyboard(GlobalMemoryManager* allocator);
 
+			Keyboard(const Keyboard& other) = default;
+			Keyboard& operator = (const Keyboard& other) = default;
+
 			inline void CaptureCharacters() {
 				m_process_characters = true;
 			}
@@ -80,7 +83,7 @@ namespace ECSEngine {
 			void Procedure(const KeyboardProcedureInfo& info);
 
 		private:
-			std::unique_ptr<DirectX::Keyboard> m_implementation;
+			DirectX::Keyboard* m_implementation;
 			KeyboardState m_frame_state;
 			KeyboardTracker m_tracker;
 			KeyboardCharacterQueue m_character_queue;

@@ -9,6 +9,10 @@
 #include "PoolAllocator.h"
 #include "StackAllocator.h"
 
+namespace DirectX {
+	class ScratchImage;
+}
+
 namespace ECSEngine {
 
 	using AllocateFunction = void* (*)(void* allocator, size_t size, size_t alignment);
@@ -180,6 +184,16 @@ namespace ECSEngine {
 		return Allocate(allocator.allocator, allocator.allocator_type, allocator.allocation_type, size, alignment);
 	}
 
+	// Dynamic allocation type
+	inline void* AllocateEx(AllocatorPolymorphic allocator, size_t size) {
+		if (allocator.allocator == nullptr) {
+			return malloc(size);
+		}
+		else {
+			return Allocate(allocator, size);
+		}
+	}
+
 	inline AllocateFunction GetAllocateFunction(AllocatorType type, AllocationType allocation_type = AllocationType::SingleThreaded) {
 		if (allocation_type == AllocationType::SingleThreaded) {
 			return ECS_ALLOCATE_FUNCTIONS[(unsigned int)type];
@@ -231,6 +245,16 @@ namespace ECSEngine {
 		Deallocate(allocator.allocator, allocator.allocator_type, buffer, allocator.allocation_type);
 	}
 
+	// Dynamic allocation type - if allocator.allocator is nullptr then uses malloc
+	inline void DeallocateEx(AllocatorPolymorphic allocator, void* buffer) {
+		if (allocator.allocator == nullptr) {
+			free(buffer);
+		}
+		else {
+			Deallocate(allocator, buffer);
+		}
+	}
+
 	inline DeallocateFunction GetDeallocateFunction(AllocatorType type, AllocationType allocation_type = AllocationType::SingleThreaded) {
 		if (allocation_type == AllocationType::SingleThreaded) {
 			return ECS_DEALLOCATE_FUNCTIONS[(unsigned int)type];
@@ -256,5 +280,38 @@ namespace ECSEngine {
 	inline DeallocateMutableFunction GetDeallocateMutableFunction(AllocatorPolymorphic allocator) {
 		return GetDeallocateMutableFunction(allocator.allocator_type, allocator.allocation_type);
 	}
+
+	template<typename Allocator>
+	AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, AllocationType allocation_type = AllocationType::SingleThreaded) {
+		AllocatorType allocator_type = AllocatorType::LinearAllocator;
+		if constexpr (std::is_same_v<Allocator, LinearAllocator>) {
+			allocator_type = AllocatorType::LinearAllocator;
+		}
+		else if constexpr (std::is_same_v<Allocator, StackAllocator>) {
+			allocator_type = AllocatorType::StackAllocator;
+		}
+		else if constexpr (std::is_same_v<Allocator, PoolAllocator>) {
+			allocator_type = AllocatorType::PoolAllocator;
+		}
+		else if constexpr (std::is_same_v<Allocator, MultipoolAllocator>) {
+			allocator_type = AllocatorType::MultipoolAllocator;
+		}
+		else if constexpr (std::is_same_v<Allocator, MemoryManager>) {
+			allocator_type = AllocatorType::MemoryManager;
+		}
+		else if constexpr (std::is_same_v<Allocator, GlobalMemoryManager>) {
+			allocator_type = AllocatorType::GlobalMemoryManager;
+		}
+		else if constexpr (std::is_same_v<Allocator, MemoryArena>) {
+			allocator_type = AllocatorType::MemoryArena;
+		}
+		else if constexpr (std::is_same_v<Allocator, ResizableMemoryArena>) {
+			allocator_type = AllocatorType::ResizableMemoryArena;
+		}
+
+		return { allocator, allocator_type, allocation_type };
+	}
+
+	ECSENGINE_API void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator);
 
 }

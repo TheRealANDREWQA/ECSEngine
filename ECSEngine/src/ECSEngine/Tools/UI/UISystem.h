@@ -14,13 +14,24 @@ namespace ECSEngine {
 	struct Graphics;
 	struct TaskManager;
 	struct ResourceManager;
+	struct GlobalMemoryManager;
 
 	struct World;
+
+	enum ECS_UI_FRAME_PACING {
+		ECS_UI_FRAME_PACING_NONE = 0,
+		ECS_UI_FRAME_PACING_LOW = 1,
+		ECS_UI_FRAME_PACING_MEDIUM = 2,
+		ECS_UI_FRAME_PACING_HIGH = 3,
+		ECS_UI_FRAME_PACING_INSTANT = 4
+	};
 
 	namespace Tools {
 
 		// Bool acts as a placeholder, only interested to see if the resource existed previously
 		using UISystemAddDynamicWindowElementTable = HashTable<bool, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
+
+		ECSENGINE_API UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager);
 
 		class ECSENGINE_API UISystem
 		{
@@ -36,10 +47,13 @@ namespace ECSEngine {
 				ResourceManager* resource,
 				TaskManager* task_manager,
 				const wchar_t* font_filename,
-				const char* font_uv_descriptor,
+				const wchar_t* font_uv_descriptor,
 				uint2 window_os_size,
 				GlobalMemoryManager* initial_allocator = nullptr
 			);
+
+			UISystem(const UISystem& other) = default;
+			UISystem& operator= (const UISystem& other) = default;
 
 			void AddActionHandler(
 				LinearAllocator* allocator,
@@ -407,6 +421,8 @@ namespace ECSEngine {
 
 			// It returns a list of streams that will be needed when finishing the drawer element
 			void AddWindowDrawerElement(unsigned int window_index, const char* name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
+
+			void AddFrameHandler(UIActionHandler handler);
 
 			void BindWindowHandler(Action action, Action data_initializer, size_t data_size);
 
@@ -851,10 +867,10 @@ namespace ECSEngine {
 			// returns the size of the window; aligned to left and right text characters pointers
 			// should have different rows separated by \n
 			float2 DrawToolTipSentenceWithTextToRight(
-				ActionData* ECS_RESTRICT action_data,
-				const char* ECS_RESTRICT aligned_to_left_text,
-				const char* ECS_RESTRICT aligned_to_right_text,
-				UITooltipBaseData* ECS_RESTRICT data
+				ActionData* action_data,
+				const char* aligned_to_left_text,
+				const char* aligned_to_right_text,
+				UITooltipBaseData* data
 			);
 
 			float2 DrawToolTipSentenceSize(
@@ -864,9 +880,9 @@ namespace ECSEngine {
 			
 			//aligned to left and right text characters pointers should have different rows separated by \n
 			float2 DrawToolTipSentenceWithTextToRightSize(
-				const char* ECS_RESTRICT aligned_to_left_text,
-				const char* ECS_RESTRICT aligned_to_right_text,
-				UITooltipBaseData* ECS_RESTRICT data
+				const char* aligned_to_left_text,
+				const char* aligned_to_right_text,
+				UITooltipBaseData* data
 			);
 
 			bool ExistsWindowResource(unsigned int window_index, const char* name) const;
@@ -989,8 +1005,6 @@ namespace ECSEngine {
 			) const;
 
 			bool GetLastRevertCommand(HandlerCommand& command, unsigned int window_index);
-
-			void* GetLastSystemHandlerData();
 
 			float2 GetMouseDelta(float2 mouse_position) const;
 
@@ -1124,6 +1138,10 @@ namespace ECSEngine {
 
 			UIDrawerDescriptor GetDrawerDescriptor(unsigned int window_index);
 
+			void* GetFrameHandlerData(unsigned int index) const;
+
+			unsigned int GetFrameHandlerCount() const;
+
 			void GetFixedDockspaceRegionsFromMouse(
 				float2 mouse_position,
 				UIDockspace** dockspaces,
@@ -1220,7 +1238,7 @@ namespace ECSEngine {
 				DockspaceType element_type
 			);
 
-			void HandleSystemHandler();
+			void HandleFrameHandlers();
 
 			unsigned int HashString(const char* string) const;
 
@@ -1283,24 +1301,24 @@ namespace ECSEngine {
 
 			float NormalizeVerticalToWindowDimensions(float value) const;
 
-			UIActionHandler PeekSystemHandler() const;
+			UIActionHandler PeekFrameHandler() const;
 
-			void PopSystemHandler();
+			void PopFrameHandler();
 
-			void PopUpSystemHandler(const char* name, bool is_fixed, bool destroy_at_first_click = false, bool is_initialized = true, bool destroy_when_released = false);
+			void PopUpFrameHandler(const char* name, bool is_fixed, bool destroy_at_first_click = false, bool is_initialized = true, bool destroy_when_released = false);
 
 			// Move the background dockspaces behind all other dockspaces
 			void PushBackgroundDockspace();
 
 			void PushActiveDockspaceRegion(Stream<UIVisibleDockspaceRegion>& regions) const;
 
-			void PushSystemHandler(UIActionHandler handler);
+			void PushFrameHandler(UIActionHandler handler);
 
 			void PushDestroyWindowHandler(unsigned int window_index);
 
 			void PushDestroyCallbackWindowHandler(unsigned int window_index, UIActionHandler handler);
 
-			void ReadFontDescriptionFile(const char* filename);
+			void ReadFontDescriptionFile(const wchar_t* filename);
 
 			void RegisterFocusedWindowClickableAction(
 				float2 position, 
@@ -1347,6 +1365,10 @@ namespace ECSEngine {
 
 			// removes the last general handler, but it does not free the memory from the temp allocator
 			void RemoveGeneralHandler(UIDockspace* dockspace, unsigned int border_index);
+
+			void RemoveFrameHandler(Action action, void* handler_data);
+
+			void RemoveFrameHandler(unsigned int index);
 			
 			// removes the last sprite texture written
 			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type = UISpriteType::Normal);
@@ -1576,8 +1598,6 @@ namespace ECSEngine {
 
 			void SetWindowOSSize(uint2 new_size);
 
-			unsigned int StoreElementDrawName(unsigned int window_index, const char* name);
-
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 
 			template<size_t flags = 0>
@@ -1758,7 +1778,8 @@ namespace ECSEngine {
 				const HID::KeyboardTracker*
 			);
 			UIFocusedWindowData m_focused_window_data;
-			Stack<UIActionHandler> m_handler_stack;
+			// These handlers will be called every frame - unlike the handler stack on which only the top most handler is called
+			CapacityStream<UIActionHandler> m_frame_handlers;
 		};
 
 		void DrawDockspaceRegionThreadTask(unsigned int thread_index, World* world, void* data);
@@ -1803,7 +1824,7 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ConvertASCIIToWideStreamAction(ActionData* action_data);
 
-		ECSENGINE_API void DefaultHoverableWithToolTip(ActionData* action_data);
+		ECSENGINE_API void DefaultHoverableWithToolTipAction(ActionData* action_data);
 
 		// It will destroy the window and then pop itself from the system handler stack
 		ECSENGINE_API void DestroyWindowSystemHandler(ActionData* action_data);

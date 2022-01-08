@@ -105,7 +105,6 @@
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawConfigs.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawer.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerActions.h" />
-    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerActionsTemplates.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerActionStructures.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerDescriptor.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawerStructures.h" />
@@ -142,6 +141,12 @@
     <ClInclude Include="src\ECSEngine\Rendering\ShaderInclude.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
     <ClInclude Include="src\Includes\ECSEngineRenderingCompression.h" />
+    <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
+    <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawConfig.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
+    <ClInclude Include="src\ECSEngine\ApplicationUtilities.h" />
+    <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
@@ -223,6 +228,12 @@
     <ClCompile Include="src\ECSEngine\Rendering\PBRMaps.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ShaderInclude.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawer.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawConfig.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
+    <ClCompile Include="src\ECSEngine\ApplicationUtilities.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

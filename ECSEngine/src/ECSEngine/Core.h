@@ -45,6 +45,8 @@ namespace ECSEngine {
 #define ECS_NOINLINE __declspec(noinline)
 #define ECS_RESTRICT __restrict
 
+#define ECS_LOCATION __FILE__, (unsigned int)__LINE__
+
 #define ECS_STACK_ALLOC(size) _alloca(size)
 #define ECS_MALLOCA(size) _malloca(size)
 #define ECS_FREEA(memory) _freea(memory)
@@ -64,7 +66,7 @@ struct_name.field6 = field6;
 struct_name.field7 = field7;
 #define ECS_FORWARD_STRUCT_MEMBERS_8(struct_name, field1, field2, field3, field4, field5, field6, field7, field8) ECS_FORWARD_STRUCT_MEMBERS_7(struct_name, field1, field2, field3, field4, field5, field6, field7); \
 struct_name.field8 = field8;
-#define ECS_FORWARD_STRUCT_MEMBERS_9(struct_name, field1, field2, field3, field4, field5, field6, filed7, field8, field9) ECS_FORWARD_STRUCT_MEMBERS_8(struct_name, field1, field2, field3, field4, field5, field6, field7, field8); \
+#define ECS_FORWARD_STRUCT_MEMBERS_9(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9) ECS_FORWARD_STRUCT_MEMBERS_8(struct_name, field1, field2, field3, field4, field5, field6, field7, field8); \
 struct_name.field9 = field9;
 #define ECS_FORWARD_STRUCT_MEMBERS_10(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9, field10) ECS_FORWARD_STRUCT_MEMBERS_9(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9); \
 struct_name.field10 = field10;
@@ -127,3 +129,11 @@ template return_type function_name(ResizableMemoryArena*, __VA_ARGS__);
 function(int32_t); function(uint32_t); function(int64_t); function(uint64_t);
 
 #define ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(type) type(const type& other) = default; type& operator = (const type& other) = default;
+
+#define ECS_ENUM_BITWISE_OPERATIONS(T) inline T operator~ (T a) { return (T)~(int)a; } \
+inline T operator| (T a, T b) { return (T)((int)a | (int)b); } \
+inline T operator& (T a, T b) { return (T)((int)a & (int)b); } \
+inline T operator^ (T a, T b) { return (T)((int)a ^ (int)b); } \
+inline T& operator|= (T& a, T b) { return (T&)((int&)a |= (int)b); } \
+inline T& operator&= (T& a, T b) { return (T&)((int&)a &= (int)b); } \
+inline T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }

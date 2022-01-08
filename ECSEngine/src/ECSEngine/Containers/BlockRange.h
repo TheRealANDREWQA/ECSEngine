@@ -11,18 +11,12 @@ namespace ECSEngine {
 		* Availabilty is determined using a BooleanBitField.
 		* Capacity should be multiple of 8 and represents how many blocks it can have
 		*/
-		class ECSENGINE_API BlockRange
+		struct ECSENGINE_API BlockRange
 		{
 		public:
 			BlockRange(void* buffer, unsigned int capacity, unsigned int max_index);
 
 			BlockRange& operator = (const BlockRange& other) = default;
-
-			void AddDebugStart(unsigned int start);
-
-			bool IsDebugStart(unsigned int start, unsigned int& difference, unsigned int& closest_index) const;
-
-			void RemoveDebugStart(unsigned int start);
 
 			// returns 0xFFFFFFFFFFFFFFFF if cannot fulfill the request
 			unsigned int Request(unsigned int size);
@@ -34,8 +28,6 @@ namespace ECSEngine {
 			void Free(unsigned int start);
 
 			void Clear();
-
-			unsigned int DebugCheckUsedBlocks() const;
 
 			unsigned int GetCapacity() const;
 
@@ -53,20 +45,13 @@ namespace ECSEngine {
 
 			void SetEnd(unsigned int index, unsigned int value);
 
-			void SetDebugBuffer(unsigned int* buffer);
-
 			static size_t MemoryOf(unsigned int number);
 
-			static size_t MemoryOfDebug(unsigned int number);
-
-		private:
+		//private:
 			unsigned int* m_buffer;
 			unsigned int m_capacity;
 			unsigned int m_free_block_count;
 			unsigned int m_used_block_count;
-#ifdef ECSENGINE_DEBUG
-			unsigned int* m_debug_starts;
-#endif
 		};
 	}
 }

@@ -1,8 +1,9 @@
+#include "editorpch.h"
 #include "ToolbarUI.h"
-#include "..\Project\ProjectOperations.h"
-#include "..\Editor\EditorState.h"
-#include "..\Editor\EditorParameters.h"
-#include "..\Project\ProjectUITemplate.h"
+#include "../Editor/EditorState.h"
+#include "../Editor/EditorParameters.h"
+#include "../Project/ProjectUITemplate.h"
+#include "../Project/ProjectOperations.h"
 
 #if 1
 
@@ -65,12 +66,11 @@ void LoadProjectUITemplateClickable(ActionData* action_data) {
 	LoadProjectUITemplateAction(action_data);
 }
 
-template<bool initialize>
-void ToolbarDraw(void* window_data, void* drawer_descriptor) {
+void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	ToolbarData* data = (ToolbarData*)window_data;
-	if constexpr (initialize) {
+	if (initialize) {
 		// Default initialize all handlers with SkipAction, data size 0
 		Stream<UIActionHandler> handlers(data,  TOOLBAR_DATA_FILE_ROW_COUNT + TOOLBAR_WINDOW_MENU_COUNT + TOOLBAR_DATA_LAYOUT_ROW_COUNT);
 		for (size_t index = 0; index < handlers.size; index++) {
@@ -79,7 +79,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 
 		EDITOR_STATE(data->editor_state);
 		EditorState* editor_state = data->editor_state;
-		ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+		ProjectFile* project_file = editor_state->project_file;
 
 #pragma region File
 
@@ -238,7 +238,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 	UIConfigBorder border;
 	border.color = drawer.color_theme.borders;
 
-	drawer.SolidColorRectangle<0>(drawer.region_position, drawer.region_scale, drawer.color_theme.theme);
+	drawer.SolidColorRectangle(0, drawer.region_position, drawer.region_scale, drawer.color_theme.theme);
 
 	config.AddFlag(transform);
 	config.AddFlag(border);
@@ -250,7 +250,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 	current_state.row_count = TOOLBAR_DATA_FILE_ROW_COUNT;
 	current_state.submenu_index = 0;
 
-	drawer.Menu<configuration>(config, "File", &current_state);
+	drawer.Menu(configuration, config, "File", &current_state);
 
 	current_state.right_characters = nullptr;
 	current_state.separation_lines[0] = 1;
@@ -260,7 +260,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 	current_state.click_handlers = data->window_actions;
 	current_state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
 
-	drawer.Menu<configuration>(config, "Window", &current_state);
+	drawer.Menu(configuration, config, "Window", &current_state);
 
 	char layout_state_characters[256];
 	CapacityStream<char> layout_state_stream(layout_state_characters, 0, 256);
@@ -300,7 +300,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 		data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].unavailables[1] = !ExistsFileOrFolder(_template->ui_template.ui_file);
 	}
 
-	drawer.Menu<configuration>(config, "Layout", &current_state);
+	drawer.Menu(configuration, config, "Layout", &current_state);
 
 	UIConfigRelativeTransform logo_transform;
 	logo_transform.scale.x = 0.7f;
@@ -309,8 +309,8 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 	config.flag_count = 0;
 	config.AddFlag(logo_transform);
 	config.AddFlag(border);
-	drawer.SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(config, ECS_TOOLS_UI_TEXTURE_ECS_LOGO);
-	drawer.SolidColorRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_BORDER>(config, drawer.color_theme.theme);
+	drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,config, ECS_TOOLS_UI_TEXTURE_ECS_LOGO);
+	drawer.SolidColorRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_BORDER, config, drawer.color_theme.theme);
 
 	UIConfigAbsoluteTransform project_transform;
 	const ProjectFile* project_file = (const ProjectFile*)data->editor_state->project_file;
@@ -321,13 +321,12 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor) {
 	project_transform.position.x = drawer.GetAlignedToRightOverLimit(project_transform.scale.x).x;
 	project_transform.position.y = drawer.current_y;
 	config.AddFlag(project_transform);
-	drawer.TextLabel<UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_BORDER>(config, project_name.buffer);
+	drawer.TextLabel(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_BORDER, config, project_name.buffer);
 }
 
 void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
-	descriptor.draw = ToolbarDraw<false>;
-	descriptor.initialize = ToolbarDraw<true>;
+	descriptor.draw = ToolbarDraw;
 
 	ToolbarData* data = (ToolbarData*)stack_memory;
 	data->editor_state = editor_state;

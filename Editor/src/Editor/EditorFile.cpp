@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "EditorFile.h"
 #include "EditorState.h"
 #include "..\UI\Hub.h"
@@ -32,16 +33,15 @@ void MissingProjectsDestroyCallback(ActionData* action_data) {
 	ReleaseLockedWindow(action_data);
 }
 
-template<bool initialize>
-void MissingProjectsDraw(void* window_data, void* drawer_descriptor) {
+void MissingProjectsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	Stream<const char*>* paths = (Stream<const char*>*)window_data;
 
 	UIDrawConfig config;
-	drawer.Text<UI_CONFIG_DO_NOT_CACHE>(config, "One or more project are missing. Their files have been deleted or moved and cannot be opened.");
+	drawer.Text(UI_CONFIG_DO_NOT_CACHE, config, "One or more project are missing. Their files have been deleted or moved and cannot be opened.");
 	drawer.NextRow();
-	drawer.LabelList<UI_CONFIG_DO_NOT_CACHE>(config, "These are:", *paths);
+	drawer.LabelList(UI_CONFIG_DO_NOT_CACHE, config, "These are:", *paths);
 
 	UIConfigAbsoluteTransform transform;
 	transform.scale = drawer.GetLabelScale("OK");
@@ -49,7 +49,7 @@ void MissingProjectsDraw(void* window_data, void* drawer_descriptor) {
 	transform.position.y = drawer.GetAlignedToBottom(transform.scale.y).y;
 	config.AddFlag(transform);
 	
-	drawer.Button<UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM>(config, "OK", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
 }
 
 void CreateMissingProjectWindow(EditorState* editor_state, Stream<const char*> paths) {
@@ -62,8 +62,7 @@ void CreateMissingProjectWindow(EditorState* editor_state, Stream<const char*> p
 		descriptor.destroy_action_data = editor_state;
 		descriptor.destroy_action_data_size = 0;
 
-		descriptor.draw = MissingProjectsDraw<false>;
-		descriptor.initialize = MissingProjectsDraw<true>;
+		descriptor.draw = MissingProjectsDraw;
 		descriptor.window_data = paths;
 		descriptor.window_data_size = sizeof(*paths);
 
@@ -84,21 +83,22 @@ bool SaveEditorFile(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
 	HubData* hub_data = (HubData*)editor_state->hub_data;
-	std::ofstream file_stream(EDITOR_FILE, std::ios::trunc | std::ios::out | std::ios::binary);
+	ECS_FILE_HANDLE file = 0;
+	ECS_FILE_STATUS_FLAGS status = OpenFile(EDITOR_FILE, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_TRUNCATE_FILE);
 
-	if (file_stream.good()) {
+	if (status == ECS_FILE_STATUS_OK) {
+		ScopedFile scoped_file(file);
+
 		unsigned short project_count = hub_data->projects.size;
-		Write(file_stream, &project_count, sizeof(unsigned short));
-		for (size_t index = 0; index < hub_data->projects.size; index++) {
+		bool success = WriteFile(file, { &project_count, sizeof(project_count) });
+		for (size_t index = 0; index < hub_data->projects.size && success; index++) {
 			unsigned short project_path_size = (unsigned short)wcslen(hub_data->projects[index].path);
-			Write(file_stream, &project_path_size, sizeof(unsigned short));
-			Write(file_stream, hub_data->projects[index].path, sizeof(wchar_t) * project_path_size);
+			success &= WriteFile(file, { &project_path_size, sizeof(project_path_size) });
+			success &= WriteFile(file, { hub_data->projects[index].path, sizeof(wchar_t) * project_path_size });
 		}
 
-		file_stream.flush();
-		if (file_stream.good()) {
-			return true;
-		}
+		success &= FlushFileToDisk(file);
+		return success;
 	}
 	return false;
 }
@@ -108,24 +108,28 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 	HubData* hub_data = (HubData*)editor_state->hub_data;
 
-	std::ifstream file_stream(EDITOR_FILE, std::ios::in | std::ios::binary);
+	ECS_FILE_HANDLE file = 0;
+	ECS_FILE_STATUS_FLAGS status = OpenFile(EDITOR_FILE, &file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY);
 
 	const char* _invalid_file_paths[64];
 	Stream<const char*> invalid_file_paths(_invalid_file_paths, 0);
 
 	wchar_t temp_path[256];
 
-	if (file_stream.good()) {
+	if (status == ECS_FILE_STATUS_OK) {
+		ScopedFile scoped_file(file);
+
 		unsigned short project_count = 0;
-		Read(file_stream, &project_count, sizeof(unsigned short));
+		bool success = true;
+		success &= ReadFile(file, { &project_count, sizeof(project_count) });
 		if (project_count >= hub_data->projects.capacity) {
 			return false;
 		}
 		
 		hub_data->projects.size = 0;
-		for (size_t index = 0; index < project_count; index++) {
+		for (size_t index = 0; index < project_count && success; index++) {
 			unsigned short path_size = 0;
-			Read(file_stream, &path_size, sizeof(unsigned short));
+			success &= ReadFile(file, { &path_size, sizeof(path_size) });
 
 			if (path_size == 0) {
 				return false;
@@ -133,9 +137,9 @@ bool LoadEditorFile(EditorState* editor_state) {
 
 			// If the file doesn't exist, it means it has been destroyed before hand in the OS
 			// So add it to the invalid stream
-			Read(file_stream, temp_path, sizeof(wchar_t) * path_size);
+			success &= ReadFile(file, { temp_path, sizeof(wchar_t) * path_size });
 			Path current_path(temp_path, path_size);
-			current_path.Add(L'\0');
+			current_path[path_size] = L'\0';
 			if (!ExistsFileOrFolder(current_path)) {
 				void* allocation = editor_allocator->Allocate(sizeof(char) * current_path.size, alignof(char));
 				CapacityStream<char> allocated_path(allocation, 0, current_path.size);
@@ -162,9 +166,7 @@ bool LoadEditorFile(EditorState* editor_state) {
 			SaveEditorFile(editor_state);
 		}
 
-		if (file_stream.good()) {
-			return true;
-		}
+		return success;
 	}
 	return false;
 }

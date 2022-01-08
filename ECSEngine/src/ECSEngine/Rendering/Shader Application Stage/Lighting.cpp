@@ -47,38 +47,38 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreateHemisphericConstantBuffer(Graphics* graphics) {
-			return graphics->CreateConstantBuffer(sizeof(float4) * 2);
+		ConstantBuffer CreateHemisphericConstantBuffer(Graphics* graphics, bool temporary) {
+			return graphics->CreateConstantBuffer(sizeof(float4) * 2, temporary);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreateDirectionalLightBuffer(Graphics* graphics) {
-			return graphics->CreateConstantBuffer(sizeof(float4) * 2);
+		ConstantBuffer CreateDirectionalLightBuffer(Graphics* graphics, bool temporary) {
+			return graphics->CreateConstantBuffer(sizeof(float4) * 2, temporary);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreatePointLightBuffer(Graphics* graphics) {
-			return graphics->CreateConstantBuffer(sizeof(float4) * 2);
+		ConstantBuffer CreatePointLightBuffer(Graphics* graphics, bool temporary) {
+			return graphics->CreateConstantBuffer(sizeof(float4) * 2, temporary);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreateSpotLightBuffer(Graphics* graphics) {
-			return graphics->CreateConstantBuffer(sizeof(float4) * 4);
+		ConstantBuffer CreateSpotLightBuffer(Graphics* graphics, bool temporary) {
+			return graphics->CreateConstantBuffer(sizeof(float4) * 4, temporary);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreateCapsuleLightBuffer(Graphics* graphics) {
-			return graphics->CreateConstantBuffer(sizeof(float4) * 3);
+		ConstantBuffer CreateCapsuleLightBuffer(Graphics* graphics, bool temporary) {
+			return graphics->CreateConstantBuffer(sizeof(float4) * 3, temporary);
 		}
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ConstantBuffer CreateCameraPositionBuffer(Graphics* graphics) {
-			return graphics->CreateConstantBuffer(sizeof(float4) * 1);
+		ConstantBuffer CreateCameraPositionBuffer(Graphics* graphics, bool temporary) {
+			return graphics->CreateConstantBuffer(sizeof(float4) * 1, temporary);
 		}
 
 		// ----------------------------------------------------------------------------------------------------

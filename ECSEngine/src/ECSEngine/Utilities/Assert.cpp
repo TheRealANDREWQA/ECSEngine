@@ -12,16 +12,26 @@ namespace ECSEngine {
 #ifdef ECSENGINE_DISTRIBUTION
 #ifdef ECS_ASSERT_TRIGGER
 			if (!condition) {
-				std::ostringstream stream;
-				stream << "[File] " << filename << "\n" << "[Line] " << line << "\n";
+				char temp_memory[512];
+				unsigned int memory_offset = _countof("[File] ");
+				memcpy(temp_memory, "[File] ", memory_offset);
+				size_t filename_size = strlen(filename);
+				memcpy(temp_memory + memory_offset, filename, filename_size);
+				memory_offset += filename_size;
+
+				size_t line_size = _countof("[Line] ");
+				memcpy(temp_memory + memory_offset, "[Line] ", line_size);
+				memory_offset += line_size;
+				temp_memory[memory_offset] = '\n';
 				if (error_message != nullptr) {
-					stream << error_message;
+					size_t message_size = strlen(error_message);
+					memcpy(temp_memory + memory_offset, error_message, message_size);
+					memory_offset += message_size;
 				}
-				wchar_t converted_message[1024];
-				MultiByteToWideChar(CP_ACP, 0, stream.str().c_str(), -1, converted_message, 1024);
-				MessageBox(nullptr, converted_message, L"ECS Assert", MB_OK | MB_ICONERROR);
+				temp_memory[memory_offset] = '\0';
+				MessageBoxA(nullptr, temp_memory, "ECS Assert", MB_OK | MB_ICONERROR);
 				__debugbreak();
-				exit(line);
+				::exit(0);
 			}
 #endif
 #else

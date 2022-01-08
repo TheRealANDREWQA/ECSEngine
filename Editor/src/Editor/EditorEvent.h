@@ -1,4 +1,5 @@
 #pragma once
+#include "editorpch.h"
 #include "ECSEngineUI.h"
 
 struct EditorState;

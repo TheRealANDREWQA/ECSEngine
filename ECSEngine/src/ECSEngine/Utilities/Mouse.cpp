@@ -98,6 +98,16 @@ namespace ECSEngine {
 			m_implementation->SetWindow(info.hWnd);
 		}
 
+		void Mouse::DisableRawInput()
+		{
+			m_get_raw_input = false;
+		}
+
+		void Mouse::EnableRawInput()
+		{
+			m_get_raw_input = true;
+		}
+
 		MouseState* Mouse::GetState() {
 			return &m_state;
 		}
@@ -107,13 +117,14 @@ namespace ECSEngine {
 		}
 
 		Mouse::Mouse() {
-			m_implementation = std::make_unique<DirectX::Mouse>();
+			m_implementation = new DirectX::Mouse();
 			m_tracker.Reset();
 			m_state.previous_position = { 0, 0 };
 			m_state.previous_scroll = 0;
 			m_state.state.x = 0;
 			m_state.state.y = 0;
 			m_state.state.scrollWheelValue = 0;
+			m_get_raw_input = false;
 		}
 
 		int Mouse::GetScrollValue() const
@@ -141,6 +152,11 @@ namespace ECSEngine {
 			return m_state.ScrollDelta();
 		}
 
+		bool Mouse::GetRawInputStatus() const
+		{
+			return m_get_raw_input;
+		}
+
 		int2 Mouse::GetPosition() const
 		{
 			return m_state.Position();
@@ -148,6 +164,11 @@ namespace ECSEngine {
 
 		bool Mouse::IsCursorVisible() const {
 			return m_implementation->IsVisible();
+		}
+
+		void Mouse::AddDelta(int x, int y)
+		{
+			m_implementation->AddMouseDelta(x, y);
 		}
 
 		void Mouse::ResetCursorWheel() {
@@ -176,6 +197,11 @@ namespace ECSEngine {
 			m_state.SetPreviousScroll();
 		}
 
+		void Mouse::SetPosition(int x, int y)
+		{
+			m_implementation->SetMousePosition(x, y);
+		}
+
 		void Mouse::SetCursorVisible() {
 			m_implementation->SetVisible(true);
 		}
@@ -189,7 +215,26 @@ namespace ECSEngine {
 		}
 
 		void Mouse::Procedure(const MouseProcedureInfo& info) {
-			m_implementation->ProcessMessage(info.message, info.wParam, info.lParam);
+			// Raw input handled separately
+			if (info.message == WM_INPUT && m_get_raw_input) {
+				RAWINPUT* data = (RAWINPUT*)ECS_STACK_ALLOC(sizeof(RAWINPUT));
+				unsigned int size = 0;
+				if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) == -1) {
+					return;
+				}
+				// The query failed
+				if (GetRawInputData((HRAWINPUT)info.lParam, RID_INPUT, data, &size, sizeof(RAWINPUTHEADER)) != size) {
+					return;
+				}
+				if (data->header.dwType == RIM_TYPEMOUSE && (data->data.mouse.lLastX != 0 || data->data.mouse.lLastY != 0)) {
+					m_implementation->AddMouseDelta(data->data.mouse.lLastX, data->data.mouse.lLastY);
+				}
+			}
+			else {
+				if (info.message != WM_CHAR || !m_get_raw_input) {
+					m_implementation->ProcessMessage(info.message, info.wParam, info.lParam);
+				}
+			}
 		}
 
 	}

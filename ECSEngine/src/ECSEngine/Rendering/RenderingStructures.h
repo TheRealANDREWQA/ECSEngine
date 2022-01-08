@@ -154,12 +154,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static VertexBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		unsigned int stride;
 		unsigned int size;
@@ -176,12 +183,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static IndexBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		unsigned int count;
 		unsigned int int_size;
@@ -201,8 +215,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11VertexShader* Interface() {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static VertexShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
 
 		containers::Stream<void> byte_code;
 		ID3D11VertexShader* shader;
@@ -218,8 +243,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			layout->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11InputLayout* Interface() {
+			return layout;
+		}
+
+		inline unsigned int Release() {
+			return layout->Release();
+		}
+
+		static InputLayout RawCreate(GraphicsDevice* device, containers::Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, containers::Stream<void> byte_code);
 
 		ID3D11InputLayout* layout;
 	};
@@ -236,8 +272,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11PixelShader* Interface() {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static PixelShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
 
 		ID3D11PixelShader* shader;
 	};
@@ -252,8 +299,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11GeometryShader* Interface() {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static GeometryShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
 
 		ID3D11GeometryShader* shader;
 	};
@@ -268,8 +326,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11DomainShader* Interface() {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static DomainShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
 
 		ID3D11DomainShader* shader;
 	};
@@ -284,8 +353,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+		
+		inline ID3D11HullShader* Interface() {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static HullShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
 
 		ID3D11HullShader* shader;
 	};
@@ -300,8 +380,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11ComputeShader* Interface() {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static ComputeShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
 
 		ID3D11ComputeShader* shader;
 	};
@@ -328,12 +419,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static ConstantBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Buffer* buffer;
 	};
@@ -349,8 +447,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			view->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11ShaderResourceView* Interface() {
+			return view;
+		}
+
+		inline unsigned int Release() {
+			return view->Release();
+		}
+
+		static ResourceView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor);
 
 		ID3D11ShaderResourceView* view;
 	};
@@ -366,13 +475,27 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			sampler->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11SamplerState* Interface() {
+			return sampler;
+		}
+
+		inline unsigned int Release() {
+			return sampler->Release();
+		}
+
+		static SamplerState RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor);
 
 		ID3D11SamplerState* sampler;
 	};
 
 	struct ECSENGINE_API Texture1D {
+		using RawDescriptor = D3D11_TEXTURE1D_DESC;
+		using RawInterface = ID3D11Texture1D;
+
 		Texture1D();
 		Texture1D(ID3D11Resource* _resource);
 		Texture1D(ID3D11Texture1D* _tex);
@@ -383,17 +506,27 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture1D* Resource() {
+		inline ID3D11Texture1D* Interface() {
 			return tex;
 		}
+
+		inline unsigned int Release() {
+			return tex->Release();
+		}
+
+		static Texture1D RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Texture1D* tex;
 	};
 
 	struct ECSENGINE_API Texture2D {
+		using RawDescriptor = D3D11_TEXTURE2D_DESC;
+		using RawInterface = ID3D11Texture2D;
+
 		Texture2D();
 		Texture2D(ID3D11Resource* _resource);
 		Texture2D(ID3D11Texture2D* _tex);
@@ -404,17 +537,27 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture2D* Resource() {
+		inline ID3D11Texture2D* Interface() {
 			return tex;
 		}
+
+		inline unsigned int Release() {
+			return tex->Release();
+		}
+
+		static Texture2D RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Texture2D* tex;
 	};
 
 	struct ECSENGINE_API Texture3D {
+		using RawDescriptor = D3D11_TEXTURE3D_DESC;
+		using RawInterface = ID3D11Texture3D;
+
 		Texture3D();
 		Texture3D(ID3D11Resource* _resource);
 		Texture3D(ID3D11Texture3D* _tex);
@@ -426,17 +569,27 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture3D* Resource() {
+		inline ID3D11Texture3D* Interface() {
 			return tex;
 		}
+
+		inline unsigned int Release() {
+			return tex->Release();
+		}
+
+		static Texture3D RawCreate(GraphicsDevice* graphics, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Texture3D* tex;
 	};
 
 	struct ECSENGINE_API TextureCube {
+		using RawDescriptor = D3D11_TEXTURE2D_DESC;
+		using RawInterface = ID3D11Texture2D;
+
 		TextureCube();
 		TextureCube(ID3D11Resource* _resource);
 		TextureCube(ID3D11Texture2D* _text);
@@ -447,13 +600,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture2D* Resource() {
+		inline ID3D11Texture2D* Interface() {
 			return tex;
 		}
 
+		inline unsigned int Release() {
+			return tex->Release();
+		}
+
+		static TextureCube RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Texture2D* tex;
 	};
@@ -477,8 +636,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			target->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11RenderTargetView* Interface() {
+			return target;
+		}
+
+		inline unsigned int Release() {
+			return target->Release();
+		}
+
+		static RenderTargetView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_RENDER_TARGET_VIEW_DESC* descriptor);
 
 		ID3D11RenderTargetView* target;
 	};
@@ -493,8 +663,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			view->GetDevice(&device);
+			device->Release();
 			return device;
 		}
+
+		inline ID3D11DepthStencilView* Interface() {
+			return view;
+		}
+
+		inline unsigned int Release() {
+			return view->Release();
+		}
+
+		static DepthStencilView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_DEPTH_STENCIL_VIEW_DESC* descriptor);
 
 		ID3D11DepthStencilView* view;
 	};
@@ -509,12 +690,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static StandardBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Buffer* buffer;
 		size_t count;
@@ -530,12 +718,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static StructuredBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Buffer* buffer;
 	};
@@ -550,12 +745,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static IndirectBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		ID3D11Buffer* buffer;
 	};
@@ -570,12 +772,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static UABuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		size_t element_count;
 		ID3D11Buffer* buffer;
@@ -591,12 +800,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static AppendStructuredBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		size_t element_count;
 		ID3D11Buffer* buffer;
@@ -612,12 +828,19 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Resource() {
+		inline ID3D11Buffer* Interface() {
 			return buffer;
 		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static ConsumeStructuredBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
 		size_t element_count;
 		ID3D11Buffer* buffer;
@@ -633,10 +856,121 @@ namespace ECSEngine {
 		inline GraphicsDevice* GetDevice() {
 			GraphicsDevice* device;
 			view->GetDevice(&device);
+			device->Release();
 			return device;
 		}
 
+		inline ID3D11UnorderedAccessView* Interface() {
+			return view;
+		}
+
+		inline unsigned int Release() {
+			return view->Release();
+		}
+
+		static UAView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_UNORDERED_ACCESS_VIEW_DESC* descriptor);
+
 		ID3D11UnorderedAccessView* view;
+	};
+
+	struct ECSENGINE_API BlendState {
+		BlendState() : state(nullptr) {}
+		BlendState(ID3D11BlendState* _state) : state(_state) {}
+
+		BlendState(const BlendState& other) = default;
+		BlendState& operator = (const BlendState& other) = default;
+
+		inline GraphicsDevice* GetDevice() {
+			GraphicsDevice* device;
+			state->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		inline ID3D11BlendState* Interface() {
+			return state;
+		}
+
+		inline unsigned int Release() {
+			return state->Release();
+		}
+
+		ID3D11BlendState* state;
+	};
+
+	struct ECSENGINE_API RasterizerState {
+		RasterizerState() : state(nullptr) {}
+		RasterizerState(ID3D11RasterizerState* _state) : state(_state) {}
+
+		RasterizerState(const RasterizerState& other) = default;
+		RasterizerState& operator = (const RasterizerState& other) = default;
+
+		inline GraphicsDevice* GetDevice() {
+			GraphicsDevice* device;
+			state->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		inline ID3D11RasterizerState* Interface() {
+			return state;
+		}
+
+		inline unsigned int Release() {
+			return state->Release();
+		}
+
+		ID3D11RasterizerState* state;
+	};
+
+	struct ECSENGINE_API DepthStencilState {
+		DepthStencilState() : state(nullptr) {}
+		DepthStencilState(ID3D11DepthStencilState* _state) : state(_state) {}
+
+		DepthStencilState(const DepthStencilState& other) = default;
+		DepthStencilState& operator = (const DepthStencilState& other) = default;
+
+		inline GraphicsDevice* GetDevice() {
+			GraphicsDevice* device;
+			state->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		inline ID3D11DepthStencilState* Interface() {
+			return state;
+		}
+
+		inline unsigned int Release() {
+			return state->Release();
+		}
+
+		ID3D11DepthStencilState* state;
+	};
+
+	struct ECSENGINE_API CommandList {
+		CommandList() : list(nullptr) {}
+		CommandList(ID3D11CommandList* _list) : list(_list) {}
+
+		CommandList(const CommandList& other) = default;
+		CommandList& operator = (const CommandList& other) = default;
+
+		inline GraphicsDevice* GetDevice() {
+			GraphicsDevice* device;
+			list->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		inline ID3D11CommandList* Interface() {
+			return list;
+		}
+
+		inline unsigned int Release() {
+			return list->Release();
+		}
+
+		ID3D11CommandList* list;
 	};
 
 #define TRANSLATION 0

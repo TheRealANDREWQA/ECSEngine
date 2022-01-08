@@ -49,27 +49,27 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreateHemisphericConstantBuffer(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreateHemisphericConstantBuffer(Graphics* graphics, bool temporary = false);
 
 		// ----------------------------------------------------------------------------------------------------
 		
-		ECSENGINE_API ConstantBuffer CreateDirectionalLightBuffer(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreateDirectionalLightBuffer(Graphics* graphics, bool temporary = false);
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreatePointLightBuffer(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreatePointLightBuffer(Graphics* graphics, bool temporary = false);
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreateSpotLightBuffer(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreateSpotLightBuffer(Graphics* graphics, bool temporary = false);
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreateCapsuleLightBuffer(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreateCapsuleLightBuffer(Graphics* graphics, bool temporary = false);
 
 		// ----------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreateCameraPositionBuffer(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreateCameraPositionBuffer(Graphics* graphics, bool temporary = false);
 
 		// ----------------------------------------------------------------------------------------------------
 

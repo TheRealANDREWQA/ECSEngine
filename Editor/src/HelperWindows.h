@@ -16,8 +16,7 @@ unsigned int CreateDefaultWindow(
 	const char* window_name,
 	EditorState* editor_state,
 	float2 window_size,
-	WindowDraw draw,
-	WindowDraw initialize
+	WindowDraw draw
 );
 
 #define EDITOR_CREATE_DOCKSPACE_FROM_WINDOW_DEFINITIONS(base_name, window_name) void base_name(void* _editor_state) { \

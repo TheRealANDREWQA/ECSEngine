@@ -11,8 +11,7 @@ struct EditorState;
 
 void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-template<bool initialize>
-void InspectorWindowDraw(void* window_data, void* drawer_descriptor);
+void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
 unsigned int CreateInspectorWindow(EditorState* editor_state);
 
@@ -31,3 +30,7 @@ void ChangeInspectorToModule(EditorState* editor_state, unsigned int index);
 void ChangeInspectorToGraphicsModule(EditorState* editor_state);
 
 void ChangeInspectorToModuleConfigurationGroup(EditorState* editor_state, unsigned int index);
+
+void LockInspector(EditorState* editor_state);
+
+void UnlockInspector(EditorState* editor_state);

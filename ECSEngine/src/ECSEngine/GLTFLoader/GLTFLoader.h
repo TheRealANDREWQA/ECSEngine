@@ -110,12 +110,15 @@ namespace ECSEngine {
 		containers::CapacityStream<char>* error_message = nullptr
 	);
 
+	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
 	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh);
 
+	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
 	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count);
 
+	// SINGLE THREADED - relies on the context to copy the resources
 	// Merges the submeshes that have the same material into the same buffer
 	// Material count submeshes will be created
 	// The returned mesh will have no name associated with it

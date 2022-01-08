@@ -1,15 +1,15 @@
+#include "editorpch.h"
 #include "DirectoryExplorer.h"
 #include "..\Editor\EditorState.h"
-#include "..\Project\ProjectOperations.h"
-#include "FileExplorer.h"
+#include "FileExplorerData.h"
 #include "..\HelperWindows.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 ECS_CONTAINERS;
 
-constexpr size_t LINEAR_ALLOCATOR_SIZE = 25'000;
-constexpr size_t HASH_TABLE_CAPACITY = 256;
+constexpr size_t LINEAR_ALLOCATOR_SIZE = 5'000;
+constexpr size_t POINTER_CAPACITY = 256;
 constexpr size_t RIGHT_CLICK_ROW_COUNT = 5;
 constexpr const char* RIGHT_CLICK_LEFT_CHARACTERS = "Show in Explorer\nCreate\nDelete\nRename\nCopy Path";
 
@@ -27,7 +27,7 @@ struct DirectoryExplorerData {
 	bool* right_click_menu_has_submenu;
 	UIDrawerMenuState* right_click_submenu_states;
 	UIDrawerLabelHierarchy* drawer_hierarchy;
-	Stream<const char*> directories_ptrs;
+	CapacityStream<const char*> directories_ptrs;
 	bool is_right_click_window_opened;
 	Timer timer;
 };
@@ -38,7 +38,7 @@ bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
 
 	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+	ProjectFile* project_file = editor_state->project_file;
 	folder.Copy(project_file->path);
 	folder.Add(L'\\');
 	size_t folder_base_size = folder.size;
@@ -64,7 +64,7 @@ void DirectoryExplorerHierarchySelectableCallback(ActionData* action_data) {
 	EditorState* editor_state = (EditorState*)data->editor_state;
 
 	Stream<char> label_stream(label, strlen(label));
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+	ProjectFile* project_file = editor_state->project_file;
 	data->current_path->Copy(project_file->path);
 	data->current_path->Add(ECS_OS_PATH_SEPARATOR);
 
@@ -113,7 +113,7 @@ void DirectoryExplorerCreateFolderCallback(ActionData* action_data) {
 
 	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+	ProjectFile* project_file = editor_state->project_file;
 	ascii.size = data->current_path->size - project_file->path.size - 1;
 	ascii.buffer += project_file->path.size + 1;
 	data->drawer_hierarchy->active_label.Copy(ascii);
@@ -163,13 +163,12 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 	unsigned int directory_explorer_index = system->GetWindowFromName(DIRECTORY_EXPLORER_WINDOW_NAME);
 	system->RemoveWindowMemoryResource(directory_explorer_index, choose_data->wide);
 
-	OS::RenameFolderWithError(*data->current_path, *choose_data->wide, system);
-	// Rebind the current path to be the renamed path
-	std::filesystem::path current_path(data->current_path->buffer, data->current_path->buffer + data->current_path->size);
-	auto new_path = current_path.parent_path().append(choose_data->wide->buffer, choose_data->wide->buffer + choose_data->wide->size);
-	const wchar_t* new_path_cstring = new_path.c_str();
-	data->current_path->Copy(Stream<wchar_t>(new_path_cstring, wcslen(new_path_cstring)));
+	OS::RenameFolderOrFileWithError(*data->current_path, *choose_data->wide, system);
+
+	data->current_path->Copy(*data->current_path);
+	data->current_path->AddStream(*choose_data->wide);
 	data->current_path->buffer[data->current_path->size] = L'\0';
+	data->current_path->AssertCapacity();
 
 	char ascii_path[512];
 	CapacityStream<char> ascii(ascii_path, 0, 512);
@@ -177,7 +176,7 @@ void DirectoryExplorerRenameFolderCallback(ActionData* action_data) {
 
 	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = (EditorState*)data->editor_state;
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+	ProjectFile* project_file = editor_state->project_file;
 	ascii.size = data->current_path->size - project_file->path.size - 1;
 	ascii.buffer += project_file->path.size + 1;
 	data->drawer_hierarchy->active_label.Copy(ascii);
@@ -240,22 +239,21 @@ void DirectoryExplorerCopyPath(ActionData* action_data) {
 	CopyPathToClipboardStreamAction(action_data);
 }
 
-template<bool initialize>
-void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
+void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	DirectoryExplorerData* data = (DirectoryExplorerData*)window_data;
 
-	constexpr size_t HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK
+	const size_t HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK
 		| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
 
-	if constexpr (initialize) {
+	if (initialize) {
 		drawer.layout.next_row_y_offset *= 0.5f;
 		EDITOR_STATE(data->editor_state);
 		EditorState* editor_state = data->editor_state;
 		FileExplorerData* file_explorer_data = (FileExplorerData*)editor_state->file_explorer_data;
 		data->current_path = &file_explorer_data->current_directory;
-		data->directories_ptrs.Initialize(editor_allocator, HASH_TABLE_CAPACITY);
+		data->directories_ptrs.Initialize(editor_allocator, 0, POINTER_CAPACITY);
 		data->directories_ptrs.size = 0;
 
 		data->allocator = LinearAllocator(editor_allocator->Allocate(LINEAR_ALLOCATOR_SIZE), LINEAR_ALLOCATOR_SIZE);
@@ -308,57 +306,11 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 		right_click.phase = UIDrawPhase::System;
 		config.AddFlag(right_click);
 
-		data->drawer_hierarchy = drawer.LabelHierarchy<HIERARCHY_CONFIGURATION>(config, "Hierarchy", Stream<const char*>(nullptr, 0));
+		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<const char*>(nullptr, 0));
 	}
 
 	EDITOR_STATE(data->editor_state);
 	EditorState* editor_state = data->editor_state;
-	ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
-
-	if (data->timer.GetDurationSinceMarker_ms() > LAZY_EVALUATION_MILLISECONDS_TICK) {
-		data->timer.SetMarker();
-		data->allocator.Clear();
-		data->directories_ptrs.size = 0;
-
-		wchar_t _folder_path_wide_stream[256];
-		Stream<wchar_t> folder_path_wide_stream(_folder_path_wide_stream, 0);
-		folder_path_wide_stream.AddStream(project_file->path);
-		folder_path_wide_stream.Add(ECS_OS_PATH_SEPARATOR);
-		size_t folder_path_wide_size_return = folder_path_wide_stream.size;
-
-		for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
-			folder_path_wide_stream.size = folder_path_wide_size_return;
-			folder_path_wide_stream.AddStream(ToStream(PROTECTED_FOLDERS[index]));
-			folder_path_wide_stream[folder_path_wide_stream.size] = L'\0';
-
-			Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
-			function::ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
-
-			data->directories_ptrs.Add(folder_path_stream.buffer + project_file->path.size + 1);
-
-			struct ForEachData {
-				DirectoryExplorerData* data;
-				ProjectFile* project_file;
-			};
-
-			ForEachData for_each_data;
-			for_each_data.data = data;
-			for_each_data.project_file = project_file;
-
-			ForEachDirectoryRecursive(folder_path_wide_stream, &for_each_data, [](const std::filesystem::path& path, void* _data) {
-				ForEachData* for_each_data = (ForEachData*)_data;
-
-				const wchar_t* current_path = path.c_str();
-				size_t current_path_size = wcslen(current_path) + 1;
-				char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
-				function::ConvertWideCharsToASCII(current_path, ascii_current_path, current_path_size, current_path_size);
-				for_each_data->data->directories_ptrs.Add(ascii_current_path + for_each_data->project_file->path.size + 1);
-
-				return true;
-			});
-
-		}
-	}
 
 	UIDrawConfig config;
 
@@ -380,34 +332,11 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor) {
 	right_click.phase = UIDrawPhase::System;
 	config.AddFlag(right_click);
 
-	// Copy the current directory if it changed from the directory selectable inside file explorer
-	// And make the parent state true in order to have it appear here
-	if (data->current_path->size > 0) {
-		char temp_characters[512];
-		CapacityStream<char> ascii_stream(temp_characters, 0, 512);
-		Path starting_path = *data->current_path;
-		starting_path.buffer += project_file->path.size + 1;
-		starting_path.size -= project_file->path.size + 1;
-		function::ConvertWideCharsToASCII(starting_path, ascii_stream);
-
-		data->drawer_hierarchy->active_label.Copy(ascii_stream);
-
-		ASCIIPath parent_path = function::PathParent(ascii_stream);
-		ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
-
-		UIDrawerLabelHierarchyLabelData* label_data;
-		if (data->drawer_hierarchy->label_states.TryGetValuePtr(identifier, label_data)) {
-			label_data->state = true;
-		}
-	}
-
-	if constexpr (!initialize) {
-		data->drawer_hierarchy = drawer.LabelHierarchy<HIERARCHY_CONFIGURATION>(config, "Hierarchy", data->directories_ptrs);
+	if (!initialize) {
+		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", data->directories_ptrs);
 	}
 
 }
-
-ECS_TEMPLATE_FUNCTION_BOOL_NO_API(void, DirectoryExplorerDraw, void*, void*);
 
 void CreateDirectoryExplorer(EditorState* editor_state) {
 	CreateDockspaceFromWindow(DIRECTORY_EXPLORER_WINDOW_NAME, editor_state, CreateDirectoryExplorerWindow);
@@ -428,8 +357,7 @@ void DirectoryExplorerDestroyCallback(ActionData* action_data) {
 
 void DirectoryExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
-	descriptor.draw = DirectoryExplorerDraw<false>;
-	descriptor.initialize = DirectoryExplorerDraw<true>;
+	descriptor.draw = DirectoryExplorerDraw;
 
 	DirectoryExplorerData* data = (DirectoryExplorerData*)stack_memory;
 	data->editor_state = editor_state;
@@ -457,4 +385,80 @@ unsigned int CreateDirectoryExplorerWindow(EditorState* editor_state) {
 	DirectoryExplorerSetDescriptor(descriptor, editor_state, stack_memory);
 
 	return ui_system->Create_Window(descriptor);
+}
+
+void DirectoryExplorerTick(EditorState* editor_state)
+{
+	EDITOR_STATE(editor_state);
+
+	ProjectFile* project_file = editor_state->project_file;
+	unsigned int window_index = ui_system->GetWindowFromName(DIRECTORY_EXPLORER_WINDOW_NAME);
+	if (window_index != -1) {
+		DirectoryExplorerData* data = (DirectoryExplorerData*)ui_system->GetWindowData(window_index);
+
+		if (data->timer.GetDurationSinceMarker_ms() > LAZY_EVALUATION_MILLISECONDS_TICK) {
+			data->timer.SetMarker();
+			data->allocator.Clear();
+			data->directories_ptrs.size = 0;
+
+			wchar_t _folder_path_wide_stream[256];
+			Stream<wchar_t> folder_path_wide_stream(_folder_path_wide_stream, 0);
+			folder_path_wide_stream.AddStream(project_file->path);
+			folder_path_wide_stream.Add(ECS_OS_PATH_SEPARATOR);
+			size_t folder_path_wide_size_return = folder_path_wide_stream.size;
+
+			for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
+				folder_path_wide_stream.size = folder_path_wide_size_return;
+				folder_path_wide_stream.AddStream(ToStream(PROTECTED_FOLDERS[index]));
+				folder_path_wide_stream[folder_path_wide_stream.size] = L'\0';
+
+				Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
+				function::ConvertWideCharsToASCII(folder_path_wide_stream.buffer, folder_path_stream.buffer, folder_path_wide_stream.size + 1, 256);
+
+				data->directories_ptrs.AddSafe(folder_path_stream.buffer + project_file->path.size + 1);
+
+				struct ForEachData {
+					DirectoryExplorerData* data;
+					ProjectFile* project_file;
+				};
+
+				ForEachData for_each_data;
+				for_each_data.data = data;
+				for_each_data.project_file = project_file;
+
+				ForEachDirectoryRecursive(folder_path_wide_stream, &for_each_data, [](const wchar_t* path, void* _data) {
+					ForEachData* for_each_data = (ForEachData*)_data;
+
+					size_t current_path_size = wcslen(path) + 1;
+					char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
+					function::ConvertWideCharsToASCII(path, ascii_current_path, current_path_size, current_path_size);
+					for_each_data->data->directories_ptrs.AddSafe(ascii_current_path + for_each_data->project_file->path.size + 1);
+
+					return true;
+				}, true);
+
+			}
+		}
+
+		// Copy the current directory if it changed from the directory selectable inside file explorer
+		// And make the parent state true in order to have it appear here
+		if (data->current_path->size > 0) {
+			char temp_characters[512];
+			CapacityStream<char> ascii_stream(temp_characters, 0, 512);
+			Path starting_path = *data->current_path;
+			starting_path.buffer += project_file->path.size + 1;
+			starting_path.size -= project_file->path.size + 1;
+			function::ConvertWideCharsToASCII(starting_path, ascii_stream);
+
+			data->drawer_hierarchy->active_label.Copy(ascii_stream);
+
+			ASCIIPath parent_path = function::PathParent(ascii_stream);
+			ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
+
+			UIDrawerLabelHierarchyLabelData* label_data;
+			if (data->drawer_hierarchy->label_states.TryGetValuePtr(identifier, label_data)) {
+				label_data->state = true;
+			}
+		}
+	}
 }

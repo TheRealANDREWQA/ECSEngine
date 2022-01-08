@@ -3,6 +3,7 @@
 #include "../Utilities/Function.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/File.h"
+#include "../Utilities/ForEachFiles.h"
 
 ECS_CONTAINERS;
 
@@ -61,13 +62,115 @@ namespace ECSEngine {
 	VertexBuffer::VertexBuffer(UINT _stride, UINT _size, ID3D11Buffer* _buffer) 
 		: stride(_stride), size(_size), buffer(_buffer) {}
 
+	VertexBuffer VertexBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		VertexBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex buffer failed", true);
+
+		return buffer;	
+	}
+
 	IndexBuffer::IndexBuffer() : count(0), buffer(nullptr) {}
+
+	IndexBuffer IndexBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		IndexBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
+
+		return buffer;
+	}
 
 	InputLayout::InputLayout() : layout(nullptr) {}
 
+	InputLayout InputLayout::RawCreate(GraphicsDevice* device, Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, Stream<void> byte_code)
+	{
+		InputLayout layout;
+		HRESULT result;
+
+		result = device->CreateInputLayout(
+			descriptor.buffer,
+			descriptor.size,
+			byte_code.buffer,
+			byte_code.size,
+			&layout.layout
+		);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating input layout failed", true);
+
+		return layout;
+	}
+
 	VertexShader::VertexShader() : byte_code(nullptr, 0), shader(nullptr) {}
 
+	VertexShader VertexShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
+	{
+		VertexShader shader;
+
+		HRESULT result;
+		result = device->CreateVertexShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+
+		return shader;
+	}
+
 	PixelShader::PixelShader() : shader(nullptr) {}
+
+	PixelShader PixelShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
+	{
+		PixelShader shader;
+
+		HRESULT result;
+		result = device->CreatePixelShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+
+		return shader;
+	}
+
+	GeometryShader GeometryShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
+	{
+		GeometryShader shader;
+
+		HRESULT result;
+		result = device->CreateGeometryShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+
+		return shader;
+	}
+
+	DomainShader DomainShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
+	{
+		DomainShader shader;
+
+		HRESULT result;
+		result = device->CreateDomainShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+		return shader;
+	}
+
+	HullShader HullShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
+	{
+		HullShader shader;
+
+		HRESULT result;
+		result = device->CreateHullShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Hull shader failed.", true);
+
+		return shader;
+	}
+
+	ComputeShader ComputeShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
+	{
+		ComputeShader shader;
+
+		HRESULT result;
+		result = device->CreateComputeShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+
+		return shader;
+	}
 
 	Topology::Topology() : value(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST) {}
 
@@ -77,13 +180,133 @@ namespace ECSEngine {
 
 	ResourceView::ResourceView(ID3D11ShaderResourceView* _view) : view(_view) {}
 
+	ResourceView ResourceView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor)
+	{
+		ResourceView view;
+
+		HRESULT result;
+		result = device->CreateShaderResourceView(resource, descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 1D Shader View failed.", true);
+
+		return view;
+	}
+
 	ConstantBuffer::ConstantBuffer() : buffer(nullptr) {}
 
 	ConstantBuffer::ConstantBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
+	ConstantBuffer ConstantBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		ConstantBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating pixel constant buffer failed", true);
+
+		return buffer;
+	}
+
 	SamplerState::SamplerState() : sampler(nullptr) {}
 
 	SamplerState::SamplerState(ID3D11SamplerState* _sampler) : sampler(_sampler) {}
+
+	SamplerState SamplerState::RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor)
+	{
+		SamplerState state;
+		HRESULT result = device->CreateSamplerState(descriptor, &state.sampler);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Constructing sampler state failed!", true);
+
+		return state;
+	}
+
+	UAView UAView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_UNORDERED_ACCESS_VIEW_DESC* descriptor)
+	{
+		UAView view;
+
+		HRESULT result = device->CreateUnorderedAccessView(resource, descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Append Buffer failed.", true);
+
+		return view;
+	}
+
+	RenderTargetView RenderTargetView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_RENDER_TARGET_VIEW_DESC* descriptor)
+	{
+		RenderTargetView view;
+		HRESULT result = device->CreateRenderTargetView(resource, descriptor, &view.target);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+
+		return view;
+	}
+
+	DepthStencilView DepthStencilView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_DEPTH_STENCIL_VIEW_DESC* descriptor)
+	{
+		DepthStencilView view;
+
+		HRESULT result = device->CreateDepthStencilView(resource, descriptor, &view.view);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+
+		return view;
+	}
+
+	StandardBuffer StandardBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		StandardBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	StructuredBuffer StructuredBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		StructuredBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	IndirectBuffer IndirectBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		IndirectBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	UABuffer UABuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		UABuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	AppendStructuredBuffer AppendStructuredBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		AppendStructuredBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
+
+	ConsumeStructuredBuffer ConsumeStructuredBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		ConsumeStructuredBuffer buffer;
+
+		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+
+		return buffer;
+	}
 
 	Texture1D::Texture1D() : tex(nullptr) {}
 
@@ -100,6 +323,15 @@ namespace ECSEngine {
 
 	Texture1D::Texture1D(ID3D11Texture1D* _tex) : tex(_tex) {}
 
+	Texture1D Texture1D::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		RawInterface* interface_;
+		HRESULT result = device->CreateTexture1D(descriptor, initial_data, &interface_);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture1D failed.", true);
+
+		return interface_;
+	}
+
 	Texture2D::Texture2D() : tex(nullptr) {}
 
 	Texture2D::Texture2D(ID3D11Texture2D* _tex) : tex(_tex) {}
@@ -113,6 +345,15 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture2D failed!", true);
 		tex = com_tex.Detach();
+	}
+
+	Texture2D Texture2D::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		RawInterface* interface_;
+		HRESULT result = device->CreateTexture2D(descriptor, initial_data, &interface_);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture2D failed.", true);
+
+		return interface_;
 	}
 
 	Texture3D::Texture3D() : tex(nullptr) {}
@@ -130,6 +371,14 @@ namespace ECSEngine {
 		tex = com_tex.Detach();
 	}
 
+	Texture3D Texture3D::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		RawInterface* interface_;
+		HRESULT result = device->CreateTexture3D(descriptor, initial_data, &interface_);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture3D failed.", true);
+
+		return interface_;
+	}
 
 	TextureCube::TextureCube() : tex(nullptr) {}
 
@@ -141,6 +390,15 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture3D failed!", true);
 		tex = com_tex.Detach();
+	}
+
+	TextureCube TextureCube::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
+	{
+		RawInterface* interface_;
+		HRESULT result = device->CreateTexture2D(descriptor, initial_data, &interface_);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating TextureCube failed.", true);
+
+		return interface_;
 	}
 
 	TextureCube::TextureCube(ID3D11Texture2D* _tex) : tex(_tex) {}
@@ -439,13 +697,12 @@ namespace ECSEngine {
 			Stream<Stream<const wchar_t*>> material_strings;
 		};
 
-		auto functor = [](const std::filesystem::path& path, void* _data) {
-			const wchar_t* c_path = path.c_str();
-			Stream<wchar_t> stream_path = ToStream(c_path);
+		auto functor = [](const wchar_t* path, void* _data) {
+			Stream<wchar_t> stream_path = ToStream(path);
 
 			Data* data = (Data*)_data;
 			// find the base part first
-			const wchar_t* base_start = wcsstr(c_path, data->base_name.buffer);
+			const wchar_t* base_start = wcsstr(path, data->base_name.buffer);
 			if (base_start != nullptr) {
 				base_start += data->base_name.size;
 				while (*base_start == '_') {

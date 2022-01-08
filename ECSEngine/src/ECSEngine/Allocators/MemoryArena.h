@@ -36,8 +36,6 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 
-		void SetDebugBuffer(unsigned int* buffer, unsigned int blocks_per_allocator);
-
 		static size_t MemoryOf(size_t allocator_count, size_t blocks_per_allocator);
 
 	private:
@@ -75,6 +73,7 @@ namespace ECSEngine {
 		// ------------------------------------------------- Thread safe ----------------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
+
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 

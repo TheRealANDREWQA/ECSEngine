@@ -14,8 +14,8 @@
 #include "../../Internal/Multithreading/TaskManager.h"
 #include "ResourceTypes.h"
 
-constexpr size_t ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT = (size_t)1 << 16;
-constexpr size_t ECS_RESOURCE_MANAGER_TEMPORARY_MEMORY = 500 * ECS_KB;
+constexpr size_t ECS_RESOURCE_MANAGER_TEMPORARY = (size_t)1 << 16;
+constexpr size_t ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT = (size_t)1 << 17;
 
 namespace ECSEngine {
 
@@ -36,10 +36,12 @@ namespace ECSEngine {
 		unsigned int cpuAccessFlags = 0;
 		unsigned int miscFlags = 0;
 		size_t max_size = 0;
-		AllocatorPolymorphic allocator = { nullptr, AllocatorType::LinearAllocator, AllocationType::SingleThreaded };
+		AllocatorPolymorphic allocator = { nullptr };
 		DirectX::WIC_LOADER_FLAGS loader_flag = DirectX::WIC_LOADER_DEFAULT;
 		TextureCompressionExplicit compression = (TextureCompressionExplicit)-1;
 	};
+
+	ECSENGINE_API MemoryManager DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator);
 
 	// Defining ECS_RESOURCE_MANAGER_CHECK_RESOURCE will make AddResource check if the resource exists already 
 	struct ECSENGINE_API ResourceManager
@@ -55,13 +57,14 @@ namespace ECSEngine {
 		};
 
 	//public:
-		// Temporary memory will be allocated per thread
 		ResourceManager(
 			ResourceManagerAllocator* memory,
 			Graphics* graphics,
-			unsigned int thread_count,
-			unsigned int temporary_memory = ECS_RESOURCE_MANAGER_TEMPORARY_MEMORY
+			unsigned int thread_count
 		);
+
+		ResourceManager(const ResourceManager& other) = default;
+		ResourceManager& operator = (const ResourceManager& other) = default;
 
 		// Each thread has its own resource path
 		void AddResourcePath(const char* subpath, unsigned int thread_index = 0);
@@ -121,16 +124,6 @@ namespace ECSEngine {
 		// resource folder path different from -1 will use the folder in the specified thread position
 		template<bool reference_counted = false>
 		char* LoadTextFile(
-			const char* filename, 
-			size_t& size, 
-			size_t load_flags = 1,
-			unsigned int thread_index = 0,
-			bool* reference_counted_is_loaded = nullptr
-		);
-
-		// resource folder path different from -1 will use the folder in the specified thread position
-		template<bool reference_counted = false>
-		char* LoadTextFile(
 			const wchar_t* filename,
 			size_t& size,
 			size_t load_flags = 1,
@@ -138,11 +131,11 @@ namespace ECSEngine {
 			bool* reference_counted_is_loaded = nullptr
 		);
 
-		char* LoadTextFileImplementation(std::ifstream& input, size_t* size);
+		char* LoadTextFileImplementation(const wchar_t* file, size_t* size);
 
-		void OpenFile(const char* filename, std::ifstream& input, unsigned int thread_index = 0);
-
-		void OpenFile(const wchar_t* filename, std::ifstream& input, unsigned int thread_index = 0);
+		// Same as OpenFile the function, the only difference is that it takes into consideration the thread path
+		// The file must be released if successful
+		bool OpenFile(const wchar_t* filename, ECS_FILE_HANDLE* file, bool binary = true, unsigned int thread_index = 0);
 
 		// In order to generate mip-maps, the context must be supplied
 		template<bool reference_counted = false>
@@ -158,6 +151,7 @@ namespace ECSEngine {
 		ResourceView LoadTextureImplementation(
 			const wchar_t* filename, 
 			ResourceManagerTextureDesc* descriptor,
+			size_t load_flags = 0,
 			unsigned int thread_index = 0
 		);
 
@@ -172,7 +166,7 @@ namespace ECSEngine {
 
 		// Loads all meshes from a gltf file
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags = 1, unsigned int thread_index = 0);
+		Stream<Mesh>* LoadMeshImplementation(const wchar_t* filename, size_t load_flags = 0, unsigned int thread_index = 0);
 
 		// Loads all meshes from a gltf file and creates a coallesced mesh
 		template<bool reference_counted = false>
@@ -185,7 +179,7 @@ namespace ECSEngine {
 
 		// Loads all meshes from a gltf file and creates a coallesced mesh
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		CoallescedMesh* LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags = 1, unsigned int thread_index = 0);
+		CoallescedMesh* LoadCoallescedMeshImplementation(const wchar_t* filename, size_t load_flags = 0, unsigned int thread_index = 0);
 
 		// Loads all materials from a gltf file
 		template<bool reference_counted = false>
@@ -197,7 +191,7 @@ namespace ECSEngine {
 		);
 
 		// Loads all materials from a gltf file
-		Stream<PBRMaterial>* LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags = 1, unsigned int thread_index = 0);
+		Stream<PBRMaterial>* LoadMaterialsImplementation(const wchar_t* filename, size_t load_flags = 0, unsigned int thread_index = 0);
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 		template<bool reference_counted = false>
@@ -210,7 +204,7 @@ namespace ECSEngine {
 
 		// Loads all meshes and materials from a gltf file, combines the meshes into a single one sorted by material submeshes
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
-		PBRMesh* LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags = 1, unsigned int thread_index = 0);
+		PBRMesh* LoadPBRMeshImplementation(const wchar_t* filename, size_t load_flags = 0, unsigned int thread_index = 0);
 
 		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
 		// If a .hlsl is specified, it will be compiled into binary using shader compile options and then passed to D3D
@@ -236,7 +230,7 @@ namespace ECSEngine {
 			const wchar_t* filename, 
 			Stream<char>* shader_source_code = nullptr,
 			ShaderCompileOptions options = {}, 
-			size_t load_flags = 1,
+			size_t load_flags = 0,
 			unsigned int thread_index = 0
 		);
 
@@ -264,7 +258,7 @@ namespace ECSEngine {
 			const wchar_t* filename, 
 			Stream<char>* shader_source_code = nullptr,
 			ShaderCompileOptions options = {}, 
-			size_t load_flags = 1, 
+			size_t load_flags = 0, 
 			unsigned int thread_index = 0
 		);
 
@@ -292,7 +286,7 @@ namespace ECSEngine {
 			const wchar_t* filename, 
 			Stream<char>* shader_source_code = nullptr,
 			ShaderCompileOptions options = {}, 
-			size_t load_flags = 1, 
+			size_t load_flags = 0, 
 			unsigned int thread_index = 0
 		);
 
@@ -320,7 +314,7 @@ namespace ECSEngine {
 			const wchar_t* filename,
 			Stream<char>* shader_source_code = nullptr,
 			ShaderCompileOptions options = {}, 
-			size_t load_flags = 1,
+			size_t load_flags = 0,
 			unsigned int thread_index = 0
 		);
 
@@ -348,7 +342,7 @@ namespace ECSEngine {
 			const wchar_t* filename, 
 			Stream<char>* shader_source_code = nullptr,
 			ShaderCompileOptions options = {},
-			size_t load_flags = 1, 
+			size_t load_flags = 0, 
 			unsigned int thread_index = 0
 		);
 
@@ -376,7 +370,7 @@ namespace ECSEngine {
 			const wchar_t* filename, 
 			Stream<char>* shader_source_code = nullptr,
 			ShaderCompileOptions options = {}, 
-			size_t load_flags = 1, 
+			size_t load_flags = 0, 
 			unsigned int thread_index = 0
 		);
 
@@ -393,9 +387,6 @@ namespace ECSEngine {
 		void SetShaderDirectory(Stream<wchar_t> directory);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadTextFile(const char* filename, size_t flags = 1);
 
 		template<bool reference_counted = false>
 		void UnloadTextFile(const wchar_t* filename, size_t flags = 1);
@@ -493,6 +484,19 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
+		template<bool reference_counted = false>
+		void UnloadResource(const wchar_t* filename, ResourceType type, size_t flags = 1);
+
+		template<bool reference_counted = false>
+		void UnloadResource(unsigned int index, ResourceType type, size_t flags = 1);
+
+		// ---------------------------------------------------------------------------------------------------------------------------
+
+		// Unloads all resources of a type
+		void UnloadAll(ResourceType resource_type);
+
+		// ---------------------------------------------------------------------------------------------------------------------------
+
 	//private:
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
@@ -507,25 +511,6 @@ namespace ECSEngine {
 
 	// The name nullptr means it failed
 	ECSENGINE_API Material PBRToMaterial(ResourceManager* resource_manager, const PBRMaterial& pbr, Stream<wchar_t> folder_to_search);
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	struct DecodedTexture {
-		Stream<void> data;
-		size_t width;
-		size_t height;
-		DXGI_FORMAT format;
-	};
-
-	// Returns the section of the texture without the header - it will do internally another allocation for the 
-	// decompressed data; Momentarly there are no flags
-	// If it fails it returns a { nullptr, 0 } 
-	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags = 0);
-
-	// Returns the section of the texture without the header - it will do internally another allocation for the 
-	// decompressed data; Momentarly there are no flags. The filename is needed in for the texture extension
-	// If it fails it returns a { nullptr, 0 } 
-	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// --------------------------------------------------------------------------------------------------------------------
 

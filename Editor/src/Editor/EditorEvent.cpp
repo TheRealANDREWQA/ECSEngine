@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "EditorEvent.h"
 #include "EditorState.h"
 

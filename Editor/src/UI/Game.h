@@ -8,8 +8,7 @@ struct EditorState;
 // Stack memory size should be at least 512
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-template<bool initialize>
-void GameWindowDraw(void* window_data, void* drawer_descriptor);
+void GameWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
 // It creates the dockspace and the window
 void CreateGame(EditorState* editor_state);

@@ -48,43 +48,44 @@ namespace ECSEngine {
 			unsigned int pointer_offset;
 		};
 
-		using UIReflectionFieldDraw = void (*)(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		// Only drawer will be called, the initializer is not involved
+		using UIReflectionFieldDraw = void (*)(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		// ------------------------------------------------------------ Basic ----------------------------------------------------------------------
 
-		ECSENGINE_API void UIReflectionFloatSlider(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionFloatSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionDoubleSlider(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionDoubleSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionIntSlider(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionIntSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionFloatInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionDoubleInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionIntInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionTextInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionColor(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionColorFloat(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionCheckBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionComboBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionFloatSliderGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionFloatSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionDoubleSliderGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionDoubleSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionIntSliderGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionIntSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionFloatInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionDoubleInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionIntInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		constexpr UIReflectionFieldDraw UI_REFLECTION_FIELD_BASIC_DRAW[] = {
 			UIReflectionFloatSlider,
@@ -110,28 +111,28 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------ Stream ----------------------------------------------------------------------
 
-		ECSENGINE_API void UIReflectionStreamFloatInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamDoubleInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamIntInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamTextInput(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamColor(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamColorFloat(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamCheckBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		// Probably doesn't make too much sense to have a stream of combo boxes
-		ECSENGINE_API void UIReflectionStreamComboBox(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamFloatInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamDoubleInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
-		ECSENGINE_API void UIReflectionStreamIntInputGroup(UIDrawer<false>& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
+		ECSENGINE_API void UIReflectionStreamIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* data);
 
 		constexpr UIReflectionFieldDraw UI_REFLECTION_FIELD_STREAM_DRAW[] = {
 			UIReflectionStreamFloatInput,
@@ -517,11 +518,18 @@ namespace ECSEngine {
 			UIReflectionInstance* CreateInstance(const char* name, const char* type_name);
 			UIReflectionInstance* CreateInstance(const char* name, const UIReflectionType* type);
 
+			void DestroyInstance(unsigned int index);
 			void DestroyInstance(const char* name);
 
 			void DestroyType(const char* name);
 
-			void DrawInstance(const char* ECS_RESTRICT instance_name, UIDrawer<false>& drawer, UIDrawConfig& config, const char* ECS_RESTRICT default_value_button = nullptr);
+			void DrawInstance(const char* ECS_RESTRICT instance_name, UIDrawer& drawer, UIDrawConfig& config, const char* ECS_RESTRICT default_value_button = nullptr);
+
+			// Destroys all instances and types that originate from the given hierarchy
+			void DestroyAllFromFolderHierarchy(unsigned int hierarchy_index);
+
+			// Destroys all instances and types that originate from the given hierarchy
+			void DestroyAllFromFolderHierarchy(const wchar_t* hierarchy);
 
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);

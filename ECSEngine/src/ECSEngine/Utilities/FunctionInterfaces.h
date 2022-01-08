@@ -3,6 +3,7 @@
 #include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "BasicTypes.h"
+#include "File.h"
 
 ECS_CONTAINERS;
 
@@ -60,9 +61,12 @@ namespace ECSEngine {
 		template<typename Stream>
 		void ParseWordsFromSentence(const char* ECS_RESTRICT sentence, const char* ECS_RESTRICT tokens, Stream& words);
 
-		// first_value * condition + (1 - condition) * second_value;
+		// condition ? first_value : second_value
+		// The only full template because it is a one liner
 		template<typename Type>
-		Type Select(bool condition, Type first_value, Type second_value);
+		Type Select(bool condition, Type first_value, Type second_value) {
+			return condition ? first_value : second_value;
+		}
 
 		// Calculates the integral and fractional parts and then commits them into a floating point type each that then get summed up 
 		// Returns the count of characters written
@@ -104,38 +108,6 @@ namespace ECSEngine {
 		// Non digit characters are discarded
 		template<typename FloatingPoint, typename Stream>
 		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream);
-
-		// Walks down the root and allocates the necessary memory in order to have each directory saved separetely
-		template<typename Allocator>
-		void GetRecursiveDirectories(Allocator* allocator, const wchar_t* root, CapacityStream<const wchar_t*>& directories_paths);
-
-		// Walks down the root and allocates the necessary memory in a single chunk that can then easily be discarded
-		template<typename Allocator>
-		void GetRecursiveDirectoriesBatchedAllocation(Allocator* allocator, const wchar_t* root, CapacityStream<const wchar_t*>& directories_paths);
-
-		// Walks down the root and allocates the necessary memory in order to have each directory saved separetely
-		template<typename Allocator>
-		void GetRecursiveDirectories(Allocator* allocator, const wchar_t* root, ResizableStream<const wchar_t*, Allocator>& directories_paths);
-
-		// Walks down the root and allocates the necessary memory in a single chunk that can then easily be discarded
-		template<typename Allocator>
-		void GetRecursiveDirectoriesBatchedAllocation(Allocator* allocator, const wchar_t* root, ResizableStream<const wchar_t*, Allocator>& directories_paths);
-
-		// Walks down the root and allocates the necessary memory in order to have each file saved separetely
-		template<typename Allocator>
-		void GetDirectoryFiles(Allocator* allocator, const wchar_t* directory, CapacityStream<const wchar_t*>& file_paths);
-
-		// Walks down the root and allocates the necessary memory in a single chunk that can then easily be discarded
-		template<typename Allocator>
-		void GetDirectoryFilesBatchedAllocation(Allocator* allocator, const wchar_t* directory, CapacityStream<const wchar_t*>& file_paths);
-
-		// Walks down the root and allocates the necessary memory in order to have each directory saved separetely
-		template<typename Allocator>
-		void GetDirectoryFiles(Allocator* allocator, const wchar_t* directory, ResizableStream<const wchar_t*, Allocator>& file_paths);
-
-		// Walks down the root and allocates the necessary memory in a single chunk that can then easily be discarded
-		template<typename Allocator>
-		void GetDirectoryFilesBatchedAllocation(Allocator* allocator, const wchar_t* directory, ResizableStream<const wchar_t*, Allocator>& file_paths);
 
 		template<typename Allocator>
 		ECSENGINE_API void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8);
@@ -207,17 +179,14 @@ namespace ECSEngine {
 		template<typename Stream>
 		ECSENGINE_API void MakeDescendingSequence(Stream stream);
 
-		template<typename IndexStream>
-		ECSENGINE_API void CopyStreamWithMask(void* ECS_RESTRICT buffer, const void* ECS_RESTRICT data, size_t data_element_size, IndexStream indices);
-
+		// The size of data must contain the byte size of the element
 		template<typename IndexStream>
 		ECSENGINE_API void CopyStreamWithMask(void* ECS_RESTRICT buffer, Stream<void> data, IndexStream indices);
 
+		// The size of data must contain the byte size of the element
+		// Reports if an error occurred during writing
 		template<typename IndexStream>
-		ECSENGINE_API void CopyStreamWithMask(std::ofstream& stream, const void* ECS_RESTRICT data, size_t data_element_size, IndexStream indices);
-
-		template<typename IndexStream>
-		ECSENGINE_API void CopyStreamWithMask(std::ofstream& stream, Stream<void> data, IndexStream indices);
+		ECSENGINE_API bool CopyStreamWithMask(ECS_FILE_HANDLE file, Stream<void> data, IndexStream indices);
 
 	}
 

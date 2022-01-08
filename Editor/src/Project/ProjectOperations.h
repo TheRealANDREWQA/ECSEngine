@@ -1,56 +1,13 @@
-// ECS_REFLECT
 #pragma once
+#include "editorpch.h"
 #include "ECSEngineInternal.h"
 #include "ECSEngineUI.h"
 #include "../OSFunctions.h"
+#include "ProjectFile.h"
+#include "ProjectFolders.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
-
-constexpr const wchar_t* PROJECT_ASSETS_RELATIVE_PATH = L"Assets";
-constexpr const char* PROJECT_ASSETS_RELATIVE_PATH_ASCII = "Assets";
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH = L"Modules";
-constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII = "Modules";
-constexpr const wchar_t* PROJECT_DEBUG_RELATIVE_PATH = L"Debug";
-constexpr const char* PROJECT_DEBUG_RELATIVE_PATH_ASCII = "Debug";
-
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DEBUG = L"Modules\\Debug";
-constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_DEBUG = "Modules\\Debug";
-
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_RELEASE = L"Modules\\Release";
-constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_RELEASE = "Modules\\Release";
-
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION = L"Modules\\Distribution";
-constexpr const char* PROJECT_MODULES_RELATIVE_PATH_ASCII_DISTRIBUTION = "Modules\\Distribution";
-
-constexpr const wchar_t PROJECT_EXTENSION[] = L".ecsproj";
-constexpr const wchar_t* PROJECT_DIRECTORIES[] = {
-	L"Debug",
-	L"UI",
-	PROJECT_ASSETS_RELATIVE_PATH,
-	PROJECT_MODULES_RELATIVE_PATH,
-	PROJECT_MODULES_RELATIVE_PATH_DEBUG,
-	PROJECT_MODULES_RELATIVE_PATH_RELEASE,
-	PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION
-};
-
-constexpr const wchar_t* PROJECT_MODULE_RELATIVE_PATHS[] = {
-	PROJECT_MODULES_RELATIVE_PATH_DEBUG,
-	PROJECT_MODULES_RELATIVE_PATH_RELEASE,
-	PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION
-};
-
-struct ECS_REFLECT ProjectFile {
-	char version_description[32];
-	char metadata[32];
-	char platform_description[32];
-	size_t version;
-	size_t platform;
-	WorldDescriptor ECS_REGISTER_ONLY_NAME_REFLECT(120) world_descriptor;
-	CapacityStream<wchar_t> project_name;
-	CapacityStream<wchar_t> source_dll_name;
-	CapacityStream<wchar_t> path;
-};
 
 struct EditorState;
 
@@ -77,8 +34,7 @@ void CreateProjectWizardDestroyWindowAction(ActionData* action_data);
 
 void CreateProjectWizardAction(ActionData* action_data);
 
-template<bool initialize>
-void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor);
+void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
 void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data);
 
@@ -89,16 +45,6 @@ bool CheckProjectIntegrity(const ProjectFile* project);
 void DeallocateCurrentProject(EditorState* editor_state);
 
 bool ExistsProjectInFolder(const ProjectFile* project_file);
-
-// It will make the concatenation between path and project name
-void GetProjectFilePath(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count = 256);
-
-// It will make the concatenation between path and project name
-void GetProjectFilePath(CapacityStream<wchar_t>& characters, const ProjectFile* project_file);
-
-void GetProjectDebugFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path);
-
-void GetProjectDebugFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path);
 
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count = 256);
 

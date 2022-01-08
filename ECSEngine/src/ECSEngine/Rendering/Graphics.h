@@ -6,6 +6,7 @@
 #include "../Utilities/BasicTypes.h"
 #include "ShaderReflection.h"
 #include "../Allocators/MemoryManager.h"
+#include "../Containers/AtomicStream.h"
 
 #define ECS_PIXEL_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Pixel\\" TEXT(STRING(name.hlsl))
 #define ECS_VERTEX_SHADER_SOURCE(name) L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src\\ECSEngine\\Rendering\\Shaders\\Vertex\\" TEXT(STRING(name.hlsl))
@@ -21,6 +22,7 @@ namespace ECSEngine {
 #ifdef ECSENGINE_DIRECTX11
 
 #define ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND 4
+#define ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR 1.5f
 
 	struct ECSENGINE_API GraphicsDescriptor {
 		uint2 window_size;
@@ -30,9 +32,10 @@ namespace ECSEngine {
 	};
 
 	// Default arguments all but width; initial_data can be set to fill the texture
+	// The initial data is a stream of Stream<void> for each mip map data
 	struct GraphicsTexture1DDescriptor {
 		unsigned int width;
-		const void* initial_data = nullptr;
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
 		DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
@@ -42,15 +45,11 @@ namespace ECSEngine {
 		unsigned int misc_flag = 0u;
 	};
 
-	// Size must always be initialized; for initial_data, memory_pitch and memory_slice_pitch should
-	// be set; the rest are defaults
+	// Size must always be initialized;
+	// The initial data is a stream of Stream<void> for each mip map data
 	struct GraphicsTexture2DDescriptor {
 		uint2 size;
-		struct {
-			const void* initial_data = nullptr;
-			unsigned int memory_pitch = 0;
-			unsigned int memory_slice_pitch = 0;
-		};
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
 		DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
@@ -62,12 +61,11 @@ namespace ECSEngine {
 		unsigned int sampler_quality = 0u;
 	};
 
-	// Size must be set; initial_data can be set to give initial values; the rest are defaults
+	// Size must be set
+	// The initial data is a stream of Stream<void> for each mip map data
 	struct ECSENGINE_API GraphicsTexture3DDescriptor {
 		uint3 size;
-		struct {
-			const void* initial_data = nullptr;
-		};
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
 		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
@@ -77,13 +75,10 @@ namespace ECSEngine {
 		unsigned int misc_flag = 0u;
 	};
 
+	// The initial data is a stream of Stream<void> for each mip map data
 	struct ECSENGINE_API GraphicsTextureCubeDescriptor {
 		uint2 size;
-		struct {
-			const void* initial_data = nullptr;
-			unsigned int memory_pitch = 0;
-			unsigned int memory_slice_pitch = 0;
-		};
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
 		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
 		unsigned int mip_levels = 0u;
 		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
@@ -93,18 +88,18 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API GraphicsPipelineBlendState {
-		ID3D11BlendState* blend_state;
+		BlendState blend_state;
 		float blend_factors[4];
 		unsigned int sample_mask;
 	};
 
 	struct ECSENGINE_API GraphicsPipelineDepthStencilState {
-		ID3D11DepthStencilState* depth_stencil_state;
+		DepthStencilState depth_stencil_state;
 		unsigned int stencil_ref;
 	};
 
 	struct ECSENGINE_API GraphicsPipelineRasterizerState {
-		ID3D11RasterizerState* rasterizer_state;
+		RasterizerState rasterizer_state;
 	};
 
 	struct ECSENGINE_API GraphicsPipelineRenderState {
@@ -166,8 +161,178 @@ namespace ECSEngine {
 		SamplerState pixel_sampler;
 	};
 
+	enum ECS_GRAPHICS_RESOURCE_TYPE {
+		ECS_GRAPHICS_RESOURCE_VERTEX_SHADER,
+		ECS_GRAPHICS_RESOURCE_PIXEL_SHADER,
+		ECS_GRAPHICS_RESOURCE_DOMAIN_SHADER,
+		ECS_GRAPHICS_RESOURCE_HULL_SHADER,
+		ECS_GRAPHICS_RESOURCE_GEOMETRY_SHADER,
+		ECS_GRAPHICS_RESOURCE_COMPUTE_SHADER,
+		ECS_GRAPHICS_RESOURCE_INDEX_BUFFER,
+		ECS_GRAPHICS_RESOURCE_INPUT_LAYOUT,
+		ECS_GRAPHICS_RESOURCE_CONSTANT_BUFFER,
+		ECS_GRAPHICS_RESOURCE_VERTEX_BUFFER,
+		ECS_GRAPHICS_RESOURCE_RESOURCE_VIEW,
+		ECS_GRAPHICS_RESOURCE_SAMPLER_STATE,
+		ECS_GRAPHICS_RESOURCE_UA_VIEW,
+		ECS_GRAPHICS_RESOURCE_GRAPHICS_CONTEXT,
+		ECS_GRAPHICS_RESOURCE_RENDER_TARGET_VIEW,
+		ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_VIEW,
+		ECS_GRAPHICS_RESOURCE_STANDARD_BUFFER,
+		ECS_GRAPHICS_RESOURCE_STRUCTURED_BUFFER,
+		ECS_GRAPHICS_RESOURCE_UA_BUFFER,
+		ECS_GRAPHICS_RESOURCE_INDIRECT_BUFFER,
+		ECS_GRAPHICS_RESOURCE_APPEND_BUFFER,
+		ECS_GRAPHICS_RESOURCE_CONSUME_BUFFER,
+		ECS_GRAPHICS_RESOURCE_TEXTURE_1D,
+		ECS_GRAPHICS_RESOURCE_TEXTURE_2D,
+		ECS_GRAPHICS_RESOURCE_TEXTURE_3D,
+		ECS_GRAPHICS_RESOURCE_TEXTURE_CUBE,
+		ECS_GRAPHICS_RESOURCE_BLEND_STATE,
+		ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE,
+		ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE,
+		ECS_GRAPHICS_RESOURCE_COMMAND_LIST
+	};
+
+	struct GraphicsInternalResource {
+		inline GraphicsInternalResource& operator = (const GraphicsInternalResource& other) {
+			interface_pointer = other.interface_pointer;
+			type = other.type;
+			is_deleted.store(other.is_deleted.load(std::memory_order_acquire), std::memory_order_release);
+
+			return *this;
+		}
+
+		void* interface_pointer;
+		ECS_GRAPHICS_RESOURCE_TYPE type;
+		std::atomic<bool> is_deleted;
+	};
+
+#define ECS_GRAPHICS_ASSERT_GRAPHICS_RESOURCE static_assert(std::is_same_v<Resource, VertexBuffer> || std::is_same_v<Resource, IndexBuffer> || std::is_same_v<Resource, VertexShader> \
+	|| std::is_same_v<Resource, InputLayout> || std::is_same_v<Resource, PixelShader> || std::is_same_v<Resource, GeometryShader> \
+		|| std::is_same_v<Resource, DomainShader> || std::is_same_v<Resource, HullShader> || std::is_same_v<Resource, ComputeShader> \
+		|| std::is_same_v<Resource, ConstantBuffer> || std::is_same_v<Resource, ResourceView> || std::is_same_v<Resource, SamplerState> \
+		|| std::is_same_v<Resource, Texture1D> || std::is_same_v<Resource, Texture2D> || std::is_same_v<Resource, Texture3D> \
+		|| std::is_same_v<Resource, TextureCube> || std::is_same_v<Resource, RenderTargetView> || std::is_same_v<Resource, DepthStencilView> \
+		|| std::is_same_v<Resource, StandardBuffer> || std::is_same_v<Resource, StructuredBuffer> || std::is_same_v<Resource, IndirectBuffer> \
+		|| std::is_same_v<Resource, UABuffer> || std::is_same_v<Resource, AppendStructuredBuffer> || std::is_same_v<Resource, ConsumeStructuredBuffer> \
+		|| std::is_same_v<Resource, UAView> || std::is_same_v<Resource, BlendState> || std::is_same_v<Resource, RasterizerState> \
+		|| std::is_same_v<Resource, DepthStencilState> || std::is_same_v<Resource, CommandList>);
+
+	template<typename Resource>
+	ECS_GRAPHICS_RESOURCE_TYPE GetGraphicsResourceType(Resource resource) {
+		if constexpr (std::is_same_v<Resource, BlendState>) {
+			return ECS_GRAPHICS_RESOURCE_BLEND_STATE;
+		}
+		else if constexpr (std::is_same_v<Resource, RasterizerState>) {
+			return ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE;
+		}
+		else if constexpr (std::is_same_v<Resource, DepthStencilState>) {
+			return ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE;
+		}
+		else if constexpr (std::is_same_v<Resource, CommandList>) {
+			return ECS_GRAPHICS_RESOURCE_COMMAND_LIST;
+		}
+		else if constexpr (std::is_same_v<Resource, GraphicsContext*>) {
+			return ECS_GRAPHICS_RESOURCE_GRAPHICS_CONTEXT;
+		}
+		else if constexpr (std::is_same_v<Resource, VertexShader>) {
+			return ECS_GRAPHICS_RESOURCE_VERTEX_SHADER;
+		}
+		else if constexpr (std::is_same_v<Resource, PixelShader>) {
+			return ECS_GRAPHICS_RESOURCE_COMPUTE_SHADER;
+		}
+		else if constexpr (std::is_same_v<Resource, GeometryShader>) {
+			return ECS_GRAPHICS_RESOURCE_GEOMETRY_SHADER;
+		}
+		else if constexpr (std::is_same_v<Resource, HullShader>) {
+			return ECS_GRAPHICS_RESOURCE_HULL_SHADER;
+		}
+		else if constexpr (std::is_same_v<Resource, DomainShader>) {
+			return ECS_GRAPHICS_RESOURCE_DOMAIN_SHADER;
+		}
+		else if constexpr (std::is_same_v<Resource, ComputeShader>) {
+			return ECS_GRAPHICS_RESOURCE_COMPUTE_SHADER;
+		}
+		else if constexpr (std::is_same_v<Resource, IndexBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_INDEX_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, VertexBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_VERTEX_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, ConstantBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_CONSTANT_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, StandardBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_STANDARD_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, StructuredBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_STRUCTURED_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, UABuffer>) {
+			return ECS_GRAPHICS_RESOURCE_UA_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, IndirectBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_INDIRECT_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, AppendStructuredBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_APPEND_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, ConsumeStructuredBuffer>) {
+			return ECS_GRAPHICS_RESOURCE_CONSUME_BUFFER;
+		}
+		else if constexpr (std::is_same_v<Resource, InputLayout>) {
+			return ECS_GRAPHICS_RESOURCE_INPUT_LAYOUT;
+		}
+		else if constexpr (std::is_same_v<Resource, SamplerState>) {
+			return ECS_GRAPHICS_RESOURCE_SAMPLER_STATE;
+		}
+		else if constexpr (std::is_same_v<Resource, UAView>) {
+			return ECS_GRAPHICS_RESOURCE_UA_VIEW;
+		}
+		else if constexpr (std::is_same_v<Resource, RenderTargetView>) {
+			return ECS_GRAPHICS_RESOURCE_RENDER_TARGET_VIEW;
+		}
+		else if constexpr (std::is_same_v<Resource, ResourceView>) {
+			return ECS_GRAPHICS_RESOURCE_RESOURCE_VIEW;
+		}
+		else if constexpr (std::is_same_v<Resource, DepthStencilView>) {
+			return ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_VIEW;
+		}
+		else if constexpr (std::is_same_v<Resource, Texture1D>) {
+			return ECS_GRAPHICS_RESOURCE_TEXTURE_1D;
+		}
+		else if constexpr (std::is_same_v<Resource, Texture2D>) {
+			return ECS_GRAPHICS_RESOURCE_TEXTURE_2D;
+		}
+		else if constexpr (std::is_same_v<Resource, Texture3D>) {
+			return ECS_GRAPHICS_RESOURCE_TEXTURE_3D;
+		}
+		else if constexpr (std::is_same_v<Resource, TextureCube>) {
+			return ECS_GRAPHICS_RESOURCE_TEXTURE_CUBE;
+		}
+		else {
+			static_assert(false);
+		}
+	}
+
+	template<typename Resource>
+	void* GetGraphicsResourceInterface(Resource resource) {
+		if constexpr (std::is_same_v<Resource, GraphicsContext*>) {
+			return resource;
+		}
+		else if constexpr (std::is_same_v<Resource, ID3D11Resource*>) {
+			return resource;
+		}
+		else {
+			return resource.Interface();
+		}
+	}
+
+	ECSENGINE_API MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager);
+
 	/* It has an immediate and a deferred context. The deferred context can be used to generate CommandLists */
-	class ECSENGINE_API Graphics
+	struct ECSENGINE_API Graphics
 	{
 	public:
 		Graphics(HWND hWnd, const GraphicsDescriptor* descriptor);
@@ -259,6 +424,12 @@ namespace ECSEngine {
 
 		void BindComputeUAViews(Stream<UAView> views, UINT start_slot = 0u);
 
+		void BindRasterizerState(RasterizerState state);
+
+		void BindDepthStencilState(DepthStencilState state, UINT stencil_ref = 0);
+
+		void BindBlendState(BlendState state);
+
 		void BindRenderTargetViewFromInitialViews();
 
 		void BindRenderTargetViewFromInitialViews(GraphicsContext* context);
@@ -288,63 +459,64 @@ namespace ECSEngine {
 		// ----------------------------------------------- Component Creation ----------------------------------------------------
 
 		// It will create an empty index buffer - must be populated afterwards
-		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, D3D11_USAGE usage = D3D11_USAGE_DEFAULT, unsigned int cpu_access = 0);
+		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, bool temporary = false, D3D11_USAGE usage = D3D11_USAGE_DEFAULT, unsigned int cpu_access = 0);
 
-		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, const void* data, D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, unsigned int cpu_access = 0);
+		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, const void* data, bool temporary = false, D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, unsigned int cpu_access = 0);
 
-		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices, bool temporary = false);
 
-		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices, bool temporary = false);
 
-		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices, bool temporary = false);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		PixelShader CreatePixelShader(Stream<void> byte_code);
+		PixelShader CreatePixelShader(Stream<void> byte_code, bool temporary = false);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		PixelShader CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
+		PixelShader CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		VertexShader CreateVertexShader(Stream<void> byte_code);
+		VertexShader CreateVertexShader(Stream<void> byte_code, bool temporary = false);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		VertexShader CreateVertexShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
+		VertexShader CreateVertexShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		DomainShader CreateDomainShader(Stream<void> byte_code);
+		DomainShader CreateDomainShader(Stream<void> byte_code, bool temporary = false);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		DomainShader CreateDomainShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
+		DomainShader CreateDomainShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		HullShader CreateHullShader(Stream<void> byte_code);
+		HullShader CreateHullShader(Stream<void> byte_code, bool temporary = false);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		HullShader CreateHullShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
+		HullShader CreateHullShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		GeometryShader CreateGeometryShader(Stream<void> byte_code);
+		GeometryShader CreateGeometryShader(Stream<void> byte_code, bool temporary = false);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		GeometryShader CreateGeometryShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
+		GeometryShader CreateGeometryShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
 
 		// No source code path will be assigned - so no reflection can be done on it
-		ComputeShader CreateComputeShader(Stream<void> path);
+		ComputeShader CreateComputeShader(Stream<void> path, bool temporary = false);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		ComputeShader CreateComputeShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options = {});
+		ComputeShader CreateComputeShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
 
-		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader);
+		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader, bool temporary = false);
 
 		VertexBuffer CreateVertexBuffer(
 			size_t element_size, 
 			size_t element_count, 
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC, 
 			unsigned int cpuFlags = D3D11_CPU_ACCESS_WRITE, 
 			unsigned int miscFlags = 0
@@ -354,6 +526,7 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			const void* buffer,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuFlags = 0,
 			unsigned int miscFlags = 0
@@ -362,6 +535,7 @@ namespace ECSEngine {
 		ConstantBuffer CreateConstantBuffer(
 			size_t byte_size,
 			const void* buffer,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
@@ -369,6 +543,7 @@ namespace ECSEngine {
 
 		ConstantBuffer CreateConstantBuffer(
 			size_t byte_size,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
@@ -377,6 +552,7 @@ namespace ECSEngine {
 		StandardBuffer CreateStandardBuffer(
 			size_t element_size,
 			size_t element_count,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
@@ -386,6 +562,7 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			const void* data,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
 			unsigned int miscFlags = 0
@@ -394,6 +571,7 @@ namespace ECSEngine {
 		StructuredBuffer CreateStructuredBuffer(
 			size_t element_size,
 			size_t element_count,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
@@ -403,6 +581,7 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			const void* data,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
 			unsigned int miscFlags = 0
@@ -411,6 +590,7 @@ namespace ECSEngine {
 		UABuffer CreateUABuffer(
 			size_t element_size,
 			size_t element_count,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
 			unsigned int miscFlags = 0
@@ -420,90 +600,101 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			const void* data,
+			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
 			unsigned int miscFlags = 0
 		);
 
-		IndirectBuffer CreateIndirectBuffer();
+		IndirectBuffer CreateIndirectBuffer(bool temporary = false);
 
-		AppendStructuredBuffer CreateAppendStructuredBuffer(size_t element_size, size_t element_count);
+		AppendStructuredBuffer CreateAppendStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false);
 
-		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count);
+		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false);
 
-		SamplerState CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor);
+		SamplerState CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor, bool temporary = false);
 
-		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor);
+		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor, bool temporary = false);
 
-		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor);
+		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor, bool temporary = false);
 
-		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor);
+		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor, bool temporary = false);
 
-		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor);
+		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor, bool temporary = false);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			Texture1D texture,
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
-			unsigned int mip_levels = -1
+			unsigned int mip_levels = -1,
+			bool temporary = false
 		);
 
-		ResourceView CreateTextureShaderViewResource(Texture1D texture);
+		ResourceView CreateTextureShaderViewResource(Texture1D texture, bool temporary = false);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			Texture2D texture,
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
-			unsigned int mip_levels = -1
+			unsigned int mip_levels = -1,
+			bool temporary = false
 		);
 
-		ResourceView CreateTextureShaderViewResource(Texture2D texture);
+		ResourceView CreateTextureShaderViewResource(Texture2D texture, bool temporary = false);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			Texture3D texture,
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
-			unsigned int mip_levels = -1
+			unsigned int mip_levels = -1,
+			bool temporary = false
 		);
 
-		ResourceView CreateTextureShaderViewResource(Texture3D texture);
+		ResourceView CreateTextureShaderViewResource(Texture3D texture, bool temporary = false);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			TextureCube texture, 
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT, 
 			unsigned int most_detailed_mip = 0u, 
-			unsigned int mip_levels = -1
+			unsigned int mip_levels = -1,
+			bool temporary = false
 		);
 
-		ResourceView CreateTextureShaderViewResource(TextureCube texture);
+		ResourceView CreateTextureShaderViewResource(TextureCube texture, bool temporary = false);
 
-		RenderTargetView CreateRenderTargetView(Texture2D texture, unsigned int mip_level = 0);
+		RenderTargetView CreateRenderTargetView(Texture2D texture, unsigned int mip_level = 0, bool temporary = false);
 
-		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0);
+		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0, bool temporary = false);
 
-		DepthStencilView CreateDepthStencilView(Texture2D texture);
+		DepthStencilView CreateDepthStencilView(Texture2D texture, bool temporary = false);
 
-		ResourceView CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format);
+		ResourceView CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format, bool temporary = false);
 
-		ResourceView CreateBufferView(StructuredBuffer buffer);
+		ResourceView CreateBufferView(StructuredBuffer buffer, bool temporary = false);
 
-		UAView CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element = 0);
+		UAView CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element = 0, bool temporary = false);
 
-		UAView CreateUAView(AppendStructuredBuffer buffer);
+		UAView CreateUAView(AppendStructuredBuffer buffer, bool temporary = false);
 
-		UAView CreateUAView(ConsumeStructuredBuffer buffer);
+		UAView CreateUAView(ConsumeStructuredBuffer buffer, bool temporary = false);
 
-		UAView CreateUAView(IndirectBuffer buffer);
+		UAView CreateUAView(IndirectBuffer buffer, bool temporary = false);
 
-		UAView CreateUAView(Texture1D texture, unsigned int mip_slice = 0);
+		UAView CreateUAView(Texture1D texture, unsigned int mip_slice = 0, bool temporary = false);
 
-		UAView CreateUAView(Texture2D texture, unsigned int mip_slice = 0);
+		UAView CreateUAView(Texture2D texture, unsigned int mip_slice = 0, bool temporary = false);
 
-		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0);
+		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0, bool temporary = false);
+
+		RasterizerState CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary = false);
+
+		DepthStencilState CreateDepthStencilState(const D3D11_DEPTH_STENCIL_DESC& descriptor, bool temporary = false);
+
+		BlendState CreateBlendState(const D3D11_BLEND_DESC& descriptor, bool temporary = false);
 
 #pragma endregion
 
@@ -598,7 +789,7 @@ namespace ECSEngine {
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
 		// Path nullptr means take the path from the shader
-		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code);
+		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code, bool temporary = false);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
 		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers);
@@ -614,6 +805,105 @@ namespace ECSEngine {
 #pragma region Getters and other operations
 		
 		// -------------------------------------------- Getters and other operations --------------------------------------------
+
+		// It does not acquire the lock - call this if inside a lock
+		// Can be called only from a single thread
+		void CommitInternalResourcesToBeFreed();
+
+#if defined(ECSENGINE_DEBUG) || defined(ECSENGINE_RELEASE)
+#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE(graphics, resource) graphics->AddInternalResource(resource, ECS_LOCATION)
+#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE_TRACK(graphics, resource, temporary) if (!temporary.temporary) graphics->AddInternalResource(resource, temporary.file, temporary.line)
+#else
+#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE(graphics, resource) graphics->AddInternalResource(resource)
+#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE_TRACK(graphics, resource, temporary) if (!temporary.temporary) graphics->AddInternalResource(resource)
+#endif
+
+		template<typename Resource>
+		void AddInternalResource(Resource resource) {
+			ECS_GRAPHICS_RESOURCE_TYPE resource_type = GetGraphicsResourceType(resource);
+			void* interface_ptr = GetGraphicsResourceInterface(resource);
+
+			GraphicsInternalResource internal_res = { 
+				interface_ptr,
+				resource_type,
+				false
+			};
+
+			unsigned int write_index = m_internal_resources.RequestInt(1);
+			if (write_index >= m_internal_resources.capacity) {
+				bool do_resizing = m_internal_resources_lock.try_lock();
+				// The first one to acquire the semaphore - do the resizing or the flush of removals
+				if (do_resizing) {
+					// Spin wait while there are still readers
+					unsigned int read_count = m_internal_resources_reader_count.load(ECS_RELAXED);
+					while (read_count > 0) {
+						read_count = m_internal_resources_reader_count.load(ECS_RELAXED);
+						_mm_pause();
+					}
+
+					// Commit the removals
+					CommitInternalResourcesToBeFreed();
+
+					// Do the resizing if no resources were deleted from the main array
+					if (m_internal_resources.size.load(ECS_RELAXED) >= m_internal_resources.capacity) {
+						void* allocation = m_allocator->Allocate(sizeof(GraphicsInternalResource) * (m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR));
+						memcpy(allocation, m_internal_resources.buffer, sizeof(GraphicsInternalResource) * m_internal_resources.capacity);
+						m_allocator->Deallocate(m_internal_resources.buffer);
+						m_internal_resources.InitializeFromBuffer(allocation, m_internal_resources.capacity, m_internal_resources.capacity * ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR);
+					}
+					write_index = m_internal_resources.RequestInt(1);
+					m_internal_resources[write_index] = internal_res;
+
+					m_internal_resources_lock.unlock();
+				}
+				// Other thread got to do the resizing or freeing of the resources - stall until it finishes
+				else {
+					while (m_internal_resources_lock.is_locked()) {
+						_mm_pause();
+					}
+					// Rerequest the position
+					write_index = m_internal_resources.RequestInt(1);
+					m_internal_resources[write_index] = internal_res;
+				}
+			}
+			// Write into the internal resources
+			else {
+				m_internal_resources[write_index] = internal_res;
+			}
+		}
+
+		// Only for basic resources
+		template<typename Resource>
+		void FreeResource(Resource resource) {
+			void* interface_pointer = GetGraphicsResourceInterface(resource);
+			RemoveResourceFromTracking(interface_pointer);
+
+			unsigned int count = -1;
+			if constexpr (std::is_same_v<Resource, GraphicsContext*>) {
+				count = resource->Release();
+			}
+			else if constexpr (std::is_same_v<Resource, ID3D11Resource*>) {
+				count = resource->Release();
+			}
+			else {
+				//ECS_GRAPHICS_ASSERT_GRAPHICS_RESOURCE;
+				count = resource.Release();
+			}
+
+			ECS_ASSERT(count < 100);
+		}
+
+		// It will assert FALSE if it doesn't exist
+		void RemoveResourceFromTracking(void* resource);
+
+		// If it doesn't find the resource, it does nothing
+		void RemovePossibleResourceFromTracking(void* resource);
+		
+		void FreeShaderView(ResourceView view);
+
+		void FreeUAView(UAView view);
+
+		void FreeRenderView(RenderTargetView view);
 
 		void CreateInitialRenderTargetView(bool gamma_corrected);
 
@@ -667,21 +957,36 @@ namespace ECSEngine {
 
 	//private:
 		uint2 m_window_size;
-		Microsoft::WRL::ComPtr<GraphicsDevice> m_device;
-		Microsoft::WRL::ComPtr<IDXGISwapChain> m_swap_chain;
-		Microsoft::WRL::ComPtr<GraphicsContext> m_context;
-		Microsoft::WRL::ComPtr<GraphicsContext> m_deferred_context;
+		GraphicsDevice* m_device;
+		IDXGISwapChain* m_swap_chain;
+		GraphicsContext* m_context;
+		GraphicsContext* m_deferred_context;
 		RenderTargetView m_target_view;
 		RenderTargetView m_bound_render_targets[ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND];
-		Stream<RenderTargetView> m_bound_targets;
+		size_t m_bound_render_target_count;
 		DepthStencilView m_depth_stencil_view;
 		DepthStencilView m_current_depth_stencil;
-		Microsoft::WRL::ComPtr<ID3D11BlendState> m_blend_disabled;
-		Microsoft::WRL::ComPtr<ID3D11BlendState> m_blend_enabled;
+		BlendState m_blend_disabled;
+		BlendState m_blend_enabled;
 		ShaderReflection m_shader_reflection;
 		MemoryManager* m_allocator;
 		containers::CapacityStream<GraphicsShaderHelper> m_shader_helpers;
+		// Keep a track of the created resources, for leaks and for winking out the device
+		// For some reason DX11 does not provide a winking method for the device!!!!!!!!
+		containers::AtomicStream<GraphicsInternalResource> m_internal_resources;
+	private:
+		char padding_1[ECS_CACHE_LINE_SIZE - sizeof(std::atomic<unsigned int>)];
+	public:
+		std::atomic<unsigned int> m_internal_resources_reader_count;
+	private:
+		char padding_2[ECS_CACHE_LINE_SIZE - sizeof(SpinLock)];
+	public:
+		SpinLock m_internal_resources_lock;
 	};
+
+	ECSENGINE_API void DestroyGraphics(Graphics* graphics);
+
+	// -------------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot = 0u);
 
@@ -772,6 +1077,12 @@ namespace ECSEngine {
 	ECSENGINE_API void BindComputeUAView(UAView view, GraphicsContext* context, UINT start_slot = 0u);
 
 	ECSENGINE_API void BindComputeUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot = 0u);
+
+	ECSENGINE_API void BindRasterizerState(RasterizerState state, GraphicsContext* context);
+
+	ECSENGINE_API void BindDepthStencilState(DepthStencilState state, GraphicsContext* context, UINT stencil_ref = 0);
+
+	ECSENGINE_API void BindBlendState(BlendState state, GraphicsContext* context);
 
 	ECSENGINE_API void BindRenderTargetView(RenderTargetView render_view, DepthStencilView depth_stencil_view, GraphicsContext* context);
 

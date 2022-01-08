@@ -22,7 +22,7 @@ namespace ECSEngine {
 
 			Stack& operator = (const Stack& other) = default;
 
-			unsigned int GetElementCount() const {
+			unsigned int GetSize() const {
 				return m_stack.size;
 			}
 
@@ -123,6 +123,15 @@ namespace ECSEngine {
 				size_t memory_size = MemoryOf(capacity);
 				void* allocation = allocator->Allocate(memory_size, alignof(T));
 				InitializeFromBuffer(allocation, capacity);
+			}
+
+			// Returns the i'th element - 0 means the top most one (the one that would be returned by peek)
+			// and increasingly away from it
+			T GetElement(unsigned int index) const {
+				if (m_last_item < index - 1) {
+					return m_stack[m_stack.size + m_last_item - index - 1];
+				}
+				return m_stack[m_last_item - index - 1];
 			}
 
 		//private:

@@ -982,158 +982,65 @@ namespace ECSEngine {
 
 		// Create the aggregate mesh
 		
-		// Positions
-		if (gltf_meshes[0].positions.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_POSITION;
+		auto create_vertex_type = [&](unsigned int sizeof_type, ECS_MESH_INDEX index, unsigned char stream_byte_offset) {
+			mesh.mapping[mesh.mapping_count] = index;
 			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof_type, total_vertex_buffer_count, {}, D3D11_USAGE_DEFAULT, 0);
 			size_t vertex_buffer_offset = 0;
 
 			for (size_t index = 0; index < count; index++) {
+				void** stream_buffer = (void**)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset);
+				size_t* stream_size = (size_t*)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset + sizeof(void*));
+				size_t converted_stream_size = *stream_size * sizeof_type;
+
 				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].positions.size;
+				size_t buffer_size = converted_stream_size;
 				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(float3),
-					buffer_size, 
-					gltf_meshes[sorted_indices[index]].positions.buffer
+					sizeof_type,
+					buffer_size,
+					*stream_buffer
 				);
 				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
 				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
+				graphics->RemovePossibleResourceFromTracking(current_buffer.Interface());
+				current_buffer.Release();
 			}
 			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+		};
+
+		// Positions
+		if (gltf_meshes[0].positions.buffer != nullptr) {
+			create_vertex_type(sizeof(float3), ECS_MESH_POSITION, offsetof(GLTFMesh, positions));
 		}
 
 		// Normals
 		if (gltf_meshes[0].normals.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_NORMAL;
-			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
-			size_t vertex_buffer_offset = 0;
-
-			for (size_t index = 0; index < count; index++) {
-				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].normals.size;
-				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(float3),
-					buffer_size,
-					gltf_meshes[sorted_indices[index]].normals.buffer
-				);
-				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
-				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
-			}
-			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			create_vertex_type(sizeof(float3), ECS_MESH_NORMAL, offsetof(GLTFMesh, normals));
 		}
 
 		// UVs
 		if (gltf_meshes[0].uvs.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_UV;
-			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float2), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
-			size_t vertex_buffer_offset = 0;
-
-			for (size_t index = 0; index < count; index++) {
-				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].uvs.size;
-				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(float2),
-					buffer_size,
-					gltf_meshes[sorted_indices[index]].uvs.buffer
-				);
-				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
-				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
-			}
-			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			create_vertex_type(sizeof(float2), ECS_MESH_UV, offsetof(GLTFMesh, uvs));
 		}
 
 		// Vertex Colors
 		if (gltf_meshes[0].colors.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_COLOR;
-			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(Color), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
-			size_t vertex_buffer_offset = 0;
-
-			for (size_t index = 0; index < count; index++) {
-				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].colors.size;
-				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(Color),
-					buffer_size,
-					gltf_meshes[sorted_indices[index]].colors.buffer
-				);
-				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
-				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
-			}
-			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			create_vertex_type(sizeof(Color), ECS_MESH_COLOR, offsetof(GLTFMesh, colors));
 		}
 
 		// Tangents
 		if (gltf_meshes[0].tangents.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_TANGENT;
-			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float3), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
-			size_t vertex_buffer_offset = 0;
-
-			for (size_t index = 0; index < count; index++) {
-				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].tangents.size;
-				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(float3),
-					buffer_size,
-					gltf_meshes[sorted_indices[index]].tangents.buffer
-				);
-				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
-				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
-			}
-			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			create_vertex_type(sizeof(float3), ECS_MESH_TANGENT, offsetof(GLTFMesh, tangents));
 		}
 
 		// Bone weights
 		if (gltf_meshes[0].skin_weights.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_WEIGHT;
-			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(float4), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
-			size_t vertex_buffer_offset = 0;
-
-			for (size_t index = 0; index < count; index++) {
-				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].skin_weights.size;
-				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(float4),
-					buffer_size,
-					gltf_meshes[sorted_indices[index]].skin_weights.buffer
-				);
-				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
-				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
-			}
-			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			create_vertex_type(sizeof(float4), ECS_MESH_BONE_WEIGHT, offsetof(GLTFMesh, skin_weights));
 		}
 
 		// Bone influences
 		if (gltf_meshes[0].skin_influences.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_INFLUENCE;
-			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof(uint4), total_vertex_buffer_count, D3D11_USAGE_DEFAULT, 0);
-			size_t vertex_buffer_offset = 0;
-
-			for (size_t index = 0; index < count; index++) {
-				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = gltf_meshes[sorted_indices[index]].skin_influences.size;
-				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
-					sizeof(uint4),
-					buffer_size,
-					gltf_meshes[sorted_indices[index]].skin_influences.buffer
-				);
-				CopyBufferSubresource(vertex_buffer, vertex_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
-				vertex_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
-			}
-			mesh.vertex_buffers[mesh.mapping_count++] = vertex_buffer;
+			create_vertex_type(sizeof(uint4), ECS_MESH_BONE_INFLUENCE, offsetof(GLTFMesh, skin_influences));
 		}
 
 		// Indices
@@ -1148,7 +1055,8 @@ namespace ECSEngine {
 				IndexBuffer current_buffer = graphics->CreateIndexBuffer(gltf_meshes[sorted_indices[index]].indices);
 				CopyBufferSubresource(mesh.index_buffer, index_buffer_offset, current_buffer, 0, buffer_size, graphics->GetContext());
 				index_buffer_offset += buffer_size;
-				unsigned int reference_count = current_buffer.buffer->Release();
+				graphics->RemovePossibleResourceFromTracking(current_buffer.Interface());
+				current_buffer.Release();
 			}
 		}
 

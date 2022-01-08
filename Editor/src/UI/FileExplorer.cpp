@@ -1,6 +1,7 @@
+#include "editorpch.h"
 #include "FileExplorer.h"
+#include "FileExplorerData.h"
 #include "..\Editor\EditorState.h"
-#include "AssetTypes.h"
 #include "..\HelperWindows.h"
 #include "..\Project\ProjectOperations.h"
 #include "Inspector.h"
@@ -17,8 +18,8 @@ ECS_CONTAINERS;
 constexpr float2 WINDOW_SIZE = float2(1.0f, 0.6f);
 constexpr size_t DOUBLE_CLICK_DURATION = 350;
 constexpr size_t ALLOCATOR_CAPACITY = 10'000;
-constexpr float THUMBNAIL_SIZE = 0.12f;
-constexpr float THUMBNAIL_TO_LABEL_SPACING = 0.03f;
+constexpr float THUMBNAIL_SIZE = 0.115f;
+constexpr float THUMBNAIL_TO_LABEL_SPACING = 0.014f;
 constexpr float TOOLTIP_OFFSET = 0.02f;
 constexpr size_t FILE_FUNCTORS_CAPACITY = 32;
 
@@ -53,10 +54,15 @@ constexpr unsigned int FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES = 1 <
 constexpr unsigned int FILE_EXPLORER_FLAGS_MOVE_SELECTED_FILES = 1 << 2;
 constexpr unsigned int FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES = 1 << 3;
 
+constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_STARTED = 1 << 1;
+constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_ENDED = 1 << 2;
+
 constexpr int COLOR_CUT_ALPHA = 90;
 
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD = ECS_MB * 100;
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 600;
+
+constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 2'000;
 
 enum FILE_RIGHT_CLICK_INDEX {
 	FILE_RIGHT_CLICK_OPEN,
@@ -85,6 +91,8 @@ enum DESELECTION_RIGHT_CLICK_INDEX {
 
 using Hash = HashFunctionMultiplyString;
 
+void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager* allocator, unsigned int thread_count);
+
 void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 	// Deallocate every string stored
 	for (size_t index = 0; index < data->selected_files.size; index++) {
@@ -101,7 +109,7 @@ void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 void FileExplorerResetSelectedFiles(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	FileExplorerResetSelectedFiles(data);
 }
 
@@ -125,13 +133,13 @@ void FileExplorerSetShiftIndices(FileExplorerData* explorer_data, unsigned int i
 }
 
 void FileExplorerSetShiftIndices(EditorState* editor_state, unsigned int index) {
-	FileExplorerSetShiftIndices((FileExplorerData*)editor_state->file_explorer_data, index);
+	FileExplorerSetShiftIndices(editor_state->file_explorer_data, index);
 }
 
 void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	EDITOR_STATE(editor_state);
 
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	data->current_directory.Copy(path);
 	data->current_directory[path.size] = L'\0';
 
@@ -143,13 +151,13 @@ void ChangeFileExplorerDirectory(EditorState* editor_state, Stream<wchar_t> path
 void ChangeFileExplorerFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int index) {
 	EDITOR_STATE(editor_state);
 
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	FileExplorerResetSelectedFiles(data);
 	FileExplorerAllocateSelectedFile(data, path);
 
 	FileExplorerSetShiftIndices(data, index);
 	data->right_click_stream = data->selected_files[0];
-} 
+}
 
 struct SelectableData {
 	bool IsTheSameData(const SelectableData* other) {
@@ -173,14 +181,14 @@ void FileExplorerSetNewFile(EditorState* editor_state, Stream<wchar_t> path, uns
 
 // Returns -1 when it doesn't exist, else the index where it is located
 unsigned int FileExplorerHasSelectedFile(EditorState* editor_state, Stream<wchar_t> path) {
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	return function::IsStringInStream(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size));
 }
 
 void FileExplorerHandleControlPath(EditorState* editor_state, Stream<wchar_t> path) {
 	// Check to see if the path already exists; if it is there, remove it
 	// else add it
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	unsigned int index = FileExplorerHasSelectedFile(editor_state, path);
 	if (index != -1) {
 		data->selected_files.allocator->Deallocate(data->selected_files[index].buffer);
@@ -192,7 +200,7 @@ void FileExplorerHandleControlPath(EditorState* editor_state, Stream<wchar_t> pa
 }
 
 void FileExplorerHandleShiftSelection(EditorState* editor_state, unsigned int index) {
-	FileExplorerData* explorer_data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* explorer_data = editor_state->file_explorer_data;
 	if (explorer_data->ending_shift_index < index || explorer_data->ending_shift_index == -1) {
 		explorer_data->ending_shift_index = index;
 	}
@@ -206,7 +214,7 @@ void FileExplorerSelectableBase(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SelectableData* data = (SelectableData*)_data;
-	FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 		if (mouse_tracker->LeftButton() == MBPRESSED) {
@@ -250,7 +258,7 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 				FileExplorerHandleShiftSelection(data->editor_state, data->index);
 			}
 			else {
-				FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+				FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 				// Check to see if the directory is already selected - if it is, then do nothing in order for 
 				// the drag to work correctly
 				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
@@ -268,7 +276,7 @@ void FileExplorerChangeDirectoryFromFile(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* data = (EditorState*)_data;
-	FileExplorerData* explorer_data = (FileExplorerData*)data->file_explorer_data;
+	FileExplorerData* explorer_data = data->file_explorer_data;
 	FileExplorerSetNewDirectory(data, explorer_data->selected_files[0], -1);
 }
 
@@ -302,9 +310,9 @@ void FileExplorerPasteElements(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 
-	unsigned int* _invalid_files = (unsigned int*)_malloca(sizeof(unsigned int) * data->copied_files.size);
+	unsigned int* _invalid_files = (unsigned int*)ECS_MALLOCA(sizeof(unsigned int) * data->copied_files.size);
 	Stream<unsigned int> invalid_files(_invalid_files, 0);
 
 	// For each path, copy it to the current directory or cut it
@@ -317,8 +325,8 @@ void FileExplorerPasteElements(ActionData* action_data) {
 				current_success = FolderCut(data->copied_files[index], data->current_directory);
 			}
 			else {
-				ECS_FILE_COPY_CODE code = FileCut(data->copied_files[index], data->current_directory, true);
-				if (code == ECS_FILE_COPY_SUCCESS) {
+				ECS_FILE_STATUS_FLAGS code = FileCut(data->copied_files[index], data->current_directory, true);
+				if (code == ECS_FILE_STATUS_OK) {
 					current_success = true;
 				}
 				else {
@@ -340,8 +348,8 @@ void FileExplorerPasteElements(ActionData* action_data) {
 				current_success = FolderCopy(data->copied_files[index], data->current_directory);
 			}
 			else {
-				ECS_FILE_COPY_CODE code = FileCopy(data->copied_files[index], data->current_directory, true);
-				if (code == ECS_FILE_COPY_SUCCESS) {
+				ECS_FILE_STATUS_FLAGS code = FileCopy(data->copied_files[index], data->current_directory, true);
+				if (code == ECS_FILE_STATUS_OK) {
 					current_success = true;
 				}
 				else {
@@ -365,7 +373,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 		}
 		total_buffer_size += 8;
 
-		char* _error_message = (char*)_malloca(sizeof(char) * total_buffer_size);
+		char* _error_message = (char*)ECS_MALLOCA(sizeof(char) * total_buffer_size);
 		CapacityStream<char> error_message(_error_message, 0, total_buffer_size);
 		error_message.Copy(ToStream(BASE_ERROR_MESSAGE));
 
@@ -375,13 +383,13 @@ void FileExplorerPasteElements(ActionData* action_data) {
 		}
 
 		EditorSetError(editor_state, error_message);
-		_freea(_error_message);
+		ECS_FREEA(_error_message);
 		// Also reset the copied files
 		FileExplorerResetCopiedFiles(data);
 	}
 	data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
 
-	_freea(invalid_files.buffer);
+	ECS_FREEA(invalid_files.buffer);
 }
 
 void FileExplorerCopySelection(ActionData* action_data) {
@@ -446,7 +454,8 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 				for (size_t index = 0; index < valid_copy_files.size; index++) {
 					if (valid_copy_files[index] == copy_index) {
 						valid_copy_files.RemoveSwapBack(index);
-						break;
+						// exit the loop
+						index = valid_copy_files.size;
 					}
 				}
 			}
@@ -510,7 +519,7 @@ void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index
 
 struct ForEachData {
 	EditorState* editor_state;
-	UIDrawer<false>* drawer;
+	UIDrawer* drawer;
 	UIDrawConfig* config;
 	unsigned int element_count;
 	CapacityStream<wchar_t>* mouse_element_path;
@@ -530,8 +539,8 @@ bool FileExplorerIsElementCut(FileExplorerData* data, Path path) {
 	return function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT) && function::IsStringInStream(path, data->copied_files) != (unsigned int)-1;
 }
 
-void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, SelectableData* _data, bool is_selected, bool is_folder) {
-	FileExplorerData* data = (FileExplorerData*)_data->editor_state->file_explorer_data;
+void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableData* _data, bool is_selected, bool is_folder) {
+	FileExplorerData* data = _data->editor_state->file_explorer_data;
 	Path current_path = _data->selection;
 
 	size_t extension_size = function::PathExtensionSize(current_path) * (!is_folder);
@@ -571,11 +580,11 @@ void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, Select
 		border.color = EDITOR_GREEN_COLOR;
 		config->AddFlag(border);
 
-		drawer->TextLabel<LABEL_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL>(*config, ascii_stream.buffer);
+		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL, *config, ascii_stream.buffer);
 		config->flag_count--;
 	}
 	else {
-		drawer->TextLabel<LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT>(*config, ascii_stream.buffer);
+		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT, *config, ascii_stream.buffer);
 	}
 
 	drawer->element_descriptor.label_horizontal_padd *= 2.0f;
@@ -586,8 +595,8 @@ void FileExplorerLabelDraw(UIDrawer<false>* drawer, UIDrawConfig* config, Select
 	general_action.handler = { FileExplorerLabelRenameCallback, _data, sizeof(*_data), UIDrawPhase::System };
 	config->AddFlag(general_action);
 
-	drawer->Rectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION 
-		| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_CLICKABLE_ACTION>(*config, drawer->GetCurrentPosition(), { label_horizontal_scale, drawer->layout.default_element_y });
+	drawer->Rectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION
+		| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_CLICKABLE_ACTION, *config, drawer->GetCurrentPosition(), { label_horizontal_scale, drawer->layout.default_element_y });
 
 	config->flag_count--;
 
@@ -629,7 +638,7 @@ void FileExplorerPathButtonAction(ActionData* action_data) {
 FileFunctorData* functor_data = (FileFunctorData*)_additional_data; \
 SelectableData* data = (SelectableData*)_data; \
 \
-UIDrawer<false>* drawer = functor_data->for_each_data->drawer; \
+UIDrawer* drawer = functor_data->for_each_data->drawer; \
 UIDrawConfig* config = functor_data->for_each_data->config; \
 Color white_color = ECS_COLOR_WHITE; \
 white_color.alpha = functor_data->color_alpha;
@@ -637,7 +646,7 @@ white_color.alpha = functor_data->color_alpha;
 void TextureDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, data->selection.buffer, white_color);
+	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, data->selection.buffer, white_color);
 }
 
 void FileBlankDraw(ActionData* action_data) {
@@ -645,7 +654,7 @@ void FileBlankDraw(ActionData* action_data) {
 
 	Color sprite_color = drawer->color_theme.default_text;
 	sprite_color.alpha = white_color.alpha;
-	drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, sprite_color);
+	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, sprite_color);
 }
 
 void FileOverlayDraw(ActionData* action_data, const wchar_t* overlay_texture) {
@@ -655,7 +664,8 @@ void FileOverlayDraw(ActionData* action_data, const wchar_t* overlay_texture) {
 	Color overlay_color = drawer->color_theme.default_text;
 	base_color.alpha = white_color.alpha;
 	overlay_color.alpha = white_color.alpha;
-	drawer->SpriteRectangleDouble<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(
+	drawer->SpriteRectangleDouble(
+		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
 		*config,
 		ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
 		overlay_texture,
@@ -713,7 +723,7 @@ void FilterActive(ActionData* action_data) {
 	function::ConvertWideCharsToASCII(filename, ascii_path);
 	ascii_path[ascii_path.size] = '\0';
 
-	FileExplorerData* file_explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+	FileExplorerData* file_explorer_data = data->editor_state->file_explorer_data;
 	*is_valid = strstr(ascii_path.buffer, file_explorer_data->filter_stream.buffer) != nullptr;
 }
 
@@ -838,8 +848,7 @@ struct FileExplorerSelectOverwriteFilesData {
 	Stream<wchar_t> destination;
 };
 
-template<bool initialize>
-void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descriptor) {
+void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	constexpr const char* DATA_NAME = "Data";
 	constexpr const char* STATE_NAME = "State";
 
@@ -855,7 +864,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 
 	InternalData internal_data;
 	internal_data.data = data;
-	if constexpr (initialize) {
+	if (initialize) {
 		// Make a single coallesced allocation
 		size_t total_memory = sizeof(Stream<const char*>);
 		for (size_t index = 0; index < data->overwrite_files.size; index++) {
@@ -912,10 +921,10 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 		internal_data.states = (bool*)drawer.GetResource(STATE_NAME);
 	}
 
-	constexpr const char* OVERWRITE_TEXT = "Overwrite";
-	constexpr const char* CANCEL_TEXT = "Cancel";
-	constexpr const char* DESELECT_ALL = "Deselect All";
-	constexpr const char* SELECT_ALL = "Select All";
+	const char* OVERWRITE_TEXT = "Overwrite";
+	const char* CANCEL_TEXT = "Cancel";
+	const char* DESELECT_ALL = "Deselect All";
+	const char* SELECT_ALL = "Select All";
 
 	// Draw the selection buttons - Select all, Deselect all
 	auto select_all_action = [](ActionData* action_data) {
@@ -940,7 +949,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 	drawer.Button(DESELECT_ALL, { deselect_all_action, &internal_data, sizeof(internal_data) });
 
 	UIDrawConfig config;
-	drawer.Text<UI_CONFIG_TEXT_ALIGN_TO_ROW_Y>(config, "Select the files you want to overwrite: ");
+	drawer.Text(UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, "Select the files you want to overwrite: ");
 	drawer.NextRow();
 	
 	// Draw the checkboxes
@@ -967,8 +976,8 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 		for (size_t index = 0; index < data->data->overwrite_files.size; index++) {
 			if (data->states[index]) {
 				Stream<wchar_t> path_to_copy = data->data->explorer_data->selected_files[data->data->overwrite_files[index]];
-				ECS_FILE_COPY_CODE code = FileCut(path_to_copy, data->data->destination, true);
-				if (code == ECS_FILE_COPY_ERROR) {
+				ECS_FILE_STATUS_FLAGS code = FileCut(path_to_copy, data->data->destination, true);
+				if (code != ECS_FILE_STATUS_OK) {
 					error_message.Add('\n');
 					error_message.Add('\t');
 					function::ConvertWideCharsToASCII(path_to_copy, error_message);
@@ -987,7 +996,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 		CloseXBorderClickableAction(action_data);
 	};
 
-	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, OVERWRITE_TEXT, { overwrite_action, &internal_data, sizeof(internal_data), UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, OVERWRITE_TEXT, { overwrite_action, &internal_data, sizeof(internal_data), UIDrawPhase::System });
 	config.flag_count--;
 	
 	// Aligned to the right
@@ -1003,7 +1012,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 	};
 	config.AddFlag(transform);
 
-	drawer.Button<UI_CONFIG_ABSOLUTE_TRANSFORM>(config, CANCEL_TEXT, { cancel_action, data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, CANCEL_TEXT, { cancel_action, data, 0, UIDrawPhase::System });
 }
 
 unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplorerSelectOverwriteFilesData data) {
@@ -1011,8 +1020,7 @@ unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplor
 
 	UIWindowDescriptor descriptor;
 
-	descriptor.draw = FileExplorerSelectOverwriteFilesDraw<false>;
-	descriptor.initialize = FileExplorerSelectOverwriteFilesDraw<true>;
+	descriptor.draw = FileExplorerSelectOverwriteFilesDraw;
 
 	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
 	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
@@ -1034,7 +1042,6 @@ unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplor
 
 struct FileExplorerPreloadTextureThreadTaskData {
 	EditorState* editor_state;
-	GlobalMemoryManager* global_allocator;
 	Semaphore* semaphore;
 	Stream<FileExplorerPreloadTexture> preload_textures;
 };
@@ -1043,68 +1050,146 @@ void FileExplorerPreloadTextureThreadTask(unsigned int thread_id, World* world, 
 	FileExplorerPreloadTextureThreadTaskData* data = (FileExplorerPreloadTextureThreadTaskData*)_data;
 	EDITOR_STATE(data->editor_state);
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
-	FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
+
+	// Create a temporary global allocator
+	GlobalMemoryManager allocator(FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD, 128, FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE);
 
 	// Load the texture normally - don't generate mip maps as that will require the immediate context
 	ResourceManagerTextureDesc descriptor;
-	AllocatorPolymorphic current_allocator = { data->global_allocator, AllocatorType::GlobalMemoryManager, AllocationType::MultiThreaded };
+	AllocatorPolymorphic current_allocator = GetAllocatorPolymorphic(&allocator);
 	descriptor.allocator = current_allocator;
+
+	constexpr size_t TEXTURE_WIDTH = 256;
 
 	for (size_t index = 0; index < data->preload_textures.size; index++) {
 		// Load the file into a buffer
-		Stream<void> file_contents = function::ReadWholeFile(data->preload_textures[index].path, current_allocator);
+		Stream<void> file_contents = ReadWholeFileBinary(data->preload_textures[index].path, current_allocator);
 		// Only if it succeeded
 		if (file_contents.buffer != nullptr) {
 			DecodedTexture decoded_texture = DecodeTexture(file_contents, data->preload_textures[index].path.buffer, current_allocator);
 			// Deallocate the previous contents
-			data->global_allocator->Deallocate_ts(file_contents.buffer);
+			allocator.Deallocate(file_contents.buffer);
 
 			// Resize the texture
 			Stream<void> resized_texture = ResizeTexture(
-				decoded_texture.data.buffer, 
-				decoded_texture.width, 
-				decoded_texture.height, 
-				decoded_texture.format, 
-				256, 
-				256, 
+				decoded_texture.data.buffer,
+				decoded_texture.width,
+				decoded_texture.height,
+				decoded_texture.format,
+				TEXTURE_WIDTH,
+				TEXTURE_WIDTH,
 				current_allocator
 			);
 
 			// Release the old texture
-			data->global_allocator->Deallocate_ts(decoded_texture.data.buffer);
+			allocator.Deallocate(decoded_texture.data.buffer);
+
+			// If this is a single channel texture, transform it into a 4 channel wide
+			bool was_widened = false;
+			if (decoded_texture.format == DXGI_FORMAT_R8_UNORM) {
+				decoded_texture.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+				Stream<Stream<void>> widened_texture = ConvertSingleChannelTextureToGrayscale({ &resized_texture, 1 }, TEXTURE_WIDTH, TEXTURE_WIDTH, current_allocator);
+
+				// Deallocate the resized data
+				allocator.Deallocate(resized_texture.buffer);
+				
+				// Change the resized texture buffer to this new one
+				resized_texture = widened_texture[0];
+
+				// The widened data will "leak" - cannot be reused inside the allocator but it will be released at the end
+				// when the whole allocator is released
+				was_widened = true;
+			}
+
+			auto create_texture = [&](Stream<Stream<void>> mip_data, DXGI_FORMAT format, void* deallocate_buffer) {
+				// Create a D3D11 texture from the resized texture
+				GraphicsTexture2DDescriptor texture_descriptor;
+				texture_descriptor.mip_data = mip_data;
+				texture_descriptor.usage = D3D11_USAGE_IMMUTABLE;
+				texture_descriptor.size = { (unsigned int)TEXTURE_WIDTH, (unsigned int)TEXTURE_WIDTH };
+				texture_descriptor.format = format;
+				texture_descriptor.mip_levels = 1;
+				Texture2D texture = ui_system->m_graphics->CreateTexture(&texture_descriptor);
+				if (texture.tex != nullptr) {
+					data->preload_textures[index].texture = ui_system->m_graphics->CreateTextureShaderViewResource(texture);
+					data->preload_textures[index].last_write_time = OS::GetFileLastWrite(data->preload_textures[index].path.buffer);
+				}
+
+				allocator.Deallocate(deallocate_buffer);
+			};
 
 			// Determine if the texture can be compressed
 			TextureCompressionExplicit compression_type = GetTextureCompressionType(decoded_texture.format);
 			if (IsTextureCompressionTypeValid(compression_type)) {
-				// Apply compression
-				
+				// Apply compression - only if not HDR compression
+				if (compression_type != TextureCompressionExplicit::HDRMap) {
+					Stream<Stream<void>> compressed_texture = CompressTexture({ &resized_texture, 1 }, TEXTURE_WIDTH, TEXTURE_WIDTH, compression_type, current_allocator, ECS_TEXTURE_COMPRESS_DISABLE_MULTICORE);
+					if (compressed_texture.buffer != nullptr) {
+						// Release the resized texture - only if it wasn't widened
+						if (!was_widened) {
+							allocator.Deallocate(resized_texture.buffer);
+						}
+
+						create_texture(compressed_texture, GetCompressedRenderFormat(compression_type), compressed_texture.buffer);
+					}
+				}
+				else {
+					create_texture({ &resized_texture, 1 }, decoded_texture.format, resized_texture.buffer);
+				}
+			}
+			else {
+				create_texture({ &resized_texture, 1 }, decoded_texture.format, resized_texture.buffer);
 			}
 		}
+	}
+
+	// Enter the semaphore
+	unsigned int count = data->semaphore->Enter();
+	allocator.ReleaseResources();
+
+	// The last thread deallocates the shared resources and set the preload end flag
+	if (count == data->semaphore->target - 1) {
+		editor_allocator->Deallocate(data->semaphore);
+
+		// Signal that processing ended
+		explorer_data->preload_flags = function::SetFlag(explorer_data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
 	}
 }
 
 void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
 	for (size_t index = 0; index < data->staging_preloaded_textures.size; index++) {
-		if (data->staging_preloaded_textures[index].size > 0) {
-			data->preloaded_textures.AddStream(data->staging_preloaded_textures[index]);
-			editor_allocator->Deallocate(data->staging_preloaded_textures[index].buffer);
+		if (data->staging_preloaded_textures[index].texture.view != nullptr) {
+			data->preloaded_textures.Add(data->staging_preloaded_textures[index]);
 
 			// Now change the resource manager bindings
-			for (size_t subindex = 0; subindex < data->staging_preloaded_textures[index].size; subindex++) {
-				const wchar_t* texture_path = data->staging_preloaded_textures[index][subindex].path.buffer;
-				resource_manager->AddResource(texture_path, ResourceType::Texture, data->staging_preloaded_textures[index][subindex].texture.view);
+			const wchar_t* texture_path = data->staging_preloaded_textures[index].path.buffer;
+			ResourceIdentifier identifier(texture_path);
+
+			// If it doesn't exist
+			if (!resource_manager->Exists(identifier, ResourceType::Texture)) {
+				resource_manager->AddResource(identifier, ResourceType::Texture, data->staging_preloaded_textures[index].texture.view);
+			}
+			else {
+				resource_manager->RebindResource(identifier, ResourceType::Texture, data->staging_preloaded_textures[index].texture.view);
+				resource_manager->RemoveReferenceCountForResource(identifier, ResourceType::Texture);
 			}
 		}
 	}
+
+	editor_allocator->Deallocate(data->staging_preloaded_textures.buffer);
+	data->staging_preloaded_textures.size = 0;
+	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
+	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
 }
 
 void FileExplorerPreloadTextures(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
 	bool* was_verified = (bool*)ECS_STACK_ALLOC(sizeof(bool) * data->preloaded_textures.size);
@@ -1123,26 +1208,26 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 
 	FunctorData functor_data = { editor_state, data, &new_preloads, was_verified };
 
-	auto functor = [](const std::filesystem::path& path, void* _data) {
+	auto functor = [](const wchar_t* path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		EDITOR_STATE(data->editor_state);
 
-		const wchar_t* c_path = path.c_str();
-		uint2 texture_dimensions = GetTextureDimensions(c_path);
+		uint2 texture_dimensions = GetTextureDimensions(path);
 
 		// If it is big enough
 		unsigned int total_pixel_count = texture_dimensions.x * texture_dimensions.y;
 		if (total_pixel_count > 512 * 512) {
 			// Check to see if this texture already exists
-			Stream<wchar_t> stream_path = ToStream(c_path);
-			size_t file_last_write = OS::GetFileLastWrite(c_path);
+			Stream<wchar_t> stream_path = ToStream(path);
+			size_t file_last_write = OS::GetFileLastWrite(path);
 			bool is_alive = false;
 			for (unsigned int index = 0; index < data->explorer_data->preloaded_textures.size; index++) {
 				if (function::CompareStrings(stream_path, data->explorer_data->preloaded_textures[index].path)) {
 					// Only keep this texture alive if it wasn't changed since last time
 					data->was_verified[index] = file_last_write <= data->explorer_data->preloaded_textures[index].last_write_time;
 					is_alive = data->was_verified[index];
-					break;
+					// exit the loop
+					index = data->explorer_data->preloaded_textures.size;
 				}
 			}
 
@@ -1159,7 +1244,7 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 	};
 
 	ECS_TEMP_STRING(assests_folder, 256);
-	GetProjectDebugFolder(editor_state, assests_folder);
+	GetProjectAssetsFolder(editor_state, assests_folder);
 	const wchar_t* extensions[] = {
 		L".jpg",
 		L".png",
@@ -1171,16 +1256,22 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { extensions, std::size(extensions) }, &functor_data, functor);
 
 	// Evict all the textures that must not be kept alive
-	for (size_t index = 0; index < data->preloaded_textures.size; index++) {
+	for (int64_t index = 0; index < data->preloaded_textures.size; index++) {
 		if (!was_verified[index]) {
+			const wchar_t* texture_path = data->preloaded_textures[index].path.buffer;
+			ResourceIdentifier identifier(texture_path);
+
 			// Deallocate the path
-			editor_allocator->Deallocate(data->preloaded_textures[index].path.buffer);
+			editor_allocator->Deallocate(texture_path);
 
-			// Release the view
-			ReleaseShaderView(data->preloaded_textures[index].texture);
+			if (resource_manager->Exists(identifier, ResourceType::Texture)) {
+				// Remove the texture from the resource manager - it will be released now
+				resource_manager->UnloadTexture(texture_path);
+			}
 
-			// Remove the texture from the resource manager
-			resource_manager->UnloadTexture(data->preloaded_textures[index].path.buffer);
+			// Remove the texture and decrement the index to stay in the same spot
+			data->preloaded_textures.RemoveSwapBack(index);
+			index--;
 		}
 	}
 
@@ -1190,37 +1281,35 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 	unsigned int total_texture_count = 0;
 
 	if (per_thread_textures > 0 || per_thread_remainder > 0) {
-		GlobalMemoryManager* global_allocator = (GlobalMemoryManager*)editor_allocator->Allocate(sizeof(GlobalMemoryManager));
+		data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
+
+		// Create the staging buffer
+		data->staging_preloaded_textures.Initialize(editor_allocator, new_preloads.size);
+		data->staging_preloaded_textures.Copy(new_preloads);
+
 		Semaphore* semaphore = (Semaphore*)editor_allocator->Allocate(sizeof(Semaphore));
 		semaphore->ClearCount();
-		semaphore->ClearTarget();
+		unsigned int launch_thread_count = function::Select<unsigned int>(per_thread_textures > 0, thread_count, per_thread_remainder);
+		semaphore->SetTarget(launch_thread_count);
 
-		for (size_t index = 0; index < thread_count; index++) {
+		for (size_t index = 0; index < launch_thread_count; index++) {
 			bool has_remainder = per_thread_remainder > 0;
 			per_thread_remainder -= has_remainder;
 			unsigned int thread_texture_count = per_thread_textures + has_remainder;
 
-			if (thread_texture_count > 0) {
-				semaphore->SetTarget(semaphore->target + 1);
+			FileExplorerPreloadTextureThreadTaskData* thread_data = (FileExplorerPreloadTextureThreadTaskData*)editor_allocator->Allocate(
+				sizeof(FileExplorerPreloadTextureThreadTaskData)
+			);
+			thread_data->preload_textures = { data->staging_preloaded_textures.buffer + total_texture_count, thread_texture_count };
+			thread_data->editor_state = editor_state;
+			thread_data->semaphore = semaphore;
 
-				// Allocate from the editor allocator the tasks that this thread needs to process
-				FileExplorerPreloadTexture* thread_textures = (FileExplorerPreloadTexture*)editor_allocator->Allocate(
-					sizeof(FileExplorerPreloadTexture) * thread_texture_count
-				);
-				memcpy(thread_textures, new_preloads.buffer + total_texture_count, sizeof(FileExplorerPreloadTexture)* thread_texture_count);
+			ThreadTask thread_task;
+			thread_task.data = thread_data;
+			thread_task.function = FileExplorerPreloadTextureThreadTask;
+			task_manager->AddDynamicTaskAndWake(thread_task);
 
-				FileExplorerPreloadTextureThreadTaskData* thread_data = (FileExplorerPreloadTextureThreadTaskData*)editor_allocator->Allocate(
-					sizeof(FileExplorerPreloadTextureThreadTaskData)
-				);
-				thread_data->preload_textures = { thread_textures, thread_texture_count };
-				thread_data->editor_state = editor_state;
-				thread_data->global_allocator = global_allocator;
-
-				ThreadTask thread_task;
-				thread_task.data = thread_data;
-				thread_task.function = FileExplorerPreloadTextureThreadTask;
-				task_manager->AddDynamicTaskAndWake(thread_task);
-			}
+			total_texture_count += thread_texture_count;
 		}
 	}
 
@@ -1229,19 +1318,20 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 #pragma endregion
 
 // window_data is EditorState*
-template<bool initialize>
-void FileExplorerDraw(void* window_data, void* drawer_descriptor) {
+void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	EDITOR_STATE(window_data);
 	EditorState* editor_state = (EditorState*)window_data;
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 
-	if constexpr (initialize) {
+	if (initialize) {
 		// Initialize the states only if they have not been previously initialized
 		// Test the file functors table
 		if (data->file_functors.m_capacity == 0) {
-			ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+			InitializeFileExplorer(data, editor_allocator, task_manager->GetThreadCount());
+
+			ProjectFile* project_file = editor_state->project_file;
 			data->current_directory.Copy(project_file->path);
 			data->current_directory.AddSafe(ECS_OS_PATH_SEPARATOR);
 			data->current_directory.AddStreamSafe(Path(PROJECT_ASSETS_RELATIVE_PATH, wcslen(PROJECT_ASSETS_RELATIVE_PATH)));
@@ -1343,6 +1433,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 #undef ADD_FUNCTOR
 		}
 
+		// Reduce the next roy y offset
+		drawer.layout.next_row_y_offset *= 0.5f;
 	}
 
 #pragma region Deselection Menu
@@ -1406,15 +1498,16 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	menu_state.submenues = nullptr;
 	menu_state.submenu_index = 0;
 	menu_state.unavailables = nullptr;
-	drawer.SolidColorRectangle<HEADER_CONFIGURATION>(header_config, drawer.color_theme.theme);
-	drawer.Menu<HEADER_CONFIGURATION | UI_CONFIG_MENU_SPRITE | UI_CONFIG_BORDER>(header_config, "Menu", &menu_state);
+	drawer.SolidColorRectangle(HEADER_CONFIGURATION, header_config, drawer.color_theme.theme);
+	drawer.Menu(HEADER_CONFIGURATION | UI_CONFIG_MENU_SPRITE | UI_CONFIG_BORDER, header_config, "Menu", &menu_state);
 
 	header_config.flag_count = 0;
 	header_config.AddFlag(border);
 	absolute_transform.position.x += absolute_transform.scale.x + border.thickness;
 	absolute_transform.scale.x = drawer.GetLabelScale("Import").x;
 	header_config.AddFlag(absolute_transform);
-	drawer.Button<HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y>(
+	drawer.Button(
+		HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 		header_config, 
 		"Import",
 		{ FileExplorerImportFile, nullptr, 0 }
@@ -1427,7 +1520,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	absolute_transform.position.x += absolute_transform.scale.x + border.thickness;
 	absolute_transform.scale.x = drawer.layout.default_element_x * 2.5f;
 	header_config.AddFlags(hint, absolute_transform);
-	drawer.TextInput<HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_NO_NAME>(
+	drawer.TextInput(
+		HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_NO_NAME,
 		header_config, 
 		"Input", 
 		&data->filter_stream
@@ -1440,7 +1534,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		drawer.Indent();
 		drawer.min_render_bounds.x = min_x_render_bound;
 
-		ProjectFile* project_file = (ProjectFile*)editor_state->project_file;
+		ProjectFile* project_file = editor_state->project_file;
 		char temp_characters[512];
 		CapacityStream<char> ascii_path(temp_characters, 0, 512);
 		Path wide_path = { data->current_directory.buffer + project_file->path.size + 1, data->current_directory.size - project_file->path.size - 1 };
@@ -1466,7 +1560,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			absolute_transform.scale.x = drawer.GetLabelScale(current_path.buffer).x;
 			header_config.AddFlag(absolute_transform);
 
-			drawer.Button<HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y>(
+			drawer.Button(
+				HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 				header_config,
 				current_path.buffer, 
 				{ FileExplorerPathButtonAction, &button_data, sizeof(button_data) }
@@ -1477,17 +1572,18 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			if (drawer.IsMouseInRectangle(rectangle_position, absolute_transform.scale) && (mouse_state == MBPRESSED || mouse_state == MBHELD)) {
 				rectangle_color = drawer.color_theme.theme;
 			}
-			drawer.SolidColorRectangle<UI_CONFIG_LATE_DRAW>(rectangle_position, absolute_transform.scale, rectangle_color);
+			drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, absolute_transform.scale, rectangle_color);
 
 			header_config.flag_count--;
 			absolute_transform.position.x += absolute_transform.scale.x;
 			absolute_transform.scale.x = drawer.GetLabelScale("\\").x;
 			header_config.AddFlag(absolute_transform);
-			drawer.TextLabel<HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y>(
+			drawer.TextLabel(
+				HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 				header_config,
 				"\\"
 			);
-			drawer.SolidColorRectangle<UI_CONFIG_LATE_DRAW>(absolute_transform.position - drawer.region_render_offset, absolute_transform.scale, drawer.color_theme.background);
+			drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, absolute_transform.position - drawer.region_render_offset, absolute_transform.scale, drawer.color_theme.background);
 
 			total_path_size += current_path.size + 1;
 
@@ -1507,7 +1603,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		header_config.AddFlag(absolute_transform);
 
 		float label_scale = drawer.GetLabelScale(current_path.buffer).x;
-		drawer.Button<HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y>(
+		drawer.Button(
+			HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 			header_config, 
 			current_path.buffer, 
 			{ FileExplorerPathButtonAction, &button_data, sizeof(button_data) }
@@ -1519,18 +1616,18 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		if (drawer.IsMouseInRectangle(rectangle_position, rectangle_scale) && (mouse_state == MBPRESSED || mouse_state == MBHELD)) {
 			rectangle_color = drawer.color_theme.theme;
 		}
-		drawer.SolidColorRectangle<UI_CONFIG_LATE_DRAW>(rectangle_position, rectangle_scale, rectangle_color);
+		drawer.SolidColorRectangle(UI_CONFIG_LATE_DRAW, rectangle_position, rectangle_scale, rectangle_color);
 	}
 
 	drawer.SetNextRowYOffset(next_row_offset);
 	drawer.SetRowPadding(row_padding);
 	drawer.UpdateCurrentRowScale(drawer.layout.default_element_y);
-	drawer.NextRow();
+	drawer.NextRow(2.0f);
 
 #pragma endregion
 
 	// Element Draw
-	if constexpr (!initialize) {
+	if (!initialize) {
 
 		drawer.SetDrawMode(UIDrawerMode::ColumnDrawFitSpace, 2, THUMBNAIL_TO_LABEL_SPACING);
 		UIDrawConfig config;
@@ -1555,19 +1652,18 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES);
 		}
 
-		auto directory_functor = [](const std::filesystem::path& _path, void* __data) {
+		auto directory_functor = [](const wchar_t* path, void* __data) {
 			ForEachData* _data = (ForEachData*)__data;
 
-			FileExplorerData* data = (FileExplorerData*)_data->editor_state->file_explorer_data;
+			FileExplorerData* data = _data->editor_state->file_explorer_data;
 			UIDrawConfig* config = _data->config;
-			UIDrawer<false>* drawer = _data->drawer;
+			UIDrawer* drawer = _data->drawer;
 
-			const wchar_t* c_path = _path.c_str();
-			Path path = function::StringCopy(&data->temporary_allocator, c_path);
+			Path stream_path = function::StringCopy(&data->temporary_allocator, path);
 
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
-			selectable_data.selection = path;
+			selectable_data.selection = stream_path;
 			selectable_data.index = _data->element_count;
 
 			bool is_valid = true;
@@ -1576,15 +1672,15 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			action_data.data = &selectable_data;
 			filter_functors[data->filter_stream.size > 0](&action_data);
 
-			_data->select_function(data, _data->element_count, path);
+			_data->select_function(data, _data->element_count, stream_path);
 
 			if (is_valid) {
-				bool is_selected = FileExplorerIsElementSelected(data, path);
-				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
+				bool is_selected = FileExplorerIsElementSelected(data, stream_path);
+				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, stream_path), COLOR_CUT_ALPHA, 255);
 
 				Color white_color = ECS_COLOR_WHITE;
 				white_color.alpha = color_alpha;
-				drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE>(*config, ECS_TOOLS_UI_TEXTURE_FOLDER, white_color);
+				drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, *config, ECS_TOOLS_UI_TEXTURE_FOLDER, white_color);
 
 				UIConfigGeneralAction general_action;
 				general_action.handler = { FileExplorerDirectorySelectable, &selectable_data, sizeof(selectable_data) };
@@ -1599,7 +1695,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 						ChangeFileExplorerFile(data->editor_state, data->selection, data->index);
 					}
 					else {
-						FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+						FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 						explorer_data->right_click_stream = explorer_data->selected_files[index];
 					}
 				};
@@ -1640,17 +1736,17 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					border.color = EDITOR_GREEN_COLOR;
 					config->AddFlag(border);
 
-					drawer->Rectangle<RECTANGLE_CONFIGURATION | UI_CONFIG_COLOR | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL>(*config);
+					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_COLOR | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL, *config);
 
 					config->flag_count -= 2;
 				}
 				else {
-					drawer->Rectangle<RECTANGLE_CONFIGURATION>(*config);
+					drawer->Rectangle(RECTANGLE_CONFIGURATION, *config);
 				}
 
 				// Update the mouse index if it hovers this directory - only directories must make this check
 				if (drawer->IsMouseInRectangle(rectangle_position, rectangle_scale)) {
-					_data->mouse_element_path->Copy(path);
+					_data->mouse_element_path->Copy(stream_path);
 				}
 
 				config->flag_count -= 3;
@@ -1662,24 +1758,23 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			return true;
 		};
 
-		auto file_functor = [](const std::filesystem::path& _path, void* __data) {
+		auto file_functor = [](const wchar_t* path, void* __data) {
 			ForEachData* _data = (ForEachData*)__data;
 
-			FileExplorerData* data = (FileExplorerData*)_data->editor_state->file_explorer_data;
+			FileExplorerData* data = _data->editor_state->file_explorer_data;
 			UIDrawConfig* config = _data->config;
-			UIDrawer<false>* drawer = _data->drawer;
+			UIDrawer* drawer = _data->drawer;
 
-			const wchar_t* c_path = _path.c_str();
-			Path path = function::StringCopy(&data->temporary_allocator, c_path);
+			Path stream_path = function::StringCopy(&data->temporary_allocator, path);
 
-			Path extension = function::PathExtension(path);
+			Path extension = function::PathExtension(stream_path);
 
 			ResourceIdentifier identifier(extension);
-			Action functor;
+			Action functor = FileBlankDraw;
 
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
-			selectable_data.selection = path;
+			selectable_data.selection = stream_path;
 			selectable_data.index = _data->element_count;
 
 			bool is_valid = true;
@@ -1688,25 +1783,36 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			action_data.data = &selectable_data;
 			action_data.additional_data = &is_valid;
 
-			_data->select_function(data, _data->element_count, path);
+			_data->select_function(data, _data->element_count, stream_path);
 
 			filter_functors[data->filter_stream.size > 0](&action_data);
 
 			if (is_valid && extension.size > 0) {
-				bool is_selected = FileExplorerIsElementSelected(data, path);
-				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, path), COLOR_CUT_ALPHA, 255);
+				bool is_selected = FileExplorerIsElementSelected(data, stream_path);
+				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, stream_path), COLOR_CUT_ALPHA, 255);
 
 				FileFunctorData functor_data;
 				functor_data.for_each_data = _data;
 				functor_data.color_alpha = color_alpha;
 				action_data.additional_data = &functor_data;
 
-				if (data->file_functors.TryGetValue(identifier, functor)) {
-					functor(&action_data);
+				// Functor was initialized outside the if with FileBlankDraw
+				bool has_functor = data->file_functors.TryGetValue(identifier, functor);
+				if (has_functor && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
+					// Check to see if it is a texture that is being preloaded
+					for (size_t index = 0; index < data->staging_preloaded_textures.size; index++) {
+						if (function::CompareStrings(data->staging_preloaded_textures[index].path, stream_path)) {
+							// If it is a texture that is being preloaded, overwrite to blank file while it is being loaded
+							functor = FileBlankDraw;
+							// exit the loop by setting the index to the count
+							index = data->staging_preloaded_textures.size;
+						}
+					}
 				}
-				else {
-					FileBlankDraw(&action_data);
+				else if (function::HasFlag(_data->editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
+					functor = FileBlankDraw;
 				}
+				functor(&action_data);
 
 				UIConfigHoverableAction hoverable_action;
 
@@ -1726,7 +1832,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 				OnRightClickData* action_data = (OnRightClickData*)right_click_data.action_data;
 				action_data->editor_state = _data->editor_state;
-				action_data->path = path;
+				action_data->path = stream_path;
 				action_data->index = _data->element_count;
 
 				auto OnRightClickAction = [](ActionData* action_data) {
@@ -1738,7 +1844,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 						FileExplorerSetNewFile(data->editor_state, data->path, data->index);
 					}
 					else {
-						FileExplorerData* explorer_data = (FileExplorerData*)data->editor_state->file_explorer_data;
+						FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
 						explorer_data->right_click_stream = explorer_data->selected_files[index];
 						explorer_data->starting_shift_index = explorer_data->ending_shift_index = data->index;
 					}
@@ -1765,21 +1871,21 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					border.thickness = drawer->GetDefaultBorderThickness();
 					config->AddFlag(border);
 
-					drawer->Rectangle<RECTANGLE_CONFIGURATION | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL>(*config);
+					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL, *config);
 
 					Color theme_color = drawer->color_theme.theme;
 					theme_color.alpha = 100;
-					drawer->SpriteRectangle<UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE>(*config, ECS_TOOLS_UI_TEXTURE_MASK, theme_color);
+					drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE, *config, ECS_TOOLS_UI_TEXTURE_MASK, theme_color);
 
 					config->flag_count--;
 				}
 				else {
-					drawer->Rectangle<RECTANGLE_CONFIGURATION>(*config);
+					drawer->Rectangle(RECTANGLE_CONFIGURATION, *config);
 				}
 
 				ECS_TEMP_STRING(null_terminated_path, 256);
-				null_terminated_path.Copy(path);
-				null_terminated_path[path.size] = L'\0';
+				null_terminated_path.Copy(stream_path);
+				null_terminated_path[stream_path.size] = L'\0';
 
 				drawer->AddDoubleClickAction(
 					rectangle_position,
@@ -1787,7 +1893,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					_data->element_count,
 					DOUBLE_CLICK_DURATION,
 					{ FileExplorerSelectableBase, &selectable_data, sizeof(selectable_data) },
-					{ OpenFileWithDefaultApplicationAction, null_terminated_path.buffer, (unsigned int)(sizeof(wchar_t) * (path.size + 1)) }
+					{ OpenFileWithDefaultApplicationAction, null_terminated_path.buffer, (unsigned int)(sizeof(wchar_t) * (stream_path.size + 1)) }
 				);
 
 				config->flag_count -= 2;
@@ -1835,15 +1941,15 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 					for (size_t index = 0; index < data->selected_files.size; index++) {
 						Stream<wchar_t> current_file = data->selected_files[index];
-						ECS_FILE_COPY_CODE error_code = FileCut(current_file, mouse_element_path);
-						if (error_code == ECS_FILE_COPY_ERROR) {
+						ECS_FILE_STATUS_FLAGS error_code = FileCut(current_file, mouse_element_path);
+						if (error_code == ECS_FILE_STATUS_ALREADY_EXISTS) {
+							overwrite_files.Add(index);
+						}
+						else if (error_code != ECS_FILE_STATUS_OK) {
 							error_file_count++;
 							error_files.AddSafe('\n');
 							error_files.Add('\t');
 							function::ConvertWideCharsToASCII(current_file, error_files);
-						}
-						else if (error_code == ECS_FILE_COPY_ALREADY_EXISTS) {
-							overwrite_files.Add(index);
 						}
 					}
 
@@ -1871,10 +1977,9 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		}
 
 	}
-	
 }
 
-void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager* allocator)
+void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager* allocator, unsigned int thread_count)
 {
 	// Copied files must not be initialied since only Cut/Copy will set the appropriate stream
 	file_explorer_data->current_directory.Initialize(allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
@@ -1891,14 +1996,16 @@ void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager*
 	file_explorer_data->starting_shift_index = -1;
 	file_explorer_data->ending_shift_index = -1;
 
+	// Hold texture display for some frames when loading in order to make a smoother transition - noticeably faster
 	file_explorer_data->flags = 0;
+	file_explorer_data->preload_flags = 0;
 }
 
 void FileExplorerPrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_additional_data;
-	FileExplorerData* data = (FileExplorerData*)editor_state->file_explorer_data;
+	FileExplorerData* data = editor_state->file_explorer_data;
 	if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
 		if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
 			action_data->data = data;
@@ -1926,8 +2033,7 @@ void FileExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edit
 	descriptor.window_data = editor_state;
 	descriptor.window_data_size = 0;
 
-	descriptor.draw = FileExplorerDraw<false>;
-	descriptor.initialize = FileExplorerDraw<true>;
+	descriptor.draw = FileExplorerDraw;
 
 	descriptor.private_action = FileExplorerPrivateAction;
 }
@@ -1956,4 +2062,20 @@ void CreateFileExplorerAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	CreateFileExplorer((EditorState*)action_data->data);
+}
+
+void FileExplorerTick(EditorState* editor_state)
+{
+	FileExplorerData* data = editor_state->file_explorer_data;
+
+	if (data->preload_timer.GetDurationSinceMarker_ms() >= FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION 
+		&& !function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED) && !EditorStateDoNotAddBackgroundTasks(editor_state)) {
+		FileExplorerPreloadTextures(editor_state);
+		data->preload_timer.SetMarker();
+	}
+
+	// Commit preloaded textures
+	if (function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED) && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED)) {
+		FileExplorerCommitStagingPreloadTextures(editor_state);
+	}
 }

@@ -15,6 +15,16 @@ namespace ECSEngine {
 
 	namespace Tools {
 
+		struct UIDrawConfig;
+
+		using UIDrawerTextInputFilter = bool (*)(char, CharacterType);
+
+		using UIDrawerSliderInterpolate = void (*)(const void* lower_bound, const void* upper_bound, void* value, float percentage);
+		using UIDrawerSliderPercentage = float (*)(const void* lower_bound, const void* upper_bound, const void* value);
+		using UIDrawerSliderToString = void (*)(CapacityStream<char>& characters, const void* data, void* extra_data);
+		using UIDrawerSliderConvertTextInput = void (*)(CapacityStream<char>& characters, void* data);
+		using UIDrawerSliderIsSmaller = bool (*)(const void* left, const void* right);
+
 		enum class ECSENGINE_API UIDrawerMode : unsigned char {
 			Indent,
 			NextRow,
@@ -38,129 +48,6 @@ namespace ECSEngine {
 			Vertical,
 			Both
 		};
-
-		struct ECSENGINE_API UIDrawConfig {
-			UIDrawConfig();
-
-			template<typename ConfigFlag>
-			void AddFlag(const ConfigFlag& flag) {
-				size_t associated_bit = flag.GetAssociatedBit();
-				for (size_t index = 0; index < flag_count; index++) {
-					ECS_ASSERT(associated_bits[index] != associated_bit, "Repeated flag addition");
-				}
-
-				parameter_start[flag_count + 1] = parameter_start[flag_count] + flag.GetParameterCount();
-				memcpy(parameters + parameter_start[flag_count], flag.GetParameters(), sizeof(float) * flag.GetParameterCount());
-				associated_bits[flag_count] = associated_bit;
-				flag_count++;
-			}
-
-			template<typename ConfigFlag1, typename ConfigFlag2>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-			}
-
-			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-				AddFlag(flag3);
-			}
-
-			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3, typename ConfigFlag4>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3, const ConfigFlag4& flag4) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-				AddFlag(flag3);
-				AddFlag(flag4);
-			}
-
-			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3, typename ConfigFlag4, typename ConfigFlag5>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3, const ConfigFlag4& flag4, const ConfigFlag5& flag5) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-				AddFlag(flag3);
-				AddFlag(flag4);
-				AddFlag(flag5);
-			}
-
-			// it returns the replaced config flag
-			template<typename ConfigFlag>
-			void SetExistingFlag(const ConfigFlag& flag, size_t bit_flag, ConfigFlag& previous_flag) {
-				for (size_t index = 0; index < flag_count; index++) {
-					if (associated_bits[index] == bit_flag) {
-						ConfigFlag* ptr = (ConfigFlag*)(parameters + parameter_start[index]);
-						previous_flag = *ptr;
-						*ptr = flag;
-					}
-				}
-			}
-
-			template<typename ConfigFlag>
-			void RestoreFlag(const ConfigFlag& previous_flag, size_t bit_flag) {
-				for (size_t index = 0; index < flag_count; index++) {
-					if (associated_bits[index] == bit_flag) {
-						ConfigFlag* flag = (ConfigFlag*)(parameters + parameter_start[index]);
-						*flag = previous_flag;
-						return;
-					}
-				}
-			}
-
-			const void* GetParameter(size_t bit_flag) const;
-
-			size_t flag_count;
-			unsigned int parameter_start[16];
-			float parameters[64];
-			size_t associated_bits[16];
-		};
-
-		struct ECSENGINE_API UIDrawSmallConfig {
-			UIDrawSmallConfig();
-
-			template<typename ConfigFlag>
-			void AddFlag(const ConfigFlag& flag) {
-				parameter_start[flag_count + 1] = parameter_start[flag_count] + flag.GetParameterCount();
-				memcpy(parameters + parameter_start[flag_count], flag.GetParameters(), sizeof(float) * flag.GetParameterCount());
-				associated_bits[flag_count] = flag.GetAssociatedBit();
-				flag_count++;
-			}
-			template<typename ConfigFlag1, typename ConfigFlag2>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-			}
-			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-				AddFlag(flag3);
-			}
-			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3, typename ConfigFlag4>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3, const ConfigFlag4& flag4) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-				AddFlag(flag3);
-				AddFlag(flag4);
-			}
-			template<typename ConfigFlag1, typename ConfigFlag2, typename ConfigFlag3, typename ConfigFlag4, typename ConfigFlag5>
-			void AddFlags(const ConfigFlag1& flag1, const ConfigFlag2& flag2, const ConfigFlag3& flag3, const ConfigFlag4& flag4, const ConfigFlag5& flag5) {
-				AddFlag(flag1);
-				AddFlag(flag2);
-				AddFlag(flag3);
-				AddFlag(flag4);
-				AddFlag(flag5);
-			}
-
-			const float* GetParameter(size_t bit_flag) const;
-
-			size_t flag_count;
-			unsigned int parameter_start[4];
-			float parameters[4];
-			size_t associated_bits[4];
-		};
-
 
 		struct ECSENGINE_API UIConfigAbsoluteTransform {
 
@@ -371,236 +258,113 @@ namespace ECSEngine {
 			float2 inverse_zoom;
 		};
 
-		// Value must implement ToString in order to be used
-		template<typename Type, typename SubType>
-		struct UIDrawerSliderBaseType {
+		struct UIDrawerSliderFunctions {
+			UIDrawerSliderInterpolate interpolate;
+			UIDrawerSliderPercentage percentage;
+			UIDrawerSliderToString to_string;
+			UIDrawerSliderConvertTextInput convert_text_input;
+			UIDrawerSliderIsSmaller is_smaller;
+			// Currently used by to_string
+			void* extra_data;
+		};
 
-			SubType* Pointer() {
-				return value.Pointer();
-			}
+		template<typename Type>
+		void UIDrawerSliderInterpolateImplementation(const void* _lower_bound, const void* _upper_bound, void* _value, float percentage) {
+			const Type* lower_bound = (const Type*)_lower_bound;
+			const Type* upper_bound = (const Type*)_upper_bound;
+			Type* value = (Type*)_value;
 
-			const SubType* ConstPointer() const {
-				return value.ConstPointer();
-			}
+			*value = *lower_bound + (*upper_bound - *lower_bound) * percentage;
+		}
 
-			SubType Value() const {
-				return value.Value();
-			}
+		template<typename Type>
+		float UIDrawerSliderPercentageImplementation(const void* _lower_bound, const void* _upper_bound, const void* _value) {
+			const Type* lower_bound = (const Type*)_lower_bound;
+			const Type* upper_bound = (const Type*)_upper_bound;
+			const Type* value = (const Type*)_value;
 
-			static SubType Interpolate(const UIDrawerSliderBaseType<Type, SubType>& lower_bound, const UIDrawerSliderBaseType<Type, SubType>& upper_bound, float percentage) {
-				return lower_bound.Value() + (upper_bound.Value() - lower_bound.Value()) * percentage;
-			}
-		
-			static float Percentage(const UIDrawerSliderBaseType<Type, SubType>& lower_bound, const UIDrawerSliderBaseType<Type, SubType>& upper_bound, const UIDrawerSliderBaseType<Type, SubType>& value) {
-				return (float)(*value.ConstPointer() - lower_bound.Value()) / (float)(upper_bound.Value() - lower_bound.Value());
-			}
+			return (float)(*value - *lower_bound) / (float)(*upper_bound - *lower_bound);
+		}
 
-			void ConstructValue(SubType _value) {
-				value.ConstructValue(_value);
-			}
+		template<typename Type>
+		bool UIDrawerSliderIsSmallerImplementation(const void* _left, const void* _right) {
+			const Type* left = (const Type*)_left;
+			const Type* right = (const Type*)_right;
+			return *left < *right;
+		}
 
-			void ConstructPointer(SubType* pointer) {
-				value.ConstructPointer(pointer);
-			}
+		template<typename Integer>
+		UIDrawerSliderFunctions UIDrawerGetIntSliderFunctions() {
+			UIDrawerSliderFunctions result;
 
-			void ConstructExtraData(const void* extra_data) {
-				value.ConstructExtraData(extra_data);
-			}
+			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
+				Integer character_value = function::ConvertCharactersToInt<Integer>(characters);
+				Integer* value = (Integer*)_value;
+				*value = character_value;
+			};
 
-			static size_t ByteSize() {
-				return Type::ByteSize();
-			}
-
-			// used to convert when changing value
-			template<typename Stream>
-			void ToString(Stream& characters) const {
+			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
 				characters.size = 0;
-				value.ToString(characters);
-			}
+				function::ConvertIntToChars(characters, *(const Integer*)_value);
+			};
 
-			template<typename Stream>
-			static bool ValidateTextInput(Stream& characters) {
-				return Type::ValidateTextInput(characters);
-			}
+			result.convert_text_input = convert_text_input;
+			result.to_string = to_string;
+			result.extra_data = nullptr;
+			result.interpolate = UIDrawerSliderInterpolateImplementation<Integer>;
+			result.is_smaller = UIDrawerSliderIsSmallerImplementation<Integer>;
+			result.percentage = UIDrawerSliderPercentageImplementation<Integer>;
 
-			template<typename Stream>
-			static void ConvertTextInput(Stream& characters, void* value_to_change) {
-				SubType* reinterpretation = (SubType*)value_to_change;
-				*reinterpretation = Type::ConvertTextInput(characters);
-			}
+			return result;
+		}
 
-			// used to convert for enter values
-			template<typename Stream>
-			static void ConvertToCharacters(Stream& characters, const void* value_to_convert) {
-				const SubType* reinterpretation = (const SubType*)value_to_convert;
-				Type::ConvertToCharacters(characters, reinterpretation);
-			}
+		inline UIDrawerSliderFunctions UIDrawerGetFloatSliderFunctions(unsigned int& precision) {
+			UIDrawerSliderFunctions result;
 
-			Type value;
-		};
+			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
+				float character_value = function::ConvertCharactersToFloat(characters);
+				float* value = (float*)_value;
+				*value = character_value;
+			};
 
-		struct SliderFloatBase {
-			template<typename Stream>
-			void ToString(Stream& characters) const {
-				function::ConvertFloatToChars(characters, *pointer, precision);
-			}
+			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
+				characters.size = 0;
+				function::ConvertFloatToChars(characters, *(const float*)_value, *(unsigned int*)extra_data);
+			};
 
-			float* Pointer() {
-				return pointer;
-			}
+			result.convert_text_input = convert_text_input;
+			result.to_string = to_string;
+			result.extra_data = &precision;
+			result.interpolate = UIDrawerSliderInterpolateImplementation<float>;
+			result.is_smaller = UIDrawerSliderIsSmallerImplementation<float>;
+			result.percentage = UIDrawerSliderPercentageImplementation<float>;
 
-			const float* ConstPointer() const {
-				return pointer;
-			}
+			return result;
+		}
 
-			float Value() const {
-				return value;
-			}
+		inline UIDrawerSliderFunctions UIDrawerGetDoubleSliderFunctions(unsigned int& precision) {
+			UIDrawerSliderFunctions result;
 
-			void ConstructValue(float _value) {
-				value = _value;
-			}
+			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
+				double character_value = function::ConvertCharactersToDouble(characters);
+				double* value = (double*)_value;
+				*value = character_value;
+			};
 
-			void ConstructPointer(float* _pointer) {
-				pointer = _pointer;
-			}
+			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
+				characters.size = 0;
+				function::ConvertDoubleToChars(characters, *(const double*)_value, *(unsigned int*)extra_data);
+			};
 
-			void ConstructExtraData(const void* extra_data) {
-				precision = *(const unsigned int*)extra_data;
-			}
+			result.convert_text_input = convert_text_input;
+			result.to_string = to_string;
+			result.extra_data = &precision;
+			result.interpolate = UIDrawerSliderInterpolateImplementation<double>;
+			result.is_smaller = UIDrawerSliderIsSmallerImplementation<double>;
+			result.percentage = UIDrawerSliderPercentageImplementation<double>;
 
-			static size_t ByteSize() {
-				return 4;
-			}
-
-			template<typename Stream>
-			static bool ValidateTextInput(Stream& stream) {
-				return stream.size > 0;
-			}
-
-			template<typename Stream>
-			static float ConvertTextInput(Stream& characters) {
-				return function::ConvertCharactersToFloat(characters);
-			}
-
-			template<typename Stream>
-			static void ConvertToCharacters(Stream& characters, float* ptr) {
-				function::ConvertFloatToChars(*ptr, characters);
-			}
-
-			unsigned int precision;
-			float value;
-			float* pointer;
-		};
-
-		struct SliderDoubleBase {
-			template<typename Stream>
-			void ToString(Stream& characters) const {
-				function::ConvertDoubleToChars(characters, *pointer, precision);
-			}
-
-			double* Pointer() {
-				return pointer;
-			}
-
-			const double* ConstPointer() const {
-				return pointer;
-			}
-
-			double Value() const {
-				return value;
-			}
-
-			void ConstructValue(double _value) {
-				value = _value;
-			}
-
-			void ConstructPointer(double* _pointer) {
-				pointer = _pointer;
-			}
-
-			void ConstructExtraData(const void* extra_data) {
-				precision = *(const size_t*)extra_data;
-			}
-
-			static size_t ByteSize() {
-				return 8;
-			}
-
-			template<typename Stream>
-			static bool ValidateTextInput(Stream& characters) {
-				return characters.size > 0;
-			}
-
-			template<typename Stream>
-			static double ConvertTextInput(Stream& characters) {
-				return function::ConvertCharactersToDouble(characters);
-			}
-
-			template<typename Stream>
-			static void ConvertToCharacters(Stream& characters, double* ptr) {
-				function::ConvertDoubleToChars(*ptr, characters);
-			}
-
-			size_t precision;
-			double value;
-			double* pointer;
-		};
-
-		template<typename Integer>
-		struct SliderIntegerBase {
-
-			template<typename Stream>
-			void ToString(Stream& characters) const {
-				function::ConvertIntToCharsFormatted(characters, *pointer);
-			}
-
-			Integer* Pointer() {
-				return pointer;
-			}
-
-			const Integer* ConstPointer() const {
-				return pointer;
-			}
-
-			Integer Value() const {
-				return value;
-			}
-
-			void ConstructValue(Integer _value) {
-				value = _value;
-			}
-
-			void ConstructPointer(Integer* _pointer) {
-				pointer = _pointer;
-			}
-
-			void ConstructExtraData(const void* extra_data) {}
-
-			static size_t ByteSize() {
-				return sizeof(Integer);
-			}
-
-			template<typename Stream>
-			static bool ValidateTextInput(Stream& characters) {
-				return characters.size > 0;
-			}
-
-			template<typename Stream>
-			static Integer ConvertTextInput(Stream& characters) {
-				return function::ConvertCharactersToInt<Integer>(characters);
-			}
-
-			Integer value;
-			Integer* pointer;
-		};
-
-		using SliderFloat = UIDrawerSliderBaseType<SliderFloatBase, float>;
-
-		using SliderDouble = UIDrawerSliderBaseType<SliderDoubleBase, double>;
-
-		template<typename Integer>
-		using SliderInteger = UIDrawerSliderBaseType<SliderIntegerBase<Integer>, Integer>;
+			return result;
+		}
 
 		struct ECSENGINE_API UIConfigTextInputHint {
 			inline const void* GetParameters() const {
@@ -1150,11 +914,7 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIDrawerMenu {
 			inline bool IsTheSameData(const UIDrawerMenu* other) const {
-				if (other == nullptr)
-					return false;
-				else {
-					return name == other->name;
-				}
+				return other != nullptr && name == other->name;
 			}
 
 			UIDrawerTextElement* name;
@@ -1181,12 +941,7 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIDrawerSubmenuHoverable {
 			inline bool IsTheSameData(const UIDrawerSubmenuHoverable* other) const {
-				if (other == nullptr) {
-					return false;
-				}
-				else {
-					return state == other->state && row_index == other->row_index;
-				}
+				return other != nullptr && state == other->state && row_index == other->row_index;
 			}
 
 			UIDrawerMenu* menu;
@@ -1684,26 +1439,30 @@ namespace ECSEngine {
 			const Integer* ECS_RESTRICT upper_bound;
 		};
 
-		template<typename Value>
 		struct UIDrawerInitializeSlider {
 			UIDrawConfig* config;
 			const char* name;
-			Value value_to_modify;
-			Value lower_bound;
-			Value upper_bound;
-			Value default_value;
+			unsigned int byte_size;
+			void* value_to_modify;
+			const void* lower_bound;
+			const void* upper_bound;
+			const void* default_value;
+			const UIDrawerSliderFunctions* functions;
+			UIDrawerTextInputFilter filter;
 		};
 
-		template<typename Value>
 		struct UIDrawerInitializeSliderGroup {
 			UIDrawConfig* config;
 			size_t count;
 			const char* group_name;
 			const char** names;
-			Value* values_to_modify;
-			const Value* lower_bounds;
-			const Value* upper_bounds;
-			const Value* default_values;
+			unsigned int byte_size;
+			void** values_to_modify;
+			const void* lower_bounds;
+			const void* upper_bounds;
+			const void* default_values;
+			const UIDrawerSliderFunctions* functions;
+			UIDrawerTextInputFilter filter;
 		};
 
 		struct ECSENGINE_API UIDrawerInitializeStateTable {

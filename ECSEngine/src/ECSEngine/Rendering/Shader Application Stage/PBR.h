@@ -32,19 +32,19 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreatePBRVertexConstants(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreatePBRVertexConstants(Graphics* graphics, bool temporary = false);
 
 		// ---------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreatePBRPixelConstants(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreatePBRPixelConstants(Graphics* graphics, bool temporary = false);
 
 		// ---------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreatePBRPixelEnvironmentConstant(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreatePBRPixelEnvironmentConstant(Graphics* graphics, bool temporary = false);
 
 		// ---------------------------------------------------------------------------------------------
 
-		ECSENGINE_API ConstantBuffer CreatePBRSkyboxVertexConstant(Graphics* graphics);
+		ECSENGINE_API ConstantBuffer CreatePBRSkyboxVertexConstant(Graphics* graphics, bool temporary = false);
 
 		// ---------------------------------------------------------------------------------------------
 

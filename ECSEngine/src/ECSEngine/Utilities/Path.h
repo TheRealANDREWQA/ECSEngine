@@ -9,17 +9,19 @@ namespace ECSEngine {
 	using Path = Stream<wchar_t>;
 	using ASCIIPath = Stream<char>;
 
-	struct Path2 {
-		Path absolute;
-		Path relative;
-	};
-
-	struct ASCIIPath2 {
-		ASCIIPath absolute;
-		ASCIIPath relative;
-	};
-
 	namespace function {
+
+		// -------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API bool PathIsRelative(Path path);
+
+		ECSENGINE_API bool PathIsRelative(ASCIIPath path);
+
+		// -------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API bool PathIsAbsolute(Path path);
+
+		ECSENGINE_API bool PathIsAbsolute(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 
@@ -30,10 +32,10 @@ namespace ECSEngine {
 		ECSENGINE_API ASCIIPath PathParent(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
 
 		// Uses both separators
-		ECSENGINE_API Path2 PathParentBoth(Path path);
+		ECSENGINE_API Path PathParentBoth(Path path);
 
 		// Uses both separators
-		ECSENGINE_API ASCIIPath2 PathParentBoth(ASCIIPath path);
+		ECSENGINE_API ASCIIPath PathParentBoth(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 
@@ -42,14 +44,14 @@ namespace ECSEngine {
 		ECSENGINE_API size_t PathExtensionSize(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
 
 		// Uses both separators
-		ECSENGINE_API ulong2 PathExtensionSizeBoth(Path path);
+		ECSENGINE_API size_t PathExtensionSizeBoth(Path path);
 
 		// Includes the dot
 		// The separator specifies the character by which the delimitation is made
 		ECSENGINE_API size_t PathExtensionSize(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
 
 		// Uses both separators
-		ECSENGINE_API ulong2 PathExtensionSizeBoth(ASCIIPath path);
+		ECSENGINE_API size_t PathExtensionSizeBoth(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 
@@ -57,13 +59,13 @@ namespace ECSEngine {
 		ECSENGINE_API Path PathExtension(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
 
 		// Uses both separators
-		ECSENGINE_API Path2 PathExtensionBoth(Path path);
+		ECSENGINE_API Path PathExtensionBoth(Path path);
 
 		// The separator specifies the character by which the delimitation is made
 		ECSENGINE_API ASCIIPath PathExtension(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
 
 		// Uses both separators
-		ECSENGINE_API ASCIIPath2 PathExtensionBoth(ASCIIPath path);
+		ECSENGINE_API ASCIIPath PathExtensionBoth(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 
@@ -71,13 +73,13 @@ namespace ECSEngine {
 		ECSENGINE_API Path PathStem(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
 
 		// Uses both separators
-		ECSENGINE_API Path2 PathStemBoth(Path path);
+		ECSENGINE_API Path PathStemBoth(Path path);
 
 		// The separator specifies the character by which the delimitation is made
 		ECSENGINE_API ASCIIPath PathStem(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
 
 		// Uses both separators
-		ECSENGINE_API ASCIIPath2 PathStemBoth(ASCIIPath path);
+		ECSENGINE_API ASCIIPath PathStemBoth(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 
@@ -85,13 +87,13 @@ namespace ECSEngine {
 		ECSENGINE_API Path PathFilename(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
 
 		// Uses both separators
-		ECSENGINE_API Path2 PathFilenameBoth(Path path);
+		ECSENGINE_API Path PathFilenameBoth(Path path);
 
 		// The separator specifies the character by which the delimitation is made
 		ECSENGINE_API ASCIIPath PathFilename(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
 
 		// Uses both separators
-		ECSENGINE_API ASCIIPath2 PathFilenameBoth(ASCIIPath path);
+		ECSENGINE_API ASCIIPath PathFilenameBoth(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 
@@ -107,21 +109,13 @@ namespace ECSEngine {
 		ECSENGINE_API size_t PathParentSize(Path path, wchar_t separator = ECS_OS_PATH_SEPARATOR);
 
 		// Uses both separators
-		ECSENGINE_API ulong2 PathParentSizeBoth(Path path);
+		ECSENGINE_API size_t PathParentSizeBoth(Path path);
 
 		// The separator specifies the character by which the delimitation is made
 		ECSENGINE_API size_t PathParentSize(ASCIIPath path, char separator = ECS_OS_PATH_SEPARATOR_ASCII);
 
 		// Uses both separators
-		ECSENGINE_API ulong2 PathParentSizeBoth(ASCIIPath path);
-
-		// -------------------------------------------------------------------------------------------------
-
-		// Selects the path that has the size different from 0
-		ECSENGINE_API Path GetValidPath(Path2 paths);
-
-		// Selects the path that has the size different from 0
-		ECSENGINE_API ASCIIPath GetValidPath(ASCIIPath2 paths);
+		ECSENGINE_API size_t PathParentSizeBoth(ASCIIPath path);
 
 		// -------------------------------------------------------------------------------------------------
 

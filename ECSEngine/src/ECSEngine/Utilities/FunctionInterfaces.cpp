@@ -345,20 +345,6 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Type>
-		Type Select(bool condition, Type first_value, Type second_value) {
-			return condition ? first_value : second_value;
-		}
-
-		ECS_TEMPLATE_FUNCTION(float, Select, bool, float, float);
-		ECS_TEMPLATE_FUNCTION(double, Select, bool, double, double);
-		ECS_TEMPLATE_FUNCTION(unsigned int, Select, bool, unsigned int, unsigned int);
-		ECS_TEMPLATE_FUNCTION(unsigned short, Select, bool, unsigned short, unsigned short);
-		ECS_TEMPLATE_FUNCTION(int64_t, Select, bool, int64_t, int64_t);
-		ECS_TEMPLATE_FUNCTION(size_t, Select, bool, size_t, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
 		template<typename Stream>
 		size_t ConvertFloatingPointIntegerToChars(Stream& chars, int64_t integer, size_t precision) {
 			static_assert(std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>> ||
@@ -547,236 +533,6 @@ namespace ECSEngine {
 		template ECSENGINE_API float ConvertCharactersToFloatingPoint<float>(CapacityStream<char>);
 		template ECSENGINE_API double ConvertCharactersToFloatingPoint<double>(Stream<char>);
 		template ECSENGINE_API double ConvertCharactersToFloatingPoint<double>(CapacityStream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetRecursiveDirectories(Allocator* allocator, const wchar_t* root, CapacityStream<const wchar_t*>& directories_paths)
-		{
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::path(root))) {
-				if (entry.is_directory()) {
-					const wchar_t* path = entry.path().c_str();
-					size_t character_count = wcslen(path) + 1;
-					wchar_t* allocation = (wchar_t*)allocator->Allocate(sizeof(wchar_t) * character_count, alignof(wchar_t));
-					memcpy(allocation, path, sizeof(wchar_t) * character_count);
-					directories_paths.Add(allocation);
-				}
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetRecursiveDirectories, const wchar_t*, CapacityStream<const wchar_t*>&);
-		
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetRecursiveDirectoriesBatchedAllocation(Allocator* allocator, const wchar_t* root, CapacityStream<const wchar_t*>& directories_paths)
-		{
-			size_t total_memory_count = 0;
-			size_t path_sizes[4096];
-
-			size_t index = 0;
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::path(root))) {
-				if (entry.is_directory()) {
-					const wchar_t* path = entry.path().c_str();
-					path_sizes[index] = sizeof(wchar_t) * (wcslen(path) + 1);
-					total_memory_count += path_sizes[index++];
-				}
-			}
-			ECS_ASSERT(index < 4096);
-
-			void* allocation = allocator->Allocate(total_memory_count, alignof(wchar_t));
-			uintptr_t ptr = (uintptr_t)ptr;
-
-			index = 0;
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::path(root))) {
-				if (entry.is_directory()) {
-					memcpy((wchar_t*)ptr, entry.path().c_str(), path_sizes[index]);
-					directories_paths.Add((wchar_t*)ptr);
-					ptr += path_sizes[index++];
-				}
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetRecursiveDirectoriesBatchedAllocation, const wchar_t*, CapacityStream<const wchar_t*>&);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetRecursiveDirectories(Allocator* allocator, const wchar_t* root, ResizableStream<const wchar_t*, Allocator>& directories_paths)
-		{
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::path(root))) {
-				if (entry.is_directory()) {
-					const wchar_t* path = entry.path().c_str();
-					size_t character_count = wcslen(path) + 1;
-					wchar_t* allocation = (wchar_t*)allocator->Allocate(sizeof(wchar_t) * character_count, alignof(wchar_t*));
-					memcpy(allocation, path, sizeof(wchar_t) * character_count);
-					directories_paths.Add((wchar_t*)allocation);
-				}
-			}
-		}
-
-#define INSTANTIATE_RECURSIVE_DIRECTORY(allocator) template ECSENGINE_API void GetRecursiveDirectories<allocator>(allocator*, const wchar_t*, ResizableStream<const wchar_t*, allocator>&)
-		
-		INSTANTIATE_RECURSIVE_DIRECTORY(LinearAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(StackAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(PoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MultipoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(GlobalMemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryArena);
-		INSTANTIATE_RECURSIVE_DIRECTORY(ResizableMemoryArena);
-
-#undef INSTANTIATE_RECUSIVE_DIRECTORY
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetRecursiveDirectoriesBatchedAllocation(Allocator* allocator, const wchar_t* root, ResizableStream<const wchar_t*, Allocator>& directories_paths)
-		{
-			size_t total_memory_count = 0;
-			size_t path_sizes[4096];
-
-			size_t index = 0;
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::path(root))) {
-				if (entry.is_directory()) {
-					const wchar_t* path = entry.path().c_str();
-					path_sizes[index] = sizeof(wchar_t) * (wcslen(path) + 1);
-					total_memory_count += path_sizes[index++];
-				}
-			}
-			ECS_ASSERT(index < 4096);
-
-			void* allocation = allocator->Allocate(total_memory_count, alignof(wchar_t));
-			uintptr_t ptr = (uintptr_t)ptr;
-
-			index = 0;
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::path(root))) {
-				if (entry.is_directory()) {
-					memcpy((wchar_t*)ptr, entry.path().c_str(), path_sizes[index]);
-					directories_paths.Add((wchar_t*)ptr);
-					ptr += path_sizes[index++];
-				}
-			}
-		}
-
-#define INSTANTIATE_RECURSIVE_DIRECTORY(allocator) template ECSENGINE_API void GetRecursiveDirectoriesBatchedAllocation<allocator>(allocator*, const wchar_t*, ResizableStream<const wchar_t*, allocator>&)
-
-		INSTANTIATE_RECURSIVE_DIRECTORY(LinearAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(StackAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(PoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MultipoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(GlobalMemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryArena);
-		INSTANTIATE_RECURSIVE_DIRECTORY(ResizableMemoryArena);
-
-#undef INSTANTIATE_RECUSIVE_DIRECTORY
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetDirectoryFiles(Allocator* allocator, const wchar_t* directory, CapacityStream<const wchar_t*>& files) {
-			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
-				const wchar_t* path = entry.path().c_str();
-				size_t character_count = wcslen(path) + 1;
-				wchar_t* allocation = (wchar_t*)allocator->Allocate(sizeof(wchar_t) * character_count, alignof(wchar_t));
-				memcpy(allocation, path, sizeof(wchar_t) * character_count);
-				files.Add(allocation);
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetDirectoryFiles, const wchar_t*, CapacityStream<const wchar_t*>&);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetDirectoryFilesBatchedAllocation(Allocator* allocator, const wchar_t* directory, CapacityStream<const wchar_t*>& files) {
-			size_t total_memory = 0;
-			size_t path_sizes[4096];
-			size_t index = 0;
-
-			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
-				const wchar_t* path = entry.path().c_str();
-				path_sizes[index++] = sizeof(wchar_t) * (wcslen(path) + 1);
-			}
-			ECS_ASSERT(index < 4096);
-
-			void* allocation = allocator->Allocate(total_memory, alignof(wchar_t));
-			uintptr_t ptr = (uintptr_t)allocation;
-
-			index = 0;
-			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
-				memcpy((wchar_t*)ptr, entry.path().c_str(), path_sizes[index]);
-				files.Add((wchar_t*)ptr);
-				ptr += path_sizes[index++];
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void, GetDirectoryFilesBatchedAllocation, const wchar_t*, CapacityStream<const wchar_t*>&);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetDirectoryFiles(Allocator* allocator, const wchar_t* directory, ResizableStream<const wchar_t*, Allocator>& files) {
-			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
-				const wchar_t* path = entry.path().c_str();
-				size_t character_count = wcslen(path) + 1;
-				wchar_t* allocation = (wchar_t*)allocator->Allocate(sizeof(wchar_t) * character_count, alignof(wchar_t));
-				memcpy(allocation, path, sizeof(wchar_t) * character_count);
-				files.Add(allocation);
-			}
-		}
-
-#define INSTANTIATE_RECURSIVE_DIRECTORY(allocator) template ECSENGINE_API void GetDirectoryFiles<allocator>(allocator*, const wchar_t*, ResizableStream<const wchar_t*, allocator>&)
-
-		INSTANTIATE_RECURSIVE_DIRECTORY(LinearAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(StackAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(PoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MultipoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(GlobalMemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryArena);
-		INSTANTIATE_RECURSIVE_DIRECTORY(ResizableMemoryArena);
-
-#undef INSTANTIATE_RECUSIVE_DIRECTORY
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void GetDirectoryFilesBatchedAllocation(Allocator* allocator, const wchar_t* directory, ResizableStream<const wchar_t*, Allocator>& files) {
-			size_t total_memory = 0;
-			size_t path_sizes[4096];
-			size_t index = 0;
-
-			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
-				const wchar_t* path = entry.path().c_str();
-				path_sizes[index++] = sizeof(wchar_t) * (wcslen(path) + 1);
-			}
-			ECS_ASSERT(index < 4096);
-
-			void* allocation = allocator->Allocate(total_memory, alignof(wchar_t));
-			uintptr_t ptr = (uintptr_t)allocation;
-
-			index = 0;
-			for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(directory))) {
-				memcpy((wchar_t*)ptr, entry.path().c_str(), path_sizes[index]);
-				files.Add((wchar_t*)ptr);
-				ptr += path_sizes[index++];
-			}
-		}
-
-#define INSTANTIATE_RECURSIVE_DIRECTORY(allocator) template ECSENGINE_API void GetDirectoryFilesBatchedAllocation<allocator>(allocator*, const wchar_t*, ResizableStream<const wchar_t*, allocator>&)
-
-		INSTANTIATE_RECURSIVE_DIRECTORY(LinearAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(StackAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(PoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MultipoolAllocator);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(GlobalMemoryManager);
-		INSTANTIATE_RECURSIVE_DIRECTORY(MemoryArena);
-		INSTANTIATE_RECURSIVE_DIRECTORY(ResizableMemoryArena);
-
-#undef INSTANTIATE_RECUSIVE_DIRECTORY
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -980,21 +736,6 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename IndexStream>
-		void CopyStreamWithMask(void* ECS_RESTRICT buffer, const void* ECS_RESTRICT data, size_t data_element_size, IndexStream indices)
-		{
-			for (size_t index = 0; index < indices.size; index++) {
-				memcpy(buffer, (void*)((uintptr_t)data + data_element_size * indices[index]), data_element_size);
-				uintptr_t ptr = (uintptr_t)buffer;
-				ptr += data_element_size;
-				buffer = (void*)ptr;
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, void* ECS_RESTRICT, const void* ECS_RESTRICT, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename IndexStream>
 		void CopyStreamWithMask(void* ECS_RESTRICT buffer, Stream<void> data, IndexStream indices)
 		{
 			for (size_t index = 0; index < indices.size; index++) {
@@ -1010,26 +751,16 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename IndexStream>
-		void CopyStreamWithMask(std::ofstream& stream, const void* ECS_RESTRICT data, size_t data_element_size, IndexStream indices)
+		bool CopyStreamWithMask(ECS_FILE_HANDLE file, Stream<void> data, IndexStream indices)
 		{
-			for (size_t index = 0; index < indices.size; index++) {
-				stream.write((const char*)((uintptr_t)data + data_element_size * indices[index]), data_element_size);
+			bool success = true;
+			for (size_t index = 0; index < indices.size && success; index++) {
+				success &= WriteFile(file, { function::OffsetPointer(data.buffer, data.size * indices[index]), data.size });
 			}
+			return success;
 		}
 
-		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, std::ofstream&, const void* ECS_RESTRICT, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename IndexStream>
-		void CopyStreamWithMask(std::ofstream& stream, Stream<void> data, IndexStream indices)
-		{
-			for (size_t index = 0; index < indices.size; index++) {
-				stream.write((const char*)((uintptr_t)data.buffer + data.size * indices[index]), data.size);
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_4_AFTER(void, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, std::ofstream&, Stream<void>);
+		ECS_TEMPLATE_FUNCTION_4_AFTER(bool, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, ECS_FILE_HANDLE, Stream<void>);
 
 		// ----------------------------------------------------------------------------------------------------------
 

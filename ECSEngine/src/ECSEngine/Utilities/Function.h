@@ -176,9 +176,6 @@ namespace ECSEngine {
 			}
 			return value;
 		}
-
-		// it implies 2 seeks and 2 tells
-		ECSENGINE_API size_t GetFileByteSize(std::ifstream& stream);
 		
 		// duration should be expressed as milliseconds
 		ECSENGINE_API void ConvertDurationToChars(size_t duration, char* characters);
@@ -218,12 +215,24 @@ namespace ECSEngine {
 			return (configuration & flag) != 0;
 		}
 
+		inline bool HasFlagAtomic(const std::atomic<size_t>& configuration, size_t flag) {
+			return (configuration.load(std::memory_order_relaxed) & flag) != 0;
+		}
+
 		constexpr size_t ClearFlag(size_t configuration, size_t flag) {
 			return configuration & (~flag);
 		}
 
+		inline void ClearFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
+			configuration.fetch_and(~flag, std::memory_order_relaxed);
+		}
+
 		constexpr size_t SetFlag(size_t configuration, size_t flag) {
 			return configuration | flag;
+		}
+
+		inline void SetFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
+			configuration.fetch_or(flag, std::memory_order_relaxed);
 		}
 
 		inline bool CompareStrings(Stream<wchar_t> string, Stream<wchar_t> other) {
@@ -394,13 +403,11 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<char>& characters, size_t format_flags);
 
-		// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
-		// If the read or the opening fails, it will return { nullptr, 0 }
-		ECSENGINE_API Stream<void> ReadWholeFile(const wchar_t* path, AllocatorPolymorphic allocator, bool binary = true);
+		// If the pointer is null, it will commit the message
+		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> message);
 
-		// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
-		// If the read or the opening fails, it will return { nullptr, 0 }
-		ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool binary = true);
+		// If the pointer is null, it will commit the message
+		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, const char* message);
 
 	}
 

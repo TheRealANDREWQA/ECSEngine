@@ -3,7 +3,7 @@
 
 struct EditorState;
 
-using InspectorDrawFunction = void (*)(EditorState* editor_state, void* data, ECSEngine::Tools::UIDrawer<false>* drawer);
+using InspectorDrawFunction = void (*)(EditorState* editor_state, void* data, ECSEngine::Tools::UIDrawer* drawer);
 using InspectorTable = ECSEngine::containers::HashTable<InspectorDrawFunction, ECSEngine::ResourceIdentifier, ECSEngine::containers::HashFunctionPowerOfTwo, ECSEngine::HashFunctionMultiplyString>;
 
 struct InspectorData {
@@ -11,6 +11,5 @@ struct InspectorData {
 	void* draw_data;
 	size_t data_size;
 	InspectorTable table;
+	size_t flags;
 };
-
-void InitializeInspector(EditorState* editor_state);

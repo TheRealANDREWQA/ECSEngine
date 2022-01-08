@@ -21,9 +21,10 @@
 								ECSEngine::float2 mouse_delta = system->GetMouseDelta(mouse_position)
 
 #define UI_PREPARE_DRAWER(initializer)	ECSEngine::Tools::UIDrawerDescriptor* descriptor = (ECSEngine::Tools::UIDrawerDescriptor*)drawer_descriptor; \
-							ECSEngine::Tools::UIDrawer<initializer> drawer = ECSEngine::Tools::UIDrawer<initializer>( \
+							ECSEngine::Tools::UIDrawer drawer = ECSEngine::Tools::UIDrawer( \
 								*descriptor, \
-								window_data \
+								window_data, \
+								initializer \
 							); 
 
 #define UI_DRAWER_ELEMENT_DRAW  ECSEngine::Tools::UIDrawer<false>* drawer = (ECSEngine::Tools::UIDrawer<false>*)drawer_ptr; 
@@ -42,7 +43,7 @@
 #define ECS_TOOLS_UI_FILE_VERSION 1
 #define ECS_TOOLS_UI_FILE_WINDOW_DESCRIPTOR_VERSION 1
 
-#define ECS_TOOLS_UI_SYSTEM_HANDLER_COUNT 8
+#define ECS_TOOLS_UI_SYSTEM_HANDLER_FRAME_COUNT 8
 
 #define ECS_TOOLS_UI_STRING_HASH_FUNCTION_ADDITIVE
 #define ECS_TOOLS_UI_SINGLE_THREADED
@@ -70,7 +71,7 @@
 #define ECS_TOOLS_UI_MISC_DRAWER_TEMP 250
 #define ECS_TOOLS_UI_MISC_WINDOW_TABLE_SIZE 256
 #define ECS_TOOLS_UI_MISC_TOOL_TIP_PADDING {0.007f, 0.005f}
-#define ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS 32
+#define ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS 256
 
 #define ECS_TOOLS_UI_MISC_RENDER_SLIDER_HORIZONTAL_SIZE 0.031f 
 #define ECS_TOOLS_UI_MISC_RENDER_SLIDER_VERTICAL_SIZE 0.018f
@@ -83,7 +84,7 @@
 #define ECS_TOOLS_UI_DOCKSPACE_MAX_BORDER_COUNT 8
 #define ECS_TOOLS_UI_DOCKSPACE_MAX_WINDOWS_PER_BORDER 8
 #define ECS_TOOLS_UI_DOCKSPACE_BORDER_MARGIN 0.0185f
-#define ECS_TOOLS_UI_DOCKSPACE_BORDER_SIZE 0.0025474f
+#define ECS_TOOLS_UI_DOCKSPACE_BORDER_SIZE 0.0026474f
 #define ECS_TOOLS_UI_DOCKSPACE_BORDER_MINIMUM_DISTANCE 0.08f
 #define ECS_TOOLS_UI_DOCKSPACE_BORDER_SPRITE_TEXTURE_DEFAULT_COUNT 128
 #define ECS_TOOLS_UI_DOCKSPACE_BORDER_SPRITE_CACHE_COUNT 16

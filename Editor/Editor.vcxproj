@@ -178,11 +178,11 @@
       <ConformanceMode>Default</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>..\ECSEngine\src\Includes;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\ECSEngine\src\Includes;src%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>editorpch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
@@ -202,7 +202,7 @@
       <ConformanceMode>Default</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>..\ECSEngine\src\Includes;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\ECSEngine\src\Includes;src%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -226,7 +226,7 @@
       <ConformanceMode>Default</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalIncludeDirectories>..\ECSEngine\src\Includes;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\ECSEngine\src\Includes;src%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -258,23 +258,27 @@
     <ClInclude Include="src\Editor\EditorParameters.h" />
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
+    <ClInclude Include="src\Metafiles\Metafiles.h" />
     <ClInclude Include="src\Modules\Module.h" />
     <ClInclude Include="src\Modules\ModuleConfigurationGroup.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />
     <ClInclude Include="src\OSFunctions.h" />
+    <ClInclude Include="src\Project\ProjectFile.h" />
+    <ClInclude Include="src\Project\ProjectFolders.h" />
     <ClInclude Include="src\Project\ProjectOperations.h" />
     <ClInclude Include="src\Project\ProjectUITemplate.h" />
     <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
     <ClInclude Include="src\Test.h" />
-    <ClInclude Include="src\UI\AssetTypes.h" />
+    <ClInclude Include="src\UI\FileExplorerData.h" />
+    <ClInclude Include="src\UI\HubData.h" />
+    <ClInclude Include="src\UI\InspectorData.h" />
     <ClInclude Include="src\UI\NotificationBar.h" />
     <ClInclude Include="src\UI\DirectoryExplorer.h" />
     <ClInclude Include="src\UI\FileExplorer.h" />
     <ClInclude Include="src\UI\Game.h" />
     <ClInclude Include="src\UI\Hub.h" />
     <ClInclude Include="src\UI\Inspector.h" />
-    <ClInclude Include="src\UI\InspectorData.h" />
     <ClInclude Include="src\UI\MiscellaneousBar.h" />
     <ClInclude Include="src\UI\ModuleExplorer.h" />
     <ClInclude Include="src\UI\Scene.h" />
@@ -286,14 +290,17 @@
     <ClCompile Include="src\Editor\EditorEvent.cpp" />
     <ClCompile Include="src\Editor\EditorFile.cpp" />
     <ClCompile Include="src\editorpch.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\Editor\EditorState.cpp" />
+    <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Modules\Module.cpp" />
     <ClCompile Include="src\Modules\ModuleConfigurationGroup.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\OSFunctions.cpp" />
+    <ClCompile Include="src\Project\ProjectFolders.cpp" />
     <ClCompile Include="src\Project\ProjectOperations.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />

@@ -17,10 +17,6 @@ namespace ECSEngine {
 		m_size_per_allocator = capacity / allocator_count;
 		size_t arena_buffer_offset = sizeof(MultipoolAllocator) * allocator_count;
 		for (size_t index = 0; index < allocator_count; index++) {
-			/*unsigned char* pogu = (unsigned char*)((uintptr_t)buffer + index * m_size_per_allocator);
-			uintptr_t difference = (uintptr_t)pogu - (uintptr_t)buffer;
-			void* pogu2 = (void*)((uintptr_t)arena_buffer + arena_buffer_offset + index * MultipoolAllocator::MemoryOf(blocks_per_allocator));
-			uintptr_t difference2 = (uintptr_t)pogu2 - (uintptr_t)arena_buffer;*/
 			m_allocators[index] = MultipoolAllocator(
 				(unsigned char*)((uintptr_t)buffer + index * m_size_per_allocator),
 				(void*)((uintptr_t)arena_buffer + arena_buffer_offset + index * (MultipoolAllocator::MemoryOf(blocks_per_allocator) + 16)),
@@ -81,13 +77,6 @@ namespace ECSEngine {
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryArena::Deallocate_ts, const void*);
 
-	void MemoryArena::SetDebugBuffer(unsigned int* buffer, unsigned int blocks_per_allocator)
-	{
-		for (size_t index = 0; index < m_allocators.size; index++) {
-			m_allocators[index].SetDebugBuffer(buffer + index * blocks_per_allocator);
-		}
-	}
-
 	size_t MemoryArena::MemoryOf(size_t allocator_count, size_t blocks_per_allocator) {
 		return (sizeof(MultipoolAllocator) + MultipoolAllocator::MemoryOf(blocks_per_allocator) + 16) * allocator_count + 16;
 	}
@@ -110,14 +99,8 @@ namespace ECSEngine {
 		void* buffer = backup->Allocate(initial_arena_capacity, 8);
 		memset(arena_allocation, 0, MemoryArena::MemoryOf(initial_allocator_count, initial_blocks_per_allocator));
 		memset(buffer, 0, initial_arena_capacity);
-#ifdef ECSENGINE_DEBUG
-		void* debug_buffer = backup->Allocate(containers::BlockRange::MemoryOfDebug(initial_blocks_per_allocator) * initial_allocator_count);
-#endif
 		m_arenas = containers::ResizableStream<MemoryArena, GlobalMemoryManager>(backup, ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE);
 		m_arenas.Add(MemoryArena(arena_allocation, buffer, initial_arena_capacity, initial_allocator_count, initial_blocks_per_allocator));
-#ifdef ECSENGINE_DEBUG
-		m_arenas[0].SetDebugBuffer((unsigned int*)debug_buffer, initial_blocks_per_allocator);
-#endif
 
 		if (arena_capacity == 0) {
 			m_new_arena_capacity = initial_arena_capacity;
@@ -163,9 +146,6 @@ namespace ECSEngine {
 	void ResizableMemoryArena::CreateArena() {
 		void* arena_allocation = m_backup->Allocate(MemoryArena::MemoryOf(m_new_allocator_count, m_new_blocks_per_allocator), 8);
 		void* buffer = m_backup->Allocate(m_new_arena_capacity, 8);
-#ifdef ECSENGINE_DEBUG
-		void* debug_buffer = m_backup->Allocate(containers::BlockRange::MemoryOfDebug(m_new_blocks_per_allocator) * m_new_allocator_count);
-#endif
 		ECS_ASSERT(arena_allocation != nullptr && buffer != nullptr);
 		m_arenas.Add(MemoryArena(
 			arena_allocation,
@@ -174,9 +154,6 @@ namespace ECSEngine {
 			m_new_allocator_count,
 			m_new_blocks_per_allocator
 		));
-#ifdef ECSENGINE_DEBUG
-		m_arenas[m_arenas.size - 1].SetDebugBuffer((unsigned int*)debug_buffer, m_new_blocks_per_allocator);
-#endif
 	}
 
 	void ResizableMemoryArena::CreateArena(unsigned int arena_capacity, unsigned int allocator_count, unsigned int blocks_per_allocator) {

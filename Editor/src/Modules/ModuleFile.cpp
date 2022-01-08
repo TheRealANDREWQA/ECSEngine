@@ -1,3 +1,4 @@
+#include "editorpch.h"
 #include "Module.h"
 #include "ModuleFile.h"
 #include "..\Editor\EditorState.h"
@@ -35,11 +36,13 @@ bool LoadModuleFile(EditorState* editor_state) {
 	
 	ECS_TEMP_STRING(module_path, 256);
 	GetProjectModuleFilePath(editor_state, module_path);
-	std::ifstream stream(module_path.buffer, std::ios::in | std::ios::binary | std::ios::beg);
+
+	Stream<void> file_contents = ReadWholeFileBinary(module_path, GetAllocatorPolymorphic(editor_allocator));
 
 	bool success = true;
-	if (stream.good()) {
-		size_t file_modules = DeserializeMultisectionCount(stream);
+	if (file_contents.buffer != nullptr) {
+		uintptr_t file_ptr = (uintptr_t)file_contents.buffer;
+		size_t file_modules = DeserializeMultisectionCount(file_ptr);
 		ECS_ASSERT(file_modules < TEMP_STREAMS, "Too many modules");
 
 		for (size_t index = 0; index < file_modules; index++) {
@@ -48,7 +51,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 			current_void_stream += 3;
 		}
 
-		DeserializeMultisection(stream, serialize_data, editor_allocator, AllocatorType::MemoryManager, nullptr, &success);
+		success = DeserializeMultisection(file_ptr, serialize_data, GetAllocatorPolymorphic(editor_allocator)) != -1;
 		if (success) {
 			ResetProjectModules(editor_state);
 			ResetProjectGraphicsModule(editor_state);
@@ -98,6 +101,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 				editor_state->task_manager->AddDynamicTaskAndWake(rewrite_module_file);
 			}
 		}
+		editor_allocator->Deallocate(file_contents.buffer);
 	}
 	else {
 		success = false;
@@ -147,14 +151,7 @@ bool SaveModuleFile(EditorState* editor_state) {
 
 	ECS_TEMP_STRING(module_path, 256);
 	GetProjectModuleFilePath(editor_state, module_path);
-	std::ofstream stream(module_path.buffer, std::ios::out | std::ios::trunc | std::ios::binary);
-
-	bool success = false;
-	if (stream.good()) {
-		success = SerializeMultisection(stream, serialize_data);
-	}
-
-	return success;
+	return SerializeMultisection(module_path, serialize_data);
 }
 
 void SaveProjectModuleFileThreadTask(unsigned int thread_id, World* world, void* data) {

@@ -26,9 +26,14 @@ namespace ECSEngine {
 		value.store(false, ECS_RELEASE);
 	}
 
+	bool SpinLock::is_locked() const
+	{
+		return value.load(ECS_RELAXED);
+	}
+
 	bool SpinLock::try_lock() {
 		// First do a relaxed load to check if lock is free in order to prevent
-		// unnecessary cache misses if someone does while(!try_lock())
+		// unnecessary cache misses in while(!try_lock())
 		return !value.load(ECS_RELAXED) && !value.exchange(true, ECS_ACQUIRE);
 	}
 

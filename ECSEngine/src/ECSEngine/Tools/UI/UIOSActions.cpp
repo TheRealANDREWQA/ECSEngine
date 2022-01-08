@@ -110,14 +110,14 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			RenameFolderActionData* data = (RenameFolderActionData*)_data;
-			OS::RenameFolderWithError(data->path, data->new_name, system);
+			OS::RenameFolderOrFileWithError(data->path, data->new_name, system);
 		}
 
 		void RenameFolderPointerAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			RenameFolderPointerActionData* data = (RenameFolderPointerActionData*)_data;
-			OS::RenameFolderWithError(*data->path, *data->new_name, system);
+			OS::RenameFolderOrFileWithError(*data->path, *data->new_name, system);
 		}
 
 		void RenameFolderWizardCallback(ActionData* action_data) {
@@ -164,14 +164,14 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			RenameFileActionData* data = (RenameFileActionData*)_data;
-			OS::RenameFileWithError(data->path, data->new_name, system);
+			OS::RenameFolderOrFileWithError(data->path, data->new_name, system);
 		}
 
 		void RenameFilePointerAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			RenameFilePointerActionData* data = (RenameFilePointerActionData*)_data;
-			OS::RenameFileWithError(*data->path, *data->new_name, system);
+			OS::RenameFolderOrFileWithError(*data->path, *data->new_name, system);
 		}
 
 		void RenameFileWizardCallback(ActionData* action_data) {

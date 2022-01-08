@@ -1,4 +1,5 @@
 #pragma once
+#include "editorpch.h"
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
@@ -6,7 +7,7 @@ ECS_CONTAINERS;
 ECS_TOOLS;
 
 constexpr const wchar_t* PROJECT_UI_TEMPLATE_EXTENSION = L".uit";
-constexpr const wchar_t* PROJECT_CURRENT_UI_TEMPLATE = L"UI/current.uit";
+constexpr const wchar_t* PROJECT_CURRENT_UI_TEMPLATE = L"UI\\current.uit";
 
 struct EditorState;
 

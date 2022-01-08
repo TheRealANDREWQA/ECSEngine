@@ -72,8 +72,13 @@ namespace ECSEngine {
 			}
 
 			Stream<T> Request(unsigned int count) {
-				unsigned int current_size = size.fetch_add(std::memory_order_acq_rel);
+				unsigned int current_size = size.fetch_add(count, std::memory_order_acq_rel);
 				return { buffer + current_size, count };
+			}
+
+			unsigned int RequestInt(unsigned int count){
+				unsigned int current_size = size.fetch_add(count, std::memory_order_acq_rel);
+				return current_size;
 			}
 
 			void Remove(unsigned int index) {
