@@ -122,14 +122,13 @@ namespace ECSEngine {
 			unsigned int m_first_item;
 		};
 
-		template<typename T, typename Allocator, bool zero_memory = false>
+		template<typename T>
 		struct ResizableQueue {
 		public:
 			ResizableQueue() : m_first_item(0) {}
-			ResizableQueue(Allocator* allocator, size_t capacity) : m_queue(allocator, capacity), m_first_item(0) {}
+			ResizableQueue(AllocatorPolymorphic allocator, size_t capacity) : m_queue(allocator, capacity), m_first_item(0) {}
 
 			ResizableQueue(const ResizableQueue& other) = default;
-
 			ResizableQueue& operator = (const ResizableQueue& other) = default;
 
 			void FreeBuffer() {
@@ -144,7 +143,7 @@ namespace ECSEngine {
 				return m_queue.capacity;
 			}
 
-			ResizableStream<T, Allocator, zero_memory>* GetQueue() const {
+			ResizableStream<T>* GetQueue() const {
 				return &m_queue;
 			}
 
@@ -207,7 +206,7 @@ namespace ECSEngine {
 			}
 
 		//private:
-			ResizableStream<T, Allocator, zero_memory> m_queue;
+			ResizableStream<T> m_queue;
 			unsigned int m_first_item;
 		};
 

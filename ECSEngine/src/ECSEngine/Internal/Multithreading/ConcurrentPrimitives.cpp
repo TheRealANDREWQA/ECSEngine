@@ -31,6 +31,13 @@ namespace ECSEngine {
 		return value.load(ECS_RELAXED);
 	}
 
+	void SpinLock::wait_locked() const
+	{
+		while (is_locked()) {
+			_mm_pause();
+		}
+	}
+
 	bool SpinLock::try_lock() {
 		// First do a relaxed load to check if lock is free in order to prevent
 		// unnecessary cache misses in while(!try_lock())

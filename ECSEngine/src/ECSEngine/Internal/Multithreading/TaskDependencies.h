@@ -15,7 +15,7 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API TaskDependencies {
 		TaskDependencies() : solved_task_count(0) {}
-		TaskDependencies(MemoryManager* allocator) : elements(allocator, 0), solved_task_count(0) {}
+		TaskDependencies(MemoryManager* allocator) : elements(GetAllocatorPolymorphic(allocator), 0), solved_task_count(0) {}
 
 		TaskDependencies(const TaskDependencies& other) = default;
 		TaskDependencies& operator = (const TaskDependencies & other) = default;
@@ -38,7 +38,7 @@ namespace ECSEngine {
 		// Or missing tasks
 		bool Solve();
 
-		ResizableStream<TaskDependencyElement, MemoryManager> elements;
+		ResizableStream<TaskDependencyElement> elements;
 		unsigned int solved_task_count;
 	};
 

@@ -1,29 +1,27 @@
 #pragma once
-#include "../../Core.h"
-#include "../../Containers/Stream.h"
-#include "../../Allocators/AllocatorTypes.h"
-#include "../File.h"
+#include "../../../Core.h"
+#include "../../../Containers/Stream.h"
+#include "../../File.h"
 
 ECS_CONTAINERS;
 
 namespace ECSEngine {
 
-	// Make name nullptr if you want this to be serialized anyway
-	// Only the first data.size streams will be deserialized
-	// When deserializing, data[].buffer must point to the pointer that receives the data
-	struct ECSENGINE_API SerializeMultisectionData {
+	// If the name is nullptr, the name will be skipped when serializing
+	struct SerializeMultisectionData {
 		Stream<Stream<void>> data;
+		const char* name = nullptr;
 	};
 
 	// ---------------------------------------------------------------------------------------------------------------
 
 	// The allocator polymorphic is needed to allocate the buffer to which the contents will be written and then commited to disk
 	// Allocator nullptr means use malloc
-	ECSENGINE_API bool SerializeMultisection(Stream<wchar_t> file, Stream<SerializeMultisectionData> data, AllocatorPolymorphic allocator = { nullptr }, Stream<void> header = {nullptr, 0});
+	ECSENGINE_API bool SerializeMultisection(Stream<SerializeMultisectionData> data, Stream<wchar_t> file, AllocatorPolymorphic allocator = { nullptr }, Stream<void> header = {nullptr, 0});
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void SerializeMultisection(uintptr_t& stream, Stream<SerializeMultisectionData> data, Stream<void> header = { nullptr, 0 });
+	ECSENGINE_API void SerializeMultisection(Stream<SerializeMultisectionData> data, uintptr_t& stream, Stream<void> header = { nullptr, 0 });
 
 	// ---------------------------------------------------------------------------------------------------------------
 
@@ -31,60 +29,53 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// Returns the amount of pointer data bytes
-	// The allocator is needed to read the whole file into the memory then process it
-	// Nullptr means use malloc
-	// A value of -1 bytes written means failure
-	ECSENGINE_API size_t DeserializeMultisection(
-		Stream<wchar_t> file,
+	// The whole file is read into a memory buffer and all of the multisections will point inside it. The memory buffer
+	// is allocated from the allocator. If the read operation fails, it returns nullptr. It will set all the available multisections
+	// (i. e. there is no name filtering). The buffer if not nullptr must be deallocated afterwards!!!
+	// From the memory pool there will be allocated the individual Stream<void>'s of each multisection
+	ECSENGINE_API void* DeserializeMultisection(
 		CapacityStream<SerializeMultisectionData>& data,
 		CapacityStream<void>& memory_pool,
+		Stream<wchar_t> file,
 		AllocatorPolymorphic allocator = {nullptr},
 		CapacityStream<void>* header = nullptr
 	);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// Returns the amount of pointer data bytes
+	// The whole file is read into a memory buffer and all of the multisections will point inside it. The memory buffer
+	// is allocated from the allocator. If the read operation fails, it returns nullptr. It will set all the available multisections
+	// (i. e. there is no name filtering). The buffer if not nullptr must be deallocated afterwards!!!
+	// From the memory pool there will be allocated the individual Stream<void>'s of each multisection
+	ECSENGINE_API void* DeserializeMultisectionWithMatch(
+		Stream<SerializeMultisectionData> data,
+		CapacityStream<void>& memory_pool,
+		Stream<wchar_t> file,
+		AllocatorPolymorphic allocator = { nullptr },
+		CapacityStream<void>* header = nullptr
+	);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data bytes. It can return -1 (error) if the header capacity is not big enough to read the header. 
+	// The multisections will point inside the given stream. There is no name filtering.
+	// From the memory pool there will be allocated the individual Stream<void>'s of each multisection
 	ECSENGINE_API size_t DeserializeMultisection(
-		uintptr_t& stream,
 		CapacityStream<SerializeMultisectionData>& data,
 		CapacityStream<void>& memory_pool,
-		CapacityStream<void>* header = nullptr
-	);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Returns the total amount of memory allocated
-	// A value of -1 bytes written means failure
-	// There are 2 allocators - one for the file when it will be read into the memory
-	// The other one is used to determine if the writes will happen directly into the buffers
-	// or if allocations will be made
-	ECSENGINE_API size_t DeserializeMultisection(
-		Stream<wchar_t> file,
-		CapacityStream<SerializeMultisectionData>& data,
-		AllocatorPolymorphic file_allocator = { nullptr },
-		AllocatorPolymorphic buffer_allocator = {nullptr},
-		CapacityStream<void>* header = nullptr
-	);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	// Returns the total amount of memory allocated
-	// It will write directly into the buffers
-	ECSENGINE_API size_t DeserializeMultisection(
 		uintptr_t& stream,
-		CapacityStream<SerializeMultisectionData>& data,
 		CapacityStream<void>* header = nullptr
 	);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// Returns the total amount of memory allocated
-	ECSENGINE_API size_t DeserializeMultisection(
+	// Returns the amount of pointer data bytes. It can return -1 (error) if the header capacity is not big enough to read the header. 
+	// The multisections will point inside the given stream. There is no name filtering.
+	// From the memory pool there will be allocated the individual Stream<void>'s of each multisection
+	ECSENGINE_API size_t DeserializeMultisectionWithMatch(
+		Stream<SerializeMultisectionData> data,
+		CapacityStream<void>& memory_pool,
 		uintptr_t& stream,
-		CapacityStream<SerializeMultisectionData>& data,
-		AllocatorPolymorphic allocator,
 		CapacityStream<void>* header = nullptr
 	);
 
@@ -94,22 +85,24 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
+	// The total amount of data for all multisections
 	ECSENGINE_API size_t DeserializeMultisectionSize(uintptr_t stream);
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API size_t DeserializeMultisectionSize(uintptr_t stream, Stream<size_t> multisection_data_stream_count);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void DeserializeMultisectionPerSectionSize(uintptr_t stream, CapacityStream<size_t>& sizes);
-
-	// ---------------------------------------------------------------------------------------------------------------
-
+	// Multisections[index].size will be the size of the entire multisection - not the number of streams
 	ECSENGINE_API void DeserializeMultisectionPerSectionSize(
 		uintptr_t stream,
-		CapacityStream<size_t>& sizes,
-		Stream<size_t> multisection_data_stream_count
+		CapacityStream<size_t>& multisections
+	);
+
+	// ---------------------------------------------------------------------------------------------------------------
+
+	// Multisections[index].size will be the size of the entire multisection - not the number of streams
+	// This overload will filter the multisections to only those specified
+	ECSENGINE_API void DeserializeMultisectionPerSectionSizeWithMatch(
+		uintptr_t stream,
+		Stream<SerializeMultisectionData> multisections
 	);
 
 	// ---------------------------------------------------------------------------------------------------------------
@@ -118,8 +111,9 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------
 
-	// These are byte sizes
-	ECSENGINE_API void DeserializeMultisectionStreamSizes(uintptr_t stream, CapacityStream<Stream<size_t>>& multisection_sizes);
+	// Each multisection must have the name set before hand. It works the same as the other variant, the only difference being that 
+	// it will filter the multisections according to the names
+	ECSENGINE_API void DeserializeMultisectionStreamCountWithMatch(uintptr_t stream, Stream<SerializeMultisectionData> multisections);
 
 	// ---------------------------------------------------------------------------------------------------------------
 

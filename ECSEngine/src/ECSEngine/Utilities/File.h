@@ -63,7 +63,10 @@ namespace ECSEngine {
 		// Opens a file and truncates it to zero length; the file must have write permission.
 		// Cannot be specified with READ_ONLY. Note: The flag destroys the contents of the specified file if already exists.
 		ECS_FILE_ACCESS_TRUNCATE_FILE = O_TRUNC,
-		ECS_FILE_ACCESS_TEXT = O_TEXT
+		ECS_FILE_ACCESS_TEXT = O_TEXT,
+
+		// Combination of multiple flags
+		ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE = O_WRONLY | O_BINARY | O_TRUNC
 	};
 
 	using ECS_FILE_HANDLE = int;
@@ -258,6 +261,16 @@ namespace ECSEngine {
 
 	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool DeleteFolderContents(Stream<wchar_t> path);
+
+	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
+	// or from malloc if the allocator is nullptr
+	// If the read or the opening fails, it will return { nullptr, 0 }
+	ECSENGINE_API Stream<void> ReadWholeFile(const wchar_t* path, bool binary, AllocatorPolymorphic allocator = { nullptr });
+
+	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
+	// or from malloc if the allocator is nullptr
+	// If the read or the opening fails, it will return { nullptr, 0 }
+	ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator = { nullptr });
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
 	// or from malloc if the allocator is nullptr

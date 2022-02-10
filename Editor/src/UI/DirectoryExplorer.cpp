@@ -29,7 +29,6 @@ struct DirectoryExplorerData {
 	UIDrawerLabelHierarchy* drawer_hierarchy;
 	CapacityStream<const char*> directories_ptrs;
 	bool is_right_click_window_opened;
-	Timer timer;
 };
 
 bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
@@ -307,6 +306,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		config.AddFlag(right_click);
 
 		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<const char*>(nullptr, 0));
+		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER);
 	}
 
 	EDITOR_STATE(data->editor_state);
@@ -335,7 +335,6 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 	if (!initialize) {
 		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", data->directories_ptrs);
 	}
-
 }
 
 void CreateDirectoryExplorer(EditorState* editor_state) {
@@ -396,8 +395,7 @@ void DirectoryExplorerTick(EditorState* editor_state)
 	if (window_index != -1) {
 		DirectoryExplorerData* data = (DirectoryExplorerData*)ui_system->GetWindowData(window_index);
 
-		if (data->timer.GetDurationSinceMarker_ms() > LAZY_EVALUATION_MILLISECONDS_TICK) {
-			data->timer.SetMarker();
+		if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER, LAZY_EVALUATION_MILLISECONDS_TICK)) {
 			data->allocator.Clear();
 			data->directories_ptrs.size = 0;
 

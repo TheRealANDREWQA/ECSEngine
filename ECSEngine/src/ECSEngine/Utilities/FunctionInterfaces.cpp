@@ -536,6 +536,77 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
+		template<typename CharacterType>
+		float ParseFloat(const CharacterType** characters, Stream<CharacterType> delimiters)
+		{
+			return ParseType<CharacterType, float>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
+				return ConvertCharactersToFloat(stream_characters);
+			});
+		}
+
+		template ECSENGINE_API float ParseFloat(const char**, Stream<char>);
+		template ECSENGINE_API float ParseFloat(const wchar_t**, Stream<wchar_t>);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		double ParseDouble(const CharacterType** characters, Stream<CharacterType> delimiters)
+		{
+			return ParseType<CharacterType, double>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
+				return ConvertCharactersToDouble(stream_characters);
+			});
+		}
+
+		template ECSENGINE_API double ParseDouble(const char**, Stream<char>);
+		template ECSENGINE_API double ParseDouble(const wchar_t**, Stream<wchar_t>);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		bool ParseBool(const CharacterType** characters, Stream<CharacterType> delimiters)
+		{
+			return ParseType<CharacterType, bool>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
+				size_t offset = 0;
+				if constexpr (std::is_same_v<CharacterType, char> || std::is_same_v<CharacterType, int8_t>) {
+					while (offset < stream_characters.size && stream_characters[offset] < '0' && stream_characters[offset] > '9') {
+						offset++;
+					}
+					if (offset == stream_characters.size) {
+						return false;
+					}
+					return stream_characters[offset] != '0' ? true : false;
+				}
+				else {
+					while (stream_characters[offset] < L'0' && stream_characters[offset] > L'9') {
+						offset++;
+					}
+					if (offset == stream_characters.size) {
+						return false;
+					}
+					return stream_characters[offset] != L'0' ? true : false;
+				}
+			});
+		}
+
+		template ECSENGINE_API bool ParseBool(const char**, Stream<char>);
+		template ECSENGINE_API bool ParseBool(const wchar_t**, Stream<wchar_t>);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment)
+		{
+			return Copy(allocator, { data, data_size }, alignment).buffer;
+		}
+
+		Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment)
+		{
+			void* allocation = Allocate(allocator, data.size, alignment);
+			memcpy(allocation, data.buffer, data.size);
+			return { allocation, data.size };
+		}
+
+		// ----------------------------------------------------------------------------------------------------------
+
 		template<typename Allocator>
 		void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment) {
 			void* allocation = allocator->Allocate(data_size, alignment);
@@ -657,6 +728,33 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopyTs, Stream<wchar_t>);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		Stream<char> StringCopy(AllocatorPolymorphic allocator, const char* string)
+		{
+			return StringCopy(allocator, ToStream(string));
+		}
+
+		Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
+			Stream<char> result = Stream<char>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
+			result[string.size] = '\0';
+			return result;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string)
+		{
+			Stream<wchar_t> result = Stream<wchar_t>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(wchar_t), alignof(wchar_t)), string.size);
+			result[string.size] = '\0';
+			return result;
+		}
+
+		Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, const wchar_t* string)
+		{
+			return StringCopy(allocator, ToStream(string));
+		}
 
 		// ----------------------------------------------------------------------------------------------------------
 

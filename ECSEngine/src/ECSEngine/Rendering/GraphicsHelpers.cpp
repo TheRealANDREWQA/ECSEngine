@@ -293,6 +293,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		buffer_descriptor.Usage = D3D11_USAGE_STAGING;
 		buffer_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 		buffer_descriptor.BindFlags = 0;
+		buffer_descriptor.MiscFlags = function::ClearFlag(buffer_descriptor.MiscFlags, D3D11_RESOURCE_MISC_SHARED);
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, nullptr, &_new_buffer);
@@ -702,7 +703,6 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		// Invert positions, normals, tangents and winding order
 		VertexBuffer position_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_POSITION);
 		VertexBuffer normal_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_NORMAL);
-		VertexBuffer tangent_buffer = GetMeshVertexBuffer(mesh, ECS_MESH_TANGENT);
 
 		// Inverts the z axis of a buffer and returns a new one
 		auto invert_z = [](Graphics* graphics, VertexBuffer buffer) {
@@ -746,9 +746,6 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		}
 		if (normal_buffer.buffer != nullptr) {
 			SetMeshVertexBuffer(mesh, ECS_MESH_NORMAL, invert_z(graphics, normal_buffer));
-		}
-		if (tangent_buffer.buffer != nullptr) {
-			SetMeshVertexBuffer(mesh, ECS_MESH_TANGENT, invert_z(graphics, tangent_buffer));
 		}
 
 		// Invert the winding order

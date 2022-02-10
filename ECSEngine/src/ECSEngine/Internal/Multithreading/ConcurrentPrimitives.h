@@ -36,6 +36,8 @@ namespace ECSEngine {
 
 		bool is_locked() const;
 
+		void wait_locked() const;
+
 		std::atomic<bool> value = { 0 };
 	};
 

@@ -64,12 +64,12 @@ void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction fu
 	editor_state->event_queue.Push(editor_event);
 }
 
-void EditorSkip(EditorState* editor_state, void* ECS_RESTRICT data) {}
+EDITOR_EVENT(EditorSkip) {}
 
-void EditorError(EditorState* editor_state, void* ECS_RESTRICT data) {
+EDITOR_EVENT(EditorError) {
 	EDITOR_STATE(editor_state);
 
-	Stream<char>* error_message = (Stream<char>*)data;
+	Stream<char>* error_message = (Stream<char>*)_data;
 	CreateErrorMessageWindow(ui_system, *error_message);
 }
 
@@ -80,32 +80,32 @@ void EditorSetError(EditorState* editor_state, Stream<char> error_message) {
 	EditorAddEventWithPointer(editor_state, EditorError, allocation);
 }
 
-void EditorConsoleError(EditorState* editor_state, void* ECS_RESTRICT data)
+EDITOR_EVENT(EditorConsoleError)
 {
 	EDITOR_STATE(editor_state);
 
-	Stream<char>* error_message = (Stream<char>*)data;
+	Stream<char>* error_message = (Stream<char>*)_data;
 	console->Error(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
 }
 
-void EditorConsoleWarn(EditorState* editor_state, void* ECS_RESTRICT data) {
+EDITOR_EVENT(EditorConsoleWarn) {
 	EDITOR_STATE(editor_state);
 
-	Stream<char>* error_message = (Stream<char>*)data;
+	Stream<char>* error_message = (Stream<char>*)_data;
 	console->Warn(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
 }
 
-void EditorConsoleInfo(EditorState* editor_state, void* ECS_RESTRICT data) {
+EDITOR_EVENT(EditorConsoleInfo) {
 	EDITOR_STATE(editor_state);
 
-	Stream<char>* error_message = (Stream<char>*)data;
+	Stream<char>* error_message = (Stream<char>*)_data;
 	console->Info(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
 }
 
-void EditorConsoleTrace(EditorState* editor_state, void* ECS_RESTRICT data) {
+EDITOR_EVENT(EditorConsoleTrace) {
 	EDITOR_STATE(editor_state);
 
-	Stream<char>* error_message = (Stream<char>*)data;
+	Stream<char>* error_message = (Stream<char>*)_data;
 	console->Trace(*error_message, EDITOR_CONSOLE_SYSTEM_INDEX);
 }
 

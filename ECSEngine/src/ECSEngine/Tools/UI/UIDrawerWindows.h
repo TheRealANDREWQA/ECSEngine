@@ -285,8 +285,8 @@ namespace ECSEngine {
 
 			MemoryManager* allocator;
 			TaskManager* task_manager;
-			containers::ResizableStream<ConsoleMessage, MemoryManager> messages;
-			containers::ResizableStream<const char*, MemoryManager> system_filter_strings;
+			containers::ResizableStream<ConsoleMessage> messages;
+			containers::ResizableStream<const char*> system_filter_strings;
 			size_t format;
 			SpinLock lock;
 			bool pause_on_error;
@@ -340,7 +340,7 @@ namespace ECSEngine {
 			unsigned int trace_count;
 			bool system_filter_changed;
 			unsigned char previous_verbosity_level;
-			containers::ResizableStream<unsigned int, MemoryManager> filtered_message_indices;
+			containers::ResizableStream<unsigned int> filtered_message_indices;
 			containers::HashTable<UniqueConsoleMessage, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> unique_messages;
 			bool* system_filter;
 		};

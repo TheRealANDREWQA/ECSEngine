@@ -140,11 +140,11 @@ namespace ECSEngine {
 			unsigned int m_last_item;
 		};
 
-		template<typename T, typename Allocator, bool zero_memory = false>
+		template<typename T>
 		struct ResizableStack {
 		public:
 			ResizableStack() : m_first_item(0), m_last_item(0) {}
-			ResizableStack(Allocator* allocator, size_t capacity) : m_stack(allocator, 0, capacity), m_first_item(0), m_last_item(0) {}
+			ResizableStack(AllocatorPolymorphic allocator, size_t capacity) : m_stack(allocator, 0, capacity), m_first_item(0), m_last_item(0) {}
 
 			ResizableStack(const ResizableStack& other) = default;
 			ResizableStack& operator = (const ResizableStack& other) = default;
@@ -161,7 +161,7 @@ namespace ECSEngine {
 				return m_stack.capacity;
 			}
 
-			ResizableStream<T, Allocator, zero_memory>* GetStream() const {
+			ResizableStream<T>* GetStream() const {
 				return &m_stack;
 			}
 
@@ -235,7 +235,7 @@ namespace ECSEngine {
 			}
 
 		//private:
-			ResizableStream<T, Allocator, zero_memory> m_stack;
+			ResizableStream<T> m_stack;
 			unsigned int m_first_item;
 			unsigned int m_last_item;
 		};

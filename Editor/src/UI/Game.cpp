@@ -29,7 +29,7 @@ void GameWindowDraw(void* window_data, void* drawer_descriptor, bool initialize)
 	EDITOR_STATE(data->editor_state);
 
 	if (!initialize) {
-		drawer.system->SetSprite(drawer.dockspace, drawer.border_index, *viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
+		drawer.system->SetSprite(drawer.dockspace, drawer.border_index, data->editor_state->viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
 	}
 }
 
@@ -39,20 +39,21 @@ void GamePrivateAction(ActionData* action_data) {
 	GameData* data = (GameData*)_additional_data;
 	
 	Camera* camera = data->cameras + data->active_camera;
+	const HID::MouseState* mouse_state = mouse->GetState();
 
-	if (mouse->MiddleButton()) {
+	if (mouse_state->MiddleButton()) {
 		float3 right_vector = GetRightVector(camera->rotation);
 		float3 up_vector = GetUpVector(camera->rotation);
 
 		camera->translation -= right_vector * float3::Splat(mouse_delta.x) * float3::Splat(GAME_PAN_SENSITIVITY.x) - up_vector * float3::Splat(mouse_delta.y) * float3::Splat(GAME_PAN_SENSITIVITY.y);
 	}
 
-	if (mouse->RightButton()) {
+	if (mouse_state->RightButton()) {
 		camera->rotation.x += mouse_delta.y * GAME_ROTATE_SENSITIVITY.y;
 		camera->rotation.y += mouse_delta.x * GAME_ROTATE_SENSITIVITY.x;
 	}
 
-	int scroll_delta = mouse->ScrollDelta();
+	int scroll_delta = mouse_state->ScrollDelta();
 	if (scroll_delta != 0) {
 		float3 forward_vector = GetForwardVector(camera->rotation);
 

@@ -24,7 +24,7 @@ namespace ECSEngine {
 #define ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND 4
 #define ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR 1.5f
 
-	struct ECSENGINE_API GraphicsDescriptor {
+	struct GraphicsDescriptor {
 		uint2 window_size;
 		MemoryManager* allocator;
 		DXGI_USAGE target_usage = 0;
@@ -53,9 +53,9 @@ namespace ECSEngine {
 		DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
-		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
-		D3D11_CPU_ACCESS_FLAG cpu_flag = static_cast<D3D11_CPU_ACCESS_FLAG>(0);
-		D3D11_BIND_FLAG bind_flag = D3D11_BIND_SHADER_RESOURCE;
+		unsigned int usage = D3D11_USAGE_DEFAULT;
+		unsigned int cpu_flag = 0;
+		unsigned int bind_flag = D3D11_BIND_SHADER_RESOURCE;
 		unsigned int misc_flag = 0u;
 		unsigned int sample_count = 1u;
 		unsigned int sampler_quality = 0u;
@@ -63,7 +63,7 @@ namespace ECSEngine {
 
 	// Size must be set
 	// The initial data is a stream of Stream<void> for each mip map data
-	struct ECSENGINE_API GraphicsTexture3DDescriptor {
+	struct GraphicsTexture3DDescriptor {
 		uint3 size;
 		Stream<Stream<void>> mip_data = { nullptr, 0 };
 		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
@@ -76,7 +76,7 @@ namespace ECSEngine {
 	};
 
 	// The initial data is a stream of Stream<void> for each mip map data
-	struct ECSENGINE_API GraphicsTextureCubeDescriptor {
+	struct GraphicsTextureCubeDescriptor {
 		uint2 size;
 		Stream<Stream<void>> mip_data = { nullptr, 0 };
 		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
@@ -87,49 +87,59 @@ namespace ECSEngine {
 		unsigned int misc_flag = 0u;
 	};
 
-	struct ECSENGINE_API GraphicsPipelineBlendState {
+	struct GraphicsPipelineBlendState {
 		BlendState blend_state;
 		float blend_factors[4];
 		unsigned int sample_mask;
 	};
 
-	struct ECSENGINE_API GraphicsPipelineDepthStencilState {
+	struct GraphicsPipelineDepthStencilState {
 		DepthStencilState depth_stencil_state;
 		unsigned int stencil_ref;
 	};
 
-	struct ECSENGINE_API GraphicsPipelineRasterizerState {
+	struct GraphicsPipelineRasterizerState {
 		RasterizerState rasterizer_state;
 	};
 
-	struct ECSENGINE_API GraphicsPipelineRenderState {
+	struct GraphicsPipelineRenderState {
 		GraphicsPipelineBlendState blend_state;
 		GraphicsPipelineDepthStencilState depth_stencil_state;
 		GraphicsPipelineRasterizerState rasterizer_state;
 	};
 
-	struct ECSENGINE_API GraphicsViewport {
+	struct GraphicsBoundViews {
+		RenderTargetView target;
+		DepthStencilView depth_stencil;
+	};
+
+	struct GraphicsViewport {
 		float top_left_x;
-		float top_left_y; 
+		float top_left_y;
 		float width;
 		float height;
 		float min_depth;
 		float max_depth;
 	};
 
+	struct GraphicsPipelineState {
+		GraphicsPipelineRenderState render_state;
+		GraphicsBoundViews views;
+		GraphicsViewport viewport;
+	};
 
-	struct ECSENGINE_API ShaderMacro {
+	struct ShaderMacro {
 		const char* name;
 		const char* definition;
 	};
 
-	enum ECSENGINE_API ShaderTarget : unsigned char {
+	enum ShaderTarget : unsigned char {
 		ECS_SHADER_TARGET_5_0,
 		ECS_SHADER_TARGET_5_1,
 		ECS_SHADER_TARGET_COUNT
 	};
 
-	enum ECSENGINE_API ShaderCompileFlags : unsigned char {
+	enum ShaderCompileFlags : unsigned char {
 		ECS_SHADER_COMPILE_NONE = 0,
 		ECS_SHADER_COMPILE_DEBUG = 1 << 0,
 		ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST = 1 << 1,
@@ -139,7 +149,7 @@ namespace ECSEngine {
 	};
 
 	// Default is no macros, shader target 5 and no compile flags
-	struct ECSENGINE_API ShaderCompileOptions {
+	struct ShaderCompileOptions {
 		Stream<ShaderMacro> macros = { nullptr, 0 };
 		ShaderTarget target = ECS_SHADER_TARGET_5_0;
 		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
@@ -151,6 +161,7 @@ namespace ECSEngine {
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT,
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_SPECULAR_ENVIRONEMNT,
 		ECS_GRAPHICS_SHADER_HELPER_BRDF_INTEGRATION,
+		ECS_GRAPHICS_SHADER_HELPER_GLTF_THUMBNAIL,
 		ECS_GRAPHICS_SHADER_HELPER_COUNT
 	};
 
@@ -336,6 +347,8 @@ namespace ECSEngine {
 	{
 	public:
 		Graphics(HWND hWnd, const GraphicsDescriptor* descriptor);
+		Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target, DepthStencilView new_depth_view, MemoryManager* new_allocator = nullptr);
+
 		Graphics& operator = (const Graphics& other) = default;
 
 #pragma region Context Bindings
@@ -459,9 +472,24 @@ namespace ECSEngine {
 		// ----------------------------------------------- Component Creation ----------------------------------------------------
 
 		// It will create an empty index buffer - must be populated afterwards
-		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, bool temporary = false, D3D11_USAGE usage = D3D11_USAGE_DEFAULT, unsigned int cpu_access = 0);
+		IndexBuffer CreateIndexBuffer(
+			size_t int_size,
+			size_t element_count,
+			bool temporary = false, 
+			D3D11_USAGE usage = D3D11_USAGE_DEFAULT, 
+			unsigned int cpu_access = 0, 
+			unsigned int misc_flags = 0
+		);
 
-		IndexBuffer CreateIndexBuffer(size_t int_size, size_t element_count, const void* data, bool temporary = false, D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, unsigned int cpu_access = 0);
+		IndexBuffer CreateIndexBuffer(
+			size_t int_size,
+			size_t element_count,
+			const void* data,
+			bool temporary = false, 
+			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, 
+			unsigned int cpu_access = 0,
+			unsigned int misc_flags = 0
+		);
 
 		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices, bool temporary = false);
 
@@ -712,6 +740,12 @@ namespace ECSEngine {
 
 		// ------------------------------------------- Pipeline State Changes ------------------------------------
 
+		// Uses the immediate context. Do not rely on this call generating exact bit patterns since it is using floating point values
+		void ClearRenderTarget(RenderTargetView target, ColorFloat color);
+
+		// Uses the immediate context.
+		void ClearDepthStencil(DepthStencilView depth_stencil, float depth = 1.0f, unsigned char stencil = 0);
+
 		void ClearBackBuffer(float red, float green, float blue);
 
 		void DisableAlphaBlending();
@@ -754,6 +788,8 @@ namespace ECSEngine {
 
 		void EnableCulling(GraphicsContext* context, bool wireframe = false);
 
+		CommandList FinishCommandList(bool restore_state = false);
+
 		void GenerateMips(ResourceView view);
 
 		RenderTargetView GetBoundRenderTarget() const;
@@ -769,8 +805,6 @@ namespace ECSEngine {
 		void* MapTexture(Texture2D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
 		void* MapTexture(Texture3D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
-
-		ID3D11CommandList* FinishCommandList(bool restore_state = false);
 
 		void UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int map_flags = 0u, unsigned int subresource_index = 0);
 
@@ -809,14 +843,6 @@ namespace ECSEngine {
 		// It does not acquire the lock - call this if inside a lock
 		// Can be called only from a single thread
 		void CommitInternalResourcesToBeFreed();
-
-#if defined(ECSENGINE_DEBUG) || defined(ECSENGINE_RELEASE)
-#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE(graphics, resource) graphics->AddInternalResource(resource, ECS_LOCATION)
-#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE_TRACK(graphics, resource, temporary) if (!temporary.temporary) graphics->AddInternalResource(resource, temporary.file, temporary.line)
-#else
-#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE(graphics, resource) graphics->AddInternalResource(resource)
-#define ECS_GRAPHICS_ADD_INTERNAL_RESOURCE_TRACK(graphics, resource, temporary) if (!temporary.temporary) graphics->AddInternalResource(resource)
-#endif
 
 		template<typename Resource>
 		void AddInternalResource(Resource resource) {
@@ -931,11 +957,15 @@ namespace ECSEngine {
 
 		GraphicsPipelineRasterizerState GetRasterizerState() const;
 
-		GraphicsPipelineRenderState GetRenderState() const;
+		GraphicsPipelineRenderState GetPipelineRenderState() const;
+
+		GraphicsBoundViews GetCurrentViews() const;
+
+		GraphicsPipelineState GetPipelineState() const;
 
 		void GetWindowSize(unsigned int& width, unsigned int& height) const;
 
-		void GetWindowSize(uint2& size) const;
+		uint2 GetWindowSize() const;
 
 		void RestoreBlendState(GraphicsPipelineBlendState state);
 
@@ -943,7 +973,11 @@ namespace ECSEngine {
 
 		void RestoreRasterizerState(GraphicsPipelineRasterizerState state);
 
-		void RestoreRenderState(GraphicsPipelineRenderState state);
+		void RestorePipelineRenderState(GraphicsPipelineRenderState state);
+
+		void RestoreBoundViews(GraphicsBoundViews views);
+
+		void RestorePipelineState(const GraphicsPipelineState* state);
 
 		void ResizeSwapChainSize(HWND hWnd, float width, float height);
 
@@ -968,7 +1002,7 @@ namespace ECSEngine {
 		DepthStencilView m_current_depth_stencil;
 		BlendState m_blend_disabled;
 		BlendState m_blend_enabled;
-		ShaderReflection m_shader_reflection;
+		ShaderReflection* m_shader_reflection;
 		MemoryManager* m_allocator;
 		containers::CapacityStream<GraphicsShaderHelper> m_shader_helpers;
 		// Keep a track of the created resources, for leaks and for winking out the device
@@ -982,6 +1016,7 @@ namespace ECSEngine {
 		char padding_2[ECS_CACHE_LINE_SIZE - sizeof(SpinLock)];
 	public:
 		SpinLock m_internal_resources_lock;
+		bool m_copied_graphics;
 	};
 
 	ECSENGINE_API void DestroyGraphics(Graphics* graphics);
@@ -1088,11 +1123,19 @@ namespace ECSEngine {
 
 	ECSENGINE_API void BindViewport(float top_left_x, float top_left_y, float new_width, float new_height, float min_depth, float max_depth, GraphicsContext* context);
 
+	ECSENGINE_API void BindViewport(GraphicsViewport viewport, GraphicsContext* context);
+
 	ECSENGINE_API void BindMesh(const Mesh& mesh, GraphicsContext* context);
 
 	ECSENGINE_API void BindMesh(const Mesh& mesh, GraphicsContext* context, Stream<ECS_MESH_INDEX> mapping);
 
 	ECSENGINE_API void BindMaterial(const Material& material, GraphicsContext* context);
+
+	// Only works on the immediate context
+	ECSENGINE_API void ClearRenderTarget(RenderTargetView view, GraphicsContext* context, ColorFloat color);
+
+	// Only works on the immediate context
+	ECSENGINE_API void ClearDepthStencil(DepthStencilView view, GraphicsContext* context, float depth = 1.0f, unsigned char stencil = 0);
 
 	template<typename Resource>
 	ECSENGINE_API void CopyGraphicsResource(Resource destination, Resource source, GraphicsContext* context);
@@ -1195,7 +1238,7 @@ namespace ECSEngine {
 
 	ECSENGINE_API void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
 
-	ECSENGINE_API ID3D11CommandList* FinishCommandList(GraphicsContext* context, bool restore_state = false);
+	ECSENGINE_API CommandList FinishCommandList(GraphicsContext* context, bool restore_state = false);
 
 	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
 
@@ -1203,7 +1246,13 @@ namespace ECSEngine {
 
 	ECSENGINE_API GraphicsPipelineRasterizerState GetRasterizerState(GraphicsContext* context);
 
-	ECSENGINE_API GraphicsPipelineRenderState GetRenderState(GraphicsContext* context);
+	ECSENGINE_API GraphicsPipelineRenderState GetPipelineRenderState(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsBoundViews GetBoundViews(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsPipelineState GetPipelineState(GraphicsContext* context);
+
+	ECSENGINE_API GraphicsViewport GetViewport(GraphicsContext* context);
 
 	// It must be unmapped manually
 	ECSENGINE_API void* MapBuffer(
@@ -1249,7 +1298,11 @@ namespace ECSEngine {
 
 	ECSENGINE_API void RestoreRasterizerState(GraphicsContext* context, GraphicsPipelineRasterizerState rasterizer_state);
 
-	ECSENGINE_API void RestoreRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state);
+	ECSENGINE_API void RestorePipelineRenderState(GraphicsContext* context, GraphicsPipelineRenderState render_state);
+
+	ECSENGINE_API void RestoreBoundViews(GraphicsContext* context, GraphicsBoundViews views);
+
+	ECSENGINE_API void RestorePipelineState(GraphicsContext* context, const GraphicsPipelineState* state);
 
 	template<typename Texture>
 	ECSENGINE_API void UpdateTexture(
@@ -1298,14 +1351,20 @@ namespace ECSEngine {
 	// The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
-	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes);
+	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes, unsigned int misc_flags = 0);
 
 	// Same as the non mask variant - the difference is that it will only convert the meshes specified
 	// in the mesh mask
 	// The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
-	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes, containers::Stream<unsigned int> mesh_mask);
+	ECSENGINE_API Mesh MeshesToSubmeshes(
+		Graphics* graphics, 
+		containers::Stream<Mesh> meshes, 
+		Submesh* submeshes,
+		containers::Stream<unsigned int> mesh_mask, 
+		unsigned int misc_flags = 0
+	);
 
 #endif // ECSENGINE_DIRECTX11
 

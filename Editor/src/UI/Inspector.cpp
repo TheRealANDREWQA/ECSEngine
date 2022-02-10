@@ -8,6 +8,7 @@
 #include "../Editor/EditorEvent.h"
 #include "FileExplorer.h"
 #include "../Modules/Module.h"
+#include "ECSEngineRendering.h"
 
 using namespace ECSEngine;
 ECS_CONTAINERS;
@@ -23,6 +24,10 @@ constexpr float TEXT_FILE_ROW_OFFSET = 0.008f;
 constexpr float C_FILE_ROW_OFFSET = 0.015f;
 
 constexpr size_t INSPECTOR_FLAG_LOCKED = 1 << 0;
+
+#define MESH_PREVIEW_HEIGHT 0.4f
+#define MESH_PREVIEW_ROTATION_DELTA_FACTOR 125.0f
+#define MESH_PREVIEW_RADIUS_DELTA_FACTOR 0.00125f
 
 using HashFunction = HashFunctionMultiplyString;
 
@@ -40,7 +45,7 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void AddInspectorTableFunction(InspectorTable* table, InspectorDrawFunction function, const wchar_t* _identifier) {
+void AddInspectorTableFunction(InspectorTable* table, InspectorFunctions function, const wchar_t* _identifier) {
 	ResourceIdentifier identifier(_identifier);
 
 	ECS_ASSERT(table->Find(identifier) == -1);
@@ -49,7 +54,7 @@ void AddInspectorTableFunction(InspectorTable* table, InspectorDrawFunction func
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorDrawFunction& function, Stream<wchar_t> _identifier) {
+bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, Stream<wchar_t> _identifier) {
 	ResourceIdentifier identifier(_identifier.buffer, _identifier.size * sizeof(wchar_t));
 
 	InspectorData* data = editor_state->inspector_data;
@@ -58,8 +63,20 @@ bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorDraw
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorDrawFunction& function, const wchar_t* _identifier) {
+bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, const wchar_t* _identifier) {
 	return TryGetInspectorTableFunction(editor_state, function, ToStream(_identifier));
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void InspectorIconTexture(UIDrawer* drawer, ResourceView texture, Color color = ECS_COLOR_WHITE) {
+	UIDrawConfig config;
+	UIConfigRelativeTransform transform;
+	float2 icon_size = drawer->GetSquareScale(ICON_SIZE);
+	transform.scale = icon_size / drawer->GetStaticElementDefaultScale();
+	config.AddFlag(transform);
+
+	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM, config, texture, color);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -126,12 +143,7 @@ void InspectorOpenAndShowButton(UIDrawer* drawer, Stream<wchar_t> path) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawFileTimes(UIDrawer* drawer, const wchar_t* path) {
-	char creation_time[256];
-	char write_time[256];
-	char access_time[256];
-	bool success = OS::GetFileTimes(path, creation_time, access_time, write_time);
-
+void InspectorDrawFileTimesInternal(UIDrawer* drawer, const char* creation_time, const char* write_time, const char* access_time, bool success) {
 	UIDrawConfig config;
 	// Display file times
 	if (success) {
@@ -153,6 +165,30 @@ void InspectorDrawFileTimes(UIDrawer* drawer, const wchar_t* path) {
 		drawer->NextRow();
 	}
 }
+
+void InspectorDrawFileTimes(UIDrawer* drawer, const wchar_t* path) {
+	char creation_time[256];
+	char write_time[256];
+	char access_time[256];
+	bool success = OS::GetFileTimes(path, creation_time, access_time, write_time);
+
+	InspectorDrawFileTimesInternal(drawer, creation_time, write_time, access_time, success);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void InspectorDrawFileTimes(UIDrawer* drawer, Stream<wchar_t> path) {
+	char creation_time[256];
+	char write_time[256];
+	char access_time[256];
+	bool success = OS::GetFileTimes(path, creation_time, access_time, write_time);
+
+	InspectorDrawFileTimesInternal(drawer, creation_time, write_time, access_time, success);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void InspectorCleanNothing(EditorState* editor_state, void* data) {}
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
@@ -295,21 +331,170 @@ void InspectorDrawHlslTextFile(EditorState* editor_state, void* data, UIDrawer* 
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawMeshFile(EditorState* editor_state, void* data, UIDrawer* drawer) {
-	const wchar_t* path = (const wchar_t*)data;
+struct InspectorDrawMeshFileData {
+	Stream<wchar_t> path;
+	GLTFThumbnail thumbnail;
+	CoallescedMesh* mesh;
+	float radius_delta;
+	float2 rotation_delta;
+};
+
+void InspectorCleanMeshFile(EditorState* editor_state, void* _data) {
+	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
+	editor_state->resource_manager->UnloadCoallescedMeshImplementation(data->mesh);
+	// Release the texture aswell
+	Graphics* graphics = editor_state->Graphics();
+	Texture2D texture = GetResource(data->thumbnail.texture);
+	graphics->FreeResource(texture);
+	graphics->FreeResource(data->thumbnail.texture);
+}
+
+void InspectorMeshPreviewClickable(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
+	if (mouse_tracker->LeftButton() == MBPRESSED) {
+		// Active the raw input
+		mouse->EnableRawInput();
+	}
+	else if (mouse_tracker->LeftButton() == MBHELD) {
+		data->rotation_delta.x -= MESH_PREVIEW_ROTATION_DELTA_FACTOR * mouse_delta.y;
+		data->rotation_delta.y -= MESH_PREVIEW_ROTATION_DELTA_FACTOR * mouse_delta.x;
+	}
+	else if (mouse_tracker->LeftButton() == MBRELEASED) {
+		// Disable the raw input
+		mouse->DisableRawInput();
+	}
+}
+
+void InspectorMeshPreviewHoverable(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
+	data->radius_delta -= mouse->GetScrollDelta() * MESH_PREVIEW_RADIUS_DELTA_FACTOR;
+	PinWindowVerticalSliderPosition(system, window_index);
+}
+
+void InspectorDrawMeshFile(EditorState* editor_state, void* _data, UIDrawer* drawer) {
+	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
 
 	// Check to see if the file still exists - else revert to draw nothing
-	if (!ExistsFileOrFolder(path)) {
+	if (!ExistsFileOrFolder(data->path)) {
 		ChangeInspectorToNothing(editor_state);
 		return;
 	}
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_MESH, drawer->color_theme.default_text, drawer->color_theme.theme);
-	Stream<wchar_t> stream_path = ToStream(path);
-	InspectorIconNameAndPath(drawer, stream_path);
+	// If the thumbnail was not generated, use the generic mesh icon
+	FileExplorerMeshThumbnail mesh_thumbnail;
+	if (editor_state->file_explorer_data->mesh_thumbnails.TryGetValue(ResourceIdentifier(data->path.buffer, data->path.size * sizeof(wchar_t)), mesh_thumbnail)
+		&& mesh_thumbnail.could_be_read) {
+		// Use the thumbnail for the icon draw
+		InspectorIconTexture(drawer, mesh_thumbnail.texture);
+	}
+	else {
+		InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_MESH, drawer->color_theme.default_text, drawer->color_theme.theme);
+	}
 
-	InspectorDrawFileTimes(drawer, path);
-	InspectorOpenAndShowButton(drawer, stream_path);
+	InspectorIconNameAndPath(drawer, data->path);
+
+	InspectorDrawFileTimes(drawer, data->path);
+	InspectorOpenAndShowButton(drawer, data->path);
+	drawer->NextRow();
+
+	auto calculate_texture_size_from_region = [](uint2 window_size, float2 region_scale) {
+		return uint2(
+			(unsigned int)(window_size.x * region_scale.x * 0.5f),
+			(unsigned int)(window_size.y * MESH_PREVIEW_HEIGHT)
+		);
+	};
+
+	Graphics* graphics = editor_state->Graphics();
+	uint2 window_size = graphics->GetWindowSize();
+	// Draw the thumbnail preview
+	if (data->mesh == nullptr) {
+		// The texture size is the width of the dockspace region with the height ratio taken into account
+		uint2 texture_size = calculate_texture_size_from_region(window_size, drawer->GetRegionScale());
+
+		// Load the mesh
+		CoallescedMesh* mesh = editor_state->resource_manager->LoadCoallescedMeshImplementation(data->path.buffer);
+		data->mesh = mesh;
+		data->thumbnail = GLTFGenerateThumbnail(graphics, texture_size, &mesh->mesh);
+	}
+	else {
+		// Only update the thumbnail if there is something to update or if the region scale changed
+		bool dimensions_changed = false;
+		uint2 texture_size = GetTextureDimensions(GetResource(data->thumbnail.texture));
+		uint2 texture_size_from_region = calculate_texture_size_from_region(window_size, drawer->GetRegionScale());
+		dimensions_changed = texture_size != texture_size_from_region;
+
+		if (dimensions_changed) {
+			// Release the texture and the view
+			Texture2D texture = GetResource(data->thumbnail.texture);
+			graphics->FreeResource(texture);
+			graphics->FreeResource(data->thumbnail.texture);
+
+			GLTFThumbnailInfo old_info = data->thumbnail.info;
+
+			data->thumbnail = GLTFGenerateThumbnail(
+				graphics,
+				texture_size_from_region,
+				&data->mesh->mesh
+			);
+
+			data->thumbnail.info = old_info;
+
+			// Update the thumbnail to the new location
+			GLTFUpdateThumbnail(graphics, &data->mesh->mesh, data->thumbnail, data->radius_delta, { 0.0f, 0.0f }, { data->rotation_delta.x, data->rotation_delta.y, 0.0f });
+
+			data->radius_delta = 0.0f;
+			data->rotation_delta = { 0.0f, 0.0f };
+		}
+		else {
+			bool update_thumbnail = data->radius_delta != 0.0f || data->rotation_delta.x != 0.0f || data->rotation_delta.y != 0.0f;
+			if (update_thumbnail) {
+				GLTFUpdateThumbnail(
+					graphics,
+					&data->mesh->mesh,
+					data->thumbnail,
+					data->radius_delta,
+					{ 0.0f, 0.0f },
+					{ data->rotation_delta.x, data->rotation_delta.y, 0.0f }
+				);
+
+				data->rotation_delta = { 0.0f, 0.0f };
+				data->radius_delta = 0.0f;
+			}
+		}
+	}
+
+	// Draw the texture now
+	UIDrawConfig thumbnail_config;
+
+	UIConfigAbsoluteTransform thumbnail_transform;
+	thumbnail_transform.scale.x = drawer->GetRegionScale().x;
+	thumbnail_transform.scale.y = MESH_PREVIEW_HEIGHT;
+	thumbnail_transform.position.x = drawer->GetRegionPosition().x;
+	thumbnail_transform.position.y = drawer->GetRegionPosition().y + drawer->GetRegionScale().y - MESH_PREVIEW_HEIGHT;
+	// Add the offsets from the region offset
+	thumbnail_transform.position += drawer->GetRegionRenderOffset();
+
+	// Clamp the position on the y axis such that it is not less than the current position
+	thumbnail_transform.position.y = function::ClampMin(thumbnail_transform.position.y, drawer->current_y);
+
+	thumbnail_config.AddFlag(thumbnail_transform);
+
+	drawer->SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, thumbnail_config, data->thumbnail.texture);
+	// Only finalize the rectangle on the Y axis
+	// Subtract the region maximum offset
+	drawer->UpdateRenderBoundsRectangle(
+		{ drawer->region_fit_space_horizontal_offset, thumbnail_transform.position.y - drawer->GetRegionRenderOffset().y },
+		{ 0.0f, thumbnail_transform.scale.y + drawer->region_limit.y - drawer->region_position.y - drawer->region_scale.y }
+	);
+
+	// Add the clickable and hoverable handler on that rectangle aswell
+	drawer->AddHoverable(thumbnail_transform.position, thumbnail_transform.scale, { InspectorMeshPreviewHoverable, data, 0 });
+	drawer->AddClickable(thumbnail_transform.position, thumbnail_transform.scale, { InspectorMeshPreviewClickable, data, 0 });
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -374,14 +559,29 @@ void InspectorDrawModuleConfigurationGroup(EditorState* editor_state, void* data
 		for (size_t index = 0; index < group->libraries.size; index++) {
 			ascii_name.size = 0;
 			function::ConvertWideCharsToASCII(group->libraries[index], ascii_name);
+
+			UIConfigComboBoxCallback combo_callback;
+			auto combo_callback_function = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				EditorState* editor_state = (EditorState*)_data;
+				bool success = SaveModuleConfigurationGroupFile(editor_state);
+				if (!success) {
+					EditorSetConsoleError(editor_state, ToStream("An error has occured when writing the module configuration group file after changing configuration."));
+				}
+			};
+			combo_callback.handler = { combo_callback_function, editor_state, 0, UIDrawPhase::Normal };
+
+			config.AddFlag(combo_callback);
 			drawer->ComboBox(
-				UI_CONFIG_DO_NOT_CACHE,
+				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_COMBO_BOX_CALLBACK,
 				config, 
 				ascii_name.buffer, 
 				combo_labels,
 				combo_display_labels,
 				(unsigned char*)group->configurations + index
 			);
+			config.flag_count--;
 
 			// Draw the remove button
 			UIDrawConfig button_config;
@@ -410,6 +610,12 @@ void InspectorDrawModuleConfigurationGroup(EditorState* editor_state, void* data
 					group->configurations[index] = group->configurations[index + 1];
 				}
 				group->libraries.RemoveSwapBack(data->library_index);
+				
+				// Write the file
+				bool success = SaveModuleConfigurationGroupFile(data->editor_state);
+				if (!success) {
+					EditorSetConsoleError(data->editor_state, ToStream("An error occured during module configuration group file save after removing a module."));
+				}
 			};
 
 			RemoveModuleConfigurationGroupData remove_data;
@@ -466,8 +672,31 @@ void InspectorDrawModuleConfigurationGroup(EditorState* editor_state, void* data
 	);
 	drawer->NextRow();
 
+	UIConfigComboBoxCallback fallback_callback;
+
+	auto fallback_callback_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		EditorState* editor_state = (EditorState*)_data;
+		bool success = SaveModuleConfigurationGroupFile(editor_state);
+		if (!success) {
+			EditorSetConsoleError(editor_state, ToStream("An error has occured when writing the module configuration group file after changing the fallback configuration."));
+		}
+	};
+
+	fallback_callback.handler = { fallback_callback_action, editor_state, 0, UIDrawPhase::Normal };
+
+	config.AddFlag(fallback_callback);
 	// Draw the fallback configuration for the other modules
-	drawer->ComboBox(UI_CONFIG_DO_NOT_CACHE, config, "Fallback configuration", combo_labels, combo_display_labels, (unsigned char*)group->configurations + group->libraries.size);
+	drawer->ComboBox(
+		UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_COMBO_BOX_CALLBACK,
+		config, 
+		"Fallback configuration",
+		combo_labels, 
+		combo_display_labels, 
+		(unsigned char*)group->configurations + group->libraries.size
+	);
+	config.flag_count--;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -545,26 +774,35 @@ void CreateInspectorAction(ActionData* action_data) {
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorDrawFunction(EditorState* editor_state, InspectorDrawFunction draw_function, void* data, size_t data_size)
+void ChangeInspectorDrawFunction(EditorState* editor_state, InspectorFunctions functions, void* data, size_t data_size)
 {
 	EDITOR_STATE(editor_state);
 
 	InspectorData* inspector_data = editor_state->inspector_data;
 	// Only change the function if the inspector is unlocked
 	if (!function::HasFlag(inspector_data->flags, INSPECTOR_FLAG_LOCKED)) {
+		inspector_data->clean_function(editor_state, inspector_data->draw_data);
+
 		if (inspector_data->data_size > 0) {
 			editor_allocator->Deallocate(inspector_data->draw_data);
 		}
 		inspector_data->draw_data = function::AllocateMemory(editor_allocator, data, data_size);
-		inspector_data->draw_function = draw_function;
+		inspector_data->draw_function = functions.draw_function;
+		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;
 	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void* GetInspectorDrawFunctionData(EditorState* editor_state) {
+	return editor_state->inspector_data->draw_data;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void ChangeInspectorToNothing(EditorState* editor_state) {
-	ChangeInspectorDrawFunction(editor_state, InspectorDrawNothing, nullptr, 0);
+	ChangeInspectorDrawFunction(editor_state, { InspectorDrawNothing, InspectorCleanNothing }, nullptr, 0);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -574,22 +812,45 @@ void ChangeInspectorToFolder(EditorState* editor_state, Stream<wchar_t> path) {
 	null_terminated_path.Copy(path);
 	null_terminated_path[null_terminated_path.size] = L'\0';
 
-	ChangeInspectorDrawFunction(editor_state, InspectorDrawFolderInfo, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1));
+	ChangeInspectorDrawFunction(editor_state, { InspectorDrawFolderInfo, InspectorCleanNothing }, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1));
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path) {
+	InspectorDrawMeshFileData data;
+	data.mesh = nullptr;
+	data.radius_delta = 0.0f;
+	data.rotation_delta = { 0.0f, 0.0f };
+
+	// Allocate the data and embedd the path in it
+	ChangeInspectorDrawFunction(editor_state, { InspectorDrawMeshFile, InspectorCleanMeshFile }, &data, sizeof(data) + sizeof(wchar_t) * (path.size + 1));
+
+	// Get the data and set the path
+	InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state);
+	draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+	draw_data->path.Copy(path);
+	draw_data->path[draw_data->path.size] = L'\0';
+}
+
 void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path) {
-	InspectorDrawFunction draw_function;
+	InspectorFunctions functions;
 	Stream<wchar_t> extension = function::PathExtension(path);
 
 	ECS_TEMP_STRING(null_terminated_path, 256);
 	null_terminated_path.Copy(path);
 	null_terminated_path[null_terminated_path.size] = L'\0';
-	if (extension.size == 0 || !TryGetInspectorTableFunction(editor_state, draw_function, extension)) {
-		draw_function = InspectorDrawBlankFile;
+	if (extension.size == 0 || !TryGetInspectorTableFunction(editor_state, functions, extension)) {
+		functions.draw_function = InspectorDrawBlankFile;
+		functions.clean_function = InspectorCleanNothing;
 	}
-	ChangeInspectorDrawFunction(editor_state, draw_function, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1));
+
+	if (functions.draw_function != InspectorDrawMeshFile) {
+		ChangeInspectorDrawFunction(editor_state, functions, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1));
+	}
+	else {
+		ChangeInspectorToMeshFile(editor_state, path);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -617,7 +878,7 @@ void ChangeInspectorToModuleConfigurationGroup(EditorState* editor_state, unsign
 	null_terminated_path[editor_state->module_configuration_groups[index].name.size + 1] = '\0';
 	ChangeInspectorDrawFunction(
 		editor_state, 
-		InspectorDrawModuleConfigurationGroup,
+		{ InspectorDrawModuleConfigurationGroup, InspectorCleanNothing },
 		null_terminated_path.buffer, 
 		editor_state->module_configuration_groups[index].name.size + 2
 	);
@@ -645,6 +906,7 @@ void InitializeInspector(EditorState* editor_state)
 {
 	InspectorData* data = editor_state->inspector_data;
 	data->draw_function = nullptr;
+	data->clean_function = InspectorCleanNothing;
 	data->data_size = 0;
 	data->draw_data = nullptr;
 	data->flags = 0;
@@ -652,20 +914,20 @@ void InitializeInspector(EditorState* editor_state)
 	void* allocation = editor_state->editor_allocator->Allocate(InspectorTable::MemoryOf(POINTER_CAPACITY));
 	data->table.InitializeFromBuffer(allocation, POINTER_CAPACITY);
 
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".png");
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".jpg");
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".bmp");
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".tiff");
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".tga");
-	AddInspectorTableFunction(&data->table, InspectorDrawTexture, L".hdr");
-	AddInspectorTableFunction(&data->table, InspectorDrawTextFile, L".txt");
-	AddInspectorTableFunction(&data->table, InspectorDrawTextFile, L".md");
-	AddInspectorTableFunction(&data->table, InspectorDrawCppTextFile, L".cpp");
-	AddInspectorTableFunction(&data->table, InspectorDrawCppTextFile, L".h");
-	AddInspectorTableFunction(&data->table, InspectorDrawCppTextFile, L".hpp");
-	AddInspectorTableFunction(&data->table, InspectorDrawCTextFile, L".c");
-	AddInspectorTableFunction(&data->table, InspectorDrawHlslTextFile, L".hlsl");
-	AddInspectorTableFunction(&data->table, InspectorDrawHlslTextFile, L".hlsli");
-	AddInspectorTableFunction(&data->table, InspectorDrawMeshFile, L".gltf");
-	AddInspectorTableFunction(&data->table, InspectorDrawMeshFile, L".glb");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTexture, InspectorCleanNothing }, L".png");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTexture, InspectorCleanNothing }, L".jpg");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTexture, InspectorCleanNothing }, L".bmp");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTexture, InspectorCleanNothing }, L".tiff");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTexture, InspectorCleanNothing }, L".tga");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTexture, InspectorCleanNothing }, L".hdr");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTextFile, InspectorCleanNothing }, L".txt");
+	AddInspectorTableFunction(&data->table, { InspectorDrawTextFile, InspectorCleanNothing }, L".md");
+	AddInspectorTableFunction(&data->table, { InspectorDrawCppTextFile, InspectorCleanNothing }, L".cpp");
+	AddInspectorTableFunction(&data->table, { InspectorDrawCppTextFile, InspectorCleanNothing }, L".h");
+	AddInspectorTableFunction(&data->table, { InspectorDrawCppTextFile, InspectorCleanNothing }, L".hpp");
+	AddInspectorTableFunction(&data->table, { InspectorDrawCTextFile, InspectorCleanNothing }, L".c");
+	AddInspectorTableFunction(&data->table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, L".hlsl");
+	AddInspectorTableFunction(&data->table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, L".hlsli");
+	AddInspectorTableFunction(&data->table, { InspectorDrawMeshFile, InspectorCleanMeshFile }, L".gltf");
+	AddInspectorTableFunction(&data->table, { InspectorDrawMeshFile, InspectorCleanMeshFile }, L".glb");
 }

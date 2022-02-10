@@ -58,8 +58,7 @@ namespace ECSEngine {
 		// entity pool
 		EntityPool* entity_pool_temp;
 		if (descriptor.entity_pool == nullptr) {
-			entity_pool_temp = new EntityPool(descriptor.entity_pool_power_of_two, descriptor.entity_pool_arena_count,
-				descriptor.entity_pool_block_count, temp_internal_memory);
+			entity_pool_temp = new EntityPool(temp_internal_memory, descriptor.entity_pool_arena_count, descriptor.entity_pool_power_of_two);
 			entity_pool = entity_pool_temp;
 		}
 		else {
@@ -67,8 +66,11 @@ namespace ECSEngine {
 			entity_pool = nullptr;
 		}
 
+		EntityManagerDescriptor entity_descriptor;
+		entity_descriptor.memory_manager = temp_internal_memory;
+		entity_descriptor.entity_pool = entity_pool_temp;
 		// entity manager
-		entity_manager = new EntityManager(temp_internal_memory, entity_pool_temp, descriptor.entity_manager_max_dynamic_archetype_count, descriptor.entity_manager_max_static_archetype_count);
+		entity_manager = new EntityManager(entity_descriptor);
 
 		// system manager
 		system_manager = new SystemManager(task_manager, temp_internal_memory, descriptor.system_manager_max_systems);

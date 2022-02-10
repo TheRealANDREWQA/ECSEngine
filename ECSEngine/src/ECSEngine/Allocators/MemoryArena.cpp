@@ -4,7 +4,7 @@
 
 namespace ECSEngine {
 
-	MemoryArena::MemoryArena() : m_allocators(nullptr, 0), m_current_index(0), m_size_per_allocator(0), m_initial_buffer(nullptr) {}
+	MemoryArena::MemoryArena() : m_allocators(nullptr), m_allocator_count(0), m_current_index(0), m_size_per_allocator(0), m_initial_buffer(nullptr) {}
 
 	MemoryArena::MemoryArena(
 		void* arena_buffer, 
@@ -12,7 +12,7 @@ namespace ECSEngine {
 		size_t capacity, 
 		size_t allocator_count,
 		size_t blocks_per_allocator
-	) : m_allocators(arena_buffer, allocator_count), m_current_index(0), m_initial_buffer(buffer), m_size_per_allocator(0)
+	) : m_allocators((MultipoolAllocator*)arena_buffer), m_allocator_count(allocator_count), m_current_index(0), m_initial_buffer(buffer), m_size_per_allocator(0)
 	{
 		m_size_per_allocator = capacity / allocator_count;
 		size_t arena_buffer_offset = sizeof(MultipoolAllocator) * allocator_count;
@@ -28,10 +28,10 @@ namespace ECSEngine {
 
 	void* MemoryArena::Allocate(size_t size, size_t alignment) {
 		size_t index = m_current_index;
-		while (index < m_allocators.size) {
+		while (index < m_allocator_count) {
 			void* allocation = m_allocators[index].Allocate(size, alignment);
 			if (allocation != nullptr) {
-				m_current_index = (m_current_index + 1) % m_allocators.size;
+				m_current_index = m_current_index + 1 == m_allocator_count ? 0 : m_current_index + 1;
 				return allocation;
 			}
 			index++;
@@ -40,7 +40,7 @@ namespace ECSEngine {
 		while (index < m_current_index) {
 			void* allocation = m_allocators[index].Allocate(size, alignment);
 			if (allocation != nullptr) {
-				m_current_index = (m_current_index + 1) % m_allocators.size;
+				m_current_index = m_current_index + 1 == m_allocator_count ? 0 : m_current_index + 1;
 				return allocation;
 			}
 			index++;
@@ -99,8 +99,10 @@ namespace ECSEngine {
 		void* buffer = backup->Allocate(initial_arena_capacity, 8);
 		memset(arena_allocation, 0, MemoryArena::MemoryOf(initial_allocator_count, initial_blocks_per_allocator));
 		memset(buffer, 0, initial_arena_capacity);
-		m_arenas = containers::ResizableStream<MemoryArena, GlobalMemoryManager>(backup, ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE);
-		m_arenas.Add(MemoryArena(arena_allocation, buffer, initial_arena_capacity, initial_allocator_count, initial_blocks_per_allocator));
+		m_arenas = (MemoryArena*)backup->Allocate(sizeof(MemoryArena) * ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE);
+		m_arenas[0] = MemoryArena(arena_allocation, buffer, initial_arena_capacity, initial_allocator_count, initial_blocks_per_allocator);
+		m_arena_size = 1;
+		m_arena_capacity = ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE;
 
 		if (arena_capacity == 0) {
 			m_new_arena_capacity = initial_arena_capacity;
@@ -114,14 +116,14 @@ namespace ECSEngine {
 	}
 
 	void* ResizableMemoryArena::Allocate(size_t size, size_t alignment) {
-		for (int64_t index = m_arenas.size - 1; index >= 0; index--) {
+		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			void* allocation = m_arenas[index].Allocate(size, alignment);
 			if (allocation != nullptr) {
 				return allocation;
 			}
 		}
 		CreateArena();
-		void* allocation = m_arenas[m_arenas.size - 1].Allocate(size, alignment);
+		void* allocation = m_arenas[m_arena_size - 1].Allocate(size, alignment);
 		ECS_ASSERT(allocation != nullptr);
 		return allocation;
 	}
@@ -129,9 +131,9 @@ namespace ECSEngine {
 	template<bool trigger_error_if_not_found>
 	void ResizableMemoryArena::Deallocate(const void* block) {
 		uintptr_t block_reinterpretation = (uintptr_t)block;
-		for (int64_t index = m_arenas.size - 1; index >= 0; index--) {
+		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
-			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocators.size * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
+			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocator_count * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
 				m_arenas[index].Deallocate<trigger_error_if_not_found>(block);
 				return;
 			}
@@ -144,60 +146,60 @@ namespace ECSEngine {
 	ECS_TEMPLATE_FUNCTION_BOOL(void, ResizableMemoryArena::Deallocate, const void*);
 
 	void ResizableMemoryArena::CreateArena() {
-		void* arena_allocation = m_backup->Allocate(MemoryArena::MemoryOf(m_new_allocator_count, m_new_blocks_per_allocator), 8);
-		void* buffer = m_backup->Allocate(m_new_arena_capacity, 8);
-		ECS_ASSERT(arena_allocation != nullptr && buffer != nullptr);
-		m_arenas.Add(MemoryArena(
-			arena_allocation,
-			buffer,
-			m_new_arena_capacity,
-			m_new_allocator_count,
-			m_new_blocks_per_allocator
-		));
+		CreateArena(m_new_arena_capacity, m_new_allocator_count, m_new_blocks_per_allocator);
 	}
 
 	void ResizableMemoryArena::CreateArena(unsigned int arena_capacity, unsigned int allocator_count, unsigned int blocks_per_allocator) {
 		void* arena_allocation = m_backup->Allocate(MemoryArena::MemoryOf(allocator_count, blocks_per_allocator), 8);
 		void* buffer = m_backup->Allocate(m_new_arena_capacity, 8);
-		m_arenas.Add(MemoryArena(
+
+		ECS_ASSERT(arena_allocation != nullptr && buffer != nullptr);
+		if (m_arena_size == m_arena_capacity) {
+			unsigned int new_capacity = (unsigned int)((float)m_arena_capacity * 1.5f + 1);
+			MemoryArena* new_arenas = (MemoryArena*)m_backup->Allocate(sizeof(MemoryArena) * new_capacity);
+			memcpy(new_arenas, m_arenas, sizeof(MemoryArena) * m_arena_capacity);
+			m_arena_capacity = new_capacity;
+		}
+
+		m_arenas[m_arena_size++] = MemoryArena(
 			arena_allocation,
 			buffer,
 			arena_capacity,
 			allocator_count,
 			blocks_per_allocator
-		));
+		);
 	}
 
 	// ---------------------------------------------------- Thread safe variants -----------------------------------------
 
 	void* ResizableMemoryArena::Allocate_ts(size_t size, size_t alignment) {
-		for (int64_t index = m_arenas.size - 1; index >= 0; index--) {
+		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			void* allocation = m_arenas[index].Allocate_ts(size, alignment);
 			if (allocation != nullptr) {
 				return allocation;
 			}
 		}
-		unsigned int current_arena_size = m_arenas.size;
+		unsigned int current_arena_size = m_arena_size;
 		bool try_lock = m_lock.try_lock();
 		if (try_lock) {
 			CreateArena();
 			m_lock.unlock();
 		}
 		else {
-			while (current_arena_size == m_arenas.size) {
+			while (current_arena_size == m_arena_size) {
 				_mm_pause();
 			}
 		}
-		return m_arenas[m_arenas.size - 1].Allocate(size, alignment);
+		return m_arenas[m_arena_size - 1].Allocate(size, alignment);
 	}
 
 	template<bool trigger_error_if_not_found>
 	void ResizableMemoryArena::Deallocate_ts(const void* block)
 	{
 		uintptr_t block_reinterpretation = (uintptr_t)block;
-		for (int64_t index = m_arenas.size - 1; index >= 0; index--) {
+		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
-			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocators.size * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
+			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocator_count * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
 				m_arenas[index].Deallocate_ts<trigger_error_if_not_found>(block);
 				break;
 			}

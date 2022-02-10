@@ -10,7 +10,7 @@ namespace ECSEngine {
 
 	namespace HID {
 
-		using KeyboardCharacterQueue = containers::ResizableQueue<char, GlobalMemoryManager, true>;
+		using KeyboardCharacterQueue = containers::ResizableQueue<char>;
 
 		struct ECSENGINE_API KeyboardProcedureInfo {
 			UINT message;

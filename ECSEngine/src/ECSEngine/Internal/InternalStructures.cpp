@@ -4,217 +4,395 @@
 
 namespace ECSEngine {
 
-	void VectorComponentSignature::ConvertComponents(const unsigned char* components) {
-		uint64_t signature[4] = { 0, 0, 0, 0 };
-		for (size_t i = 1; i <= components[0]; i++) {
-			unsigned char division_by_64 = components[i] >> 6;
-			signature[division_by_64] |= (uint64_t)1 << (components[i] - (division_by_64 << 6));
+	// ------------------------------------------------------------------------------------------------------------
+
+	void VectorComponentSignature::ConvertComponents(ComponentSignature signature)
+	{
+		// Increment the component indices so as to not have 0 as a valid component index
+		alignas(32) uint16_t increments[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
+		for (size_t index = 0; index < signature.count; index++) {
+			increments[index] = 1;
 		}
-		value = Vec32uc().load(signature);
+		Vec16us increment;
+		increment.load_a(increments);
+		value = LoadPartial16(signature.indices, signature.count);
+		// value.load_partial(signature.count, signature.indices);
+		value += increment;
 	}
 
-	void VectorComponentSignature::ConvertComponents(const unsigned char* components1, const unsigned char* components2) {
-		uint64_t signature[4] = { 0, 0, 0, 0 };
-		for (size_t i = 1; i <= components1[0]; i++) {
-			unsigned char division_by_64 = components1[i] >> 6;
-			signature[division_by_64] |= (uint64_t)1 << (components1[i] - (division_by_64 << 6));
-		}
-		for (size_t i = 1; i <= components2[0]; i++) {
-			unsigned char division_by_64 = components2[i] >> 6;
-			signature[division_by_64] |= (uint64_t)1 << (components2[i] - (division_by_64 << 6));
-		}
-		value = Vec32uc().load(signature);
+	// ------------------------------------------------------------------------------------------------------------
+
+	void VectorComponentSignature::ConvertInstances(const SharedInstance* instances, unsigned char count)
+	{
+		ConvertComponents({ (Component*)instances, count });
 	}
 
-	void VectorComponentSignature::ConvertComponents(const Stream<ComponentInfo>& infos) {
-		uint64_t signature[4] = { 0, 0, 0, 0 };
-		for (size_t index = 0; index < infos.size; index++) {
-			unsigned char division_by_64 = infos[index].index >> 6;
-			signature[division_by_64] |= (uint64_t)1 << (infos[index].index - (division_by_64 << 6));
-		}
-		value = Vec32uc().load(signature);
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ECS_VECTORCALL VectorComponentSignature::HasComponents(VectorComponentSignature components) const
+	{
+		Vec16us splatted_component;
+		Vec16us zero_vector = ZeroVectorInteger();
+		Vec16sb is_zero;
+		Vec16sb match;
+
+#define LOOP_ITERATION(iteration)   splatted_component = Broadcast16<iteration>(components.value); \
+									/* Test to see if the current element is zero */ \
+									is_zero = splatted_component == zero_vector; \
+									/* If we get to an element which is 0, that means all components have been matched */ \
+									if (horizontal_and(is_zero)) { \
+										return true; \
+									} \
+									match = splatted_component == value; \
+									if (!horizontal_or(match)) { \
+										return false; \
+									} 
+
+		LOOP_UNROLL(16, LOOP_ITERATION);
+
+		return true;
+
+#undef LOOP_ITERATION
 	}
 
-	bool VectorComponentSignature::HasComponents(const unsigned char* components) const {
-		return HasComponents(VectorComponentSignature(components));
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ECS_VECTORCALL VectorComponentSignature::ExcludesComponents(VectorComponentSignature components) const
+	{
+		Vec16us splatted_component;
+		Vec16us zero_vector = ZeroVectorInteger();
+		Vec16sb is_zero;
+		Vec16sb match;
+
+#define LOOP_ITERATION(iteration)   splatted_component = Broadcast16<iteration>(components.value); \
+									/* Test to see if the current element is zero */ \
+									is_zero = splatted_component == zero_vector; \
+									/* If we get to an element which is 0, that means all components have been matched */ \
+									if (horizontal_and(is_zero)) { \
+										return true; \
+									} \
+									match = splatted_component == value; \
+									if (horizontal_or(match)) { \
+										return false; \
+									} 
+
+		LOOP_UNROLL(16, LOOP_ITERATION);
+
+#undef LOOP_ITERATION
+
+		return true;
+
 	}
 
-	bool VectorComponentSignature::ExcludesComponents(const unsigned char* components) const {
-		return ExcludesComponents(VectorComponentSignature(components));
+	// ------------------------------------------------------------------------------------------------------------
+
+	void VectorComponentSignature::InitializeSharedComponent(SharedComponentSignature shared_signature)
+	{
+		ConvertComponents(ComponentSignature(shared_signature.indices, shared_signature.count));
 	}
 
-	bool VectorComponentSignature::ExcludesComponents(const unsigned char* components, VectorComponentSignature zero_signature) const {
-		return ExcludesComponents(VectorComponentSignature(components), zero_signature);
+	// ------------------------------------------------------------------------------------------------------------
+
+	void VectorComponentSignature::InitializeSharedInstances(SharedComponentSignature shared_signature)
+	{
+		ConvertInstances(shared_signature.instances, shared_signature.count);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 	EntityPool::EntityPool(
-		unsigned int power_of_two,
-		unsigned int arena_count, 
-		unsigned int pool_block_count,
-		MemoryManager* memory_manager
-	) 
-		: m_arena_count(arena_count), m_pool_size(1 << power_of_two), m_memory_manager(memory_manager), 
-		m_pool_block_count(pool_block_count), m_power_of_two(power_of_two)
-	{
-		void* allocation = memory_manager->Allocate(MemoryOf(arena_count), alignof(BlockRange));
-		m_pools.buffer = (BlockRange*)allocation;
-		m_pools.size = 0;
-
-		uintptr_t buffer = (uintptr_t)allocation;
-		buffer += sizeof(BlockRange) * arena_count;
-		buffer = function::align_pointer(buffer, alignof(EntityInfo*));
-		m_entity_infos = (EntityInfo**)buffer;
-	}
+		MemoryManager* memory_manager,
+		unsigned int pool_capacity,
+		unsigned int pool_power_of_two
+	) : m_memory_manager(memory_manager), m_pool_capacity(pool_capacity), m_pool_power_of_two(pool_power_of_two), m_entity_infos(GetAllocatorPolymorphic(memory_manager), 1) {}
+	
+	// ------------------------------------------------------------------------------------------------------------
 
 	void EntityPool::CreatePool() {
-		ECS_ASSERT(m_pools.size < m_arena_count);
-		void* allocation = m_memory_manager->Allocate(BlockRange::MemoryOf(m_pool_block_count) + sizeof(EntityInfo) * m_pool_size + 8, alignof(size_t));
-		m_pools[m_pools.size] = BlockRange(allocation, m_pool_block_count, m_pool_size);
-		m_entity_infos[m_pools.size++] = (EntityInfo*)function::align_pointer((uintptr_t)allocation + 
-		BlockRange::MemoryOf(m_pool_block_count), alignof(EntityInfo));
-	}
-
-	EntityInfo EntityPool::GetEntityInfo(unsigned int entity) const {
-		size_t pool_index = entity >> m_power_of_two;
-		size_t entity_pool_index = entity & (m_pool_size - 1);
-		return m_entity_infos[pool_index][entity_pool_index];
-	}
-
-	EntityInfo* EntityPool::GetEntityInfoBuffer(unsigned int buffer_index) const {
-		return m_entity_infos[buffer_index];
-	}
-
-	unsigned int EntityPool::GetSequence(unsigned int size) {
-		for (size_t index = 0; index < m_pools.size; index++) {
-			size_t offset = m_pools[index].Request(size);
-			if (offset != 0xFFFFFFFFFFFFFFFF) {
-				return offset + index * m_pool_size;
+		void* allocation = m_memory_manager->Allocate(m_entity_infos.buffer->stream.MemoryOf(m_pool_capacity));
+		// Walk through the entity info stream and look for an empty slot and place the allocation there
+		// Cannot remove swap back chunks because the entity index calculation takes into consideration the initial
+		// chunk position. Using reallocation tables that would offset chunk indices does not seem like a good idea
+		// since adds latency to the lookup
+		auto info_stream = StableReferenceStream<EntityInfo>(allocation, m_pool_capacity);
+		for (size_t index = 0; index < m_entity_infos.size; index++) {
+			if (!m_entity_infos[index].is_in_use) {
+				m_entity_infos[index].is_in_use = true;
+				m_entity_infos[index].stream = info_stream;
+				return;
 			}
 		}
-		CreatePool();
-		return m_pools[m_pools.size - 1].Request(size) + (m_pools.size - 1) * m_pool_size;
+		m_entity_infos.Add({info_stream, true});
 	}
 
-	unsigned int EntityPool::GetSequenceFast(unsigned int size) {
-		for (int64_t index = m_pools.size - 1; index >= 0; index--) {
-			size_t offset = m_pools[index].Request(size);
-			if (offset != 0xFFFFFFFFFFFFFFFF) {
-				return offset + index * m_pool_size;
+	// ------------------------------------------------------------------------------------------------------------
+
+	Entity GetEntityFromPoolOffset(unsigned int pool_index, unsigned int pool_power_of_two, unsigned int index) {
+		return (pool_index << pool_power_of_two) + index;
+	}
+
+	uint2 GetPoolAndEntityIndex(const EntityPool* entity_pool, Entity entity) {
+		return { entity.value >> entity_pool->m_pool_power_of_two, entity.value & (entity_pool->m_pool_power_of_two - 1) };
+	}
+
+	template<bool has_info>
+	ECS_INLINE Entity EntityPoolAllocateImplementation(EntityPool* entity_pool, EntityInfo info = {}) {
+		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
+			if (entity_pool->m_entity_infos[index].stream.size < entity_pool->m_entity_infos[index].stream.capacity) {
+				if constexpr (has_info) {
+					return GetEntityFromPoolOffset(index, entity_pool->m_pool_power_of_two, entity_pool->m_entity_infos[index].stream.Add(info));
+				}
+				else {
+					return GetEntityFromPoolOffset(index, entity_pool->m_pool_power_of_two, entity_pool->m_entity_infos[index].stream.ReserveOne());
+				}
 			}
 		}
-		return 0xFFFFFFFF;
-	}
 
-	void EntityPool::FreeSequence(unsigned int first) {
-		size_t pool_index = first >> m_power_of_two;
-		size_t offset = first & (m_pool_size - 1);
-		m_pools[pool_index].Free(offset);
-	}
-
-	void EntityPool::SetEntityInfo(unsigned int entity, EntityInfo new_info) {
-		size_t pool_index = entity >> m_power_of_two;
-		size_t entity_index = entity & (m_pool_size - 1);
-		m_entity_infos[pool_index][entity_index] = new_info;
-	}
-
-	void EntityPool::SetEntityInfoToSequence(unsigned int first_entity, unsigned int size, EntityInfo new_info) {
-		size_t pool_index = first_entity >> m_power_of_two;
-		size_t entity_index = first_entity & (m_pool_size - 1);
-		for (size_t index = 0; index < size; index++) {
-			m_entity_infos[pool_index][entity_index + index] = new_info;
+		// All pools are full - create a new one and allocate from it
+		entity_pool->CreatePool();
+		if constexpr (has_info) {
+			return GetEntityFromPoolOffset(
+				entity_pool->m_entity_infos.size - 1,
+				entity_pool->m_pool_power_of_two, 
+				entity_pool->m_entity_infos[entity_pool->m_entity_infos.size - 1].stream.Add(info)
+			);
+		}
+		else {
+			return GetEntityFromPoolOffset(
+				entity_pool->m_entity_infos.size - 1,
+				entity_pool->m_pool_power_of_two,
+				entity_pool->m_entity_infos[entity_pool->m_entity_infos.size - 1].stream.ReserveOne()
+			);
 		}
 	}
 
-	size_t EntityPool::MemoryOf(unsigned int pool_count) {
-		return (sizeof(EntityInfo*) + sizeof(BlockRange)) * pool_count;
+	Entity EntityPool::Allocate()
+	{
+		return EntityPoolAllocateImplementation<false>(this);
 	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Entity EntityPool::AllocateEx(EntityInfo info)
+	{
+		return EntityPoolAllocateImplementation<true>(this, info);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	struct EntityPoolAllocateAdditionalData {
+		EntityInfo* infos = nullptr;
+		ushort2 archetype_indices;
+		Stream<EntitySequence> chunk_positions = { nullptr,0 };
+	};
+
+	enum EntityPoolAllocateType {
+		ENTITY_POOL_ALLOCATE_NO_DATA,
+		ENTITY_POOL_ALLOCATE_WITH_INFOS,
+		ENTITY_POOL_ALLOCATE_WITH_CHUNKS
+	};
+	
+	template<EntityPoolAllocateType additional_data_type>
+	ECS_INLINE void EntityPoolAllocateImplementation(EntityPool* entity_pool, Stream<Entity> entities, EntityPoolAllocateAdditionalData additional_data = {}) {
+		// The assert will be done by the stream too
+		// ECS_ASSERT(entities.size < m_pool_capacity);
+
+		auto loop_iteration = [&entities, entity_pool, additional_data](unsigned int index) {
+			if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_INFOS) {
+				entity_pool->m_entity_infos[index].stream.AddStream(Stream<EntityInfo>(additional_data.infos, entities.size), (unsigned int*)entities.buffer);
+			}
+			else if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_CHUNKS) {
+				unsigned int total_entity_count = 0;
+				for (size_t chunk_index = 0; chunk_index < additional_data.chunk_positions.size; chunk_index++) {
+					for (size_t entity_index = 0; entity_index < additional_data.chunk_positions[chunk_index].entity_count; entity_index++) {
+						EntityInfo info;
+						info.base_archetype = additional_data.archetype_indices.y;
+						info.main_archetype = additional_data.archetype_indices.x;
+						info.chunk = additional_data.chunk_positions[chunk_index].chunk_index;
+						info.stream_index = additional_data.chunk_positions[chunk_index].stream_offset + entity_index;
+						// This will be a handle that can be used to index into this specific chunk of the entity pool
+						entities[total_entity_count++] = GetEntityFromPoolOffset(index, entity_pool->m_pool_power_of_two, entity_pool->m_entity_infos[index].stream.Add(info));
+					}
+				}
+			}
+			else {
+				entity_pool->m_entity_infos[index].stream.Reserve(Stream<unsigned int>(entities.buffer, entities.size));
+			}
+		};
+
+		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
+			if (entity_pool->m_entity_infos[index].stream.size + entities.size < entity_pool->m_entity_infos[index].stream.capacity) {
+				loop_iteration(index);
+				return;
+			}
+		}
+
+		// All pools are full - create a new one and allocate from it
+		entity_pool->CreatePool();
+		unsigned int pool_index = entity_pool->m_entity_infos.size - 1;
+		loop_iteration(pool_index);
+	}
+
+	void EntityPool::Allocate(Stream<Entity> entities)
+	{
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_NO_DATA>(this, entities);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::AllocateEx(Stream<Entity> entities, EntityInfo* infos)
+	{
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_INFOS>(this, entities, {infos});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, Stream<EntitySequence> chunk_positions)
+	{
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_CHUNKS>(this, entities, { nullptr, archetype_indices, chunk_positions });
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::Deallocate(Entity entity)
+	{
+		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
+		m_entity_infos[entity_indices.x].stream.Remove(entity_indices.y);
+		if (m_entity_infos[entity_indices.x].stream.size == 0) {
+			// Deallocate the buffer and mark as unused
+			m_memory_manager->Deallocate(m_entity_infos[entity_indices.x].stream.buffer);
+			// When iterating for an allocation, since the size and the capacity are both set to 0
+			// The iteration will just skip this block - as it should
+			m_entity_infos[entity_indices.x].stream.buffer = nullptr;
+			m_entity_infos[entity_indices.x].stream.free_list = nullptr;
+			m_entity_infos[entity_indices.x].stream.size = 0;
+			m_entity_infos[entity_indices.x].stream.capacity = 0;
+			m_entity_infos[entity_indices.x].is_in_use = false;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::Deallocate(Stream<Entity> entities)
+	{
+		for (size_t index = 0; index < entities.size; index++) {
+			Deallocate(entities[index]);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	EntityInfo EntityPool::GetInfo(Entity entity) const {
+		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
+		return m_entity_infos[entity_indices.x].stream[entity_indices.y];
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	EntityInfo* EntityPool::GetInfoPtr(Entity entity)
+	{
+		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
+		return m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::SetEntityInfo(Entity entity, EntityInfo new_info) {
+		unsigned int pool_index = entity.value >> m_pool_power_of_two;
+		unsigned int entity_index = entity.value & (m_pool_power_of_two - 1);
+		m_entity_infos[pool_index].stream[entity_index] = new_info;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 	ArchetypeQuery::ArchetypeQuery() {}
 
-	ArchetypeQuery::ArchetypeQuery(const unsigned char* components, const unsigned char* shared_components)
+	ArchetypeQuery::ArchetypeQuery(VectorComponentSignature _unique, VectorComponentSignature _shared) : unique(_unique), shared(_shared) {}
+
+	bool ECS_VECTORCALL ArchetypeQuery::Verifies(VectorComponentSignature unique_to_compare, VectorComponentSignature shared_to_compare) const
 	{
-		unique = VectorComponentSignature(components);
-		shared = VectorComponentSignature(shared_components);
+		return VerifiesUnique(unique_to_compare) && VerifiesShared(shared_to_compare);
 	}
+
+	bool ECS_VECTORCALL ArchetypeQuery::VerifiesUnique(VectorComponentSignature unique_to_compare) const
+	{
+		return unique_to_compare.HasComponents(unique);
+	}
+
+	bool ECS_VECTORCALL ArchetypeQuery::VerifiesShared(VectorComponentSignature shared_to_compare) const
+	{
+		return shared_to_compare.HasComponents(shared);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 	ArchetypeQueryExclude::ArchetypeQueryExclude() {}
 
 	ArchetypeQueryExclude::ArchetypeQueryExclude(
-		const unsigned char* components, 
-		const unsigned char* shared_components, 
-		const unsigned char* exclude_components,
-		const unsigned char* exclude_shared
+		VectorComponentSignature _unique, 
+		VectorComponentSignature _shared, 
+		VectorComponentSignature _exclude_unique, 
+		VectorComponentSignature _exclude_shared
+	) : unique(_unique), shared(_shared), unique_excluded(_exclude_unique), shared_excluded(_exclude_shared) {}
+
+	bool ECS_VECTORCALL ArchetypeQueryExclude::Verifies(VectorComponentSignature unique_to_compare, VectorComponentSignature shared_to_compare) const
+	{
+		return VerifiesUnique(unique_to_compare) && VerifiesShared(shared_to_compare);
+	}
+
+	bool ECS_VECTORCALL ArchetypeQueryExclude::VerifiesUnique(VectorComponentSignature unique_to_compare) const
+	{
+		return unique_to_compare.HasComponents(unique) && unique_to_compare.ExcludesComponents(unique_excluded);
+	}
+
+	bool ECS_VECTORCALL ArchetypeQueryExclude::VerifiesShared(VectorComponentSignature shared_to_compare) const
+	{
+		return shared_to_compare.HasComponents(shared) && shared_to_compare.ExcludesComponents(shared_excluded);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ECS_VECTORCALL SharedComponentSignatureHasInstances(
+		VectorComponentSignature archetype_components,
+		VectorComponentSignature archetype_instances,
+		VectorComponentSignature query_components, 
+		VectorComponentSignature query_instances
 	)
 	{
-		unique = VectorComponentSignature(components);
-		shared = VectorComponentSignature(shared_components);
-		unique_excluded = VectorComponentSignature(exclude_components);
-		shared_excluded = VectorComponentSignature(exclude_shared);
+		Vec16us splatted_component;
+		Vec16us splatted_instance;
+		Vec16us zero_vector = ZeroVectorInteger();
+		Vec16sb is_zero;
+		Vec16sb match;
+		Vec16sb instance_match;
+
+#define LOOP_ITERATION(iteration)	splatted_component = Broadcast16<iteration>(query_components.value); \
+									/* Test to see if the current element is zero */ \
+									is_zero = splatted_component == zero_vector; \
+									/* If we get to an element which is 0, that means all components have been matched */ \
+									if (horizontal_and(is_zero)) { \
+										return true; \
+									} \
+									match = splatted_component == archetype_components.value; \
+									if (!horizontal_or(match)) { \
+										return false; \
+									} \
+									/* Test now the instance - splat the instance and keep the position where only the component was matched */ \
+									splatted_instance = Broadcast16<iteration>(query_instances.value); \
+									instance_match = splatted_instance == archetype_instances.value; \
+									match &= instance_match; \
+									if (!horizontal_or(match)) { \
+										return false; \
+									}
+									
+
+		LOOP_UNROLL(16, LOOP_ITERATION);
+
+		return true;
+
+#undef LOOP_ITERATION
 	}
 
-	unsigned int HashFunctionMultiplyString::Hash(Stream<const char> string)
-	{
-		// Value must be clipped to 3 bytes only - that's the precision of the hash tables
-		unsigned int sum = 0;
-		for (size_t index = 0; index < string.size; index++) {
-			sum += string[index] * index;
-		}
-		return sum * (unsigned int)string.size;
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(Stream<const wchar_t> string) {
-		return Hash(Stream<const char>((void*)string.buffer, string.size * sizeof(wchar_t)));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(const char* string) {
-		return Hash(Stream<const char>((void*)string, strlen(string)));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(const wchar_t* string) {
-		return Hash(Stream<const char>((void*)string, sizeof(wchar_t) * wcslen(string)));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(const void* identifier, unsigned int identifier_size) {
-		return Hash(Stream<const char>((void*)identifier, identifier_size));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(ResourceIdentifier identifier)
-	{
-		return Hash(identifier.ptr, identifier.size);
-	}
-
-	ResourceIdentifier::ResourceIdentifier() : ptr(nullptr), size(0) {}
-
-	ResourceIdentifier::ResourceIdentifier(const char* _ptr) : ptr(_ptr), size(strlen(_ptr)) {}
-
-	ResourceIdentifier::ResourceIdentifier(const wchar_t* _ptr) : ptr(_ptr), size(wcslen(_ptr) * sizeof(wchar_t)) {}
-
-	ResourceIdentifier::ResourceIdentifier(const void* id, unsigned int size) : ptr(id), size(size) {}
-
-	ResourceIdentifier::ResourceIdentifier(Stream<void> identifier) : ptr(identifier.buffer), size(identifier.size) {}
-
-	bool ResourceIdentifier::operator == (const ResourceIdentifier& other) const {
-		return size == other.size && ptr == other.ptr;
-	}
-
-	bool ResourceIdentifier::Compare(const ResourceIdentifier& other) const {
-		if (size != other.size)
-			return false;
-		else {
-			size_t index = 0;
-			Vec32uc char_compare, other_char_compare;
-			while (size - index > char_compare.size()) {
-				char_compare.load(function::OffsetPointer(ptr, index));
-				other_char_compare.load(function::OffsetPointer(other.ptr, index));
-				if (horizontal_and(char_compare == other_char_compare) == false) {
-					return false;
-				}
-				index += char_compare.size();
-			}
-			char_compare.load_partial(size - index, function::OffsetPointer(ptr, index));
-			other_char_compare.load_partial(size - index, function::OffsetPointer(other.ptr, index));
-			return horizontal_and(char_compare == other_char_compare);
-		}
-	}
+	// ------------------------------------------------------------------------------------------------------------
 
 }

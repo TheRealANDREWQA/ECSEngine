@@ -563,7 +563,7 @@ namespace ECSEngine {
 	}
 
 	Matrix Camera::GetProjectionViewMatrix() const {
-		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
+		return MatrixTranslation(-translation) * MatrixRotation(-rotation) * projection;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------

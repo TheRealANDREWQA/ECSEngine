@@ -639,12 +639,12 @@ namespace ECSEngine {
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Max border count", &dockspace->max_border_count, 4, 16);
 			drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, "Max windows per border", &dockspace->max_windows_border, 4, 16);
 
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border margin", &dockspace->border_margin, 0.0f, 0.5f);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border minimum distance", &dockspace->border_minimum_distance, 0.0f, 0.5f);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border size", &dockspace->border_size, 0.0005f, 0.01f, 7);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Mininum scale", &dockspace->mininum_scale, 0.01f, 0.5f, 3);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Viewport padding x", &dockspace->viewport_padding_x, 0.0f, 0.003f, 7);
-			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Viewport padding y", &dockspace->viewport_padding_y, 0.0f, 0.003f, 7);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border margin", &dockspace->border_margin, 0.0f, 0.5f, 0.0f, 4);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border minimum distance", &dockspace->border_minimum_distance, 0.0f, 0.5f, 0.0f, 5);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Border size", &dockspace->border_size, 0.0005f, 0.01f, 0.0f, 5);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Mininum scale", &dockspace->mininum_scale, 0.01f, 0.5f, 0.0f, 5);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Viewport padding x", &dockspace->viewport_padding_x, 0.0f, 0.003f, 0.0f, 5);
+			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Viewport padding y", &dockspace->viewport_padding_y, 0.0f, 0.003f, 0.0f, 5);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -929,7 +929,7 @@ namespace ECSEngine {
 			unsigned int parameter_window_index = system->GetWindowFromName(new_name);
 			data->is_parameter_window_opened = function::Select(parameter_window_index == 0xFFFFFFFF, false, true);
 
-			int scroll_amount = mouse->MouseWheelScroll() - data->scroll;
+			int scroll_amount = mouse->GetScrollValue() - data->scroll;
 			float total_scroll = 0.0f;
 			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
 				if (keyboard_tracker->IsKeyPressed(HID::Key::Z)) {
@@ -994,7 +994,7 @@ namespace ECSEngine {
 					}
 				}
 			}
-			data->scroll = mouse->MouseWheelScroll();
+			data->scroll = mouse->GetScrollValue();
 			data->last_frame = system->GetFrameIndex();
 
 			if (keyboard->IsKeyDown(HID::Key::LeftAlt) && mouse_tracker->LeftButton() == MBPRESSED &&
@@ -1545,7 +1545,7 @@ namespace ECSEngine {
 		void ConsoleDump(unsigned int thread_index, World* world, void* _data) {
 			ConsoleDumpData* data = (ConsoleDumpData*)_data;
 			ECS_FILE_HANDLE file = 0;
-			ECS_FILE_STATUS_FLAGS status = OpenFile(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
+			ECS_FILE_STATUS_FLAGS status = FileCreate(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
 
 			ECS_ASSERT(status == ECS_FILE_STATUS_OK);
 
@@ -2143,7 +2143,7 @@ namespace ECSEngine {
 			data.warn_count = 0;
 			data.trace_count = 0;
 			data.last_frame_message_count = 0;
-			data.filtered_message_indices = containers::ResizableStream<unsigned int, MemoryManager>(console->messages.allocator, 0);
+			data.filtered_message_indices = containers::ResizableStream<unsigned int>(console->messages.allocator, 0);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -2152,8 +2152,8 @@ namespace ECSEngine {
 			pause_on_error(false), verbosity_level(CONSOLE_VERBOSITY_DETAILED), dump_type(ConsoleDumpType::CountMessages),
 			task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
 			format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
-			messages = containers::ResizableStream<ConsoleMessage, MemoryManager>(allocator, 0);
-			system_filter_strings = containers::ResizableStream<const char*, MemoryManager>(allocator, 0);
+			messages = containers::ResizableStream<ConsoleMessage>(GetAllocatorPolymorphic(allocator), 0);
+			system_filter_strings = containers::ResizableStream<const char*>(GetAllocatorPolymorphic(allocator), 0);
 
 			// Make a stable reference to the dump path
 			size_t dump_path_size = wcslen(_dump_path) + 1;
@@ -2280,8 +2280,8 @@ namespace ECSEngine {
 			dump_data.console = this;
 			dump_data.starting_index = last_dumped_message;
 
-			ThreadTask task = { ConsoleAppendToDump, &dump_data };
-			task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
+			ThreadTask task = { ConsoleAppendToDump, &dump_data, sizeof(dump_data) };
+			task_manager->AddDynamicTaskAndWake(task);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -2292,8 +2292,8 @@ namespace ECSEngine {
 			dump_data.console = this;
 			dump_data.starting_index = 0;
 
-			ThreadTask task = { ConsoleDump, &dump_data };
-			task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
+			ThreadTask task = { ConsoleDump, &dump_data, sizeof(dump_data) };
+			task_manager->AddDynamicTaskAndWake(task);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -2344,8 +2344,8 @@ namespace ECSEngine {
 						dump_data.console = this;
 						dump_data.starting_index = last_dumped_message;
 
-						ThreadTask task = { ConsoleAppendToDump, &dump_data };
-						task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
+						ThreadTask task = { ConsoleAppendToDump, &dump_data, sizeof(dump_data) };
+						task_manager->AddDynamicTaskAndWake(task);
 					}
 				}
 				else {
@@ -2353,8 +2353,8 @@ namespace ECSEngine {
 					dump_data.console = this;
 					dump_data.starting_index = 0;
 
-					ThreadTask task = { ConsoleDump, &dump_data };
-					task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
+					ThreadTask task = { ConsoleDump, &dump_data, sizeof(dump_data) };
+					task_manager->AddDynamicTaskAndWake(task);
 				}
 			}
 		}
@@ -2371,8 +2371,8 @@ namespace ECSEngine {
 						dump_data.console = this;
 						dump_data.starting_index = last_dumped_message;
 
-						ThreadTask task = { ConsoleAppendToDump, &dump_data };
-						task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
+						ThreadTask task = { ConsoleAppendToDump, &dump_data, sizeof(dump_data) };
+						task_manager->AddDynamicTaskAndWake(task);
 					}
 				}
 				else {
@@ -2380,8 +2380,8 @@ namespace ECSEngine {
 					dump_data.console = this;
 					dump_data.starting_index = 0;
 
-					ThreadTask task = { ConsoleDump, &dump_data };
-					task_manager->AddDynamicTaskAndWake(task, sizeof(dump_data));
+					ThreadTask task = { ConsoleDump, &dump_data, sizeof(dump_data) };
+					task_manager->AddDynamicTaskAndWake(task);
 				}
 			}
 		}

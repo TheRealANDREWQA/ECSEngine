@@ -57,6 +57,33 @@ namespace ECSEngine {
 			size_t* ECS_RESTRICT last_write_time = nullptr
 		);
 
+		// A pointer null means I don't care; returns whether or not succeeded
+		// Works for directories too
+		ECSENGINE_API bool GetFileTimes(
+			Stream<wchar_t> path,
+			char* ECS_RESTRICT creation_time = nullptr,
+			char* ECS_RESTRICT access_time = nullptr,
+			char* ECS_RESTRICT last_write_time = nullptr
+		);
+
+		// A pointer null means I don't care; returns whether or not succeeded
+		// Works for directories too
+		ECSENGINE_API bool GetFileTimes(
+			Stream<wchar_t> path,
+			wchar_t* ECS_RESTRICT creation_time = nullptr,
+			wchar_t* ECS_RESTRICT access_time = nullptr,
+			wchar_t* ECS_RESTRICT last_write_time = nullptr
+		);
+
+		// A pointer null means I don't care; returns whether or not it succeeded
+		// Works for directories too; It will conver the dates into a number;
+		ECSENGINE_API bool GetFileTimes(
+			Stream<wchar_t> path,
+			size_t* ECS_RESTRICT creation_time = nullptr,
+			size_t* ECS_RESTRICT access_time = nullptr,
+			size_t* ECS_RESTRICT last_write_time = nullptr
+		);
+
 		// A pointer null means I don't care; returns whether or not succeeded; output is in milliseconds
 		// Works for directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
@@ -84,6 +111,33 @@ namespace ECSEngine {
 			wchar_t* ECS_RESTRICT last_write_time = nullptr
 		);
 
+		// A pointer null means I don't care; returns whether or not succeeded; output is in milliseconds
+		// Works for directories too
+		ECSENGINE_API bool GetRelativeFileTimes(
+			Stream<wchar_t> path,
+			size_t* ECS_RESTRICT creation_time = nullptr,
+			size_t* ECS_RESTRICT access_time = nullptr,
+			size_t* ECS_RESTRICT last_write_time = nullptr
+		);
+
+		// A pointer null means I don't care; returns whether or not succeeded
+		// Works for directories too
+		ECSENGINE_API bool GetRelativeFileTimes(
+			Stream<wchar_t> path,
+			char* ECS_RESTRICT creation_time = nullptr,
+			char* ECS_RESTRICT access_time = nullptr,
+			char* ECS_RESTRICT last_write_time = nullptr
+		);
+
+		// A pointer null means I don't care; returns whether or not succeeded
+		// Works for directories too
+		ECSENGINE_API bool GetRelativeFileTimes(
+			Stream<wchar_t> path,
+			wchar_t* ECS_RESTRICT creation_time = nullptr,
+			wchar_t* ECS_RESTRICT access_time = nullptr,
+			wchar_t* ECS_RESTRICT last_write_time = nullptr
+		);
+
 		ECSENGINE_API bool OpenFileWithDefaultApplication(
 			const wchar_t* path,
 			CapacityStream<char>* error_message = nullptr
@@ -97,8 +151,10 @@ namespace ECSEngine {
 		// Local time
 		ECSENGINE_API Date GetLocalTime();
 
-		// Convinience function - if it fails it will return 0
+		// Convenience function - if it fails it will return 0
 		ECSENGINE_API size_t GetFileLastWrite(const wchar_t* path);
+
+		ECSENGINE_API size_t GetFileLastWrite(containers::Stream<wchar_t> path);
 
 #pragma endregion
 

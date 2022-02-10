@@ -38,7 +38,6 @@ namespace ECSEngine {
 		ECS_MESH_NORMAL,
 		ECS_MESH_UV,
 		ECS_MESH_COLOR,
-		ECS_MESH_TANGENT,
 		ECS_MESH_BONE_WEIGHT,
 		ECS_MESH_BONE_INFLUENCE,
 		ECS_MESH_BUFFER_COUNT
@@ -1016,7 +1015,7 @@ namespace ECSEngine {
 		const char* name;
 		IndexBuffer index_buffer;
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
-		unsigned char mapping[ECS_MESH_BUFFER_COUNT];
+		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];
 		unsigned char mapping_count;
 	};
 

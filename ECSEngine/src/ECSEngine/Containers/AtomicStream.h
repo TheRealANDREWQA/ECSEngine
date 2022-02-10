@@ -16,8 +16,8 @@ namespace ECSEngine {
 			AtomicStream(const void* buffer, unsigned int size, unsigned int capacity) : buffer((T*)buffer), size(size), capacity(capacity) {}
 			AtomicStream(Stream<T> other) : buffer(other.buffer), size(other.size), capacity(other.size) {}
 
-			AtomicStream(const AtomicStream& other) = default;
-			AtomicStream<T>& operator = (const AtomicStream<T>&other) = default;
+			AtomicStream(const AtomicStream<T>& other) = default;
+			AtomicStream<T>& operator = (const AtomicStream<T>& other) = default;
 
 			unsigned int Add(T element) {
 				unsigned int index = size.fetch_add(1, std::memory_order_acq_rel);

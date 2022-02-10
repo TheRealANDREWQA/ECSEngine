@@ -34,9 +34,8 @@ void CreateProjectDefaultUI(EditorState* editor_state) {
 
 UIDockspace* CreateProjectBackgroundDockspace(UISystem* system)
 {
-	float border_size = system->m_descriptors.dockspaces.border_size;
-	float2 dockspace_position = { -1.0f, -1.0f + TOOLBAR_SIZE_Y + MISCELLANEOUS_BAR_SIZE_Y - border_size };
-	float2 dockspace_scale = { 2.0f - border_size, 1.0f - dockspace_position.y - NOTIFICATION_BAR_WINDOW_SIZE - border_size };
+	float2 dockspace_position = { -1.0f, -1.0f + TOOLBAR_SIZE_Y + MISCELLANEOUS_BAR_SIZE_Y };
+	float2 dockspace_scale = { 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X, 1.0f - dockspace_position.y - NOTIFICATION_BAR_WINDOW_SIZE };
 	unsigned int dockspace_index = system->CreateFixedDockspace({ dockspace_position, dockspace_scale }, DockspaceType::FloatingVertical, 0, false, UI_DOCKSPACE_BACKGROUND);
 	UIDockspace* dockspace = system->GetDockspace(dockspace_index, DockspaceType::FloatingVertical);
 

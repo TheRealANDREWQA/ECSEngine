@@ -230,7 +230,7 @@ namespace ECSEngine {
 				path = PathParent(path);
 				path_directory = PathFilename(path);
 			}
-			return Path(path.buffer + reference.size + 1, path_initial_size - reference.size - 1);
+			return Path(path_directory.buffer + reference.size + 1, path_initial_size - (path_directory.buffer - path.buffer) - reference.size - 1);
 		}
 
 		// --------------------------------------------------------------------------------------------------

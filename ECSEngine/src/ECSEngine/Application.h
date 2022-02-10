@@ -6,6 +6,12 @@
 
 namespace ECSEngine {
 
+	constexpr size_t ECS_PLATFORM_WIN64_DX11 = 1 << 0;
+	constexpr size_t ECS_PLATFORM_WIN64_DX11_STRING_INDEX = 0;
+	constexpr size_t ECS_PLATFORM_ALL = ECS_PLATFORM_WIN64_DX11;
+
+	extern ECSENGINE_API const char* ECS_PLATFORM_STRINGS[];
+
 	enum class ECSENGINE_API CursorType : unsigned char {
 		Default,
 		IBeam,

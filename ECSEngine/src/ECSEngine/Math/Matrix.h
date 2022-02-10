@@ -659,7 +659,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotation(float3 rotation) {
-		return MatrixRotationX(rotation.x) * MatrixRotationY(rotation.y) * MatrixRotationZ(rotation.z);
+		//return MatrixRotationX(rotation.x) * MatrixRotationY(rotation.y) * MatrixRotationZ(rotation.z);
+		return MatrixRotationZ(rotation.z) * MatrixRotationY(rotation.y) * MatrixRotationX(rotation.x);
 	}
 
 	ECS_INLINE Matrix ECS_VECTORCALL MatrixRotationRad(float3 rotation) {

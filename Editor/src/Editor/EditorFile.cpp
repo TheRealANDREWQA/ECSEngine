@@ -141,8 +141,8 @@ bool LoadEditorFile(EditorState* editor_state) {
 			Path current_path(temp_path, path_size);
 			current_path[path_size] = L'\0';
 			if (!ExistsFileOrFolder(current_path)) {
-				void* allocation = editor_allocator->Allocate(sizeof(char) * current_path.size, alignof(char));
-				CapacityStream<char> allocated_path(allocation, 0, current_path.size);
+				void* allocation = editor_allocator->Allocate(sizeof(char) * (current_path.size + 1), alignof(char));
+				CapacityStream<char> allocated_path(allocation, 0, current_path.size + 1);
 				function::ConvertWideCharsToASCII(current_path, allocated_path);
 				invalid_file_paths.Add(allocated_path.buffer);
 			}

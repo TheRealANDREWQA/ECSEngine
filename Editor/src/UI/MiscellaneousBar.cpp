@@ -123,9 +123,9 @@ void CreateMiscellaneousBar(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 	UIWindowDescriptor descriptor;
 
-	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y - ui_system->m_descriptors.dockspaces.border_size;
+	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y;
 	descriptor.initial_position_x = -1.0f;
-	descriptor.initial_size_x = 2.0f - ui_system->m_descriptors.dockspaces.border_size;
+	descriptor.initial_size_x = 2.0f;
 	descriptor.initial_size_y = MISCELLANEOUS_BAR_SIZE_Y;
 
 	size_t stack_memory[128];

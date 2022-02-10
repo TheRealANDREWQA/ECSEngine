@@ -8,33 +8,44 @@ constexpr unsigned int GRAPHICS_MODULE_INDEX = 0;
 
 struct EditorState;
 
+enum EDITOR_LAUNCH_BUILD_COMMAND_STATUS {
+	EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING,
+	EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING,
+	EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING,
+	EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED,
+	EDITOR_LAUNCH_BUILD_COMMAND_COUNT
+};
+
 // Returns whether or not it succeeded in adding the module. It can fail if the solution or project file doesn't exist, 
 // the project already is added to the ECSEngine project or if the configuration is invalid
 bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, EditorModuleConfiguration configuration);
 
 // Runs on multiple threads
-void BuildProjectModules(EditorState* editor_state);
+// It will report the status, in order, for each module
+void BuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses);
 
 // Editor state is needed in order to print to console
-void BuildProjectModule(EditorState* editor_state, unsigned int index);
+// Returns whether or not the command will actually will execute. It can be skipped 
+// if the module is in flight running on the same configuration a build command or if it is up to date
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildProjectModule(EditorState* editor_state, unsigned int index);
 
 // Runs on multiple threads
-void CleanProjectModules(EditorState* editor_state);
+// It will report the status, in order, for each module
+void CleanProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses);
 
-// Editor state is needed in order to print to console; thread_index -1 means
-// that it runs in a single threaded environment and that it will clear the log file
-// and write in it; 
-// Returns whether or not it succeded
-void CleanProjectModule(EditorState* editor_state, unsigned int index);
+// Editor state is needed in order to print to console
+// Returns whether or not the command will actually will execute. It can be skipped 
+// if the module is in flight running on the same configuration a build command
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanProjectModule(EditorState* editor_state, unsigned int index);
 
 // Runs on multiple threads
-void RebuildProjectModules(EditorState* editor_state);
+// It will report the status, in order, for each module
+void RebuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses);
 
-// Editor state is needed in order to print to console; thread_index -1 means
-// that it runs in a single threaded environment and that it will clear the log file
-// and write in it
-// Returns whether or not it succeded
-void RebuildProjectModule(EditorState* editor_state, unsigned int index);
+// Editor state is needed in order to print to console
+// Returns whether or not the command will actually will execute. It can be skipped 
+// if the module is in flight running on the same configuration a build command
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildProjectModule(EditorState* editor_state, unsigned int index);
 
 void DeleteProjectModuleFlagFiles(EditorState* editor_state);
 

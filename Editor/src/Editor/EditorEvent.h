@@ -4,7 +4,9 @@
 
 struct EditorState;
 
-using EditorEventFunction = void (*)(EditorState* editor_state, void* ECS_RESTRICT data);
+typedef void (*EditorEventFunction)(EditorState* editor_state, void* data);
+
+#define EDITOR_EVENT(name) void name(EditorState* editor_state, void* _data)
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
 #define EDITOR_CONSOLE_SYSTEM_INDEX 1 << 0
@@ -20,17 +22,17 @@ EDITOR_EXPORT void EditorAddEvent(EditorState* editor_state, EditorEventFunction
 // allocator and it must still be deallocated
 EDITOR_EXPORT void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction function, void* event_data);
 
-EDITOR_EXPORT void EditorSkip(EditorState* editor_state, void* ECS_RESTRICT data);
+EDITOR_EXPORT EDITOR_EVENT(EditorSkip);
 
-EDITOR_EXPORT void EditorError(EditorState* editor_state, void* ECS_RESTRICT data);
+EDITOR_EXPORT EDITOR_EVENT(EditorError);
 
-EDITOR_EXPORT void EditorConsoleError(EditorState* editor_state, void* ECS_RESTRICT data);
+EDITOR_EXPORT EDITOR_EVENT(EditorConsoleError);
 
-EDITOR_EXPORT void EditorConsoleWarn(EditorState* editor_state, void* ECS_RESTRICT data);
+EDITOR_EXPORT EDITOR_EVENT(EditorConsoleWarn);
 
-EDITOR_EXPORT void EditorConsoleInfo(EditorState* editor_state, void* ECS_RESTRICT data);
+EDITOR_EXPORT EDITOR_EVENT(EditorConsoleInfo);
 
-EDITOR_EXPORT void EditorConsoleTrace(EditorState* editor_state, void* ECS_RESTRICT data);
+EDITOR_EXPORT EDITOR_EVENT(EditorConsoleTrace);
 
 // Thread safe
 EDITOR_EXPORT void EditorSetError(EditorState* editor_state, ECSEngine::containers::Stream<char> error_message);

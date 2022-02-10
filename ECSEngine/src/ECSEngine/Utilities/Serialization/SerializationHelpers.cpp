@@ -1,14 +1,7 @@
 #include "ecspch.h"
-#include "Serialization.h"
 #include "SerializationHelpers.h"
 
 namespace ECSEngine {
-
-	// -----------------------------------------------------------------------------------------
-
-	bool Write(ECS_FILE_HANDLE file, const void* data, size_t data_size) {
-		return WriteFile(file, { data, data_size });
-	}
 
 	// -----------------------------------------------------------------------------------------
 
@@ -20,12 +13,6 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Write(ECS_FILE_HANDLE file, Stream<void> data) {
-		return WriteFile(file, data);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
 	bool Write(CapacityStream<void>& stream, Stream<void> data) {
 		stream.Add(data);
 		return stream.size < stream.capacity;
@@ -33,16 +20,17 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Read(ECS_FILE_HANDLE file, void* data, size_t data_size) {
-		return ReadFile(file, { data, data_size });
+	void Write(uintptr_t* stream, const void* data, size_t data_size)
+	{
+		memcpy((void*)*stream, data, data_size);
+		*stream += data_size;
 	}
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Read(ECS_FILE_HANDLE file, CapacityStream<void>& data, size_t data_size) {
-		bool success = ReadFile(file, { function::OffsetPointer(data), data_size });
-		data.size += data_size;
-		return data.size < data.capacity && success;
+	void Write(uintptr_t* stream, Stream<void> data)
+	{
+		return Write(stream, data.buffer, data.size);
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -55,24 +43,24 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Read(uintptr_t& stream, void* data, size_t data_size) {
-		memcpy(data, (const void*)stream, data_size);
-		stream += data_size;
+	bool Read(uintptr_t* stream, void* data, size_t data_size) {
+		memcpy(data, (const void*)*stream, data_size);
+		*stream += data_size;
 		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Read(uintptr_t& stream, CapacityStream<void>& data, size_t data_size) {
-		memcpy((void*)((uintptr_t)data.buffer + data.size), (const void*)stream, data_size);
-		stream += data_size;
+	bool Read(uintptr_t* stream, CapacityStream<void>& data, size_t data_size) {
+		memcpy((void*)((uintptr_t)data.buffer + data.size), (const void*)*stream, data_size);
+		*stream += data_size;
 		data.size += data_size;
 		return data.size <= data.capacity;
 	}
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Ignore(ECS_FILE_HANDLE file, size_t byte_size)
+	bool IgnoreFile(ECS_FILE_HANDLE file, size_t byte_size)
 	{
 		return SetFileCursor(file, byte_size, ECS_FILE_SEEK_CURRENT) != -1;
 	}
@@ -87,9 +75,9 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Ignore(uintptr_t& stream, size_t byte_size)
+	bool Ignore(uintptr_t* stream, size_t byte_size)
 	{
-		stream += byte_size;
+		*stream += byte_size;
 		return true;
 	}
 

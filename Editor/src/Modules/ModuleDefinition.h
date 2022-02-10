@@ -56,4 +56,4 @@ struct EditorModule {
 	size_t library_last_write_time;
 };
 
-using ProjectModules = ECSEngine::containers::ResizableStream<EditorModule, ECSEngine::MemoryManager>;
+using ProjectModules = ECSEngine::containers::ResizableStream<EditorModule>;

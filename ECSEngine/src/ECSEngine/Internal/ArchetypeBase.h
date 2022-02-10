@@ -4,26 +4,7 @@
 #include "../Containers/Stream.h"
 #include "../Containers/SequentialTable.h"
 #include "InternalStructures.h"
-
-#ifndef ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_CHUNK_COUNT
-#define ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_CHUNK_COUNT 8
-#endif
-
-#ifndef ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_CHUNK_SIZE
-#define ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_CHUNK_SIZE 1024
-#endif
-
-#ifndef ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_INITIAL_CHUNK_COUNT
-#define ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_INITIAL_CHUNK_COUNT 1
-#endif
-
-#ifndef ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_SEQUENCE_COUNT
-#define ECS_DEFAULT_ARCHETYPE_BASE_DESCRIPTOR_SEQUENCE_COUNT 64
-#endif
-
-#ifndef ECS_ARCHETYPE_BASE_REBALANCE_BUFFER
-#define ECS_ARCHETYPE_BASE_REBALANCE_BUFFER 5000
-#endif
+#include "../Utilities/BasicTypes.h"
 
 namespace ECSEngine {
 
@@ -31,471 +12,160 @@ namespace ECSEngine {
 
 	struct MemoryManager;
 
-	class ECSENGINE_API ArchetypeBase {
+	struct ECSENGINE_API ArchetypeBase {
 	public:
+		// The small memory manager is used for the chunks resizable stream
+		// In order to not put pressure and fragment the main memory manager
 		ArchetypeBase(
-			unsigned int max_chunk_count,
-			unsigned int chunk_size,
-			unsigned int max_sequences,
-			const Stream<ComponentInfo>& _component_infos,
+			MemoryManager* small_memory_manager,
 			MemoryManager* memory_manager,
-			unsigned int initial_chunk_count = 0
-		);
-		ArchetypeBase(
-			void* initial_allocation,
-			unsigned int max_chunk_count,
 			unsigned int chunk_size,
-			unsigned int max_sequences,
-			const Stream<ComponentInfo>& _component_infos,
-			MemoryManager* memory_manager,
-			unsigned int initial_chunk_count = 0
-		);
-		ArchetypeBase(
-			ArchetypeBaseDescriptor descriptor,
-			const Stream<ComponentInfo>& _component_infos,
-			MemoryManager* memory_manager
-		);
-		ArchetypeBase(
-			void* initial_allocation,
-			ArchetypeBaseDescriptor descriptor,
-			const Stream<ComponentInfo>& _component_infos,
-			MemoryManager* memory_manager
+			const ComponentInfo* infos,
+			ComponentSignature components
 		);
 			
-		ArchetypeBase& operator = (const ArchetypeBase& other) = default;
+		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ArchetypeBase);
 		
-		void AddEntities(unsigned int first, unsigned int size);
+		// Only allocate space for that entity - no default values are set for the components
+		// Returns the chunk index in the x component and the stream index in the y component
+		uint2 AddEntity(Entity entity);
 
-		// Can serve as initialization function for multithreaded functions
-		void AddEntities(unsigned int first, unsigned int size, Stream<unsigned int>& buffer_offsets, unsigned int* sizes);
+		// Returns the chunk index in the x component and the stream index in the y component
+		// Components and data must be synched
+		uint2 AddEntity(Entity entity, ComponentSignature components, const void** data);
 
-		// Can serve as initialization function for multithreaded functions
-		void AddEntities(unsigned int first, unsigned int size, Stream<unsigned int>& buffer_offsets, unsigned int* sizes, unsigned int* sequence_index);
+		// Only allocates space for these entities - no values are written to these entities
+		// Pass the chunk_positions stream to a copy function which will do the actual write of the values
+		void AddEntities(Stream<Entity> entities, CapacityStream<EntitySequence>& chunk_positions);
 
-		// supports contiguous insertions if the requested size is smaller than the chunk size
-		void AddEntities(unsigned int first, unsigned int size, bool contiguous);
-
-		// Can serve as initialization function for multithreaded functions
-		// supports contiguous insertions if the requested size is smaller than the chunk size
-		void AddEntities(unsigned int first, unsigned int size, unsigned int& offset, unsigned int& chunk_index, bool contiguous);
-
-		// Can serve as initialization function for multithreaded functions
-		// supports contiguous insertions if the requested size is smaller than the chunk size
-		void AddEntities(unsigned int first, unsigned int size, unsigned int& offset, unsigned int& chunk_index, unsigned int& sequence_index, bool contiguous);
-
-		// data coming from multiple sources, not contiguous; data -> components layout: AAAAA BBBBB CCCCC
-		// SINGLE THREADED
-		void AddEntities(
-			unsigned int first, 
-			unsigned int size, 
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int source_count
-		);
-
-		// data coming from multiple sources, not contiguous; data -> components layout: AAAAA BBBBB CCCCC
-		// MULTITHREADED; job for a worker thread
-		void AddEntities_mt(
-			unsigned int first_copy_index,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int chunk_offset,
-			unsigned int chunk_index,
-			unsigned int total_entity_count,
-			const Stream<unsigned int>& source_indices
-		);
-
-		// data coming from multiple sources, not contiguous; data -> entity layout: ABC ABC ABC ABC ABC
-		// SINGLE THREADED
-		void AddEntities(
-			unsigned int first, 
-			unsigned int size, 
-			const unsigned char** component_order, 
-			const void*** data, 
-			unsigned int source_count,
-			bool parsed_by_entity
-		);
-
-		// data coming from multiple sources, not contiguous; data -> entity layout: ABC ABC ABC ABC ABC
-		// MULTITHREADED; job for a worker thread
-		void AddEntities_mt(
-			unsigned int first_copy_index,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int chunk_offset,
-			unsigned int chunk_index,
-			const Stream<unsigned int>& source_indices
-		);
-
-		// the prefered way of adding entities since memcpy can use higher bit copy constructs, parsed by components 
-		// SINGLE THREADED
-		void AddEntitiesSequential(
-			unsigned int first,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int source_count
-		);
-
-		// the prefered way of adding entities since memcpy can use higher bit copy constructs, parsed by components 
-		// MULTITHREADED; job for a worker thread
-		void AddEntitiesSequential_mt(
-			unsigned int first_copy_index,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int chunk_offset,
-			unsigned int chunk_index,
-			const Stream<unsigned int>& source_indices
-		);
-
-		// data coming from multiple sources, not contiguous, must be placed in the same chunk; 
-		// data -> components layout: AAAAA BBBBB CCCCC; 
-		// SINGLE THREADED
-		void AddEntitiesSingleChunk(
-			unsigned int first,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int source_count
-		);
-
-		// data coming from multiple sources, not contiguous, must be placed in the same chunk; 
-		// data -> components layout: AAAAA BBBBB CCCCC; 
-		// MULTITHREADED; job for a worker thread
-		void AddEntitiesSingleChunk_mt(
-			unsigned int first_copy_index,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int chunk_offset,
-			unsigned int chunk_index,
-			unsigned int total_entity_count,
-			const Stream<unsigned int>& source_indices
-		);
-
-		// data coming from multiple sources, not contiguous, must be placed in the same chunk; 
-		// data -> entity layout: ABC ABC ABC ABC ABC; 
-		// SINGLE THREADED
-		void AddEntitiesSingleChunk(
-			unsigned int first,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int source_count,
-			bool parsed_by_entity
-		);
-
-		// data coming from multiple sources, not contiguous, must be placed in the same chunk; 
-		// data -> entity layout: ABC ABC ABC ABC ABC; 
-		// MULTITHREADED; job for a worker thread
-		void AddEntitiesSingleChunk_mt(
-			unsigned int first_copy_index,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int chunk_offset,
-			unsigned int chunk_index,
-			const Stream<unsigned int>& source_indices
-		);
-
-		// the prefered way of adding entities since memcpy can use higher bit copy constructs, parsed by components 
-		// single chunk insertion
-		// SINGLE THREADED
-		void AddEntitiesSequentialSingleChunk(
-			unsigned int first,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int source_count
-		);
-
-		// the prefered way of adding entities since memcpy can use higher bit copy constructs, parsed by components 
-		// single chunk insertion
-		// MULTITHREADED; job for worker thread
-		void AddEntitiesSequentialSingleChunk_mt(
-			unsigned int first_copy_index,
-			unsigned int size,
-			const unsigned char** component_order,
-			const void*** data,
-			unsigned int chunk_offset,
-			unsigned int chunk_index,
-			unsigned int total_entity_count,
-			const Stream<unsigned int>& source_indices
-		);
-
-		// data parsed by components, last_copy_index is not included; layout: AAAAA BBBBB CCCCC
-		void CopyKernel(
-			const void** data, 
-			const unsigned char* component_order, 
-			unsigned int chunk_index,
-			unsigned int chunk_offset,
-			unsigned int first_copy_index,
-			unsigned int last_copy_index,
-			unsigned int data_size
-		);
-
-		// data parsed by entities, last_copy_index is not included; layout: ABC ABC ABC ABC ABC
-		void CopyKernel(
+		// Splats the same value of the component to all entities
+		void CopySplatComponents(
+			Stream<EntitySequence> chunk_positions,
 			const void** data,
-			const unsigned char* component_order,
-			unsigned int chunk_index,
-			unsigned int chunk_offset,
-			unsigned int first_copy_index,
-			unsigned int last_copy_index,
-			bool parsed_by_entities
+			ComponentSignature components
 		);
 
-		// data parsed by components, last_copy_index is not included; layout AAAAA BBBBB CCCCC
-		void CopyKernelSequential(
+		// Copies components from another archetype
+		void CopyFromAnotherArchetype(
+			Stream<EntitySequence> chunk_positions,
+			const ArchetypeBase* source_archetype,
+			const Entity* entities, 
+			const EntityPool* entity_pool,
+			ComponentSignature components_to_copy
+		);
+
+		// Data parsed by entities ABC ABC ABC ABC ABC;
+		// The list of pointers is flattened inside this single array so there is no need to allocate a seperate array for
+		// the void** pointers
+		void CopyByEntity(
+			Stream<EntitySequence> chunk_positions,
 			const void** data,
-			const unsigned char* component_order,
-			unsigned int chunk_index,
-			unsigned int chunk_offset,
-			unsigned int first_copy_index,
-			unsigned int last_copy_index
+			ComponentSignature signature
+		);
+
+		// Data parsed by entities ABC ABC ABC ABC ABC;
+		// There should be total count of entities pointers inside data
+		void CopyByEntityContiguous(
+			Stream<EntitySequence> chunk_positions,
+			const void** data,
+			ComponentSignature signature
+		);
+
+		// Data parsed by components layout AAAAA BBBBB CCCCC; It assumes that data is not contiguous
+		// The list of pointers is flattened inside this single array so there is no need to allocate a seperate array for
+		// the void** pointers
+		void CopyByComponents(
+			Stream<EntitySequence> chunk_positions,
+			const void** data,
+			ComponentSignature signature
+		);
+
+		// Data parsed by components layout AAAAA BBBBB CCCCC; It use memcpy to blit the values into each chunk
+		// There should be signature.count data pointers
+		void CopyByComponentsContiguous(
+			Stream<EntitySequence> chunk_positions,
+			const void** data,
+			ComponentSignature signature
 		);
 
 		void CreateChunk();
 
 		void CreateChunks(unsigned int count);
 
+		void ClearChunk(unsigned int chunk_index);
+
+		size_t ChunkMemorySize() const;
+
 		void Deallocate();
 
-		void DeleteSequence(unsigned int chunk_index, unsigned int sequence_index);
+		void DeallocateChunk(unsigned int index);
 
-		// deallocates the chunk 
-		void DestroyChunk(unsigned int index);
+		// Deallocates the chunk, the pool is needed to update the entity infos for those entities that got swapped
+		void DestroyChunk(unsigned int index, EntityPool* pool);
 
-		// linear search over infos
-		unsigned char FindComponentIndex(unsigned char component) const;
+		unsigned char FindComponentIndex(Component component) const;
 
-		// frees the chunk without allocating a new one
-		void FreeChunk(unsigned int chunk_index);
+		// It will replace the absolute indices with indices that correspond to the current components
+		void FindComponents(ComponentSignature components) const;
 
-		// no need to allocate memory since it will point to the same buffer
-		void GetBuffers(Stream<void*>& buffers) const;
+		// buffers must have size of at least chunk count
+		void GetBuffers(void*** buffers) const;
 
-		// need to allocate memory
-		void GetBuffers(Stream<void*>& buffers, const unsigned char* components) const;
+		// buffers must have size of at least chunk count
+		// It will fill in buffers in order of chunks and then components
+		void GetBuffers(void*** buffers, size_t* chunk_sizes, ComponentSignature components) const;
+
+		void* GetComponent(EntityInfo info, Component component) const;
+
+		// The component index will be used to directly index into the buffers
+		void* GetComponentByIndex(EntityInfo info, unsigned char component_index) const;
 
 		unsigned int GetChunkCount() const;
 
-		// must search every chunk and every sequence in order to find the entity; DO NOT USE IN TIGHT LOOPS
-		void* GetComponent(unsigned int entity, unsigned char component) const;
-
-		// the preferred way of getting a component since it requires mostly reading the table buffer
-		void* GetComponent(unsigned int entity, unsigned char component, EntityInfo info) const;
-
-		// last parameter is dummy
-		void* GetComponent(unsigned int entity, unsigned char component_index, bool is_component_index) const;
-
-		// last parameter is dummy
-		void* GetComponent(unsigned int entity, unsigned char component_index, EntityInfo info, bool is_component_index) const;
-
-		// last parameter is dummy
-		void* GetComponent(unsigned int entity_index, unsigned char component_index, EntityInfo info, unsigned int entity_index_and_component_index) const;
-
-		// if all components need to be pointed
-		void GetComponent(unsigned int entity, void** data) const;
-
-		// if some components need to be pointed
-		void GetComponent(unsigned int entity, const unsigned char* components, void** data) const;
-
-		// if all components need to be pointed
-		void GetComponent(unsigned int entity, EntityInfo info, void** data) const;
-
-		// if some components need to be pointed
-		void GetComponent(unsigned int entity, const unsigned char* components, EntityInfo info, void** data) const;
-
-		unsigned char GetComponentCount() const;
-
-		void GetComponentInfo(Stream<ComponentInfo>& info) const;
-
-		// using stream of sequences since it can point directly to the table sequence buffer
-		void GetComponentOffsets(const unsigned char* components, Stream<void*>& buffers, Stream<Stream<Sequence>>& sequences) const;
-
-		EntityInfo GetEntityInfo(unsigned int entity) const;
-
 		unsigned int GetEntityCount() const;
 
-		unsigned int GetEntityIndex(unsigned int entity) const;
+		// The entities stream must have a capacity of at least chunk
+		void GetEntities(Stream<Entity>* entities) const;
 
-		unsigned int GetEntityIndex(unsigned int entity, EntityInfo info) const;
+		// It will copy the entities - consider using the other variant since it will alias the 
+		// values inside the chunks and no copies are needed
+		void GetEntities(CapacityStream<Entity>& entities) const;
 
-		void GetEntities(Stream<unsigned int>& entities) const;
+		void Reserve(unsigned int count);
 
-		void GetEntities(Stream<Stream<Substream>>& substreams, unsigned int** entity_buffers) const;
-
-		void GetEntities(Stream<Stream<Sequence>>& sequences, unsigned int** entity_buffers) const;
-
-		// the stream will store the first entity of the sequences that will be deallocated
-		unsigned int GetRebalanceEntityCount(
-			unsigned int chunk_index, 
-			unsigned int& new_sequence_index, 
-			Stream<unsigned int>& sequence_first
-		) const;
-
-		// the stream will store the first entity of the sequences that will be deallocated
-		unsigned int GetRebalanceEntityCount(
-			unsigned int chunk_index, 
-			unsigned int count, 
-			unsigned int& new_sequence_index,
-			Stream<unsigned int>& sequence_first
-		) const;
-
-		// the stream will store the first entity of the sequences that will be deallocated
-		unsigned int GetRebalanceEntityCount(
-			unsigned int chunk_index, 
-			unsigned int min_sequence_size, 
-			unsigned int max_sequence_size,
-			unsigned int& new_sequence_index,
-			Stream<unsigned int>& sequence_first
-		) const;
-
-		// the stream will store the first entity of the sequences that will be deallocated
-		unsigned int GetRebalanceEntityCount(
-			unsigned int chunk_index,
-			unsigned int min_sequence_size, 
-			unsigned int max_sequence_size, 
-			unsigned int count, 
-			unsigned int& new_sequence_index,
-			Stream<unsigned int>& sequence_first
-		) const;
-
-		// it will point to the same buffer as those inside tables
-		void GetSequences(Stream<Stream<Sequence>>& sequences) const;
-
-		// it will point to the same buffer as those inside tables
-		void GetSequences(Stream<Stream<Sequence>>& sequences, unsigned int** entity_buffer) const;
-
-		unsigned int GetSequenceCount() const;
-
-		unsigned int GetSequenceCount(unsigned int chunk_index) const;
-
-		// memory needed for a chunk
-		size_t MemoryOf();
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(unsigned int new_first, unsigned int chunk_index, unsigned int entity_count);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount;
-		void Rebalance(
-			unsigned int new_first, 
-			unsigned int chunk_index, 
-			unsigned int entity_count, 
-			LinearAllocator* temp_allocator
-		);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(unsigned int new_first, unsigned int chunk_index, unsigned int count, unsigned int entity_count);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(
-			unsigned int new_first, 
-			unsigned int chunk_index, 
-			unsigned int count, 
-			unsigned int entity_count,
-			LinearAllocator* temp_allocator
-		);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(
-			unsigned int new_first, 
-			unsigned int chunk_index,
-			unsigned int min_sequence_size, 
-			unsigned int max_sequence_size,
-			unsigned int entity_count
-		);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(
-			unsigned int new_first,
-			unsigned int chunk_index,
-			unsigned int min_sequence_size,
-			unsigned int max_sequence_size,
-			unsigned int entity_count,
-			LinearAllocator* temp_allocator
-		);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(
-			unsigned int new_first,
-			unsigned int chunk_index, 
-			unsigned int min_sequence_size,
-			unsigned int max_sequence_size,
-			unsigned int count,
-			unsigned int entity_count
-		);
-
-		// item count parameter value should be given from a call to GetRebalanceEntityCount; 
-		void Rebalance(
-			unsigned int new_first,
-			unsigned int chunk_index,
-			unsigned int min_sequence_size,
-			unsigned int max_sequence_size,
-			unsigned int count,
-			unsigned int entity_count,
-			LinearAllocator* temp_allocator
-		);
-
-		// must search every chunk and every sequence in order to find the entity; DO NOT USE IN TIGHT LOOPS
-		void RemoveEntities(const Stream<unsigned int>& entities);
-
-		// must search every chunk and every sequence in order to find the entity; DO NOT USE IN TIGHT LOOPS
-		void RemoveEntities(const Stream<unsigned int>& entities, Stream<unsigned int>& deleted_sequence_first);
+		void Reserve(unsigned int count, CapacityStream<EntitySequence>& chunk_positions);
 		
-		void RemoveEntities(const Stream<unsigned int>& entities, const Stream<EntityInfo>& infos);
+		// It will update some entity infos for when the chunk is empty and it will be removed swap back-ed
+		// by another chunk and these entities change their chunk index and for the entity that will replace
+		// it inside the chunk
+		void RemoveEntity(Entity entity, EntityPool* pool);
 
-		void RemoveEntities(const Stream<unsigned int>& entities, const Stream<EntityInfo>& infos, Stream<unsigned int>& deleted_sequence_first);
+		void RemoveEntities(Stream<Entity> entities, EntityPool* pool);
 
-		// assumes that the entity value represents also the index in the info buffer
-		void RemoveEntities(const Stream<unsigned int>& entities, const EntityInfo* infos, unsigned int buffer_initial_index);
+		// Sets the entities previously allocated using reserve
+		void SetEntities(const Entity* entities, Stream<EntitySequence> chunk_positions);
 
-		// assumes that the entity value represents also the index in the info buffer
-		void RemoveEntities(
-			const Stream<unsigned int>& entities, 
-			const EntityInfo* infos, 
-			unsigned int buffer_initial_index,
-			Stream<unsigned int>& deleted_sequence_first
-		);
+		void UpdateComponent(EntityInfo info, Component component, const void* data);
 
-		// the preferred way of removing entities since it will read the entity infos directly from the pool
-		void RemoveEntities(const Stream<unsigned int>& entities, const EntityPool* pool);
+		// It will index directly into the component and copy the data
+		void UpdateComponentByIndex(EntityInfo info, unsigned char component_index, const void* data);
 
-		// the preferred way of removing entities since it will read the entity infos directly from the pool
-		void RemoveEntities(const Stream<unsigned int>& entities, const EntityPool* pool, Stream<unsigned int>& deleted_sequence_first);
+	//public:
+		struct Chunk {
+			Entity* entities;
+			void** buffers;
+			unsigned int size;
+		};
 
-		// must search every chunk and every sequence in order to find the entity; DO NOT USE IN TIGHT LOOPS
-		void UpdateComponent(unsigned int entity, unsigned char component, const void* data);
-
-		// the preferred way of updating the component since it requires mostly copying the new data
-		void UpdateComponent(unsigned int entity, unsigned char component, const void* data, EntityInfo info);
-
-		// the preferred way of updating the component since it requires only copying the new data; last argument is dummy
-		void UpdateComponent(unsigned int entity, unsigned char component_index, const void* data, EntityInfo info, bool is_component_index);
-
-		// the preferred way of updating the component since it requires only copying the new data; last argument is dummy
-		void UpdateComponent(unsigned int entity_index, unsigned char component_index, const void* data, EntityInfo info, unsigned int component_and_entity_index);
-
-		// memory needed for a chunk
-		static size_t MemoryOf(unsigned int chunk_size, unsigned int max_sequences, const Stream<ComponentInfo>& component_infos);
-
-		static size_t MemoryOfInitialization(unsigned int component_count, unsigned int max_chunk_count);
-
-	private:
-		void Rebalance(unsigned int chunk_index, unsigned int buffer_offset, const Stream<Substream>& copy_order);
-
-		Stream<ComponentInfo> m_component_infos;
-		Stream<void*> m_buffers;
-		SequentialTable* m_table;
 		MemoryManager* m_memory_manager;
-		unsigned int m_max_chunk_count;
+		ResizableStream<Chunk> m_chunks;
 		unsigned int m_chunk_size;
+		// The global entity count
 		unsigned int m_entity_count;
-		unsigned int m_sequence_count;
+		// Unique infos - only reference
+		const ComponentInfo* m_infos;
+		// Unique components indices - only reference
+		ComponentSignature m_components;
 	};
 
 }

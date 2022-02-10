@@ -12,7 +12,7 @@ namespace ECSEngine {
 		Keyboard::Keyboard(GlobalMemoryManager* allocator) {
 			m_implementation = new DirectX::Keyboard();
 			m_tracker.Reset();
-			m_character_queue = KeyboardCharacterQueue(allocator, ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
+			m_character_queue = KeyboardCharacterQueue(GetAllocatorPolymorphic(allocator), ECS_KEYBOARD_CHARACTER_QUEUE_DEFAULT_SIZE);
 			DoNotCaptureCharacters();
 		}
 

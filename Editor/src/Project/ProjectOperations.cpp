@@ -19,37 +19,13 @@ using namespace ECSEngine;
 ECS_TOOLS;
 ECS_CONTAINERS;
 
-constexpr float2 CREATE_PROJECT_WIZARD_SCALE = float2(1.0f, 0.65f);
+constexpr float2 CREATE_PROJECT_WIZARD_SCALE = float2(0.75f, 0.65f);
 constexpr size_t SAVE_PROJECT_AUTOMATICALLY_TICK = 1000;
 
 struct SaveCurrentProjectConfirmationData {
 	EditorState* editor_state;
 	UIActionHandler handler;
 };
-
-// -------------------------------------------------------------------------------------------------------------------
-
-bool CreateProjectFile(ProjectOperationData* data) {
-	EDITOR_STATE(data->editor_state);
-	constexpr size_t max_character_count = 1024;
-	wchar_t temp_characters[max_character_count];
-	CapacityStream<wchar_t> temp_stream = { temp_characters, 0, max_character_count };
-
-	ProjectFile* file_data = data->file_data;
-
-	GetProjectFilePath(temp_stream, file_data);
-	bool success = Serialize(ui_reflection->reflection, STRING(ProjectFile), temp_stream, file_data);
-	if (!success) {
-		if (data->error_message.buffer != nullptr) {
-			data->error_message.size = function::FormatString(data->error_message.buffer, "Writing data to project file failed, {0} being the path", temp_characters);
-			data->error_message.AssertCapacity();
-		}
-		return false;
-	}
-
-	data->error_message.size = 0;
-	return true;
-}
 
 // -------------------------------------------------------------------------------------------------------------------
 
@@ -70,11 +46,13 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	hub_path.AddStreamSafe(ToStream(PROJECT_EXTENSION));
 	AddHubProject(data->editor_state, hub_path);
 
+	data->editor_state->editor_tick = EditorStateProjectTick;
+
 	SaveProjectUIAutomaticallyData save_automatically_data;
 	save_automatically_data.editor_state = data->editor_state;;
 	save_automatically_data.timer = Timer();
 	save_automatically_data.timer.SetMarker();
-	ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
+	//ui_system->PushFrameHandler({ SaveProjectUIAutomatically, &save_automatically_data, sizeof(save_automatically_data) });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -240,7 +218,7 @@ void CreateProject(ProjectOperationData* data)
 		return;
 	}
 
-	bool success = CreateProjectFile(data);
+	bool success = SaveProjectFile(*data);
 	if (!success) {
 		if (data->error_message.buffer != nullptr) {
 			CreateErrorMessageWindow(ui_system, data->error_message);
@@ -326,18 +304,6 @@ void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile*
 
 // -------------------------------------------------------------------------------------------------------------------
 
-void CreateProjectWizardDestroyWindowAction(ActionData* action_data)
-{
-	UI_UNPACK_ACTION_DATA;
-
-	UIReflectionDrawer* ui_reflection = (UIReflectionDrawer*)_data;
-	ui_reflection->DestroyInstance("WorldDesc");
-	ui_reflection->DestroyType(STRING(WorldDescriptor));
-	ReleaseLockedWindow(action_data);
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-
 void CreateProjectWizardAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -351,22 +317,6 @@ void CreateProjectDefaultValues(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ProjectFile* data = (ProjectFile*)_data;
-	data->world_descriptor.graphics_window_size_x = 715;
-	data->world_descriptor.graphics_window_size_y = 1366;
-	data->world_descriptor.entity_manager_max_dynamic_archetype_count = CREATE_PROJECT_DEFAULT_ENTITY_MANAGER_MAX_DYNAMIC_ARCHETYPE_COUNT;
-	data->world_descriptor.entity_manager_max_static_archetype_count = CREATE_PROJECT_ENTITY_MANAGER_MAX_STATIC_ARCHETYPE_COUNT;
-	data->world_descriptor.entity_pool_block_count = CREATE_PROJECT_DEFAULT_ENTITY_POOL_BLOCK_COUNT;
-	data->world_descriptor.entity_pool_arena_count = CREATE_PROJECT_DEFAULT_ENTITY_POOL_ARENA_COUNT;
-	data->world_descriptor.entity_pool_power_of_two = CREATE_PROJECT_DEFAULT_ENTITY_POOL_POWER_OF_TWO;
-	data->world_descriptor.global_memory_size = CREATE_PROJECT_DEFAULT_GLOBAL_MEMORY_SIZE;
-	data->world_descriptor.global_memory_pool_count = CREATE_PROJECT_DEFAULT_GLOBAL_POOL_COUNT;
-	data->world_descriptor.global_memory_new_allocation_size = CREATE_PROJECT_DEFAULT_GLOBAL_NEW_ALLOCATION;
-	data->world_descriptor.memory_manager_maximum_pool_count = CREATE_PROJECT_DEFAULT_MEMORY_MANAGER_MAXIMUM_POOL_COUNT;
-	data->world_descriptor.memory_manager_new_allocation_size = CREATE_PROJECT_DEFAULT_MEMORY_MANAGER_NEW_ALLOCATION_SIZE;
-	data->world_descriptor.memory_manager_size = CREATE_PROJECT_DEFAULT_MEMORY_MANAGER_SIZE;
-	data->world_descriptor.thread_count = std::thread::hardware_concurrency();
-	data->world_descriptor.system_manager_max_systems = CREATE_PROJECT_DEFAULT_SYSTEM_MANAGER_MAX_SYSTEMS;
-	data->world_descriptor.task_manager_max_dynamic_tasks = CREATE_PROJECT_DEFAULT_TASK_MANAGER_MAX_DYNAMIC_TASKS;
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -378,7 +328,6 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 	EDITOR_STATE(data->project_data.editor_state);
 	EditorState* editor_state = data->project_data.editor_state;
 	ProjectFile* file_data = editor_state->project_file;
-	WorldDescriptor* world = &file_data->world_descriptor;
 
 	UIDrawConfig config;
 	UIConfigRelativeTransform transform;
@@ -409,7 +358,6 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 		memcpy(&data->project_data.file_data->platform_description, ECS_PLATFORM_STRINGS[ECS_PLATFORM_WIN64_DX11_STRING_INDEX], strlen(ECS_PLATFORM_STRINGS[ECS_PLATFORM_WIN64_DX11_STRING_INDEX]) + 1);
 		data->project_data.file_data->version = VERSION_INDEX;
 		data->project_data.file_data->platform = ECS_PLATFORM_WIN64_DX11;
-		memset(&data->project_data.file_data->metadata, 0, 32);
 
 		project_name_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * project_name_stream_capacity), 0, project_name_stream_capacity - 1);
 		directory_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * directory_stream_capacity), 0, directory_stream_capacity - 1);
@@ -425,16 +373,6 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 		memset(project_name_stream->buffer, 0, sizeof(char) * project_name_stream_capacity);
 		memset(directory_stream->buffer, 0, sizeof(char) * directory_stream_capacity);
 		memset(source_dll_name_stream->buffer, 0, sizeof(char) * source_dll_directory_capacity);
-
-		ActionData action_data;
-		action_data.data = editor_state->project_file;
-		action_data.system = drawer.GetSystem();
-		CreateProjectDefaultValues(&action_data);
-
-		ui_reflection->CreateType(STRING(WorldDescriptor));
-		UIReflectionInstance* instance = ui_reflection->CreateInstance("WorldDesc", STRING(WorldDescriptor));
-
-		ui_reflection->BindInstancePtrs(instance, world);
 	}
 	else {
 		project_name_stream = (CapacityStream<char>*)drawer.GetResource("Name input stream buffer");
@@ -487,28 +425,13 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 		if (data->copy_project_name_to_source_dll) {
 			source_dll_input->DeleteAllCharacters();
 			source_dll_input->InsertCharacters(project_input->text->buffer, project_input->text->size, 0, drawer.system);
-			assert(convert_data.wide->capacity >= project_input->text->size);
+			ECS_ASSERT(convert_data.wide->capacity >= project_input->text->size);
 			function::ConvertASCIIToWide(convert_data.wide->buffer, project_input->text->buffer, project_input->text->size);
 			convert_data.wide->size = project_input->text->size;
 		}
 	}
 
 	drawer.NextRow();
-
-	drawer.CollapsingHeader("Project Parameters", [&]() {
-		const size_t INPUT_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM;
-
-		drawer.SetDrawMode(UIDrawerMode::NextRow);
-		float default_x_before = drawer.layout.default_element_x;
-		drawer.layout.default_element_x *= 5.0f;
-		if (!initialize) {
-			ui_reflection->DrawInstance("WorldDesc", drawer, config, "Default values");
-		}
-		drawer.layout.default_element_x = default_x_before;
-		
-
-		drawer.SetDrawMode(UIDrawerMode::Indent);
-	});
 	
 	config.flag_count = 0;
 	UIConfigAbsoluteTransform bottom_button_transform;
@@ -532,16 +455,17 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 	// launch wizard window
 	UIWindowDescriptor window_descriptor;
 	window_descriptor.draw = CreateProjectWizardDraw;
+
 	window_descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, CREATE_PROJECT_WIZARD_SCALE.x);
 	window_descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, CREATE_PROJECT_WIZARD_SCALE.y);
 	window_descriptor.initial_size_x = CREATE_PROJECT_WIZARD_SCALE.x;
 	window_descriptor.initial_size_y = CREATE_PROJECT_WIZARD_SCALE.y;
+
 	window_descriptor.window_name = "Create Project Wizard";
 	window_descriptor.window_data = wizard_data;
 	window_descriptor.window_data_size = sizeof(CreateProjectWizardData);
-	window_descriptor.destroy_action = CreateProjectWizardDestroyWindowAction;
-	window_descriptor.destroy_action_data = ui_reflection;
-	window_descriptor.destroy_action_data_size = 0;
+
+	window_descriptor.destroy_action = ReleaseLockedWindow;
 
 	unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW 
 		| UI_DOCKSPACE_LOCK_WINDOW);	
@@ -556,44 +480,77 @@ bool OpenProjectFile(ProjectOperationData data) {
 	ECS_TEMP_STRING(project_path, 256);
 	GetProjectFilePath(project_path, data.file_data);
 
-	const size_t temp_memory_size = 1024;
-	size_t temp_memory[temp_memory_size];
+	const size_t TEMP_MEMORY_SIZE = 1024;
+	size_t temp_memory[TEMP_MEMORY_SIZE];
 
 	ProjectFile* file_data = data.file_data;
-	CapacityStream<void> memory_pool = CapacityStream<void>(temp_memory, 0, sizeof(size_t) * temp_memory_size);
-	function::CopyPointer copy_pointers[128];
-	Stream<function::CopyPointer> copy_pointer_stream = Stream<function::CopyPointer>(copy_pointers, 0);
+	CapacityStream<void> memory_pool = CapacityStream<void>(temp_memory, 0, sizeof(size_t) * TEMP_MEMORY_SIZE);
+	
+	// There are currently only 3 stream fields
+	const size_t MAX_STREAM_FIELDS = 8;
+	const char** _field_names_deserialized = (const char**)ECS_STACK_ALLOC(sizeof(const char*) * MAX_STREAM_FIELDS);
+	CapacityStream<const char*> field_names_deserialized(_field_names_deserialized, 0, MAX_STREAM_FIELDS);
 
+#define RETURN_ERROR_MESSAGE(string, ...) if (data.error_message.buffer != nullptr) { data.error_message.size = function::FormatString(data.error_message.buffer, string, __VA_ARGS__); data.error_message.AssertCapacity(); }\
+											return false;
+
+	// Set the file data to 0. If a field could not be deserialized, it will be 0
+	memset(file_data, 0, sizeof(*file_data));
 	bool success = true;
-	size_t deserialization_size = Deserialize(ui_reflection->reflection, STRING(ProjectFile), project_path, file_data, memory_pool, copy_pointer_stream);
-	success = deserialization_size != -1;
-	void* allocation = editor_allocator->Allocate(deserialization_size);
-	function::CopyPointersFromBuffer(copy_pointer_stream, allocation);
-
-	if (!success) {
-		if (data.error_message.buffer != nullptr) {
-			data.error_message.size = function::FormatString(data.error_message.buffer, "Opening project file {0} failed; data could not be read (byte size might be too small)", project_path);
-			data.error_message.AssertCapacity();
-		}
-		return false;
+	ECS_TEXT_DESERIALIZE_STATUS status = TextDeserialize(ui_reflection->reflection->GetType(STRING(ProjectFile)), file_data, memory_pool, project_path);
+	if (status == ECS_TEXT_DESERIALIZE_COULD_NOT_READ) {
+		RETURN_ERROR_MESSAGE("Opening project file {0} failed; data could not be read (byte size might be too small)", project_path);
 	}
 
+	// If the version is different, fail
 	if (file_data->version < COMPATIBLE_PROJECT_FILE_VERSION_INDEX) {
-		if (data.error_message.buffer != nullptr) {
-			data.error_message.size = function::FormatString(data.error_message.buffer, "Opening project file {0} failed; compatible version {1}, actual version {2}", project_path, COMPATIBLE_PROJECT_FILE_VERSION_INDEX, file_data->version);
-			data.error_message.AssertCapacity();
-		}
-		return false;
+		RETURN_ERROR_MESSAGE("Opening project file {0} failed; version is {1} while compatible versions are above {2}.", project_path, file_data->version, COMPATIBLE_PROJECT_FILE_VERSION_INDEX);
 	}
+
+	if (status == ECS_TEXT_DESERIALIZE_FIELD_DATA_MISSING || status == ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS) {
+		// If the version description could not be deserialized, fail
+		if (file_data->version_description[0] == 0) {
+			RETURN_ERROR_MESSAGE("Opening project file {0} failed; version description is missing.", project_path);
+		}
+		if (file_data->platform_description[0] == 0) {
+			RETURN_ERROR_MESSAGE("Opening project file {0} failed; platform description is missing.", project_path);
+		}
+		if (file_data->source_dll_name.buffer == nullptr) {
+			RETURN_ERROR_MESSAGE("Opening project file {0} failed; source dll name is missing.", project_path);
+		}
+		if (file_data->project_name.buffer == nullptr) {
+			RETURN_ERROR_MESSAGE("Opening project file {0} failed; project name is missing.", project_path);
+		}
+		if (file_data->path.buffer == nullptr) {
+			RETURN_ERROR_MESSAGE("Opening project file {0} failed; the project's path is missing.", project_path);
+		}
+	}
+
 	if (!function::HasFlag(file_data->platform, ECS_PLATFORM_WIN64_DX11)) {
-		if (data.error_message.buffer != nullptr) {
-			data.error_message.size = function::FormatString(data.error_message.buffer, "Opening project file {0} failed, compatible platform {1}, actual platform {2}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
-			data.error_message.AssertCapacity();
-		}
-		return false;
+		RETURN_ERROR_MESSAGE("Opening project file {0} failed, compatible platform {1}, actual platform {2}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
 	}
+
+	// A coallesced allocation is used to copy the source dll name, the path and the name
+	void* allocation = editor_allocator->Allocate(sizeof(wchar_t) * (file_data->path.size + file_data->source_dll_name.size + file_data->project_name.size + 3));
+	wchar_t* strings = (wchar_t*)allocation;
+	file_data->path.CopyTo(strings);
+	file_data->path.buffer = strings;
+	strings += file_data->path.size;
+	strings[0] = L'\0';
+
+	file_data->source_dll_name.CopyTo(strings);
+	file_data->source_dll_name.buffer = strings;
+	strings += file_data->source_dll_name.size;
+	strings[0] = L'\0';
+
+	file_data->project_name.CopyTo(strings);
+	file_data->project_name.buffer = strings;
+	strings += file_data->project_name.size;
+	strings[0] = L'\0';
 
 	return true;
+
+#undef RETURN_ERROR_MESSAGE
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -723,6 +680,7 @@ bool OpenProject(ProjectOperationData data)
 	ui_system->PushFrameHandler({ remove_editor_state_do_not_add_tasks, &remove_data, sizeof(remove_data) });
 
 	data.editor_state->editor_tick = EditorStateProjectTick;
+
 	return true;
 }
 
@@ -775,7 +733,7 @@ bool SaveProjectFile(ProjectOperationData data) {
 	CapacityStream<wchar_t> project_path = CapacityStream<wchar_t>(temp_characters, 0, 256);
 	GetProjectFilePath(project_path, data.file_data);
 
-	bool success = Serialize(ui_reflection->reflection, STRING(ProjectFile), project_path, data.file_data);
+	bool success = TextSerialize(ui_reflection->reflection->GetType(STRING(ProjectFile)), data.file_data, project_path);
 	
 	if (!success) {
 		if (data.error_message.buffer != nullptr) {
@@ -996,7 +954,7 @@ void SaveProjectUIAutomatically(ActionData* action_data)
 	SaveProjectUIAutomaticallyData* data = (SaveProjectUIAutomaticallyData*)_data;
 	if (data->timer.GetDurationSinceMarker_ms() > SAVE_PROJECT_AUTOMATICALLY_TICK) {
 		EDITOR_STATE(data->editor_state);
-		ThreadTask task = { SaveProjectThreadTask, data->editor_state };
+		ThreadTask task = { SaveProjectThreadTask, data->editor_state, 0 };
 		task_manager->AddDynamicTaskAndWake(task);
 		data->timer.SetMarker();
 	}

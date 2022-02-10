@@ -62,8 +62,8 @@ namespace ECSEngine {
 		TaskManager* m_task_manager;
 		MemoryManager* m_memory;
 		HashTable<SystemInternal, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunction> m_systems;
-		ResizableStream<Stream<const char>, MemoryManager> m_deactivated_systems;
-		ResizableStream<Stream<const char>, MemoryManager> m_active_systems;
+		ResizableStream<Stream<const char>> m_deactivated_systems;
+		ResizableStream<Stream<const char>> m_active_systems;
 	};
 
 }

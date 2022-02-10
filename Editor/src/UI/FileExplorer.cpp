@@ -48,6 +48,9 @@ constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_COPIED_FILE_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT = 16;
+constexpr size_t FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE = 128;
+
+constexpr uint2 FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE = { 256, 256 };
 
 constexpr unsigned int FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT = 1 << 0;
 constexpr unsigned int FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES = 1 << 1;
@@ -56,13 +59,16 @@ constexpr unsigned int FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES = 1 << 3;
 
 constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_STARTED = 1 << 1;
 constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_ENDED = 1 << 2;
+constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_LAUNCHED_THREADS = 1 << 3;
+
 
 constexpr int COLOR_CUT_ALPHA = 90;
 
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_ALLOCATOR_SIZE_PER_THREAD = ECS_MB * 100;
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 600;
 
-constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 2'000;
+constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 1'500;
+constexpr size_t FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION = 500;
 
 enum FILE_RIGHT_CLICK_INDEX {
 	FILE_RIGHT_CLICK_OPEN,
@@ -91,12 +97,10 @@ enum DESELECTION_RIGHT_CLICK_INDEX {
 
 using Hash = HashFunctionMultiplyString;
 
-void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager* allocator, unsigned int thread_count);
-
 void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 	// Deallocate every string stored
 	for (size_t index = 0; index < data->selected_files.size; index++) {
-		data->selected_files.allocator->Deallocate(data->selected_files[index].buffer);
+		Deallocate(data->selected_files.allocator, data->selected_files[index].buffer);
 	}
 
 	// If it is a long list, deallocate the buffer
@@ -116,7 +120,7 @@ void FileExplorerResetSelectedFiles(EditorState* editor_state) {
 void FileExplorerResetCopiedFiles(FileExplorerData* data) {
 	// Cut/Copy will make a coallesced allocation
 	if (data->copied_files.size > 0) {
-		data->selected_files.allocator->Deallocate(data->copied_files.buffer);
+		Deallocate(data->selected_files.allocator, data->copied_files.buffer);
 		data->copied_files.size = 0;
 	}
 	data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT);
@@ -182,7 +186,7 @@ void FileExplorerSetNewFile(EditorState* editor_state, Stream<wchar_t> path, uns
 // Returns -1 when it doesn't exist, else the index where it is located
 unsigned int FileExplorerHasSelectedFile(EditorState* editor_state, Stream<wchar_t> path) {
 	FileExplorerData* data = editor_state->file_explorer_data;
-	return function::IsStringInStream(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size));
+	return function::FindString(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size));
 }
 
 void FileExplorerHandleControlPath(EditorState* editor_state, Stream<wchar_t> path) {
@@ -191,7 +195,7 @@ void FileExplorerHandleControlPath(EditorState* editor_state, Stream<wchar_t> pa
 	FileExplorerData* data = editor_state->file_explorer_data;
 	unsigned int index = FileExplorerHasSelectedFile(editor_state, path);
 	if (index != -1) {
-		data->selected_files.allocator->Deallocate(data->selected_files[index].buffer);
+		Deallocate(data->selected_files.allocator, data->selected_files[index].buffer);
 		data->selected_files.RemoveSwapBack(index);
 	}
 	else {
@@ -228,7 +232,7 @@ void FileExplorerSelectableBase(ActionData* action_data) {
 				// Check to see if the file is already selected - if it is, then do nothing in order for 
 				// the drag to work correctly
 				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
-				if (function::IsStringInStream(data->selection, selected_files) == -1) {
+				if (function::FindString(data->selection, selected_files) == -1) {
 					FileExplorerSetNewFile(data->editor_state, data->selection, data->index);
 				}
 			}
@@ -262,7 +266,7 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 				// Check to see if the directory is already selected - if it is, then do nothing in order for 
 				// the drag to work correctly
 				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
-				if (function::IsStringInStream(data->selection, selected_files) == -1) {
+				if (function::FindString(data->selection, selected_files) == -1) {
 					FileExplorerResetSelectedFiles(explorer_data);
 					FileExplorerAllocateSelectedFile(explorer_data, data->selection);
 					FileExplorerSetShiftIndices(explorer_data, data->index);
@@ -404,7 +408,7 @@ void FileExplorerCopySelection(ActionData* action_data) {
 
 	FileExplorerResetCopiedFiles(data);
 
-	void* allocation = data->selected_files.allocator->Allocate(total_size + sizeof(Stream<wchar_t>) * data->selected_files.size);
+	void* allocation = Allocate(data->selected_files.allocator, total_size + sizeof(Stream<wchar_t>) * data->selected_files.size);
 	uintptr_t buffer = (uintptr_t)allocation;
 
 	data->copied_files.InitializeFromBuffer(buffer, data->selected_files.size);
@@ -449,7 +453,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		}
 		// Check to see if this file is also in the copy stream to remove it
 		else {
-			unsigned int copy_index = function::IsStringInStream(data->selected_files[index], data->copied_files);
+			unsigned int copy_index = function::FindString(data->selected_files[index], data->copied_files);
 			if (copy_index != -1) {
 				for (size_t index = 0; index < valid_copy_files.size; index++) {
 					if (valid_copy_files[index] == copy_index) {
@@ -487,7 +491,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 			total_size += data->copied_files[valid_copy_files[index]].size;
 		}
 
-		void* allocation = data->selected_files.allocator->Allocate(sizeof(wchar_t) * total_size + sizeof(Stream<wchar_t>) * valid_copy_files.size, alignof(wchar_t));
+		void* allocation = Allocate(data->selected_files.allocator, sizeof(wchar_t) * total_size + sizeof(Stream<wchar_t>) * valid_copy_files.size, alignof(wchar_t));
 		uintptr_t buffer = (uintptr_t)allocation;
 		Stream<Stream<wchar_t>> new_copy_files;
 		new_copy_files.InitializeFromBuffer(buffer, valid_copy_files.size);
@@ -512,7 +516,8 @@ void FileExplorerSelectFromIndexShift(FileExplorerData* data, unsigned int index
 	if (data->starting_shift_index <= index && index <= data->ending_shift_index) {
 		unsigned int index = data->selected_files.ReserveNewElement();
 		data->selected_files.size++;
-		data->selected_files[index].Initialize(data->selected_files.allocator, path.size);
+		void* new_allocation = Allocate(data->selected_files.allocator, data->selected_files[index].MemoryOf(path.size));
+		data->selected_files[index].InitializeFromBuffer(new_allocation, path.size);
 		data->selected_files[index].Copy(path);
 	}
 }
@@ -532,11 +537,11 @@ struct FileFunctorData {
 };
 
 bool FileExplorerIsElementSelected(FileExplorerData* data, Path path) {
-	return function::IsStringInStream(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size)) != (unsigned int)-1;
+	return function::FindString(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size)) != (unsigned int)-1;
 }
 
 bool FileExplorerIsElementCut(FileExplorerData* data, Path path) {
-	return function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT) && function::IsStringInStream(path, data->copied_files) != (unsigned int)-1;
+	return function::HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT) && function::FindString(path, data->copied_files) != (unsigned int)-1;
 }
 
 void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableData* _data, bool is_selected, bool is_folder) {
@@ -702,6 +707,15 @@ void FileMeshDraw(ActionData* action_data) {
 	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_MESH);
 }
 
+void FileMeshThumbnailDraw(ActionData* action_data) {
+	EXPAND_ACTION;
+
+	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
+	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValue(ResourceIdentifier(data->selection.buffer, data->selection.size * sizeof(wchar_t)));
+
+	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, *config, thumbnail.texture, white_color);
+}
+
 #undef EXPAND_ACTION
 
 #pragma endregion
@@ -774,6 +788,7 @@ void FileExplorerDrag(ActionData* action_data) {
 			Stream<wchar_t> last_file = explorer_data->selected_files[explorer_data->selected_files.size - 1];
 			Stream<wchar_t> last_type_extension = function::PathExtension(last_file);
 			const wchar_t* texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
+			ResourceView thumbnail_texture = nullptr;
 			ECS_TEMP_STRING(texture_draw, 256);
 
 			// If it has an extension, check to see existing files
@@ -805,26 +820,59 @@ void FileExplorerDrag(ActionData* action_data) {
 					else if (action == FileEditorDraw) {
 						texture = ECS_TOOLS_UI_TEXTURE_FILE_EDITOR;
 					}
+					else if (action == FileMeshDraw) {
+						// If it is a mesh draw, check to see if the thumbnail was generated
+						FileExplorerMeshThumbnail thumbnail;
+						if (explorer_data->mesh_thumbnails.TryGetValue({last_file.buffer, (unsigned int)last_file.size * sizeof(wchar_t)}, thumbnail)) {
+							if (thumbnail.could_be_read) {
+								// Set the thumbnail texture
+								thumbnail_texture = thumbnail.texture;
+							}
+							else {
+								texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
+							}
+						}
+						else {
+							texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
+						}
+					}
 				}
 				else {
 					texture = ECS_TOOLS_UI_TEXTURE_FILE_BLANK;
 				}
 			}
 
-			// The last file texture
-			system->SetSprite(
-				dockspace,
-				border_index,
-				texture,
-				hover_position,
-				hover_scale,
-				buffers,
-				counts,
-				transparent_color,
-				{ 0.0f, 0.0f },
-				{ 1.0f, 1.0f },
-				UIDrawPhase::System
-			);
+			if (thumbnail_texture.view == nullptr) {
+				// The last file texture
+				system->SetSprite(
+					dockspace,
+					border_index,
+					texture,
+					hover_position,
+					hover_scale,
+					buffers,
+					counts,
+					transparent_color,
+					{ 0.0f, 0.0f },
+					{ 1.0f, 1.0f },
+					UIDrawPhase::System
+				);
+			}
+			else {
+				system->SetSprite(
+					dockspace,
+					border_index,
+					thumbnail_texture,
+					hover_position,
+					hover_scale,
+					buffers,
+					counts,
+					transparent_color,
+					{ 0.0f, 0.0f },
+					{ 1.0f, 1.0f },
+					UIDrawPhase::System
+				);
+			}
 
 			explorer_data->flags = function::SetFlag(explorer_data->flags, FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES);
 		}
@@ -1046,7 +1094,7 @@ struct FileExplorerPreloadTextureThreadTaskData {
 	Stream<FileExplorerPreloadTexture> preload_textures;
 };
 
-void FileExplorerPreloadTextureThreadTask(unsigned int thread_id, World* world, void* _data) {
+ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 	FileExplorerPreloadTextureThreadTaskData* data = (FileExplorerPreloadTextureThreadTaskData*)_data;
 	EDITOR_STATE(data->editor_state);
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
@@ -1172,7 +1220,12 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 
 			// If it doesn't exist
 			if (!resource_manager->Exists(identifier, ResourceType::Texture)) {
-				resource_manager->AddResource(identifier, ResourceType::Texture, data->staging_preloaded_textures[index].texture.view);
+				resource_manager->AddResource(
+					texture_path,
+					ResourceType::Texture,
+					data->staging_preloaded_textures[index].texture.view, 
+					data->staging_preloaded_textures[index].last_write_time
+				);
 			}
 			else {
 				resource_manager->RebindResource(identifier, ResourceType::Texture, data->staging_preloaded_textures[index].texture.view);
@@ -1181,17 +1234,20 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 		}
 	}
 
-	editor_allocator->Deallocate(data->staging_preloaded_textures.buffer);
-	data->staging_preloaded_textures.size = 0;
+	// Free the buffer
+	data->staging_preloaded_textures.FreeBuffer();
+
 	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
 	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
 }
 
-void FileExplorerPreloadTextures(EditorState* editor_state) {
+void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 	FileExplorerData* data = editor_state->file_explorer_data;
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
+	// Reserve space for some preloads
+	data->staging_preloaded_textures.ReserveNewElements(16);
 	bool* was_verified = (bool*)ECS_STACK_ALLOC(sizeof(bool) * data->preloaded_textures.size);
 	memset(was_verified, 0, sizeof(bool) * data->preloaded_textures.size);
 
@@ -1237,7 +1293,7 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 				preload_texture.last_write_time = file_last_write;
 				preload_texture.path = function::StringCopy(editor_allocator, stream_path);
 				preload_texture.texture = nullptr;
-				data->new_preloads->Add(preload_texture);
+				data->explorer_data->staging_preloaded_textures.Add(preload_texture);
 			}
 		}
 		return true;
@@ -1271,21 +1327,28 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 
 			// Remove the texture and decrement the index to stay in the same spot
 			data->preloaded_textures.RemoveSwapBack(index);
+			// Also modify the was verified field in order to keep them synced
+			was_verified[index] = was_verified[data->preloaded_textures.size];
 			index--;
 		}
 	}
 
+	// Set the preload started flag
+	data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
+}
+
+void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+
+	FileExplorerData* data = editor_state->file_explorer_data;
+
 	unsigned int thread_count = task_manager->GetThreadCount();
-	unsigned int per_thread_textures = new_preloads.size / thread_count;
-	unsigned int per_thread_remainder = new_preloads.size % thread_count;
+ 	unsigned int per_thread_textures = data->staging_preloaded_textures.size / thread_count;
+	unsigned int per_thread_remainder = data->staging_preloaded_textures.size % thread_count;
 	unsigned int total_texture_count = 0;
 
 	if (per_thread_textures > 0 || per_thread_remainder > 0) {
 		data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
-
-		// Create the staging buffer
-		data->staging_preloaded_textures.Initialize(editor_allocator, new_preloads.size);
-		data->staging_preloaded_textures.Copy(new_preloads);
 
 		Semaphore* semaphore = (Semaphore*)editor_allocator->Allocate(sizeof(Semaphore));
 		semaphore->ClearCount();
@@ -1313,12 +1376,112 @@ void FileExplorerPreloadTextures(EditorState* editor_state) {
 		}
 	}
 
+	data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_LAUNCHED_THREADS);
+}
+
+#pragma endregion
+
+#pragma region Generate Mesh Thumbnails
+
+void FileExplorerReleaseMeshThumbnail(EditorState* editor_state, FileExplorerData* explorer_data, unsigned int table_index) {
+	EDITOR_STATE(editor_state);
+
+	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValueFromIndex(table_index);
+	// Release the resource view and the memory allocated for the resource identifier
+	ResourceIdentifier identifier = explorer_data->mesh_thumbnails.GetIdentifiers()[table_index];
+
+	editor_allocator->Deallocate(identifier.ptr);
+	Texture2D texture = GetResource(thumbnail.texture);
+	Graphics* graphics = editor_state->Graphics();
+	graphics->FreeResource(texture);
+	graphics->FreeResource(thumbnail.texture);
+
+	explorer_data->mesh_thumbnails.EraseFromIndex(table_index);
+}
+
+void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+	FileExplorerData* data = editor_state->file_explorer_data;
+
+	Stream<FileExplorerMeshThumbnail> thumbnails = data->mesh_thumbnails.GetValueStream();
+	const ResourceIdentifier* identifiers = data->mesh_thumbnails.GetIdentifiers();
+	// Walk through the thumbnails and if one such thumbnail doesn't exist, kick it
+	for (int64_t index = 0; index < (int64_t)thumbnails.size; index++) {
+		if (data->mesh_thumbnails.IsItemAt(index)) {
+			Stream<wchar_t> path = { identifiers[index].ptr, identifiers[index].size };
+			// If the mesh was changed or deleted, remove it
+			if (!ExistsFileOrFolder(path) || OS::GetFileLastWrite(path.buffer) > thumbnails[index].last_write_time) {
+				FileExplorerReleaseMeshThumbnail(editor_state, data, index);
+				index--;
+			}
+		}
+	}
+
+	struct FunctorData {
+		MemoryManager* editor_allocator;
+		ResourceManager* resource_manager;
+		FileExplorerData* explorer_data;
+		bool thumbnail_found = false;
+	};
+
+	FunctorData functor_data = { editor_allocator, editor_state->resource_manager, data };
+
+	auto functor = [](const wchar_t* path, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
+
+		// If the path doesn't exist, record it, add it to the GPU tasks and end the loop
+		// Also add it to the 
+		if (data->explorer_data->mesh_thumbnails.Find(path) == -1) {
+			// Allocate the identifier for the hash table
+			Stream<wchar_t> allocated_path = function::StringCopy(data->editor_allocator, path);
+			FileExplorerMeshThumbnail thumbnail;
+
+			// Try to read the mesh here and create it's buffers GPU buffers
+			CoallescedMesh* mesh = data->resource_manager->LoadCoallescedMeshImplementation(path);
+			// If the mesh is nullptr, the read failed
+			thumbnail.could_be_read = mesh != nullptr;
+			if (thumbnail.could_be_read) {
+				// Call the GLTFThumbnail generator
+				GLTFThumbnail gltf_thumbnail = GLTFGenerateThumbnail(data->resource_manager->m_graphics, FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE, &mesh->mesh);
+				thumbnail.texture = gltf_thumbnail.texture;
+				thumbnail.last_write_time = OS::GetFileLastWrite(path);
+
+				// Free the coallesced mesh
+				data->resource_manager->UnloadCoallescedMeshImplementation(mesh);
+			}
+
+			// Update the hash table
+			InsertToDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, allocated_path);
+
+			data->thumbnail_found = true;
+
+			// Exit the search - only a thumbnail is generated per frame
+			return false;
+		}
+		return true;
+	};
+
+	ECS_TEMP_STRING(assests_folder, 256);
+	GetProjectAssetsFolder(editor_state, assests_folder);
+	const wchar_t* extensions[] = {
+		L".gltf",
+		L".glb",
+	};
+	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { extensions, std::size(extensions) }, &functor_data, functor);
+
+	if (functor_data.thumbnail_found) {
+		// In another 30 ms the lazy evaluation should be triggered again. A couple of frames will run in between helping to preserve the fluidity of
+		// the editor meantime
+		EditorStateLazyEvaluationSet(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL, FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION - 30);
+	}
 }
 
 #pragma endregion
 
 // window_data is EditorState*
 void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+	Timer stack_timer;
+
 	UI_PREPARE_DRAWER(initialize);
 
 	EDITOR_STATE(window_data);
@@ -1326,10 +1489,9 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 	FileExplorerData* data = editor_state->file_explorer_data;
 
 	if (initialize) {
-		// Initialize the states only if they have not been previously initialized
-		// Test the file functors table
 		if (data->file_functors.m_capacity == 0) {
-			InitializeFileExplorer(data, editor_allocator, task_manager->GetThreadCount());
+			//InitializeFileExplorer(data, editor_allocator, task_manager->GetThreadCount());
+			//InitializeFileExplorer(editor_state);
 
 			ProjectFile* project_file = editor_state->project_file;
 			data->current_directory.Copy(project_file->path);
@@ -1435,6 +1597,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 		// Reduce the next roy y offset
 		drawer.layout.next_row_y_offset *= 0.5f;
+
+		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES);
 	}
 
 #pragma region Deselection Menu
@@ -1798,18 +1962,33 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 				// Functor was initialized outside the if with FileBlankDraw
 				bool has_functor = data->file_functors.TryGetValue(identifier, functor);
-				if (has_functor && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
-					// Check to see if it is a texture that is being preloaded
-					for (size_t index = 0; index < data->staging_preloaded_textures.size; index++) {
-						if (function::CompareStrings(data->staging_preloaded_textures[index].path, stream_path)) {
-							// If it is a texture that is being preloaded, overwrite to blank file while it is being loaded
-							functor = FileBlankDraw;
-							// exit the loop by setting the index to the count
-							index = data->staging_preloaded_textures.size;
+				if (has_functor) {
+					if (functor == TextureDraw) {
+						if (function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
+							// Check to see if it is a texture that is being preloaded
+							for (size_t index = 0; index < data->staging_preloaded_textures.size; index++) {
+								if (function::CompareStrings(data->staging_preloaded_textures[index].path, stream_path)) {
+									// If it is a texture that is being preloaded, overwrite to blank file while it is being loaded
+									functor = FileBlankDraw;
+									// exit the loop by setting the index to the count
+									index = data->staging_preloaded_textures.size;
+								}
+							}
+						}
+					}
+					else if (functor == FileMeshDraw) {
+						FileExplorerMeshThumbnail thumbnail;
+						// If the thumbnail has been generated, check to see if the texture has been finalized
+						if (data->mesh_thumbnails.TryGetValue(ResourceIdentifier(stream_path.buffer, stream_path.size * sizeof(wchar_t)), thumbnail)) {
+							// If the thumbnail could not be created, keep it mesh draw
+							if (thumbnail.could_be_read) {
+								// Replace the functor
+								functor = FileMeshThumbnailDraw;
+							}
 						}
 					}
 				}
-				else if (function::HasFlag(_data->editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
+				else if (function::HasFlagAtomic(_data->editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 					functor = FileBlankDraw;
 				}
 				functor(&action_data);
@@ -1921,7 +2100,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			if (mouse_element_path.size > 0) {
 				// If it is moved - check that it landed in a folder that is not selected
 				Stream<Stream<wchar_t>> selected_files(data->selected_files.buffer, data->selected_files.size);
-				if (function::IsStringInStream(mouse_element_path, selected_files) == -1) {
+				if (function::FindString(mouse_element_path, selected_files) == -1) {
 					// Move all the files - if one cannot be moved because it already exists, then ask permision
 					// else skip it
 					unsigned int error_file_count = 0;
@@ -1977,28 +2156,37 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 		}
 
 	}
+
 }
 
-void InitializeFileExplorer(FileExplorerData* file_explorer_data, MemoryManager* allocator, unsigned int thread_count)
+void InitializeFileExplorer(EditorState* editor_state)
 {
+	EDITOR_STATE(editor_state);
+
+	FileExplorerData* data = editor_state->file_explorer_data;
+
+	AllocatorPolymorphic polymorphic_allocator = GetAllocatorPolymorphic(editor_allocator);
 	// Copied files must not be initialied since only Cut/Copy will set the appropriate stream
-	file_explorer_data->current_directory.Initialize(allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
-	file_explorer_data->selected_files.Initialize(allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
-	file_explorer_data->filter_stream.Initialize(allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
-	file_explorer_data->preloaded_textures.Initialize(allocator, FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT);
+	data->current_directory.Initialize(editor_allocator, 0, FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY);
+	data->selected_files.Initialize(polymorphic_allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
+	data->filter_stream.Initialize(editor_allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
+	data->preloaded_textures.Initialize(polymorphic_allocator, FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT);
+	data->staging_preloaded_textures.Initialize(polymorphic_allocator, 0);
 
-	file_explorer_data->right_click_stream.buffer = nullptr;
-	file_explorer_data->right_click_stream.size = 0;
+	data->mesh_thumbnails.Initialize(editor_allocator, FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE);
 
-	file_explorer_data->copied_files.buffer = nullptr;
-	file_explorer_data->copied_files.size = 0;
+	data->right_click_stream.buffer = nullptr;
+	data->right_click_stream.size = 0;
 
-	file_explorer_data->starting_shift_index = -1;
-	file_explorer_data->ending_shift_index = -1;
+	data->copied_files.buffer = nullptr;
+	data->copied_files.size = 0;
+
+	data->starting_shift_index = -1;
+	data->ending_shift_index = -1;
 
 	// Hold texture display for some frames when loading in order to make a smoother transition - noticeably faster
-	file_explorer_data->flags = 0;
-	file_explorer_data->preload_flags = 0;
+	data->flags = 0;
+	data->preload_flags = 0;
 }
 
 void FileExplorerPrivateAction(ActionData* action_data) {
@@ -2068,10 +2256,20 @@ void FileExplorerTick(EditorState* editor_state)
 {
 	FileExplorerData* data = editor_state->file_explorer_data;
 
-	if (data->preload_timer.GetDurationSinceMarker_ms() >= FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION 
-		&& !function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED) && !EditorStateDoNotAddBackgroundTasks(editor_state)) {
-		FileExplorerPreloadTextures(editor_state);
-		data->preload_timer.SetMarker();
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES, FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION)) {
+		if (!function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
+			FileExplorerRegisterPreloadTextures(editor_state);
+		}
+		if (!EditorStateDoNotAddBackgroundTasks(editor_state) && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)
+			&& !function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_LAUNCHED_THREADS)) {
+			FileExplorerLaunchPreloadTextures(editor_state);
+		}
+	}
+
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL, FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION)) {
+		if (!EditorStateDoNotAddBackgroundTasks(editor_state)) {
+			FileExplorerGenerateMeshThumbnails(editor_state);
+		}
 	}
 
 	// Commit preloaded textures

@@ -30,8 +30,6 @@ void CreateProject(ProjectOperationData* data);
 
 void CreateProjectAction(ActionData* action_data);
 
-void CreateProjectWizardDestroyWindowAction(ActionData* action_data);
-
 void CreateProjectWizardAction(ActionData* action_data);
 
 void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize);

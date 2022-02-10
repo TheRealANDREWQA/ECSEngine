@@ -17,7 +17,7 @@
 								const ECSEngine::HID::MouseTracker* mouse_tracker = action_data->mouse_tracker; \
 								const ECSEngine::HID::KeyboardTracker* keyboard_tracker = action_data->keyboard_tracker; \
 								ECSEngine::HID::Keyboard* keyboard = action_data->keyboard; \
-								const ECSEngine::HID::MouseState* mouse = action_data->mouse; \
+								ECSEngine::HID::Mouse* mouse = action_data->mouse; \
 								ECSEngine::float2 mouse_delta = system->GetMouseDelta(mouse_position)
 
 #define UI_PREPARE_DRAWER(initializer)	ECSEngine::Tools::UIDrawerDescriptor* descriptor = (ECSEngine::Tools::UIDrawerDescriptor*)drawer_descriptor; \
@@ -45,11 +45,7 @@
 
 #define ECS_TOOLS_UI_SYSTEM_HANDLER_FRAME_COUNT 8
 
-#define ECS_TOOLS_UI_STRING_HASH_FUNCTION_ADDITIVE
 #define ECS_TOOLS_UI_SINGLE_THREADED
-
-#define ECS_TOOLS_UI_ACTIVE_WINDOW
-#define ECS_TOOLS_UI_SPRITE_COLLAPSE_TRIANGLE
 
 #define ECS_TOOLS_UI_SYSTEM_ACTION_ALLOCATOR_MEMORY 20'000
 
@@ -62,8 +58,8 @@
 #define ECS_TOOLS_UI_WINDOW_MIN_ZOOM 0.65f
 #define ECS_TOOLS_UI_WINDOW_MAX_ZOOM 2.0f
 
-#define ECS_TOOLS_UI_ONE_PIXEL_X 0.0012626f
-#define ECS_TOOLS_UI_ONE_PIXEL_Y 0.0020536f
+#define ECS_TOOLS_UI_ONE_PIXEL_X 0.0010626f
+#define ECS_TOOLS_UI_ONE_PIXEL_Y 0.00175536f
 
 #define ECS_TOOLS_UI_THREAD_TEMP_ALLOCATOR_MEMORY 5'000'000
 
@@ -93,7 +89,7 @@
 #define ECS_TOOLS_UI_DOCKSPACE_BORDER_GENERAL_HANDLER_COUNT 128
 #define ECS_TOOLS_UI_DOCKSPACE_MINIMUM_SCALE 0.08f
 #define ECS_TOOLS_UI_DOCKSPACE_VIEWPORT_PADDING_X 0.0011692f
-#define ECS_TOOLS_UI_DOCKSPACE_VIEWPORT_PADDING_Y 0.0014729f
+#define ECS_TOOLS_UI_DOCKSPACE_VIEWPORT_PADDING_Y 0.001455f
 #define ECS_TOOLS_UI_DOCKSPACE_REGION_HEADER_SPACING 0.007f
 #define ECS_TOOLS_UI_DOCKSPACE_REGION_HEADER_PADDING 0.025f
 #define ECS_TOOLS_UI_DOCKSPACE_REGION_HEADER_ADDED_SCALE 0.02f

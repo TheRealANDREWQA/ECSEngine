@@ -10,18 +10,18 @@ using namespace ECSEngine;
 ECS_CONTAINERS;
 
 constexpr const char* CMB_BUILD_SYSTEM_PATH = "cd C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE";
-constexpr const char* CMD_BUILD_SYSTEM = "devenv";
-constexpr const char* BUILD_PROJECT_STRING = "/build";
-constexpr const char* CLEAN_PROJECT_STRING = "/clean";
-constexpr const char* REBUILD_PROJECT_STRING = "/rebuild";
+constexpr const char* CMD_BUILD_SYSTEM = "MSBuild.exe";
+constexpr const char* BUILD_PROJECT_STRING = "/t:build";
+constexpr const char* CLEAN_PROJECT_STRING = "/t:clean";
+constexpr const char* REBUILD_PROJECT_STRING = "/t:rebuild";
 constexpr const char* CMD_BUILD_SYSTEM_LOG_FILE_COMMAND = "/out";
 constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_PATH = L"\\Debug\\";
-constexpr const wchar_t* CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION = L".txt";
+constexpr const wchar_t* CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION = L".log";
 
-constexpr const wchar_t* CMD_BUILD_SYSTEM_WIDE = L"devenv";
-constexpr const wchar_t* BUILD_PROJECT_STRING_WIDE = L"/build";
-constexpr const wchar_t* CLEAN_PROJECT_STRING_WIDE = L"/clean";
-constexpr const wchar_t* REBUILD_PROJECT_STRING_WIDE = L"/rebuild";
+constexpr const wchar_t* CMD_BUILD_SYSTEM_WIDE = L"MSBuild.exe";
+constexpr const wchar_t* BUILD_PROJECT_STRING_WIDE = L"/t:build";
+constexpr const wchar_t* CLEAN_PROJECT_STRING_WIDE = L"/t:clean";
+constexpr const wchar_t* REBUILD_PROJECT_STRING_WIDE = L"/t:rebuild";
 constexpr const wchar_t* CMD_BUILD_SYSTEM_LOG_FILE_COMMAND_WIDE = L"/out";
 
 constexpr const char* CMB_BUILD_SYSTEM_INCORRECT_PARAMETER = "The operation could not be completed. The parameter is incorrect.";
@@ -46,32 +46,33 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
 
 	if (contents.buffer != nullptr) {
 		contents[contents.size - 1] = '\0';
-		char* failed_character = strrchr(contents.buffer, 'f');
-		failed_character -= 2;
-
-		char _number_characters[256];
-		Stream<char> number_characters(_number_characters, 0);
-		while (function::IsNumberCharacter(*failed_character)) {
-			number_characters.Add(*failed_character);
-			failed_character--;
-		}
-		number_characters.SwapContents();
-		size_t number = function::ConvertCharactersToInt<size_t>(number_characters);
+		const char* build_FAILED = strstr(contents.buffer, "Build FAILED.");
 
 		editor_allocator->Deallocate_ts(contents.buffer);
-		if (number > 0) {
-			ECS_FORMAT_TEMP_STRING(error_message, "{0} module/s have failed to build. Check the {1} log.", number, CMD_BUILD_SYSTEM);
-			EditorSetConsoleError(editor_state, error_message);
-			return false;
-		}
-		else {
-			size_t string_size = strlen(CMB_BUILD_SYSTEM_INCORRECT_PARAMETER);
-			if (function::CompareStrings(Stream<char>(contents.buffer + 1, string_size), Stream<char>(CMB_BUILD_SYSTEM_INCORRECT_PARAMETER, string_size))) {
-				ECS_FORMAT_TEMP_STRING(error_message, "{0} could not complete the command. Incorrect parameter. Most likely, the module is missing the current configuration. Open the {1} log for more information.", CMD_BUILD_SYSTEM, CMD_BUILD_SYSTEM);
+		if (build_FAILED != nullptr) {
+			// Extract the module name from the log path
+			const wchar_t* debug_ptr = wcsstr(log_path.buffer, CMD_BUILD_SYSTEM_LOG_FILE_PATH);
+			if (debug_ptr != nullptr) {
+				debug_ptr += wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH);
+				const wchar_t* underscore_after_library_name = wcschr(debug_ptr, L'_');
+				if (underscore_after_library_name != nullptr) {
+					ECS_FORMAT_TEMP_STRING(error_message, "Module {0} have failed to build. Check the {1} log.",
+						Stream<wchar_t>(debug_ptr, underscore_after_library_name - debug_ptr), CMD_BUILD_SYSTEM);
+					EditorSetConsoleError(editor_state, error_message);
+					return false;
+				}
+				else {
+					ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name (it's missing the underscore)."
+						" Check the {0} log.", CMD_BUILD_SYSTEM);
+					EditorSetConsoleError(editor_state, error_message);
+					return false;
+				}
+			}
+			else {
+				ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {0} log.", CMD_BUILD_SYSTEM);
 				EditorSetConsoleError(editor_state, error_message);
 				return false;
 			}
-			return true;
 		}
 	}
 	else {
@@ -79,6 +80,29 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
 		EditorSetConsoleWarn(editor_state, error_message);
 		return false;
 	}
+
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void AddProjectModuleToLaunchedCompilation(EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration) {
+	EDITOR_STATE(editor_state);
+	// Allocate the string from the multithreaded because the deallocate would have interfered with the normal allocations
+	// since the deallocation would be done from a different thread
+	// Concatenate the library_name with _ and then the configuration string
+	Stream<wchar_t> configuration_string = ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]);
+
+	void* allocation = multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * (library_name.size + configuration_string.size + 1));
+	uintptr_t buffer = (uintptr_t)allocation;
+	library_name.CopyTo(buffer);
+	wchar_t* underscore = (wchar_t*)buffer;
+	*underscore = L'_';
+	buffer += sizeof(wchar_t);
+
+	configuration_string.CopyTo(buffer);
+
+	editor_state->launched_module_compilation.Add({ allocation, library_name.size + configuration_string.size + 1 });
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -131,6 +155,8 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 	module->configuration = configuration;
 	module->load_status = EditorModuleLoadStatus::Failed;
 
+	module->library_last_write_time = 0;
+	module->solution_last_write_time = 0;
 	module->solution_path.Copy(solution_path);
 	module->solution_path[module->solution_path.size] = L'\0';
 	module->library_name.Copy(library_name);
@@ -159,27 +185,12 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-struct BuildThreadTaskData {
-	EditorState* editor_state;
-	unsigned int index;
-	ConditionVariable* condition_variable;
-};
-
-template<void (*function)(EditorState* editor_state, unsigned int index)>
-void BuildThreadTask(unsigned int thread_index, World* world, void* _data) {
-	BuildThreadTaskData* data = (BuildThreadTaskData*)_data;
-	 function(data->editor_state, data->index);
-	data->condition_variable->Notify();
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 struct CheckBuildStatusThreadData {
 	EditorState* editor_state;
 	Stream<wchar_t> path;
 };
 
-void CheckBuildStatusThreadTask(unsigned int thread_index, World* world, void* _data) {
+ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 	CheckBuildStatusThreadData* data = (CheckBuildStatusThreadData*)_data;
 
 	while (!ExistsFileOrFolder(data->path)) {
@@ -196,13 +207,14 @@ void CheckBuildStatusThreadTask(unsigned int thread_index, World* world, void* _
 	log_path.AddStream(ToStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION));
 	
 	bool succeded = PrintCommandStatus(data->editor_state, log_path);
+	// Extract the library name and the configuration
+	Stream<wchar_t> filename = function::PathFilename(data->path);
+	const wchar_t* underscore = wcschr(filename.buffer, '_');
+
+	Stream<wchar_t> library_name(filename.buffer, underscore - filename.buffer);
+	Stream<wchar_t> configuration(underscore + 1, extension.buffer - underscore - 1);
 	if (succeded) {
-		// Extract the library name and the configuration
-		Stream<wchar_t> filename = function::PathFilename(data->path);
-		const wchar_t* underscore = wcschr(filename.buffer, '_');
 		if (underscore != nullptr) {
-			Stream<wchar_t> library_name(filename.buffer, underscore - filename.buffer);
-			Stream<wchar_t> configuration(underscore + 1, extension.buffer - underscore - 1);
 			Stream<wchar_t> command(extension.buffer + 1, extension.size - 1);
 
 			ECS_FORMAT_TEMP_STRING(console_string, "Command {0} for module {1} with configuration {2} completed successfully.", command, library_name, configuration);
@@ -214,40 +226,47 @@ void CheckBuildStatusThreadTask(unsigned int thread_index, World* world, void* _
 		}
 	}
 
+	Stream<wchar_t> launched_compilation_string(library_name.buffer, configuration.buffer + configuration.size - library_name.buffer);
+	// Remove the module from the launched compilation stream
+	data->editor_state->launched_module_compilation_lock.lock();
+	unsigned int index = 0;
+	unsigned int launched_module_count = data->editor_state->launched_module_compilation.size;
+	for (; index < launched_module_count; index++) {
+		if (function::CompareStrings(launched_compilation_string, data->editor_state->launched_module_compilation[index])) {
+			// Deallocate the string
+			data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->editor_state->launched_module_compilation[index].buffer);
+			data->editor_state->launched_module_compilation.RemoveSwapBack(index);
+			// Exit the loop by setting index to -2
+			index = -2;
+		}
+	}
+	data->editor_state->launched_module_compilation_lock.unlock();
+
+	// Warn if the module could not be find in the launched module compilation
+	if (index != -1) {
+		ECS_FORMAT_TEMP_STRING(console_string, "Module {0} with configuration {1} could not be find in the compilation list.", library_name, configuration);
+		EditorSetConsoleWarn(data->editor_state, console_string);
+	}
+
 	// The path must be deallocated
-	data->editor_state->editor_allocator->Deallocate_ts(data->path.buffer);
+	data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->path.buffer);
 	ECS_ASSERT(RemoveFile(data->path));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-// Returns the index of the thread that is executing the task
-unsigned int PushBuildThreadTask(EditorState* editor_state, unsigned int index, ConditionVariable* condition_variable, ThreadFunction function) {
-	EDITOR_STATE(editor_state);
-	BuildThreadTaskData data = { editor_state, index, condition_variable };
-	return task_manager->AddDynamicTaskAndWake({ function, &data }, sizeof(data));
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
-void ForEachProjectModule(EditorState* editor_state, ThreadFunction function) {
-	constexpr size_t MAX_THREADS = 128;
+void ForEachProjectModule(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses, EDITOR_LAUNCH_BUILD_COMMAND_STATUS (*build_function)(EditorState*, unsigned int)) {
 	EDITOR_STATE(editor_state);
 
 	// Clear the log file first
 	const ProjectModules* project_modules = (const ProjectModules*)editor_state->project_modules;
 
-	// Create a condition variable that will be used by the main thread (this one) 
-	// in order to sleep while the threads are doing their task/s
-	ConditionVariable condition_variable;
-
 	// Prepare thread indices for log file merge at the end and failed task indices
 	size_t module_count = project_modules->size;
-	unsigned int thread_indices[MAX_THREADS];
 	// The graphics module located at 1 must be skipped if it is not set
 	bool starting_index = project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size == 0;
-	for (size_t index = starting_index; index < module_count; index++) {
-		thread_indices[index] = PushBuildThreadTask(editor_state, index, &condition_variable, function);
+	for (unsigned int index = starting_index; index < module_count; index++) {
+		statuses[index] = build_function(editor_state, index);
 	}
 }
 
@@ -281,23 +300,41 @@ void CommandLineString(const EditorState* editor_state, CapacityStream<wchar_t>&
 	string.AddStream(modules->buffer[module_index].solution_path);
 	string.Add(L' ');
 	string.AddStream(command);
-	string.Add(L' ');
+	string.AddStream(ToStream(L" /p:Configuration="));
 	string.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)modules->buffer[module_index].configuration]));
-	string.Add(L' ');
-	string.AddStream(ToStream(CMD_BUILD_SYSTEM_LOG_FILE_COMMAND_WIDE));
-	string.Add(L' ');
-	string.AddStreamSafe(log_file);
-	string.AddStream(ToStream(L" & cd . > "));
+	string.AddStream(ToStream(L" /p:Platform=x64 /flp:logfile="));
+	string.AddStream(log_file);
+	string.AddStream(ToStream(L";verbosity=normal & cd . > "));
 	GetProjectDebugFolder(editor_state, string);
 	string.Add(ECS_OS_PATH_SEPARATOR);
 	GetProjectModuleBuildFlagFile(editor_state, module_index, command, string);
-	string[string.size] = '\0';
+	string[string.size] = L'\0';
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t> command) {
+// Returns whether or not the command actually will be executed. The command can be skipped if the module is in flight
+// running another command
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t> command) {
 	EDITOR_STATE(editor_state);
+
+	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
+
+	// First check that the module is not executing another build command - it doesn't necessarly 
+	// have to be the same type. A clean cannot be executed while a build is running
+	// The lock must be acquired so a thread that wants to remove an element 
+	// does not interfere with this reading
+	editor_state->launched_module_compilation_lock.lock();
+	for (size_t index = 0; index < editor_state->launched_module_compilation.size; index++) {
+		if (memcmp(library_name.buffer, editor_state->launched_module_compilation[index].buffer, sizeof(wchar_t) * library_name.size) == 0) {
+			editor_state->launched_module_compilation_lock.unlock();
+			return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
+		}
+	}
+	editor_state->launched_module_compilation_lock.unlock();
+
+	// Add the module to the launched module compilation
+	AddProjectModuleToLaunchedCompilation(editor_state, library_name, editor_state->project_modules->buffer[index].configuration);
 
 	// Construct the system string
 #ifdef MODULE_BUILD_USING_CRT
@@ -309,8 +346,6 @@ void RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t
 	wchar_t _log_path[512];
 	Stream<wchar_t> log_path(_log_path, 0);
 	GetProjectModuleBuildLogPath(editor_state, index, command, log_path);
-	// Clear the log file
-	ClearFile(log_path);
 
 #ifdef MODULE_BUILD_USING_CRT
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
@@ -335,9 +370,10 @@ void RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t
 		EditorSetConsoleInfoFocus(editor_state, console_string);
 	}
 #else
-	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE", SW_SHOW);
+	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\MSBuild\\Current\\Bin", SW_HIDE);
 	if ((uint64_t)value < 32) {
 		EditorSetConsoleError(editor_state, ToStream("An error occured when creating the command prompt that builds the module."));
+		return EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 	}
 	else {
 		ECS_TEMP_STRING(flag_file, 256);
@@ -348,55 +384,60 @@ void RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t
 		// Log the command status
 		CheckBuildStatusThreadData check_data;
 		check_data.editor_state = editor_state;
-		check_data.path = function::StringCopyTs(editor_state->editor_allocator, flag_file);
-		task_manager->AddDynamicTaskAndWake({ CheckBuildStatusThreadTask, &check_data }, sizeof(check_data));
+		check_data.path.buffer = (wchar_t*)multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * (flag_file.size + 1));
+		check_data.path.Copy(flag_file);
+		
+		task_manager->AddDynamicTaskAndWake({ CheckBuildStatusThreadTask, &check_data, sizeof(check_data) });
 	}
+	return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 #endif
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void BuildProjectModule(EditorState* editor_state, unsigned int index) {
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildProjectModule(EditorState* editor_state, unsigned int index) {
 	ProjectModules* modules = editor_state->project_modules;
 	if (UpdateProjectModuleLastWrite(editor_state, index) || modules->buffer[index].load_status != EditorModuleLoadStatus::Good) {
-		RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING_WIDE));
+		return RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING_WIDE));
 	}
-	else {
+	// The callback will check the status of this function and report accordingly to the console
+	/*else {
 		ECS_FORMAT_TEMP_STRING(console_message, "Module {0} with configuration {1} is up to date.", 
 			modules->buffer[index].library_name, MODULE_CONFIGURATIONS[(unsigned int)modules->buffer[index].configuration]);
 		EditorSetConsoleInfo(editor_state, console_message);
-	}
+	}*/
+	return EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void BuildProjectModules(EditorState* editor_state)
+void BuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses)
 {
-	ForEachProjectModule(editor_state, BuildThreadTask<BuildProjectModule>);
+	ForEachProjectModule(editor_state, statuses, BuildProjectModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void CleanProjectModule(EditorState* editor_state, unsigned int index) {
-	RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING_WIDE));
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanProjectModule(EditorState* editor_state, unsigned int index) {
+	return RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING_WIDE));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void CleanProjectModules(EditorState* editor_state) {
-	ForEachProjectModule(editor_state, BuildThreadTask<CleanProjectModule>);
+void CleanProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses) {
+	ForEachProjectModule(editor_state, statuses, CleanProjectModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void RebuildProjectModule(EditorState* editor_state, unsigned int index) {
-	RunCmdCommand(editor_state, index, ToStream(REBUILD_PROJECT_STRING_WIDE));
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildProjectModule(EditorState* editor_state, unsigned int index) {
+	return RunCmdCommand(editor_state, index, ToStream(REBUILD_PROJECT_STRING_WIDE));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void RebuildProjectModules(EditorState* editor_state) {
-	ForEachProjectModule(editor_state, BuildThreadTask<RebuildProjectModule>);
+void RebuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses) {
+	ForEachProjectModule(editor_state, statuses, RebuildProjectModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -499,7 +540,7 @@ void GetProjectModuleBuildFlagFile(const EditorState* editor_state, unsigned int
 	temp_file.Add(L'_');
 	temp_file.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)modules->buffer[module_index].configuration]));
 	temp_file.Add(L'.');
-	temp_file.AddStream(command);
+	temp_file.AddStream(Stream<wchar_t>(command.buffer + 2, command.size - 2));
 	temp_file[temp_file.size] = L'\0';
 }
 
@@ -517,7 +558,7 @@ void GetProjectModuleBuildLogPath(const EditorState* editor_state, unsigned int 
 	log_path.Add(L'_');
 	log_path.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)modules->buffer[index].configuration]));
 	wchar_t* replace_slash_with_underscore = log_path.buffer + log_path.size;
-	log_path.AddStream(command);
+	log_path.AddStream(Stream<wchar_t>(command.buffer + 2, command.size - 2));
 	*replace_slash_with_underscore = L'_';
 	log_path.AddStream(ToStream(CMB_BUILD_SYSTEM_LOG_FILE_EXTENSION));
 	log_path[log_path.size] = L'\0';
@@ -573,7 +614,7 @@ size_t GetProjectModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 		Stream<wchar_t> current_path = ToStream(path);
 		Stream<wchar_t> filename = function::PathFilename(current_path);
 
-		if (function::IsStringInStream(filename, data->source_names) != -1) {
+		if (function::FindString(filename, data->source_names) != -1) {
 			bool success = OS::GetFileTimes(current_path.buffer, nullptr, nullptr, &data->last_write);
 			return false;
 		}
@@ -884,7 +925,11 @@ void ResetProjectModules(EditorState* editor_state)
 	EDITOR_STATE(editor_state);
 
 	ProjectModules* project_modules = editor_state->project_modules;
-	for (size_t index = 0; index < project_modules->size; index++) {
+	if (HasGraphicsModule(editor_state)) {
+		ReleaseProjectModule(editor_state, GRAPHICS_MODULE_INDEX);
+		ResetProjectGraphicsModule(editor_state);
+	}
+	for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
 		ReleaseProjectModule(editor_state, index);
 	}
 	project_modules->size = 1;

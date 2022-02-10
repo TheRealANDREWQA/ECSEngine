@@ -387,12 +387,12 @@ namespace ECSEngine {
 
 		template<typename Value>
 		Value ClampMin(Value value, Value min) {
-			return Select(value < min, min, value);
+			return value < min ? min : value;
 		}
 
 		template<typename Value>
 		Value ClampMax(Value value, Value max) {
-			return Select(value > max, max, value);
+			return value > max ? max : value;
 		}
 
 		ECSENGINE_API unsigned int GetAlphabetIndex(char character);
@@ -408,6 +408,12 @@ namespace ECSEngine {
 
 		// If the pointer is null, it will commit the message
 		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, const char* message);
+
+		// It will first select a slice inside the XZ plane using the rotation given by the x component
+		// Then it will rotate in the plane determined by the diameter of that rotation and the Y axis
+		// The point is centered around the origin, if a translation is disired, it should be added afterwards
+		// Rotation is in degrees
+		ECSENGINE_API float3 OrbitPoint(float radius, float2 rotation);
 
 	}
 

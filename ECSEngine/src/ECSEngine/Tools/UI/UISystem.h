@@ -46,8 +46,6 @@ namespace ECSEngine {
 				Graphics* graphics,
 				ResourceManager* resource,
 				TaskManager* task_manager,
-				const wchar_t* font_filename,
-				const wchar_t* font_uv_descriptor,
 				uint2 window_os_size,
 				GlobalMemoryManager* initial_allocator = nullptr
 			);
@@ -801,7 +799,7 @@ namespace ECSEngine {
 
 			void DrawPass(
 				CapacityStream<VertexBuffer>& buffers,
-				CapacityStream<UIDynamicStream<UISpriteTexture, true>>& sprite_textures,
+				CapacityStream<UIDynamicStream<UISpriteTexture>>& sprite_textures,
 				ConstantBuffer& viewport_buffer,
 				const size_t* counts,
 				GraphicsContext* context,
@@ -888,6 +886,8 @@ namespace ECSEngine {
 			bool ExistsWindowResource(unsigned int window_index, const char* name) const;
 
 			bool ExistsWindowResource(unsigned int window_index, Stream<void> identifier) const;
+
+			void EvictOutdatedTextures();
 
 			void FillActionDataSystemParameters(ActionData* action_data);
 
@@ -1404,9 +1404,6 @@ namespace ECSEngine {
 
 			template<bool destroy_windows = true>
 			ECSENGINE_API void RemoveDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, DockspaceType type);
-
-			template<bool destroy_windows = true>
-			ECSENGINE_API void RemoveFixedDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, DockspaceType type);
 
 			void RepairDockspaceReferences(unsigned int dockspace_index, DockspaceType type, unsigned int new_index);
 

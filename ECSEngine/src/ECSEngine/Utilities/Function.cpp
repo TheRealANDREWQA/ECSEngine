@@ -419,7 +419,7 @@ namespace ECSEngine {
 		{
 			size_t starting_index = characters[0] == '+' || characters[0] == '-';
 			for (size_t index = starting_index; index < characters.size; index++) {
-				if (characters[index] < '0' || characters[index] > '9' && characters[index] != '.') {
+				if (characters[index] < '0' || characters[index] > '9') {
 					return false;
 				}
 			}
@@ -601,6 +601,32 @@ namespace ECSEngine {
 			if (error_message != nullptr) {
 				error_message->AddStreamSafe(ToStream(message));
 			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		float3 OrbitPoint(float radius, float2 rotation)
+		{
+			// Offset the rotation along the x axis such that at 0 degrees it is facing in the direction of the Z axis
+			rotation.x -= 90.0f;
+
+			rotation = { DegToRad(rotation.x), DegToRad(rotation.y) };
+
+			// Calculate the point in the XZ plane
+			float x_position = radius * cos(rotation.x);
+			float z_position = radius * sin(rotation.x);
+
+			// Calculate the symmetric point - the signs are inverted
+			float2 symmetric_point = { fabsf(x_position), fabsf(z_position) };
+
+			// The cosine of the y rotation will serve as an interpolation between the 2 points for the x and z components
+			// The sine of the y rotation will serve as the final y position
+			float interpolation_xz = (cos(rotation.y) + 1.0f) * 0.5f;
+			float final_x = Lerp(x_position, symmetric_point.x, interpolation_xz);
+			float final_z = Lerp(z_position, symmetric_point.y, interpolation_xz);
+			float final_y = radius * sin(rotation.y);
+
+			return { final_x, final_y, final_z };
 		}
 
 		// --------------------------------------------------------------------------------------------------

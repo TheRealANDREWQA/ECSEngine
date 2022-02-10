@@ -585,7 +585,7 @@ namespace ECSEngine {
 				nodes[current_index].internal_allocations.buffer = nullptr;
 				nodes[current_index].internal_allocations.size = 0;
 				nodes[current_index].internal_allocations.capacity = 0;
-				nodes[current_index].internal_allocations.allocator = system->m_memory;
+				nodes[current_index].internal_allocations.allocator = GetAllocatorPolymorphic(system->m_memory);
 
 				nodes[current_index].function = draw;
 				nodes[current_index].name_length = full_name_length;

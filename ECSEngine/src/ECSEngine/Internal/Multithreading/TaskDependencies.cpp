@@ -12,7 +12,7 @@ namespace ECSEngine {
 			total_size += element.dependencies[index].size;
 		}
 
-		void* allocation = elements.allocator->Allocate(total_size, alignof(char));
+		void* allocation = Allocate(elements.allocator, total_size, alignof(char));
 		uintptr_t ptr = (uintptr_t)allocation;
 		element.task_name.CopyTo((void*)ptr);
 		element.task_name.buffer = (char*)ptr;
@@ -39,7 +39,7 @@ namespace ECSEngine {
 	void TaskDependencies::Reset()
 	{
 		for (size_t index = 0; index < elements.size; index++) {
-			elements.allocator->Deallocate(elements[index].task_name.buffer);
+			Deallocate(elements.allocator, elements[index].task_name.buffer);
 		}
 		elements.FreeBuffer();
 	}
@@ -51,7 +51,7 @@ namespace ECSEngine {
 	void TaskDependencies::Remove(Stream<char> task_name) {
 		for (size_t index = 0; index < elements.size; index++) {
 			if (function::CompareStrings(elements[index].task_name, task_name)) {
-				elements.allocator->Deallocate(elements[index].task_name.buffer);
+				Deallocate(elements.allocator, elements[index].task_name.buffer);
 				elements.Remove(index);
 				return;
 			}

@@ -10,6 +10,8 @@
 #include "..\Editor\EditorEvent.h"
 #include "..\Project\ProjectOperations.h"
 
+bool DISPLAY_LOCKED_FILES_SIZE = false;
+
 using namespace ECSEngine;
 ECS_CONTAINERS;
 ECS_TOOLS;
@@ -51,8 +53,6 @@ struct ModuleExplorerData {
 	EditorState* editor_state;
 	unsigned int selected_module;
 	unsigned int selected_module_configuration_group;
-	bool display_locked_file_warning;
-	Timer lazy_solution_last_write_timer;
 };
 
 void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
@@ -274,46 +274,121 @@ struct ModuleExplorerRunModuleBuildCommandData {
 	unsigned int module_index;
 };
 
+void ModuleExplorerPrintConsoleMessageAfterBuildCommand(ModuleExplorerRunModuleBuildCommandData* data, EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status) {
+	Stream<wchar_t> library_name = data->editor_state->project_modules->buffer[data->module_index].library_name;
+	const char* configuration_string = MODULE_CONFIGURATIONS[(unsigned int)data->editor_state->project_modules->buffer[data->module_index].configuration];
+	ECS_TEMP_ASCII_STRING(console_message, 256);
+	switch (command_status) {
+	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
+		ECS_FORMAT_STRING(console_message, "Command for module {0} with configuration {1} launched successfully.", library_name, configuration_string);
+		EditorSetConsoleInfo(data->editor_state, console_message);
+		break;
+	case EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED:
+		ECS_FORMAT_STRING(console_message, "The module {0} with configuration {1} is up to date. The command is skipped", library_name, configuration_string);
+		EditorSetConsoleInfo(data->editor_state, console_message);
+		break;
+	case EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING:
+		ECS_FORMAT_STRING(console_message, "An error has occured when launching the command line for module {0} with configuration {1}. The command is aborted.", library_name, configuration_string);
+		EditorSetConsoleError(data->editor_state, console_message);
+		break;
+	case EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING:
+		ECS_FORMAT_STRING(console_message, "The module {0} with configuration {1} is already executing a command.", library_name, configuration_string);
+		EditorSetConsoleError(data->editor_state, console_message);
+		break;
+	}
+}
+
+void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* command_statuses) {
+	ECS_TEMP_ASCII_STRING(console_message, 8192);
+
+	unsigned int counts_for_status_type[EDITOR_LAUNCH_BUILD_COMMAND_COUNT];
+	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
+		counts_for_status_type[command_statuses[index]]++;
+	}
+
+	auto add_same_type_module_status_to_listing = [&console_message, editor_state, command_statuses](EDITOR_LAUNCH_BUILD_COMMAND_STATUS status_type) {
+		for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
+			if (command_statuses[index]) {
+				function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[index].library_name, console_message);
+				console_message.Add('\n');
+			}
+		}
+	};
+
+	auto append_string_message_for_type = [&](EDITOR_LAUNCH_BUILD_COMMAND_STATUS status_type, const char* message) {
+		if (counts_for_status_type[status_type]) {
+			ECS_FORMAT_TEMP_STRING(append_message, message, counts_for_status_type[status_type]);
+			console_message.AddStreamSafe(append_message);
+			add_same_type_module_status_to_listing(status_type);
+		}
+	};
+
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING, "{0} modules have launched successfully their command. These are:\n");
+	EditorSetConsoleInfo(editor_state, console_message);
+	console_message.size = 0;
+	
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED, "{0} modules have been skipped (they are up to date). These are:\n");
+	EditorSetConsoleInfo(editor_state, console_message);
+	console_message.size = 0;
+
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING, "{0} modules have failed to launch their command line prompt. These are:\n");
+	EditorSetConsoleError(editor_state, console_message);
+	console_message.size = 0;
+
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING, "{0} modules are already running. The current command will be ignored. These are:\n");
+	EditorSetConsoleError(editor_state, console_message);
+}
+
 void ModuleExplorerBuildModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	BuildProjectModule(data->editor_state, data->module_index);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildProjectModule(data->editor_state, data->module_index);
+	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
 }
 
 void ModuleExplorerCleanModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	CleanProjectModule(data->editor_state, data->module_index);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = CleanProjectModule(data->editor_state, data->module_index);
+	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
 }
 
 void ModuleExplorerRebuildModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	RebuildProjectModule(data->editor_state, data->module_index);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = RebuildProjectModule(data->editor_state, data->module_index);
+	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
 }
 
 void ModuleExplorerBuildAll(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* data = (EditorState*)_data;
-	BuildProjectModules(data);
+
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->project_modules->size);
+	BuildProjectModules(data, statuses);
+	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data, statuses);
 }
 
 void ModuleExplorerCleanAll(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* data = (EditorState*)_data;
-	CleanProjectModules(data);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->project_modules->size);
+	CleanProjectModules(data, statuses);
+	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data, statuses);
 }
 
 void ModuleExplorerRebuildAll(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* data = (EditorState*)_data;
-	RebuildProjectModules(data);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->project_modules->size);
+	RebuildProjectModules(data, statuses);
+	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data, statuses);
 }
 
 void ModuleExplorerReset(ActionData* action_data) {
@@ -444,8 +519,8 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		explorer_data->selected_module = -1;
 		explorer_data->selected_module_configuration_group = -1;
 		explorer_data->editor_state = editor_state;
-		explorer_data->display_locked_file_warning = true;
-		explorer_data->lazy_solution_last_write_timer.SetMarker();
+
+		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_MODULE_EXPLORER);
 	}
 	else {
 		explorer_data = (ModuleExplorerData*)drawer.GetResource(MODULE_EXPLORER_DATA_NAME);
@@ -888,49 +963,46 @@ void ModuleExplorerTick(EditorState* editor_state)
 	EDITOR_STATE(editor_state);
 
 	unsigned int window_index = ui_system->GetWindowFromName(MODULE_EXPLORER_WINDOW_NAME);
-	bool display_locked_file_warning = true;
-	if (window_index != -1) {
-		ModuleExplorerData* explorer_data = (ModuleExplorerData*)ui_system->FindWindowResource(window_index, MODULE_EXPLORER_DATA_NAME, strlen(MODULE_EXPLORER_DATA_NAME));
-		ProjectModules* project_modules = editor_state->project_modules;
-		display_locked_file_warning = explorer_data->display_locked_file_warning;
+	ProjectModules* project_modules = editor_state->project_modules;
 
-		size_t lazy_solution_duration = explorer_data->lazy_solution_last_write_timer.GetDurationSinceMarker_ms();
-
-		bool has_graphics_module = HasGraphicsModule(editor_state);
-		if (lazy_solution_duration > LAZY_SOLUTION_LAST_WRITE_TARGET_MILLISECONDS) {
-			for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
-				if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
-					bool success = false;
-					if (project_modules->buffer[index].library_last_write_time != 0) {
-						success = HasModuleFunction(editor_state, index);
-					}
-					SetModuleLoadStatus(project_modules->buffer + index, success);
+	bool has_graphics_module = HasGraphicsModule(editor_state);
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_MODULE_EXPLORER, LAZY_SOLUTION_LAST_WRITE_TARGET_MILLISECONDS)) {
+		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
+			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
+				bool success = false;
+				if (project_modules->buffer[index].library_last_write_time != 0) {
+					success = HasModuleFunction(editor_state, index);
 				}
-				bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, index);
-				if (is_updated && project_modules->buffer[index].load_status == EditorModuleLoadStatus::Good) {
-					project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
-				}
+				SetModuleLoadStatus(project_modules->buffer + index, success);
 			}
-
-			explorer_data->lazy_solution_last_write_timer.SetMarker();
+			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, index);
+			if (is_updated && project_modules->buffer[index].load_status == EditorModuleLoadStatus::Good) {
+				project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
+			}
 		}
+	}
 
-		if (has_graphics_module) {
-			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
-			if (is_updated && project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status == EditorModuleLoadStatus::Good) {
-				project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status = EditorModuleLoadStatus::OutOfDate;
-			}
-			if (UpdateProjectModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
-				LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX);
-			}
+	if (has_graphics_module) {
+		bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
+		if (is_updated && project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status == EditorModuleLoadStatus::Good) {
+			project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status = EditorModuleLoadStatus::OutOfDate;
+		}
+		if (UpdateProjectModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
+			LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX);
 		}
 	}
 
 	// Inform the user when many .pdb.locked files gathered
 	size_t locked_files_size = GetVisualStudioLockedFilesSize(editor_state);
-	if (locked_files_size > ECS_GB && display_locked_file_warning) {
-		ECS_FORMAT_TEMP_STRING(console_output, "Visual studio locked files size surpassed 1 GB (actual size is {0}). Consider deleting the files now"
-			" if the debugger is not opened or by reopening the project.", locked_files_size);
-		EditorSetConsoleWarn(editor_state, console_output);
+	if (locked_files_size > ECS_GB) {
+		if (!DISPLAY_LOCKED_FILES_SIZE) {
+			ECS_FORMAT_TEMP_STRING(console_output, "Visual studio locked files size surpassed 1 GB (actual size is {0}). Consider deleting the files now"
+				" if the debugger is not opened or by reopening the project.", locked_files_size);
+			EditorSetConsoleWarn(editor_state, console_output);
+			DISPLAY_LOCKED_FILES_SIZE = true;
+		}
+	}
+	else {
+		DISPLAY_LOCKED_FILES_SIZE = false;
 	}
 }

@@ -71,6 +71,27 @@ struct_name.field9 = field9;
 #define ECS_FORWARD_STRUCT_MEMBERS_10(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9, field10) ECS_FORWARD_STRUCT_MEMBERS_9(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9); \
 struct_name.field10 = field10;
 
+#define ECS_FORWARD_STREAM(stream, function, ...) if (stream[stream.size] == '\0') {\
+												return function(stream.buffer, __VA_ARGS__); \
+											} \
+											else { \
+												char _null_path[512]; \
+												containers::CapacityStream<char> null_path(_null_path, 0, 512); \
+												null_path.Copy(stream); \
+												null_path[stream.size] = '\0'; \
+												return function(null_path.buffer, __VA_ARGS__); \
+
+#define ECS_FORWARD_STREAM_WIDE(stream, function, ...) if (stream[stream.size] == L'\0') {\
+												return function(stream.buffer, __VA_ARGS__); \
+											} \
+											else { \
+												wchar_t _null_path[512]; \
+												containers::CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
+												null_path.Copy(stream); \
+												null_path[stream.size] = L'\0'; \
+												return function(null_path.buffer, __VA_ARGS__); \
+											}
+
 #define ECS_TEMPLATE_FUNCTION(return_type, function_name, ...) template ECSENGINE_API return_type function_name(__VA_ARGS__)
 
 #define ECS_TEMPLATE_FUNCTION_2_BEFORE(return_type, function_name, first, second, ...) ECS_TEMPLATE_FUNCTION(return_type, function_name, first, __VA_ARGS__); \
@@ -137,3 +158,20 @@ inline T operator^ (T a, T b) { return (T)((int)a ^ (int)b); } \
 inline T& operator|= (T& a, T b) { return (T&)((int&)a |= (int)b); } \
 inline T& operator&= (T& a, T b) { return (T&)((int&)a &= (int)b); } \
 inline T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
+
+// Have faith in the optimizer that it will eliminate these dead branches
+#define LOOP_UNROLL_4(count, function, pivot)	if (count >= pivot + 1) { function(pivot); } \
+												if (count >= pivot + 2) { function(pivot + 1); } \
+												if (count >= pivot + 3) { function(pivot + 2); } \
+												if (count >= pivot + 4) { function(pivot + 3); } 
+
+
+// It goes up to 16
+#define LOOP_UNROLL(count, function)	LOOP_UNROLL_4(count, function, 0); \
+										LOOP_UNROLL_4(count, function, 4); \
+										LOOP_UNROLL_4(count, function, 8); \
+										LOOP_UNROLL_4(count, function, 12); 
+										//LOOP_UNROLL_4(count, function, 16); \
+										//LOOP_UNROLL_4(count, function, 20); \
+										//LOOP_UNROLL_4(count, function, 24); \
+										//LOOP_UNROLL_4(count, function, 28); \

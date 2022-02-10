@@ -113,6 +113,7 @@ float4 main(in PS_INPUT input) : SV_TARGET
     float3 F0 = FresnelBaseReflectivity(pixel_color, metallic);
     
     uint index = 0;
+    // The total radiance
     float3 L0 = float3(0.0f, 0.0f, 0.0f);
     for (; index < 4; index++)
     {

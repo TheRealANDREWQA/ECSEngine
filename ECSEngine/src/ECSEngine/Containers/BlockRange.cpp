@@ -32,8 +32,6 @@ namespace ECSEngine {
 				flag = horizontal_find_first(match);
 			}
 
-			unsigned int difference = 0xFFFFFFFF;
-			unsigned int closest_index = 0xFFFFFFFF;
 			if constexpr (assert_if_not_found) {
 				// checking if the start value is valid
 				ECS_ASSERT(flag != -1, "Attempting to free a block that was not allocated");
@@ -58,7 +56,7 @@ namespace ECSEngine {
 			for (i = 0; flag == -1 && i < m_free_block_count; i += temp.size()) {
 				section.load((const void*)(m_buffer + i));
 				match = section == temp;
-				precull_horizontal_find_first(match, flag);
+				PrecullHorizontalFindFirst(match, flag);
 			}
 
 			size_t next_block_index = i + flag - temp.size();
@@ -69,7 +67,7 @@ namespace ECSEngine {
 			for (i = 0; flag2 == -1 && i < m_free_block_count; i += temp.size()) {
 				section.load((const void*)(m_buffer + m_capacity + i));
 				match = section == temp;
-				precull_horizontal_find_first(match, flag2);
+				PrecullHorizontalFindFirst(match, flag2);
 			}
 
 			// previous block 

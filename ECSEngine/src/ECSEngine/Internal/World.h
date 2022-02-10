@@ -25,8 +25,6 @@ namespace ECSEngine {
 		unsigned int task_manager_max_dynamic_tasks = ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD;
 		MemoryManager* ECS_OMIT_FIELD_REFLECT(8) internal_allocator = nullptr;
 		EntityPool* ECS_OMIT_FIELD_REFLECT(8) entity_pool = nullptr;
-		unsigned int entity_manager_max_dynamic_archetype_count = ECS_ENTITY_MANAGER_MAX_DYNAMIC_ARCHETYPES;
-		unsigned int entity_manager_max_static_archetype_count = ECS_ENTITY_MANAGER_MAX_STATIC_ARCHETYPES;
 		unsigned int entity_pool_power_of_two;
 		unsigned int entity_pool_arena_count;
 		unsigned int entity_pool_block_count;

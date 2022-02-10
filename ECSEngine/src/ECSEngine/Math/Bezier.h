@@ -5,7 +5,7 @@
 
 namespace ECSEngine {
 
-	template<typename BasicType>
+	template<typename Ref>
 	struct BezierBase {
 		BezierBase() {}
 		BezierBase(BasicType _point1, BasicType _point2, BasicType _control1, BasicType _control2) : point1(_point1),

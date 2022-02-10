@@ -25,6 +25,8 @@ namespace ECSEngine {
 			Stream<float> values;
 
 			values.buffer = (float*)Allocate(allocator, component_count * accessor->count * sizeof(float));
+			ECS_ASSERT(values.buffer != nullptr);
+
 			values.size = accessor->count * component_count;
 			for (size_t index = 0; index < accessor->count; index++) {
 				*success &= cgltf_accessor_read_float(accessor, index, values.buffer + index * component_count, component_count);
@@ -50,7 +52,6 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------------------------------
 
-		// Consider ignoring the tangents
 		bool MeshFromAttribute(
 			GLTFMesh& mesh,
 			const cgltf_attribute* attribute,
@@ -64,6 +65,11 @@ namespace ECSEngine {
 			cgltf_attribute_type attribute_type = attribute->type;
 			const cgltf_accessor* accessor = attribute->data;
 			unsigned int component_count = 0;
+
+			// Ignore tangents
+			if (attribute_type == cgltf_attribute_type_tangent) {
+				return true;
+			}
 
 			bool is_valid = attribute_type != cgltf_attribute_type_invalid;
 
@@ -201,49 +207,6 @@ namespace ECSEngine {
 					joints.w = function::ClampMax(0u, joints.w);
 
 					mesh.skin_influences[index] = joints;
-				}
-				break;
-			}
-			case cgltf_attribute_type_tangent:
-			{
-				mesh.tangents = Stream<float4>(values.buffer, accessor_count);
-				float matrix[16];
-				cgltf_node_transform_world(nodes + current_nodex_index, matrix);
-
-				Matrix ecs_matrix(matrix);
-
-				Vector4 tolerance(0.000001f);
-				if (ecs_matrix != MatrixIdentity()) {
-					for (size_t index = 0; index < accessor_count; index++) {
-						Vector4 tangent(mesh.tangents[index]);
-						if (horizontal_and((SquareLength3(tangent) < tolerance))) {
-							tangent = VectorGlobals::RIGHT_4;
-							/*if (error_message != nullptr) {
-								ECS_FORMAT_STRING(*error_message, "Mesh tangent data is invalid. A tangent has a squared length smaller than the tolerance. Index is {0}", index);
-							}
-							return false;*/
-						}
-
-						// Transform the tangent
-						tangent = MatrixVectorMultiply(tangent, ecs_matrix);
-
-						tangent = Normalize3(tangent);
-						tangent.StorePartialConstant<3>(mesh.tangents.buffer + index);
-					}
-				}
-				else {
-					for (size_t index = 0; index < accessor_count; index++) {
-						Vector4 tangent(mesh.tangents[index]);
-						if (horizontal_and((SquareLength3(tangent) < tolerance))) {
-							tangent = VectorGlobals::RIGHT_4;
-							/*if (error_message != nullptr) {
-								ECS_FORMAT_STRING(*error_message, "Mesh tangent data is invalid. A tangent has a squared length smaller than the tolerance. Index is {0}", index);
-							}
-							return false;*/
-						}
-						tangent = Normalize3(tangent);
-						tangent.StorePartialConstant<3>(mesh.tangents.buffer + index);
-					}
 				}
 				break;
 			}
@@ -441,12 +404,6 @@ namespace ECSEngine {
 				// Invert the normals Z axis
 				for (size_t subindex = 0; subindex < mesh.normals.size; subindex++) {
 					mesh.normals[subindex].z = -mesh.normals[subindex].z;
-				}
-
-				// Invert the tangents Z axis
-				for (size_t subindex = 0; subindex < mesh.tangents.size; subindex++) {
-					mesh.tangents[subindex].z = -mesh.tangents[subindex].z;
-					mesh.tangents[subindex].w = -mesh.tangents[subindex].w;
 				}
 
 				// The winding order of the vertices must be changed
@@ -864,7 +821,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh)
+	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, unsigned int misc_flags)
 	{
 		Mesh mesh;
 
@@ -875,51 +832,52 @@ namespace ECSEngine {
 			mesh.name = nullptr;
 		}
 
+		D3D11_USAGE buffer_usage = D3D11_USAGE_IMMUTABLE;
 		// Positions
 		if (gltf_mesh.positions.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_POSITION;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.positions.size, gltf_mesh.positions.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.positions.size, gltf_mesh.positions.buffer, 
+				false, buffer_usage, 0, misc_flags);
 		}
 
 		// Normals
 		if (gltf_mesh.normals.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_NORMAL;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.normals.size, gltf_mesh.normals.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.normals.size, gltf_mesh.normals.buffer,
+				false, buffer_usage, 0, misc_flags);
 		}
 
 		// UVs
 		if (gltf_mesh.uvs.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_UV;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float2), gltf_mesh.uvs.size, gltf_mesh.uvs.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float2), gltf_mesh.uvs.size, gltf_mesh.uvs.buffer,
+				false, buffer_usage, 0, misc_flags);
 		}
 
 		// Vertex Colors
 		if (gltf_mesh.colors.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_COLOR;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(Color), gltf_mesh.colors.size, gltf_mesh.colors.buffer);
-		}
-
-		// Tangents
-		if (gltf_mesh.tangents.buffer != nullptr) {
-			mesh.mapping[mesh.mapping_count] = ECS_MESH_TANGENT;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float4), gltf_mesh.tangents.size, gltf_mesh.tangents.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(Color), gltf_mesh.colors.size, gltf_mesh.colors.buffer,
+				false, buffer_usage, 0, misc_flags);
 		}
 
 		// Bone weights
 		if (gltf_mesh.skin_weights.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_WEIGHT;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float4), gltf_mesh.skin_weights.size, gltf_mesh.skin_weights.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float4), gltf_mesh.skin_weights.size, gltf_mesh.skin_weights.buffer,
+				false, buffer_usage, 0, misc_flags);
 		}
 
 		// Bone influences
 		if (gltf_mesh.skin_influences.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_INFLUENCE;
-			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(uint4), gltf_mesh.skin_influences.size, gltf_mesh.skin_influences.buffer);
+			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(uint4), gltf_mesh.skin_influences.size, gltf_mesh.skin_influences.buffer,
+				false, buffer_usage, 0, misc_flags);
 		}
 
 		// Indices
 		if (gltf_mesh.indices.buffer != nullptr) {
-			mesh.index_buffer = graphics->CreateIndexBuffer(gltf_mesh.indices);
+			mesh.index_buffer = graphics->CreateIndexBuffer(sizeof(unsigned int), gltf_mesh.indices.size, gltf_mesh.indices.buffer, false, D3D11_USAGE_DEFAULT, 0, misc_flags);
 		}
 
 		return mesh;
@@ -927,9 +885,9 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count) {
+	void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, unsigned int misc_flags) {
 		for (size_t index = 0; index < count; index++) {
-			meshes[index] = GLTFMeshToMesh(graphics, gltf_meshes[index]);
+			meshes[index] = GLTFMeshToMesh(graphics, gltf_meshes[index], misc_flags);
 		}
 	}
 
@@ -941,7 +899,8 @@ namespace ECSEngine {
 		Submesh* submeshes,
 		unsigned int* submesh_material_index, 
 		size_t material_count, 
-		size_t count
+		size_t count,
+		unsigned int misc_flags
 	) {
 		constexpr size_t COUNT_MAX = 2048;
 
@@ -982,19 +941,18 @@ namespace ECSEngine {
 
 		// Create the aggregate mesh
 		
-		auto create_vertex_type = [&](unsigned int sizeof_type, ECS_MESH_INDEX index, unsigned char stream_byte_offset) {
-			mesh.mapping[mesh.mapping_count] = index;
+		auto create_vertex_type = [&](unsigned int sizeof_type, ECS_MESH_INDEX mapping_index, unsigned char stream_byte_offset) {
+			mesh.mapping[mesh.mapping_count] = mapping_index;
 			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof_type, total_vertex_buffer_count, {}, D3D11_USAGE_DEFAULT, 0);
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof_type, total_vertex_buffer_count, {}, D3D11_USAGE_DEFAULT, 0, misc_flags);
 			size_t vertex_buffer_offset = 0;
 
 			for (size_t index = 0; index < count; index++) {
 				void** stream_buffer = (void**)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset);
 				size_t* stream_size = (size_t*)function::OffsetPointer(&gltf_meshes[sorted_indices[index]], stream_byte_offset + sizeof(void*));
-				size_t converted_stream_size = *stream_size * sizeof_type;
 
 				// Create a staging buffer that can be copied to the main buffer
-				size_t buffer_size = converted_stream_size;
+				size_t buffer_size = *stream_size;
 				VertexBuffer current_buffer = graphics->CreateVertexBuffer(
 					sizeof_type,
 					buffer_size,
@@ -1028,11 +986,6 @@ namespace ECSEngine {
 			create_vertex_type(sizeof(Color), ECS_MESH_COLOR, offsetof(GLTFMesh, colors));
 		}
 
-		// Tangents
-		if (gltf_meshes[0].tangents.buffer != nullptr) {
-			create_vertex_type(sizeof(float3), ECS_MESH_TANGENT, offsetof(GLTFMesh, tangents));
-		}
-
 		// Bone weights
 		if (gltf_meshes[0].skin_weights.buffer != nullptr) {
 			create_vertex_type(sizeof(float4), ECS_MESH_BONE_WEIGHT, offsetof(GLTFMesh, skin_weights));
@@ -1046,7 +999,7 @@ namespace ECSEngine {
 		// Indices
 		if (gltf_meshes[0].indices.buffer != nullptr) {
 			// Create a main index buffer that is DEFAULT usage and then copy into it the smaller index buffers
-			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count);
+			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count, false, D3D11_USAGE_DEFAULT, 0, misc_flags);
 			size_t index_buffer_offset = 0;
 
 			for (size_t index = 0; index < count; index++) {

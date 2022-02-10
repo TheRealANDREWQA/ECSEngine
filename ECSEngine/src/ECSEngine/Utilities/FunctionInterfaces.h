@@ -109,6 +109,53 @@ namespace ECSEngine {
 		template<typename FloatingPoint, typename Stream>
 		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream);
 
+		template<typename CharacterType, typename ReturnType, typename Functor>
+		ReturnType ParseType(const CharacterType** characters, Stream<CharacterType> delimiters, Functor&& functor) {
+			Stream<CharacterType> stream_characters(*characters, 0);
+
+			CharacterType current_character = **characters;
+			bool continue_search = true;
+
+			auto not_delimiter = [delimiters](CharacterType character) {
+				for (size_t index = 0; index < delimiters.size; index++) {
+					if (delimiters[index] == character) {
+						return false;
+					}
+				}
+				return true;
+			};
+
+			continue_search = not_delimiter(current_character);
+			while (continue_search) {
+				current_character = **characters;
+				*characters++;
+				continue_search = not_delimiter(current_character);
+			}
+
+			stream_characters.size = *characters - stream_characters.buffer;
+			return functor(stream_characters);
+		}
+
+		template<typename Integer, typename CharacterType>
+		Integer ParseInteger(const CharacterType** characters, Stream<CharacterType> delimiters) {
+			return ParseType<CharacterType, Integer>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
+				return ConvertCharactersToInt<Integer>(stream_characters);
+			});
+		}
+
+		template<typename CharacterType>
+		ECSENGINE_API float ParseFloat(const CharacterType** characters, Stream<CharacterType> delimiters);
+
+		template<typename CharacterType>
+		ECSENGINE_API double ParseDouble(const CharacterType** characters, Stream<CharacterType> delimiters);
+
+		template<typename CharacterType>
+		ECSENGINE_API bool ParseBool(const CharacterType** characters, Stream<CharacterType> delimiters);
+
+		ECSENGINE_API void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8);
+
+		ECSENGINE_API Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
+
 		template<typename Allocator>
 		ECSENGINE_API void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8);
 
@@ -120,6 +167,12 @@ namespace ECSEngine {
 
 		template<typename Allocator>
 		ECSENGINE_API Stream<void> CopyTs(Allocator* allocator, Stream<void> data, size_t alignment = 8);
+
+		// It will copy the null termination character
+		ECSENGINE_API Stream<char> StringCopy(AllocatorPolymorphic allocator, const char* string);
+
+		// It will copy the null termination character
+		ECSENGINE_API Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string);
 
 		// It will copy the null termination character
 		template<typename Allocator>
@@ -137,6 +190,10 @@ namespace ECSEngine {
 		template<typename Allocator>
 		ECSENGINE_API Stream<char> StringCopyTs(Allocator* allocator, Stream<char> string);
 
+		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, const wchar_t* string);
+
+		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string);
+
 		// It will copy the null termination character
 		template<typename Allocator>
 		ECSENGINE_API Stream<wchar_t> StringCopy(Allocator* allocator, const wchar_t* string);
@@ -152,26 +209,6 @@ namespace ECSEngine {
 		// It will copy the null termination characters
 		template<typename Allocator>
 		ECSENGINE_API Stream<wchar_t> StringCopyTs(Allocator* allocator, Stream<wchar_t> string);
-
-		// Stream should contain as elements Stream<char> or CapacityStream<char>, Stream cannot be ResizableStream
-		// But can be easily converted into a normal Stream; returns the index at which the string was found
-		template<typename Stream>
-		ECSENGINE_API unsigned int IsStringInStream(const char* string, Stream stream);
-
-		// Stream should contain as elements Stream<char> or CapacityStream<char>, Stream cannot be ResizableStream
-		// But can be easily converted into a normal Stream; returns the index at which the string was found
-		template<typename StreamType>
-		ECSENGINE_API unsigned int IsStringInStream(containers::Stream<char> string, StreamType stream);
-
-		// Stream should contain as elements Stream<wchar_t> or CapacityStream<wchar_t>, Stream cannot be ResizableStream
-		// But can be easily converted into a normal Stream; returns the index at which the string was found
-		template<typename Stream>
-		ECSENGINE_API unsigned int IsStringInStream(const wchar_t* string, Stream stream);
-
-		// Stream should contain as elements Stream<wchar_t> or CapacityStream<wchar_t>, Stream cannot be ResizableStream
-		// But can be easily converted into a normal Stream; returns the index at which the string was found
-		template<typename StreamType>
-		ECSENGINE_API unsigned int IsStringInStream(containers::Stream<wchar_t> string, StreamType stream);
 
 		template<typename Stream>
 		ECSENGINE_API void MakeSequence(Stream stream);
