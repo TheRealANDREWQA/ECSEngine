@@ -1,12 +1,15 @@
 #pragma once
 #include "../Core.h"
 #include "../Utilities/Assert.h"
+#include "../Allocators/AllocatorPolymorphic.h"
 #include <stdint.h>
 #include <string.h>
 
-constexpr float ECS_RESIZABLE_STREAM_FACTOR = 1.5f;
+#define ECS_RESIZABLE_STREAM_FACTOR (1.5f)
 
 namespace ECSEngine {
+
+#define ECS_STACK_CAPACITY_STREAM(type, name, capacity) type _##name[capacity]; ECSEngine::containers::CapacityStream<type> name(_##name, 0, capacity);
 
 	namespace containers {
 
@@ -137,6 +140,13 @@ namespace ECSEngine {
 			void Initialize(Allocator* allocator, size_t _size) {
 				size_t memory_size = MemoryOf(_size);
 				void* allocation = allocator->Allocate(memory_size, alignof(T));
+				buffer = (T*)allocation;
+				size = _size;
+			}
+
+			void Initialize(AllocatorPolymorphic allocator, size_t _size) {
+				size_t memory_size = MemoryOf(_size);
+				void* allocation = Allocate(allocator, memory_size, alignof(T));
 				buffer = (T*)allocation;
 				size = _size;
 			}
@@ -339,29 +349,152 @@ namespace ECSEngine {
 				InitializeFromBuffer(allocation, _size, _capacity);
 			}
 
+			void Initialize(AllocatorPolymorphic allocator, unsigned int _size, unsigned int _capacity) {
+				size_t memory_size = MemoryOf(_capacity);
+				void* allocation = Allocate(allocator, memory_size, alignof(T));
+				InitializeFromBuffer(allocation, _size, _capacity);
+			}
+
 			T* buffer;
 			unsigned int size;
 			unsigned int capacity;
 		};
 
-		template<typename T, typename Allocator, bool zero_memory = false>
-		struct ResizableStream {
-			ResizableStream() : buffer(nullptr), allocator(nullptr), capacity(0), size(0) {}
-			ResizableStream(Allocator* _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
-				if (_capacity != 0) {
-					buffer = (T*)allocator->Allocate(sizeof(T) * _capacity, alignof(T));
+		template <>
+		struct ECSENGINE_API Stream<void>
+		{
+			Stream() : buffer(nullptr), size(0) {}
+			Stream(const void* _buffer, size_t _size) : buffer((void*)_buffer), size(_size) {}
 
-					if constexpr (zero_memory) {
-						memset(buffer, 0, sizeof(T) * _capacity);
-					}
+			template<typename T>
+			Stream(Stream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
+
+			template<typename T>
+			Stream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
+
+			Stream(const Stream& other) = default;
+			Stream<void>& operator = (const Stream<void>& other) = default;
+
+			void Add(Stream<void> other) {
+				memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
+				size += other.size;
+			}
+
+			// it will set the size
+			void Copy(const void* memory, unsigned long long memory_size) {
+				memcpy(buffer, memory, memory_size);
+				size = memory_size;
+			}
+
+			// it will not set the size
+			void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
+				memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
+			}
+
+			void CopyTo(void* memory) const {
+				memcpy(memory, buffer, size);
+			}
+
+			template<typename Allocator>
+			void Initialize(Allocator* allocator, size_t _size) {
+				buffer = allocator->Allocate(_size);
+				size = _size;
+			}
+
+			void Initialize(AllocatorPolymorphic allocator, size_t _size) {
+				buffer = Allocate(allocator, size);
+				size = _size;
+			}
+
+			void InitializeFromBuffer(uintptr_t& _buffer, size_t _size) {
+				buffer = (void*)_buffer;
+				size = _size;
+				_buffer += size;
+			}
+
+			void* buffer;
+			size_t size;
+		};
+
+		template<>
+		struct ECSENGINE_API CapacityStream<void>
+		{
+			CapacityStream() : buffer(nullptr), size(0), capacity(0) {}
+			CapacityStream(const void* _buffer, unsigned int _size, unsigned int _capacity) : buffer((void*)_buffer), size(_size), capacity(_capacity) {}
+
+			template<typename T>
+			CapacityStream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)), capacity(other.capacity * sizeof(T)) {}
+
+			CapacityStream(const CapacityStream& other) = default;
+			CapacityStream<void>& operator = (const CapacityStream<void>& other) = default;
+
+			void Add(Stream<void> other) {
+				ECS_ASSERT(size + other.size < capacity);
+				memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
+				size += other.size;
+			}
+
+			void Add(CapacityStream<void> other) {
+				ECS_ASSERT(size + other.size < capacity);
+				memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
+				size += other.size;
+			}
+
+			// it will set the size
+			void Copy(const void* memory, unsigned long long memory_size) {
+				ECS_ASSERT(memory_size <= capacity);
+				memcpy(buffer, memory, memory_size);
+				size = memory_size;
+			}
+
+			// it will not set the size
+			void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
+				memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
+			}
+
+			void CopyTo(void* memory) const {
+				memcpy(memory, buffer, size);
+			}
+
+			template<typename Allocator>
+			void Initialize(Allocator* allocator, unsigned int _capacity) {
+				buffer = allocator->Allocate(_capacity);
+				size = 0;
+				capacity = _capacity;
+			}
+
+			void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
+				buffer = Allocate(allocator, _capacity);
+				size = 0;
+				capacity = _capacity;
+			}
+
+			void InitializeFromBuffer(uintptr_t& _buffer, unsigned int _size, unsigned int _capacity) {
+				buffer = (void*)_buffer;
+				size = _size;
+				capacity = _capacity;
+			}
+
+			void* buffer;
+			unsigned int size;
+			unsigned int capacity;
+		};
+
+
+		template<typename T>
+		struct ResizableStream {
+			ResizableStream() : buffer(nullptr), allocator({nullptr}), capacity(0), size(0) {}
+			ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
+				if (_capacity != 0) {
+					buffer = (T*)Allocate(allocator, sizeof(T) * _capacity, alignof(T));
 				}
 				else {
 					buffer = nullptr;
 				}
 			}
 
-			ResizableStream(const ResizableStream<T, Allocator, zero_memory>& other) = default;
-			ResizableStream<T, Allocator, zero_memory>& operator = (const ResizableStream<T, Allocator, zero_memory>& other) = default;
+			ResizableStream(const ResizableStream& other) = default;
+			ResizableStream<T>& operator = (const ResizableStream<T>& other) = default;
 
 			unsigned int Add(T element) {
 				if (size == capacity) {
@@ -440,7 +573,7 @@ namespace ECSEngine {
 
 			void FreeBuffer() {
 				if (buffer != nullptr) {
-					allocator->Deallocate(buffer);
+					Deallocate(allocator, buffer);
 					buffer = nullptr;
 					size = 0;
 					capacity = 0;
@@ -483,31 +616,24 @@ namespace ECSEngine {
 			}
 
 			void Resize(unsigned int new_capacity) {
-				T* new_buffer = (T*)allocator->Allocate(new_capacity * sizeof(T), alignof(T));
+				T* new_buffer = (T*)Allocate(allocator, new_capacity * sizeof(T), alignof(T));
 				ECS_ASSERT(new_buffer != nullptr);
-
-				if constexpr (zero_memory) {
-					memset(new_buffer, 0, sizeof(T) * new_capacity);
-				}
 
 				memcpy(new_buffer, buffer, sizeof(T) * size);
 
 				if (buffer != nullptr)
-					allocator->Deallocate(buffer);
+					Deallocate(allocator, buffer);
 
 				buffer = new_buffer;
 				capacity = new_capacity;
 			}
 
 			void ResizeNoCopy(unsigned int new_capacity) {
-				T* new_buffer = (T*)allocator->Allocate(new_capacity * sizeof(T), alignof(T));
+				T* new_buffer = (T*)Allocate(allocator, new_capacity * sizeof(T), alignof(T));
 				ECS_ASSERT(new_buffer != nullptr);
 
-				if constexpr (zero_memory) {
-					memset(new_buffer, 0, sizeof(T) * new_capacity);
-				}
 				if (buffer != nullptr)
-					allocator->Deallocate(buffer);
+					Deallocate(allocator, buffer);
 
 				buffer = new_buffer;
 				capacity = new_capacity;
@@ -526,11 +652,11 @@ namespace ECSEngine {
 			}
 
 			void Trim() {
-				T* allocation = (T*)allocator->Allocate(sizeof(T) * size, alignof(T));
+				T* allocation = (T*)Allocate(allocator, sizeof(T) * size, alignof(T));
 				ECS_ASSERT(allocation != nullptr);
 
 				memcpy(allocation, buffer, sizeof(T) * size);
-				allocator->Deallocate(buffer);
+				Deallocate(allocator, buffer);
 				buffer = allocation;
 				capacity = size;
 			}
@@ -539,17 +665,21 @@ namespace ECSEngine {
 			void Trim(unsigned int additional_elements) {
 				if (additional_elements < capacity - size) {
 					unsigned int elements_to_copy = size + additional_elements;
-					T* allocation = (T*)allocator->Allocate(sizeof(T) * elements_to_copy, alignof(T));
+					T* allocation = (T*)Allocate(allocator, sizeof(T) * elements_to_copy, alignof(T));
 					ECS_ASSERT(allocation != nullptr);
 
-					if constexpr (zero_memory) {
-						memset(allocation + size, 0, sizeof(T) * additional_elements);
-					}
-
 					memcpy(allocation, buffer, elements_to_copy * sizeof(T));
-					allocator->Deallocate(buffer);
+					Deallocate(allocator, buffer);
 					buffer = allocation;
 					capacity = size + additional_elements;
+				}
+			}
+
+			// It will trim the container if the difference between the capacity and the current size is greater or equal to
+			// the threshold
+			void TrimThreshold(unsigned int threshold) {
+				if (capacity - size >= threshold) {
+					Trim();
 				}
 			}
 
@@ -565,7 +695,7 @@ namespace ECSEngine {
 				return sizeof(T) * number;
 			}
 
-			void Initialize(Allocator* _allocator, unsigned int _capacity) {
+			void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
 				allocator = _allocator;
 				if (_capacity > 0) {
 					ResizeNoCopy(_capacity);
@@ -578,232 +708,9 @@ namespace ECSEngine {
 			}
 
 			T* buffer;
-			Allocator* allocator;
 			unsigned int size;
 			unsigned int capacity;
-		};
-
-		template <>
-		struct ECSENGINE_API Stream<void>
-		{
-			Stream() : buffer(nullptr), size(0) {}
-			Stream(const void* _buffer, size_t _size) : buffer((void*)_buffer), size(_size) {}
-
-			template<typename T>
-			Stream(Stream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
-
-			template<typename T>
-			Stream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
-
-			Stream(const Stream& other) = default;
-			Stream<void>& operator = (const Stream<void>& other) = default;
-
-			void Add(Stream<void> other) {
-				memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-				size += other.size;
-			}
-
-			// it will set the size
-			void Copy(const void* memory, unsigned long long memory_size) {
-				memcpy(buffer, memory, memory_size);
-				size = memory_size;
-			}
-
-			// it will not set the size
-			void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
-				memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
-			}
-
-			void CopyTo(void* memory) const {
-				memcpy(memory, buffer, size);
-			}
-
-			template<typename Allocator>
-			void Initialize(Allocator* allocator, size_t _size) {
-				buffer = allocator->Allocate(_size);
-				size = _size;
-			}
-
-			void InitializeFromBuffer(uintptr_t& _buffer, size_t _size) {
-				buffer = (void*)_buffer;
-				size = _size;
-				_buffer += size;
-			}
-
-			void* buffer;
-			size_t size;
-		};
-
-		template<>
-		struct ECSENGINE_API CapacityStream<void>
-		{
-			CapacityStream() : buffer(nullptr), size(0), capacity(0) {}
-			CapacityStream(const void* _buffer, unsigned int _size, unsigned int _capacity) : buffer((void*)_buffer), size(_size), capacity(_capacity) {}
-
-			template<typename T>
-			CapacityStream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)), capacity(other.capacity * sizeof(T)) {}
-
-			CapacityStream(const CapacityStream& other) = default;
-			CapacityStream<void>& operator = (const CapacityStream<void>& other) = default;
-
-			void Add(Stream<void> other) {
-				ECS_ASSERT(size + other.size < capacity);
-				memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-				size += other.size;
-			}
-
-			void Add(CapacityStream<void> other) {
-				ECS_ASSERT(size + other.size < capacity);
-				memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-				size += other.size;
-			}
-
-			// it will set the size
-			void Copy(const void* memory, unsigned long long memory_size) {
-				ECS_ASSERT(memory_size <= capacity);
-				memcpy(buffer, memory, memory_size);
-				size = memory_size;
-			}
-
-			// it will not set the size
-			void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
-				memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
-			}
-
-			void CopyTo(void* memory) const {
-				memcpy(memory, buffer, size);
-			}
-
-			template<typename Allocator>
-			void Initialize(Allocator* allocator, unsigned int _capacity) {
-				buffer = allocator->Allocate(_capacity);
-				size = 0;
-				capacity = _capacity;
-			}
-
-			void InitializeFromBuffer(uintptr_t& _buffer, unsigned int _size, unsigned int _capacity) {
-				buffer = (void*)_buffer;
-				size = _size;
-				capacity = _capacity;
-			}
-
-			void* buffer;
-			unsigned int size;
-			unsigned int capacity;
-		};
-
-		template<typename T>
-		struct StableReferenceStream {
-			StableReferenceStream() {}
-			StableReferenceStream(void* buffer, unsigned int _capacity) {
-				InitializeFromBuffer(buffer, _capacity);
-			}
-
-			StableReferenceStream(const StableReferenceStream& other) = default;
-			StableReferenceStream<T>& operator = (const StableReferenceStream<T>& other) = default;
-
-			// returns a handle that can be used for the lifetime of the object to index it
-			unsigned int Add(T element) {
-				unsigned int remapping_value = remapping[size];
-				buffer[remapping_value] = element;
-				size++;
-				return remapping_value;
-			}
-
-			// returns a handle that can be used for the lifetime of the object to index it
-			unsigned int Add(const T* element) {
-				unsigned int remapping_value = remapping[size];
-				buffer[remapping_value] = *element;
-				size++;
-				return remapping_value;
-			}
-
-			// returns a handle that can be used for the lifetime of the object to index it
-			bool AddSafe(T element, unsigned int& handle_value) {
-				if (size == capacity) {
-					return false;
-				}
-				handle_value = Add(element);
-				return true;
-			}
-
-			unsigned int RemapValue(unsigned int index) const {
-				return remapping[index];
-			}
-
-			// it will reset the mapping
-			void Reset() {
-				size = 0;
-				for (unsigned int index = 0; index < capacity; index++) {
-					remapping[index] = index;
-				}
-			}
-
-			void Remove(unsigned int index) {
-				for (unsigned int copy_index = index + 1; copy_index < size; copy_index++) {
-					buffer[copy_index - 1] = buffer[copy_index];
-					remapping[copy_index]--;
-				}
-				size--;
-			}
-
-			void RemoveSwapBack(unsigned int index) {
-				size--;
-				buffer[remapping[index]] = buffer[size];
-				unsigned int index_remap = remapping[index];
-				remapping[index] = remapping[size];
-				remapping[size] = index_remap;
-			}
-
-			void Swap(unsigned int first, unsigned int second) {
-				T copy = buffer[remapping[first]];
-				buffer[remapping[first]] = buffer[remapping[second]];
-				buffer[remapping[second]] = copy;
-				unsigned int remap_value = remapping[first];
-				remapping[first] = remapping[second];
-				remapping[second] = remap_value;
-			}
-
-			ECS_INLINE const T& operator [](unsigned int index) const {
-				return buffer[index];
-			}
-
-			ECS_INLINE T& operator [](unsigned int index) {
-				return buffer[index];
-			}
-
-			static size_t MemoryOf(unsigned int count) {
-				return sizeof(T) * count;
-			}
-
-			void InitializeFromBuffer(void* _buffer, unsigned int _capacity) {
-				buffer = (T*)_buffer;
-				capacity = _capacity;
-				uintptr_t ptr = (uintptr_t)_buffer;
-				ptr += sizeof(T) * capacity;
-				remapping = (unsigned int*)ptr;
-				for (size_t index = 0; index < capacity; index++) {
-					remapping[index] = index;
-				}
-				size = 0;
-			}
-
-			void InitializeFromBuffer(uintptr_t& _buffer, unsigned int _capacity) {
-				InitializeFromBuffer((void*)buffer, _capacity);
-				buffer += MemoryOf(_capacity);
-			}
-
-			template<typename Allocator>
-			void Initialize(Allocator* allocator, unsigned int _capacity) {
-				size_t memory_size = MemoryOf(_capacity);
-				void* allocation = allocator->Allocate(memory_size, 8);
-				InitializeFromBuffer(allocation, _capacity);
-			}
-
-			T* buffer;
-			unsigned int* remapping;
-			unsigned int size;
-			unsigned int capacity;
+			AllocatorPolymorphic allocator;
 		};
 
 	}

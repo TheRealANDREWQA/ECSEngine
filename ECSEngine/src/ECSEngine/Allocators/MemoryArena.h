@@ -1,6 +1,5 @@
 #pragma once
 #include "../Core.h"
-#include "../Containers/Stream.h"
 #include "../Internal/Multithreading/ConcurrentPrimitives.h"
 #include "MemoryManager.h"
 
@@ -8,10 +7,14 @@
 
 namespace ECSEngine {
 
-	class ECSENGINE_API MemoryArena
+	// Stream and Resizable stream are not used here because they will create a cycle with AllocatorPolymorphic
+	// which is included in Stream.h
+
+
+
+	struct ECSENGINE_API MemoryArena
 	{
-		friend class ResizableMemoryArena;
-	public:
+	//public:
 		MemoryArena();
 		// arena_buffer is the memory to hold the multipool allocators, should be determined with MemoryOf
 		MemoryArena(
@@ -38,16 +41,17 @@ namespace ECSEngine {
 
 		static size_t MemoryOf(size_t allocator_count, size_t blocks_per_allocator);
 
-	private:
-		containers::Stream<MultipoolAllocator> m_allocators;
+	//private:
+		MultipoolAllocator* m_allocators;
+		size_t m_allocator_count;
 		void* m_initial_buffer;
 		unsigned int m_size_per_allocator;
 		unsigned int m_current_index;
 		SpinLock m_lock;
 	};
 
-	class ECSENGINE_API ResizableMemoryArena {
-	public:
+	struct ECSENGINE_API ResizableMemoryArena {
+	//public:
 		ResizableMemoryArena();
 		ResizableMemoryArena(
 			GlobalMemoryManager* backup, 
@@ -77,9 +81,11 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 
-	private:
+	//private:
 		GlobalMemoryManager* m_backup;
-		containers::ResizableStream<MemoryArena, GlobalMemoryManager> m_arenas;
+		MemoryArena* m_arenas;
+		unsigned int m_arena_size;
+		unsigned int m_arena_capacity;
 		SpinLock m_lock;
 		unsigned int m_new_arena_capacity;
 		unsigned int m_new_allocator_count;

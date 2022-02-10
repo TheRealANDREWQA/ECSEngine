@@ -199,8 +199,11 @@
     <ClInclude Include="src\ECSEngine\ApplicationUtilities.h" />
     <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\Deck.h" />
+    <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
-    <ClInclude Include="src\ECSEngine\GLTFLoader\GLTFLoader.h" />
+    <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
+    <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
@@ -210,6 +213,7 @@
     <ClInclude Include="src\ECSEngine\Math\Transform.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompression.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Compression\TextureCompressionTypes.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\DirectXTexHelpers.h" />
     <ClInclude Include="src\ECSEngine\Rendering\PBRMaps.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.h" />
@@ -232,10 +236,16 @@
     <ClInclude Include="src\ECSEngine\Tools\UI\UIResourcePaths.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIStructures.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UISystem.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeserializeTable.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
@@ -292,17 +302,15 @@
     <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\Reflection.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\IndexSerialization.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Serialization.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeMultisection.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializeSection.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeSection.h" />
     <ClInclude Include="src\Includes\ECSEngineWorld.h" />
     <ClInclude Include="src\Includes\EntryPoint.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Timer.h" />
     <ClInclude Include="src\Includes\ecspch.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stream.h" />
-    <ClInclude Include="src\ECSEngine\Internal\StaticArchetypeBase.h" />
     <ClInclude Include="src\ECSEngine\Internal\System\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\World.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskManager.h" />
@@ -312,18 +320,22 @@
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
     <ClCompile Include="src\ECSEngine\ApplicationUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\DataPointer.cpp" />
-    <ClCompile Include="src\ECSEngine\GLTFLoader\cgtlf.c">
+    <ClCompile Include="src\ECSEngine\Containers\HashTable.cpp" />
+    <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="src\ECSEngine\GLTFLoader\GLTFLoader.cpp" />
+    <ClCompile Include="src\ECSEngine\GLTF\GLTFLoader.cpp" />
+    <ClCompile Include="src\ECSEngine\GLTF\GLTFThumbnail.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Archetype.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\ResourceManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\World.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\DirectXTexHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\PBRMaps.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.cpp" />
@@ -344,6 +356,7 @@
     <ClCompile Include="src\ECSEngine\Tools\UI\UIStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UISystem.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
@@ -369,16 +382,18 @@
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\Reflection.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\IndexSerialization.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Serialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeserializeTable.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeMultisection.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializeSection.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeSection.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp" />
     <ClCompile Include="src\Includes\ecspch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="src\ECSEngine\Internal\StaticArchetypeBase.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\System\SystemManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskManager.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
@@ -453,6 +468,11 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\GLTFThumbnail.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Pixel\PBR.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
@@ -518,6 +538,11 @@
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
+    </FxCompile>
+    <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\GLTFThumbnail.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\PBR.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>

@@ -110,8 +110,8 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	MiscellaneousBarSetDescriptor(descriptor, editor_state, stack_memory);
 	
 	descriptor.initial_position_x = -1.0f;
-	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y - ECS_TOOLS_UI_ONE_PIXEL_Y;
-	descriptor.initial_size_x = 2.0f - ui_system->m_descriptors.dockspaces.border_size;
+	descriptor.initial_position_y = -1.0f + TOOLBAR_SIZE_Y;
+	descriptor.initial_size_x = 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X;
 	descriptor.initial_size_y = MISCELLANEOUS_BAR_SIZE_Y;
 	descriptor.window_data = nullptr;
 	descriptor.window_data_size = 0;
@@ -128,7 +128,6 @@ void DeferredSystemClear(ActionData* action_data) {
 	ResetHubData((EditorState*)action_data->data);
 	system->Clear();
 	Hub((EditorState*)action_data->data);
-	system->PopFrameHandler();
 };
 
 void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
@@ -302,7 +301,7 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 
 	descriptor.initial_position_x = -1.0f;
 	descriptor.initial_position_y = -1.0f;
-	descriptor.initial_size_x = 2.0f - ui_system->m_descriptors.dockspaces.border_size;
+	descriptor.initial_size_x = 2.0f - ECS_TOOLS_UI_ONE_PIXEL_X;
 	descriptor.initial_size_y = TOOLBAR_SIZE_Y;
 
 	ToolbarPlaceholderData data;

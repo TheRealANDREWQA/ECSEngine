@@ -11,16 +11,16 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void ThreadWrapperNone(unsigned int thread_id, World* ECS_RESTRICT world, ThreadFunction function, void* ECS_RESTRICT data, void* ECS_RESTRICT wrapper_data) {
-		function(thread_id, world, data);
+	ECS_THREAD_WRAPPER_TASK(ThreadWrapperNone) {
+		function(thread_id, world, _data);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void ThreadWrapperCountTasks(unsigned int thread_id, World* ECS_RESTRICT _world, ThreadFunction function, void* ECS_RESTRICT data, void* ECS_RESTRICT _wrapper_data) {
+	ECS_THREAD_WRAPPER_TASK(ThreadWrapperCountTasks) {
 		std::atomic<unsigned int>* wrapper_data = (std::atomic<unsigned int>*)_wrapper_data;
 		wrapper_data->fetch_add(1);
-		function(thread_id, _world, data);
+		function(thread_id, world, _data);
 		wrapper_data->fetch_sub(1);
 	}
 
@@ -93,8 +93,6 @@ namespace ECSEngine {
 		, m_dynamic_wrapper_mode(TaskManagerWrapper::None), m_dynamic_wrapper(ThreadWrapperNone), m_dynamic_wrapper_data(nullptr), m_dynamic_wrapper_data_size(0)
 #endif
 	{
-		void* task_allocation = memory_manager->Allocate(ECS_TASK_MANAGER_ALLOCATOR_CAPACITY);
-		m_allocator = TaskAllocator(task_allocation, ECS_TASK_MANAGER_ALLOCATOR_CAPACITY);
 		size_t total_memory = 0;
 		
 		// dynamic queue; adding a cache line in order to prevent cache line bouncing when a thread is accessing its queue
@@ -151,7 +149,7 @@ namespace ECSEngine {
 			m_events[index].Reset();
 		}
 
-		m_tasks = ResizableStream<ThreadTask, MemoryManager>(memory_manager, 0);
+		m_tasks = ResizableStream<ThreadTask>(GetAllocatorPolymorphic(memory_manager), 0);
 
 		// Now the thread local allocators
 		const size_t linear_allocator_cache_lines = (sizeof(LinearAllocator) - 1) / ECS_CACHE_LINE_SIZE;
@@ -182,10 +180,10 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddTask(ThreadTask task, size_t task_data_size) {
-		if (task_data_size > 0) {
-			void* allocation = m_tasks.allocator->Allocate(task_data_size);
-			memcpy(allocation, task.data, task_data_size);
+	void TaskManager::AddTask(ThreadTask task) {
+		if (task.data_size > 0) {
+			void* allocation = Allocate(m_tasks.allocator, task.data_size);
+			memcpy(allocation, task.data, task.data_size);
 			task.data = allocation;
 		}
 #ifdef ECS_THREAD_TASK_NAME
@@ -198,8 +196,8 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	unsigned int TaskManager::AddDynamicTask(ThreadTask task, size_t task_data_size) {
-		AddDynamicTaskWithAffinity(task, m_last_thread_index, task_data_size);
+	unsigned int TaskManager::AddDynamicTask(ThreadTask task) {
+		AddDynamicTaskWithAffinity(task, m_last_thread_index);
 		unsigned int thread_index = m_last_thread_index;
 		m_last_thread_index = function::Select(m_last_thread_index == m_thread_queue.size - 1, (unsigned int)0, m_last_thread_index + 1);
 		return thread_index;
@@ -207,19 +205,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	unsigned int TaskManager::AddDynamicTaskAndWake(ThreadTask task, size_t task_data_size)
+	unsigned int TaskManager::AddDynamicTaskAndWake(ThreadTask task)
 	{
-		unsigned int thread_index = AddDynamicTask(task, task_data_size);
+		unsigned int thread_index = AddDynamicTask(task);
 		WakeThread(thread_index);
 		return thread_index;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
-		if (task_data_size > 0) {
-			void* allocation = m_allocator.Allocate(task_data_size);
-			memcpy(allocation, task.data, task_data_size);
+	void TaskManager::AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id) {
+		if (task.data_size > 0) {
+			void* allocation = m_thread_memory_managers[thread_id]->Allocate(task.data_size);
+			memcpy(allocation, task.data, task.data_size);
 			task.data = allocation;
 		}
 #ifdef ECS_THREAD_TASK_NAME
@@ -232,8 +230,8 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size) {
-		AddDynamicTaskWithAffinity(task, thread_id, task_data_size);
+	void TaskManager::AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id) {
+		AddDynamicTaskWithAffinity(task, thread_id);
 		WakeThread(thread_id);
 	}
 
@@ -279,10 +277,11 @@ namespace ECSEngine {
 	void TaskManager::CreateThreads() {
 		size_t thread_count = m_thread_queue.size;
 		for (size_t index = 0; index < thread_count; index++) {
-			std::thread([=]() {
+			auto thread = std::thread([=]() {
 				ThreadProcedure(this, index);
-			}).detach();
-			//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			});
+
+			thread.detach();
 		}
 	}
 
@@ -357,13 +356,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::ResetTaskAllocator()
-	{
-		m_allocator.Clear();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	void TaskManager::ResetDynamicQueues() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
 			ResetDynamicQueue(index);
@@ -375,7 +367,7 @@ namespace ECSEngine {
 	void TaskManager::SetTask(ThreadTask task, unsigned int index, size_t task_data_size) {
 		ECS_ASSERT(m_tasks.size < m_tasks.capacity);
 		if (task_data_size > 0) {
-			void* allocation = m_tasks.allocator->Allocate(task_data_size);
+			void* allocation = Allocate(m_tasks.allocator, task_data_size);
 			memcpy(allocation, task.data, task_data_size);
 			task.data = allocation;
 		}
@@ -470,12 +462,16 @@ namespace ECSEngine {
 		while (task_manager->GetThreadTaskIndex(thread_id) != ECS_END_THREAD) {
 			ThreadTask task; 
 			if (thread_queue->Pop(task)) {
-				//__debugbreak();
 #ifdef ECS_TASK_MANAGER_WRAPPER
 				task_manager->m_dynamic_wrapper(thread_id, task_manager->m_world, task.function, task.data, task_manager->m_dynamic_wrapper_data);
 #ifdef ECS_THREAD_TASK_NAME
 				if (task.name != nullptr) {
-					task_manager->m_tasks.allocator->Deallocate_ts(task.name);
+					DeallocateTs(task_manager->m_tasks.allocator.allocator, task_manager->m_tasks.allocator.allocator_type, task.name);
+				}
+
+				// Deallocate the task data if allocated from the thread allocator
+				if (task.data_size > 0) {
+					task_manager->m_thread_memory_managers[thread_id]->Deallocate(task.data);
 				}
 #endif
 #else

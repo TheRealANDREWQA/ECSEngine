@@ -17,7 +17,7 @@ namespace ECSEngine {
 #pragma region Alphabet and character type
 
 	// Helper Visualing enum
-	enum class ECSENGINE_API AlphabetIndex : unsigned char
+	enum class AlphabetIndex : unsigned char
 	{
 		ExclamationMark = 0x00,
 		Quotes = 0x01,
@@ -118,7 +118,7 @@ namespace ECSEngine {
 		Unknown = 0x60
 	};
 
-	enum class ECSENGINE_API CharacterType : unsigned char {
+	enum class CharacterType : unsigned char {
 		CapitalLetter,
 		LowercaseLetter,
 		Digit,

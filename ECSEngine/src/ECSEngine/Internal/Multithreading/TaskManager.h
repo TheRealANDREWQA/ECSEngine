@@ -56,21 +56,21 @@ namespace ECSEngine {
 		TaskManager(const TaskManager& other) = default;
 		TaskManager& operator = (const TaskManager& other) = default;
 
-		void AddTask(ThreadTask task, size_t task_data_size = 0);
+		void AddTask(ThreadTask task);
 
 		// it will add that task to the next thread after the last one used and returns the index of the 
 		// thread that is executing the task
-		unsigned int AddDynamicTask(ThreadTask task, size_t task_data_size = 0);
+		unsigned int AddDynamicTask(ThreadTask task);
 
 		// it will add that task to the next thread after the last one used and returns the index of the
 		// thread that is executing the task
-		unsigned int AddDynamicTaskAndWake(ThreadTask task, size_t task_data_size = 0);
+		unsigned int AddDynamicTaskAndWake(ThreadTask task);
 
 		// does not affect last thread id used
-		void AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size = 0);
+		void AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id);
 
 		// does not affect last thread id used
-		void AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id, size_t task_data_size = 0);
+		void AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id);
 
 		void ChangeStaticWrapperMode(TaskManagerWrapper wrapper_mode, void* wrapper_data = nullptr, size_t wrapper_data_size = 0, ThreadFunctionWrapper custom_function = nullptr);
 
@@ -108,8 +108,6 @@ namespace ECSEngine {
 
 		void ResetDynamicQueue(unsigned int thread_id);
 
-		void ResetTaskAllocator();
-
 		// Sets a specific task, should only be used in initialization
 		void SetTask(ThreadTask task, unsigned int index, size_t task_data_size = 0);
 
@@ -135,11 +133,10 @@ namespace ECSEngine {
 	//private:
 		World* m_world;
 		Stream<ThreadQueue*> m_thread_queue;
-		ResizableStream<ThreadTask, MemoryManager> m_tasks;
+		ResizableStream<ThreadTask> m_tasks;
 		std::atomic<int>** m_thread_task_index;
 		ConditionVariable* m_events;
 		Timer m_timer;
-		TaskAllocator m_allocator;
 		unsigned int m_last_thread_index;
 		LinearAllocator** m_thread_linear_allocators;
 		MemoryManager** m_thread_memory_managers;

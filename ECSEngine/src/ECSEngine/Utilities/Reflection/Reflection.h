@@ -8,6 +8,7 @@
 #include "../../Internal/InternalStructures.h"
 #include "../../Containers/HashTable.h"
 #include "../../Containers/AtomicStream.h"
+#include "ReflectionTypes.h"
 
 namespace ECSEngine {
 
@@ -17,131 +18,15 @@ namespace ECSEngine {
 
 		ECS_CONTAINERS;
 
-		enum class ECSENGINE_API ReflectionBasicFieldType : unsigned char {
-			Int8,
-			UInt8,
-			Int16,
-			UInt16,
-			Int32,
-			UInt32,
-			Int64,
-			UInt64,
-			Wchar_t,
-			Float,
-			Double,
-			Bool,
-			Enum,
-			Char2,
-			UChar2,
-			Short2,
-			UShort2,
-			Int2,
-			UInt2,
-			Long2,
-			ULong2,
-			Char3,
-			UChar3,
-			Short3,
-			UShort3,
-			Int3,
-			UInt3,
-			Long3,
-			ULong3,
-			Char4,
-			UChar4,
-			Short4,
-			UShort4,
-			Int4,
-			UInt4,
-			Long4,
-			ULong4,
-			Float2,
-			Float3,
-			Float4,
-			Double2,
-			Double3,
-			Double4,
-			Bool2,
-			Bool3,
-			Bool4,
-			UserDefined,
-			Unknown
-		};
-
-		// The extended type indicates whether or not this is a stream/pointer/embedded array
-		enum class ECSENGINE_API ReflectionStreamFieldType : unsigned char {
-			Basic,
-			Pointer,
-			BasicTypeArray,
-			Stream,
-			CapacityStream,
-			ResizableStream,
-			Unknown
-		};
-
-		struct ECSENGINE_API ReflectionFieldInfo {
-			ReflectionFieldInfo() {}
-			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionStreamFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
-				: stream_type(_extended_type), basic_type(_basic_type), byte_size(_byte_size), basic_type_count(_basic_type_count) {}
-
-			ReflectionFieldInfo(const ReflectionFieldInfo& other) = default;
-			ReflectionFieldInfo& operator = (const ReflectionFieldInfo& other) = default;
-
-			ReflectionStreamFieldType stream_type;
-			ReflectionBasicFieldType basic_type;
-			unsigned short basic_type_count;
-			unsigned short additional_flags;
-			unsigned short byte_size;
-			unsigned short pointer_offset;
-		};
-
-		struct ECSENGINE_API ReflectionField {
-			const char* name;
-			const char* definition;
-			ReflectionFieldInfo info;
-		};
-
-		bool ECSENGINE_API IsTypeCharacter(char character);
-
-		struct ECSENGINE_API ReflectionType {
-			const char* name;
-			containers::Stream<ReflectionField> fields;
-			unsigned int folder_hierarchy_index;
-		};
-
-		struct ECSENGINE_API ReflectionEnum {
-			const char* name;
-			Stream<const char*> fields;
-			unsigned int folder_hierarchy_index;
-		};
-
-		struct ECSENGINE_API ReflectionFilteredFiles {
-			containers::ResizableStream<const wchar_t*, MemoryManager> files;
-			containers::Stream<const wchar_t*> extensions;
-			const char* filter_name;
-		};
-
 		using ReflectionHash = HashFunctionMultiplyString;
 		using ReflectionFieldTable = containers::HashTable<ReflectionFieldInfo, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 		using ReflectionTypeTable = containers::HashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 		using ReflectionEnumTable = containers::HashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 
-		constexpr size_t max_type_count = 1024;
-		constexpr size_t max_enum_count = 128;
+		constexpr size_t ECS_REFLECTION_MAX_TYPE_COUNT = 128;
+		constexpr size_t ECS_REFLECTION_MAX_ENUM_COUNT = 32;
 
-		struct ECSENGINE_API ReflectionManagerParseStructuresThreadTaskData {
-			CapacityStream<char> thread_memory;
-			containers::Stream<const wchar_t*> paths;
-			containers::CapacityStream<ReflectionType> types;
-			containers::CapacityStream<ReflectionEnum> enums;
-			const ReflectionFieldTable* field_table;
-			CapacityStream<char>* error_message;
-			SpinLock error_message_lock;
-			size_t total_memory;
-			ConditionVariable* condition_variable;
-			void* allocated_buffer;
-			bool success;
-		};
+		struct ReflectionManagerParseStructuresThreadTaskData;
 
 		struct ECSENGINE_API ReflectionManager {
 			struct FolderHierarchy {
@@ -149,7 +34,7 @@ namespace ECSEngine {
 				const void* allocated_buffer;
 			};
 
-			ReflectionManager(MemoryManager* allocator, size_t type_count = max_type_count, size_t enum_count = max_enum_count);
+			ReflectionManager(MemoryManager* allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
 
 			ReflectionManager(const ReflectionManager& other) = default;
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
@@ -223,24 +108,12 @@ namespace ECSEngine {
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
 			ReflectionFieldTable field_table;
-			containers::ResizableStream<FolderHierarchy, MemoryManager> folders;
+			containers::ResizableStream<FolderHierarchy> folders;
 		};
 
-		struct ECSENGINE_API ReflectionManagerHasReflectStructuresThreadTaskData {
-			ReflectionManager* reflection_manager;
-			Stream<const wchar_t*> files;
-			unsigned int folder_index;
-			unsigned int starting_path_index;
-			unsigned int ending_path_index;
-			containers::AtomicStream<unsigned int>* valid_paths;
-			Semaphore* semaphore;
-		};
+		ECSENGINE_API bool IsTypeCharacter(char character);
 
 		ECSENGINE_API size_t PtrDifference(const void* ptr1, const void* ptr2);
-
-		ECSENGINE_API void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* data);
-
-		ECSENGINE_API void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* data);
 
 		ECSENGINE_API void AddEnumDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,
@@ -340,6 +213,17 @@ namespace ECSEngine {
 		ECSENGINE_API bool IsIntegralMultiComponent(ReflectionBasicFieldType type);
 
 		ECSENGINE_API unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type);
+
+		ECSENGINE_API void* GetReflectionFieldStreamBuffer(ReflectionFieldInfo info, const void* data);
+
+		ECSENGINE_API size_t GetReflectionFieldStreamSize(ReflectionFieldInfo info, const void* data);
+
+		// The size of the void stream is that of the elements, not that of the byte size of the elements
+		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoid(ReflectionFieldInfo info, const void* data);
+
+		ECSENGINE_API size_t GetReflectionFieldStreamElementByteSize(ReflectionFieldInfo info);
+
+		ECSENGINE_API unsigned char GetReflectionFieldPointerIndirection(ReflectionFieldInfo info);
 
 		inline bool IsBoolBasicType(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool || type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 

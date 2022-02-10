@@ -526,7 +526,7 @@ namespace ECSEngine {
 			*ptr_short = (unsigned char)window_indices.size;
 			ptr += sizeof(unsigned char);
 
-			ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
+			//ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
 			memcpy((void*)ptr, window_indices.buffer, sizeof(unsigned short) * window_indices.size);
 			ptr += sizeof(unsigned short) * window_indices.size;
 			return ptr - (uintptr_t)buffer;
@@ -539,7 +539,7 @@ namespace ECSEngine {
 			size = sizeof(float) + sizeof(bool) * 4 + sizeof(unsigned char);
 			size += sizeof(unsigned char);
 
-			ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
+			//ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
 			size += sizeof(unsigned short) * window_indices.size;
 			return size;
 		}
@@ -553,7 +553,7 @@ namespace ECSEngine {
 			window_indices.size = *ptr_window_indices_count;
 
 			ptr += sizeof(unsigned char);
-			ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
+			//ECS_ASSERT(window_indices.size > 0, "No windows to serialize");
 			memcpy(window_indices.buffer, (const void*)ptr, sizeof(unsigned short) * window_indices.size);
 			ptr += sizeof(unsigned short) * window_indices.size;
 		
@@ -656,7 +656,7 @@ namespace ECSEngine {
 			// descriptors
 			for (size_t index = 0; index < (unsigned int)UIWindowDrawerDescriptorIndex::Count; index++) {
 				if (descriptors->configured[index]) {
-					memcpy((void*)buffer, descriptor_ptrs[index], descriptor_sizes[index]);
+					memcpy((void*)ptr, descriptor_ptrs[index], descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];
 				}
 			}

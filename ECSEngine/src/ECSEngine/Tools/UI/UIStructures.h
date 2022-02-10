@@ -24,18 +24,8 @@ namespace ECSEngine {
 		using UIToolsAllocator = ECSEngine::ResizableMemoryArena;
 		using UIHash = ECSEngine::HashFunctionMultiplyString;
 
-#ifdef ECS_TOOLS_UI_MEMORY_ARENA
-		template<typename T, bool zero_memory = false>
-		using UIDynamicStream = ResizableStream<T, MemoryArena, zero_memory>;
-#else
-#ifdef ECS_TOOLS_UI_RESIZABLE_MEMORY_ARENA
-		template<typename T, bool zero_memory = false>
-		using UIDynamicStream = ResizableStream<T, ResizableMemoryArena, zero_memory>;
-#else
-		template<typename T, bool zero_memory = false>
-		using UIDynamicStream = ResizableStream<T, MemoryManager, zero_memory>;
-#endif
-#endif
+		template<typename T>
+		using UIDynamicStream = ResizableStream<T>;
 
 		enum class DockspaceType : unsigned char {
 			Horizontal,
@@ -80,7 +70,7 @@ namespace ECSEngine {
 			const HID::MouseTracker* mouse_tracker;
 			const HID::KeyboardTracker* keyboard_tracker;
 			HID::Keyboard* keyboard;
-			const HID::MouseState* mouse;
+			HID::Mouse* mouse;
 			unsigned int thread_id;
 		};
 
@@ -356,7 +346,7 @@ namespace ECSEngine {
 			void Release(Graphics* graphics);
 
 			CapacityStream<VertexBuffer> buffers;
-			CapacityStream<UIDynamicStream<UISpriteTexture, true>> sprite_textures;
+			CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures;
 			ConstantBuffer region_viewport_info;
 			UIDynamicStream<unsigned int> sprite_cluster_subtreams;
 		};

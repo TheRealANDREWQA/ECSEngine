@@ -1173,6 +1173,27 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			void SpriteRectangle(
+				size_t configuration,
+				const UIDrawConfig& config,
+				ResourceView view,
+				Color color = ECS_COLOR_WHITE,
+				float2 top_left_uv = { 0.0f, 0.0f },
+				float2 bottom_right_uv = { 1.0f, 1.0f }
+			);
+
+			void SpriteRectangle(
+				size_t configuration,
+				float2 position,
+				float2 scale,
+				ResourceView view,
+				Color color = ECS_COLOR_WHITE,
+				float2 top_left_uv = { 0.0f, 0.0f },
+				float2 bottom_right_uv = { 1.0f, 1.0f }
+			);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void VertexColorRectangle(
 				size_t configuration,
 				float2 position,
@@ -2807,6 +2828,10 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float2 GetRegionScale() const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			float2 GetRegionRenderOffset() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

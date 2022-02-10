@@ -7,9 +7,9 @@ namespace ECSEngine {
 	namespace containers {
 
 		// Miscellaneous is used as the exponent for the power of two range selector
-		template<typename T, typename Allocator, typename RangeSelector>
+		template<typename T, typename RangeSelector>
 		struct Deck {
-			Deck() : buffers(nullptr, 0), chunk_size(0), miscellaneous(0) {}
+			Deck() : buffers({ nullptr }, 0), chunk_size(0), miscellaneous(0) {}
 			Deck(
 				const void* _buffers, 
 				size_t _buffers_capacity,
@@ -25,13 +25,13 @@ namespace ECSEngine {
 				if (chunks_with_elements.size == 0) {
 					// The deck is completely full, need to reallocate the buffer of buffers and the chunks with elements
 					if (buffers.size == buffers.capacity) {
-						buffers.allocator->Deallocate(chunks_with_elements.buffer);
+						Deallocate(buffers.allocator, chunks_with_elements.buffer);
 						buffers.Resize((size_t)((float)buffers.capacity * ECS_RESIZABLE_STREAM_FACTOR + 1.0f));
 						chunks_with_elements.Initialize(buffers.allocator, buffers.capacity);
 					}
 
 					// A new chunk must be allocated
-					void* chunk_allocation = buffers.allocator->Allocate(sizeof(T) * chunk_size);
+					void* chunk_allocation = Allocate(buffers.allocator, sizeof(T) * chunk_size);
 					buffers[buffers.size] = { chunk_allocation, 0, (unsigned int)chunk_size };
 					chunks_with_elements.Add(buffers.size);
 					buffers.size++;
@@ -86,7 +86,8 @@ namespace ECSEngine {
 				}
 
 				for (size_t index = buffers.size; index < buffers.size + count; index++) {
-					buffers[index].Initialize(buffers.allocator, 0, chunk_size);
+					void* allocation = Allocate(buffers.allocator, buffers[index].MemoryOf(chunk_size));
+					buffers[index].InitializeFromBuffer(allocation, 0, chunk_size);
 					chunks_with_elements.Add(index);
 				}
 				buffers.size += count;
@@ -198,9 +199,9 @@ namespace ECSEngine {
 			// It will set the capacity to 0
 			void FreeChunks() {
 				for (size_t index = 0; index < buffers.size; index++) {
-					buffers.allocator->Deallocate(buffers[index].buffer);
+					Deallocate(buffers.allocator, buffers[index].buffer);
 				}
-				buffers.allocator->Deallocate(chunks_with_elements.buffer);
+				Deallocate(buffers.allocator, chunks_with_elements.buffer);
 				buffers.FreeBuffer();
 			}
 
@@ -263,8 +264,8 @@ namespace ECSEngine {
 					}
 
 					buffers.Resize(new_chunk_count);
-					buffers.allocator->Deallocate(chunks_with_elements.buffer);
-					chunks_with_elements = { buffers.allocator->Allocate(sizeof(unsigned int) * new_chunk_count), new_chunk_count };
+					Deallocate(buffers.allocator, chunks_with_elements.buffer);
+					chunks_with_elements = { Allocate(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
 					// Copy the old counts
 					for (size_t index = 0; index < old_count; index++) {
 						chunks_with_elements[index] = old_counts[index];
@@ -284,14 +285,14 @@ namespace ECSEngine {
 			void ResizeNoCopy(size_t new_chunk_count) {
 				// Deallocate every chunk
 				for (size_t index = 0; index < buffers.size; index++) {
-					buffers.allocator->Deallocate(buffers[index].buffer);
+					Deallocate(buffers.allocator, buffers[index].buffer);
 				}
 
 				// Deallocate the available chunks
-				buffers.allocator->Deallocate(chunks_with_elements.buffer);
+				Deallocate(buffers.allocator, chunks_with_elements.buffer);
 
 				// Reallocate the available chunks
-				chunks_with_elements = { buffers.allocator->Allocate(sizeof(unsigned int) * new_chunk_count), new_chunk_count };
+				chunks_with_elements = { Allocate(buffers.allocator, sizeof(unsigned int) * new_chunk_count), new_chunk_count };
 				for (size_t index = 0; index < new_chunk_count; index++) {
 					chunks_with_elements[index] = index;
 				}
@@ -299,7 +300,7 @@ namespace ECSEngine {
 				buffers.ResizeNoCopy(new_chunk_count);
 				// Allocate every chunk
 				for (size_t index = 0; index < new_chunk_count; index++) {
-					buffers[index] = { buffers.allocator->Allocate(sizeof(T) * chunk_size), 0, chunk_size };
+					buffers[index] = { Allocate(buffers.allocator, sizeof(T) * chunk_size), 0, chunk_size };
 				}
 				buffers.size = new_chunk_count;
 			}
@@ -322,7 +323,7 @@ namespace ECSEngine {
 			
 				// If the chunk count is smaller than the current count, release the appropriate chunks
 				for (size_t index = chunk_count; index < buffers.size; index++) {
-					buffers.allocator->Deallocate(buffers[index].buffer);
+					Deallocate(buffers.allocator, buffers[index].buffer);
 
 					size_t copied_count = 0;
 					// Shift elements from the upper chunks into the lower ones
@@ -368,7 +369,7 @@ namespace ECSEngine {
 
 				// If the total chunk count is smaller than the current count, release the appropriate chunks
 				for (size_t index = total_chunk_count; index < buffers.size; index++) {
-					buffers.allocator->Deallocate(buffers[index].buffer);
+					Deallocate(buffers.allocator, buffers[index].buffer);
 				}
 
 				for (size_t index = chunk_count; index < buffers.size; index++) {
@@ -412,20 +413,20 @@ namespace ECSEngine {
 				return buffers[chunk_index][in_chunk_index];
 			}
 
-			void Initialize(Allocator* _allocator, size_t _initial_chunk_count, size_t _chunk_size, size_t _miscellaneous = 0) {
+			void Initialize(AllocatorPolymorphic _allocator, size_t _initial_chunk_count, size_t _chunk_size, size_t _miscellaneous = 0) {
 				chunk_size = _chunk_size;
 				miscellaneous = _miscellaneous;
 				buffers.Initialize(_allocator, _initial_chunk_count);
 				buffers.size = _initial_chunk_count;
-				chunks_with_elements = { _allocator->Allocate(sizeof(unsigned int) * _initial_chunk_count), 0 };
+				chunks_with_elements = { Allocate(_allocator, sizeof(unsigned int) * _initial_chunk_count), 0 };
 				for (size_t index = 0; index < _initial_chunk_count; index++) {
-					void* chunk = _allocator->Allocate(sizeof(T) * chunk_size);
+					void* chunk = Allocate(_allocator, sizeof(T) * chunk_size);
 					buffers[index] = { chunk, 0, (unsigned int)chunk_size };
 					chunks_with_elements.Add((unsigned int)index);
 				}
 			}
 
-			ResizableStream<CapacityStream<T>, Allocator> buffers;
+			ResizableStream<CapacityStream<T>> buffers;
 			Stream<unsigned int> chunks_with_elements;
 			size_t chunk_size;
 			size_t miscellaneous;
@@ -451,11 +452,11 @@ namespace ECSEngine {
 			}
 		};
 
-		template<typename T, typename Allocator>
-		using DeckModulo = Deck<T, Allocator, DeckRangeModulo>;
+		template<typename T>
+		using DeckModulo = Deck<T, DeckRangeModulo>;
 
-		template<typename T, typename Allocator>
-		using DeckPowerOfTwo = Deck<T, Allocator, DeckRangePowerOfTwo>;
+		template<typename T>
+		using DeckPowerOfTwo = Deck<T, DeckRangePowerOfTwo>;
 
 	}
 

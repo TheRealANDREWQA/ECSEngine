@@ -9,18 +9,6 @@
 
 ECS_CONTAINERS;
 
-#define FORWARD_STREAM(stream, function, ...) if (stream[stream.size] == L'\0') {\
-												return function(stream.buffer, __VA_ARGS__); \
-											} \
-											else { \
-												wchar_t _null_path[512]; \
-												containers::CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
-												null_path.Copy(stream); \
-												null_path[stream.size] = L'\0'; \
-												return function(null_path.buffer, __VA_ARGS__); \
-											}
-
-
 namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
@@ -89,7 +77,7 @@ namespace ECSEngine {
 
 	ECS_FILE_STATUS_FLAGS FileCreate(Stream<wchar_t> path, ECS_FILE_HANDLE* file_handle, ECS_FILE_ACCESS_FLAGS access_flags, ECS_FILE_CREATE_FLAGS create_flags, CapacityStream<char>* error_message)
 	{
-		FORWARD_STREAM(path, FileCreate, file_handle, access_flags, create_flags, error_message);
+		ECS_FORWARD_STREAM_WIDE(path, FileCreate, file_handle, access_flags, create_flags, error_message);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -113,7 +101,7 @@ namespace ECSEngine {
 		ECS_FILE_ACCESS_FLAGS access_flags,
 		CapacityStream<char>* error_message
 	) {
-		FORWARD_STREAM(path, OpenFile, file_handle, access_flags, error_message)
+		ECS_FORWARD_STREAM_WIDE(path, OpenFile, file_handle, access_flags, error_message)
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -299,7 +287,7 @@ namespace ECSEngine {
 
 	size_t GetFileByteSize(Stream<wchar_t> path)
 	{
-		FORWARD_STREAM(path, GetFileByteSize);
+		ECS_FORWARD_STREAM_WIDE(path, GetFileByteSize);
 	}
 
 	size_t GetFileByteSize(ECS_FILE_HANDLE file_handle)
@@ -324,7 +312,7 @@ namespace ECSEngine {
 
 	bool HasSubdirectories(Stream<wchar_t> directory)
 	{
-		FORWARD_STREAM(directory, HasSubdirectories);
+		ECS_FORWARD_STREAM_WIDE(directory, HasSubdirectories);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -332,12 +320,14 @@ namespace ECSEngine {
 	bool ClearFile(const wchar_t* path) {
 		ECS_FILE_HANDLE file_handle = 0;
 		bool success = OpenFile(path, &file_handle, ECS_FILE_ACCESS_TRUNCATE_FILE | ECS_FILE_ACCESS_READ_ONLY) == ECS_FILE_STATUS_OK;
-		CloseFile(file_handle);
+		if (success) {
+			CloseFile(file_handle);
+		}
 		return success;
 	}
 
 	bool ClearFile(Stream<wchar_t> path) {
-		FORWARD_STREAM(path, ClearFile);
+		ECS_FORWARD_STREAM_WIDE(path, ClearFile);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -349,7 +339,7 @@ namespace ECSEngine {
 
 	bool RemoveFile(Stream<wchar_t> file)
 	{
-		FORWARD_STREAM(file, RemoveFile);
+		ECS_FORWARD_STREAM_WIDE(file, RemoveFile);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -363,7 +353,7 @@ namespace ECSEngine {
 	}
 
 	bool RemoveFolder(Stream<wchar_t> folder) {
-		FORWARD_STREAM(folder, RemoveFolder);
+		ECS_FORWARD_STREAM_WIDE(folder, RemoveFolder);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -374,7 +364,7 @@ namespace ECSEngine {
 
 
 	bool CreateFolder(Stream<wchar_t> folder) {
-		FORWARD_STREAM(folder, CreateFolder);
+		ECS_FORWARD_STREAM_WIDE(folder, CreateFolder);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -583,7 +573,7 @@ namespace ECSEngine {
 
 	bool ResizeFile(Stream<wchar_t> file, int size)
 	{
-		FORWARD_STREAM(file, ResizeFile, size);
+		ECS_FORWARD_STREAM_WIDE(file, ResizeFile, size);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -639,7 +629,31 @@ namespace ECSEngine {
 	}
 
 	bool DeleteFolderContents(Stream<wchar_t> path) {
-		FORWARD_STREAM(path, DeleteFolderContents);
+		ECS_FORWARD_STREAM_WIDE(path, DeleteFolderContents);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<void> ReadWholeFile(const wchar_t* path, bool binary, AllocatorPolymorphic allocator)
+	{
+		if (binary) {
+			return ReadWholeFileBinary(path, allocator);
+		}
+		else {
+			return ReadWholeFileText(path, allocator);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator)
+	{
+		if (binary) {
+			return ReadWholeFileBinary(path, allocator);
+		}
+		else {
+			return ReadWholeFileText(path, allocator);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -658,7 +672,7 @@ namespace ECSEngine {
 
 	bool IsFile(containers::Stream<wchar_t> path)
 	{
-		FORWARD_STREAM(path, IsFile);
+		ECS_FORWARD_STREAM_WIDE(path, IsFile);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -677,7 +691,7 @@ namespace ECSEngine {
 
 	bool IsFolder(containers::Stream<wchar_t> path)
 	{
-		FORWARD_STREAM(path, IsFolder);
+		ECS_FORWARD_STREAM_WIDE(path, IsFolder);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -714,7 +728,7 @@ namespace ECSEngine {
 
 	Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator)
 	{
-		FORWARD_STREAM(path, ReadWholeFileBinary, allocator);
+		ECS_FORWARD_STREAM_WIDE(path, ReadWholeFileBinary, allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -735,15 +749,18 @@ namespace ECSEngine {
 		}
 
 		void* allocation = nullptr;
+		// Add a '\0' at the end of the file in order to help with C functions parsing
 		if (allocator.allocator != nullptr) {
-			allocation = Allocate(allocator, file_size);
+			allocation = Allocate(allocator, file_size + 1);
 		}
 		else {
-			allocation = malloc(file_size);
+			allocation = malloc(file_size + 1);
 		}
 		unsigned int read_bytes = ReadFromFile(file_handle, { allocation, file_size });
 		// Text files will return a smaller number of bytes since it will convert line feed carriages
 		file_size = read_bytes;
+		char* characters = (char*)allocation;
+		characters[read_bytes] = '\0';
 
 		return { allocation, file_size };
 	}
@@ -752,7 +769,7 @@ namespace ECSEngine {
 
 	Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator)
 	{
-		FORWARD_STREAM(path, ReadWholeFileText, allocator);
+		ECS_FORWARD_STREAM_WIDE(path, ReadWholeFileText, allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -766,7 +783,7 @@ namespace ECSEngine {
 
 	bool ExistsFileOrFolder(containers::Stream<wchar_t> path)
 	{
-		FORWARD_STREAM(path, ExistsFileOrFolder);
+		ECS_FORWARD_STREAM_WIDE(path, ExistsFileOrFolder);
 	}
 
 }

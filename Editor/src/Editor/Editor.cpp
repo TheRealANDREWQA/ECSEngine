@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #include "editorpch.h"
 #include "ECSEngine.h"
 #include "../DrawFunction2.h"
@@ -23,6 +24,25 @@
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
+
+#pragma comment(lib, "d3d11.lib")
+
+struct ECS_REFLECT MyStruct {
+	bool boolean;
+	unsigned int integer0;
+	size_t integer1;
+	int64_t integer2;
+	float float0;
+	float3 float3;
+	float4 float4;
+	double double0;
+	double3 double3;
+	Stream<char> characters;
+	Stream<wchar_t> stream_characters;
+	Stream<float> float_values;
+	const char* ascii_string;
+	const wchar_t* wide_char;
+};
 
 #pragma comment(lib, "Shcore.lib")
 
@@ -93,7 +113,7 @@ public:
 		EditorState editor_state;
 		EditorStateInitialize(this, &editor_state, hWnd, mouse, keyboard);
 
-		ResourceManager* resource_manager = editor_state.ResourceManager();
+		ResourceManager* resource_manager = editor_state.resource_manager;
 		Graphics* graphics = editor_state.Graphics();
 
 		Hub(&editor_state);
@@ -116,97 +136,96 @@ public:
 		//Submesh _submeshes[128];
 		//Submesh _normal_submeshes[128];
 
-		//AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&memory_manager);
-		//success = LoadMeshesFromGLTF(gltf_data, gltf_meshes, allocator, &ERROR_MESSAGE);
+		//AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state.GlobalMemoryManager());
+		//bool success = LoadMeshesFromGLTF(gltf_data, gltf_meshes, allocator, &ERROR_MESSAGE);
 		///*GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);*/
 
 		//Stream<PBRMaterial> materials(_materials, 0);
 		//Stream<unsigned int> submesh_material_index(_submesh_material_index, 0);
 		//success = LoadDisjointMaterialsFromGLTF(gltf_data, materials, submesh_material_index, allocator, &ERROR_MESSAGE);
-		//GLTFMeshesToMeshes(&graphics, gltf_meshes, meshes, gltf_data.mesh_count);
+		//GLTFMeshesToMeshes(graphics, gltf_meshes, meshes, gltf_data.mesh_count);
 		//memset(submesh_material_index.buffer, 0, sizeof(unsigned int) * gltf_data.mesh_count);
 		//materials.size = 1;
-		//Mesh merged_mesh = GLTFMeshesToMergedMesh(&graphics, gltf_meshes, _submeshes, _submesh_material_index, materials.size, gltf_data.mesh_count);
-		//Mesh normal_merged_mesh = MeshesToSubmeshes(&graphics, Stream<Mesh>(meshes, gltf_data.mesh_count), _normal_submeshes);
+		//Mesh merged_mesh = GLTFMeshesToMergedMesh(graphics, gltf_meshes, _submeshes, _submesh_material_index, materials.size, gltf_data.mesh_count);
+		//Mesh normal_merged_mesh = MeshesToSubmeshes(graphics, Stream<Mesh>(meshes, gltf_data.mesh_count), _normal_submeshes);
 		//FreeGLTFMeshes(gltf_meshes, gltf_data.mesh_count, allocator);
 		//FreeGLTFFile(gltf_data);
 
 		//PBRMaterial created_material = CreatePBRMaterialFromName(ToStream("Cerberus"), ToStream("Cerberus"), ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"), allocator);
-		//Material cerberus_material = PBRToMaterial(&resource_manager, created_material);
-		//PBRMesh* cerberus = resource_manager.LoadPBRMesh(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\cerberus_textures.glb");
-		//Material cerberus_material = PBRToMaterial(&resource_manager, cerberus->materials[0], ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"));
+		////Material cerberus_material = PBRToMaterial(resource_manager, created_material, ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"));
+		//PBRMesh* cerberus = resource_manager->LoadPBRMesh(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\cerberus_textures.glb");
+		//Material cerberus_material = PBRToMaterial(resource_manager, cerberus->materials[0], ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"));
 
-		Stream<char> shader_source;
+		//Stream<char> shader_source;
 
-		VertexShader forward_lighting_v_shader = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(ForwardLighting), &shader_source);
-		PixelShader forward_lighting_p_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(ForwardLighting));
-		PixelShader forward_lighting_no_normal_p_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(ForwardLightingNoNormal));
-		InputLayout forward_lighting_layout = graphics->ReflectVertexShaderInput(forward_lighting_v_shader, shader_source);
-		resource_manager->Deallocate(shader_source.buffer);
-		
-		ShaderCompileOptions options;
-		ShaderMacro _macros[32];
-		Stream<ShaderMacro> macros(_macros, 0);
-		macros[0] = { "COLOR_TEXTURE", "" };
-		macros[1] = { "ROUGHNESS_TEXTURE", "" };
-		macros[2] = { "OCCLUSION_TEXTURE", "" };
-		macros[3] = { "NORMAL_TEXTURE", "" };
-		macros.size = 4;
-		options.macros = macros;
-		PixelShader PBR_pixel_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), nullptr, options);
-		VertexShader PBR_vertex_shader = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), &shader_source);
-		InputLayout PBR_layout = graphics->ReflectVertexShaderInput(PBR_vertex_shader, shader_source);
-		resource_manager->Deallocate(shader_source.buffer);
+		//VertexShader forward_lighting_v_shader = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(ForwardLighting), &shader_source);
+		//PixelShader forward_lighting_p_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(ForwardLighting));
+		//PixelShader forward_lighting_no_normal_p_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(ForwardLightingNoNormal));
+		//InputLayout forward_lighting_layout = graphics->ReflectVertexShaderInput(forward_lighting_v_shader, shader_source);
+		//resource_manager->Deallocate(shader_source.buffer);
+		//
+		//ShaderCompileOptions options;
+		//ShaderMacro _macros[32];
+		//Stream<ShaderMacro> macros(_macros, 0);
+		//macros[0] = { "COLOR_TEXTURE", "" };
+		//macros[1] = { "ROUGHNESS_TEXTURE", "" };
+		//macros[2] = { "OCCLUSION_TEXTURE", "" };
+		//macros[3] = { "NORMAL_TEXTURE", "" };
+		//macros.size = 4;
+		//options.macros = macros;
+		//PixelShader PBR_pixel_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), nullptr, options);
+		//VertexShader PBR_vertex_shader = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), &shader_source);
+		//InputLayout PBR_layout = graphics->ReflectVertexShaderInput(PBR_vertex_shader, shader_source);
+		//resource_manager->Deallocate(shader_source.buffer);
 
-		ConstantBuffer obj_buffer = graphics->CreateConstantBuffer(sizeof(float) * 32);
+		//ConstantBuffer obj_buffer = graphics->CreateConstantBuffer(sizeof(float) * 32);
 
-		ConstantBuffer specular_factors = graphics->CreateConstantBuffer(sizeof(float) * 2);
+		//ConstantBuffer specular_factors = graphics->CreateConstantBuffer(sizeof(float) * 2);
 
-		ConstantBuffer hemispheric_ambient_light = Shaders::CreateHemisphericConstantBuffer(graphics);
-		ConstantBuffer directional_light = Shaders::CreateDirectionalLightBuffer(graphics);
-		ConstantBuffer camera_position_buffer = Shaders::CreateCameraPositionBuffer(graphics);
-		ConstantBuffer point_light = Shaders::CreatePointLightBuffer(graphics);
-		ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(graphics);
-		ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(graphics);
-		ConstantBuffer pbr_lights = graphics->CreateConstantBuffer(sizeof(float4) * 8 + sizeof(float4) * 4);
-		ConstantBuffer pbr_pixel_values = Shaders::CreatePBRPixelConstants(graphics);
-		ConstantBuffer pbr_vertex_values = Shaders::CreatePBRVertexConstants(graphics);
+		//ConstantBuffer hemispheric_ambient_light = Shaders::CreateHemisphericConstantBuffer(graphics);
+		//ConstantBuffer directional_light = Shaders::CreateDirectionalLightBuffer(graphics);
+		//ConstantBuffer camera_position_buffer = Shaders::CreateCameraPositionBuffer(graphics);
+		//ConstantBuffer point_light = Shaders::CreatePointLightBuffer(graphics);
+		//ConstantBuffer spot_light = Shaders::CreateSpotLightBuffer(graphics);
+		//ConstantBuffer capsule_light = Shaders::CreateCapsuleLightBuffer(graphics);
+		//ConstantBuffer pbr_lights = graphics->CreateConstantBuffer(sizeof(float4) * 8 + sizeof(float4) * 4);
+		//ConstantBuffer pbr_pixel_values = Shaders::CreatePBRPixelConstants(graphics);
+		//ConstantBuffer pbr_vertex_values = Shaders::CreatePBRVertexConstants(graphics);
 
-		Shaders::SetCapsuleLight(capsule_light, graphics, float3(0.0f, 0.0f, 20.0f), float3(0.0f, 1.0f, 0.0f), 10.0f, 1.0f, 2.0f, ColorFloat(50.0f, 50.0f, 50.0f));
+		//Shaders::SetCapsuleLight(capsule_light, graphics, float3(0.0f, 0.0f, 20.0f), float3(0.0f, 1.0f, 0.0f), 10.0f, 1.0f, 2.0f, ColorFloat(50.0f, 50.0f, 50.0f));
 
-		const ColorFloat COLORS[] = {
-			{1.0f, 0, 0},
-			{0, 1.0f, 0},
-			{0, 0, 1.0f},
-			{1.0f, 1.0f, 0},
-			{1.0f, 0, 1.0f},
-			{0, 1.0f, 1.0f}
-		};
-		ConstantBuffer index_color = graphics->CreateConstantBuffer(sizeof(ColorFloat) * 6, COLORS);
+		//const ColorFloat COLORS[] = {
+		//	{1.0f, 0, 0},
+		//	{0, 1.0f, 0},
+		//	{0, 0, 1.0f},
+		//	{1.0f, 1.0f, 0},
+		//	{1.0f, 0, 1.0f},
+		//	{0, 1.0f, 1.0f}
+		//};
+		//ConstantBuffer index_color = graphics->CreateConstantBuffer(sizeof(ColorFloat) * 6, COLORS);
 
-		D3D11_SAMPLER_DESC descriptor = {};
-		descriptor.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-		descriptor.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-		descriptor.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-		descriptor.Filter = D3D11_FILTER_ANISOTROPIC;
-		descriptor.MaxAnisotropy = 16;
-		SamplerState sampler = graphics->CreateSamplerState(descriptor);
+		//D3D11_SAMPLER_DESC descriptor = {};
+		//descriptor.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		//descriptor.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		//descriptor.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		//descriptor.Filter = D3D11_FILTER_ANISOTROPIC;
+		//descriptor.MaxAnisotropy = 16;
+		//SamplerState sampler = graphics->CreateSamplerState(descriptor);
 
 		Camera camera;
 		camera.translation = { 0.0f, 0.0f, 0.0f };
-		//camera.SetPerspectiveProjectionFOV(45.0f, (float)width / (float)height, -1.0f, 1.0f);
-		ResourceManagerTextureDesc plank_descriptor;
-		//plank_descriptor.context = graphics.m_context.Get();
-		plank_descriptor.usage = D3D11_USAGE_DEFAULT;
-		//ResourceView plank_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", plank_descriptor);
-		//ResourceView plank_normal_texture = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_nor_dx_1k.jpg", plank_descriptor);
-		//ResourceView plank_roughness = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_rough_1k.jpg", plank_descriptor);
+		//ResourceManagerTextureDesc plank_descriptor;
+		//plank_descriptor.context = graphics->m_context;
+		//plank_descriptor.usage = D3D11_USAGE_DEFAULT;
+		//ResourceView plank_texture = resource_manager->LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", &plank_descriptor);
+		//ResourceView plank_normal_texture = resource_manager->LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_nor_dx_1k.jpg", &plank_descriptor);
+		//ResourceView plank_roughness = resource_manager->LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_rough_1k.jpg", &plank_descriptor);
 		////ResourceView plank_metallic = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", plank_descriptor);
-		//ResourceView plank_ao = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_ao_1k.jpg", plank_descriptor);
+		//ResourceView plank_ao = resource_manager->LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_ao_1k.jpg", &plank_descriptor);
 		//ECS_ASSERT(plank_texture.view != nullptr && plank_normal_texture.view != nullptr && plank_roughness.view != nullptr && plank_ao.view != nullptr);
 
-		MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, editor_state.GlobalMemoryManager());
-		DebugDrawer debug_drawer(&debug_drawer_memory, resource_manager, 1);
+		/*MemoryManager debug_drawer_memory(5'000'000, 1024, 2'500'000, editor_state.GlobalMemoryManager());
+		DebugDrawer debug_drawer(&debug_drawer_memory, resource_manager, 1);*/
 		float3 LIGHT_DIRECTION(0.0f, -1.0f, 0.0f);
 		ColorFloat LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 0.0f);
 
@@ -315,38 +334,139 @@ public:
 		editor_state.inject_data.sections = Stream<InjectWindowSection>(section, std::size(section));
 		editor_state.inject_window_name = "Inject Window";
 
-		ResourceManagerTextureDesc texture_desc;
-		texture_desc.allocator = GetAllocatorPolymorphic(editor_state.GlobalMemoryManager());
-		ResourceView environment_map = resource_manager->LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ice_Lake\\Ice_Lake_Ref.hdr", texture_desc);
-		//ResourceView environment_map = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ridgecrest_Road\\Ridgecrest_Road_Ref.hdr", texture_desc);
-		TextureCube converted_cube = ConvertTextureToCube(graphics, environment_map, DXGI_FORMAT_R16G16B16A16_FLOAT, { 1024, 1024 });
-		ResourceView converted_cube_view = graphics->CreateTextureShaderViewResource(converted_cube);
+		//MyStruct my_struct;
+		//my_struct.boolean = false;
+		//my_struct.characters = ToStream("Not too many characters.");
+		//my_struct.double0 = 0.0;
+		//my_struct.double3 = { 25.1, 26.66666, 10.03308 };
+		//my_struct.float0 = -2.5f;
+		//my_struct.float3 = { -10.023f, -249.607f, 102523.030f };
+		//my_struct.float4 = { 21738128.9312f, 2312389.0f, -32185309.0f, 0.0f };
+		//my_struct.integer0 = 523;
+		//my_struct.integer1 = 10320;
+		//my_struct.integer2 = -3295;
+		//my_struct.stream_characters = ToStream(L"Wide characters. \\Interesting");
+		//float float_values[64];
+		//for (size_t index = 0; index < 64; index++) {
+		//	float_values[index] = index;
+		//}
+		//my_struct.float_values = { float_values, 64 };
+		//my_struct.ascii_string = "Does this work?";
+		//my_struct.wide_char = L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets";
 
-		VertexBuffer cube_v_buffer;
-		IndexBuffer cube_v_index;
-		CreateCubeVertexBuffer(graphics, 30.0f, cube_v_buffer, cube_v_index);
+		//MyStruct new_struct;
+		//memset(&new_struct, 0, sizeof(MyStruct));
+		//void* allocation = malloc(10'000);
+		//CapacityStream<void> memory_pool(allocation, 0, 10'000);
+		////bool serialize_success = TextSerialize(editor_state.ui_reflection->reflection->GetType(STRING(MyStruct)), &my_struct, ToStream(L"C:\\Users\\Andrei\\C++\\MyFile.txt"));
+		//bool deserialize_success = TextDeserialize(editor_state.ui_reflection->reflection->GetType(STRING(MyStruct)), &new_struct, memory_pool, ToStream(L"C:\\Users\\Andrei\\C++\\MyFile.txt"));
 
-		TextureCube diffuse_environment = ConvertEnvironmentMapToDiffuseIBL(converted_cube_view, graphics, { 64, 64 }, 200);
-		ResourceView diffuse_view = graphics->CreateTextureShaderViewResource(diffuse_environment);
+		//ResourceManagerTextureDesc texture_desc;
+		//texture_desc.allocator = GetAllocatorPolymorphic(editor_state.GlobalMemoryManager());
+		//ResourceView environment_map = resource_manager->LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ice_Lake\\Ice_Lake_Ref.hdr", &texture_desc);
+		////ResourceView environment_map = resource_manager.LoadTexture(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ridgecrest_Road\\Ridgecrest_Road_Ref.hdr", texture_desc);
+		//TextureCube converted_cube = ConvertTextureToCube(graphics, environment_map, DXGI_FORMAT_R16G16B16A16_FLOAT, { 1024, 1024 });
+		//ResourceView converted_cube_view = graphics->CreateTextureShaderViewResource(converted_cube);
 
-		TextureCube specular_environment = ConvertEnvironmentMapToSpecularIBL(converted_cube_view, graphics, { 1024, 1024 }, 512);
-		ResourceView specular_view = graphics->CreateTextureShaderViewResource(specular_environment);
-		D3D11_TEXTURE2D_DESC specular_descriptor;
-		specular_environment.tex->GetDesc(&specular_descriptor);
+		//VertexBuffer cube_v_buffer;
+		//IndexBuffer cube_v_index;
+		//CreateCubeVertexBuffer(graphics, 30.0f, cube_v_buffer, cube_v_index);
 
-		Texture2D brdf_lut = CreateBRDFIntegrationLUT(graphics, { 512, 512 }, 256);
-		ResourceView brdf_lut_view = graphics->CreateTextureShaderViewResource(brdf_lut);
+		//TextureCube diffuse_environment = ConvertEnvironmentMapToDiffuseIBL(converted_cube_view, graphics, { 64, 64 }, 200);
+		//ResourceView diffuse_view = graphics->CreateTextureShaderViewResource(diffuse_environment);
 
-		ConstantBuffer converted_cube_constants = graphics->CreateConstantBuffer(sizeof(Matrix));
-		
-		float specular_max_mip = (float)specular_descriptor.MipLevels - 1.0f;
-		ConstantBuffer environment_constants = Shaders::CreatePBRPixelEnvironmentConstant(graphics);
+		//TextureCube specular_environment = ConvertEnvironmentMapToSpecularIBL(converted_cube_view, graphics, { 1024, 1024 }, 512);
+		//ResourceView specular_view = graphics->CreateTextureShaderViewResource(specular_environment);
+		//D3D11_TEXTURE2D_DESC specular_descriptor;
+		//specular_environment.tex->GetDesc(&specular_descriptor);
 
-		ConstantBuffer skybox_vertex_constant = Shaders::CreatePBRSkyboxVertexConstant(graphics);
+		//Texture2D brdf_lut = CreateBRDFIntegrationLUT(graphics, { 512, 512 }, 256);
+		//ResourceView brdf_lut_view = graphics->CreateTextureShaderViewResource(brdf_lut);
 
-		/*cerberus_material.pixel_textures[5] = diffuse_view;
-		cerberus_material.pixel_textures[6] = specular_view;
-		cerberus_material.pixel_textures[7] = brdf_lut_view;*/
+		//ConstantBuffer converted_cube_constants = graphics->CreateConstantBuffer(sizeof(Matrix));
+		//
+		//float specular_max_mip = (float)specular_descriptor.MipLevels - 1.0f;
+		//ConstantBuffer environment_constants = Shaders::CreatePBRPixelEnvironmentConstant(graphics);
+
+		//ConstantBuffer skybox_vertex_constant = Shaders::CreatePBRSkyboxVertexConstant(graphics);
+
+		//cerberus_material.pixel_textures[5] = diffuse_view;
+		//cerberus_material.pixel_textures[6] = specular_view;
+		//cerberus_material.pixel_textures[7] = brdf_lut_view;
+
+		//CoallescedMesh* cerberus_mesh = resource_manager->LoadCoallescedMesh(
+		//	L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\trireme2material.glb", 
+		//	{ ECS_RESOURCE_MANAGER_SHARED_RESOURCE }
+		//);
+		//GLTFThumbnail thumbnail = GLTFGenerateThumbnail(graphics, { 512, 512 }, &cerberus_mesh->mesh);
+		//
+		//GraphicsDevice* device = nullptr;
+		//GraphicsContext* context = nullptr;
+		//// create device, front and back buffers, swap chain and rendering context
+		//HRESULT device_result = D3D11CreateDevice(
+		//	nullptr,
+		//	D3D_DRIVER_TYPE_HARDWARE,
+		//	nullptr,
+		//	0,
+		//	nullptr,
+		//	0,
+		//	D3D11_SDK_VERSION,
+		//	&device,
+		//	nullptr,
+		//	&context
+		//);
+
+		//ResourceManagerTextureDesc texture_desc;
+		//texture_desc.context = graphics->GetContext();
+		//texture_desc.misc_flags = D3D11_RESOURCE_MISC_SHARED;
+		//ResourceView texture_view = resource_manager->LoadTextureImplementation(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", &texture_desc);
+
+		//ID3D11Resource* texture_resource = GetResource(texture_view);
+
+		///*IDXGIKeyedMutex* mutex;
+		//device_result = texture_resource->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex);
+		//device_result = mutex->AcquireSync(0, 0);*/
+
+		//IDXGIResource* dxgi_resource;
+		//device_result = texture_resource->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
+
+		//HANDLE shared_handle;
+		//device_result = dxgi_resource->GetSharedHandle(&shared_handle);
+
+		//ID3D11Resource* tex_res;
+		//device_result = device->OpenSharedResource(shared_handle, __uuidof(ID3D11Resource), (void**)&tex_res);
+
+		///*ID3D11Texture2D* tex;
+		//device_result = tex_res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&tex);*/
+		//ID3D11ShaderResourceView* view;
+		//device_result = device->CreateShaderResourceView(tex_res, nullptr, &view);
+
+		//device_result = cerberus_mesh->mesh.index_buffer.buffer->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
+		//device_result = dxgi_resource->GetSharedHandle(&shared_handle);
+		//ID3D11Buffer* buffer;
+		//device_result = device->OpenSharedResource(shared_handle, __uuidof(ID3D11Buffer), (void**)&buffer);
+
+		//UINT COUNTU = cerberus_mesh->mesh.vertex_buffers[0].buffer->AddRef();
+		//COUNTU = cerberus_mesh->mesh.vertex_buffers[0].buffer->Release();
+
+		//device_result = cerberus_mesh->mesh.vertex_buffers[0].buffer->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
+		//device_result = dxgi_resource->GetSharedHandle(&shared_handle);
+		//ID3D11Buffer* v_buffer;
+		//device_result = device->OpenSharedResource(shared_handle, __uuidof(ID3D11Buffer), (void**)&v_buffer);
+
+		//COUNTU = dxgi_resource->Release();
+		//UINT COUNT = v_buffer->Release();
+		//COUNT = cerberus_mesh->mesh.vertex_buffers[0].buffer->Release();
+
+		//context->OMSetBlendState(graphics->m_blend_enabled.state, nullptr, 0);
+		//context->PSSetShader(graphics->m_shader_helpers[0].pixel.shader, nullptr, 0);
+		//context->VSSetShader(graphics->m_shader_helpers[0].vertex.shader, nullptr, 0);
+		//context->IASetInputLayout(graphics->m_shader_helpers[0].input_layout.layout);
+		//context->PSSetSamplers(0, 1, &graphics->m_shader_helpers[0].pixel_sampler.sampler);
+		//context->PSSetShaderResources(0, 1, &view);
+		//context->IASetIndexBuffer(buffer, DXGI_FORMAT_R32_UINT, 0);
+		//UINT offsets[] = { 0, 0 };
+		//context->IASetVertexBuffers(0, 1, &v_buffer, &cerberus_mesh->mesh.vertex_buffers[0].stride, offsets);
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -361,12 +481,6 @@ public:
 
 			unsigned int frame_pacing = 0;
 
-			EditorEvent editor_event;
-			while (editor_state.event_queue.Pop(editor_event)) {
-				EditorEventFunction event_function = (EditorEventFunction)editor_event.function;
-				event_function(&editor_state, editor_event.data);
-			}
-
 			static bool CAMERA_CHANGED = true;
 
 			if (!IsIconic(hWnd)) {
@@ -379,139 +493,146 @@ public:
 
 				unsigned int VALUE = 0;
 
-				//unsigned int window_index = ui.GetWindowFromName("Game");
-				//if (window_index == -1)
-				//	window_index = 0;
-				//float aspect_ratio = ui.m_windows[window_index].transform.scale.x / ui.m_windows[window_index].transform.scale.y * new_width / new_height;
+				unsigned int window_index = editor_state.ui_system->GetWindowFromName("Game");
+				if (window_index == -1)
+					window_index = 0;
+				float aspect_ratio = editor_state.ui_system->m_windows[window_index].transform.scale.x / editor_state.ui_system->m_windows[window_index].transform.scale.y
+					* graphics->m_window_size.x / graphics->m_window_size.y;
 
-				//Shaders::SetPBRPixelEnvironmentConstant(environment_constants, &graphics, { specular_max_mip, environment_diffuse_factor, environment_specular_factor });
+				//Shaders::SetPBRPixelEnvironmentConstant(environment_constants, graphics, { specular_max_mip, environment_diffuse_factor, environment_specular_factor });
 
-				//graphics.ClearBackBuffer(0.0f, 0.0f, 0.0f);
-				//const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
+				graphics->ClearBackBuffer(0.0f, 0.0f, 0.0f);
+				const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
 
-				//if (mouse_state->MiddleButton()) {
-				//	float2 mouse_position = ui.GetNormalizeMousePosition();
-				//	float2 delta = ui.GetMouseDelta(mouse_position);
+				timer.SetMarker();
 
-				//	float3 right_vector = GetRightVector(camera.rotation);
-				//	float3 up_vector = GetUpVector(camera.rotation);
+				float horizontal_rotation = 0.0f;
+				float vertical_rotation = 0.0f;
 
-				//	float factor = 10.0f;
+				if (mouse_state->MiddleButton()) {
+					float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
+					float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
 
-				//	if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-				//		factor = 2.5f;
-				//	}
+					float3 right_vector = GetRightVector(camera.rotation);
+					float3 up_vector = GetUpVector(camera.rotation);
 
-				//	VALUE = 4;
+					float factor = 10.0f;
 
-				//	camera.translation -= right_vector * float3::Splat(delta.x * factor) - up_vector * float3::Splat(delta.y * factor);
-				//	CAMERA_CHANGED = true;
-				//}
-				//if (mouse_state->RightButton()) {
-				//	float factor = 75.0f;
-				//	float2 mouse_position = ui.GetNormalizeMousePosition();
-				//	float2 delta = ui.GetMouseDelta(mouse_position);
+					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
+						factor = 2.5f;
+					}
 
-				//	if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-				//		factor = 10.0f;
-				//	}
+					VALUE = 4;
 
-				//	VALUE = 4;
+					camera.translation -= right_vector * float3::Splat(delta.x * factor) - up_vector * float3::Splat(delta.y * factor);
+					CAMERA_CHANGED = true;
+				}
+				if (mouse_state->LeftButton()) {
+					float factor = 75.0f;
+					float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
+					float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
 
-				//	camera.rotation.x += delta.y * factor;
-				//	camera.rotation.y += delta.x * factor;
-				//	CAMERA_CHANGED = true;
-				//}
+					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
+						factor = 10.0f;
+					}
 
-				//int scroll_delta = mouse_state->ScrollDelta();
-				//if (scroll_delta != 0) {
-				//	float factor = 0.015f;
+					VALUE = 4;
 
-				//	VALUE = 4;
+					camera.rotation.x += delta.y * factor;
+					camera.rotation.y += delta.x * factor;
+					CAMERA_CHANGED = true;
 
-				//	if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-				//		factor = 0.005f;
-				//	}
+					horizontal_rotation -= delta.x * factor;
+					vertical_rotation -= delta.y * factor;
+				}
 
-				//	float3 forward_vector = GetForwardVector(camera.rotation);
+				int scroll_delta = mouse_state->ScrollDelta();
+				if (scroll_delta != 0) {
+					float factor = 0.015f;
 
-				//	camera.translation += forward_vector * float3::Splat(scroll_delta * factor);
-				//	CAMERA_CHANGED = true;
-				//}
+					VALUE = 4;
 
-				//HID::MouseTracker* mouse_tracker = mouse.GetTracker();
-				//if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED) {
-				//	mouse.EnableRawInput();
-				//}
-				//else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED) {
-				//	mouse.DisableRawInput();
-				//}
+					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
+						factor = 0.005f;
+					}
+
+					float3 forward_vector = GetForwardVector(camera.rotation);
+
+					camera.translation += forward_vector * float3::Splat(scroll_delta * factor);
+					CAMERA_CHANGED = true;
+				}
+
+				HID::MouseTracker* mouse_tracker = mouse.GetTracker();
+				if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED || mouse_tracker->LeftButton() == MBPRESSED) {
+					mouse.EnableRawInput();
+				}
+				else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED || mouse_tracker->LeftButton() == MBRELEASED) {
+					mouse.DisableRawInput();
+				}
 
 				//if (CAMERA_CHANGED) {
-				//	graphics.m_context->ClearDepthStencilView(viewport_depth_view.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
-				//	//graphics.m_context->ClearRenderTargetView(viewport_render_view.target, colors);
-
-				//	graphics.BindRenderTargetView(viewport_render_view, viewport_depth_view);
+					//graphics->m_context->ClearDepthStencilView(editor_state.viewport_texture_depth.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+					//graphics.m_context->ClearRenderTargetView(editor_state.viewport_render_target, colors);
 
 				//	Matrix cube_matrix = MatrixTranspose(camera.GetProjectionViewMatrix());
 
-				//	graphics.DisableDepth();
-				//	graphics.DisableCulling();
-				//	graphics.BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE);
-				//	graphics.BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				//	graphics.BindVertexBuffer(cube_v_buffer);
-				//	graphics.BindIndexBuffer(cube_v_index);
+				//	graphics->DisableDepth();
+				//	graphics->DisableCulling();
+				//	graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE);
+				//	graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				//	graphics->BindVertexBuffer(cube_v_buffer);
+				//	graphics->BindIndexBuffer(cube_v_index);
 				//	if (diffuse_cube) {
-				//		graphics.BindPixelResourceView(diffuse_view);
+				//		graphics->BindPixelResourceView(diffuse_view);
 				//	}
 				//	else if (specular_cube) {
-				//		graphics.BindPixelResourceView(specular_view);
+				//		graphics->BindPixelResourceView(specular_view);
 				//	}
 				//	else {
-				//		graphics.BindPixelResourceView(converted_cube_view);
+				//		graphics->BindPixelResourceView(converted_cube_view);
 				//	}
-				//	Shaders::SetPBRSkyboxVertexConstant(skybox_vertex_constant, &graphics, camera.rotation, camera.projection);
-				//	graphics.BindVertexConstantBuffer(skybox_vertex_constant);
-				//	graphics.DrawIndexed(cube_v_index.count);
-				//	graphics.EnableDepth();
-				//	graphics.EnableCulling();
+				//	Shaders::SetPBRSkyboxVertexConstant(skybox_vertex_constant, graphics, camera.rotation, camera.projection);
+				//	graphics->BindVertexConstantBuffer(skybox_vertex_constant);
+				//	graphics->DrawIndexed(cube_v_index.count);
+				//	graphics->EnableDepth();
+				//	graphics->EnableCulling();
 
-				//	graphics.BindVertexShader(PBR_vertex_shader);
-				//	graphics.BindPixelShader(PBR_pixel_shader);
-				//	graphics.BindInputLayout(PBR_layout);
+				//	graphics->BindVertexShader(PBR_vertex_shader);
+				//	graphics->BindPixelShader(PBR_pixel_shader);
+				//	graphics->BindInputLayout(PBR_layout);
 
-				//	graphics.BindSamplerState(graphics.m_shader_helpers[0].pixel_sampler, 1);
+				//	graphics->BindSamplerState(graphics->m_shader_helpers[0].pixel_sampler, 1);
 
-				//	//graphics.BindPixelResourceView(plank_texture);
-				//	//graphics.BindPixelResourceView(plank_normal_texture, 1);
-				//	////graphics.BindPixelResourceView(plank_metallic, 2);
-				//	//graphics.BindPixelResourceView(plank_roughness, 3);
-				//	//graphics.BindPixelResourceView(plank_ao, 4);
-				//	//graphics.BindPixelResourceView(diffuse_view, 5);
-				//	//graphics.BindPixelResourceView(specular_view, 6);
-				//	//graphics.BindPixelResourceView(brdf_lut_view, 7);
+				//	graphics->BindPixelResourceView(plank_texture);
+				//	graphics->BindPixelResourceView(plank_normal_texture, 1);
+				//	//graphics.BindPixelResourceView(plank_metallic, 2);
+				//	graphics->BindPixelResourceView(plank_roughness, 3);
+				//	graphics->BindPixelResourceView(plank_ao, 4);
+				//	graphics->BindPixelResourceView(diffuse_view, 5);
+				//	graphics->BindPixelResourceView(specular_view, 6);
+				//	graphics->BindPixelResourceView(brdf_lut_view, 7);
 
-				//	Shaders::SetCameraPosition(camera_position_buffer, &graphics, camera.translation);
+				//	Shaders::SetCameraPosition(camera_position_buffer, graphics, camera.translation);
 
 				//	ConstantBuffer vertex_constant_buffers[1];
 				//	vertex_constant_buffers[0] = pbr_vertex_values;
-				//	graphics.BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
+				//	graphics->BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
 
-				//	Shaders::SetDirectionalLight(directional_light, &graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
+				//	Shaders::SetDirectionalLight(directional_light, graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
 
-				//	Shaders::SetPointLight(point_light, &graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
+				//	Shaders::SetPointLight(point_light, graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
 				//	ColorFloat spot_light_color = ColorFloat(3.0f, 3.0f, 3.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
-				//	Shaders::SetSpotLight(spot_light, &graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
+				//	Shaders::SetSpotLight(spot_light, graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
 
-				//	float* normal_strength_data = (float*)graphics.MapBuffer(normal_strength_buffer.buffer);
+				//	float* normal_strength_data = (float*)graphics->MapBuffer(normal_strength_buffer.buffer);
 				//	*normal_strength_data = normal_strength;
-				//	graphics.UnmapBuffer(normal_strength_buffer.buffer);
+				//	graphics->UnmapBuffer(normal_strength_buffer.buffer);
 
-				//	float2* _pbr_values = (float2*)graphics.MapBuffer(pbr_pixel_values.buffer);
+				//	float2* _pbr_values = (float2*)graphics->MapBuffer(pbr_pixel_values.buffer);
 				//	*_pbr_values = { metallic, roughness };
-				//	graphics.UnmapBuffer(pbr_pixel_values.buffer);
+				//	graphics->UnmapBuffer(pbr_pixel_values.buffer);
 
-				//	float4* _pbr_lights = (float4*)graphics.MapBuffer(pbr_lights.buffer);
+				//	float4* _pbr_lights = (float4*)graphics->MapBuffer(pbr_lights.buffer);
 				//	for (size_t index = 0; index < 4; index++) {
 				//		_pbr_lights[0] = { pbr_light_pos[index].x, pbr_light_pos[index].y, pbr_light_pos[index].z, 0.0f };
 				//		_pbr_lights++;
@@ -524,14 +645,14 @@ public:
 				//		_pbr_lights[0].x = pbr_light_range[index];
 				//		_pbr_lights++;
 				//	}
-				//	graphics.UnmapBuffer(pbr_lights.buffer);
+				//	graphics->UnmapBuffer(pbr_lights.buffer);
 
 				//	Shaders::PBRPixelConstants pixel_constants;
 				//	pixel_constants.tint = tint;
 				//	pixel_constants.normal_strength = normal_strength;
 				//	pixel_constants.metallic_factor = metallic;
 				//	pixel_constants.roughness_factor = roughness;
-				//	Shaders::SetPBRPixelConstants(pbr_pixel_values, &graphics, pixel_constants);
+				//	Shaders::SetPBRPixelConstants(pbr_pixel_values, graphics, pixel_constants);
 
 				//	ConstantBuffer pixel_constant_buffer[5];
 				//	pixel_constant_buffer[0] = camera_position_buffer;
@@ -540,42 +661,42 @@ public:
 				//	pixel_constant_buffer[3] = pbr_lights;
 				//	pixel_constant_buffer[4] = directional_light;
 
-				//	graphics.BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
+				//	graphics->BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
 
 				//	camera.SetPerspectiveProjectionFOV(60.0f, aspect_ratio, 0.05f, 1000.0f);
 
 				//	Matrix camera_matrix = camera.GetProjectionViewMatrix();
 
-				//	//Matrix world_matrices[1];
-				//	//for (size_t subindex = 0; subindex < 1; subindex++) {
-				//	//	void* obj_ptr = graphics.MapBuffer(obj_buffer.buffer);
-				//	//	float* reinter = (float*)obj_ptr;
-				//	//	DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
+				//	Matrix world_matrices[1];
+				//	for (size_t subindex = 0; subindex < 1; subindex++) {
+				//		void* obj_ptr = graphics->MapBuffer(obj_buffer.buffer);
+				//		float* reinter = (float*)obj_ptr;
+				//		DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
 
-				//	//	Matrix matrix = /*MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) **/ MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
-				//	//		* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
-				//	//	Matrix world_matrix = matrix;
-				//	//	world_matrices[subindex] = world_matrix;
-				//	//	Matrix transpose = MatrixTranspose(matrix);
-				//	//	transpose.Store(reinter);
+				//		Matrix matrix = /*MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) **/ MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
+				//			* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
+				//		Matrix world_matrix = matrix;
+				//		world_matrices[subindex] = world_matrix;
+				//		Matrix transpose = MatrixTranspose(matrix);
+				//		transpose.Store(reinter);
 
-				//	//	Matrix MVP_matrix = matrix * camera_matrix;
-				//	//	matrix = MatrixTranspose(MVP_matrix);
-				//	//	matrix.Store(reinter + 16);
+				//		Matrix MVP_matrix = matrix * camera_matrix;
+				//		matrix = MatrixTranspose(MVP_matrix);
+				//		matrix.Store(reinter + 16);
 
-				//	//	graphics.UnmapBuffer(obj_buffer.buffer);
-				//	//	graphics.BindSamplerState(sampler);
+				//		graphics->UnmapBuffer(obj_buffer.buffer);
+				//		graphics->BindSamplerState(sampler);
 
-				//	//	ECS_MESH_INDEX mapping[3];
-				//	//	mapping[0] = ECS_MESH_POSITION;
-				//	//	mapping[1] = ECS_MESH_NORMAL;
-				//	//	mapping[2] = ECS_MESH_UV;
+				//		ECS_MESH_INDEX mapping[3];
+				//		mapping[0] = ECS_MESH_POSITION;
+				//		mapping[1] = ECS_MESH_NORMAL;
+				//		mapping[2] = ECS_MESH_UV;
 
-				//	//	Shaders::SetPBRVertexConstants(pbr_vertex_values, &graphics, MatrixTranspose(world_matrices[subindex]), MatrixTranspose(MVP_matrix), uv_tiling, uv_offsets);
+				//		Shaders::SetPBRVertexConstants(pbr_vertex_values, graphics, MatrixTranspose(world_matrices[subindex]), MatrixTranspose(MVP_matrix), uv_tiling, uv_offsets);
 
-				//	//	graphics.BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
-				//	//	graphics.DrawIndexed(normal_merged_mesh.index_buffer.count);
-				//	//}
+				//		graphics->BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
+				//		graphics->DrawIndexed(normal_merged_mesh.index_buffer.count);
+				//	}
 				//}
 
 				graphics->BindRenderTargetViewFromInitialViews();
@@ -584,20 +705,34 @@ public:
 
 				editor_state.Tick();
 
+				/*size_t milliseconds = timer.GetDurationSinceMarker_ms();
+				ECS_STACK_CAPACITY_STREAM(char, milliseconds_duration, 64);
+				function::ConvertIntToChars(milliseconds_duration, milliseconds);
+				milliseconds_duration[milliseconds_duration.size] = ' ';
+				milliseconds_duration[milliseconds_duration.size + 1] = '\0';
+				OutputDebugStringA(milliseconds_duration.buffer);*/
+
 				frame_pacing = editor_state.ui_system->DoFrame();
 				frame_pacing = std::max(frame_pacing, VALUE);
 
+				//milliseconds = timer.GetDurationSinceMarker_ms();
+				//milliseconds_duration.size = 0;
+				////ECS_STACK_CAPACITY_STREAM(char, milliseconds_duration, 64);
+				//function::ConvertIntToChars(milliseconds_duration, milliseconds);
+				//milliseconds_duration[milliseconds_duration.size] = '\n';
+				//milliseconds_duration[milliseconds_duration.size + 1] = '\0';
+				//OutputDebugStringA(milliseconds_duration.buffer);
+
 				graphics->SwapBuffers(0);
 				mouse.SetPreviousPositionAndScroll();
-				editor_state.TaskManager()->ResetTaskAllocator();
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
 		}
 
-		editor_state.TaskManager()->SleepUntilDynamicTasksFinish();
+		editor_state.task_manager->SleepUntilDynamicTasksFinish();
 
-		DestroyGraphics(graphics);
+		DestroyGraphics(editor_state.Graphics());
 
 		if (result == -1)
 			return -1;

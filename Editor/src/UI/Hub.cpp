@@ -137,7 +137,7 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 				editor_allocator->Deallocate(hub_data->projects[index].error_message);
 			}
 			hub_data->projects.Remove(index);
-			task_manager->AddDynamicTaskAndWake({ SaveEditorFileThreadTask, editor_state });
+			task_manager->AddDynamicTaskAndWake({ SaveEditorFileThreadTask, editor_state, 0 });
 			return;
 		}
 	}

@@ -65,7 +65,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Element>
-	ushort2* CalculateElementTypeCounts(MemoryManager* allocator, unsigned int* counts, ushort2** indices, DeckPowerOfTwo<Element, MemoryManager>* deck) {
+	ushort2* CalculateElementTypeCounts(MemoryManager* allocator, unsigned int* counts, ushort2** indices, DeckPowerOfTwo<Element>* deck) {
 		unsigned int total_count = deck->GetElementCount();
 		ushort2* type_indices = (ushort2*)allocator->Allocate(sizeof(ushort2) * total_count * 4);
 		SetIndicesTypeMask(indices, type_indices, total_count);
@@ -83,7 +83,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	template<typename Element>
-	void UpdateElementDurations(DeckPowerOfTwo<Element, MemoryManager>* deck, float time_delta) {
+	void UpdateElementDurations(DeckPowerOfTwo<Element>* deck, float time_delta) {
 		for (size_t index = 0; index < deck->buffers.size; index++) {
 			for (int64_t subindex = 0; subindex < deck->buffers[index].size; subindex++) {
 				deck->buffers[index][subindex].options.duration -= time_delta;
@@ -2944,18 +2944,20 @@ namespace ECSEngine {
 			buffer += ECS_CACHE_LINE_SIZE;
 		}
 
-		lines.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		spheres.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		points.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		rectangles.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		crosses.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		circles.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		arrows.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		axes.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		triangles.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		aabbs.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		oobbs.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
-		strings.Initialize(allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		AllocatorPolymorphic polymorphic_allocator = GetAllocatorPolymorphic(allocator);
+
+		lines.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		spheres.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		points.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		rectangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		crosses.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		circles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		arrows.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		axes.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		triangles.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		aabbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		oobbs.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
+		strings.Initialize(polymorphic_allocator, 1, DECK_CHUNK_SIZE, DECK_POWER_OF_TWO);
 
 		string_character_bounds = (float2*)buffer;
 
@@ -3189,14 +3191,14 @@ namespace ECSEngine {
 
 	GraphicsPipelineRenderState DebugDrawer::GetPreviousRenderState() const
 	{
-		return graphics->GetRenderState();
+		return graphics->GetPipelineRenderState();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void DebugDrawer::RestorePreviousRenderState(GraphicsPipelineRenderState state)
 	{
-		graphics->RestoreRenderState(state);
+		graphics->RestorePipelineRenderState(state);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

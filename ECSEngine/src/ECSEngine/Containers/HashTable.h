@@ -16,6 +16,39 @@ namespace ECSEngine {
 
 	namespace containers {
 
+#define ECS_RESOURCE_IDENTIFIER(name) ResourceIdentifier identifier = ResourceIdentifier(name, strlen(name));
+
+		// filename can be used as a general purpose pointer if other identifier than the filename is used
+		// Compare function uses AVX2 32 byte SIMD char compare
+		struct ECSENGINE_API ResourceIdentifier {
+			ResourceIdentifier();
+			ResourceIdentifier(const char* filename);
+			ResourceIdentifier(const wchar_t* filename);
+			// if the identifier is something other than a LPCWSTR path
+			ResourceIdentifier(const void* id, unsigned int size);
+			ResourceIdentifier(Stream<void> identifier);
+			//ResourceIdentifier(Stream<wchar_t> identifier);
+
+			ResourceIdentifier(const ResourceIdentifier& other) = default;
+			ResourceIdentifier& operator = (const ResourceIdentifier& other) = default;
+
+			bool operator == (const ResourceIdentifier& other) const;
+
+			bool Compare(const ResourceIdentifier& other) const;
+
+			const void* ptr;
+			unsigned int size;
+		};
+
+		struct ECSENGINE_API HashFunctionMultiplyString {
+			static unsigned int Hash(Stream<const char> string);
+			static unsigned int Hash(Stream<const wchar_t> string);
+			static unsigned int Hash(const char* string);
+			static unsigned int Hash(const wchar_t* string);
+			static unsigned int Hash(const void* identifier, unsigned int identifier_size);
+			static unsigned int Hash(ResourceIdentifier identifier);
+		};
+
 		struct ECSENGINE_API HashFunctionPowerOfTwo {
 		public:
 			HashFunctionPowerOfTwo() {}
@@ -23,12 +56,21 @@ namespace ECSEngine {
 			unsigned int operator ()(unsigned int key, unsigned int capacity) const {
 				return key & (capacity - 1);
 			}
+
+			static unsigned int Next(unsigned int capacity) {
+				// If the value is really small make it to 16
+				if (capacity < 16) {
+					return 16;
+				}
+				return function::PowerOfTwoGreater(capacity).x;
+			}
 		};
 
 		struct ECSENGINE_API HashFunctionPrimeNumber {
 		public:
 			HashFunctionPrimeNumber() {}
 			HashFunctionPrimeNumber(size_t additional_info) {}
+
 			unsigned int operator () (unsigned int key, unsigned int capacity) const {
 				switch (capacity) {
 				case 11:
@@ -139,6 +181,122 @@ namespace ECSEngine {
 					return key % 999983u;
 				}
 			}
+
+			static unsigned int Next(unsigned int capacity) {
+				switch (capacity) {
+				case 0:
+					return 11;
+				case 11:
+					return 23;
+				case 23:
+					return 41;
+				case 41:
+					return 67;
+				case 67:
+					return 97;
+				case 97:
+					return 179;
+				case 179:
+					return 331;
+				case 331:
+					return 503;
+				case 503:
+					return 617;
+				case 617:
+					return 773;
+				case 773:
+					return 919;
+				case 919:
+					return 1063;
+				case 1063:
+					return 1237;
+				case 1237:
+					return 1511;
+				case 1511:
+					return 1777;
+				case 1777:
+					return 2003;
+				case 2003:
+					return 2381;
+				case 2381:
+					return 2707;
+				case 2707:
+					return 3049;
+				case 3049:
+					return 3463;
+				case 3463:
+					return 3911;
+				case 3911:
+					return 4603;
+				case 4603:
+					return 5231;
+				case 5231:
+					return 6007;
+				case 6007:
+					return 7333;
+				case 7333:
+					return 8731;
+				case 8731:
+					return 9973;
+				case 9973:
+					return 12203;
+				case 12203:
+					return 16339;
+				case 16339:
+					return 20521;
+				case 20521:
+					return 27127;
+				case 27127:
+					return 33587;
+				case 33587:
+					return 40187;
+				case 40187:
+					return 48611;
+				case 48611:
+					return 58169;
+				case 58169:
+					return 71707;
+				case 71707:
+					return 82601;
+				case 82601:
+					return 94777;
+				case 94777:
+					return 115153;
+				case 115153:
+					return 127453;
+				case 127453:
+					return 149011;
+				case 149011:
+					return 181889;
+				case 181889:
+					return 219533;
+				case 219533:
+					return 260959;
+				case 260959:
+					return 299993;
+				case 299993:
+					return 354779;
+				case 354779:
+					return 435263;
+				case 435263:
+					return 511087;
+				case 511087:
+					return 587731;
+				case 587731:
+					return 668201;
+				case 668201:
+					return 781087;
+				case 781087:
+					return 900001;
+				case 900001:
+					return 999983;
+				default:
+					ECS_ASSERT(false);
+				}
+
+				return -1;
+			}
+
 			static size_t PrimeCapacity(size_t index) {
 				switch (index) {
 				case 1:
@@ -258,6 +416,11 @@ namespace ECSEngine {
 			unsigned int operator () (unsigned int key, unsigned int capacity) const {
 				return (key * 11400714819323198485llu) >> m_shift_amount;
 			}
+
+			static unsigned int Next(unsigned int capacity) {
+				return (unsigned int)((float)capacity * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 2);
+			}
+
 		//private:
 			size_t m_shift_amount;
 		};
@@ -270,6 +433,11 @@ namespace ECSEngine {
 				key ^= key >> m_shift_amount;
 				return (key * 11400714819323198485llu) >> m_shift_amount;
 			}
+
+			static unsigned int Next(unsigned int capacity) {
+				return (unsigned int)((float)capacity * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 2);
+			}
+
 		//private:
 			size_t m_shift_amount;
 		};
@@ -280,6 +448,14 @@ namespace ECSEngine {
 			HashFunctionFolding(size_t additional_info) {}
 			unsigned int operator() (unsigned int key, unsigned int capacity) const {
 				return (key & 0x0000FFFF + (key & 0xFFFF0000) >> 16) & (capacity - 1);
+			}
+
+			static unsigned int Next(unsigned int capacity) {
+				// If the value is really small, make it 16
+				if (capacity < 16) {
+					return 16;
+				}
+				return function::PowerOfTwoGreater(capacity).x;
 			}
 		};
 
@@ -419,7 +595,7 @@ namespace ECSEngine {
 						index++;
 					}
 				}
-				if (m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR || distance >= 32)
+				if ((m_count * 100 / m_capacity > ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR) || distance >= 32)
 					return true;
 				return false;
 			}
@@ -571,6 +747,12 @@ namespace ECSEngine {
 
 			static size_t MemoryOf(unsigned int number) {
 				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + 31);
+			}
+
+			// Used by insert dynamic to determine which is the next suitable capacity 
+			// for the container to grow at
+			static unsigned int NextCapacity(unsigned int capacity) {
+				return TableHashFunction::Next(capacity);
 			}
 
 			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
@@ -932,6 +1114,12 @@ namespace ECSEngine {
 				return (sizeof(unsigned short) + sizeof(T) + sizeof(Identifier)) * (number + 63);
 			}
 
+			// Used by insert dynamic to determine which is the next suitable capacity 
+			// for the container to grow at
+			static unsigned int NextCapacity(unsigned int capacity) {
+				return TableHashFunction::Next(capacity);
+			}
+
 			void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
 				unsigned int extended_capacity = capacity + 63;
 
@@ -1001,13 +1189,23 @@ namespace ECSEngine {
 		// deallocating when necessary
 		template<typename Table, typename Allocator, typename Value>
 		void InsertToDynamicTable(Table& table, Allocator* allocator, Value value, Stream<void> identifier) {
-			if (table.Insert(value, identifier)) {
-				size_t new_capacity = (size_t)((float)table.GetCapacity() * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 1);
+			auto grow = [&]() {
+				unsigned int new_capacity = Table::NextCapacity(table.GetCapacity());
 				void* new_allocation = allocator->Allocate(table.MemoryOf(new_capacity));
 				const void* old_allocation = table.Grow(new_allocation, new_capacity);
 				allocator->Deallocate(old_allocation);
+			};
+
+			if (table.GetCapacity() == 0) {
+				grow();
+			}
+			if (table.Insert(value, identifier)) {
+				grow();
 			}
 		}
+
+		template<typename T>
+		using HashTableDefault = HashTable<T, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString>;
 
 	}
 

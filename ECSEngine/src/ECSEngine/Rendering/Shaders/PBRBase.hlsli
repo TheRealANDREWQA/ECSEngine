@@ -60,14 +60,14 @@
 *  F0 represents the base reflectivity of the surface, which we calculate using something called the indices of refraction or IOR only for dielectrics.
 *  F0 for conductors (metals) is it the surface's response at normal incidence (0 degree angle).
 *  By pre-computing F0 for both dielectrics and conductors we can use the same Fresnel-Schlick approximation for both types of surfaces,
-*  but we do have to tint the base reflectivity if we have a metallic surface. We generally accomplish this as follows lerping based on a metalness value.
+*  but we do have to tint the base reflectivity if we have a metallic surface. We generally accomplish this as follows: lerping based on a metalness value.
 *  F0 for dielectrics is usually averaged around 0.04.
 *
 *  Given the fact that f(cook-torrance) already takes into account the ratio of light that gets reflected on a surface by the F term, the ks into the
 *  fr function is not necessary.
 *
 *  This workflow uses the following texture maps:
-*  Albedo/Color - with no light interraction (ideally, the same value across all pixels).
+*  Albedo/Color - with no light interraction (ideally, the same value (luminance) across all pixels).
 *  Normal.
 *  Metallic.
 *  Roughness.

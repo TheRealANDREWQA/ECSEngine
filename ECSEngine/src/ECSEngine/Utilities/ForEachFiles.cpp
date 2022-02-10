@@ -6,7 +6,7 @@
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "Function.h"
 
-#define FORWARD_STREAM(stream, function, ...) if (stream[stream.size] == L'\0') {\
+#define ECS_FORWARD_STREAM_WIDE(stream, function, ...) if (stream[stream.size] == L'\0') {\
 												return function(stream.buffer, __VA_ARGS__); \
 											} \
 											else { \
@@ -328,7 +328,7 @@ namespace ECSEngine {
 
 	bool ForEachFileInDirectory(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor)
 	{
-		FORWARD_STREAM(directory, ForEachFileInDirectory, data, functor);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachFileInDirectory, data, functor);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -348,7 +348,7 @@ namespace ECSEngine {
 		return ForEachInDirectoryInternal(directory, [=](const wchar_t* path, unsigned int attribute) {
 			if (attribute & _A_ARCH) {
 				Stream<wchar_t> extension = function::PathExtension(ToStream(path));
-				if (function::IsStringInStream(extension, stream_of_extensions) != -1) {
+				if (function::FindString(extension, stream_of_extensions) != -1) {
 					return functor(path, data);
 				}
 			}
@@ -358,7 +358,7 @@ namespace ECSEngine {
 
 	bool ForEachFileInDirectoryWithExtension(Stream<wchar_t> directory, Stream<const wchar_t*> extensions, void* data, ForEachFolderFunction functor)
 	{
-		FORWARD_STREAM(directory, ForEachFileInDirectoryWithExtension, extensions, data, functor);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachFileInDirectoryWithExtension, extensions, data, functor);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -374,7 +374,7 @@ namespace ECSEngine {
 
 	bool ForEachFileInDirectoryRecursive(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor, bool depth_traversal)
 	{
-		FORWARD_STREAM(directory, ForEachFileInDirectoryRecursive, data, functor, depth_traversal);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachFileInDirectoryRecursive, data, functor, depth_traversal);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -395,7 +395,7 @@ namespace ECSEngine {
 		return ForEachInDirectoryRecursiveInternal(directory, [=](const wchar_t* path, unsigned int attribute) {
 			if (attribute & _A_ARCH) {
 				Stream<wchar_t> extension = function::PathExtension(ToStream(path));
-				if (function::IsStringInStream(extension, stream_of_extensions) != -1) {
+				if (function::FindString(extension, stream_of_extensions) != -1) {
 					return functor(path, data);
 				}
 			}
@@ -405,7 +405,7 @@ namespace ECSEngine {
 
 	bool ForEachFileInDirectoryRecursiveWithExtension(Stream<wchar_t> directory, Stream<const wchar_t*> extensions, void* data, ForEachFolderFunction functor, bool depth_traversal)
 	{
-		FORWARD_STREAM(directory, ForEachFileInDirectoryRecursiveWithExtension, extensions, data, functor, depth_traversal);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachFileInDirectoryRecursiveWithExtension, extensions, data, functor, depth_traversal);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -421,7 +421,7 @@ namespace ECSEngine {
 
 	bool ForEachDirectory(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor)
 	{
-		FORWARD_STREAM(directory, ForEachDirectory, data, functor);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachDirectory, data, functor);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -437,7 +437,7 @@ namespace ECSEngine {
 
 	bool ForEachDirectoryRecursive(Stream<wchar_t> directory, void* data, ForEachFolderFunction functor, bool depth_traversal)
 	{
-		FORWARD_STREAM(directory, ForEachDirectoryRecursive, data, functor, depth_traversal);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachDirectoryRecursive, data, functor, depth_traversal);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -469,7 +469,7 @@ namespace ECSEngine {
 		ForEachFolderFunction file_functor
 	)
 	{
-		FORWARD_STREAM(directory, ForEachInDirectory, data, folder_functor, file_functor);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachInDirectory, data, folder_functor, file_functor);
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -501,7 +501,7 @@ namespace ECSEngine {
 		ForEachFolderFunction file_functor,
 		bool depth_traversal
 	) {
-		FORWARD_STREAM(directory, ForEachInDirectoryRecursive, data, folder_functor, file_functor, depth_traversal);
+		ECS_FORWARD_STREAM_WIDE(directory, ForEachInDirectoryRecursive, data, folder_functor, file_functor, depth_traversal);
 	}
 
 	// --------------------------------------------------------------------------------------------------

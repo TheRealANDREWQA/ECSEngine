@@ -15,8 +15,8 @@ namespace ECSEngine {
 	SystemManager::SystemManager(TaskManager* task_manager, MemoryManager* memory_manager, size_t system_count) 
 	: m_task_manager(task_manager), m_memory(memory_manager) {
 		m_systems.Initialize(memory_manager, system_count, 0);
-		m_deactivated_systems = ResizableStream<Stream<const char>, MemoryManager>(memory_manager, 0);
-		m_active_systems = ResizableStream<Stream<const char>, MemoryManager>(memory_manager, 0);
+		m_deactivated_systems = ResizableStream<Stream<const char>>(GetAllocatorPolymorphic(memory_manager), 0);
+		m_active_systems = ResizableStream<Stream<const char>>(GetAllocatorPolymorphic(memory_manager), 0);
 	}
 
 	void SystemManager::ActivateSystem(const char* name, const char* system_to_activate_after) {

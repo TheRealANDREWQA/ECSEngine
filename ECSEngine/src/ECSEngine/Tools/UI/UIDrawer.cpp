@@ -2857,7 +2857,7 @@ namespace ECSEngine {
 					action_data.dockspace_mask = system->GetDockspaceMaskFromType(dockspace_type);
 					action_data.keyboard = system->m_keyboard;
 					action_data.keyboard_tracker = system->m_keyboard_tracker;
-					action_data.mouse = system->m_mouse->GetState();
+					action_data.mouse = system->m_mouse;
 					action_data.mouse_position = mouse_position;
 					action_data.position = position;
 					action_data.scale = scale;
@@ -4312,11 +4312,11 @@ namespace ECSEngine {
 			AddWindowResource(name, [&](const char* identifier) {
 				data = (UIDrawerHierarchy*)GetMainAllocatorBuffer<UIDrawerHierarchy>();
 
-				data->nodes.allocator = system->m_memory;
+				data->nodes.allocator = GetAllocatorPolymorphic(system->m_memory);
 				data->nodes.capacity = 0;
 				data->nodes.size = 0;
 				data->nodes.buffer = nullptr;
-				data->pending_initializations.allocator = system->m_memory;
+				data->pending_initializations.allocator = GetAllocatorPolymorphic(system->m_memory);
 				data->pending_initializations.buffer = nullptr;
 				data->pending_initializations.size = 0;
 				data->pending_initializations.capacity = 0;
@@ -4341,8 +4341,8 @@ namespace ECSEngine {
 
 				if (((configuration & UI_CONFIG_HIERARCHY_CHILD) == 0) && (((configuration & UI_CONFIG_HIERARCHY_SELECTABLE) != 0) || ((configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) != 0))) {
 					data->multiple_hierarchy_data = GetMainAllocatorBuffer<UIDrawerHierarchiesData>();
-					data->multiple_hierarchy_data->hierarchy_transforms = UIDynamicStream<UIElementTransform>(system->m_memory, 0);
-					data->multiple_hierarchy_data->elements = UIDynamicStream<UIDrawerHierarchiesElement>(system->m_memory, 0);
+					data->multiple_hierarchy_data->hierarchy_transforms = UIDynamicStream<UIElementTransform>(GetAllocatorPolymorphic(system->m_memory), 0);
+					data->multiple_hierarchy_data->elements = UIDynamicStream<UIDrawerHierarchiesElement>(GetAllocatorPolymorphic(system->m_memory), 0);
 					data->multiple_hierarchy_data->active_hierarchy = data;
 				}
 				else if (configuration & UI_CONFIG_HIERARCHY_CHILD) {
@@ -5301,11 +5301,11 @@ namespace ECSEngine {
 			AddWindowResource(name, [&](const char* identifier) {
 				list = GetMainAllocatorBuffer<UIDrawerList>();
 
-				list->hierarchy.nodes.allocator = system->m_memory;
+				list->hierarchy.nodes.allocator = GetAllocatorPolymorphic(system->m_memory);
 				list->hierarchy.nodes.capacity = 0;
 				list->hierarchy.nodes.size = 0;
 				list->hierarchy.nodes.buffer = nullptr;
-				list->hierarchy.pending_initializations.allocator = system->m_memory;
+				list->hierarchy.pending_initializations.allocator = GetAllocatorPolymorphic(system->m_memory);
 				list->hierarchy.pending_initializations.buffer = nullptr;
 				list->hierarchy.pending_initializations.size = 0;
 				list->hierarchy.pending_initializations.capacity = 0;
@@ -5360,7 +5360,7 @@ namespace ECSEngine {
 
 			if (ValidatePosition(configuration, position, scale)) {
 				if (~configuration & UI_CONFIG_MENU_SPRITE) {
-					size_t label_configuration = configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
+					size_t label_configuration = configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE;
 					label_configuration |= function::Select<size_t>(is_active, 0, UI_CONFIG_UNAVAILABLE_TEXT);
 					TextLabelDrawer(
 						label_configuration,
@@ -5387,7 +5387,6 @@ namespace ECSEngine {
 					);
 
 					HandleBorder(configuration, config, position, scale);
-					FinalizeRectangle(configuration, position, scale);
 				}
 
 				if (is_active) {
@@ -5400,6 +5399,8 @@ namespace ECSEngine {
 					AddClickable(position, scale, { SkipAction, nullptr, 0 });
 				}
 			}
+
+			FinalizeRectangle(configuration, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -7729,6 +7730,73 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void UIDrawer::SpriteRectangle(size_t configuration, const UIDrawConfig& config, ResourceView view, Color color, float2 top_left_uv, float2 bottom_right_uv)
+		{
+			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
+			SpriteRectangle(configuration, position, scale, view, color, top_left_uv, bottom_right_uv);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::SpriteRectangle(size_t configuration, float2 position, float2 scale, ResourceView view, Color color, float2 top_left_uv, float2 bottom_right_uv)
+		{
+			if (!initializer) {
+				HandleFitSpaceRectangle(configuration, position, scale);
+
+				if (ValidatePosition(configuration, position, scale)) {
+					if (configuration & UI_CONFIG_LATE_DRAW) {
+						system->SetSprite(
+							dockspace,
+							border_index,
+							view,
+							position,
+							scale,
+							buffers + ECS_TOOLS_UI_MATERIALS,
+							counts + ECS_TOOLS_UI_MATERIALS,
+							color,
+							top_left_uv,
+							bottom_right_uv,
+							UIDrawPhase::Late
+						);
+					}
+					else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
+						system->SetSprite(
+							dockspace,
+							border_index,
+							view,
+							position,
+							scale,
+							system_buffers,
+							system_counts,
+							color,
+							top_left_uv,
+							bottom_right_uv,
+							UIDrawPhase::System
+						);
+					}
+					else {
+						system->SetSprite(
+							dockspace,
+							border_index,
+							view,
+							position,
+							scale,
+							buffers,
+							counts,
+							color,
+							top_left_uv,
+							bottom_right_uv,
+							UIDrawPhase::Normal
+						);
+					}
+				}
+
+				FinalizeRectangle(configuration, position, scale);
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::VertexColorRectangle(
 			size_t configuration,
 			float2 position,
@@ -9328,57 +9396,59 @@ namespace ECSEngine {
 					FinalizeRectangle(configuration, position, scale);
 				}
 
-				if (~configuration & UI_CONFIG_BUTTON_HOVERABLE) {
-					Color label_color = HandleColor(configuration, config);
+				if (is_active) {
+					if (~configuration & UI_CONFIG_BUTTON_HOVERABLE) {
+						Color label_color = HandleColor(configuration, config);
 
-					//AddDefaultHoverable(position, scale, label_color, 1.25f, handler.phase);
-					if (handler.phase == UIDrawPhase::Normal) {
-						UIDefaultHoverableData hoverable_data;
-						hoverable_data.colors[0] = label_color;
-						hoverable_data.percentages[0] = 1.25f;
+						//AddDefaultHoverable(position, scale, label_color, 1.25f, handler.phase);
+						if (handler.phase == UIDrawPhase::Normal) {
+							UIDefaultHoverableData hoverable_data;
+							hoverable_data.colors[0] = label_color;
+							hoverable_data.percentages[0] = 1.25f;
 
-						UIDrawPhase phase = UIDrawPhase::Normal;
-						if (configuration & UI_CONFIG_LATE_DRAW) {
-							phase = UIDrawPhase::Late;
+							UIDrawPhase phase = UIDrawPhase::Normal;
+							if (configuration & UI_CONFIG_LATE_DRAW) {
+								phase = UIDrawPhase::Late;
+							}
+							else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
+								phase = UIDrawPhase::System;
+							}
+							AddDefaultClickable(position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 						}
-						else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-							phase = UIDrawPhase::System;
+						else {
+							UIDefaultTextHoverableData hoverable_data;
+							hoverable_data.color = label_color;
+							hoverable_data.text = text;
+
+							UISpriteVertex* vertices = HandleTextSpriteBuffer(configuration);
+							size_t* count = HandleTextSpriteCount(configuration);
+
+							size_t text_vertex_count = strlen(text) * 6;
+							hoverable_data.text_offset = { vertices[*count - text_vertex_count].position.x - position.x, -vertices[*count - text_vertex_count].position.y - position.y };
+							Color text_color;
+							float2 text_size;
+							float text_character_spacing;
+							HandleText(configuration, config, text_color, text_size, text_character_spacing);
+
+							hoverable_data.character_spacing = text_character_spacing;
+							hoverable_data.font_size = text_size;
+							hoverable_data.text_color = text_color;
+
+							UIDrawPhase hoverable_phase = UIDrawPhase::Normal;
+							if (configuration & UI_CONFIG_LATE_DRAW) {
+								hoverable_phase = UIDrawPhase::Late;
+							}
+							else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
+								hoverable_phase = UIDrawPhase::System;
+							}
+							AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
 						}
-						AddDefaultClickable(position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 					}
 					else {
-						UIDefaultTextHoverableData hoverable_data;
-						hoverable_data.color = label_color;
-						hoverable_data.text = text;
-
-						UISpriteVertex* vertices = HandleTextSpriteBuffer(configuration);
-						size_t* count = HandleTextSpriteCount(configuration);
-
-						size_t text_vertex_count = strlen(text) * 6;
-						hoverable_data.text_offset = { vertices[*count - text_vertex_count].position.x - position.x, -vertices[*count - text_vertex_count].position.y - position.y };
-						Color text_color;
-						float2 text_size;
-						float text_character_spacing;
-						HandleText(configuration, config, text_color, text_size, text_character_spacing);
-
-						hoverable_data.character_spacing = text_character_spacing;
-						hoverable_data.font_size = text_size;
-						hoverable_data.text_color = text_color;
-
-						UIDrawPhase hoverable_phase = UIDrawPhase::Normal;
-						if (configuration & UI_CONFIG_LATE_DRAW) {
-							hoverable_phase = UIDrawPhase::Late;
-						}
-						else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-							hoverable_phase = UIDrawPhase::System;
-						}
-						AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
+						const UIConfigButtonHoverable* hoverable = (const UIConfigButtonHoverable*)config.GetParameter(UI_CONFIG_BUTTON_HOVERABLE);
+						AddDefaultClickable(position, scale, hoverable->handler, handler);
+						AddHoverable(position, scale, hoverable->handler);
 					}
-				}
-				else {
-					const UIConfigButtonHoverable* hoverable = (const UIConfigButtonHoverable*)config.GetParameter(UI_CONFIG_BUTTON_HOVERABLE);
-					AddDefaultClickable(position, scale, hoverable->handler, handler);
-					AddHoverable(position, scale, hoverable->handler);
 				}
 
 				if (configuration & UI_CONFIG_TOOL_TIP) {
@@ -10798,6 +10868,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		float2 UIDrawer::GetRegionRenderOffset() const
+		{
+			return region_render_offset;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		// returns the render bound difference
 		float2 UIDrawer::GetRenderSpan() const {
 			return { max_render_bounds.x - min_render_bounds.x, max_render_bounds.y - min_render_bounds.y };
@@ -11002,9 +11079,14 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetAlignedToRight(float x_scale, float target_position) const {
+			const float EPSILON = 0.0005f;
+
 			target_position = function::Select(target_position == -5.0f, region_limit.x, target_position);
 			target_position = function::Select(export_scale != nullptr, current_x + x_scale, target_position);
-			target_position += (system->m_windows[window_index].drawer_draw_difference.y == 0.0f) * system->m_descriptors.misc.render_slider_vertical_size;
+
+			// Move the position by a small offset so as to not have floating point calculation errors that would result
+			// In an increased render span even tho it supposed to not contribute to it
+			target_position -= EPSILON;
 			return { function::ClampMin(target_position - x_scale, current_x), current_y };
 		}
 
@@ -11018,8 +11100,14 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UIDrawer::GetAlignedToBottom(float y_scale, float target_position) const {
+			const float EPSILON = 0.0003f;
+
 			target_position = function::Select(target_position == -5.0f, region_limit.y, target_position);
 			target_position = function::Select(export_scale != nullptr, current_y + y_scale, target_position);
+			
+			// Move the position by a small offset so as to not have floating point calculation errors that would result
+			// In an increased render span even tho it supposed to not contribute to it
+			target_position -= EPSILON;
 			return { current_x, function::ClampMin(target_position - y_scale, current_y) };
 		}
 
@@ -11396,7 +11484,7 @@ namespace ECSEngine {
 			text_alignment.vertical = TextAlignment::Middle;
 			config.AddFlag(text_alignment);
 
-			HashTable<unsigned int, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> parent_hash_table;
+			HashTable<unsigned int, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString> parent_hash_table;
 			size_t table_count = function::PowerOfTwoGreater(labels.size).x * 2;
 			parent_hash_table.InitializeFromBuffer(GetTempBuffer(parent_hash_table.MemoryOf(table_count)), table_count);
 
@@ -11416,7 +11504,7 @@ namespace ECSEngine {
 				// increase the activation count else introduce it
 				ResourceIdentifier identifier(labels[index], label_stream.size);
 				ECS_ASSERT(!parent_hash_table.Insert(index + 1, identifier));
-
+				
 				unsigned int table_index = data->label_states.Find(identifier);
 
 				// get the label state for triangle drop down
@@ -11591,7 +11679,15 @@ namespace ECSEngine {
 					FinalizeRectangle(configuration, initial_label_position, { horizontal_bound - initial_label_position.x, scale.y });
 					NextRow();
 				}
+
 			}
+
+			/*size_t milliseconds = stack_timer.GetDuration_ms();
+			ECS_STACK_CAPACITY_STREAM(char, milliseconds_duration, 64);
+			function::ConvertIntToChars(milliseconds_duration, milliseconds);
+			milliseconds_duration[milliseconds_duration.size] = '\n';
+			milliseconds_duration[milliseconds_duration.size + 1] = '\0';
+			OutputDebugStringA(milliseconds_duration.buffer);*/
 
 			const ResourceIdentifier* label_state_identifiers = data->label_states.GetIdentifiers();
 			Stream<UIDrawerLabelHierarchyLabelData> table_values = data->label_states.GetValueStream();

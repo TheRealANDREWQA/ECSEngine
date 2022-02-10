@@ -212,6 +212,27 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		bool GetFileTimes(Stream<wchar_t> path, char* ECS_RESTRICT creation_time, char* ECS_RESTRICT access_time, char* ECS_RESTRICT last_write_time)
+		{
+			ECS_FORWARD_STREAM_WIDE(path, GetFileTimes, creation_time, access_time, last_write_time);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetFileTimes(Stream<wchar_t> path, wchar_t* ECS_RESTRICT creation_time, wchar_t* ECS_RESTRICT access_time, wchar_t* ECS_RESTRICT last_write_time)
+		{
+			ECS_FORWARD_STREAM_WIDE(path, GetFileTimes, creation_time, access_time, last_write_time);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetFileTimes(Stream<wchar_t> path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
+		{
+			ECS_FORWARD_STREAM_WIDE(path, GetFileTimes, creation_time, access_time, last_write_time);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		bool GetRelativeFileTimes(
 			const wchar_t* ECS_RESTRICT path,
 			size_t* ECS_RESTRICT creation_time,
@@ -340,6 +361,27 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		bool GetRelativeFileTimes(Stream<wchar_t> path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
+		{
+			ECS_FORWARD_STREAM_WIDE(path, GetRelativeFileTimes, creation_time, access_time, last_write_time);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetRelativeFileTimes(Stream<wchar_t> path, char* ECS_RESTRICT creation_time, char* ECS_RESTRICT access_time, char* ECS_RESTRICT last_write_time)
+		{
+			ECS_FORWARD_STREAM_WIDE(path, GetRelativeFileTimes, creation_time, access_time, last_write_time);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetRelativeFileTimes(Stream<wchar_t> path, wchar_t* ECS_RESTRICT creation_time, wchar_t* ECS_RESTRICT access_time, wchar_t* ECS_RESTRICT last_write_time)
+		{
+			ECS_FORWARD_STREAM_WIDE(path, GetRelativeFileTimes, creation_time, access_time, last_write_time);
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		bool OpenFileWithDefaultApplication(const wchar_t* path, CapacityStream<char>* error_message)
 		{
 			HINSTANCE instance = ShellExecute(NULL, NULL, path, NULL, NULL, SW_SHOW);
@@ -435,6 +477,22 @@ namespace ECSEngine {
 			size_t last_write = 0;
 			GetFileTimes(path, nullptr, nullptr, &last_write);
 			return last_write;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		size_t GetFileLastWrite(containers::Stream<wchar_t> path)
+		{
+			if (path[path.size] == L'\0') {
+				return GetFileLastWrite(path.buffer);
+			}
+			else {
+				ECS_ASSERT(path.size < 1024);
+				wchar_t* null_terminated_path = (wchar_t*)ECS_STACK_ALLOC(sizeof(wchar_t) * (path.size + 1));
+				path.CopyTo(null_terminated_path);
+				null_terminated_path[path.size] = L'\0';
+				return GetFileLastWrite(null_terminated_path);
+			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------

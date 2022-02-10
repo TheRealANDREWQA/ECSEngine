@@ -10,15 +10,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Write(ECS_FILE_HANDLE file, const void* data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
 	ECSENGINE_API bool Write(CapacityStream<void>& stream, const void* data, size_t data_size);
-
-	// -----------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool Write(ECS_FILE_HANDLE file, Stream<void> data);
 
 	// -----------------------------------------------------------------------------------------
 
@@ -26,11 +18,11 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Read(ECS_FILE_HANDLE file, void* data, size_t data_size);
+	ECSENGINE_API void Write(uintptr_t* stream, const void* data, size_t data_size);
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Read(ECS_FILE_HANDLE file, CapacityStream<void>& data, size_t data_size);
+	ECSENGINE_API void Write(uintptr_t* stream, Stream<void> data);
 
 	// -----------------------------------------------------------------------------------------
 
@@ -38,15 +30,15 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Read(uintptr_t& stream, void* data, size_t data_size);
+	ECSENGINE_API bool Read(uintptr_t* stream, void* data, size_t data_size);
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Read(uintptr_t& stream, CapacityStream<void>& data, size_t data_size);
+	ECSENGINE_API bool Read(uintptr_t* stream, CapacityStream<void>& data, size_t data_size);
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Ignore(ECS_FILE_HANDLE file, size_t byte_size);
+	ECSENGINE_API bool IgnoreFile(ECS_FILE_HANDLE file, size_t byte_size);
 
 	// -----------------------------------------------------------------------------------------
 
@@ -54,15 +46,17 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Ignore(uintptr_t& stream, size_t byte_size);
+	ECSENGINE_API bool Ignore(uintptr_t* stream, size_t byte_size);
 
 	// -----------------------------------------------------------------------------------------
 
 	// Prepares the file for writing, allocates the memory for the temporary buffer and then 
 	template<typename Functor>
-	bool SerializeWriteFile(Stream<wchar_t> file, AllocatorPolymorphic allocator, size_t allocation_size, Functor&& functor) {
+	bool SerializeWriteFile(Stream<wchar_t> file, AllocatorPolymorphic allocator, size_t allocation_size, bool binary, Functor&& functor) {
 		ECS_FILE_HANDLE file_handle = 0;
-		ECS_FILE_STATUS_FLAGS flags = FileCreate(file, &file_handle, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_TRUNCATE_FILE);
+		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE;
+		access_flags |= binary ? ECS_FILE_ACCESS_BINARY : ECS_FILE_ACCESS_TEXT;
+		ECS_FILE_STATUS_FLAGS flags = FileCreate(file, &file_handle, access_flags);
 		if (flags == ECS_FILE_STATUS_OK) {
 			ScopedFile scoped_file(file_handle);
 
@@ -92,9 +86,10 @@ namespace ECSEngine {
 	size_t DeserializeReadFile(
 		Stream<wchar_t> file,
 		AllocatorPolymorphic allocator,
+		bool binary,
 		Functor&& functor
 	) {
-		Stream<void> contents = ReadWholeFileBinary(file, allocator);
+		Stream<void> contents = ReadWholeFile(file, binary, allocator);
 		if (contents.buffer != nullptr) {
 			uintptr_t buffer = (uintptr_t)contents.buffer;
 			size_t pointer_bytes = functor(buffer);
@@ -103,6 +98,20 @@ namespace ECSEngine {
 		}
 		return -1;
 	}
+
+	template<typename Functor>
+	void* DeserializeReadBinaryFileAndKeepMemory(
+		Stream<wchar_t> file,
+		AllocatorPolymorphic allocator,
+		Functor&& functor
+	) {
+		Stream<void> contents = ReadWholeFileBinary(file, allocator);
+		if (contents.buffer != nullptr) {
+			uintptr_t buffer = (uintptr_t)contents.buffer;
+			functor(buffer);
+			return contents.buffer;
+		}
+		return nullptr;
+	}
 	
-	// -----------------------------------------------------------------------------------------
 }

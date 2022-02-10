@@ -28,7 +28,6 @@ namespace ECSEngine {
 		containers::Stream<Color> colors;
 		containers::Stream<float4> skin_weights;
 		containers::Stream<uint4> skin_influences;
-		containers::Stream<float4> tangents;
 		containers::Stream<unsigned int> indices;
 	};
 
@@ -112,24 +111,28 @@ namespace ECSEngine {
 
 	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
-	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh);
+	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
+	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, unsigned int misc_flags = 0);
 
 	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
-	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count);
+	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
+	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, unsigned int misc_flags = 0);
 
 	// SINGLE THREADED - relies on the context to copy the resources
 	// Merges the submeshes that have the same material into the same buffer
 	// Material count submeshes will be created
 	// The returned mesh will have no name associated with it
 	// The submeshes will inherit the mesh name
+	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
 	ECSENGINE_API Mesh GLTFMeshesToMergedMesh(
 		Graphics* graphics, 
 		GLTFMesh* gltf_meshes, 
 		Submesh* submeshes,
 		unsigned int* submesh_material_index, 
 		size_t material_count,
-		size_t count
+		size_t count,
+		unsigned int misc_flags = 0
 	);
 
 	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);

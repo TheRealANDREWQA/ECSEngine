@@ -45,7 +45,7 @@ void ApplyModuleConfigurationGroup(EditorState* editor_state, unsigned int group
 		size_t subindex = 0;
 		bool has_been_found = false;
 		for (; subindex < group->libraries.size && !has_been_found; subindex++) {
-			unsigned int in_group_index = function::IsStringInStream(modules->buffer[index].library_name, group->libraries);
+			unsigned int in_group_index = function::FindString(modules->buffer[index].library_name, group->libraries);
 			if (in_group_index != -1) {
 				has_been_found = true;
 				ChangeProjectModuleConfiguration(editor_state, index, group->configurations[in_group_index]);
@@ -216,12 +216,12 @@ bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(file_path, 256);
 	GetModuleConfigurationGroupFilePath(editor_state, file_path);
 
-	Stream<void> contents = ReadWholeFileBinary(file_path, GetAllocatorPolymorphic(editor_state->editor_allocator));
-	if (contents.buffer != nullptr) {
+	Stream<void> content = ReadWholeFileBinary(file_path, GetAllocatorPolymorphic(editor_state->editor_allocator));
+	if (content.buffer != nullptr) {
 		// Read the whole file into a temporary buffer
-		ECS_ASSERT(contents.size < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_BYTE_SIZE);
+		ECS_ASSERT(content.size < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_BYTE_SIZE);
 
-		uintptr_t file_ptr = (uintptr_t)contents.buffer;
+		uintptr_t file_ptr = (uintptr_t)content.buffer;
 
 		// Make sure it is the correct file version
 		char header[64];
@@ -233,72 +233,87 @@ bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 		// Get the count of groups and the count of libraries for each group
 		size_t group_count = DeserializeMultisectionCount(file_ptr, header_stream.size);
 		ECS_ASSERT(group_count < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_GROUPS);
-
-		size_t* _group_stream_counts = (size_t*)ECS_STACK_ALLOC(sizeof(size_t) * group_count);
-		size_t* _group_byte_size = (size_t*)ECS_STACK_ALLOC(sizeof(size_t) * group_count);
-		CapacityStream<size_t> group_stream_counts(_group_stream_counts, 0, group_count);
-		CapacityStream<size_t> group_byte_size(_group_byte_size, 0, group_count);
-		DeserializeMultisectionStreamCount(file_ptr, group_stream_counts);
-
-		// The first section of each group is the name, followed by the configurations and
-		// finally the library names. The stream of streams of library names is not stored directly
-		// The count of libraries can be infered from the total number of sections
-		DeserializeMultisectionPerSectionSize(file_ptr, group_byte_size);
-
-		// Get the total stream count
-		size_t total_stream_count = 0;
-		for (size_t index = 0; index < group_count; index++) {
-			total_stream_count += group_stream_counts[index];
-		}
-		void* stream_allocation = editor_state->editor_allocator->Allocate(sizeof(Stream<void>) * total_stream_count + sizeof(Stream<Stream<void>>) * group_count);
-		CapacityStream<SerializeMultisectionData> multisections(stream_allocation, 0, group_count);
-		uintptr_t stream_allocation_ptr = (uintptr_t)stream_allocation;
-		stream_allocation_ptr += sizeof(Stream<Stream<void>>) * group_count;
-		for (size_t index = 0; index < group_count; index++) {
-			multisections[index].data.InitializeFromBuffer(stream_allocation_ptr, group_stream_counts[index]);
+		if (group_count == 0) {
+			ResetModuleConfigurationGroups(editor_state);
+			EditorSetConsoleWarn(editor_state, ToStream("The module configuration group file is empty."));
+			editor_state->editor_allocator->Deallocate(content.buffer);
+			return false;
 		}
 
-		void* _group_per_stream_size = editor_state->editor_allocator->Allocate(sizeof(size_t) * total_stream_count + sizeof(Stream<size_t>) * group_count);
-		uintptr_t group_per_stream_size_ptr = (uintptr_t)_group_per_stream_size;
-		CapacityStream<Stream<size_t>> group_per_stream_size;
-		// The deserialization call will need the size set to 0 at first
-		group_per_stream_size.InitializeFromBuffer(group_per_stream_size_ptr, 0, group_count);
-		for (size_t index = 0; index < group_count; index++) {
-			group_per_stream_size[index].InitializeFromBuffer(group_per_stream_size_ptr, group_stream_counts[index]);
-		}
-		DeserializeMultisectionStreamSizes(file_ptr, group_per_stream_size);
+		SerializeMultisectionData* _multisections = (SerializeMultisectionData*)ECS_STACK_ALLOC(sizeof(SerializeMultisectionData) * group_count);
+		CapacityStream<SerializeMultisectionData> multisections(_multisections, 0, group_count);
 
+		const size_t MAX_STREAMS = 512;
+		void* _stack_allocation = ECS_STACK_ALLOC(sizeof(Stream<void>) * MAX_STREAMS);
+		CapacityStream<void> memory_pool(_stack_allocation, 0, sizeof(Stream<void>) * MAX_STREAMS);
+
+		DeserializeMultisection(multisections, memory_pool, file_ptr);
 		ModuleConfigurationGroup* groups = (ModuleConfigurationGroup*)ECS_STACK_ALLOC(sizeof(ModuleConfigurationGroup) * group_count);
 
-		// Allocate the count of bytes for each group separately
 		for (size_t index = 0; index < group_count; index++) {
-			size_t library_count = group_stream_counts[index] - 2;
-			void* group_allocation = editor_state->editor_allocator->Allocate(group_byte_size[index] + sizeof(Stream<Stream<wchar_t>>) * library_count);
-			// First the library buffer must be set
+			size_t library_count = multisections[index].data.size - 2;
+			size_t group_byte_size = 0;
+			for (size_t subindex = 0; subindex < multisections[index].data.size; subindex++) {
+				group_byte_size += multisections[index].data[subindex].size;
+			}
+
+			void* group_allocation = editor_state->editor_allocator->Allocate(group_byte_size + sizeof(Stream<Stream<wchar_t>>) * library_count);
 			uintptr_t group_ptr = (uintptr_t)group_allocation;
 			group_ptr += sizeof(Stream<wchar_t>) * library_count;
 			Stream<wchar_t>* libraries = (Stream<wchar_t>*)group_allocation;
 
 			// Then each individual library
-			for (size_t library_index = 2; library_index < group_stream_counts[index]; library_index++) {
+			for (size_t library_index = 2; library_index < multisections[index].data.size; library_index++) {
 				multisections[index].data[library_index].buffer = (void*)group_ptr;
-				libraries[library_index - 2].InitializeFromBuffer(group_ptr, group_per_stream_size[index][library_index] / sizeof(wchar_t));
+				libraries[library_index - 2].InitializeFromBuffer(group_ptr, multisections[index].data[library_index].size / sizeof(wchar_t));
+				multisections[index].data[library_index].CopyTo(libraries[library_index - 2].buffer);
 			}
+
 			// The name - located at index 0 
 			multisections[index].data[0].buffer = (void*)group_ptr;
-			groups[index].name = { (const char*)group_ptr, group_per_stream_size[index][0] };
-
-			// It will also load the null terminator - remove it from the size of the stream
-			groups[index].name.size--;
-			group_ptr += group_per_stream_size[index][0];
+			groups[index].name = { (const char*)group_ptr, multisections[index].data[0].size };
+			// Account for the null terminator
+			group_ptr += multisections[index].data[0].size;
 
 			// The configurations
 			multisections[index].data[1].buffer = (void*)group_ptr;
 			groups[index].configurations = (EditorModuleConfiguration*)group_ptr;
 
 			groups[index].libraries = { libraries, library_count };
+
+			// Now copy the data into the group name and configurations
+			multisections[index].data[0].CopyTo(groups[index].name.buffer);
+			multisections[index].data[1].CopyTo(groups[index].configurations);
 		}
-		DeserializeMultisection(file_ptr, multisections);
+
+		//// Allocate the count of bytes for each group separately
+		//for (size_t index = 0; index < group_count; index++) {
+		//	size_t library_count = group_stream_counts[index] - 2;
+		//	void* group_allocation = editor_state->editor_allocator->Allocate(group_byte_size[index] + sizeof(Stream<Stream<wchar_t>>) * library_count);
+		//	// First the library buffer must be set
+		//	uintptr_t group_ptr = (uintptr_t)group_allocation;
+		//	group_ptr += sizeof(Stream<wchar_t>) * library_count;
+		//	Stream<wchar_t>* libraries = (Stream<wchar_t>*)group_allocation;
+
+		//	// Then each individual library
+		//	for (size_t library_index = 2; library_index < group_stream_counts[index]; library_index++) {
+		//		multisections[index].data[library_index].buffer = (void*)group_ptr;
+		//		libraries[library_index - 2].InitializeFromBuffer(group_ptr, group_per_stream_size[index][library_index] / sizeof(wchar_t));
+		//	}
+		//	// The name - located at index 0 
+		//	multisections[index].data[0].buffer = (void*)group_ptr;
+		//	groups[index].name = { (const char*)group_ptr, group_per_stream_size[index][0] };
+
+		//	// It will also load the null terminator - remove it from the size of the stream
+		//	groups[index].name.size--;
+		//	group_ptr += group_per_stream_size[index][0];
+
+		//	// The configurations
+		//	multisections[index].data[1].buffer = (void*)group_ptr;
+		//	groups[index].configurations = (EditorModuleConfiguration*)group_ptr;
+
+		//	groups[index].libraries = { libraries, library_count };
+		//}
 
 		ValidateModuleConfigurationGroups(editor_state, Stream<ModuleConfigurationGroup>(groups, group_count));
 		// Add the group only if it has at least a library
@@ -308,9 +323,7 @@ bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 			}
 		}
 
-		editor_state->editor_allocator->Deallocate(_group_per_stream_size);
-		editor_state->editor_allocator->Deallocate(stream_allocation);
-		editor_state->editor_allocator->Deallocate(contents.buffer);
+		editor_state->editor_allocator->Deallocate(content.buffer);
 		return true;
 	}
 	return false;
@@ -339,6 +352,7 @@ bool SaveModuleConfigurationGroupFile(EditorState* editor_state) {
 		size_t current_stream_count = groups[index].libraries.size + 2;
 		multisections[index].data.buffer = streams;
 		multisections[index].data.size = groups[index].libraries.size + 2;
+		multisections[index].name = nullptr;
 		streams += current_stream_count;
 
 		// First the name
@@ -354,7 +368,7 @@ bool SaveModuleConfigurationGroupFile(EditorState* editor_state) {
 	*header_version = MODULE_CONFIGURATION_GROUP_FILE_VERSION;
 
 	// Serialize
-	return SerializeMultisection(file_path, multisections, { nullptr }, { header, 64 });
+	return SerializeMultisection(multisections, file_path, { nullptr }, { header, 64 });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

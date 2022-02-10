@@ -8,11 +8,38 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
-		ECS_CONTAINERS;
+		ECS_CONTAINERS;	
+
+		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data);
+		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data);
+
+		struct ReflectionManagerParseStructuresThreadTaskData {
+			CapacityStream<char> thread_memory;
+			containers::Stream<const wchar_t*> paths;
+			containers::CapacityStream<ReflectionType> types;
+			containers::CapacityStream<ReflectionEnum> enums;
+			const ReflectionFieldTable* field_table;
+			CapacityStream<char>* error_message;
+			SpinLock error_message_lock;
+			size_t total_memory;
+			ConditionVariable* condition_variable;
+			void* allocated_buffer;
+			bool success;
+		};
+
+		struct ReflectionManagerHasReflectStructuresThreadTaskData {
+			ReflectionManager* reflection_manager;
+			Stream<const wchar_t*> files;
+			unsigned int folder_index;
+			unsigned int starting_path_index;
+			unsigned int ending_path_index;
+			containers::AtomicStream<unsigned int>* valid_paths;
+			Semaphore* semaphore;
+		};
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionManager::ReflectionManager(MemoryManager* allocator, size_t type_count, size_t enum_count) : folders(allocator, 0)
+		ReflectionManager::ReflectionManager(MemoryManager* allocator, size_t type_count, size_t enum_count) : folders(GetAllocatorPolymorphic(allocator), 0)
 		{
 			InitializeFieldTable();
 			InitializeTypeTable(type_count);
@@ -26,7 +53,7 @@ namespace ECSEngine {
 			Stream<ReflectionType> type_defs = type_definitions.GetValueStream();
 			for (size_t index = 0; index < type_defs.size;  index++) {
 				if (type_definitions.IsItemAt(index)) {
-					folders.allocator->Deallocate(type_defs[index].name);
+					Deallocate(folders.allocator, type_defs[index].name);
 				}
 			}
 			type_definitions.Clear();
@@ -45,7 +72,7 @@ namespace ECSEngine {
 				total_memory += data[data_index].total_memory;
 			}
 
-			void* allocation = folders.allocator->Allocate(total_memory);
+			void* allocation = Allocate(folders.allocator, total_memory);
 			uintptr_t ptr = (uintptr_t)allocation;
 
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
@@ -127,7 +154,7 @@ namespace ECSEngine {
 			Stream<ReflectionEnum> enum_defs = enum_definitions.GetValueStream();
 			for (size_t index = 0; index < enum_defs.size; index++) {
 				if (enum_definitions.IsItemAt(index)) {
-					folders.allocator->Deallocate(enum_defs[index].name);
+					Deallocate(folders.allocator, enum_defs[index].name);
 				}
 			}
 			enum_definitions.Clear();
@@ -146,10 +173,10 @@ namespace ECSEngine {
 
 		void ReflectionManager::DeallocateThreadTaskData(ReflectionManagerParseStructuresThreadTaskData& data)
 		{
-			folders.allocator->Deallocate(data.thread_memory.buffer);
-			folders.allocator->Deallocate(data.types.buffer);
-			folders.allocator->Deallocate(data.enums.buffer);
-			folders.allocator->Deallocate(data.paths.buffer);
+			free(data.thread_memory.buffer);
+			Deallocate(folders.allocator, data.types.buffer);
+			Deallocate(folders.allocator, data.enums.buffer);
+			Deallocate(folders.allocator, data.paths.buffer);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -176,7 +203,7 @@ namespace ECSEngine {
 				}
 			}
 
-			folders.allocator->Deallocate(folders[folder_index].allocated_buffer);
+			Deallocate(folders.allocator, folders[folder_index].allocated_buffer);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -252,7 +279,7 @@ namespace ECSEngine {
 		void ReflectionManager::InitializeFieldTable()
 		{
 			constexpr size_t table_size = 256;
-			void* allocation = folders.allocator->Allocate(ReflectionFieldTable::MemoryOf(table_size));
+			void* allocation = Allocate(folders.allocator, ReflectionFieldTable::MemoryOf(table_size));
 			field_table.InitializeFromBuffer(allocation, table_size);
 
 			// Initialize all values, helped by macros
@@ -325,7 +352,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::InitializeTypeTable(size_t count)
 		{
-			void* allocation = folders.allocator->Allocate(ReflectionTypeTable::MemoryOf(count));
+			void* allocation = Allocate(folders.allocator, ReflectionTypeTable::MemoryOf(count));
 			type_definitions.InitializeFromBuffer(allocation, count);
 		}
 
@@ -333,7 +360,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::InitializeEnumTable(size_t count)
 		{
-			void* allocation = folders.allocator->Allocate(ReflectionEnumTable::MemoryOf(count));
+			void* allocation = Allocate(folders.allocator, ReflectionEnumTable::MemoryOf(count));
 			enum_definitions.InitializeFromBuffer(allocation, count);
 		}
 
@@ -352,15 +379,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			constexpr size_t max_types = 64;
 			constexpr size_t max_enums = 32;
 			constexpr size_t path_size = 128;
-			void* type_allocation = folders.allocator->Allocate(CapacityStream<ReflectionType>::MemoryOf(max_types));
-			void* enum_allocation = folders.allocator->Allocate(CapacityStream<ReflectionEnum>::MemoryOf(max_enums));
-			void* path_allocation = folders.allocator->Allocate(sizeof(const wchar_t*) * path_count);
+			void* type_allocation = Allocate(folders.allocator, CapacityStream<ReflectionType>::MemoryOf(max_types));
+			void* enum_allocation = Allocate(folders.allocator, CapacityStream<ReflectionEnum>::MemoryOf(max_enums));
+			void* path_allocation = Allocate(folders.allocator, sizeof(const wchar_t*) * path_count);
 
 			data.enums.InitializeFromBuffer(enum_allocation, 0, max_enums);
 			data.types.InitializeFromBuffer(type_allocation, 0, max_types);
 			data.paths.InitializeFromBuffer(path_allocation, path_count);
 
-			void* thread_allocation = folders.allocator->Allocate(thread_memory);
+			void* thread_allocation = malloc(thread_memory);
 			data.thread_memory.InitializeFromBuffer(thread_allocation, 0, thread_memory);
 			data.field_table = &field_table;
 			data.success = true;
@@ -420,14 +447,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			manager->DeallocateThreadTaskData(thread_data);
 			for (size_t index = 0; index < files.size; index++) {
-				manager->folders.allocator->Deallocate(files[index]);
+				Deallocate(manager->folders.allocator, files[index]);
 			}
 
 			return thread_data.success;
 		}
 
 		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
-			AllocatorPolymorphic allocator = GetAllocatorPolymorphic(folders.allocator);
+			AllocatorPolymorphic allocator = folders.allocator;
 			const wchar_t* c_file_extensions[] = {
 				L".c",
 				L".cpp",
@@ -455,7 +482,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		) {
 			unsigned int thread_count = task_manager->GetThreadCount();
 
-			AllocatorPolymorphic allocator = GetAllocatorPolymorphic(folders.allocator);
+			AllocatorPolymorphic allocator = folders.allocator;
 			const wchar_t* c_file_extensions[] = {
 				L".c",
 				L".cpp",
@@ -480,7 +507,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return ProcessFolderHierarchyImplementation(this, folder_index, files, error_message);
 			}
 
-			unsigned int* path_indices_buffer = (unsigned int*)folders.allocator->Allocate(sizeof(unsigned int) * files_count, alignof(unsigned int));
+			unsigned int* path_indices_buffer = (unsigned int*)Allocate(folders.allocator, sizeof(unsigned int) * files_count, alignof(unsigned int));
 			AtomicStream<unsigned int> path_indices = AtomicStream<unsigned int>(path_indices_buffer, 0, files_count);
 
 			// Calculate the thread start and thread end
@@ -588,9 +615,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			for (size_t thread_index = 0; thread_index < parse_thread_count; thread_index++) {
 				DeallocateThreadTaskData(parse_thread_data[thread_index]);
 			}
-			folders.allocator->Deallocate(path_indices_buffer);
+			Deallocate(folders.allocator, path_indices_buffer);
 			for (size_t index = 0; index < files.size; index++) {
-				folders.allocator->Deallocate(files[index]);
+				Deallocate(folders.allocator, files[index]);
 			}
 
 			return success;
@@ -1364,7 +1391,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				// Resizable stream
 				else if (strncmp(initial_ptr, STRING(ResizableStream), strlen(STRING(ResizableStream))) == 0) {
-					field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
+					field.info.byte_size = sizeof(ResizableStream<char>);
 					field.info.stream_type = ReflectionStreamFieldType::ResizableStream;
 				}
 				else {
@@ -1503,12 +1530,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					field
 				);
 
-				pointer_offset = function::align_pointer(before_pointer_offset, alignof(ResizableStream<void, LinearAllocator>));
+				pointer_offset = function::align_pointer(before_pointer_offset, alignof(ResizableStream<char>));
 				field.info.pointer_offset = pointer_offset;
 				field.info.stream_type = ReflectionStreamFieldType::ResizableStream;
 				field.info.additional_flags = field.info.byte_size;
-				field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
-				pointer_offset += sizeof(ResizableStream<void, LinearAllocator>);
+				field.info.byte_size = sizeof(ResizableStream<char>);
+				pointer_offset += sizeof(ResizableStream<char>);
 
 				data->total_memory += strlen(field.name) + 1;
 				type.fields.Add(field);
@@ -1732,7 +1759,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				field.info.byte_size = sizeof(CapacityStream<void>);
 			}
 			else if (stream_type == ReflectionStreamFieldType::ResizableStream) {
-				field.info.byte_size = sizeof(ResizableStream<void, LinearAllocator>);
+				field.info.byte_size = sizeof(ResizableStream<char>);
 			}
 			else if (stream_type == ReflectionStreamFieldType::Pointer) {
 				field.info.byte_size = sizeof(void*);
@@ -1830,7 +1857,79 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		void* GetReflectionFieldStreamBuffer(ReflectionFieldInfo info, const void* data)
+		{
+			const void* stream_field = function::OffsetPointer(data, info.pointer_offset);
+			if (info.stream_type == ReflectionStreamFieldType::Stream) {
+				Stream<void>* stream = (Stream<void>*)stream_field;
+				return stream->buffer;
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::CapacityStream) {
+				CapacityStream<void>* stream = (CapacityStream<void>*)stream_field;
+				return stream->buffer;
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+				ResizableStream<char>* stream = (ResizableStream<char>*)stream_field;
+				return stream->buffer;
+			}
+			return nullptr;
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t GetReflectionFieldStreamSize(ReflectionFieldInfo info, const void* data)
+		{
+			const void* stream_field = function::OffsetPointer(data, info.pointer_offset);
+
+			if (info.stream_type == ReflectionStreamFieldType::Stream) {
+				Stream<void>* stream = (Stream<void>*)stream_field;
+				return stream->size;
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::CapacityStream) {
+				CapacityStream<void>* stream = (CapacityStream<void>*)stream_field;
+				return stream->size;
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+				ResizableStream<char>* stream = (ResizableStream<char>*)stream_field;
+				return stream->size;
+			}
+			return 0;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		Stream<void> GetReflectionFieldStreamVoid(ReflectionFieldInfo info, const void* data)
+		{
+			const void* stream_field = function::OffsetPointer(data, info.pointer_offset);
+			if (info.stream_type == ReflectionStreamFieldType::Stream) {
+				Stream<void>* stream = (Stream<void>*)stream_field;
+				return *stream;
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::CapacityStream) {
+				CapacityStream<void>* stream = (CapacityStream<void>*)stream_field;
+				return { stream->buffer, stream->size };
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+				ResizableStream<char>* stream = (ResizableStream<char>*)stream_field;
+				return { stream->buffer, stream->size };
+			}
+			return { nullptr, 0 };
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t GetReflectionFieldStreamElementByteSize(ReflectionFieldInfo info)
+		{
+			return info.additional_flags;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		unsigned char GetReflectionFieldPointerIndirection(ReflectionFieldInfo info)
+		{
+			ECS_ASSERT(info.stream_type == ReflectionStreamFieldType::Pointer);
+			return info.basic_type_count;
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
