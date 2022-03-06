@@ -31,7 +31,7 @@ void FocusConsole(ActionData* action_data) {
 	EditorState* editor_state = (EditorState*)_data;
 	// Create console handles the case when the window already exists
 	// If it doesn't, create it
-	CreateConsole(system, editor_state->console);
+	CreateConsole(system);
 }
 
 void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
@@ -48,6 +48,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 	constexpr float TEXT_LABEL_Y_SIZE = NOTIFICATION_BAR_WINDOW_SIZE - 0.015f;
 	constexpr float REGION_PADDING = 0.01f;
 
+	Console* console = GetConsole();
 	unsigned int message_index = console->messages.size - 1;
 	unsigned int console_window = drawer.system->GetWindowFromName(CONSOLE_WINDOW_NAME);
 
@@ -85,11 +86,11 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		relative_transform.offset.y = (NOTIFICATION_BAR_WINDOW_SIZE - TEXT_LABEL_Y_SIZE) * 0.5f;
 		config.AddFlag(relative_transform);
 		Color sprite_color = ECS_COLOR_WHITE;
-		if (message->icon_type != ConsoleMessageType::Error) {
-			sprite_color = CONSOLE_COLORS[(unsigned int)message->icon_type];
+		if (message->type != ConsoleMessageType::Error) {
+			sprite_color = CONSOLE_COLORS[(unsigned int)message->type];
 		}
 
-		drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)message->icon_type], sprite_color);
+		drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)message->type], sprite_color);
 
 		UIConfigWindowDependentSize text_size;
 		text_size.scale_factor = drawer.GetWindowSizeFactors(text_size.type, { NOTIFICATION_MESSAGE_SIZE, NOTIFICATION_BAR_WINDOW_SIZE });
@@ -98,7 +99,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		UIConfigTextParameters text_params;
 		text_params.character_spacing = drawer.font.character_spacing;
 		text_params.size = drawer.GetFontSize();
-		text_params.color = CONSOLE_COLORS[(unsigned int)message->icon_type];
+		text_params.color = CONSOLE_COLORS[(unsigned int)message->type];
 		config.AddFlag(text_params);
 
 		UIConfigTextAlignment text_alignment;

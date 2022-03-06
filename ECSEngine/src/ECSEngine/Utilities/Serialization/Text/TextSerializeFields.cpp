@@ -5,8 +5,6 @@
 
 namespace ECSEngine {
 
-	const char* END_SERIALIZE_STRING = "END_SERIALIZE\n";
-
 	using namespace Reflection;
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -96,9 +94,9 @@ namespace ECSEngine {
 			}
 		}
 
-		size_t end_serialize_size = strlen(END_SERIALIZE_STRING);
+		size_t end_serialize_size = strlen(ECS_END_TEXT_SERIALIZE_STRING);
 		// Put the end serialize string
-		memcpy((void*)stream, END_SERIALIZE_STRING, end_serialize_size);
+		memcpy((void*)stream, ECS_END_TEXT_SERIALIZE_STRING, end_serialize_size);
 		stream += end_serialize_size;
 	}
 
@@ -109,7 +107,7 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(char, temporary_buffer, 512);
 
 		// Output that string to the end of the serialization process so as to know when packing multiple files when to stop
-		size_t total_size = strlen(END_SERIALIZE_STRING);
+		size_t total_size = strlen(ECS_END_TEXT_SERIALIZE_STRING);
 
 		for (size_t index = 0; index < fields.size; index++) {
 			ReflectionBasicFieldType basic_type = fields[index].basic_type;
@@ -250,7 +248,7 @@ namespace ECSEngine {
 				}
 
 				// If another new line is found, check to see that the end deserialize_string is here
-				if (!function::CompareStrings(Stream<char>(second_last_new_line + 1, last_new_line - second_last_new_line), ToStream(END_SERIALIZE_STRING))) {
+				if (!function::CompareStrings(Stream<char>(second_last_new_line + 1, last_new_line - second_last_new_line), ToStream(ECS_END_TEXT_SERIALIZE_STRING))) {
 					// If it's not, the file is corrupted
 					return ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS;
 				}
@@ -283,7 +281,7 @@ namespace ECSEngine {
 		}
 
 		// Check to see if the end serialize string exists - if it doesn't, fail
-		const char* end_serialize_string = strstr(characters, END_SERIALIZE_STRING);
+		const char* end_serialize_string = strstr(characters, ECS_END_TEXT_SERIALIZE_STRING);
 		if (end_serialize_string == nullptr) {
 			return ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS;
 		}
@@ -611,7 +609,7 @@ namespace ECSEngine {
 		}
 
 		// Advance the stream 
-		stream = (uintptr_t)end_serialize_string + strlen(END_SERIALIZE_STRING);
+		stream = (uintptr_t)end_serialize_string + strlen(ECS_END_TEXT_SERIALIZE_STRING);
 
 		return status;
 	}
@@ -625,6 +623,7 @@ namespace ECSEngine {
 		return TextDeserializeFieldsImplementation<true, false>(fields, stream, [&](size_t byte_size) {
 			void* allocation = function::OffsetPointer(memory_pool);
 			memory_pool.size += byte_size;
+			ECS_ASSERT(memory_pool.size <= memory_pool.capacity);
 			return allocation;
 		}, [&](void* allocation, size_t byte_size) {
 				memory_pool.size -= byte_size;

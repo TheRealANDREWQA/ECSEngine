@@ -3,8 +3,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	// Serializes into a temporary memory buffer, then commits to the file
 	// Allocator nullptr means use malloc
 	ECSENGINE_API bool Serialize(

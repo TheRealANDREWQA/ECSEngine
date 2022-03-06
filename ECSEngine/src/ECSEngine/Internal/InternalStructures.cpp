@@ -1,120 +1,29 @@
 #include "ecspch.h"
 #include "../Utilities/Function.h"
 #include "InternalStructures.h"
+#include "VectorComponentSignature.h"
+#include "../Utilities/Crash.h"
 
 namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void VectorComponentSignature::ConvertComponents(ComponentSignature signature)
-	{
-		// Increment the component indices so as to not have 0 as a valid component index
-		alignas(32) uint16_t increments[sizeof(__m256i) / sizeof(uint16_t)] = { 0 };
-		for (size_t index = 0; index < signature.count; index++) {
-			increments[index] = 1;
-		}
-		Vec16us increment;
-		increment.load_a(increments);
-		value = LoadPartial16(signature.indices, signature.count);
-		// value.load_partial(signature.count, signature.indices);
-		value += increment;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	void VectorComponentSignature::ConvertInstances(const SharedInstance* instances, unsigned char count)
-	{
-		ConvertComponents({ (Component*)instances, count });
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool ECS_VECTORCALL VectorComponentSignature::HasComponents(VectorComponentSignature components) const
-	{
-		Vec16us splatted_component;
-		Vec16us zero_vector = ZeroVectorInteger();
-		Vec16sb is_zero;
-		Vec16sb match;
-
-#define LOOP_ITERATION(iteration)   splatted_component = Broadcast16<iteration>(components.value); \
-									/* Test to see if the current element is zero */ \
-									is_zero = splatted_component == zero_vector; \
-									/* If we get to an element which is 0, that means all components have been matched */ \
-									if (horizontal_and(is_zero)) { \
-										return true; \
-									} \
-									match = splatted_component == value; \
-									if (!horizontal_or(match)) { \
-										return false; \
-									} 
-
-		LOOP_UNROLL(16, LOOP_ITERATION);
-
-		return true;
-
-#undef LOOP_ITERATION
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool ECS_VECTORCALL VectorComponentSignature::ExcludesComponents(VectorComponentSignature components) const
-	{
-		Vec16us splatted_component;
-		Vec16us zero_vector = ZeroVectorInteger();
-		Vec16sb is_zero;
-		Vec16sb match;
-
-#define LOOP_ITERATION(iteration)   splatted_component = Broadcast16<iteration>(components.value); \
-									/* Test to see if the current element is zero */ \
-									is_zero = splatted_component == zero_vector; \
-									/* If we get to an element which is 0, that means all components have been matched */ \
-									if (horizontal_and(is_zero)) { \
-										return true; \
-									} \
-									match = splatted_component == value; \
-									if (horizontal_or(match)) { \
-										return false; \
-									} 
-
-		LOOP_UNROLL(16, LOOP_ITERATION);
-
-#undef LOOP_ITERATION
-
-		return true;
-
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	void VectorComponentSignature::InitializeSharedComponent(SharedComponentSignature shared_signature)
-	{
-		ConvertComponents(ComponentSignature(shared_signature.indices, shared_signature.count));
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	void VectorComponentSignature::InitializeSharedInstances(SharedComponentSignature shared_signature)
-	{
-		ConvertInstances(shared_signature.instances, shared_signature.count);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
 	EntityPool::EntityPool(
 		MemoryManager* memory_manager,
-		unsigned int pool_capacity,
 		unsigned int pool_power_of_two
-	) : m_memory_manager(memory_manager), m_pool_capacity(pool_capacity), m_pool_power_of_two(pool_power_of_two), m_entity_infos(GetAllocatorPolymorphic(memory_manager), 1) {}
+	) : m_memory_manager(memory_manager), m_pool_power_of_two(pool_power_of_two), m_entity_infos(GetAllocatorPolymorphic(memory_manager), 1) {}
 	
 	// ------------------------------------------------------------------------------------------------------------
 
 	void EntityPool::CreatePool() {
-		void* allocation = m_memory_manager->Allocate(m_entity_infos.buffer->stream.MemoryOf(m_pool_capacity));
+		unsigned int pool_capacity = 1 << m_pool_power_of_two;
+
+		void* allocation = m_memory_manager->Allocate(m_entity_infos.buffer->stream.MemoryOf(pool_capacity));
 		// Walk through the entity info stream and look for an empty slot and place the allocation there
 		// Cannot remove swap back chunks because the entity index calculation takes into consideration the initial
 		// chunk position. Using reallocation tables that would offset chunk indices does not seem like a good idea
 		// since adds latency to the lookup
-		auto info_stream = StableReferenceStream<EntityInfo>(allocation, m_pool_capacity);
+		auto info_stream = StableReferenceStream<EntityInfo, true>(allocation, pool_capacity);
 		for (size_t index = 0; index < m_entity_infos.size; index++) {
 			if (!m_entity_infos[index].is_in_use) {
 				m_entity_infos[index].is_in_use = true;
@@ -127,96 +36,150 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Entity GetEntityFromPoolOffset(unsigned int pool_index, unsigned int pool_power_of_two, unsigned int index) {
+	void EntityPool::CopyEntities(const EntityPool* entity_pool)
+	{
+		// Assume that everything is deallocated before
+		// Everything can be just memcpy'ed after the correct number of pools have been allocated
+		ECS_ASSERT(m_entity_infos.size == 0);
+		ECS_ASSERT(m_pool_power_of_two == entity_pool->m_pool_power_of_two);
+
+		for (size_t index = 0; index < entity_pool->m_entity_infos.size; index++) {
+			CreatePool();
+			// Set the is in use flag
+			m_entity_infos[index].is_in_use = entity_pool->m_entity_infos[index].is_in_use;
+
+			if (m_entity_infos[index].is_in_use) {
+				m_entity_infos[index].stream.Copy(entity_pool->m_entity_infos[index].stream);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	unsigned int GetEntityIndexFromPoolOffset(unsigned int pool_index, unsigned int pool_power_of_two, unsigned int index) {
 		return (pool_index << pool_power_of_two) + index;
 	}
 
 	uint2 GetPoolAndEntityIndex(const EntityPool* entity_pool, Entity entity) {
-		return { entity.value >> entity_pool->m_pool_power_of_two, entity.value & (entity_pool->m_pool_power_of_two - 1) };
+		return { entity.index >> entity_pool->m_pool_power_of_two, entity.index & (entity_pool->m_pool_power_of_two - 1) };
 	}
 
-	template<bool has_info>
-	ECS_INLINE Entity EntityPoolAllocateImplementation(EntityPool* entity_pool, EntityInfo info = {}) {
+	Entity EntityPoolAllocateImplementation(EntityPool* entity_pool, unsigned short archetype = -1, unsigned short base_archetype = -1, unsigned int stream_index = -1) {	
+		EntityInfo info;
+		info.main_archetype = archetype;
+		info.base_archetype = base_archetype;
+		info.stream_index = stream_index;
+		info.layer = 0;
+		info.tags = 0;
+
+		auto construct_info = [=](unsigned int pool_index) {
+			unsigned int entity_index = entity_pool->m_entity_infos[pool_index].stream.ReserveOne();
+			EntityInfo* current_info = entity_pool->m_entity_infos[pool_index].stream.ElementPointer(entity_index);
+			unsigned char new_generation_count = current_info->generation_count + 1;
+			memcpy(current_info, &info, sizeof(info));
+			current_info->generation_count = new_generation_count == 0 ? 1 : new_generation_count;
+
+			entity_index = GetEntityIndexFromPoolOffset(pool_index, entity_pool->m_pool_power_of_two, entity_index);
+			return Entity(entity_index, current_info->generation_count);
+		};
+		
 		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
 			if (entity_pool->m_entity_infos[index].stream.size < entity_pool->m_entity_infos[index].stream.capacity) {
-				if constexpr (has_info) {
-					return GetEntityFromPoolOffset(index, entity_pool->m_pool_power_of_two, entity_pool->m_entity_infos[index].stream.Add(info));
-				}
-				else {
-					return GetEntityFromPoolOffset(index, entity_pool->m_pool_power_of_two, entity_pool->m_entity_infos[index].stream.ReserveOne());
-				}
+				return construct_info(index);
 			}
 		}
 
 		// All pools are full - create a new one and allocate from it
 		entity_pool->CreatePool();
-		if constexpr (has_info) {
-			return GetEntityFromPoolOffset(
-				entity_pool->m_entity_infos.size - 1,
-				entity_pool->m_pool_power_of_two, 
-				entity_pool->m_entity_infos[entity_pool->m_entity_infos.size - 1].stream.Add(info)
-			);
-		}
-		else {
-			return GetEntityFromPoolOffset(
-				entity_pool->m_entity_infos.size - 1,
-				entity_pool->m_pool_power_of_two,
-				entity_pool->m_entity_infos[entity_pool->m_entity_infos.size - 1].stream.ReserveOne()
-			);
-		}
+		return construct_info(entity_pool->m_entity_infos.size - 1);
 	}
 
 	Entity EntityPool::Allocate()
 	{
-		return EntityPoolAllocateImplementation<false>(this);
+		return EntityPoolAllocateImplementation(this);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Entity EntityPool::AllocateEx(EntityInfo info)
+	Entity EntityPool::AllocateEx(unsigned short archetype, unsigned short base_archetype, unsigned int stream_index)
 	{
-		return EntityPoolAllocateImplementation<true>(this, info);
+		return EntityPoolAllocateImplementation(this, archetype, base_archetype, stream_index);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	struct EntityPoolAllocateAdditionalData {
-		EntityInfo* infos = nullptr;
+		const unsigned short* archetypes;
+		const unsigned short* base_archetypes;
+		const unsigned int* stream_indices;
 		ushort2 archetype_indices;
-		Stream<EntitySequence> chunk_positions = { nullptr,0 };
+		unsigned int copy_position;
 	};
 
 	enum EntityPoolAllocateType {
 		ENTITY_POOL_ALLOCATE_NO_DATA,
 		ENTITY_POOL_ALLOCATE_WITH_INFOS,
-		ENTITY_POOL_ALLOCATE_WITH_CHUNKS
+		ENTITY_POOL_ALLOCATE_WITH_POSITION
 	};
 	
 	template<EntityPoolAllocateType additional_data_type>
 	ECS_INLINE void EntityPoolAllocateImplementation(EntityPool* entity_pool, Stream<Entity> entities, EntityPoolAllocateAdditionalData additional_data = {}) {
-		// The assert will be done by the stream too
-		// ECS_ASSERT(entities.size < m_pool_capacity);
-
 		auto loop_iteration = [&entities, entity_pool, additional_data](unsigned int index) {
 			if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_INFOS) {
-				entity_pool->m_entity_infos[index].stream.AddStream(Stream<EntityInfo>(additional_data.infos, entities.size), (unsigned int*)entities.buffer);
+				entity_pool->m_entity_infos[index].stream.Reserve({ entities.buffer, entities.size });
+				// Increase the generation count for those entities and generate the appropriate infos
+				for (size_t entity_index = 0; entity_index < entities.size; entity_index++) {
+					EntityInfo* info = entity_pool->m_entity_infos[index].stream.ElementPointer(entities[entity_index].value);
+					info->generation_count++;
+					info->generation_count = info->generation_count == 0 ? 1 : info->generation_count;
+
+					info->tags = 0;
+					info->layer = 0;
+					info->base_archetype = additional_data.base_archetypes[entity_index];
+					info->main_archetype = additional_data.archetypes[entity_index];
+					info->stream_index = additional_data.stream_indices[entity_index];
+
+					// Set the appropriate entity now
+					entities[entity_index].index = GetEntityIndexFromPoolOffset(index, entity_pool->m_pool_power_of_two, entities[entity_index].value);
+					entities[entity_index].generation_count = info->generation_count;
+				}
 			}
-			else if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_CHUNKS) {
-				unsigned int total_entity_count = 0;
-				for (size_t chunk_index = 0; chunk_index < additional_data.chunk_positions.size; chunk_index++) {
-					for (size_t entity_index = 0; entity_index < additional_data.chunk_positions[chunk_index].entity_count; entity_index++) {
-						EntityInfo info;
-						info.base_archetype = additional_data.archetype_indices.y;
-						info.main_archetype = additional_data.archetype_indices.x;
-						info.chunk = additional_data.chunk_positions[chunk_index].chunk_index;
-						info.stream_index = additional_data.chunk_positions[chunk_index].stream_offset + entity_index;
-						// This will be a handle that can be used to index into this specific chunk of the entity pool
-						entities[total_entity_count++] = GetEntityFromPoolOffset(index, entity_pool->m_pool_power_of_two, entity_pool->m_entity_infos[index].stream.Add(info));
-					}
+			else if constexpr (additional_data_type == ENTITY_POOL_ALLOCATE_WITH_POSITION) {
+				for (size_t entity_index = 0; entity_index < entities.size; entity_index++) {
+					unsigned int info_index = entity_pool->m_entity_infos[index].stream.ReserveOne();
+
+					EntityInfo* current_info = entity_pool->m_entity_infos[index].stream.ElementPointer(info_index);
+					current_info->base_archetype = additional_data.archetype_indices.y;
+					current_info->main_archetype = additional_data.archetype_indices.x;
+					current_info->stream_index = additional_data.copy_position + entity_index;
+
+					current_info->tags = 0;
+					current_info->layer = 0;
+					current_info->generation_count++;
+					current_info->generation_count = current_info->generation_count == 0 ? 1 : current_info->generation_count;
+					// This will be a handle that can be used to index into this specific chunk of the entity pool
+					entities[entity_index].index = GetEntityIndexFromPoolOffset(index, entity_pool->m_pool_power_of_two, info_index);
+					entities[entity_index].generation_count = current_info->generation_count;
 				}
 			}
 			else {
-				entity_pool->m_entity_infos[index].stream.Reserve(Stream<unsigned int>(entities.buffer, entities.size));
+				entity_pool->m_entity_infos[index].stream.Reserve({ entities.buffer, entities.size });
+				// Increase the generation count for those entities and generate the appropriate infos
+				for (size_t entity_index = 0; entity_index < entities.size; entity_index++) {
+					EntityInfo* info = entity_pool->m_entity_infos[index].stream.ElementPointer(entities[entity_index].value);
+					info->generation_count++;
+					info->generation_count = info->generation_count == 0 ? 1 : info->generation_count;
+
+					info->tags = 0;
+					info->layer = 0;
+					info->base_archetype = -1;
+					info->main_archetype = -1;
+					info->stream_index = -1;
+
+					// Set the appropriate entity now
+					entities[entity_index].index = GetEntityIndexFromPoolOffset(index, entity_pool->m_pool_power_of_two, entities[entity_index].value);
+					entities[entity_index].generation_count = info->generation_count;
+				}
 			}
 		};
 
@@ -240,16 +203,127 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::AllocateEx(Stream<Entity> entities, EntityInfo* infos)
+	void EntityPool::AllocateEx(Stream<Entity> entities, const unsigned short* archetypes, const unsigned short* base_archetypes, const unsigned int* stream_indices)
 	{
-		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_INFOS>(this, entities, {infos});
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_INFOS>(this, entities, {archetypes, base_archetypes, stream_indices});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, Stream<EntitySequence> chunk_positions)
+	void EntityPool::AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, unsigned int copy_position)
 	{
-		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_CHUNKS>(this, entities, { nullptr, archetype_indices, chunk_positions });
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_POSITION>(this, entities, { nullptr, nullptr, nullptr, archetype_indices, copy_position });
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	EntityInfo GetInfoCrashCheck(
+		const EntityPool* entity_pool,
+		Entity entity,
+		const char* file,
+		const char* function,
+		unsigned int line
+	) {
+		uint2 entity_indices = GetPoolAndEntityIndex(entity_pool, entity);
+		ECS_CRASH_RETURN_VALUE_EX(
+			entity_indices.x < entity_pool->m_entity_infos.size && entity_pool->m_entity_infos[entity_indices.x].is_in_use,
+			{},
+			"Invalid entity {#} when trying to retrieve EntityInfo.",
+			file,
+			function,
+			line,
+			entity.index
+		);
+
+		EntityInfo info = entity_pool->m_entity_infos[entity_indices.x].stream[entity_indices.y];
+		bool is_valid = info.generation_count == entity.generation_count;
+		if (!is_valid) {
+			if (info.generation_count == 0) {
+				ECS_CRASH_EX(
+					"Generation counter mismatch for entity {#}. The entity is deleted.",
+					file,
+					function,
+					line,
+					entity.index
+				);
+				return {};
+			}
+			else {
+				ECS_CRASH_EX(
+					"Generation counter mismatch for entity {#}. Entity counter {#}, info counter {#}.",
+					file,
+					function,
+					line,
+					entity.index,
+					entity.generation_count,
+					info.generation_count
+				);
+				return {};
+			}
+		}
+
+		return info;
+	}
+
+	EntityInfo* GetInfoCrashCheck(
+		EntityPool* entity_pool,
+		Entity entity, 
+		const char* file,
+		const char* function,
+		unsigned int line
+	) {
+		uint2 entity_indices = GetPoolAndEntityIndex(entity_pool, entity);
+		ECS_CRASH_RETURN_VALUE_EX(
+			entity_indices.x < entity_pool->m_entity_infos.size && entity_pool->m_entity_infos[entity_indices.x].is_in_use,
+			nullptr,
+			"Invalid entity {#} when trying to retrieve EntityInfo.",
+			file,
+			function,
+			line,
+			entity.index
+		);
+
+		EntityInfo* info = entity_pool->m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);
+		bool is_valid = info->generation_count == entity.generation_count;
+		if (!is_valid) {
+			if (info->generation_count == 0) {
+				ECS_CRASH_EX(
+					"Generation counter mismatch for entity {#}. The entity is deleted.",
+					file,
+					function,
+					line,
+					entity.index
+				);
+				return nullptr;
+			}
+			else {
+				ECS_CRASH_EX(
+					"Generation counter mismatch for entity {#}. Entity counter {#}, info counter {#}.",
+					file,
+					function,
+					line,
+					entity.index,
+					entity.generation_count,
+					info->generation_count
+				);
+				return nullptr;
+			}
+		}
+
+		return info;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::ClearTag(Entity entity, unsigned char tag) {
+		EntityInfo* info = GetInfoCrashCheck(
+			this, 
+			entity, 
+			__FILE__,
+			__FUNCTION__,
+			__LINE__
+		);
+		info->tags &= ~(1 << tag);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -257,7 +331,19 @@ namespace ECSEngine {
 	void EntityPool::Deallocate(Entity entity)
 	{
 		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
+		ECS_CRASH_RETURN(
+			entity_indices.x < m_entity_infos.size&& m_entity_infos[entity_indices.x].is_in_use,
+			"Incorrect entity {2} when trying to delete it.",
+			entity.index
+		);
+
+		EntityInfo* info = m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);
+		// Check that they have the same generation counter
+		ECS_CRASH_RETURN(info->generation_count == entity.generation_count, "Trying to delete an entity {2} which has already been deleted.", entity.index);
 		m_entity_infos[entity_indices.x].stream.Remove(entity_indices.y);
+		// Signal that there is no entity allocated in this position
+		info->generation_count = 0;
+
 		if (m_entity_infos[entity_indices.x].stream.size == 0) {
 			// Deallocate the buffer and mark as unused
 			m_memory_manager->Deallocate(m_entity_infos[entity_indices.x].stream.buffer);
@@ -282,7 +368,47 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	bool EntityPool::IsValid(Entity entity) {
+		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
+		if (entity_indices.x >= m_entity_infos.size || m_entity_infos[entity_indices.y].is_in_use) {
+			return false;
+		}
+		EntityInfo info = m_entity_infos[entity_indices.x].stream[entity_indices.y];
+		return info.generation_count == entity.generation_count;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool EntityPool::HasTag(Entity entity, unsigned char tag) const
+	{
+
+		EntityInfo info = GetInfoCrashCheck(
+			this, 
+			entity, 
+			__FILE__,
+			__FUNCTION__,
+			__LINE__
+		);
+
+		return (info.tags & tag) != 0;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	EntityInfo EntityPool::GetInfo(Entity entity) const {
+		return GetInfoCrashCheck(
+			this,
+			entity,
+			__FILE__,
+			__FUNCTION__,
+			__LINE__
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	EntityInfo EntityPool::GetInfoNoChecks(Entity entity) const
+	{
 		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
 		return m_entity_infos[entity_indices.x].stream[entity_indices.y];
 	}
@@ -291,106 +417,56 @@ namespace ECSEngine {
 
 	EntityInfo* EntityPool::GetInfoPtr(Entity entity)
 	{
+		return GetInfoCrashCheck(
+			this,
+			entity,
+			__FILE__,
+			__FUNCTION__,
+			__LINE__
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	EntityInfo* EntityPool::GetInfoPtrNoChecks(Entity entity)
+	{
 		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
 		return m_entity_infos[entity_indices.x].stream.ElementPointer(entity_indices.y);
 	}
-
+	
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::SetEntityInfo(Entity entity, EntityInfo new_info) {
-		unsigned int pool_index = entity.value >> m_pool_power_of_two;
-		unsigned int entity_index = entity.value & (m_pool_power_of_two - 1);
-		m_entity_infos[pool_index].stream[entity_index] = new_info;
-	}
+	void EntityPool::SetEntityInfo(Entity entity, unsigned short archetype, unsigned short base_archetype, unsigned int stream_index) {
+		EntityInfo* info = GetInfoCrashCheck(this, entity, __FILE__, __FUNCTION__, __LINE__);
 
-	// ------------------------------------------------------------------------------------------------------------
-
-	ArchetypeQuery::ArchetypeQuery() {}
-
-	ArchetypeQuery::ArchetypeQuery(VectorComponentSignature _unique, VectorComponentSignature _shared) : unique(_unique), shared(_shared) {}
-
-	bool ECS_VECTORCALL ArchetypeQuery::Verifies(VectorComponentSignature unique_to_compare, VectorComponentSignature shared_to_compare) const
-	{
-		return VerifiesUnique(unique_to_compare) && VerifiesShared(shared_to_compare);
-	}
-
-	bool ECS_VECTORCALL ArchetypeQuery::VerifiesUnique(VectorComponentSignature unique_to_compare) const
-	{
-		return unique_to_compare.HasComponents(unique);
-	}
-
-	bool ECS_VECTORCALL ArchetypeQuery::VerifiesShared(VectorComponentSignature shared_to_compare) const
-	{
-		return shared_to_compare.HasComponents(shared);
+		info->base_archetype = base_archetype;
+		info->main_archetype = archetype;
+		info->stream_index = stream_index;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ArchetypeQueryExclude::ArchetypeQueryExclude() {}
-
-	ArchetypeQueryExclude::ArchetypeQueryExclude(
-		VectorComponentSignature _unique, 
-		VectorComponentSignature _shared, 
-		VectorComponentSignature _exclude_unique, 
-		VectorComponentSignature _exclude_shared
-	) : unique(_unique), shared(_shared), unique_excluded(_exclude_unique), shared_excluded(_exclude_shared) {}
-
-	bool ECS_VECTORCALL ArchetypeQueryExclude::Verifies(VectorComponentSignature unique_to_compare, VectorComponentSignature shared_to_compare) const
-	{
-		return VerifiesUnique(unique_to_compare) && VerifiesShared(shared_to_compare);
-	}
-
-	bool ECS_VECTORCALL ArchetypeQueryExclude::VerifiesUnique(VectorComponentSignature unique_to_compare) const
-	{
-		return unique_to_compare.HasComponents(unique) && unique_to_compare.ExcludesComponents(unique_excluded);
-	}
-
-	bool ECS_VECTORCALL ArchetypeQueryExclude::VerifiesShared(VectorComponentSignature shared_to_compare) const
-	{
-		return shared_to_compare.HasComponents(shared) && shared_to_compare.ExcludesComponents(shared_excluded);
+	void EntityPool::SetTag(Entity entity, unsigned char tag) {
+		EntityInfo* info = GetInfoCrashCheck(this, entity, __FILE__, __FUNCTION__, __LINE__);
+		info->tags |= 1 << tag;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool ECS_VECTORCALL SharedComponentSignatureHasInstances(
-		VectorComponentSignature archetype_components,
-		VectorComponentSignature archetype_instances,
-		VectorComponentSignature query_components, 
-		VectorComponentSignature query_instances
-	)
+	void EntityPool::SetLayer(Entity entity, unsigned int layer) {
+		EntityInfo* info = GetInfoCrashCheck(this, entity, __FILE__, __FUNCTION__, __LINE__);
+		info->layer = layer;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// Target this memory manager to be able to hold half a million objects without going to the global allocator
+	// Add a small number of half a million to accomodate smaller allocations, like the one for the resizable stream
+	// Support another half a million for each global allocator callback
+	MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory)
 	{
-		Vec16us splatted_component;
-		Vec16us splatted_instance;
-		Vec16us zero_vector = ZeroVectorInteger();
-		Vec16sb is_zero;
-		Vec16sb match;
-		Vec16sb instance_match;
-
-#define LOOP_ITERATION(iteration)	splatted_component = Broadcast16<iteration>(query_components.value); \
-									/* Test to see if the current element is zero */ \
-									is_zero = splatted_component == zero_vector; \
-									/* If we get to an element which is 0, that means all components have been matched */ \
-									if (horizontal_and(is_zero)) { \
-										return true; \
-									} \
-									match = splatted_component == archetype_components.value; \
-									if (!horizontal_or(match)) { \
-										return false; \
-									} \
-									/* Test now the instance - splat the instance and keep the position where only the component was matched */ \
-									splatted_instance = Broadcast16<iteration>(query_instances.value); \
-									instance_match = splatted_instance == archetype_instances.value; \
-									match &= instance_match; \
-									if (!horizontal_or(match)) { \
-										return false; \
-									}
-									
-
-		LOOP_UNROLL(16, LOOP_ITERATION);
-
-		return true;
-
-#undef LOOP_ITERATION
+		size_t whole_chunk_memory = StableReferenceStream<EntityInfo>::MemoryOf(505'000);
+		return MemoryManager(whole_chunk_memory, 4096, whole_chunk_memory, global_memory);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

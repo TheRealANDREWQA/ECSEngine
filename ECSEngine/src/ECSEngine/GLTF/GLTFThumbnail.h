@@ -9,7 +9,7 @@ namespace ECSEngine {
 
 	struct GLTFThumbnailInfo {
 		float3 object_rotation;
-		float2 object_translation;
+		float3 object_translation;
 		float initial_camera_radius;
 		float camera_radius;
 	};
@@ -31,7 +31,7 @@ namespace ECSEngine {
 		const Mesh* mesh;
 		GLTFThumbnail* thumbnail;
 		float radius_delta;
-		float2 translation_delta;
+		float3 translation_delta;
 		float3 rotation_delta;
 	};
 
@@ -57,7 +57,7 @@ namespace ECSEngine {
 		const Mesh* mesh,
 		GLTFThumbnail& thumbnail, 
 		float radius_delta, 
-		float2 translation_delta,
+		float3 translation_delta,
 		float3 rotation_delta
 	);
 

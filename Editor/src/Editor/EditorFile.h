@@ -4,7 +4,6 @@
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 ECS_TOOLS;
 
 constexpr const wchar_t* EDITOR_FILE = L"Resources/projects.ecseditor";

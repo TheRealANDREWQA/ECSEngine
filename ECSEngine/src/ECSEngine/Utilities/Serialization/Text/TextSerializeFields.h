@@ -5,7 +5,7 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
+#define ECS_END_TEXT_SERIALIZE_STRING "END_SERIALIZE\n"
 
 	// Data.size represents the element count for a stream type
 	struct TextSerializeField {
@@ -40,8 +40,8 @@ namespace ECSEngine {
 			ulong4 unsigned4;
 			long4 signed4;
 			double4 floating4;
-			containers::Stream<char> ascii_characters;
-			containers::Stream<wchar_t> wide_characters;
+			Stream<char> ascii_characters;
+			Stream<wchar_t> wide_characters;
 		};
 	};
 

@@ -47,13 +47,17 @@ enum class EditorModuleLoadStatus : unsigned char {
 };
 
 struct EditorModule {
-	ECSEngine::containers::Stream<wchar_t> solution_path;
-	ECSEngine::containers::Stream<wchar_t> library_name;
+	ECSEngine::Stream<wchar_t> solution_path;
+	ECSEngine::Stream<wchar_t> library_name;
 	ECSEngine::Module ecs_module;
 	EditorModuleConfiguration configuration;
 	EditorModuleLoadStatus load_status;
 	size_t solution_last_write_time;
 	size_t library_last_write_time;
+
+	// These are needed for reflection of the settings
+	ECSEngine::HashTableDefault<void*> reflected_settings;
+	ECSEngine::Stream<wchar_t> current_settings_path;
 };
 
-using ProjectModules = ECSEngine::containers::ResizableStream<EditorModule>;
+using ProjectModules = ECSEngine::ResizableStream<EditorModule>;

@@ -329,7 +329,7 @@ namespace ECSEngine {
 		else if constexpr (position < 4) {
 			// It is in the low 64 bits of the register
 			// Use shift lower to brind the value inside the low word
-			permutation = _mm256_slli_epi64(vector, position * 16);
+			permutation = _mm256_srli_epi64(vector, position * 16);
 		}
 		else {
 			// The 16 bit types lack dedicated permute or shuffle functions
@@ -341,13 +341,13 @@ namespace ECSEngine {
 			// If it is not then bring it there
 			if constexpr (position % 4 != 0) {
 				// It is in the low 64 bits of the register
-				// Use shuffle lo in order to bring the value in the low word
-				permutation = _mm256_slli_epi64(vector, (position % 4) * 16);
+				// Use shift lower in order to bring the value in the low word
+				permutation = _mm256_srli_epi64(permutation, (position % 4) * 16);
 			}
 		}
 
 		// Broadcast now
-		return _mm256_broadcastw_epi16(_mm256_castsi256_si128(vector));
+		return _mm256_broadcastw_epi16(_mm256_castsi256_si128(permutation));
 	}
 
 	template<int position>
@@ -361,13 +361,13 @@ namespace ECSEngine {
 		else {
 			if constexpr (position < 8) {
 				// It is in the low word of the vector, only shift it
-				permutation = _mm256_slli_epi64(vector, position * 8);
+				permutation = _mm256_srli_epi64(vector, position * 8);
 			}
 			else {
 				// Use permutevar in order to bring the qword containing the byte into the low qword and then shift
 				permutation = _mm256_permute4x64_epi64(vector, position >> 4);
 				if constexpr (position % 8 != 0) {
-					permutation = _mm256_slli_epi64(vector, (position % 8) * 8);
+					permutation = _mm256_srli_epi64(permutation, (position % 8) * 8);
 				}
 			}
 		}
@@ -395,76 +395,6 @@ namespace ECSEngine {
 		return _mm256_castsi256_pd(Broadcast4<position>(_mm256_castpd_si256(vector)));
 	}
 
-
-#pragma endregion
-
-#pragma region Load Partial
-
-	// Count must be between [0; 8)
-	ECS_INLINE __m256 ECS_VECTORCALL LoadPartial8(const void* data, int count) {
-		// Create a blend mask according to the count
-		alignas(32) uint32_t masks[sizeof(__m256) / sizeof(uint32_t)] = { 0xFFFFFFFF };
-		for (size_t index = 0; index < count; index++) {
-			masks[index] = 0;
-		}
-		__m256 vector = _mm256_loadu_ps((const float*)data);
-		__m256 zero = _mm256_setzero_ps();
-
-		__m256 mask = _mm256_load_ps((const float*)masks);
-		return _mm256_blendv_ps(vector, zero, mask);
-	}
-
-	// Count must be between [0; 32)
-	ECS_INLINE __m256i ECS_VECTORCALL LoadPartial32(const void* data, int count) {
-		// Create a blend mask according to the count
-		alignas(32) uint8_t masks[sizeof(__m256i) / sizeof(uint8_t)] = { 0xFF };
-		for (size_t index = 0; index < count; index++) {
-			masks[index] = 0;
-		}
-
-		__m256i vector = _mm256_loadu_epi8(data);
-		__m256i zero = _mm256_setzero_si256();
-
-		__m256i mask = _mm256_load_si256((const __m256i*)masks);
-		return _mm256_blendv_epi8(vector, zero, mask);
-	}
-
-	// Count must be between [0; 16)
-	ECS_INLINE __m256i ECS_VECTORCALL LoadPartial16(const void* data, int count) {
-		// Create a blend mask according to the count
-		alignas(32) uint16_t masks[sizeof(__m256i) / sizeof(uint16_t)] = { 0xFFFF };
-		for (size_t index = 0; index < count; index++) {
-			masks[index] = 0;
-		}
-
-		__m256i vector = _mm256_loadu_epi16(data);
-		__m256i zero = _mm256_setzero_si256();
-
-		__m256i mask = _mm256_load_si256((const __m256i*)masks);
-		return _mm256_blendv_epi8(vector, zero, mask);
-	}
-
-	// Count must be between [0; 4)
-	ECS_INLINE __m256i ECS_VECTORCALL LoadPartial4(const void* data, int count) {
-		// Use a switch to determine how many elements to mask out
-		__m256i vector = _mm256_loadu_epi64(data);
-		__m256i zero = _mm256_setzero_si256();
-
-		__m256i result = vector;
-		switch (count) {
-		case 1:
-			// Only the first element will be kept - 2 32bit values
-			result = _mm256_blend_epi32(zero, vector, 0x03);
-			break;
-		case 2:
-			result = _mm256_blend_epi32(zero, vector, 0x0F);
-			break;
-		case 3:
-			result = _mm256_blend_epi32(zero, vector, (1 << 6) - 1);
-			break;
-		}
-		return result;
-	}
 
 #pragma endregion
 

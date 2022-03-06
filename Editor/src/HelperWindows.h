@@ -3,7 +3,7 @@
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
-ECS_CONTAINERS;
+;
 
 struct EditorState;
 

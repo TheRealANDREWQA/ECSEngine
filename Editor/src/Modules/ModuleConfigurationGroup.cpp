@@ -6,14 +6,13 @@
 #include "../Editor/EditorEvent.h"
 #include "ModuleFile.h"
 
-constexpr const wchar_t* MODULE_CONFIGURATION_GROUP_FILE_EXTENSION = L".ecsmodulegroup";
+constexpr const wchar_t* MODULE_CONFIGURATION_GROUP_FILE_EXTENSION = L".ecsmodulesgroup";
 constexpr unsigned int MODULE_CONFIGURATION_GROUP_FILE_VERSION = 0;
 
 constexpr size_t MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_GROUPS = 16;
 constexpr size_t MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_BYTE_SIZE = 10'000;
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
@@ -63,7 +62,7 @@ void ApplyModuleConfigurationGroup(EditorState* editor_state, unsigned int group
 	if (has_library_changed) {
 		bool success = SaveModuleFile(editor_state);
 		if (!success) {
-			EditorSetConsoleError(editor_state, ToStream("An error occured when saving the module file after configuration group application."));
+			EditorSetConsoleError(ToStream("An error occured when saving the module file after configuration group application."));
 		}
 	}
 }
@@ -150,18 +149,18 @@ void DeallocateModuleConfigurationGroup(EditorState* editor_state, unsigned int 
 void DeleteModuleConfigurationGroupFile(EditorState* editor_state)
 {
 	ECS_TEMP_STRING(path, 256);
-	GetModuleConfigurationGroupFilePath(editor_state, path);
+	GetProjectModuleConfigurationGroupFilePath(editor_state, path);
 	if (ExistsFileOrFolder(path)) {
 		RemoveFile(path);
 	}
 	else {
-		EditorSetConsoleError(editor_state, ToStream("An error occured when deleting the module configuration group file."));
+		EditorSetConsoleError(ToStream("An error occured when deleting the module configuration group file."));
 	}
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
-void GetModuleConfigurationGroupFilePath(EditorState* editor_state, CapacityStream<wchar_t>& path) {
+void GetProjectModuleConfigurationGroupFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path) {
 	path.size = 0;
 	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
 	path.Copy(project_file->path);
@@ -173,7 +172,7 @@ void GetModuleConfigurationGroupFilePath(EditorState* editor_state, CapacityStre
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetModuleConfigurationGroupIndex(EditorState* editor_state, Stream<char> name) {
+unsigned int GetModuleConfigurationGroupIndex(const EditorState* editor_state, Stream<char> name) {
 	for (size_t index = 0; index < editor_state->module_configuration_groups.size; index++) {
 		if (function::CompareStrings(name, editor_state->module_configuration_groups[index].name)) {
 			return index;
@@ -196,8 +195,8 @@ void RemoveModuleConfigurationGroup(EditorState* editor_state, Stream<char> name
 	if (group_index != -1) {
 		RemoveModuleConfigurationGroup(editor_state, group_index);
 	}
-	ECS_FORMAT_TEMP_STRING(error_message, "Could not find {0} module configuration group.", name);
-	EditorSetConsoleError(editor_state, error_message);
+	ECS_FORMAT_TEMP_STRING(error_message, "Could not find {#} module configuration group.", name);
+	EditorSetConsoleError(error_message);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -214,7 +213,7 @@ void ResetModuleConfigurationGroups(EditorState* editor_state)
 
 bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(file_path, 256);
-	GetModuleConfigurationGroupFilePath(editor_state, file_path);
+	GetProjectModuleConfigurationGroupFilePath(editor_state, file_path);
 
 	Stream<void> content = ReadWholeFileBinary(file_path, GetAllocatorPolymorphic(editor_state->editor_allocator));
 	if (content.buffer != nullptr) {
@@ -235,7 +234,7 @@ bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 		ECS_ASSERT(group_count < MODULE_CONFIGURATION_GROUP_FILE_MAXIMUM_GROUPS);
 		if (group_count == 0) {
 			ResetModuleConfigurationGroups(editor_state);
-			EditorSetConsoleWarn(editor_state, ToStream("The module configuration group file is empty."));
+			EditorSetConsoleWarn(ToStream("The module configuration group file is empty."));
 			editor_state->editor_allocator->Deallocate(content.buffer);
 			return false;
 		}
@@ -333,7 +332,7 @@ bool LoadModuleConfigurationGroupFile(EditorState* editor_state) {
 
 bool SaveModuleConfigurationGroupFile(EditorState* editor_state) {
 	ECS_TEMP_STRING(file_path, 256);
-	GetModuleConfigurationGroupFilePath(editor_state, file_path);
+	GetProjectModuleConfigurationGroupFilePath(editor_state, file_path);
 
 	Stream<ModuleConfigurationGroup> groups(editor_state->module_configuration_groups.buffer, editor_state->module_configuration_groups.size);
 
@@ -453,7 +452,7 @@ void ModuleConfigurationGroupAddAction(ActionData* action_data) {
 
 		bool success = SaveModuleConfigurationGroupFile(data->editor_state);
 		if (!success) {
-			EditorSetConsoleError(data->editor_state, ToStream("An error occured when saving the module configuration group file."));
+			EditorSetConsoleError(ToStream("An error occured when saving the module configuration group file."));
 		}
 		data->destroy_window = true;
 	}
@@ -486,7 +485,7 @@ void ModuleConfigurationGroupAddAction(ActionData* action_data) {
 
 		bool success = SaveModuleConfigurationGroupFile(data->editor_state);
 		if (!success) {
-			EditorSetConsoleError(data->editor_state, ToStream("An error occured when saving the module configuration group file."));
+			EditorSetConsoleError(ToStream("An error occured when saving the module configuration group file."));
 		}
 		data->destroy_window = true;
 	}

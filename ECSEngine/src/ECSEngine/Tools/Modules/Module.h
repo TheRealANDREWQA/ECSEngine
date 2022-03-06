@@ -11,7 +11,7 @@ namespace ECSEngine {
 
 	struct World;
 
-	using ModuleFunction = void (*)(World* world, containers::Stream<TaskDependencyElement>& module_stream);
+	using ModuleFunction = void (*)(World* world, Stream<TaskDependencyElement>& module_stream);
 
 	// Module function missing is returned for either graphics function missing
 	enum ModuleStatus : unsigned char {
@@ -23,19 +23,19 @@ namespace ECSEngine {
 	struct Module {
 		ModuleStatus code;
 		ModuleFunction function;
-		containers::Stream<TaskDependencyElement> tasks;
+		Stream<TaskDependencyElement> tasks;
 		HMODULE os_module_handle;
 	};
 
 	// Returns true if it has the associated DLL function
-	ECSENGINE_API bool IsModule(containers::Stream<wchar_t> path);
+	ECSENGINE_API bool IsModule(Stream<wchar_t> path);
 
 	// It does not load the tasks because it misses the allocator for string allocation
 	// The function LoadModuleTasks can be used to load them at a later time
-	ECSENGINE_API Module LoadModule(containers::Stream<wchar_t> path);
+	ECSENGINE_API Module LoadModule(Stream<wchar_t> path);
 
 	// It loads the thread tasks
-	ECSENGINE_API Module LoadModule(containers::Stream<wchar_t> path, World* world, AllocatorPolymorphic allocator);
+	ECSENGINE_API Module LoadModule(Stream<wchar_t> path, World* world, AllocatorPolymorphic allocator);
 
 	// It will not release the OS Handler - it must be kept around as long as the tasks are loaded;
 	// It does a single coallesced allocation
@@ -47,7 +47,7 @@ namespace ECSEngine {
 
 	// It will not release the OS Handler - it must be kept around as long as the tasks are loaded;
 	// It does a single coallesced allocation
-	ECSENGINE_API containers::Stream<TaskDependencyElement> LoadModuleTasks(
+	ECSENGINE_API Stream<TaskDependencyElement> LoadModuleTasks(
 		World* world,
 		Module module,
 		AllocatorPolymorphic allocator

@@ -99,6 +99,7 @@
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <SupportJustMyCode>true</SupportJustMyCode>
       <SDLCheck>false</SDLCheck>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -121,7 +122,7 @@
       <WarningLevel>Level1</WarningLevel>
       <PreprocessorDefinitions>ECSENGINE_PLATFORM_WINDOWS;ECSENGINE_BUILD_DLL;ECSENGINE_RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>src/Includes;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <MinimalRebuild>false</MinimalRebuild>
@@ -129,16 +130,17 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <FloatingPointModel>Precise</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <SupportJustMyCode>true</SupportJustMyCode>
       <SDLCheck>false</SDLCheck>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -177,6 +179,7 @@
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <SDLCheck>false</SDLCheck>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -200,12 +203,17 @@
     <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\Deck.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
-    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityHierarchy.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Internal\ForEach.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
+    <ClInclude Include="src\ECSEngine\Internal\SystemManager.h" />
+    <ClInclude Include="src\ECSEngine\Internal\VectorComponentSignature.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
     <ClInclude Include="src\ECSEngine\Math\Conversion.h" />
     <ClInclude Include="src\ECSEngine\Math\Hermite.h" />
@@ -236,7 +244,9 @@
     <ClInclude Include="src\ECSEngine\Tools\UI\UIResourcePaths.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIStructures.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UISystem.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
@@ -249,6 +259,7 @@
     <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
+    <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
     <ClInclude Include="src\Includes\ECSEngineInternal.h" />
@@ -311,7 +322,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\Timer.h" />
     <ClInclude Include="src\Includes\ecspch.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stream.h" />
-    <ClInclude Include="src\ECSEngine\Internal\System\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\World.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskManager.h" />
     <ClInclude Include="src\ECSEngine\Containers\StaticSequentialTable.h" />
@@ -329,10 +339,25 @@
     <ClCompile Include="src\ECSEngine\GLTF\GLTFLoader.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\GLTFThumbnail.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Archetype.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\EntityHierarchy.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\EntityManagerSerialize.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\ForEach.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\ResourceManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\SystemManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\VectorComponentSignature.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Speed</FavorSizeOrSpeed>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NDEBUG;ECSENGINE_PLATFORM_WINDOWS;ECSENGINE_BUILD_DLL;ECSENGINE_RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SupportJustMyCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</SupportJustMyCode>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Speed</FavorSizeOrSpeed>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Internal\World.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\DirectXTexHelpers.cpp" />
@@ -356,7 +381,9 @@
     <ClCompile Include="src\ECSEngine\Tools\UI\UIStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UISystem.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
@@ -394,7 +421,6 @@
     <ClCompile Include="src\Includes\ecspch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="src\ECSEngine\Internal\System\SystemManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskManager.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
   </ItemGroup>
@@ -613,6 +639,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="cpp.hint" />
     <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Macros.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />

@@ -6,9 +6,7 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
-	class ECSENGINE_API StaticSequentialTable
+	struct ECSENGINE_API StaticSequentialTable
 	{
 	public:
 		StaticSequentialTable();

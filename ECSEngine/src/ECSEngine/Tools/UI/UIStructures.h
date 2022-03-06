@@ -17,8 +17,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	namespace Tools {
 
 		using UIToolsAllocator = ECSEngine::ResizableMemoryArena;
@@ -520,7 +518,7 @@ namespace ECSEngine {
 
 #pragma region Window
 
-		using WindowTable = containers::HashTable<void*, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
+		using WindowTable = HashTable<void*, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
 
 		struct ECSENGINE_API UIDrawerElementDrawData {
 			UIDrawerElementDraw draw;
@@ -553,7 +551,7 @@ namespace ECSEngine {
 			char* name;
 			void* window_data;
 			size_t window_data_size;
-			containers::Stream<UISpriteVertex> name_vertex_buffer;
+			Stream<UISpriteVertex> name_vertex_buffer;
 			UIDynamicStream<const char*> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
 			HashTable<UIWindowDynamicResource, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> dynamic_resources;

@@ -11,8 +11,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	namespace Tools {
 
 		struct UIDrawConfig;
@@ -25,7 +23,7 @@ namespace ECSEngine {
 		using UIDrawerSliderConvertTextInput = void (*)(CapacityStream<char>& characters, void* data);
 		using UIDrawerSliderIsSmaller = bool (*)(const void* left, const void* right);
 
-		enum class ECSENGINE_API UIDrawerMode : unsigned char {
+		enum class UIDrawerMode : unsigned char {
 			Indent,
 			NextRow,
 			NextRowCount,
@@ -35,7 +33,7 @@ namespace ECSEngine {
 			Nothing
 		};
 
-		enum class ECSENGINE_API TextAlignment : unsigned char {
+		enum class TextAlignment : unsigned char {
 			Left,
 			Right,
 			Middle,
@@ -43,20 +41,13 @@ namespace ECSEngine {
 			Bottom
 		};
 
-		enum class ECSENGINE_API WindowSizeTransformType : unsigned char {
+		enum class WindowSizeTransformType : unsigned char {
 			Horizontal,
 			Vertical,
 			Both
 		};
 
 		struct ECSENGINE_API UIConfigAbsoluteTransform {
-
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 4;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_ABSOLUTE_TRANSFORM;
 			}
@@ -66,13 +57,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigRelativeTransform {
-
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 4;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_RELATIVE_TRANSFORM;
 			}
@@ -82,13 +66,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigWindowDependentSize {
-
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigWindowDependentSize) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 			}
@@ -99,12 +76,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigTextParameters {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigTextParameters) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_PARAMETERS;
 			}
@@ -115,29 +86,15 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigTextAlignment {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 1;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_ALIGNMENT;
 			}
 
 			TextAlignment horizontal = TextAlignment::Middle;
 			TextAlignment vertical = TextAlignment::Middle;
-		private:
-			unsigned char padding[2];
 		};
 
 		struct ECSENGINE_API UIConfigColor {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 1;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR;
 			}
@@ -146,12 +103,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigButtonHoverable {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigButtonHoverable) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_BUTTON_HOVERABLE;
 			}
@@ -160,12 +111,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigSliderColor {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 1;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_COLOR;
 			}
@@ -174,12 +119,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigSliderShrink {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 2;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_SHRINK;
 			}
@@ -188,12 +127,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigSliderPadding {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 1;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_PADDING;
 			}
@@ -202,12 +135,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigSliderLength {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 1;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_LENGTH;
 			}
@@ -216,12 +143,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigBorder {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigBorder) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_BORDER;
 			}
@@ -367,12 +288,6 @@ namespace ECSEngine {
 		}
 
 		struct ECSENGINE_API UIConfigTextInputHint {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigTextInputHint) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_INPUT_HINT;
 			}
@@ -381,12 +296,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigTextInputCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigTextInputCallback);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_INPUT_CALLBACK;
 			}
@@ -395,12 +304,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigSliderChangedValueCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigSliderChangedValueCallback) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 			}
@@ -409,12 +312,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigHoverableAction {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigHoverableAction) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_HOVERABLE_ACTION;
 			}
@@ -423,12 +320,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigClickableAction {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigClickableAction) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_CLICKABLE_ACTION;
 			}
@@ -437,12 +328,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGeneralAction {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigGeneralAction) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_GENERAL_ACTION;
 			}
@@ -451,12 +336,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigRectangleVertexColor {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigRectangleVertexColor) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_VERTEX_COLOR;
 			}
@@ -465,22 +344,16 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigSpriteGradient {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigSpriteGradient) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SPRITE_GRADIENT;
 			}
 
-			LPCWSTR texture;
+			const wchar_t* texture;
 			float2 top_left_uv;
 			float2 bottom_right_uv;
 		};
 
-		struct ECSENGINE_API UIDrawerCollapsingHeader {
+		struct UIDrawerCollapsingHeader {
 			UIDrawerTextElement name;
 			bool state;
 		};
@@ -488,7 +361,7 @@ namespace ECSEngine {
 		// can be drawer or initializer
 		using UINodeDraw = void (*)(void* drawer_ptr, void* window_data, void* other_ptr);
 
-		struct ECSENGINE_API UIDrawerHierarchyNode {
+		struct UIDrawerHierarchyNode {
 			UIDrawerTextElement name_element;
 			const char* name;
 			unsigned int name_length;
@@ -499,25 +372,25 @@ namespace ECSEngine {
 			UINodeDraw function;
 		};
 
-		struct ECSENGINE_API UIDrawerHierarchyPendingNode {
+		struct UIDrawerHierarchyPendingNode {
 			UINodeDraw function;
 			unsigned int bound_node;
 		};
 
-		struct ECSENGINE_API UIDrawerHierarchiesElement {
+		struct UIDrawerHierarchiesElement {
 			void* hierarchy;
 			unsigned int node_index;
 			unsigned int children_count;
 		};
 
 		// used to coordinate multiple hierarchies - one parent and the rest child
-		struct ECSENGINE_API UIDrawerHierarchiesData {
+		struct UIDrawerHierarchiesData {
 			UIDynamicStream<UIElementTransform> hierarchy_transforms;
 			UIDynamicStream<UIDrawerHierarchiesElement> elements;
 			void* active_hierarchy;
 		};
 
-		struct ECSENGINE_API UIDrawerHierarchySelectable {
+		struct UIDrawerHierarchySelectable {
 			unsigned int selected_index;
 			unsigned int offset;
 			unsigned int* pointer;
@@ -655,17 +528,11 @@ namespace ECSEngine {
 
 		// if using this for list, override closed uvs
 		struct ECSENGINE_API UIConfigHierarchySpriteTexture {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigHierarchySpriteTexture) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_SPRITE_TEXTURE;
 			}
 
-			LPCWSTR texture;
+			const wchar_t* texture;
 			float2 top_left_closed_uv = { 0.0f, 0.0f };
 			float2 bottom_right_closed_uv = { 1.0f, 1.0f };
 			float2 top_left_opened_uv = {0.0f, 0.0f};
@@ -676,12 +543,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigHierarchyNoAction {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigHierarchyNoAction) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME;
 			}
@@ -691,12 +552,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigHierarchyChild {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return 2;
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_CHILD;
 			}
@@ -707,12 +562,6 @@ namespace ECSEngine {
 		// The callback receives the hierarchy into additional data parameter
 		// Pointer or callback can miss
 		struct ECSENGINE_API UIConfigHierarchySelectable {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			static inline constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigHierarchySelectable) / sizeof(float);
-			}
 			static inline constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_SELECTABLE;
 			}
@@ -748,29 +597,38 @@ namespace ECSEngine {
 			UIConfigHierarchyNoAction* hierarchy_extra;
 		};
 
-		struct ECSENGINE_API UIDrawerSentenceNotCached {
+		struct UIDrawerSentenceNotCached {
 			Stream<unsigned int> whitespace_characters;
 		};
 
-		struct ECSENGINE_API UIDrawerWhitespaceCharacter {
+		struct UIDrawerWhitespaceCharacter {
 			unsigned short position;
 			char type;
 		};
 
 		struct ECSENGINE_API UIDrawerSentenceBase {
-			void SetWhitespaceCharacters(const char* characters, size_t character_count);
+			void SetWhitespaceCharacters(const char* characters, size_t character_count, char parse_token = ' ');
 
 			Stream<UISpriteVertex> vertices;
 			Stream<UIDrawerWhitespaceCharacter> whitespace_characters;
 		};
 
-		struct ECSENGINE_API UIDrawerSentenceCached {
+		struct UIDrawerSentenceCached {
 			UIDrawerSentenceBase base;
 			float2 zoom;
 			float2 inverse_zoom;
 		};
 
-		struct ECSENGINE_API UIDrawerTextTable {
+		struct UIDrawerSentenceFitSpaceToken {
+			static inline constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN;
+			}
+
+			char token;
+			bool keep_token = true;
+		};
+
+		struct UIDrawerTextTable {
 			Stream<Stream<UISpriteVertex>> labels;
 			Stream<float> column_scales;
 			float row_scale;
@@ -779,12 +637,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGraphKeepResolutionX {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return 2;
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_KEEP_RESOLUTION_X;
 			}
@@ -794,12 +646,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGraphKeepResolutionY {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return 2;
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_KEEP_RESOLUTION_Y;
 			}
@@ -809,12 +655,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGraphColor {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return 1;
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_DROP_COLOR;
 			}
@@ -823,12 +663,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigHistogramColor {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return 1;
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_HISTOGRAM_COLOR;
 			}
@@ -836,7 +670,7 @@ namespace ECSEngine {
 			Color color;
 		};
 
-		struct ECSENGINE_API UIDrawerGraphTagData {
+		struct UIDrawerGraphTagData {
 			void* drawer;
 			float2 position;
 			float2 graph_position;
@@ -844,12 +678,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGraphMinY {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return 1;
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_MIN_Y;
 			}
@@ -858,12 +686,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGraphMaxY {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return 1;
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_MAX_Y;
 			}
@@ -872,12 +694,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGraphTags {
-			inline const void* GetParameters() const {
-				return this;
-			}
-			constexpr inline static size_t GetParameterCount() {
-				return sizeof(UIConfigGraphTags) / sizeof(float);
-			}
 			constexpr inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_TAGS;
 			}
@@ -890,13 +706,13 @@ namespace ECSEngine {
 			unsigned int horizontal_tag_count = 0;
 		};
 
-		struct ECSENGINE_API UIDrawerMenuWindow {
+		struct UIDrawerMenuWindow {
 			const char* name;
 			float2 position;
 			float2 scale;
 		};
 
-		struct ECSENGINE_API UIDrawerMenuState {
+		struct UIDrawerMenuState {
 			unsigned short* left_row_substreams;
 			unsigned short* right_row_substreams;
 			char* left_characters;
@@ -923,7 +739,7 @@ namespace ECSEngine {
 			UIDrawerMenuState state;
 		};
 
-		struct ECSENGINE_API UIDrawerMenuGeneralData {
+		struct UIDrawerMenuGeneralData {
 			UIDrawerMenu* menu;
 			UIDrawerMenuState* destroy_state = nullptr;
 			unsigned char menu_initializer_index = 255;
@@ -933,7 +749,7 @@ namespace ECSEngine {
 			bool is_opened_when_clicked = false;
 		};
 
-		struct ECSENGINE_API UIDrawerMenuDrawWindowData {
+		struct UIDrawerMenuDrawWindowData {
 			UIDrawerMenu* menu;
 			UIDrawerMenuState* state;
 		};
@@ -970,13 +786,6 @@ namespace ECSEngine {
 		using UIDrawerMultiGraphSample7 = UIDrawerMultiGraphSample<7>;
 
 		struct ECSENGINE_API UIConfigColorInputCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigColorInputCallback) / sizeof(float);
-			}
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR_INPUT_CALLBACK;
 			}
@@ -994,7 +803,7 @@ namespace ECSEngine {
 			Dockspace
 		};
 
-		struct ECSENGINE_API UIParameterWindowReturnToDefaultButtonData {
+		struct UIParameterWindowReturnToDefaultButtonData {
 			UIWindowDrawerDescriptor* window_descriptor;
 			void* system_descriptor;
 			void* default_descriptor;
@@ -1004,14 +813,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigToolTip {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigToolTip) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_TOOL_TIP;
 			}
@@ -1019,19 +820,19 @@ namespace ECSEngine {
 			const char* characters;
 		};
 
-		struct ECSENGINE_API UIDrawerStateTable {
+		struct UIDrawerStateTable {
 			UIDrawerTextElement name;
 			Stream<UIDrawerTextElement> labels;
 			unsigned int max_x_scale;
 		};
 
-		struct ECSENGINE_API UIDrawerMenuButtonData {
+		struct UIDrawerMenuButtonData {
 			UIWindowDescriptor descriptor;
 			size_t border_flags;
 			bool is_opened_when_pressed;
 		};
 
-		struct ECSENGINE_API UIDrawerFilterMenuData {
+		struct UIDrawerFilterMenuData {
 			const char* window_name;
 			const char* name;
 			Stream<const char*> labels;
@@ -1040,7 +841,7 @@ namespace ECSEngine {
 			bool* notifier;
 		};
 
-		struct ECSENGINE_API UIDrawerFilterMenuSinglePointerData {
+		struct UIDrawerFilterMenuSinglePointerData {
 			const char* window_name;
 			const char* name;
 			Stream<const char*> labels;
@@ -1049,28 +850,20 @@ namespace ECSEngine {
 			bool* notifier;
 		};
 
-		struct ECSENGINE_API UIDrawerBufferState {
+		struct UIDrawerBufferState {
 			size_t solid_color_count;
 			size_t text_sprite_count;
 			size_t sprite_count;
 			size_t sprite_cluster_count;
 		};
 
-		struct ECSENGINE_API UIDrawerHandlerState {
+		struct UIDrawerHandlerState {
 			size_t hoverable_count;
 			size_t clickable_count;
 			size_t general_count;
 		};
 
 		struct ECSENGINE_API UIConfigStateTableNotify {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigStateTableNotify) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_STATE_TABLE_NOTIFY_ON_CHANGE;
 			}
@@ -1080,20 +873,12 @@ namespace ECSEngine {
 
 		using UIConfigFilterMenuNotify = UIConfigStateTableNotify;
 
-		struct ECSENGINE_API UIDrawerStateTableBoolClickable {
+		struct UIDrawerStateTableBoolClickable {
 			bool* notifier;
 			bool* state;
 		};
 
 		struct ECSENGINE_API UIConfigComboBoxPrefix {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigComboBoxPrefix) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_COMBO_BOX_PREFIX;
 			}
@@ -1101,12 +886,12 @@ namespace ECSEngine {
 			const char* prefix;
 		};
 
-		struct ECSENGINE_API UIDrawerLabelHierarchyLabelData {
+		struct UIDrawerLabelHierarchyLabelData {
 			bool state;
 			unsigned char activation_count;
 		};
 
-		struct ECSENGINE_API UIDrawerLabelHierarchy {
+		struct UIDrawerLabelHierarchy {
 			Stream<char> active_label;
 			Stream<char> selected_label_temporary;
 			Stream<char> right_click_label_temporary;
@@ -1118,14 +903,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigLabelHierarchySpriteTexture {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigLabelHierarchySpriteTexture) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE;
 			}
@@ -1145,14 +922,6 @@ namespace ECSEngine {
 		// The callback receives the label char* in the additional action data member; if copy_on_initialization is set,
 		//  then the data parameter will be copied only in the initializer pass
 		struct ECSENGINE_API UIConfigLabelHierarchySelectableCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigLabelHierarchySelectableCallback) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK;
 			}
@@ -1165,14 +934,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigLabelHierarchyHashTableCapacity {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigLabelHierarchyHashTableCapacity) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY;
 			}
@@ -1184,14 +945,6 @@ namespace ECSEngine {
 		// label stream; if copy_on_initialization is set, then the data parameter will be copied only in the initializer
 		// pass
 		struct ECSENGINE_API UIConfigLabelHierarchyRightClick {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigLabelHierarchyRightClick) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
 			}
@@ -1207,14 +960,6 @@ namespace ECSEngine {
 		// Count must be filled in order to be double checked with the drawer count
 		// In order to prevent out of bounds accesses
 		struct ECSENGINE_API UIConfigSentenceHoverableHandlers {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigSentenceHoverableHandlers) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SENTENCE_HOVERABLE_HANDLERS;
 			}
@@ -1230,14 +975,6 @@ namespace ECSEngine {
 		// Count must be filled in order to be double checked with the drawer count
 		// In order to prevent out of bounds accesses
 		struct ECSENGINE_API UIConfigSentenceClickableHandlers {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigSentenceClickableHandlers) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SENTENCE_CLICKABLE_HANDLERS;
 			}
@@ -1253,14 +990,6 @@ namespace ECSEngine {
 		// Count must be filled in order to be double checked with the drawer count
 		// In order to prevent out of bounds accesses
 		struct ECSENGINE_API UIConfigSentenceGeneralHandlers {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigSentenceGeneralHandlers) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SENTENCE_GENERAL_HANDLERS;
 			}
@@ -1273,19 +1002,11 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigMenuButtonSprite {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigMenuButtonSprite) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_MENU_BUTTON_SPRITE;
 			}
 
-			LPCWSTR texture;
+			const wchar_t* texture;
 			float2 top_left_uv = { 0.0f, 0.0f };
 			float2 bottom_right_uv = { 1.0f, 1.0f };
 			Color color = ECS_COLOR_WHITE;
@@ -1294,14 +1015,6 @@ namespace ECSEngine {
 		using UIConfigMenuSprite = UIConfigMenuButtonSprite;
 
 		struct ECSENGINE_API UIConfigActiveState {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigActiveState) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_ACTIVE_STATE;
 			}
@@ -1311,14 +1024,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigCollapsingHeaderDoNotCache {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigCollapsingHeaderDoNotCache) / sizeof(float);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_DO_NOT_CACHE;
 			}
@@ -1326,7 +1031,7 @@ namespace ECSEngine {
 			bool* state;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeComboBox {
+		struct UIDrawerInitializeComboBox {
 			UIDrawConfig* config;
 			const char* name;
 			Stream<const char*> labels;
@@ -1334,50 +1039,50 @@ namespace ECSEngine {
 			unsigned char* active_label;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeColorInput {
+		struct UIDrawerInitializeColorInput {
 			UIDrawConfig* config;
 			const char* name;
 			Color* color;
 			Color default_color;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeFilterMenu {
+		struct UIDrawerInitializeFilterMenu {
 			UIDrawConfig* config;
 			const char* name;
 			Stream<const char*> label_names;
 			bool** states;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeFilterMenuSinglePointer {
+		struct UIDrawerInitializeFilterMenuSinglePointer {
 			UIDrawConfig* config;
 			const char* name;
 			Stream<const char*> label_names;
 			bool* states;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeHierarchy {
+		struct UIDrawerInitializeHierarchy {
 			UIDrawConfig* config;
 			const char* name;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeLabelHierarchy {
+		struct UIDrawerInitializeLabelHierarchy {
 			UIDrawConfig* config;
 			const char* identifier;
 			Stream<const char*> labels;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeList {
+		struct UIDrawerInitializeList {
 			UIDrawConfig* config;
 			const char* name;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeMenu {
+		struct UIDrawerInitializeMenu {
 			UIDrawConfig* config;
 			const char* name;
 			UIDrawerMenuState* state;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeFloatInput {
+		struct UIDrawerInitializeFloatInput {
 			UIDrawConfig* config;
 			const char* name; 
 			float* value; 
@@ -1396,7 +1101,7 @@ namespace ECSEngine {
 			Integer max = ULLONG_MAX;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeDoubleInput {
+		struct UIDrawerInitializeDoubleInput {
 			UIDrawConfig* config;
 			const char* name; 
 			double* value; 
@@ -1405,7 +1110,7 @@ namespace ECSEngine {
 			double upper_bound = DBL_MAX;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeFloatInputGroup {
+		struct UIDrawerInitializeFloatInputGroup {
 			UIDrawConfig* config;
 			size_t count;
 			const char* ECS_RESTRICT group_name;
@@ -1416,7 +1121,7 @@ namespace ECSEngine {
 			const float* ECS_RESTRICT upper_bound;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeDoubleInputGroup {
+		struct UIDrawerInitializeDoubleInputGroup {
 			UIDrawConfig* config;
 			size_t count;
 			const char* ECS_RESTRICT group_name;
@@ -1465,40 +1170,32 @@ namespace ECSEngine {
 			UIDrawerTextInputFilter filter;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeStateTable {
+		struct UIDrawerInitializeStateTable {
 			UIDrawConfig* config;
 			const char* name;
 			Stream<const char*> labels;
 			bool** states;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeStateTableSinglePointer {
+		struct UIDrawerInitializeStateTableSinglePointer {
 			UIDrawConfig* config;
 			const char* name;
 			Stream<const char*> labels;
 			bool* states;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeTextInput {
+		struct UIDrawerInitializeTextInput {
 			UIDrawConfig* config;
 			const char* name;
 			CapacityStream<char>* text_to_fill;
 		};
 
-		struct ECSENGINE_API UIDrawerLabelList {
+		struct UIDrawerLabelList {
 			UIDrawerTextElement name;
 			Stream<UIDrawerTextElement> labels;
 		};
 
 		struct ECSENGINE_API UIConfigCollapsingHeaderSelection {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return 1;
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_COLLAPSING_HEADER_SELECTION;
 			}
@@ -1507,14 +1204,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigGetTransform {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigGetTransform);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_GET_TRANSFORM;
 			}
@@ -1525,14 +1214,6 @@ namespace ECSEngine {
 
 		// Phase will always be UIDrawPhase::System
 		struct ECSENGINE_API UIConfigComboBoxCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigComboBoxCallback);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_COMBO_BOX_CALLBACK;
 			}
@@ -1540,13 +1221,13 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeArrayElementData {
+		struct UIDrawerInitializeArrayElementData {
 			UIDrawConfig* config;
 			const char* name;
 			size_t element_count;
 		};
 
-		struct ECSENGINE_API UIDrawerArrayData {
+		struct UIDrawerArrayData {
 			bool collapsing_header_state;
 			bool drag_is_released;
 			UIDrawPhase add_callback_phase;
@@ -1561,20 +1242,22 @@ namespace ECSEngine {
 			void* remove_callback_data;
 		};
 
-		struct ECSENGINE_API UIDrawerArrayDrawData {
+		struct UIDrawerArrayDrawData {
 			void* element_data;
 			void* additional_data;
+			size_t configuration;
+			UIDrawConfig* config;
 			unsigned int current_index;
 		};
 
-		struct ECSENGINE_API UIDrawerInitializeColorFloatInput {
+		struct UIDrawerInitializeColorFloatInput {
 			UIDrawConfig* config;
 			const char* name;
 			ColorFloat* color;
 			ColorFloat default_color;
 		};
 
-		struct ECSENGINE_API UIConfigArrayProvideNameActionData {
+		struct UIConfigArrayProvideNameActionData {
 			char** name;
 			unsigned int index;
 		};
@@ -1585,14 +1268,6 @@ namespace ECSEngine {
 		// retrieve the index from. It will default to Element + index
 		// for elements that are outside the boundary of the capacity
 		struct ECSENGINE_API UIConfigArrayProvideNames {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigArrayProvideNames);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_ARRAY_PROVIDE_NAMES;
 			}
@@ -1605,14 +1280,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigArrayAddCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigArrayAddCallback);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_ARRAY_ADD_CALLBACK;
 			}
@@ -1621,14 +1288,6 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIConfigArrayRemoveCallback {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigArrayRemoveCallback);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_ARRAY_REMOVE_CALLBACK;
 			}
@@ -1639,20 +1298,21 @@ namespace ECSEngine {
 		// The background is centered at the center of the sprite
 		// Overwrite color black means ignore it - use the theme color
 		struct ECSENGINE_API UIConfigSpriteButtonBackground {
-			inline const void* GetParameters() const {
-				return this;
-			}
-
-			inline static constexpr size_t GetParameterCount() {
-				return sizeof(UIConfigSpriteButtonBackground);
-			}
-
 			inline static constexpr size_t GetAssociatedBit() {
 				return UI_CONFIG_SPRITE_BUTTON_BACKGROUND;
 			}
 
 			float2 scale;
 			Color overwrite_color = ECS_COLOR_BLACK;
+		};
+
+		struct ECSENGINE_API UIConfigCheckBoxCallback {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_CHECK_BOX_CALLBACK;
+			}
+		
+			UIActionHandler handler;
+			bool disable_value_to_modify = true;
 		};
 
 	}

@@ -175,6 +175,18 @@ namespace ECSEngine {
 			bool has_pushed_stack = drawer->PushIdentifierStackStringPattern();
 			drawer->PushIdentifierStack(group_name);
 
+			if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+				if (~configuration & UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME) {
+					float2 font_size;
+					float character_spacing;
+					Color text_color;
+					drawer->HandleText(configuration, config, text_color, font_size, character_spacing);
+					scale.x -= drawer->system->GetTextSpan(group_name, strlen(group_name), font_size.x, font_size.y, character_spacing).x + drawer->layout.element_indentation;
+				}
+				scale.x -= drawer->layout.element_indentation * count;
+				scale.x /= count;
+			}
+
 			for (size_t index = 0; index < count; index++) {
 				BasicType lower_bound, upper_bound, default_value = *values[index];
 				if constexpr (std::is_same_v<BasicType, float>) {
@@ -2042,7 +2054,15 @@ namespace ECSEngine {
 				TextAlignment horizontal_alignment, vertical_alignment;
 				GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
 
-				if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+				float2 label_scale = HandleLabelSize(element->scale);
+				if (~configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X) {
+					scale.x = label_scale.x;
+				}
+				if (~configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y) {
+					scale.y = label_scale.y;
+				}
+
+				if ((configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE)) {
 					const float* dependent_size = (const float*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 					const WindowSizeTransformType* type = (WindowSizeTransformType*)dependent_size;
 
@@ -2091,14 +2111,6 @@ namespace ECSEngine {
 					float2 font_size;
 					float character_spacing;
 					Color font_color;
-
-					float2 label_scale = HandleLabelSize(element->scale);
-					if (~configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X) {
-						scale.x = label_scale.x;
-					}
-					if (~configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y) {
-						scale.y = label_scale.y;
-					}
 
 					float x_position, y_position;
 					HandleTextLabelAlignment(
@@ -2169,9 +2181,26 @@ namespace ECSEngine {
 
 		// single lined text input; drawer kernel
 		void UIDrawer::TextInputDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextInput* input, float2 position, float2 scale, UIDrawerTextInputFilter filter) {
-			if (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+			HandleFitSpaceRectangle(configuration, position, scale);
+			
+			float2 initial_position = position;
+			float2 initial_scale = scale;
+
+			bool is_element_name_first = IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME);
+			if (is_element_name_first) {
 				ElementName(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, config, &input->name, position, scale);
 				position.x = current_x - region_render_offset.x;
+			}
+
+			bool dependent_size = configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+			if (dependent_size) {
+				bool is_element_name_after = IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME);
+				if (is_element_name_first) {
+					scale.x -= position.x - initial_position.x;
+				}
+				else if (is_element_name_after) {
+					scale.x -= input->name.scale.x + layout.element_indentation;
+				}
 			}
 
 			if (configuration & UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER) {
@@ -2187,12 +2216,10 @@ namespace ECSEngine {
 				}
 			}
 
-			HandleFitSpaceRectangle(configuration, position, scale);
-
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
 				UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
-				*get_transform->position = position;
-				*get_transform->scale = scale;
+				*get_transform->position = initial_position;
+				*get_transform->scale = initial_scale;
 			}
 
 			if (ValidatePosition(configuration, position, scale)) {
@@ -2355,9 +2382,10 @@ namespace ECSEngine {
 				HandleBorder(configuration, config, position, scale);
 			}
 
-			FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, scale);
+			bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME);
+			FinalizeRectangle(configuration | (is_name_after ? UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW : 0), position, scale);
 
-			if (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+			if (is_name_after) {
 				ElementName(configuration, config, &input->name, position, scale);
 			}
 		}
@@ -2616,16 +2644,6 @@ namespace ECSEngine {
 				}
 				slider->default_value = allocation;
 
-				if (configuration & UI_CONFIG_VERTICAL) {
-					slider->total_length_main_axis = scale.y + slider->TextScale()->y + slider_length + slider_padding;
-					FinalizeRectangle(configuration, position, { scale.x, slider->total_length_main_axis });
-				}
-				else {
-					slider->total_length_main_axis = scale.x + slider->TextScale()->x + slider_length + slider_padding;
-					FinalizeRectangle(configuration, position, { slider->total_length_main_axis, scale.y });
-				}
-
-
 				return slider;
 				}
 			);
@@ -2655,9 +2673,24 @@ namespace ECSEngine {
 			Color color = HandleColor(configuration, config);
 			HandleSliderVariables(configuration, config, slider_length, slider_padding, slider_shrink, slider_color, color);
 
-			if (IsElementNameFirst(configuration, UI_CONFIG_SLIDER_NO_NAME)) {
+			float2 initial_position = position;
+			float2 initial_scale = scale;
+
+			bool is_name_first = IsElementNameFirst(configuration, UI_CONFIG_SLIDER_NO_NAME);
+			if (is_name_first) {
 				ElementName(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, config, &slider->label, position, scale);
-				HandleTransformFlags(configuration, config, position, scale);
+				position.x = current_x - region_render_offset.x;
+			}
+
+			bool dependent_size = configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+			if (dependent_size) {
+				bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_SLIDER_NO_NAME);
+				if (is_name_first) {
+					scale.x -= position.x - initial_position.x;
+				}
+				else if (is_name_after) {
+					scale.x -= slider->label.scale.x + layout.element_indentation;
+				}
 			}
 
 			if (ValidatePosition(configuration, position)) {
@@ -3278,10 +3311,11 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* element, bool* value_to_modify, float2 position, float2 scale) {
+		template<typename NameType>
+		void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType* name, bool* value_to_modify, float2 position, float2 scale) {
 			if (IsElementNameFirst(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-				ElementName(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, config, element, position, scale);
-				HandleTransformFlags(configuration, config, position, scale);
+				drawer->ElementName(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, config, name, position, scale);
+				drawer->HandleTransformFlags(configuration, config, position, scale);
 			}
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
@@ -3290,81 +3324,76 @@ namespace ECSEngine {
 				*get_transform->scale = scale;
 			}
 
-			if (ValidatePosition(configuration, position, scale)) {
+			if (drawer->ValidatePosition(configuration, position, scale)) {
 				bool state = true;
 				if (configuration & UI_CONFIG_ACTIVE_STATE) {
 					const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
 					state = active_state->state;
 				}
 
-				Color color = HandleColor(configuration, config);
+				Color color = drawer->HandleColor(configuration, config);
 				if (!state) {
-					SolidColorRectangle(configuration, position, scale, DarkenColor(color, color_theme.darken_inactive_item));
+					drawer->SolidColorRectangle(configuration, position, scale, DarkenColor(color, drawer->color_theme.darken_inactive_item));
 				}
 				else {
-					SolidColorRectangle(configuration, position, scale, color);
+					drawer->SolidColorRectangle(configuration, position, scale, color);
 					if (*value_to_modify) {
-						Color check_color = ToneColor(color, color_theme.check_box_factor);
-						SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
+						Color check_color = ToneColor(color, drawer->color_theme.check_box_factor);
+						drawer->SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
 					}
-					AddDefaultClickableHoverable(position, scale, { BoolClickable, value_to_modify, 0 }, color);
 
-					HandleLateAndSystemDrawActionNullify(configuration, position, scale);
+					if (configuration & UI_CONFIG_CHECK_BOX_CALLBACK) {
+						const UIConfigCheckBoxCallback* callback = (const UIConfigCheckBoxCallback*)config.GetParameter(UI_CONFIG_CHECK_BOX_CALLBACK);
+
+						if (!callback->disable_value_to_modify) {
+							struct WrapperData {
+								bool* value_to_modify;
+								Action callback;
+								void* callback_data;
+							};
+
+							auto wrapper = [](ActionData* action_data) {
+								UI_UNPACK_ACTION_DATA;
+
+								WrapperData* data = (WrapperData*)_data;
+								bool old_value = *data->value_to_modify;
+								*data->value_to_modify = !old_value;
+
+								action_data->data = data->callback_data;
+								data->callback(action_data);
+							};
+
+							WrapperData wrapper_data = { value_to_modify, callback->handler.action, callback->handler.data };
+							drawer->AddDefaultClickableHoverable(position, scale, { wrapper, &wrapper_data, sizeof(wrapper_data), callback->handler.phase });
+						}
+						else {
+							drawer->AddDefaultClickableHoverable(position, scale, callback->handler);
+						}
+					}
+					else {
+						drawer->AddDefaultClickableHoverable(position, scale, { BoolClickable, value_to_modify, 0 }, color);
+					}
+
+					drawer->HandleLateAndSystemDrawActionNullify(configuration, position, scale);
 				}
 
 			}
 
-			FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, scale);
+			drawer->FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, scale);
 
 			if (IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-				ElementName(configuration, config, element, position, scale);
+				drawer->ElementName(configuration, config, name, position, scale);
 			}
+		}
+
+		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* element, bool* value_to_modify, float2 position, float2 scale) {
+			CheckBoxDrawerImplementation(this, configuration, config, element, value_to_modify, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, const char* name, bool* value_to_modify, float2 position, float2 scale) {
-			if (IsElementNameFirst(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-				ElementName(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, config, name, position, scale);
-				HandleTransformFlags(configuration, config, position, scale);
-			}
-
-			if (configuration & UI_CONFIG_GET_TRANSFORM) {
-				UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
-				*get_transform->position = position;
-				*get_transform->scale = scale;
-			}
-
-			if (ValidatePosition(configuration, position, scale)) {
-				bool state = true;
-				if (configuration & UI_CONFIG_ACTIVE_STATE) {
-					const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
-					state = active_state->state;
-				}
-
-				Color color = HandleColor(configuration, config);
-				if (!state) {
-					SolidColorRectangle(configuration, position, scale, DarkenColor(color, color_theme.darken_inactive_item));
-				}
-				else {
-					if (*value_to_modify) {
-						Color check_color = ToneColor(color, color_theme.check_box_factor);
-						SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color, { 0.0f, 0.0f }, { 1.0f, 1.0f });
-					}
-
-					SolidColorRectangle(configuration, position, scale, color);
-					AddDefaultClickableHoverable(position, scale, { BoolClickable, value_to_modify, 0 }, color);
-
-					HandleLateAndSystemDrawActionNullify(configuration, position, scale);
-				}
-
-			}
-
-			FinalizeRectangle(configuration | UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW, position, scale);
-
-			if (IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-				ElementName(configuration, config, name, position, scale);
-			}
+			CheckBoxDrawerImplementation(this, configuration, config, name, value_to_modify, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3534,7 +3563,7 @@ namespace ECSEngine {
 
 				unsigned int name_size = strlen(name);
 
-				size_t slider_configuration = configuration | UI_CONFIG_SLIDER_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
+				size_t slider_configuration = configuration | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 				slider_configuration |= function::Select<size_t>(configuration & UI_CONFIG_SLIDER_ENTER_VALUES, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK, 0);
 
 				if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
@@ -3560,30 +3589,25 @@ namespace ECSEngine {
 						}
 					}
 
-					char stack_memory[128];
-					memcpy(stack_memory, name, name_size);
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Red");
+					bool pop_string_pattern = PushIdentifierStackStringPattern();
+					PushIdentifierStack(name);
 
 					data->r_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"R:",
 						position,
 						scale,
 						&color->red,
 						(unsigned char)0,
 						(unsigned char)255
 					);
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Green");
-					ECS_ASSERT(name_size + 5 < 128);
 
 					HandleTransformFlags(configuration, config, position, scale);
 					data->g_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"G:",
 						position,
 						scale,
 						&color->green,
@@ -3591,20 +3615,22 @@ namespace ECSEngine {
 						(unsigned char)255
 					);
 
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Blue");
-
 					HandleTransformFlags(configuration, config, position, scale);
 					data->b_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"B:",
 						position,
 						scale,
 						&color->blue,
 						(unsigned char)0,
 						(unsigned char)255
 					);
+
+					PopIdentifierStack();
+					if (pop_string_pattern) {
+						PopIdentifierStack();
+					}
 
 					if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						if (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3640,30 +3666,26 @@ namespace ECSEngine {
 					}
 
 					HandleTransformFlags(configuration, config, position, scale);
-					char stack_memory[128];
-					memcpy(stack_memory, name, name_size);
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Hue");
+
+					bool pop_string_pattern = PushIdentifierStackStringPattern();
+					PushIdentifierStack(name);
 
 					data->h_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"H:",
 						position,
 						scale,
 						&data->hsv.hue,
 						(unsigned char)0,
 						(unsigned char)255
 					);
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Saturation");
-					ECS_ASSERT(name_size + std::size("Saturation") < 128);
 
 					HandleTransformFlags(configuration, config, position, scale);
 					data->s_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"S:",
 						position,
 						scale,
 						&data->hsv.saturation,
@@ -3671,20 +3693,22 @@ namespace ECSEngine {
 						(unsigned char)255
 					);
 
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Value");
-
 					HandleTransformFlags(configuration, config, position, scale);
 					data->v_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"V:",
 						position,
 						scale,
 						&data->hsv.value,
 						(unsigned char)0,
 						(unsigned char)255
 					);
+
+					PopIdentifierStack();
+					if (pop_string_pattern) {
+						PopIdentifierStack();
+					}
 
 					if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						if (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3720,21 +3744,25 @@ namespace ECSEngine {
 					}
 
 					HandleTransformFlags(configuration, config, position, scale);
-					char stack_memory[128];
-					memcpy(stack_memory, name, name_size);
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "Alpha");
-					stack_memory[name_size + 5] = '\0';
+
+					bool pop_string_pattern = PushIdentifierStackStringPattern();
+					PushIdentifierStack(name);
+
 					data->a_slider = IntSliderInitializer(
 						slider_configuration,
 						config,
-						stack_memory,
+						"A:",
 						position,
 						scale,
 						&color->alpha,
 						(unsigned char)0,
 						(unsigned char)255
 					);
+
+					PopIdentifierStack();
+					if (pop_string_pattern) {
+						PopIdentifierStack();
+					}
 
 					if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						if (configuration & UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK) {
@@ -3752,12 +3780,9 @@ namespace ECSEngine {
 					data->hex_characters.capacity = 6;
 
 					HandleTransformFlags(configuration, config, position, scale);
-					char stack_memory[256];
-					memcpy(stack_memory, name, name_size);
-					stack_memory[name_size] = '\0';
-					strcat(stack_memory, "HexInput");
-					stack_memory[name_size + std::size("HexInput")] = '\0';
-					ECS_ASSERT(name_size + std::size("HexInput") < 256);
+
+					bool pop_string_pattern = PushIdentifierStackStringPattern();
+					PushIdentifierStack(name);
 
 					UIConfigTextInputCallback callback;
 					callback.handler.action = ColorInputHexCallback;
@@ -3766,14 +3791,19 @@ namespace ECSEngine {
 
 					config.AddFlag(callback);
 					data->hex_input = TextInputInitializer(
-						configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN | UI_CONFIG_TEXT_INPUT_CALLBACK,
+						configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN | UI_CONFIG_TEXT_INPUT_CALLBACK,
 						config,
-						stack_memory,
+						"Hex",
 						&data->hex_characters,
 						position,
 						scale
 					);
 					config.flag_count--;
+
+					PopIdentifierStack();
+					if (pop_string_pattern) {
+						PopIdentifierStack();
+					}
 				}
 				else {
 					data->hex_characters.buffer = nullptr;
@@ -3844,7 +3874,7 @@ namespace ECSEngine {
 				| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 			LABEL_CONFIGURATION |= function::Select<size_t>(is_active, 0, UI_CONFIG_UNAVAILABLE_TEXT);
 
-			size_t SLIDER_CONFIGURATION = configuration | UI_CONFIG_SLIDER_NO_NAME;
+			size_t SLIDER_CONFIGURATION = configuration | UI_CONFIG_ELEMENT_NAME_FIRST;
 			SLIDER_CONFIGURATION |= function::Select<size_t>(~configuration & UI_CONFIG_SLIDER_ENTER_VALUES, 0, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
 
 			auto callback_lambda = [&](bool is_rgb, bool is_hsv, bool is_alpha) {
@@ -3872,65 +3902,49 @@ namespace ECSEngine {
 			};
 
 			auto rgb_lambda = [&]() {
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
-				TextLabel(LABEL_CONFIGURATION, label_config, "R:", position, scale);
-
 				callback_lambda(true, false, false);
 
-				Indent(-1.0f);
-				HandleTransformFlags(LABEL_CONFIGURATION, config, position, scale);
 				starting_point = position;
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->r_slider, position, scale, &color->red, (unsigned char)0, (unsigned char)255);
+				position.x = current_x - region_render_offset.x;
 
 				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
-				TextLabel(LABEL_CONFIGURATION, label_config, "G:", position, scale);
-
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
+				position.x -= layout.element_indentation;
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->g_slider, position, scale, &color->green, (unsigned char)0, (unsigned char)255);
+				position.x = current_x - region_render_offset.x;
 
 				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
-				TextLabel(LABEL_CONFIGURATION, label_config, "B:", position, scale);
-
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
+				position.x -= layout.element_indentation;
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->b_slider, position, scale, &color->blue, (unsigned char)0, (unsigned char)255);
+				position.x = current_x - region_render_offset.x - layout.element_indentation;
 				end_point = { current_x - region_render_offset.x - layout.element_indentation, position.y };
 
 				remove_callback_lambda();
 			};
 
 			auto hsv_lambda = [&]() {
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
-				TextLabel(LABEL_CONFIGURATION, label_config, "H:", position, scale);
-
 				callback_lambda(false, true, false);
 
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
+				if ((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) != 0) {
+					NextRow();
+					SetCurrentX(overall_start_position.x + region_render_offset.x);
+					position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
+				}
+
 				starting_point = position;
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->h_slider, position, scale, &data->hsv.hue, (unsigned char)0, (unsigned char)255);
+				position.x = current_x - region_render_offset.x;
 
 				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
-				TextLabel(LABEL_CONFIGURATION, label_config, "S:", position, scale);
-
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
+				position.x -= layout.element_indentation;
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->s_slider, position, scale, &data->hsv.saturation, (unsigned char)0, (unsigned char)255);
+				position.x = current_x - region_render_offset.x;
 
 				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
-				TextLabel(LABEL_CONFIGURATION, label_config, "V:", position, scale);
-
-				Indent(-1.0f);
-				HandleTransformFlags(configuration, config, position, scale);
+				position.x -= layout.element_indentation;
 				alpha_endpoint = { position.x + scale.x, position.y };
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->v_slider, position, scale, &data->hsv.value, (unsigned char)0, (unsigned char)255);
+				position.x = current_x - region_render_offset.x;
 
 				if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
 					if (data->r_slider->interpolate_value || data->g_slider->interpolate_value || data->b_slider->interpolate_value || data->is_hex_input) {
@@ -3952,27 +3966,19 @@ namespace ECSEngine {
 				callback_lambda(false, false, true);
 
 				if (((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) == 0) && ((configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) == 0)) {
-					Indent(-1.0f);
-					HandleTransformFlags(configuration, config, position, scale);
-					TextLabel(LABEL_CONFIGURATION, label_config, "A:", position, scale);
-					Indent(-1.0f);
-
 					HandleTransformFlags(configuration, config, position, scale);
 					IntSliderDrawer(SLIDER_CONFIGURATION, config, data->a_slider, position, scale, &color->alpha, (unsigned char)0, (unsigned char)255);
+					position.x = current_x - region_render_offset.x;
 				}
 				else {
 					NextRow();
 					SetCurrentX(overall_start_position.x + region_render_offset.x);
-					Indent(-1.0f);
-					HandleTransformFlags(configuration, config, position, scale);
-					TextLabel(LABEL_CONFIGURATION, label_config, "A:", position, scale);
-					Indent(-1.0f);
 
 					HandleTransformFlags(configuration, config, position, scale);
 					scale.x = alpha_endpoint.x - starting_point.x - layout.element_indentation - system->NormalizeHorizontalToWindowDimensions(scale.y);
 					IntSliderDrawer(SLIDER_CONFIGURATION, config, data->a_slider, position, scale, &color->alpha, (unsigned char)0, (unsigned char)255);
+					scale.x = current_x - region_render_offset.x;
 				}
-
 
 				if (data->a_slider->interpolate_value) {
 					data->hsv.alpha = color->alpha;
@@ -3982,7 +3988,8 @@ namespace ECSEngine {
 			};
 
 			auto hex_lambda = [&]() {
-				if (((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) != 0) || (configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS != 0) || (configuration & UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER != 0)) {
+				if (((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) != 0) || ((configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) != 0)
+					|| ((configuration & UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER) != 0)) {
 					NextRow();
 					SetCurrentX(overall_start_position.x + region_render_offset.x);
 
@@ -4005,13 +4012,14 @@ namespace ECSEngine {
 				}
 
 				TextInputDrawer(
-					configuration | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK,
+					configuration | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_TEXT_INPUT_CALLBACK,
 					config,
 					data->hex_input,
 					position,
 					{ end_point.x - overall_start_position.x, scale.y },
 					UIDrawerTextInputHexFilter
 				);
+				NextRow();
 			};
 
 			if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
@@ -4019,10 +4027,6 @@ namespace ECSEngine {
 			}
 
 			if (configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) {
-				if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
-					NextRow();
-					SetCurrentX(overall_start_position.x + region_render_offset.x);
-				}
 				hsv_lambda();
 			}
 
@@ -5849,7 +5853,23 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void* UIDrawer::SentenceInitializer(size_t configuration, const UIDrawConfig& config, const char* text) {
+		char SentenceToken(size_t configuration, const UIDrawConfig& config) {
+			if (configuration & UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN) {
+				const UIDrawerSentenceFitSpaceToken* data = (const UIDrawerSentenceFitSpaceToken*)config.GetParameter(UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN);
+				return data->token;
+			}
+			return ' ';
+		}
+
+		bool SentenceKeepToken(size_t configuration, const UIDrawConfig& config) {
+			if (configuration & UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN) {
+				const UIDrawerSentenceFitSpaceToken* data = (const UIDrawerSentenceFitSpaceToken*)config.GetParameter(UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN);
+				return data->keep_token;
+			}
+			return false;
+		}
+
+		void* UIDrawer::SentenceInitializer(size_t configuration, const UIDrawConfig& config, const char* text, char separator_token) {
 			if (~configuration & UI_CONFIG_DO_NOT_CACHE) {
 				UIDrawerSentenceCached* data = nullptr;
 
@@ -5863,7 +5883,9 @@ namespace ECSEngine {
 
 					// getting the whitespace characters count to preallocate the buffers accordingly
 					size_t sentence_length = ParseStringIdentifier(identifier, strlen(identifier));
-					size_t whitespace_characters = function::ParseWordsFromSentence(identifier);
+					
+					char parse_token = SentenceToken(configuration, config);
+					size_t whitespace_characters = function::ParseWordsFromSentence(identifier, parse_token);
 
 					data->base.whitespace_characters.buffer = (UIDrawerWhitespaceCharacter*)GetMainAllocatorBuffer(sizeof(UISpriteVertex) * sentence_length * 6
 						+ sizeof(UIDrawerWhitespaceCharacter) * (whitespace_characters + 1));
@@ -5879,7 +5901,7 @@ namespace ECSEngine {
 
 					buffer += sizeof(UISpriteVertex) * sentence_length * 6;
 
-					data->base.SetWhitespaceCharacters(identifier, sentence_length);
+					data->base.SetWhitespaceCharacters(identifier, sentence_length, parse_token);
 
 					Color text_color;
 					float character_spacing;
@@ -5913,22 +5935,22 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t UIDrawer::SentenceWhitespaceCharactersCount(const char* identifier, CapacityStream<unsigned int> stack_buffer) {
-			return function::FindWhitespaceCharactersCount(identifier, &stack_buffer);
+		size_t UIDrawer::SentenceWhitespaceCharactersCount(const char* identifier, CapacityStream<unsigned int> stack_buffer, char separator_token) {
+			return function::FindWhitespaceCharactersCount(identifier, separator_token, &stack_buffer);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data) {
+		void UIDrawer::SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data, char separator_token) {
 			//size_t identifier_length = ParseStringIdentifier(identifier, strlen(identifier));
 			size_t identifier_length = strlen(identifier);
 			size_t temp_marker = GetTempAllocatorMarker();
 			char* temp_chars = (char*)GetTempBuffer(identifier_length + 1);
 			memcpy(temp_chars, identifier, identifier_length);
 			temp_chars[identifier_length + 1] = '\0';
-			size_t space_count = function::ParseWordsFromSentence(temp_chars);
+			size_t space_count = function::ParseWordsFromSentence(temp_chars, separator_token);
 
-			function::FindWhitespaceCharacters(temp_chars, data->whitespace_characters);
+			function::FindWhitespaceCharacters(data->whitespace_characters, temp_chars, separator_token);
 			data->whitespace_characters.Add(identifier_length);
 			ReturnTempAllocator(temp_marker);
 		}
@@ -5953,7 +5975,7 @@ namespace ECSEngine {
 			}
 
 			auto handlers = [&](float2 handler_position, float2 handler_scale, unsigned int line_count) {
-				if (configuration & UI_CONFIG_SENTENCE_HOVERABLE_HANDLERS) {
+				/*if (configuration & UI_CONFIG_SENTENCE_HOVERABLE_HANDLERS) {
 					if (hoverables->callback[line_count] != nullptr) {
 						AddHoverable(handler_position, handler_scale, { hoverables->callback[line_count], hoverables->data[line_count], hoverables->data_size[line_count], hoverables->phase[line_count] });
 					}
@@ -5967,10 +5989,16 @@ namespace ECSEngine {
 					if (generals->callback[line_count] != nullptr) {
 						AddGeneral(handler_position, handler_scale, { generals->callback[line_count], generals->data[line_count], generals->data_size[line_count], generals->phase[line_count] });
 					}
-				}
+				}*/
 			};
 
 			unsigned int line_count = 0;
+
+			char separator_token = SentenceToken(configuration, config);
+			bool keep_token = SentenceKeepToken(configuration, config);
+
+			// If keeping the token, make the next character after the end of string with '\0' such that it will be rendered as a space and 
+			// will not disturb the final string that much
 
 			if (configuration & UI_CONFIG_DO_NOT_CACHE) {
 #pragma region Non cached
@@ -5978,13 +6006,13 @@ namespace ECSEngine {
 				constexpr size_t WHITESPACE_ALLOCATION_SIZE = ECS_KB * 50;
 				unsigned int _whitespace_characters[4096];
 				CapacityStream<unsigned int> whitespace_characters(_whitespace_characters, 0, 4096);
-				whitespace_characters.size = SentenceWhitespaceCharactersCount(identifier, whitespace_characters);
+				whitespace_characters.size = SentenceWhitespaceCharactersCount(identifier, whitespace_characters, separator_token);
 
 				if (whitespace_characters.size > whitespace_characters.capacity) {
 					unsigned int* new_whitespace_characters = (unsigned int*)GetTempBuffer(sizeof(unsigned int) * whitespace_characters.size);
 					UIDrawerSentenceNotCached data;
 					data.whitespace_characters = Stream<unsigned int>(new_whitespace_characters, 0);
-					SentenceNonCachedInitializerKernel(identifier, &data);
+					SentenceNonCachedInitializerKernel(identifier, &data, separator_token);
 					whitespace_characters.buffer = data.whitespace_characters.buffer;
 					whitespace_characters.capacity = whitespace_characters.size;
 				}
@@ -6007,6 +6035,7 @@ namespace ECSEngine {
 
 				char* temp_chars = (char*)GetTempBuffer(text_length + 1);
 				memcpy(temp_chars, identifier, text_length);
+				temp_chars[text_length] = '\0';
 
 				Color font_color;
 				float2 font_size;
@@ -6014,37 +6043,66 @@ namespace ECSEngine {
 
 				HandleText(configuration, config, font_color, font_size, character_spacing);
 
-				float starting_row_position = position.x;
-				float space_x_scale = system->GetSpaceXSpan(font_size.x);
-				for (size_t index = 0; index < whitespace_characters.size; index++) {
-					if (whitespace_characters[index] != 0) {
-						word_end_index = whitespace_characters[index] - 1;
-					}
-					if (word_end_index >= word_start_index) {
-						temp_chars[word_end_index + 1] = '\0';
-						float2 text_span;
+				// Check to see if the sentence contains \n. If it doesn't, can take the text span of the entire sentence and precull it 
+				// if is out of bounds
+				bool single_sentence = true;
+				for (size_t index = 0; index < whitespace_characters.size && single_sentence; index++) {
+					single_sentence = temp_chars[whitespace_characters[index]] != '\n';
+				}
 
-						Stream<UISpriteVertex> current_vertices;
-						if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-							current_vertices = GetTextStream(configuration, (word_end_index - word_start_index + 1) * 6);
+				auto draw_word_by_word = [&]() {
+					float starting_row_position = position.x;
+					float token_x_scale = system->GetTextSpan(&separator_token, 1, font_size.x, font_size.y, character_spacing).x * !keep_token;
+					for (size_t index = 0; index < whitespace_characters.size; index++) {
+						if (whitespace_characters[index] != 0) {
+							word_end_index = whitespace_characters[index] - 1;
 						}
-						Text(configuration, config, temp_chars + word_start_index, position, text_span);
+						if (word_end_index >= word_start_index) {
+							unsigned int last_character_index = word_end_index + 1 + keep_token;
+							char replaced_token = temp_chars[last_character_index];
+							temp_chars[last_character_index] = '\0';
+							float2 text_span;
 
-						if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-							current_row_y_scale = y_row_scale;
-							float y_position = AlignMiddle<float>(position.y, y_row_scale, text_span.y);
-							TranslateTextY(y_position, 0, current_vertices);
+							Stream<UISpriteVertex> current_vertices;
+							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+								current_vertices = GetTextStream(configuration, (last_character_index - word_start_index) * 6);
+							}
+							Text(configuration, config, temp_chars + word_start_index, position, text_span);
+
+							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+								current_row_y_scale = y_row_scale;
+								float y_position = AlignMiddle<float>(position.y, y_row_scale, text_span.y);
+								TranslateTextY(y_position, 0, current_vertices);
+							}
+
+							FinalizeRectangle(0, position, text_span);
+							position.x += text_span.x;
+							temp_chars[last_character_index] = replaced_token;
 						}
 
-						FinalizeRectangle(0, position, text_span);
-						position.x += text_span.x;
-					}
+						while (whitespace_characters[index] == whitespace_characters[index + 1] - 1 && index < whitespace_characters.size - 1) {
+							if (identifier[whitespace_characters[index]] == separator_token) {
+								position.x += character_spacing + token_x_scale;
+							}
+							else {
+								float2 handler_position = { starting_row_position, position.y };
+								float2 handler_scale = { position.x - starting_row_position, y_row_scale };
+								handlers(handler_position, handler_scale, line_count);
+								line_count++;
 
-					while (whitespace_characters[index] == whitespace_characters[index + 1] - 1 && index < whitespace_characters.size - 1) {
-						if (identifier[whitespace_characters[index]] == ' ') {
-							position.x += character_spacing + space_x_scale;
+								NextRow();
+								position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
+								starting_row_position = position.x;
+								if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+									current_row_y_scale = y_row_scale;
+								}
+							}
+							index++;
 						}
-						else {
+						if (identifier[whitespace_characters[index]] == separator_token) {
+							position.x += character_spacing + token_x_scale;
+						}
+						else if (identifier[whitespace_characters[index]] == '\n') {
 							float2 handler_position = { starting_row_position, position.y };
 							float2 handler_scale = { position.x - starting_row_position, y_row_scale };
 							handlers(handler_position, handler_scale, line_count);
@@ -6053,26 +6111,38 @@ namespace ECSEngine {
 							NextRow();
 							position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
 							starting_row_position = position.x;
-							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-								current_row_y_scale = y_row_scale;
+						}
+						word_start_index = whitespace_characters[index] + 1;
+					}
+				};
+
+				if (single_sentence) {
+					float2 text_span = system->GetTextSpan(temp_chars, text_length, font_size.x, font_size.y, character_spacing);
+					if (ValidatePosition(0, position, text_span)) {
+						if (draw_mode == UIDrawerMode::FitSpace) {
+							if (position.x + text_span.x < region_limit.x) {
+								if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+									position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
+								}
+								Text(configuration, config, temp_chars, position);
+							}
+							else {
+								draw_word_by_word();
 							}
 						}
-						index++;
+						else {
+							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+								position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
+							}
+							Text(configuration, config, temp_chars, position);
+						}
 					}
-					if (identifier[whitespace_characters[index]] == ' ') {
-						position.x += character_spacing + space_x_scale;
+					else {
+						FinalizeRectangle(0, position, text_span);
 					}
-					else if (identifier[whitespace_characters[index]] == '\n') {
-						float2 handler_position = { starting_row_position, position.y };
-						float2 handler_scale = { position.x - starting_row_position, y_row_scale };
-						handlers(handler_position, handler_scale, line_count);
-						line_count++;
-
-						NextRow();
-						position = { current_x - region_render_offset.x, current_y - region_render_offset.y };
-						starting_row_position = position.x;
-					}
-					word_start_index = whitespace_characters[index] + 1;
+				}
+				else {
+					draw_word_by_word();
 				}
 
 				if (configuration & UI_CONFIG_SENTENCE_FIT_SPACE) {
@@ -6080,7 +6150,6 @@ namespace ECSEngine {
 					draw_mode_count = previous_draw_count;
 					draw_mode_target = previous_draw_target;
 				}
-
 #pragma endregion
 
 			}
@@ -6128,7 +6197,7 @@ namespace ECSEngine {
 						if (word_end_index >= word_start_index) {
 							float2 text_span;
 							temp_stream.buffer = data->base.vertices.buffer + word_start_index * 6;
-							temp_stream.size = (word_end_index - word_start_index + 1) * 6;
+							temp_stream.size = (word_end_index - word_start_index + 1 + keep_token) * 6;
 
 							if (is_zoom_different) {
 								auto text_sprite_stream = GetTextStream(configuration, 0);
@@ -6153,7 +6222,7 @@ namespace ECSEngine {
 						}
 
 						while (data->base.whitespace_characters[index].position == data->base.whitespace_characters[index + 1].position - 1) {
-							if (data->base.whitespace_characters[index].type == ' ') {
+							if (data->base.whitespace_characters[index].type == separator_token && !keep_token) {
 								position.x += character_spacing + space_x_scale;
 							}
 							else {
@@ -6171,7 +6240,7 @@ namespace ECSEngine {
 							}
 							index++;
 						}
-						if (data->base.whitespace_characters[index].type == ' ') {
+						if (data->base.whitespace_characters[index].type == separator_token && !keep_token) {
 							position.x += character_spacing + space_x_scale;
 						}
 						else if (data->base.whitespace_characters[index].type == '\n') {
@@ -8794,46 +8863,82 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayFloat(const char* name, CapacityStream<float>* values) {
+		void UIDrawer::ArrayFloat(
+			const char* name,
+			CapacityStream<float>* values, 
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
 			UIDrawConfig config;
-			ArrayFloat(0, config, name, values);
+			ArrayFloat(0, config, name, values, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayFloat(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayFloatFunction);
+		void UIDrawer::ArrayFloat(
+			size_t configuration,
+			const UIDrawConfig& config,
+			const char* name,
+			CapacityStream<float>* values, 
+			size_t element_configuration, 
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayFloatFunction);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayDouble(const char* name, CapacityStream<double>* values) {
+		void UIDrawer::ArrayDouble(
+			const char* name, 
+			CapacityStream<double>* values,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
 			UIDrawConfig config;
-			ArrayDouble(0, config, name, values);
+			ArrayDouble(0, config, name, values, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayDouble(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayDoubleFunction);
+		void UIDrawer::ArrayDouble(
+			size_t configuration, 
+			const UIDrawConfig& config,
+			const char* name, 
+			CapacityStream<double>* values,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayDoubleFunction);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename Integer>
-		void UIDrawer::ArrayInteger(const char* name, CapacityStream<Integer>* values) {
+		void UIDrawer::ArrayInteger(
+			const char* name,
+			CapacityStream<Integer>* values,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
 			UIDrawConfig config;
-			ArrayInteger(0, config, name, values);
+			ArrayInteger(0, config, name, values, element_configuration, element_config);
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger, const char*, CapacityStream<integer>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger, const char*, CapacityStream<integer>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
 #undef EXPORT
 
 		template<typename Integer>
-		void UIDrawer::ArrayInteger(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayIntegerFunction<Integer>);
+		void UIDrawer::ArrayInteger(
+			size_t configuration, 
+			const UIDrawConfig& config, 
+			const char* name, 
+			CapacityStream<Integer>* values,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayIntegerFunction<Integer>);
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger, size_t, const UIDrawConfig&, const char*, CapacityStream<integer>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger, size_t, const UIDrawConfig&, const char*, CapacityStream<integer>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -8847,35 +8952,63 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayFloat2(const char* name, CapacityStream<float2>* values) {
+		void UIDrawer::ArrayFloat2(const char* name, CapacityStream<float2>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayFloat2(0, config, name, values);
+			ArrayFloat2(0, config, name, values, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayFloat2(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float2>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayFloat2Function);
+		void UIDrawer::ArrayFloat2(
+			size_t configuration, 
+			const UIDrawConfig& config, 
+			const char* name, 
+			CapacityStream<float2>* values,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayFloat2Function);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayDouble2(const char* name, CapacityStream<double2>* values) {
+		void UIDrawer::ArrayDouble2(const char* name, CapacityStream<double2>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayDouble2(0, config, name, values);
+			ArrayDouble2(0, config, name, values, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayDouble2(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double2>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayDouble2Function);
+		void UIDrawer::ArrayDouble2(
+			size_t configuration, 
+			const UIDrawConfig& config, 
+			const char* name,
+			CapacityStream<double2>* values, 
+			size_t element_configuration, 
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayDouble2Function);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename BaseInteger, typename Integer2>
-		void UIDrawer::ArrayInteger2(const char* name, CapacityStream<Integer2>* values) {
+		void UIDrawer::ArrayInteger2(const char* name, CapacityStream<Integer2>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
 			ArrayInteger2<BaseInteger>(0, config, name, values);
 		}
 
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<char>(const char* name, CapacityStream<char2>* values);
+#define EXPORT(type, type2) template ECSENGINE_API void UIDrawer::ArrayInteger2<type>(const char*, CapacityStream<type2>*, size_t, const UIDrawConfig*);
+
+		EXPORT(char, char2);
+		EXPORT(int8_t, char2);
+		EXPORT(uint8_t, uchar2);
+		EXPORT(int16_t, short2);
+		EXPORT(uint16_t, ushort2);
+		EXPORT(int32_t, int2);
+		EXPORT(uint32_t, uint2);
+		EXPORT(int64_t, long2);
+		EXPORT(uint64_t, ulong2);
+
+#undef EXPORT
+
+		/*template ECSENGINE_API void UIDrawer::ArrayInteger2<char>(const char* name, CapacityStream<char2>* values, size_t, const UIDrawConfig);
 		template ECSENGINE_API void UIDrawer::ArrayInteger2<int8_t>(const char* name, CapacityStream<char2>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint8_t>(const char* name, CapacityStream<uchar2>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger2<int16_t>(const char* name, CapacityStream<short2>* values);
@@ -8883,33 +9016,54 @@ namespace ECSEngine {
 		template ECSENGINE_API void UIDrawer::ArrayInteger2<int32_t>(const char* name, CapacityStream<int2>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint32_t>(const char* name, CapacityStream<uint2>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger2<int64_t>(const char* name, CapacityStream<long2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint64_t>(const char* name, CapacityStream<ulong2>* values);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint64_t>(const char* name, CapacityStream<ulong2>* values);*/
 
 		template<typename BaseInteger, typename Integer2>
-		void UIDrawer::ArrayInteger2(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer2>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayInteger2Function<BaseInteger>);
+		void UIDrawer::ArrayInteger2(
+			size_t configuration,
+			const UIDrawConfig& config,
+			const char* name, 
+			CapacityStream<Integer2>* values, 
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayInteger2Function<BaseInteger>);
 		}
 
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<char>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<int8_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint8_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<uchar2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<int16_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<short2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint16_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ushort2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<int32_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<int2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint32_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<uint2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<int64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<long2>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ulong2>* values);
+#define EXPORT(type, type2) template ECSENGINE_API void UIDrawer::ArrayInteger2<type>(size_t, const UIDrawConfig&, const char*, CapacityStream<type2>*, size_t, const UIDrawConfig*);
+
+		EXPORT(char, char2);
+		EXPORT(int8_t, char2);
+		EXPORT(uint8_t, uchar2);
+		EXPORT(int16_t, short2);
+		EXPORT(uint16_t, ushort2);
+		EXPORT(int32_t, int2);
+		EXPORT(uint32_t, uint2);
+		EXPORT(int64_t, long2);
+		EXPORT(uint64_t, ulong2);
+
+#undef EXPORT
+
+		/*template ECSENGINE_API void UIDrawer::ArrayInteger2<char>(size_t, const UIDrawConfig&, const char*, CapacityStream<char2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<int8_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<char2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint8_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<uchar2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<int16_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<short2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint16_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<ushort2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<int32_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<int2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint32_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<uint2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<int64_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<long2>*);
+		template ECSENGINE_API void UIDrawer::ArrayInteger2<uint64_t>(size_t, const UIDrawConfig&, const char*, CapacityStream<ulong2>*);*/
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// it will infer the extended type
 		template<typename BaseInteger>
-		void UIDrawer::ArrayInteger2Infer(const char* name, CapacityStream<void>* values) {
+		void UIDrawer::ArrayInteger2Infer(const char* name, CapacityStream<void>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayInteger2Infer<BaseInteger>(0, config, name, values);
+			ArrayInteger2Infer<BaseInteger>(0, config, name, values, element_configuration, element_config);
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger2Infer<integer>, const char*, CapacityStream<void>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger2Infer<integer>, const char*, CapacityStream<void>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -8917,37 +9071,44 @@ namespace ECSEngine {
 
 		// it will infer the extended type
 		template<typename BaseInteger>
-		void UIDrawer::ArrayInteger2Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values) {
+		void UIDrawer::ArrayInteger2Infer(
+			size_t configuration, 
+			const UIDrawConfig& config, 
+			const char* name, 
+			CapacityStream<void>* values, 
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
 			if constexpr (std::is_same_v<BaseInteger, char> || std::is_same_v<BaseInteger, int8_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<char2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<char2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint8_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<uchar2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<uchar2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int16_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<short2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<short2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint16_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<ushort2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<ushort2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int32_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<int2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<int2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint32_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<uint2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<uint2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int64_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<long2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<long2>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint64_t>) {
-				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<ulong2>*)values);
+				ArrayInteger2<BaseInteger>(configuration, config, name, (CapacityStream<ulong2>*)values, element_configuration, element_config);
 			}
 			else {
 				ECS_ASSERT(false);
 			}
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger2Infer<integer>, size_t, const UIDrawConfig&, const char*, CapacityStream<void>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger2Infer<integer>, size_t, const UIDrawConfig&, const char*, CapacityStream<void>*, size_t, const UIDrawConfig* config);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -8961,35 +9122,49 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayFloat3(const char* name, CapacityStream<float3>* values) {
+		void UIDrawer::ArrayFloat3(const char* name, CapacityStream<float3>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayFloat3(0, config, name, values);
+			ArrayFloat3(0, config, name, values, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayFloat3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float3>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayFloat3Function);
+		void UIDrawer::ArrayFloat3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float3>* values, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayFloat3Function);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayDouble3(const char* name, CapacityStream<double3>* values) {
+		void UIDrawer::ArrayDouble3(const char* name, CapacityStream<double3>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayDouble3(0, config, name, values);
+			ArrayDouble3(0, config, name, values, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayDouble3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double3>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayDouble3Function);
+		void UIDrawer::ArrayDouble3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double3>* values, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayDouble3Function);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename BaseInteger, typename Integer3>
-		void UIDrawer::ArrayInteger3(const char* name, CapacityStream<Integer3>* values) {
+		void UIDrawer::ArrayInteger3(const char* name, CapacityStream<Integer3>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayInteger3<BaseInteger>(0, config, name, values);
+			ArrayInteger3<BaseInteger>(0, config, name, values, element_configuration, element_config);
 		}
 
-		template ECSENGINE_API void UIDrawer::ArrayInteger3<char>(const char* name, CapacityStream<char3>* values);
+#define EXPORT(type, type3) template ECSENGINE_API void UIDrawer::ArrayInteger3<type>(const char*, CapacityStream<type3>*, size_t, const UIDrawConfig*);
+
+		EXPORT(char, char3);
+		EXPORT(int8_t, char3);
+		EXPORT(uint8_t, uchar3);
+		EXPORT(int16_t, short3);
+		EXPORT(uint16_t, ushort3);
+		EXPORT(int32_t, int3);
+		EXPORT(uint32_t, uint3);
+		EXPORT(int64_t, long3);
+		EXPORT(uint64_t, ulong3);
+
+#undef EXPORT
+
+		/*template ECSENGINE_API void UIDrawer::ArrayInteger3<char>(const char* name, CapacityStream<char3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int8_t>(const char* name, CapacityStream<char3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint8_t>(const char* name, CapacityStream<uchar3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int16_t>(const char* name, CapacityStream<short3>* values);
@@ -8997,14 +9172,28 @@ namespace ECSEngine {
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int32_t>(const char* name, CapacityStream<int3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint32_t>(const char* name, CapacityStream<uint3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int64_t>(const char* name, CapacityStream<long3>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint64_t>(const char* name, CapacityStream<ulong3>* values);
+		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint64_t>(const char* name, CapacityStream<ulong3>* values);*/
 
 		template<typename BaseInteger, typename Integer3>
-		void UIDrawer::ArrayInteger3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer3>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayInteger3Function<BaseInteger>);
+		void UIDrawer::ArrayInteger3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer3>* values, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayInteger3Function<BaseInteger>);
 		}
 
-		template ECSENGINE_API void UIDrawer::ArrayInteger3<char>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char3>* values);
+#define EXPORT(type, type3) template ECSENGINE_API void UIDrawer::ArrayInteger3<type>(size_t, const UIDrawConfig&, const char*, CapacityStream<type3>*, size_t, const UIDrawConfig*);
+
+		EXPORT(char, char3);
+		EXPORT(int8_t, char3);
+		EXPORT(uint8_t, uchar3);
+		EXPORT(int16_t, short3);
+		EXPORT(uint16_t, ushort3);
+		EXPORT(int32_t, int3);
+		EXPORT(uint32_t, uint3);
+		EXPORT(int64_t, long3);
+		EXPORT(uint64_t, ulong3);
+
+#undef EXPORT
+
+		/*template ECSENGINE_API void UIDrawer::ArrayInteger3<char>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int8_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint8_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<uchar3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int16_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<short3>* values);
@@ -9012,18 +9201,18 @@ namespace ECSEngine {
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int32_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<int3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint32_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<uint3>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger3<int64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<long3>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ulong3>* values);
+		template ECSENGINE_API void UIDrawer::ArrayInteger3<uint64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ulong3>* values);*/
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// it will infer the extended type
 		template<typename BaseInteger>
-		void UIDrawer::ArrayInteger3Infer(const char* name, CapacityStream<void>* values) {
+		void UIDrawer::ArrayInteger3Infer(const char* name, CapacityStream<void>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayInteger3Infer<BaseInteger>(0, config, name, values);
+			ArrayInteger3Infer<BaseInteger>(0, config, name, values, element_configuration, element_config);
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger3Infer<integer>, const char*, CapacityStream<void>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger3Infer<integer>, const char*, CapacityStream<void>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -9031,37 +9220,37 @@ namespace ECSEngine {
 
 		// it will infer the extended type
 		template<typename BaseInteger>
-		void UIDrawer::ArrayInteger3Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values) {
+		void UIDrawer::ArrayInteger3Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			if constexpr (std::is_same_v<BaseInteger, char> || std::is_same_v<BaseInteger, int8_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<char3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<char3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint8_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<uchar3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<uchar3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int16_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<short3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<short3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint16_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<ushort3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<ushort3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int32_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<int3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<int3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint32_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<uint3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<uint3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int64_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<long3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<long3>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint64_t>) {
-				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<ulong3>*)values);
+				ArrayInteger3<BaseInteger>(configuration, config, name, (CapacityStream<ulong3>*)values, element_configuration, element_config);
 			}
 			else {
 				ECS_ASSERT(false);
 			}
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger3Infer<integer>, size_t, const UIDrawConfig&, const char*, CapacityStream<void>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger3Infer<integer>, size_t, const UIDrawConfig&, const char*, CapacityStream<void>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -9075,35 +9264,49 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayFloat4(const char* name, CapacityStream<float4>* values) {
+		void UIDrawer::ArrayFloat4(const char* name, CapacityStream<float4>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
 			ArrayFloat4(0, config, name, values);
 		}
 
-		void UIDrawer::ArrayFloat4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float4>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayFloat4Function);
+		void UIDrawer::ArrayFloat4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float4>* values, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayFloat4Function);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayDouble4(const char* name, CapacityStream<double4>* values) {
+		void UIDrawer::ArrayDouble4(const char* name, CapacityStream<double4>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
 			ArrayDouble4(0, config, name, values);
 		}
 
-		void UIDrawer::ArrayDouble4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double4>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayDouble4Function);
+		void UIDrawer::ArrayDouble4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double4>* values, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayDouble4Function);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		template<typename BaseInteger, typename Integer4>
-		void UIDrawer::ArrayInteger4(const char* name, CapacityStream<Integer4>* values) {
+		void UIDrawer::ArrayInteger4(const char* name, CapacityStream<Integer4>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayInteger4<BaseInteger>(0, config, name, values);
+			ArrayInteger4<BaseInteger>(0, config, name, values, element_configuration, element_config);
 		}
 
-		template ECSENGINE_API void UIDrawer::ArrayInteger4<char>(const char* name, CapacityStream<char4>* values);
+#define EXPORT(type, type4) template ECSENGINE_API void UIDrawer::ArrayInteger4<type>(const char*, CapacityStream<type4>*, size_t, const UIDrawConfig*);
+
+		EXPORT(char, char4);
+		EXPORT(int8_t, char4);
+		EXPORT(uint8_t, uchar4);
+		EXPORT(int16_t, short4);
+		EXPORT(uint16_t, ushort4);
+		EXPORT(int32_t, int4);
+		EXPORT(uint32_t, uint4);
+		EXPORT(int64_t, long4);
+		EXPORT(uint64_t, ulong4);
+
+#undef EXPORT
+
+		/*template ECSENGINE_API void UIDrawer::ArrayInteger4<char>(const char* name, CapacityStream<char4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int8_t>(const char* name, CapacityStream<char4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint8_t>(const char* name, CapacityStream<uchar4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int16_t>(const char* name, CapacityStream<short4>* values);
@@ -9111,14 +9314,35 @@ namespace ECSEngine {
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int32_t>(const char* name, CapacityStream<int4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint32_t>(const char* name, CapacityStream<uint4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int64_t>(const char* name, CapacityStream<long4>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint64_t>(const char* name, CapacityStream<ulong4>* values);
+		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint64_t>(const char* name, CapacityStream<ulong4>* values);*/
 
 		template<typename BaseInteger, typename Integer4>
-		void UIDrawer::ArrayInteger4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer4>* values) {
-			Array(configuration, config, name, values, nullptr, UIDrawerArrayInteger4Function<BaseInteger>);
+		void UIDrawer::ArrayInteger4(
+			size_t configuration, 
+			const UIDrawConfig& config,
+			const char* name, 
+			CapacityStream<Integer4>* values, 
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, values, nullptr, UIDrawerArrayInteger4Function<BaseInteger>);
 		}
 
-		template ECSENGINE_API void UIDrawer::ArrayInteger4<char>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char4>* values);
+#define EXPORT(type, type4) template ECSENGINE_API void UIDrawer::ArrayInteger4<type>(size_t, const UIDrawConfig&, const char*, CapacityStream<type4>*, size_t, const UIDrawConfig*);
+
+		EXPORT(char, char4);
+		EXPORT(int8_t, char4);
+		EXPORT(uint8_t, uchar4);
+		EXPORT(int16_t, short4);
+		EXPORT(uint16_t, ushort4);
+		EXPORT(int32_t, int4);
+		EXPORT(uint32_t, uint4);
+		EXPORT(int64_t, long4);
+		EXPORT(uint64_t, ulong4);
+
+#undef EXPORT
+
+		/*template ECSENGINE_API void UIDrawer::ArrayInteger4<char>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int8_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<char4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint8_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<uchar4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int16_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<short4>* values);
@@ -9126,18 +9350,18 @@ namespace ECSEngine {
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int32_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<int4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint32_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<uint4>* values);
 		template ECSENGINE_API void UIDrawer::ArrayInteger4<int64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<long4>* values);
-		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ulong4>* values);
+		template ECSENGINE_API void UIDrawer::ArrayInteger4<uint64_t>(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ulong4>* values);*/
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// it will infer the extended type
 		template<typename BaseInteger>
-		void UIDrawer::ArrayInteger4Infer(const char* name, CapacityStream<void>* values) {
+		void UIDrawer::ArrayInteger4Infer(const char* name, CapacityStream<void>* values, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayInteger4Infer<BaseInteger>(0, config, name, values);
+			ArrayInteger4Infer<BaseInteger>(0, config, name, values, element_configuration, element_config);
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger4Infer<integer>, const char*, CapacityStream<void>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger4Infer<integer>, const char*, CapacityStream<void>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -9145,37 +9369,44 @@ namespace ECSEngine {
 
 		// it will infer the extended type
 		template<typename BaseInteger>
-		void UIDrawer::ArrayInteger4Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values) {
+		void UIDrawer::ArrayInteger4Infer(
+			size_t configuration, 
+			const UIDrawConfig& config,
+			const char* name,
+			CapacityStream<void>* values,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
 			if constexpr (std::is_same_v<BaseInteger, char> || std::is_same_v<BaseInteger, int8_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<char4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<char4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint8_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<uchar4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<uchar4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int16_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<short4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<short4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint16_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<ushort4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<ushort4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int32_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<int4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<int4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint32_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<uint4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<uint4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, int64_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<long4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<long4>*)values, element_configuration, element_config);
 			}
 			else if constexpr (std::is_same_v<BaseInteger, uint64_t>) {
-				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<ulong4>*)values);
+				ArrayInteger4<BaseInteger>(configuration, config, name, (CapacityStream<ulong4>*)values, element_configuration, element_config);
 			}
 			else {
 				ECS_ASSERT(false);
 			}
 		}
 
-#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger4Infer<integer>, size_t, const UIDrawConfig&, const char*, CapacityStream<void>*);
+#define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawer::ArrayInteger4Infer<integer>, size_t, const UIDrawConfig&, const char*, CapacityStream<void>*, size_t, const UIDrawConfig*);
 
 		ECS_TEMPLATE_FUNCTION_INTEGER(EXPORT);
 
@@ -9189,13 +9420,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayColor(const char* name, CapacityStream<Color>* colors) {
+		void UIDrawer::ArrayColor(const char* name, CapacityStream<Color>* colors, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayColor(0, config, name, colors);
+			ArrayColor(0, config, name, colors, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayColor(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Color>* colors) {
-			Array(configuration, config, name, colors, nullptr, UIDrawerArrayColorFunction);
+		void UIDrawer::ArrayColor(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Color>* colors, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, colors, nullptr, UIDrawerArrayColorFunction);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9206,13 +9437,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayColorFloat(const char* name, CapacityStream<ColorFloat>* colors) {
+		void UIDrawer::ArrayColorFloat(const char* name, CapacityStream<ColorFloat>* colors, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayColorFloat(0, config, name, colors);
+			ArrayColorFloat(0, config, name, colors, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayColorFloat(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ColorFloat>* colors) {
-			Array(configuration, config, name, colors, nullptr, UIDrawerArrayColorFloatFunction);
+		void UIDrawer::ArrayColorFloat(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ColorFloat>* colors, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, colors, nullptr, UIDrawerArrayColorFloatFunction);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9224,13 +9455,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayCheckBox(const char* name, CapacityStream<bool>* states) {
+		void UIDrawer::ArrayCheckBox(const char* name, CapacityStream<bool>* states, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayCheckBox(0, config, name, states);
+			ArrayCheckBox(0, config, name, states, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayCheckBox(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<bool>* states) {
-			Array(configuration, config, name, states, nullptr, UIDrawerArrayCheckBoxFunction);
+		void UIDrawer::ArrayCheckBox(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<bool>* states, size_t element_configuration, const UIDrawConfig* element_config) {
+			Array(configuration, element_configuration, config, element_config, name, states, nullptr, UIDrawerArrayCheckBoxFunction);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9241,15 +9472,15 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayTextInput(const char* name, CapacityStream<CapacityStream<char>>* texts) {
+		void UIDrawer::ArrayTextInput(const char* name, CapacityStream<CapacityStream<char>>* texts, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayTextInput(0, config, name, texts);
+			ArrayTextInput(0, config, name, texts, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayTextInput(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<CapacityStream<char>>* texts) {
+		void UIDrawer::ArrayTextInput(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<CapacityStream<char>>* texts, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawerTextInput** inputs = (UIDrawerTextInput**)GetTempBuffer(sizeof(UIDrawerTextInput*) * texts->size);
 
-			Array(configuration, config, name, texts, inputs, UIDrawerArrayTextInputFunction,
+			Array(configuration, element_configuration, config, element_config, name, texts, inputs, UIDrawerArrayTextInputFunction,
 				[](UIDrawer& drawer, void* _elements, unsigned int element_count, unsigned int* new_order, void* additional_data) {
 					Stream<CapacityStream<char>> elements(_elements, element_count);
 					UIDrawerTextInput** inputs = (UIDrawerTextInput**)additional_data;
@@ -9279,13 +9510,21 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ArrayComboBox(const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels) {
+		void UIDrawer::ArrayComboBox(const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels, size_t element_configuration, const UIDrawConfig* element_config) {
 			UIDrawConfig config;
-			ArrayComboBox(0, config, name, flags, flag_labels);
+			ArrayComboBox(0, config, name, flags, flag_labels, element_configuration, element_config);
 		}
 
-		void UIDrawer::ArrayComboBox(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels) {
-			Array(configuration, config, name, flags, &flag_labels, UIDrawerArrayComboBoxFunction);
+		void UIDrawer::ArrayComboBox(
+			size_t configuration,
+			const UIDrawConfig& config,
+			const char* name, 
+			CapacityStream<unsigned char>* flags, 
+			CapacityStream<Stream<const char*>> flag_labels,
+			size_t element_configuration,
+			const UIDrawConfig* element_config
+		) {
+			Array(configuration, element_configuration, config, element_config, name, flags, &flag_labels, UIDrawerArrayComboBoxFunction);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9416,32 +9655,36 @@ namespace ECSEngine {
 							AddDefaultClickable(position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 						}
 						else {
-							UIDefaultTextHoverableData hoverable_data;
-							hoverable_data.color = label_color;
-							hoverable_data.text = text;
-
 							UISpriteVertex* vertices = HandleTextSpriteBuffer(configuration);
 							size_t* count = HandleTextSpriteCount(configuration);
+							const char* identifier = HandleResourceIdentifier(text);
+							size_t text_vertex_count = ParseStringIdentifier(identifier, strlen(identifier)) * 6;
 
-							size_t text_vertex_count = strlen(text) * 6;
-							hoverable_data.text_offset = { vertices[*count - text_vertex_count].position.x - position.x, -vertices[*count - text_vertex_count].position.y - position.y };
-							Color text_color;
-							float2 text_size;
-							float text_character_spacing;
-							HandleText(configuration, config, text_color, text_size, text_character_spacing);
+							if (*count >= text_vertex_count) {
 
-							hoverable_data.character_spacing = text_character_spacing;
-							hoverable_data.font_size = text_size;
-							hoverable_data.text_color = text_color;
+								UIDefaultTextHoverableData hoverable_data;
+								hoverable_data.color = label_color;
+								hoverable_data.text = text;
 
-							UIDrawPhase hoverable_phase = UIDrawPhase::Normal;
-							if (configuration & UI_CONFIG_LATE_DRAW) {
-								hoverable_phase = UIDrawPhase::Late;
+								hoverable_data.text_offset = { vertices[*count - text_vertex_count].position.x - position.x, -vertices[*count - text_vertex_count].position.y - position.y };
+								Color text_color;
+								float2 text_size;
+								float text_character_spacing;
+								HandleText(configuration, config, text_color, text_size, text_character_spacing);
+
+								hoverable_data.character_spacing = text_character_spacing;
+								hoverable_data.font_size = text_size;
+								hoverable_data.text_color = text_color;
+
+								UIDrawPhase hoverable_phase = UIDrawPhase::Normal;
+								if (configuration & UI_CONFIG_LATE_DRAW) {
+									hoverable_phase = UIDrawPhase::Late;
+								}
+								else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
+									hoverable_phase = UIDrawPhase::System;
+								}
+								AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
 							}
-							else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
-								hoverable_phase = UIDrawPhase::System;
-							}
-							AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
 						}
 					}
 					else {
@@ -10199,6 +10442,51 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		Stream<const char*> AllocateFilterMenuCopyLabels(UIDrawer* drawer, Stream<const char*> labels) {
+			Stream<const char*> result;
+
+			size_t copy_memory = sizeof(const char*) * labels.size;
+			for (size_t index = 0; index < labels.size; index++) {
+				copy_memory += strlen(labels[index]) + 1;
+			}
+			void* copy_allocation = drawer->GetMainAllocatorBuffer(copy_memory);
+			uintptr_t copy_ptr = (uintptr_t)copy_allocation;
+
+			result.buffer = (const char**)copy_ptr;
+			result.size = labels.size;
+			copy_ptr += sizeof(const char*) * labels.size;
+
+			for (size_t index = 0; index < labels.size; index++) {
+				char* char_ptr = (char*)copy_ptr;
+				size_t name_length = strlen(labels[index]) + 1;
+				memcpy(char_ptr, labels[index], name_length * sizeof(char));
+				result[index] = char_ptr;
+				copy_ptr += sizeof(char) * name_length;
+			}
+
+			return result;
+		}
+
+		Stream<const char*> ReallocateFilterMenuCopyLabels(UIDrawer* drawer, Stream<const char*> old_labels, Stream<const char*> new_labels) {
+			drawer->system->RemoveWindowMemoryResource(drawer->window_index, old_labels.buffer);
+			drawer->system->m_memory->Deallocate(old_labels.buffer);
+
+			return AllocateFilterMenuCopyLabels(drawer, new_labels);
+		}
+
+		bool ShouldReallocateFilterMenuCopyLabels(Stream<const char*> old_labels, Stream<const char*> new_labels) {
+			if (old_labels.size != new_labels.size) {
+				return true;
+			}
+			for (size_t index = 0; index < old_labels.size; index++) {
+				if (!function::CompareStrings(old_labels[index], new_labels[index])) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		// States should be a stack pointer with bool* to the members that need to be changed
 		void UIDrawer::FilterMenu(const char* name, Stream<const char*> label_names, bool** states) {
 			UIDrawConfig config;
@@ -10211,6 +10499,16 @@ namespace ECSEngine {
 			if (!initializer) {
 				if (~configuration & UI_CONFIG_DO_NOT_CACHE) {
 					UIDrawerFilterMenuData* data = (UIDrawerFilterMenuData*)GetResource(name);
+
+					data->states = states;
+					if (~configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
+						data->labels = label_names;
+					}
+					else {
+						if (ShouldReallocateFilterMenuCopyLabels(data->labels, label_names)) {
+							data->labels = ReallocateFilterMenuCopyLabels(this, data->labels, label_names);
+						}
+					}
 
 					FilterMenuDrawer(configuration, config, name, data);
 					HandleDynamicResource(configuration, name);
@@ -10253,6 +10551,17 @@ namespace ECSEngine {
 			if (!initializer) {
 				if (~configuration & UI_CONFIG_DO_NOT_CACHE) {
 					UIDrawerFilterMenuSinglePointerData* data = (UIDrawerFilterMenuSinglePointerData*)GetResource(name);
+
+					data->states = states;
+					// Update the labels if they have changed in dimension
+					if (~configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
+						data->labels = label_names;
+					}
+					else {
+						if (ShouldReallocateFilterMenuCopyLabels(data->labels, label_names)) {
+							data->labels = ReallocateFilterMenuCopyLabels(this, data->labels, label_names);
+						}
+					}
 
 					FilterMenuDrawer(configuration, config, name, data);
 					HandleDynamicResource(configuration, name);
@@ -10309,29 +10618,15 @@ namespace ECSEngine {
 			}
 			AddWindowResource(name, [&](const char* identifier) {
 				size_t total_memory = sizeof(UIDrawerFilterMenuData);
-				total_memory += sizeof(const char*) * label_names.size;
 				total_memory += sizeof(bool*) * label_names.size;
 				size_t identifier_size = strlen(identifier) + 1;
 				size_t window_name_size = identifier_size + strlen("Filter Window");
 				total_memory += sizeof(char) * window_name_size;
-				if (configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
-					for (size_t index = 0; index < label_names.size; index++) {
-						total_memory += strlen(label_names[index]) + 1;
-					}
-				}
 
 				data = (UIDrawerFilterMenuData*)GetMainAllocatorBuffer(total_memory);
 				data->name = identifier;
 				uintptr_t ptr = (uintptr_t)data;
 				ptr += sizeof(UIDrawerFilterMenuData);
-
-				data->labels.buffer = (const char**)ptr;
-				data->labels.size = label_names.size;
-				ptr += sizeof(const char*) * label_names.size;
-
-				data->states = (bool**)ptr;
-				ptr += sizeof(bool*) * label_names.size;
-				memcpy(data->states, states, sizeof(bool*) * label_names.size);
 
 				char* window_name = (char*)ptr;
 				memcpy(window_name, identifier, identifier_size);
@@ -10340,16 +10635,10 @@ namespace ECSEngine {
 				ptr += window_name_size;
 
 				if (~configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
-					memcpy(data->labels.buffer, label_names.buffer, label_names.size * sizeof(const char*));
+					data->labels = label_names;
 				}
 				else {
-					for (size_t index = 0; index < label_names.size; index++) {
-						char* char_ptr = (char*)ptr;
-						size_t name_length = strlen(label_names[index]) + 1;
-						memcpy(char_ptr, label_names[index], name_length * sizeof(char));
-						data->labels[index] = char_ptr;
-						ptr += sizeof(char) * name_length;
-					}
+					data->labels = AllocateFilterMenuCopyLabels(this, label_names);
 				}
 
 				data->draw_all = (configuration & UI_CONFIG_FILTER_MENU_ALL) == 0;
@@ -10402,24 +10691,14 @@ namespace ECSEngine {
 			}
 			AddWindowResource(name, [&](const char* identifier) {
 				size_t total_memory = sizeof(UIDrawerFilterMenuSinglePointerData);
-				total_memory += sizeof(const char*) * label_names.size;
 				size_t identifier_size = strlen(identifier) + 1;
 				size_t window_name_size = identifier_size + strlen("Filter Window");
 				total_memory += sizeof(char) * window_name_size;
-				if (configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
-					for (size_t index = 0; index < label_names.size; index++) {
-						total_memory += strlen(label_names[index]) + 1;
-					}
-				}
 
 				data = (UIDrawerFilterMenuSinglePointerData*)GetMainAllocatorBuffer(total_memory);
 				data->name = identifier;
 				uintptr_t ptr = (uintptr_t)data;
 				ptr += sizeof(UIDrawerFilterMenuSinglePointerData);
-
-				data->labels.buffer = (const char**)ptr;
-				data->labels.size = label_names.size;
-				ptr += sizeof(const char*) * label_names.size;
 
 				data->states = states;
 				char* window_name = (char*)ptr;
@@ -10429,16 +10708,10 @@ namespace ECSEngine {
 				ptr += window_name_size;
 
 				if (~configuration & UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES) {
-					memcpy(data->labels.buffer, label_names.buffer, label_names.size * sizeof(const char*));
+					data->labels = label_names;
 				}
 				else {
-					for (size_t index = 0; index < label_names.size; index++) {
-						char* char_ptr = (char*)ptr;
-						size_t name_length = strlen(label_names[index]) + 1;
-						memcpy(char_ptr, label_names[index], name_length * sizeof(char));
-						data->labels[index] = char_ptr;
-						ptr += sizeof(char) * name_length;
-					}
+					data->labels = AllocateFilterMenuCopyLabels(this, label_names);
 				}
 
 				data->draw_all = (configuration & UI_CONFIG_FILTER_MENU_ALL) == 0;
@@ -11265,16 +11538,25 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::Indent() {
-			min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
-			current_x += layout.element_indentation + current_column_x_scale;
-			current_column_x_scale = 0.0f;
+			Indent(1.0f);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::Indent(float count) {
+			//min_render_bounds.x = function::ClampMax(min_render_bounds.x, current_x - region_render_offset.x);
 			min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
 			current_x += count * layout.element_indentation + current_column_x_scale;
+			current_column_x_scale = 0.0f;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::IndentWindowSize(float percentage)
+		{
+			//min_render_bounds.x = function::ClampMax(min_render_bounds.x, current_x - region_render_offset.x);
+			min_render_bounds.x = function::Select(min_render_bounds.x > current_x - region_render_offset.x, current_x - region_render_offset.x, min_render_bounds.x);
+			current_x += (region_limit.x - region_fit_space_horizontal_offset) * percentage + current_column_x_scale;
 			current_column_x_scale = 0.0f;
 		}
 
@@ -12242,12 +12524,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::NextRow() {
-			min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
-			current_y += layout.next_row_y_offset + current_row_y_scale;
-			current_x = GetNextRowXPosition();
-			current_row_y_scale = 0.0f;
-			current_column_x_scale = 0.0f;
-			draw_mode_extra_float.y = current_y;
+			NextRow(1.0f);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12255,6 +12532,20 @@ namespace ECSEngine {
 		void UIDrawer::NextRow(float count) {
 			min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
 			current_y += count * layout.next_row_y_offset + current_row_y_scale;
+			current_x = GetNextRowXPosition();
+			current_row_y_scale = 0.0f;
+			current_column_x_scale = 0.0f;
+
+			// This records the last
+			draw_mode_extra_float.y = current_y;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::NextRowWindowSize(float percentage)
+		{
+			min_render_bounds.y = function::Select(min_render_bounds.y > current_y - region_render_offset.y, current_y - region_render_offset.y, min_render_bounds.y);
+			current_y += (region_limit.y - region_fit_space_vertical_offset) * percentage + current_row_y_scale;
 			current_x = GetNextRowXPosition();
 			current_row_y_scale = 0.0f;
 			current_column_x_scale = 0.0f;
@@ -13132,8 +13423,8 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		// Currently, draw_mode_floats is needed for column draw, only the y component needs to be filled
-		// with the desired y spacing
+		// Currently, draw_mode_extra_float is needed for column draw, only the y component needs to be filled
+		// with the y position at each draw level
 		void UIDrawer::SetDrawMode(UIDrawerMode mode, unsigned int target, float draw_mode_float) {
 			draw_mode = mode;
 			draw_mode_count = 0;
@@ -13142,6 +13433,14 @@ namespace ECSEngine {
 			if (mode == UIDrawerMode::ColumnDraw || mode == UIDrawerMode::ColumnDrawFitSpace) {
 				draw_mode_extra_float.y = current_y;
 			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::SetRenderSpan(float2 value)
+		{
+			min_render_bounds = { 0.0f, 0.0f };
+			max_render_bounds = value;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14156,7 +14455,13 @@ namespace ECSEngine {
 					else {
 						text_span = system->GetTextSpan(text, ParseStringIdentifier(text, strlen(text)), font_size.x, font_size.y, character_spacing);
 						HandleFitSpaceRectangle(configuration, position, text_span);
+						FinalizeRectangle(configuration, position, text_span);
 					}
+				}
+				// Still have to fill in the text span
+				else {
+					text_span = system->GetTextSpan(text, ParseStringIdentifier(text, strlen(text)), font_size.x, font_size.y, character_spacing);
+					HandleFitSpaceRectangle(configuration, position, text_span);
 				}
 			}
 			else {
@@ -14696,14 +15001,24 @@ namespace ECSEngine {
 
 		void UIDrawerArrayFloatFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-			drawer.FloatInput(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, temp_config, element_name, (float*)draw_data.element_data);
+			drawer.FloatInput(
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, 
+				draw_data.config == nullptr ? temp_config : *draw_data.config, 
+				element_name, 
+				(float*)draw_data.element_data
+			);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		void UIDrawerArrayDoubleFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-			drawer.DoubleInput(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, temp_config, element_name, (double*)draw_data.element_data);
+			drawer.DoubleInput(
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, 
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
+				element_name, 
+				(double*)draw_data.element_data
+			);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -14711,7 +15026,12 @@ namespace ECSEngine {
 		template<typename Integer>
 		void UIDrawerArrayIntegerFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-			drawer.IntInput<Integer>(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, temp_config, element_name, (Integer*)draw_data.element_data);
+			drawer.IntInput<Integer>(
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE, 
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
+				element_name,
+				(Integer*)draw_data.element_data
+			);
 		}
 
 #define EXPORT(integer) ECS_TEMPLATE_FUNCTION(void, UIDrawerArrayIntegerFunction<integer>, UIDrawer&, const char*, UIDrawerArrayDrawData);
@@ -14729,8 +15049,8 @@ namespace ECSEngine {
 			values[1] = values[0] + 1;
 
 			drawer.FloatInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				2,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14747,8 +15067,8 @@ namespace ECSEngine {
 			values[1] = values[0] + 1;
 
 			drawer.DoubleInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				2,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14766,8 +15086,8 @@ namespace ECSEngine {
 			values[1] = values[0] + 1;
 
 			drawer.IntInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				2,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14791,8 +15111,8 @@ namespace ECSEngine {
 			values[2] = values[0] + 2;
 
 			drawer.FloatInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				3,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14810,8 +15130,8 @@ namespace ECSEngine {
 			values[2] = values[0] + 2;
 
 			drawer.DoubleInputGroup(
-				UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				3,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14830,8 +15150,8 @@ namespace ECSEngine {
 			values[2] = values[0] + 2;
 
 			drawer.IntInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				3,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14856,8 +15176,8 @@ namespace ECSEngine {
 			values[3] = values[0] + 3;
 
 			drawer.FloatInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				4,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14869,7 +15189,6 @@ namespace ECSEngine {
 
 		void UIDrawerArrayDouble4Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-
 			double* values[4];
 			values[0] = (double*)draw_data.element_data;
 			values[1] = values[0] + 1;
@@ -14877,8 +15196,8 @@ namespace ECSEngine {
 			values[3] = values[0] + 3;
 
 			drawer.DoubleInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				4,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14891,7 +15210,6 @@ namespace ECSEngine {
 		template<typename BaseInteger>
 		void UIDrawerArrayInteger4Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-
 			BaseInteger* values[4];
 			values[0] = (BaseInteger*)draw_data.element_data;
 			values[1] = values[0] + 1;
@@ -14899,8 +15217,8 @@ namespace ECSEngine {
 			values[3] = values[0] + 3;
 
 			drawer.IntInputGroup(
-				UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_NO_RANGE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				4,
 				element_name,
 				UI_DRAWER_ARRAY_SUBTYPE_COMPONENTS,
@@ -14918,21 +15236,21 @@ namespace ECSEngine {
 
 		void UIDrawerArrayColorFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-			drawer.ColorInput(UI_CONFIG_DO_NOT_CACHE, temp_config, element_name, (Color*)draw_data.element_data);
+			drawer.ColorInput(draw_data.configuration | UI_CONFIG_DO_NOT_CACHE, draw_data.config == nullptr ? temp_config : *draw_data.config, element_name, (Color*)draw_data.element_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		void UIDrawerArrayColorFloatFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-			drawer.ColorFloatInput(UI_CONFIG_DO_NOT_CACHE, temp_config, element_name, (ColorFloat*)draw_data.element_data);
+			drawer.ColorFloatInput(draw_data.configuration | UI_CONFIG_DO_NOT_CACHE, draw_data.config == nullptr ? temp_config : *draw_data.config, element_name, (ColorFloat*)draw_data.element_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		void UIDrawerArrayCheckBoxFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data) {
 			UIDrawConfig temp_config;
-			drawer.CheckBox(UI_CONFIG_DO_NOT_CACHE, temp_config, element_name, (bool*)draw_data.element_data);
+			drawer.CheckBox(draw_data.configuration | UI_CONFIG_DO_NOT_CACHE, draw_data.config == nullptr ? temp_config : *draw_data.config, element_name, (bool*)draw_data.element_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -14941,7 +15259,12 @@ namespace ECSEngine {
 			UIDrawConfig temp_config;
 			UIDrawerTextInput** inputs = (UIDrawerTextInput**)draw_data.additional_data;
 
-			inputs[draw_data.current_index] = drawer.TextInput(UI_CONFIG_DO_NOT_CACHE, temp_config, element_name, (CapacityStream<char>*)draw_data.element_data);
+			inputs[draw_data.current_index] = drawer.TextInput(
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE, 
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
+				element_name,
+				(CapacityStream<char>*)draw_data.element_data
+			);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -14951,8 +15274,8 @@ namespace ECSEngine {
 			CapacityStream<Stream<const char*>>* flag_labels = (CapacityStream<Stream<const char*>>*)draw_data.additional_data;
 
 			drawer.ComboBox(
-				UI_CONFIG_DO_NOT_CACHE,
-				temp_config,
+				draw_data.configuration | UI_CONFIG_DO_NOT_CACHE,
+				draw_data.config == nullptr ? temp_config : *draw_data.config,
 				element_name,
 				flag_labels->buffer[draw_data.current_index],
 				flag_labels->buffer[draw_data.current_index].size,

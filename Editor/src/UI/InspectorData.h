@@ -9,7 +9,7 @@ struct InspectorFunctions {
 	InspectorDrawFunction draw_function;
 	InspectorCleanDrawFunction clean_function;
 };
-typedef ECSEngine::containers::HashTable<InspectorFunctions, ECSEngine::ResourceIdentifier, ECSEngine::containers::HashFunctionPowerOfTwo, ECSEngine::HashFunctionMultiplyString> InspectorTable;
+typedef ECSEngine::HashTable<InspectorFunctions, ECSEngine::ResourceIdentifier, ECSEngine::HashFunctionPowerOfTwo, ECSEngine::HashFunctionMultiplyString> InspectorTable;
 
 struct InspectorData {
 	InspectorDrawFunction draw_function;

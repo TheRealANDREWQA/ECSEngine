@@ -15,8 +15,6 @@ constexpr const char* CHANGE_FILE_EXTENSION_WIZARD_NAME = "Change Extension";
 constexpr const char* CHANGE_FILE_EXTENSION_WIZARD_INPUT_NAME = "New extension";
 
 namespace ECSEngine {
-	
-	ECS_CONTAINERS;
 
 	namespace Tools {
 

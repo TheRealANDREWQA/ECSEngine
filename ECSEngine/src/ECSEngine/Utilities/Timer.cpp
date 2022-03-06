@@ -3,58 +3,76 @@
 
 namespace ECSEngine {
 
-	void Timer::PrintDuration() const {
-		auto end = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_start).count();
-		// print function
-		//ECSENGINE_CORE_INFO("Function {0} took {1} nanoseconds -- {2} milliseconds", m_name, duration, duration / 1'000'000);
+	// -----------------------------------------------------------------------------------------------------------
+
+	void Timer::DelayStart(size_t nanoseconds)
+	{
+		m_start += std::chrono::nanoseconds(nanoseconds);
 	}
 
-	void Timer::PrintDurationSinceMarker() const {
-		auto end = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_marker).count();
-		// print function
-		//ECSENGINE_CORE_INFO("Function {0} took {1} nanoseconds -- {2} milliseconds", m_name, duration, duration / 1'000'000);
+	// -----------------------------------------------------------------------------------------------------------
+
+	void Timer::DelayMarker(size_t nanoseconds)
+	{
+		m_marker += std::chrono::nanoseconds(nanoseconds);
 	}
+
+	// -----------------------------------------------------------------------------------------------------------
 
 	void Timer::SetNewStart()
 	{
 		m_start = std::chrono::high_resolution_clock::now();
 	}
 
+	// -----------------------------------------------------------------------------------------------------------
+
 	void Timer::SetMarker() {
 		m_marker = std::chrono::high_resolution_clock::now();
 	}
 
+	// -----------------------------------------------------------------------------------------------------------
+
 	unsigned long long Timer::GetDuration_ns() const {
 		auto end = std::chrono::high_resolution_clock::now();
-		return std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_start).count();
+		size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_start).count();
+		bool overflow = duration > end.time_since_epoch().count();
+		return overflow ? -duration : duration;
 	}
+
+	// -----------------------------------------------------------------------------------------------------------
 
 	unsigned long long Timer::GetDurationSinceMarker_ns() const {
 		auto end = std::chrono::high_resolution_clock::now();
-		return std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_marker).count();
+		size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - m_marker).count();
+		bool overflow = duration > end.time_since_epoch().count();
+		return overflow ? -duration : duration;
 	}
+
+	// -----------------------------------------------------------------------------------------------------------
 
 	unsigned long long Timer::GetDuration_ms() const {
-		auto end = std::chrono::high_resolution_clock::now();
-		return std::chrono::duration_cast<std::chrono::milliseconds>(end - m_start).count();
+		return GetDuration_ns() / 1'000'000;
 	}
 
+	// -----------------------------------------------------------------------------------------------------------
+
 	unsigned long long Timer::GetDurationSinceMarker_ms() const {
-		auto end = std::chrono::high_resolution_clock::now();
-		return std::chrono::duration_cast<std::chrono::milliseconds>(end - m_marker).count();
+		return GetDurationSinceMarker_ns() / 1'000'000;
 	}
+
+	// -----------------------------------------------------------------------------------------------------------
 
 	unsigned long long Timer::GetDuration_us() const
 	{
-		auto end = std::chrono::high_resolution_clock::now();
-		return std::chrono::duration_cast<std::chrono::microseconds>(end - m_start).count();
+		return GetDuration_ns() / 1'000;
 	}
 
+	// -----------------------------------------------------------------------------------------------------------
+
 	unsigned long long Timer::GetDurationSinceMarker_us() const {
-		auto end = std::chrono::high_resolution_clock::now();
-		return std::chrono::duration_cast<std::chrono::microseconds>(end - m_marker).count();
+		return GetDurationSinceMarker_ns() / 1'000;
 	}
+
+	// -----------------------------------------------------------------------------------------------------------
 
 }

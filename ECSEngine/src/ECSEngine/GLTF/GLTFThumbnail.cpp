@@ -2,7 +2,7 @@
 #include "GLTFThumbnail.h"
 #include "../Rendering/Graphics.h"
 #include "../Rendering/GraphicsHelpers.h"
-#include "../Math/Matrix.h"
+#include "../Math/Transform.h"
 #include "../Utilities/Timer.h"
 
 #define DEFAULT_ROTATION { 0.0f, 0.0f, 0.0f }
@@ -44,14 +44,17 @@ namespace ECSEngine {
 
 		Camera camera;
 		camera.SetPerspectiveProjectionFOV(60.0f, (float)texture_size.x / (float)texture_size.y, 0.0005f, 100000.0f);
-		camera.rotation = { 0.0f, 0.0f, 0.0f };
+		camera.rotation = { info.object_rotation.x, info.object_rotation.y, 0.0f };
 
 		// The object translation must be modulated by the rotation angles such that it stay framed
-		camera.translation = { -info.object_translation.x * sin(DegToRad(info.object_rotation.y)), -info.object_translation.y * cos(DegToRad(info.object_rotation.x)), -info.camera_radius };
-		//camera.translation = { 0.0f, 0.0f, -info.camera_radius };
-
+		camera.translation = OrbitPoint(info.camera_radius, { info.object_rotation.x, info.object_rotation.y });
+			
 		VertexConstants vertex_constants;
-		Matrix object_matrix = MatrixRotation(info.object_rotation);
+		Matrix object_matrix = MatrixTranslation(
+			info.object_translation.x,
+			info.object_translation.y,
+			info.object_translation.z
+		);
 		vertex_constants.object_matrix = MatrixTranspose(object_matrix);
 
 		Matrix camera_matrix = camera.GetProjectionViewMatrix();
@@ -151,22 +154,21 @@ namespace ECSEngine {
 		// Offset the object such that it appears centered
 		float x_translation = -difference.x * 0.5f - min_bound.x;
 		float y_translation = -difference.y * 0.5f - min_bound.y;
+		float z_translation = -difference.z * 0.5f - min_bound.z;
 
 		// Now construct the camera parameters - the radius and the rotation. For rotation select a some x and y values that will generarly
 		// work for many meshes
 		GLTFThumbnailInfo info;
 		info.object_rotation = DEFAULT_ROTATION;
-		info.object_translation = { x_translation, y_translation };
+		info.object_translation = { x_translation, y_translation, z_translation };
 
 		// The camera radius is equal to the biggest side - increase it by a bit since some object might not enter the frame correctly
 		info.camera_radius = maximum_side * 1.1f;
 		info.initial_camera_radius = info.camera_radius;
 
 		// If the biggest side is on the Z axis, rotate the object by 90 degrees on the Y axis such that the object can be better seen
-		// Adjust the translation offsets
 		if (maximum_side == difference.z) {
-			info.object_rotation.y = 90.0f;
-			info.object_translation.x = -difference.z * 0.5f - min_bound.z;
+			info.object_rotation.y = -90.0f;
 		}
 
 		return info;
@@ -254,7 +256,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void GLTFUpdateThumbnail(Graphics* graphics, const Mesh* mesh, GLTFThumbnail& thumbnail, float radius_delta, float2 translation_delta, float3 rotation_delta)
+	void GLTFUpdateThumbnail(Graphics* graphics, const Mesh* mesh, GLTFThumbnail& thumbnail, float radius_delta, float3 translation_delta, float3 rotation_delta)
 	{
 		GLTFUpdateThumbnailTaskData task_data;
 		task_data.graphics = graphics;

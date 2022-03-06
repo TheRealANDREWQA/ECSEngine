@@ -3,8 +3,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	namespace HID {
 
 		Keyboard::Keyboard() : m_implementation(nullptr) {}

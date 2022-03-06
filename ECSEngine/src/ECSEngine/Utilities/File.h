@@ -5,8 +5,6 @@
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/BasicTypes.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	enum ECS_FILE_STATUS_FLAGS : int {
@@ -32,7 +30,7 @@ namespace ECSEngine {
 
 	enum ECS_FILE_CREATE_FLAGS : int {
 		// The file will be deleted when the last file descriptor is closed
-		ECS_FILE_CREATE_temporary = O_TEMPORARY,
+		ECS_FILE_CREATE_TEMPORARY = O_TEMPORARY,
 		// Avoids flushing the contents to disk
 		ECS_FILE_CREATE_AVOID_FLUSH_DISK = _O_SHORT_LIVED,
 		// Fails if already exists
@@ -215,17 +213,17 @@ namespace ECSEngine {
 	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool CreateFolder(Stream<wchar_t> path);
 
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API bool FileCopy(const wchar_t* from, const wchar_t* to, bool use_filename_from = true, bool overwrite_existent = false);
 
 	// It will be forwarded to const wchar_t* variant
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool use_filename_from = true, bool overwrite_existent = false);
 
 	// Equivalent to FileCopy and then deleting the old file
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent = false, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API bool FileCut(const wchar_t* from, const wchar_t* to, bool use_filename_from = true, bool overwrite_existent = false);
 
 	// Equivalent to FileCopy and then deleting the old file
 	// It will be forwarded to const wchar_t* variant
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent = false, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool use_filename_from = true, bool overwrite_existent = false);
 
 	// From and to must be absolute paths
 	ECSENGINE_API bool FolderCopy(const wchar_t* from, const wchar_t* to);
@@ -262,6 +260,13 @@ namespace ECSEngine {
 	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool DeleteFolderContents(Stream<wchar_t> path);
 
+	// The folder must exist before calling this function
+	ECSENGINE_API bool HideFolder(const wchar_t* path);
+
+	// The folder must exist before calling this function
+	// It will be forwarded to const wchar_t* variant
+	ECSENGINE_API bool HideFolder(Stream<wchar_t> path);
+
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
 	// or from malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
@@ -294,6 +299,24 @@ namespace ECSEngine {
 	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
 
+	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
+	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(const wchar_t* path, Stream<void> buffer, bool append_data = false);
+
+	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
+	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(Stream<wchar_t> path, Stream<void> buffer, bool append_data = false);
+
+	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
+	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileText(const wchar_t* path, Stream<void> buffer, bool append_data = false);
+
+	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
+	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileText(Stream<wchar_t> path, Stream<void> buffer, bool append_data = false);
+
+	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
+	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFile(const wchar_t* path, Stream<void> buffer, bool binary, bool append_data = false);
+
+	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
+	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFile(Stream<wchar_t> path, Stream<void> buffer, bool binary, bool append_data = false);
+	
 	ECSENGINE_API bool ExistsFileOrFolder(const wchar_t* path);
 
 	// It will be forwarded to const wchar_t* variant

@@ -7,8 +7,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	namespace function {
 
 		// ----------------------------------------------------------------------------------------------------------
@@ -33,7 +31,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 #define CONVERT_TYPE_TO_CHARS_FROM_ASCII_TO_WIDE(convert_function, chars, ...) char characters[512]; \
-		containers::Stream<char> ascii(characters, 0); \
+		Stream<char> ascii(characters, 0); \
 \
 		size_t character_count = function::convert_function(ascii, __VA_ARGS__); \
 		function::ConvertASCIIToWide(chars.buffer + chars.size, ascii, character_count + 1); \
@@ -41,13 +39,13 @@ namespace ECSEngine {
 \
 		return character_count;
 		
-		template<typename Stream>
-		size_t ConvertIntToCharsFormatted(Stream& chars, int64_t value) {
-			static_assert(std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>> ||
-				std::is_same_v<Stream, containers::Stream<wchar_t>> || std::is_same_v<Stream, containers::CapacityStream<wchar_t>>);
+		template<typename StreamType>
+		size_t ConvertIntToCharsFormatted(StreamType& chars, int64_t value) {
+			static_assert(std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>> ||
+				std::is_same_v<StreamType, Stream<wchar_t>> || std::is_same_v<StreamType, CapacityStream<wchar_t>>);
 
 			// ASCII implementation
-			if constexpr (std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>>) {
+			if constexpr (std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>>) {
 				size_t initial_size = chars.size;
 				if (value < 0) {
 					chars[chars.size] = '-';
@@ -92,13 +90,13 @@ namespace ECSEngine {
 		
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		size_t ConvertIntToChars(Stream& chars, int64_t value) {
-			static_assert(std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>> ||
-				std::is_same_v<Stream, containers::Stream<wchar_t>> || std::is_same_v<Stream, containers::CapacityStream<wchar_t>>);
+		template<typename StreamType>
+		size_t ConvertIntToChars(StreamType& chars, int64_t value) {
+			static_assert(std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>> ||
+				std::is_same_v<StreamType, Stream<wchar_t>> || std::is_same_v<StreamType, CapacityStream<wchar_t>>);
 
 			// ASCII implementation
-			if constexpr (std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>>) {
+			if constexpr (std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>>) {
 				size_t initial_size = chars.size;
 
 				if (value < 0) {
@@ -211,16 +209,21 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		size_t FindWhitespaceCharactersCount(const char* string, CapacityStream<unsigned int>* stack_buffer)
+		size_t FindWhitespaceCharactersCount(const char* string, char separator_token, CapacityStream<unsigned int>* stack_buffer)
 		{
+			char tokens[3];
+			tokens[0] = separator_token;
+			tokens[1] = '\n';
+			tokens[2] = '\0';
+
 			size_t size = strlen(string);
-			const char* character = strpbrk(string, " \n");
+			const char* character = strpbrk(string, tokens);
 
 			size_t count = 0;
 			if (stack_buffer == nullptr) {
 				while (character != nullptr) {
 					size_t position = (uintptr_t)character - (uintptr_t)string;
-					character = strpbrk(string + position + 1, " \n");
+					character = strpbrk(string + position + 1, tokens);
 					count++;
 				}
 			}
@@ -230,7 +233,7 @@ namespace ECSEngine {
 					if (stack_buffer->size < stack_buffer->capacity) {
 						stack_buffer->Add(position);
 					}
-					character = strpbrk(string + position + 1, " \n");
+					character = strpbrk(string + position + 1, tokens);
 					count++;
 				}
 			}
@@ -241,19 +244,23 @@ namespace ECSEngine {
 
 		// it searches for spaces and next line characters
 		template<typename Stream>
-		void FindWhitespaceCharacters(const char* string, Stream& spaces) {
+		void FindWhitespaceCharacters(Stream& spaces, const char* string, char separator_token) {
 			size_t length = strlen(string);
 			size_t position = 0;
 
-			const char* character = strpbrk(string, " \n");
+			char tokens[3];
+			tokens[0] = separator_token;
+			tokens[1] = '\n';
+			tokens[2] = '\0';
+			const char* character = strpbrk(string, tokens);
 			while (character != nullptr) {
 				position = (uintptr_t)character - (uintptr_t)string;
 				spaces.Add(position);
-				character = strpbrk(string + position + 1, " \n");
+				character = strpbrk(string + position + 1, tokens);
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_AFTER(void, FindWhitespaceCharacters, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char*);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, FindWhitespaceCharacters, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char*, char);
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -345,13 +352,13 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		size_t ConvertFloatingPointIntegerToChars(Stream& chars, int64_t integer, size_t precision) {
-			static_assert(std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>> ||
-				std::is_same_v<Stream, containers::Stream<wchar_t>> || std::is_same_v<Stream, containers::CapacityStream<wchar_t>>);
+		template<typename StreamType>
+		size_t ConvertFloatingPointIntegerToChars(StreamType& chars, int64_t integer, size_t precision) {
+			static_assert(std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>> ||
+				std::is_same_v<StreamType, Stream<wchar_t>> || std::is_same_v<StreamType, CapacityStream<wchar_t>>);
 
 			// ASCII implementation
-			if constexpr (std::is_same_v<Stream, containers::Stream<char>> || std::is_same_v<Stream, containers::CapacityStream<char>>) {
+			if constexpr (std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>>) {
 				size_t initial_size = chars.size;
 				ConvertIntToChars(chars, integer);
 

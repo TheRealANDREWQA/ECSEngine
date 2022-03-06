@@ -2,8 +2,6 @@
 #include "StackAllocator.h"
 #include "../Utilities/Function.h"
 
-#define ECS_SHOW_LOGS_STACKALLOCATOR 0
-
 namespace ECSEngine {
 
 	void* StackAllocator::Allocate(size_t size, size_t alignment) {
@@ -23,10 +21,6 @@ namespace ECSEngine {
 		m_buffer[offset - 1] = offset - 1;
 		m_last_top = m_top;
 		m_top = offset + size;
-
-#if ECS_SHOW_LOGS_STACKALLOCATOR
-		ECSENGINE_CORE_INFO("Succesfull stack allocation! {0} {1} {2}", m_top, size, alignment);
-#endif
 
 		return pointer;
 	}

@@ -36,6 +36,12 @@
     <ClInclude Include="src\UI\HubData.h" />
     <ClInclude Include="src\Metafiles\Metafiles.h" />
     <ClInclude Include="src\Project\ProjectFolders.h" />
+    <ClInclude Include="src\Editor\EditorWorld.h" />
+    <ClInclude Include="src\UI\Settings.h" />
+    <ClInclude Include="src\Project\ProjectSettings.h" />
+    <ClInclude Include="src\Project\ProjectBackup.h" />
+    <ClInclude Include="src\UI\Backups.h" />
+    <ClInclude Include="src\Modules\ModuleSettings.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
@@ -64,6 +70,12 @@
     <ClCompile Include="src\Editor\EditorState.cpp" />
     <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Project\ProjectFolders.cpp" />
+    <ClCompile Include="src\Editor\EditorWorld.cpp" />
+    <ClCompile Include="src\UI\Settings.cpp" />
+    <ClCompile Include="src\Project\ProjectSettings.cpp" />
+    <ClCompile Include="src\Project\ProjectBackup.cpp" />
+    <ClCompile Include="src\UI\Backups.cpp" />
+    <ClCompile Include="src\Modules\ModuleSettings.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

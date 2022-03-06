@@ -187,9 +187,9 @@ namespace ECSEngine {
 
 		void AddOOBB(float3 translation, float3 rotation, float3 scale, ColorFloat color, DebugDrawCallOptions options = {});
 
-		void AddString(float3 position, float3 direction, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
+		void AddString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
 
-		void AddStringRotation(float3 position, float3 rotation, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
+		void AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options = { false });
 
 #pragma endregion
 
@@ -225,7 +225,7 @@ namespace ECSEngine {
 			float3 position, 
 			float3 direction,
 			float size,
-			containers::Stream<char> text,
+			Stream<char> text,
 			ColorFloat color, 
 			unsigned int thread_index,
 			DebugDrawCallOptions options = { false }
@@ -236,7 +236,7 @@ namespace ECSEngine {
 			float3 position,
 			float3 direction,
 			float size,
-			containers::Stream<char> text,
+			Stream<char> text,
 			ColorFloat color,
 			unsigned int thread_index,
 			DebugDrawCallOptions options = { false }
@@ -277,7 +277,7 @@ namespace ECSEngine {
 			float3 translation, 
 			float3 direction, 
 			float size, 
-			containers::Stream<char> text,
+			Stream<char> text,
 			ColorFloat color, 
 			DebugDrawCallOptions options = {false}
 		);
@@ -288,7 +288,7 @@ namespace ECSEngine {
 			float3 translation, 
 			float3 rotation, 
 			float size, 
-			containers::Stream<char> text, 
+			Stream<char> text, 
 			ColorFloat color, 
 			DebugDrawCallOptions options = {false}
 		);
@@ -309,7 +309,7 @@ namespace ECSEngine {
 			VertexBuffer model_normals,
 			float size,
 			ColorFloat color,
-			containers::Stream<Matrix> world_matrices,
+			Stream<Matrix> world_matrices,
 			DebugDrawCallOptions options = {}
 		);
 
@@ -329,7 +329,7 @@ namespace ECSEngine {
 			VertexBuffer model_tangents,
 			float size,
 			ColorFloat color,
-			containers::Stream<Matrix> world_matrices,
+			Stream<Matrix> world_matrices,
 			DebugDrawCallOptions options = {}
 		);
 
@@ -552,30 +552,30 @@ namespace ECSEngine {
 
 		MemoryManager* allocator;
 		Graphics* graphics;
-		containers::DeckPowerOfTwo<DebugLine> lines;
-		containers::DeckPowerOfTwo<DebugSphere> spheres;
-		containers::DeckPowerOfTwo<DebugPoint> points;
-		containers::DeckPowerOfTwo<DebugRectangle> rectangles;
-		containers::DeckPowerOfTwo<DebugCross> crosses;
-		containers::DeckPowerOfTwo<DebugCircle> circles;
-		containers::DeckPowerOfTwo<DebugArrow> arrows;
-		containers::DeckPowerOfTwo<DebugAxes> axes;
-		containers::DeckPowerOfTwo<DebugTriangle> triangles;
-		containers::DeckPowerOfTwo<DebugAABB> aabbs;
-		containers::DeckPowerOfTwo<DebugOOBB> oobbs;
-		containers::DeckPowerOfTwo<DebugString> strings;
-		containers::CapacityStream<DebugLine>* thread_lines;
-		containers::CapacityStream<DebugSphere>* thread_spheres;
-		containers::CapacityStream<DebugPoint>* thread_points;
-		containers::CapacityStream<DebugRectangle>* thread_rectangles;
-		containers::CapacityStream<DebugCross>* thread_crosses;
-		containers::CapacityStream<DebugCircle>* thread_circles;
-		containers::CapacityStream<DebugArrow>* thread_arrows;
-		containers::CapacityStream<DebugAxes>* thread_axes;
-		containers::CapacityStream<DebugTriangle>* thread_triangles;
-		containers::CapacityStream<DebugAABB>* thread_aabbs;
-		containers::CapacityStream<DebugOOBB>* thread_oobbs;
-		containers::CapacityStream<DebugString>* thread_strings;
+		DeckPowerOfTwo<DebugLine> lines;
+		DeckPowerOfTwo<DebugSphere> spheres;
+		DeckPowerOfTwo<DebugPoint> points;
+		DeckPowerOfTwo<DebugRectangle> rectangles;
+		DeckPowerOfTwo<DebugCross> crosses;
+		DeckPowerOfTwo<DebugCircle> circles;
+		DeckPowerOfTwo<DebugArrow> arrows;
+		DeckPowerOfTwo<DebugAxes> axes;
+		DeckPowerOfTwo<DebugTriangle> triangles;
+		DeckPowerOfTwo<DebugAABB> aabbs;
+		DeckPowerOfTwo<DebugOOBB> oobbs;
+		DeckPowerOfTwo<DebugString> strings;
+		CapacityStream<DebugLine>* thread_lines;
+		CapacityStream<DebugSphere>* thread_spheres;
+		CapacityStream<DebugPoint>* thread_points;
+		CapacityStream<DebugRectangle>* thread_rectangles;
+		CapacityStream<DebugCross>* thread_crosses;
+		CapacityStream<DebugCircle>* thread_circles;
+		CapacityStream<DebugArrow>* thread_arrows;
+		CapacityStream<DebugAxes>* thread_axes;
+		CapacityStream<DebugTriangle>* thread_triangles;
+		CapacityStream<DebugAABB>* thread_aabbs;
+		CapacityStream<DebugOOBB>* thread_oobbs;
+		CapacityStream<DebugString>* thread_strings;
 		SpinLock** thread_locks;
 		unsigned int thread_count;
 		RasterizerState rasterizer_states[ECS_DEBUG_RASTERIZER_COUNT];

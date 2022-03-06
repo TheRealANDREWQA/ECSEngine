@@ -5,7 +5,6 @@
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../../Utilities/FunctionTemplates.h"
 
-ECS_CONTAINERS;
 
 namespace ECSEngine {
 
@@ -59,7 +58,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Module LoadModule(containers::Stream<wchar_t> path, World* world, AllocatorPolymorphic allocator) {
+	Module LoadModule(Stream<wchar_t> path, World* world, AllocatorPolymorphic allocator) {
 		Module module = LoadModule(path);
 		if (module.code == ECS_GET_MODULE_OK) {
 			LoadModuleTasks(world, module, allocator);
@@ -96,9 +95,9 @@ namespace ECSEngine {
 				total_size += sizeof(char) * (strlen(stream[index].task.name) + 1);
 			}
 
-			total_size += stream[index].task_name.size * sizeof(char);
+			total_size += (strlen(stream[index].task.name) + 1) * sizeof(char);
 			for (size_t subindex = 0; subindex < stream[index].dependencies.size; subindex++) {
-				total_size += stream[index].dependencies[subindex].size * sizeof(char);
+				total_size += (stream[index].dependencies[subindex].size + 1) * sizeof(char);
 			}
 		}
 
@@ -109,7 +108,7 @@ namespace ECSEngine {
 		stream.InitializeFromBuffer(buffer, temp_stream.size);
 		for (size_t index = 0; index < temp_stream.size; index++) {
 			stream[index].task = temp_stream[index].task;
-			stream[index].task_name.InitializeAndCopy(buffer, temp_stream[index].task_name);
+			strcpy((char*)stream[index].task.name, temp_stream[index].task.name);
 
 			if (temp_stream[index].task.name != nullptr) {
 				char* ptr = (char*)buffer;
@@ -123,6 +122,7 @@ namespace ECSEngine {
 
 			for (size_t subindex = 0; subindex < temp_stream[index].dependencies.size; subindex++) {
 				stream[index].dependencies[subindex].InitializeAndCopy(buffer, temp_stream[index].dependencies[subindex]);
+				stream[index].dependencies[subindex].buffer[temp_stream[index].dependencies[subindex].size] = '\0';
 			}
 		}
 

@@ -8,6 +8,8 @@
 #include "../UI/HubData.h"
 #include "../Modules/ModuleDefinition.h"
 
+#define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
+
 struct EditorEvent {
 	void* function;
 	void* data;
@@ -17,6 +19,8 @@ struct EditorEvent {
 struct EditorState;
 
 typedef void (*EditorStateTick)(EditorState*);
+
+#define EDITOR_SCENE_BUFFERING_COUNT 3
 
 enum EDITOR_LAZY_EVALUATION_COUNTERS {
 	EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER,
@@ -28,8 +32,13 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS {
 };
 
 struct EditorState {
+	struct EditorWorld {
+		ECSEngine::World world;
+		bool is_empty;
+	};
+
 	inline ECSEngine::World* ActiveWorld() {
-		return worlds.buffer + active_world;
+		return &worlds[active_world].world;
 	}
 
 	inline void Tick() {
@@ -59,12 +68,11 @@ struct EditorState {
 	ECSEngine::ResourceView viewport_texture;
 	ECSEngine::DepthStencilView viewport_texture_depth;
 	ECSEngine::RenderTargetView viewport_render_target;
-	ECSEngine::Tools::Console* console;
 	ECSEngine::ResourceManager* resource_manager;
 	ECSEngine::TaskManager* task_manager;
 	ECSEngine::TaskDependencies* project_task_graph;
 	
-	ECSEngine::containers::ResizableStream<ECSEngine::containers::Stream<wchar_t>> launched_module_compilation;
+	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation;
 	// Needed to syncronize the threads when removing the launched module compilation
 	ECSEngine::SpinLock launched_module_compilation_lock;
 	
@@ -76,18 +84,21 @@ struct EditorState {
 	
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function
-	ECSEngine::containers::ThreadSafeQueue<EditorEvent> event_queue;
+	ECSEngine::ThreadSafeQueue<EditorEvent> event_queue;
 	
-	ECSEngine::containers::Stream<ECSEngine::containers::Stream<char>> module_configuration_definitions;
-	ECSEngine::containers::ResizableStream<ModuleConfigurationGroup> module_configuration_groups;
+	ECSEngine::Stream<ECSEngine::Stream<char>> module_configuration_definitions;
+	ECSEngine::ResizableStream<ModuleConfigurationGroup> module_configuration_groups;
 	
-	ECSEngine::containers::CapacityStream<ECSEngine::World> worlds;
-	unsigned int active_world;
-	
-	ECSEngine::containers::ResizableQueue<ECSEngine::ThreadTask> pending_background_tasks;
+	ECSEngine::WorldDescriptor project_descriptor;
+	ECSEngine::CapacityStream<EditorWorld> worlds;
+	unsigned short active_world;
+	unsigned short scene_world;
+	std::atomic<unsigned short> copy_world_count;
+
+	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> pending_background_tasks;
 
 	// A queue onto which GPU tasks can be placed in order to be consumed on the immediate context
-	ECSEngine::containers::ResizableQueue<ECSEngine::ThreadTask> gpu_tasks;
+	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> gpu_tasks;
 	
 	ECSEngine::Tools::InjectWindowData inject_data;
 	const char* inject_window_name;
@@ -98,9 +109,25 @@ struct EditorState {
 	bool inject_window_is_pop_up_window = false;
 };
 
+void EditorSetConsoleError(ECSEngine::Stream<char> error_message);
+
+void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message);
+
+void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message);
+
+void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message);
+
 #define EDITOR_STATE_DO_NOT_ADD_TASKS (1 << 0)
 #define EDITOR_STATE_IS_PLAYING (1 << 1)
 #define EDITOR_STATE_IS_PAUSED (1 << 2)
+#define EDITOR_STATE_STEP (1 << 3)
+#define EDITOR_STATE_FREEZE_TICKS (1 << 4)
+
+void EditorStateSetFlag(EditorState* editor_state, size_t flag);
+
+void EditorStateClearFlag(EditorState* editor_state, size_t flag);
+
+bool EditorStateHasFlag(EditorState* editor_state, size_t flag);
 
 void EditorStateProjectTick(EditorState* editor_state);
 
@@ -137,5 +164,4 @@ UISystem* ui_system = ((EditorState*)editor_state)->ui_system; \
 MemoryManager* editor_allocator = ((EditorState*)editor_state)->editor_allocator; \
 MemoryManager* multithreaded_editor_allocator = ((EditorState*)editor_state)->multithreaded_editor_allocator; \
 TaskManager* task_manager = ((EditorState*)editor_state)->task_manager; \
-Console* console = ((EditorState*)editor_state)->console; \
 TaskDependencies* project_task_graph = ((EditorState*)editor_state)->project_task_graph;

@@ -5,8 +5,6 @@
 #include "BasicTypes.h"
 #include "File.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	namespace function {
@@ -35,11 +33,12 @@ namespace ECSEngine {
 
 		// Finds the number of characters that needs to be allocated and a stack buffer can be supplied in order
 		// to fill it if the count is smaller than its capacity
-		ECSENGINE_API size_t FindWhitespaceCharactersCount(const char* string, CapacityStream<unsigned int>* stack_buffer = nullptr);
+		// The token can be changed from ' ' to another supplied value (e.g. \\ for paths or /)
+		ECSENGINE_API size_t FindWhitespaceCharactersCount(const char* string, char separator_token = ' ', CapacityStream<unsigned int>*stack_buffer = nullptr);
 
 		// it searches for spaces and next line characters
 		template<typename Stream>
-		void FindWhitespaceCharacters(const char* string, Stream& spaces);
+		void FindWhitespaceCharacters(Stream& spaces, const char* string, char separator_token = ' ');
 
 		// finds the tokens that appear in the current string
 		template<typename Stream>

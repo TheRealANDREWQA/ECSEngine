@@ -101,16 +101,16 @@ namespace ECSEngine {
 	function(e | d | c | a | b, __VA_ARGS__) 
 
 #define ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(function) switch(configuration_flags) { function }
-#define ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(integer_type, type, predication_table, function, ...) case integer_type: ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(predication_table(function, __VA_ARGS__, type)) break;
-#define ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(integer_flags, predication_table, function, ...) switch(integer_flags) { \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT8_T, int8_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT8_T, uint8_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT16_T, int16_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT16_T, uint16_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT32_T, int32_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT32_T, uint32_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT64_T, int64_t, predication_table, function, __VA_ARGS__); \
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT64_T, uint64_t, predication_table, function, __VA_ARGS__); \
+#define ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(integer_type, type, function) case integer_type: function(type); break;
+#define ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(integer_flags, function) switch(integer_flags) { \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT8_T, int8_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT8_T, uint8_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT16_T, int16_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT16_T, uint16_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT32_T, int32_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT32_T, uint32_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_INT64_T, int64_t, function); \
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT64_T, uint64_t, function); \
 		}
 
 		size_t ExtractIntFlags(size_t configuration_flags) {
@@ -122,199 +122,229 @@ namespace ECSEngine {
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
+		
+		void UIReflectionDrawConfigCopyToNormalConfig(const UIReflectionDrawConfig* ui_config, UIDrawConfig& config) {
+			memcpy(config.associated_bits + config.flag_count, ui_config->associated_bits, ui_config->config_count * sizeof(size_t));
+			for (size_t index = 0; index < ui_config->config_count; index++) {
+				memcpy(config.parameters + config.parameter_start[config.flag_count], ui_config->configs[index], ui_config->config_size[index]);
+
+				size_t parameter_count = ui_config->config_size[index] / sizeof(float) + (ui_config->config_size[index] % sizeof(float) != 0);
+				config.parameter_start[config.flag_count + 1] = config.parameter_start[config.flag_count] + parameter_count;
+				config.flag_count++;
+			}
+
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
 
 		// ------------------------------------------------------------- Basic ----------------------------------------------------------
 
-		void UIReflectionFloatSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionFloatSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionFloatSliderData* data = (UIReflectionFloatSliderData*)_data;
 
-#define SLIDER(configuration) case configuration: drawer.FloatSlider(configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
-			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE, config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->default_value, data->precision); break;
-						
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(SLIDER, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
-
-#undef SLIDER
+			drawer.FloatSlider(
+				configuration | UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE, 
+				config,
+				data->name,
+				data->value_to_modify,
+				data->lower_bound,
+				data->upper_bound,
+				data->default_value, 
+				data->precision
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDoubleSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionDoubleSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionDoubleSliderData* data = (UIReflectionDoubleSliderData*)_data;
 
-#define SLIDER(configuration) case configuration: drawer.DoubleSlider(configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
-			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE, config, data->name, data->value_to_modify, data->lower_bound, data->upper_bound, data->default_value, data->precision); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(SLIDER, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
-
-#undef SLIDER
+			drawer.DoubleSlider(
+				configuration | UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE,
+				config, 
+				data->name,
+				data->value_to_modify,
+				data->lower_bound,
+				data->upper_bound, 
+				data->default_value,
+				data->precision
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionIntSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionIntSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionIntSliderData* data = (UIReflectionIntSliderData*)_data;
 
-			size_t int_flags = ExtractIntFlags(configuration_flags);
-			configuration_flags = RemoveIntFlags(configuration_flags);
-#define SLIDER_IMPLEMENTATION(configuration, integer_type) case configuration: drawer.IntSlider<integer_type>(configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
+			size_t int_flags = ExtractIntFlags(configuration);
+			configuration = RemoveIntFlags(configuration);
+
+#define SLIDER_IMPLEMENTATION(integer_type) drawer.IntSlider<integer_type>(configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
 			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE, \
 			config, data->name, (integer_type*)data->value_to_modify, *(integer_type*)data->lower_bound, *(integer_type*)data->upper_bound, *(integer_type*)data->default_value); break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1, SLIDER_IMPLEMENTATION, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, SLIDER_IMPLEMENTATION);
 
 #undef SLIDER_IMPLEMENTATION
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionFloatInputData* data = (UIReflectionFloatInputData*)_data;
-			drawer.FloatInput(UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_DO_NOT_CACHE, config, data->name, data->value, data->default_value, data->lower_bound, data->upper_bound);
+			drawer.FloatInput(
+				configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_DO_NOT_CACHE,
+				config,
+				data->name, 
+				data->value, 
+				data->default_value,
+				data->lower_bound, 
+				data->upper_bound
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionDoubleInputData* data = (UIReflectionDoubleInputData*)_data;
-			drawer.DoubleInput(UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_DO_NOT_CACHE, config, data->name, data->value, data->default_value, data->lower_bound, data->upper_bound);
+			drawer.DoubleInput(
+				configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_DO_NOT_CACHE, 
+				config, 
+				data->name, 
+				data->value, 
+				data->default_value, 
+				data->lower_bound,
+				data->upper_bound
+			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionIntInputData* data = (UIReflectionIntInputData*)_data;
-			size_t int_flags = ExtractIntFlags(configuration_flags);
-			configuration_flags = RemoveIntFlags(configuration_flags);
+			size_t int_flags = ExtractIntFlags(configuration);
+			configuration = RemoveIntFlags(configuration);
 
-#define INPUT(configuration, integer_convert) case configuration: { integer_convert default_value = *(integer_convert*)data->default_value; \
+#define INPUT(integer_convert) { integer_convert default_value = *(integer_convert*)data->default_value; \
 			integer_convert upper_bound = *(integer_convert*)data->upper_bound; \
 		integer_convert lower_bound = *(integer_convert*)data->lower_bound; \
-		drawer.IntInput<integer_convert>(UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_DO_NOT_CACHE, config, data->name, (integer_convert*)data->value_to_modify, default_value, lower_bound, upper_bound); } break;
+		drawer.IntInput<integer_convert>( \
+			configuration | UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_DO_NOT_CACHE, \
+			config,  \
+			data->name, \
+			(integer_convert*)data->value_to_modify, \
+			default_value, \
+			lower_bound,  \
+			upper_bound);  \
+		} break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0, INPUT);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, INPUT);
 
 #undef INPUT
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionTextInputData* data = (UIReflectionTextInputData*)_data;
 
-#define INPUT(configuration) case configuration: drawer.TextInput(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->name, data->characters); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_2(INPUT, UI_CONFIG_TEXT_INPUT_HINT, UI_CONFIG_TEXT_INPUT_CALLBACK));
-
-#undef INPUT
+			drawer.TextInput(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->name, data->characters);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionColorData* data = (UIReflectionColorData*)_data;
-
-#define COLOR(configuration) case configuration: drawer.ColorInput(configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE, config, data->name, data->color, data->default_color); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_4(COLOR, UI_CONFIG_COLOR_INPUT_RGB_SLIDERS, UI_CONFIG_COLOR_INPUT_HSV_SLIDERS, UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER, UI_CONFIG_COLOR_INPUT_CALLBACK));
-
-#undef COLOR
+			drawer.ColorInput(configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE, config, data->name, data->color, data->default_color);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data)
+		void UIReflectionColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data)
 		{
 			UIReflectionColorFloatData* data = (UIReflectionColorFloatData*)_data;
-			drawer.ColorFloatInput(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE, config, data->name, data->color, data->default_color);
+			drawer.ColorFloatInput(configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE, config, data->name, data->color, data->default_color);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionCheckBoxData* data = (UIReflectionCheckBoxData*)_data;
-			drawer.CheckBox(UI_CONFIG_DO_NOT_CACHE, config, data->name, data->value);
+			drawer.CheckBox(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->name, data->value);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionComboBoxData* data = (UIReflectionComboBoxData*)_data;
-			drawer.ComboBox(UI_CONFIG_DO_NOT_CACHE, config, data->name, data->labels, data->label_display_count, data->active_label);
+			drawer.ComboBox(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->name, data->labels, data->label_display_count, data->active_label);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionFloatSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionFloatSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionGroupData<float>* data = (UIReflectionGroupData<float>*)_data;
 
-#define GROUP(configuration) case configuration: drawer.FloatSliderGroup(configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
-			| UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE,  \
-			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->default_values, data->precision); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(GROUP, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
-
-#undef GROUP
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------
-
-		void UIReflectionDoubleSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
-			UIReflectionGroupData<double>* data = (UIReflectionGroupData<double>*)_data;
-
-#define GROUP(configuration) case configuration: drawer.DoubleSliderGroup(configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE \
-			| UI_CONFIG_SLIDER_DEFAULT_VALUE,  \
-			config, data->count, data->group_name, data->input_names, data->values, data->lower_bound, data->upper_bound, data->default_values, data->precision); break;
-
-			ECS_TOOLS_UI_REFLECT_SWITCH_TABLE(ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1(GROUP, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK));
-
-#undef GROUP
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------
-
-		void UIReflectionIntSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
-			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)_data;
-			size_t int_flags = ExtractIntFlags(configuration_flags);
-			configuration_flags = RemoveIntFlags(configuration_flags);
-
-#define GROUP(configuration, integer_type) case configuration: drawer.IntSliderGroup<integer_type>(configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE \
-			| UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE, config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound, (const integer_type*)data->default_values); break;
-
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1, GROUP, UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK);
-
-#undef GROUP
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------
-
-		void UIReflectionFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
-			UIReflectionGroupData<float>* data = (UIReflectionGroupData<float>*)_data;
-
-			drawer.FloatInputGroup(
-				UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_DEFAULT,
+			drawer.FloatSliderGroup(
+				configuration | UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE,
 				config,
-				data->count,
+				data->count, 
 				data->group_name, 
 				data->input_names, 
 				data->values, 
-				data->default_values,
-				data->lower_bound,
-				data->upper_bound
+				data->lower_bound, 
+				data->upper_bound, 
+				data->default_values, 
+				data->precision
 			);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionDoubleSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionGroupData<double>* data = (UIReflectionGroupData<double>*)_data;
 
-			drawer.DoubleInputGroup(
-				UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_DEFAULT,
-				config, 
-				data->count,
+			drawer.DoubleSliderGroup(
+				configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE,
+				config,
+				data->count, 
 				data->group_name,
 				data->input_names,
 				data->values, 
+				data->lower_bound, 
+				data->upper_bound, 
+				data->default_values,
+				data->precision
+			);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionIntSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
+			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)_data;
+			size_t int_flags = ExtractIntFlags(configuration);
+			configuration = RemoveIntFlags(configuration);
+
+#define GROUP(integer_type) drawer.IntSliderGroup<integer_type>(configuration | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE \
+			| UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE, config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound, (const integer_type*)data->default_values); break;
+
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, GROUP);
+
+#undef GROUP
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
+			UIReflectionGroupData<float>* data = (UIReflectionGroupData<float>*)_data;
+
+			drawer.FloatInputGroup(
+				configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_DEFAULT,
+				config,
+				data->count,
+				data->group_name,
+				data->input_names,
+				data->values,
 				data->default_values,
 				data->lower_bound,
 				data->upper_bound
@@ -323,16 +353,34 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
-			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)_data;
-			size_t int_flags = ExtractIntFlags(configuration_flags);
-			configuration_flags = RemoveIntFlags(configuration_flags);
+		void UIReflectionDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
+			UIReflectionGroupData<double>* data = (UIReflectionGroupData<double>*)_data;
 
-#define GROUP(configuration, integer_type) case configuration: drawer.IntInputGroup<integer_type>(UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE \
-			| UI_CONFIG_NUMBER_INPUT_DEFAULT, \
+			drawer.DoubleInputGroup(
+				configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_DEFAULT,
+				config,
+				data->count,
+				data->group_name,
+				data->input_names,
+				data->values,
+				data->default_values,
+				data->lower_bound,
+				data->upper_bound
+			);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
+			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)_data;
+			size_t int_flags = ExtractIntFlags(configuration);
+			configuration = RemoveIntFlags(configuration);
+
+#define GROUP(integer_type) drawer.IntInputGroup<integer_type>( \
+			configuration | UI_CONFIG_NUMBER_INPUT_NO_RANGE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_NUMBER_INPUT_DEFAULT, \
 			config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->default_values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound); break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0, GROUP);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, GROUP);
 
 #undef GROUP
 		}
@@ -341,175 +389,160 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------- Stream ----------------------------------------------------------
 
-		void UIReflectionStreamFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data)
+		void UIReflectionStreamFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data)
 		{
 			UIReflectionStreamFloatInputData* data = (UIReflectionStreamFloatInputData*)_data;
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayFloat(configuration, config, data->name, data->values);
+			UIDrawConfig temp_config;
+			drawer.ArrayFloat(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamDoubleInputData* data = (UIReflectionStreamDoubleInputData*)_data;
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayDouble(configuration, config, data->name, data->values);
+			UIDrawConfig temp_config;
+			drawer.ArrayDouble(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamIntInputData* data = (UIReflectionStreamIntInputData*)_data;
+			UIDrawConfig temp_config;
 
-			size_t int_flags = ExtractIntFlags(configuration_flags);
-			configuration_flags = RemoveIntFlags(configuration_flags);
+			size_t int_flags = ExtractIntFlags(configuration);
+			configuration = RemoveIntFlags(configuration);
 
-#define FUNCTION(configuration, integer_type) case configuration: drawer.ArrayInteger<integer_type>(configuration | UI_CONFIG_DO_NOT_CACHE, \
-			config, data->name, (CapacityStream<integer_type>*)data->values); break;
+#define FUNCTION(integer_type) drawer.ArrayInteger<integer_type>(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, (CapacityStream<integer_type>*)data->values,\
+			configuration, &config); break;
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1, FUNCTION, UI_CONFIG_ARRAY_FIXED_SIZE);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, FUNCTION);
 
 #undef FUNCTION
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamTextInputData* data = (UIReflectionStreamTextInputData*)_data;
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayTextInput(configuration, config, data->name, data->values);
+			UIDrawConfig temp_config;
+			drawer.ArrayTextInput(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamColorData* data = (UIReflectionStreamColorData*)_data;
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayColor(configuration, config, data->name, data->values);
+			UIDrawConfig temp_config;
+			drawer.ArrayColor(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data)
+		void UIReflectionStreamColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data)
 		{
 			UIReflectionStreamColorFloatData* data = (UIReflectionStreamColorFloatData*)_data;
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayColorFloat(configuration, config, data->name, data->values);
+			UIDrawConfig temp_config;
+			drawer.ArrayColorFloat(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamCheckBoxData* data = (UIReflectionStreamCheckBoxData*)_data;
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayCheckBox(configuration, config, data->name, data->values);
+			UIDrawConfig temp_config;
+			drawer.ArrayCheckBox(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamComboBoxData* data = (UIReflectionStreamComboBoxData*)_data;
+			UIDrawConfig temp_config;
 			CapacityStream<Stream<const char*>> label_names(data->label_names, data->values->size, data->values->capacity);
-
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
-			drawer.ArrayComboBox(configuration, config, data->name, data->values, label_names);
+			drawer.ArrayComboBox(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, label_names, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 
-#define FLOAT_DOUBLE_CASE(function, cast_type) drawer.function(configuration, config, data->group_name, (CapacityStream<cast_type>*)data->values);
+#define FLOAT_DOUBLE_CASE(function, cast_type) drawer.function(UI_CONFIG_DO_NOT_CACHE, temp_config, data->group_name, (CapacityStream<cast_type>*)data->values, configuration, &config);
 
-		void UIReflectionStreamFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)_data;
+			UIDrawConfig temp_config;
 			ECS_ASSERT(2 <= data->basic_type_count && data->basic_type_count <= 4);
 
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
 			switch (data->basic_type_count) {
-				case 2:
-				{
-					FLOAT_DOUBLE_CASE(ArrayFloat2, float2);
-					break;
-				}
-				case 3:
-				{
-					FLOAT_DOUBLE_CASE(ArrayFloat3, float3);
-					break;
-				}
-				case 4:
-				{
-					FLOAT_DOUBLE_CASE(ArrayFloat4, float4);
-					break;
-				}
+			case 2:
+			{
+				FLOAT_DOUBLE_CASE(ArrayFloat2, float2);
+				break;
+			}
+			case 3:
+			{
+				FLOAT_DOUBLE_CASE(ArrayFloat3, float3);
+				break;
+			}
+			case 4:
+			{
+				FLOAT_DOUBLE_CASE(ArrayFloat4, float4);
+				break;
+			}
 			}
 		}
 
 		// ------------------------------------------------------------- Stream ----------------------------------------------------------
 
-		void UIReflectionStreamDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)_data;
+			UIDrawConfig temp_config;
 			ECS_ASSERT(2 <= data->basic_type_count && data->basic_type_count <= 4);
 
-			size_t configuration = UI_CONFIG_DO_NOT_CACHE;
-			configuration |= function::Select<size_t>(configuration_flags == UI_CONFIG_ARRAY_FIXED_SIZE, UI_CONFIG_ARRAY_FIXED_SIZE, 0);
 			switch (data->basic_type_count) {
-				case 2:
-				{
-					FLOAT_DOUBLE_CASE(ArrayDouble2, double2);
-					break;
-				}
-				case 3:
-				{
-					FLOAT_DOUBLE_CASE(ArrayDouble3, double3);
-					break;
-				}
-				case 4:
-				{
-					FLOAT_DOUBLE_CASE(ArrayDouble4, double4);
-					break;
-				}
+			case 2:
+			{
+				FLOAT_DOUBLE_CASE(ArrayDouble2, double2);
+				break;
+			}
+			case 3:
+			{
+				FLOAT_DOUBLE_CASE(ArrayDouble3, double3);
+				break;
+			}
+			case 4:
+			{
+				FLOAT_DOUBLE_CASE(ArrayDouble4, double4);
+				break;
+			}
 			}
 		}
 
 #undef FLOAT_DOUBLE_CASE
-		
+
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionStreamIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration_flags, void* _data) {
+		void UIReflectionStreamIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)_data;
+			UIDrawConfig temp_config;
 			ECS_ASSERT(2 <= data->basic_type_count && data->basic_type_count <= 4);
 
-			size_t int_flags = ExtractIntFlags(configuration_flags);
-			configuration_flags = RemoveIntFlags(configuration_flags);
+			size_t int_flags = ExtractIntFlags(configuration);
+			configuration = RemoveIntFlags(configuration);
 
-#define GROUP(configuration, integer_type) case configuration: { \
+#define GROUP(integer_type) { \
 				if (data->basic_type_count == 2) { \
-					drawer.ArrayInteger2Infer<integer_type>(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->group_name, data->values); \
+					drawer.ArrayInteger2Infer<integer_type>(UI_CONFIG_DO_NOT_CACHE, temp_config, data->group_name, data->values, configuration, &config); \
 				} \
 				else if (data->basic_type_count == 3) { \
-					drawer.ArrayInteger3Infer<integer_type>(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->group_name, data->values); \
+					drawer.ArrayInteger3Infer<integer_type>(UI_CONFIG_DO_NOT_CACHE, temp_config, data->group_name, data->values, configuration, &config); \
 				} \
 				else { \
-					drawer.ArrayInteger4Infer<integer_type>(configuration | UI_CONFIG_DO_NOT_CACHE, config, data->group_name, data->values); \
+					drawer.ArrayInteger4Infer<integer_type>(UI_CONFIG_DO_NOT_CACHE, temp_config, data->group_name, data->values, configuration, &config); \
 				} \
-				break; \
 			}
 
-			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_1, GROUP, UI_CONFIG_ARRAY_FIXED_SIZE);
+			ECS_TOOLS_UI_REFLECT_INT_SWITCH_TABLE(int_flags, GROUP);
 
 #undef GROUP
 		}
@@ -589,7 +622,7 @@ namespace ECSEngine {
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
-		
+
 #pragma endregion
 
 #pragma region Default Data
@@ -624,6 +657,41 @@ namespace ECSEngine {
 		{
 			auto field_ptr = (UIReflectionGroupData<void>*)field->data;
 			memcpy((void*)field_ptr->default_values, data, field_ptr->byte_size * field_ptr->count);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionSetColorDefaultData(UIReflectionTypeField* field, const void* data) {
+			auto field_ptr = (UIReflectionColorData*)field->data;
+			memcpy(&field_ptr->default_color, data, sizeof(Color));
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		// Currently it does nothing. It serves as a placeholder for the jump table. Maybe add support for it later on.
+		void UIReflectionSetTextInputDefaultData(UIReflectionTypeField* field, const void* data) {
+			
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionSetColorFloatDefaultData(UIReflectionTypeField* field, const void* data) {
+			auto field_ptr = (UIReflectionColorFloatData*)field->data;
+			memcpy(&field_ptr->default_color, data, sizeof(ColorFloat));
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionSetCheckBoxDefaultData(UIReflectionTypeField* field, const void* data) {
+			auto field_ptr = (UIReflectionCheckBoxData*)field->data;
+			field_ptr->default_value = *(bool*)data;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionSetComboBoxDefaultData(UIReflectionTypeField* field, const void* data) {
+			auto field_ptr = (UIReflectionComboBoxData*)field->data;
+			field_ptr->default_label = *(unsigned char*)data;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -684,15 +752,20 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::AddTypeConfiguration(const char* type_name, const char* field_name, size_t field_configuration)
 		{
-			unsigned int field_index = GetTypeFieldIndex(type_name, field_name);
-
 			UIReflectionType* type_def = GetTypePtr(type_name);
-			type_def->fields[field_index].configuration |= field_configuration;
+			AddTypeConfiguration(type_def, field_name, field_configuration);
+		}
+
+		void UIReflectionDrawer::AddTypeConfiguration(UIReflectionType* type, const char* field_name, size_t field_configuration)
+		{
+
+			unsigned int field_index = GetTypeFieldIndex(*type, field_name);
+			type->fields[field_index].configuration |= field_configuration;
 
 #if 1
 			// get a mask with the valid configurations
 			size_t mask = 0;
-			switch (type_def->fields[field_index].reflection_index) {
+			switch (type->fields[field_index].reflection_index) {
 			case UIReflectionIndex::FloatSlider:
 			case UIReflectionIndex::DoubleSlider:
 			case UIReflectionIndex::IntegerSlider:
@@ -879,6 +952,17 @@ namespace ECSEngine {
 			}
 		}
 
+		void UIReflectionDrawer::BindTypeDefaultData(UIReflectionType* type, const void* data) {
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (type->fields[index].stream_type == UIReflectionStreamType::None) {
+					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)type->fields[index].reflection_index](
+						type->fields.buffer + index,
+						function::OffsetPointer(data, type->fields[index].pointer_offset)
+					);
+				}
+			}
+		}
+
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		void UIReflectionDrawer::BindTypeRange(const char* type_name, Stream<UIReflectionBindRange> data)
@@ -1032,26 +1116,28 @@ namespace ECSEngine {
 				}
 				else {
 					CapacityStream<void>** values = (CapacityStream<void>**)instance->datas[index].struct_data;
-					if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::CapacityStream) {
+					// Resizable streams can be safely aliased with capacity streams since the layout is identical, except the resizable stream has an allocator at the end
+					if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::CapacityStream || reflect.fields[index].info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 						*values = (CapacityStream<void>*)ptr;
 					}
 					else if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::Pointer) {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
-						instance->datas[index].stream_data->buffer = (void*)ptr;
+						instance->datas[index].stream_data->buffer = *(void**)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = 0;
 						*values = instance->datas[index].stream_data;
 					}
 					else if (reflect.fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
-						instance->datas[index].stream_data->buffer = (void*)ptr;
+						instance->datas[index].stream_data->buffer = *(void**)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = reflect.fields[index].info.basic_type_count;
 						*values = instance->datas[index].stream_data;
 					}
+					// Streams should get here
 					else {
 						instance->datas[index].stream_data = (CapacityStream<void>*)allocator->Allocate(sizeof(CapacityStream<void>));
-						instance->datas[index].stream_data->buffer = (void*)ptr;
+						instance->datas[index].stream_data->buffer = *(void**)ptr;
 						instance->datas[index].stream_data->size = 0;
 						instance->datas[index].stream_data->capacity = 0;
 						*values = instance->datas[index].stream_data;
@@ -1103,20 +1189,37 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceStreamInitialSize(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data)
+		void UIReflectionDrawer::BindInstanceStreamSize(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data)
 		{
 			UIReflectionInstance* instance = GetInstancePtr(instance_name);
-			BindInstanceStreamInitialSize(instance, data);
+			BindInstanceStreamSize(instance, data);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceStreamInitialSize(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data)
+		void UIReflectionDrawer::BindInstanceStreamSize(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data)
 		{
 			UIReflectionType type = GetType(instance->type_name);
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
 				instance->datas[field_index].stream_data->size = data[index].capacity;
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceStreamBuffer(const char* instance_name, Stream<UIReflectionBindStreamBuffer> data) {
+			UIReflectionInstance* instance = GetInstancePtr(instance_name);
+			BindInstanceStreamBuffer(instance, data);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<UIReflectionBindStreamBuffer> data) {
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < data.size; index++) {
+				unsigned int field_index = GetTypeFieldIndex(type, data[index].field_name);
+				instance->datas[field_index].stream_data->buffer = data[index].new_buffer;
 			}
 		}
 
@@ -1142,7 +1245,7 @@ namespace ECSEngine {
 					size_t byte_size = 0;
 					for (size_t reflected_index = 0; reflected_index < reflected_type.fields.size; reflected_index++) {
 						if (reflected_type.fields[reflected_index].name == type.fields[field_index].name) {
-							byte_size = reflected_type.fields[reflected_index].info.additional_flags;
+							byte_size = reflected_type.fields[reflected_index].info.stream_byte_size;
 							break;
 						}
 					}
@@ -1373,6 +1476,17 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::BindTypeLowerBounds(UIReflectionType* type, const void* data) {
+			for (size_t index = 0; index < type->fields.size; index++) {
+				unsigned int int_index = (unsigned int)type->fields[index].reflection_index;
+				if (int_index < std::size(UI_REFLECTION_SET_LOWER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
+					UI_REFLECTION_SET_LOWER_BOUND[int_index](type->fields.buffer + index, function::OffsetPointer(data, type->fields[index].pointer_offset));
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		void UIReflectionDrawer::BindTypeUpperBounds(const char* type_name, Stream<UIReflectionBindUpperBound> data)
 		{
 			UIReflectionType* type = GetTypePtr(type_name);
@@ -1386,6 +1500,17 @@ namespace ECSEngine {
 			for (size_t index = 0; index < data.size; index++) {
 				unsigned int field_index = GetTypeFieldIndex(*type, data[index].field_name);
 				UI_REFLECTION_SET_UPPER_BOUND[(unsigned int)type->fields[field_index].reflection_index](type->fields.buffer + field_index, data[index].value);
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindTypeUpperBounds(UIReflectionType* type, const void* data) {
+			for (size_t index = 0; index < type->fields.size; index++) {
+				unsigned int int_index = (unsigned int)type->fields[index].reflection_index;
+				if (int_index < std::size(UI_REFLECTION_SET_UPPER_BOUND) && type->fields[index].stream_type == UIReflectionStreamType::None) {
+					UI_REFLECTION_SET_UPPER_BOUND[int_index](type->fields.buffer + index, function::OffsetPointer(data, type->fields[index].pointer_offset));
+				}
 			}
 		}
 
@@ -1441,7 +1566,7 @@ namespace ECSEngine {
 				data->value_to_modify = nullptr;
 
 				field.stream_type = UIReflectionStreamType::None;
-				field.configuration = (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type) | UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER;
+				field.configuration = (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type) /*| UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER*/;
 			};
 
 			auto integer_convert_group = [this](ReflectionField reflection_field, UIReflectionTypeField& field) {
@@ -1467,7 +1592,7 @@ namespace ECSEngine {
 				data->upper_bound = (const void*)ptr;
 
 				field.stream_type = UIReflectionStreamType::None;
-				field.configuration = (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type) | UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER;
+				field.configuration = (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type) /*| UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER*/;
 			};
 
 			auto float_convert_single = [this](ReflectionField reflection_field, UIReflectionTypeField& field) {
@@ -1895,6 +2020,10 @@ namespace ECSEngine {
 					test_basic_type(index, field_info, value_written);
 				}
 
+				if (value_written && field_info.has_default_value) {
+					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)field_info.basic_type](type.fields.buffer + type.fields.size - 1, &field_info.default_bool);
+				}
+
 				type.fields.size += value_written;
 			}
 
@@ -1975,6 +2104,114 @@ namespace ECSEngine {
 			ECS_RESOURCE_IDENTIFIER(instance.name);
 			ECS_ASSERT(!instances.Insert(instance, identifier));
 			return instances.GetValuePtr(identifier);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(unsigned int hierarchy_index, bool exclude_components)
+		{
+			auto types = reflection->type_definitions.GetValueStream();
+			auto ui_types = type_definition.GetValueStream();
+
+			unsigned int count = 0;
+			for (size_t index = 0; index < types.size; index++) {
+				if (reflection->type_definitions.IsItemAt(index)) {
+					if (types[index].folder_hierarchy_index == hierarchy_index) {
+						if (exclude_components) {
+							if (!reflection->IsTypeTag(index, STRING(COMPONENT))) {
+								count++;
+								CreateType(types[index]);
+							}
+						}
+						else {
+							count++;
+							CreateType(types[index]);
+						}
+					}
+				}
+			}
+
+			return count;
+		}
+
+		unsigned int UIReflectionDrawer::CreateTypesForHierarchy(const wchar_t* hierarchy, bool exclude_components)
+		{
+			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
+			if (hierarchy_index != -1) {
+				return CreateTypesForHierarchy(hierarchy_index, exclude_components);
+			}
+			ECS_ASSERT(false);
+			return -1;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UIReflectionDrawer::CreateInstanceForHierarchy(unsigned int hierarchy_index)
+		{
+			auto types = type_definition.GetValueStream();
+
+			unsigned int count = 0;
+			for (size_t index = 0; index < types.size; index++) {
+				if (type_definition.IsItemAt(index)) {
+					ReflectionType type = reflection->GetType(types[index].name);
+					if (type.folder_hierarchy_index == hierarchy_index) {
+						CreateInstance(types[index].name, &types[index]);
+					}
+				}
+			}
+
+			return count;
+		}
+
+		unsigned int UIReflectionDrawer::CreateInstanceForHierarchy(const wchar_t* hierarchy)
+		{
+			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
+			if (hierarchy_index != -1) {
+				return CreateInstanceForHierarchy(hierarchy_index);
+			}
+			ECS_ASSERT(false);
+			return -1;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UIReflectionDrawer::CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, bool exclude_components) {
+			auto types = reflection->type_definitions.GetValueStream();
+			auto ui_types = type_definition.GetValueStream();
+
+			unsigned int count = 0;
+			
+			auto create_type_and_instance = [&](size_t index) {
+				count++;
+				UIReflectionType* type = CreateType(types[index]);
+				CreateInstance(type->name, type);
+			};
+
+			for (size_t index = 0; index < types.size; index++) {
+				if (reflection->type_definitions.IsItemAt(index)) {
+					if (types[index].folder_hierarchy_index == hierarchy_index) {
+						if (exclude_components) {
+							if (!reflection->IsTypeTag(index, STRING(COMPONENT))) {
+								create_type_and_instance(index);
+							}
+						}
+						else {
+							create_type_and_instance(index);
+						}
+					}
+				}
+			}
+
+			return count;
+		}
+
+		unsigned int UIReflectionDrawer::CreateTypesAndInstancesForHierarchy(const wchar_t* hierarchy, bool exclude_components) {
+			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
+			if (hierarchy_index != -1) {
+				return CreateTypesAndInstancesForHierarchy(hierarchy_index);
+			}
+			ECS_ASSERT(false);
+			return -1;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -2081,11 +2318,22 @@ namespace ECSEngine {
 			const char* ECS_RESTRICT instance_name,
 			UIDrawer& drawer,
 			UIDrawConfig& config,
+			Stream<UIReflectionDrawConfig> additional_configs,
 			const char* ECS_RESTRICT default_value_button
 		) {
-			UIReflectionInstance instance = GetInstance(instance_name);
-			
-			UIReflectionType type = GetType(instance.type_name);
+			DrawInstance(GetInstancePtr(instance_name), drawer, config, additional_configs, default_value_button);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::DrawInstance(
+			UIReflectionInstance* instance,
+			UIDrawer& drawer,
+			UIDrawConfig& config,
+			Stream<UIReflectionDrawConfig> additional_configs,
+			const char* ECS_RESTRICT default_value_button
+		) {
+			UIReflectionType type = GetType(instance->type_name);
 
 			UIDrawerMode draw_mode = drawer.draw_mode;
 			unsigned int draw_mode_target = drawer.draw_mode_target;
@@ -2094,18 +2342,43 @@ namespace ECSEngine {
 
 			if (default_value_button != nullptr) {
 				UIReflectionDefaultValueData default_data;
-				default_data.instance = instance;
+				default_data.instance = *instance;
 				default_data.type = type;
 				drawer.Button(default_value_button, { UIReflectionDefaultValueAction, &default_data, sizeof(default_data) });
 			}
 
 			for (size_t index = 0; index < type.fields.size; index++) {
+				size_t config_flag_count = config.flag_count;
+				size_t current_configuration = type.fields[index].configuration;
+				for (size_t subindex = 0; subindex < additional_configs.size; subindex++) {
+					for (size_t type_index = 0; type_index < additional_configs[subindex].index_count; type_index++) {
+						if (additional_configs[subindex].index[type_index] == type.fields[index].reflection_index || 
+							additional_configs[subindex].index[type_index] == UIReflectionIndex::Count) {
+							current_configuration |= additional_configs[subindex].configurations;
+							UIReflectionDrawConfigCopyToNormalConfig(additional_configs.buffer + subindex, config);
+						}
+					}
+				}
+
 				if (type.fields[index].stream_type == UIReflectionStreamType::None) {
-					UI_REFLECTION_FIELD_BASIC_DRAW[(unsigned int)type.fields[index].reflection_index](drawer, config, type.fields[index].configuration, instance.datas[index].struct_data);
+					UI_REFLECTION_FIELD_BASIC_DRAW[(unsigned int)type.fields[index].reflection_index](
+						drawer,
+						config,
+						current_configuration,
+						instance->datas[index].struct_data
+					);
 				}
 				else {
-					UI_REFLECTION_FIELD_STREAM_DRAW[(unsigned int)type.fields[index].reflection_index](drawer, config, type.fields[index].configuration, instance.datas[index].struct_data);
+					UI_REFLECTION_FIELD_STREAM_DRAW[(unsigned int)type.fields[index].reflection_index](
+						drawer,
+						config, 
+						current_configuration,
+						instance->datas[index].struct_data
+					);
+					drawer.NextRow(-1.0f);
 				}
+
+				config.flag_count = config_flag_count;
 			}
 
 			drawer.SetDrawMode(draw_mode, draw_mode_target);
@@ -2194,10 +2467,66 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::GetHierarchyTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>& indices) {
+			auto types = type_definition.GetValueStream();
+
+			for (size_t index = 0; index < types.size; index++) {
+				if (type_definition.IsItemAt(index)) {
+					ReflectionType type = reflection->GetType(types[index].name);
+					if (type.folder_hierarchy_index == hierarchy_index) {
+						indices.AddSafe(index);
+					}
+				}
+			}
+		}
+
+
+		void UIReflectionDrawer::GetHierarchyTypes(const wchar_t* hierarchy, CapacityStream<unsigned int>& indices) {
+			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
+			if (hierarchy_index != -1) {
+				GetHierarchyTypes(hierarchy_index, indices);
+				return;
+			}
+			ECS_ASSERT(false);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::GetHierarchyInstances(unsigned int hierarchy_index, CapacityStream<unsigned int>& indices) {
+			auto instance_stream = instances.GetValueStream();
+
+			for (size_t index = 0; index < instance_stream.size; index++) {
+				if (instances.IsItemAt(index)) {
+					ReflectionType type = reflection->GetType(instance_stream[index].name);
+					if (type.folder_hierarchy_index == hierarchy_index) {
+						indices.AddSafe(index);
+					}
+				}
+			}
+		}
+
+		void UIReflectionDrawer::GetHierarchyInstances(const wchar_t* hierarchy, CapacityStream<unsigned int>& indices) {
+			unsigned int hierarchy_index = reflection->GetHierarchyIndex(hierarchy);
+			if (hierarchy_index != -1) {
+				GetHierarchyInstances(hierarchy_index, indices);
+				return;
+			}
+			ECS_ASSERT(false);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		UIReflectionType UIReflectionDrawer::GetType(const char* name) const
 		{
 			ECS_RESOURCE_IDENTIFIER(name);
 			return type_definition.GetValue(identifier);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		UIReflectionType UIReflectionDrawer::GetType(unsigned int index) const
+		{
+			return type_definition.GetValueFromIndex(index);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -2209,6 +2538,13 @@ namespace ECSEngine {
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
+
+		UIReflectionType* UIReflectionDrawer::GetTypePtr(unsigned int index) const
+		{
+			return type_definition.GetValuePtrFromIndex(index);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
 		
 		UIReflectionInstance UIReflectionDrawer::GetInstance(const char* name) const {
 			ECS_RESOURCE_IDENTIFIER(name);
@@ -2217,10 +2553,23 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		UIReflectionInstance UIReflectionDrawer::GetInstance(unsigned int index) const {
+			return instances.GetValueFromIndex(index);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		UIReflectionInstance* UIReflectionDrawer::GetInstancePtr(const char* name) const
 		{
 			ECS_RESOURCE_IDENTIFIER(name);
 			return instances.GetValuePtr(identifier);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		UIReflectionInstance* UIReflectionDrawer::GetInstancePtr(unsigned int index) const
+		{
+			return instances.GetValuePtrFromIndex(index);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -2241,6 +2590,18 @@ namespace ECSEngine {
 		{
 			UIReflectionType type = GetType(type_name);
 			return GetTypeFieldIndex(type, field_name);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UIReflectionDrawer::GetTypeCount() const {
+			return type_definition.GetCount();
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UIReflectionDrawer::GetInstanceCount() const {
+			return instances.GetCount();
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------

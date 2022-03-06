@@ -52,7 +52,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\Timer.h">
       <Filter>ECSEngine</Filter>
     </ClInclude>
-    <ClInclude Include="src\ECSEngine\Internal\System\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\World.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskManager.h" />
     <ClInclude Include="src\ECSEngine\Containers\StaticSequentialTable.h" />
@@ -132,7 +131,6 @@
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
     <ClInclude Include="src\ECSEngine\Containers\Deck.h" />
     <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
-    <ClInclude Include="src\ECSEngine\Containers\StaticLockFreeStream.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
     <ClInclude Include="src\ECSEngine\Rendering\PBRMaps.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.h" />
@@ -155,6 +153,15 @@
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
+    <ClInclude Include="src\Includes\ECSEngineConsole.h" />
+    <ClInclude Include="src\ECSEngine\Internal\ForEach.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Internal\VectorComponentSignature.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
+    <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
+    <ClInclude Include="src\ECSEngine\Internal\SystemManager.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityHierarchy.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
@@ -190,7 +197,6 @@
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp">
       <Filter>ECSEngine</Filter>
     </ClCompile>
-    <ClCompile Include="src\ECSEngine\Internal\System\SystemManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskManager.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ArchetypeBase.cpp" />
@@ -249,6 +255,13 @@
     <ClCompile Include="src\ECSEngine\Containers\HashTable.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\GLTFThumbnail.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\ForEach.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\EntityManagerSerialize.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\VectorComponentSignature.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\SystemManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\EntityHierarchy.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />
@@ -294,5 +307,6 @@
     <None Include="src\ECSEngine\Rendering\Shaders\LightingUtilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\Utilities.hlsli" />
     <None Include="src\ECSEngine\Rendering\Shaders\PBRBase.hlsli" />
+    <None Include="cpp.hint" />
   </ItemGroup>
 </Project>

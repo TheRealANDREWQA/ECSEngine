@@ -3,8 +3,6 @@
 #include "Function.h"
 #include "FunctionInterfaces.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	namespace function {

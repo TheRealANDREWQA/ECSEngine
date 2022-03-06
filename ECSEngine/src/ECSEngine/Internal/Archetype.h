@@ -1,8 +1,9 @@
 #pragma once
 #include "ArchetypeBase.h"
+#include "VectorComponentSignature.h"
 
 #ifndef ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE 
-#define ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE (1 << 9)
+#define ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE (1 << 6)
 #endif
 
 namespace ECSEngine {
@@ -20,24 +21,13 @@ namespace ECSEngine {
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(Archetype);
 
-		ECS_INLINE bool ECS_VECTORCALL CheckArchetypeQuery(ArchetypeQuery query) const {
-			VectorComponentSignature unique_signature(m_unique_components);
-			VectorComponentSignature shared_signature(m_shared_components);
-			return unique_signature.HasComponents(query.unique) && unique_signature.HasComponents(query.shared);
-		}
-
-		ECS_INLINE bool ECS_VECTORCALL CheckArchetypeQuery(ArchetypeQueryExclude query) const {
-			VectorComponentSignature unique_signature(m_unique_components);
-			VectorComponentSignature shared_signature(m_shared_components);
-			return unique_signature.HasComponents(query.unique) && unique_signature.ExcludesComponents(query.unique_excluded) &&
-				shared_signature.HasComponents(query.shared) && shared_signature.ExcludesComponents(query.shared_excluded);
-		}
-
 		// The shared component order is needed in order to assign in the correct order the instances indices
 		unsigned short CreateBaseArchetype(
 			SharedComponentSignature shared_signature, 
-			unsigned int archetype_chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
+			unsigned int archetype_starting_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
 		);
+
+		void CopyOther(const Archetype* other);
 
 		// It will deallocate all of its base archetypes and then itself
 		void Deallocate();
@@ -50,18 +40,22 @@ namespace ECSEngine {
 		// Which makes expensive the iteration - which all this architecture is about
 		void DestroyBase(unsigned short archetype_index, EntityPool* pool);
 
+		// Prefer using the EntityManager function instead of this one - it will use the 
 		unsigned char FindUniqueComponentIndex(Component component) const;
 
 		unsigned char FindSharedComponentIndex(Component component) const;
 
 		// It will replace the indices inside the signature with the equivalent indices for the current archetype's mask
+		// If a component cannot be found, it will be set to -1
 		void FindUniqueComponents(ComponentSignature signature) const;
 
 		// It will replace the indices inside the signature with the equivalent indices for the current archetype's mask
+		// If a component cannot be found, it will be set to -1
 		void FindSharedComponents(ComponentSignature signature) const;
 
 		// It will replace the values inside the signature.instances with the corresponding instance index
 		// The signature must contain initially the shared index in order to identify the correct component
+		// If a component cannot be found, a shared instance of -1 is returned
 		void FindSharedInstances(unsigned short archetype_index, SharedComponentSignature signature) const;
 
 		// If it fails it returns nullptr
@@ -93,10 +87,13 @@ namespace ECSEngine {
 
 		unsigned short GetArchetypeBaseCount() const;
 
+		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned short base_index) const;
+
 	//private:
 		struct InternalBase {
 			ArchetypeBase archetype;
 			SharedInstance* shared_instances;
+			VectorComponentSignature vector_instances;
 		};
 
 		MemoryManager* m_small_memory_manager;

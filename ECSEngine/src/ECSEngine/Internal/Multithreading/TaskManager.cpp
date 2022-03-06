@@ -4,9 +4,6 @@
 
 constexpr size_t SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL = 50;
 
-const size_t THREAD_LOCAL_LINEAR_ALLOCATOR_SIZE = 1'000;
-const size_t THREAD_LOCAL_MEMORY_MANAGER_SIZE = 1'000'000;
-
 namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -22,6 +19,12 @@ namespace ECSEngine {
 		wrapper_data->fetch_add(1);
 		function(thread_id, world, _data);
 		wrapper_data->fetch_sub(1);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ECS_THREAD_TASK(ExitThreadTask) {
+		ExitThread(0);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -83,7 +86,7 @@ namespace ECSEngine {
 
 	TaskManager::TaskManager(
 		size_t thread_count,
-		MemoryManager* memory_manager,
+		GlobalMemoryManager* memory,
 		size_t thread_linear_allocator_size,
 		size_t thread_memory_manager_size,
 		size_t max_dynamic_tasks
@@ -106,11 +109,14 @@ namespace ECSEngine {
 
 		// events
 		total_memory += sizeof(ConditionVariable) * thread_count;
+
+		// thread handles
+		total_memory += sizeof(void*) * thread_count;
 	
 		// additional bytes for alignment
 		total_memory += ECS_CACHE_LINE_SIZE * thread_count * 2;
 
-		void* allocation = memory_manager->Allocate(total_memory, ECS_CACHE_LINE_SIZE);
+		void* allocation = memory->Allocate(total_memory, ECS_CACHE_LINE_SIZE);
 		uintptr_t buffer_start = (uintptr_t)allocation;
 		m_thread_queue = Stream<ThreadQueue*>(allocation, thread_count);
 		buffer_start += sizeof(ThreadQueue*) * thread_count;
@@ -141,23 +147,32 @@ namespace ECSEngine {
 			buffer_start += sizeof(std::atomic<int>);
 		}
 
-		// events
+		// sleep variables
 		buffer_start = function::align_pointer(buffer_start, alignof(ConditionVariable));
-		m_events = (ConditionVariable*)buffer_start;
+		m_sleep_wait = (ConditionVariable*)buffer_start;
 		for (size_t index = 0; index < thread_count; index++) {
-			new (m_events + index) ConditionVariable();
-			m_events[index].Reset();
+			new (m_sleep_wait + index) ConditionVariable();
+			m_sleep_wait[index].Reset();
 		}
+		buffer_start += sizeof(ConditionVariable) * thread_count;
 
-		m_tasks = ResizableStream<ThreadTask>(GetAllocatorPolymorphic(memory_manager), 0);
+		// thread handles
+		buffer_start = function::align_pointer(buffer_start, alignof(void*));
+		m_thread_handles = (void**)buffer_start;
+		buffer_start += sizeof(void*) * thread_count;
+
+		m_tasks = ResizableStream<ThreadTask>(GetAllocatorPolymorphic(memory), 0);
 
 		// Now the thread local allocators
 		const size_t linear_allocator_cache_lines = (sizeof(LinearAllocator) - 1) / ECS_CACHE_LINE_SIZE;
 		const size_t memory_manager_cache_lines = (sizeof(MemoryManager) - 1) / ECS_CACHE_LINE_SIZE;
 		// Separate the linear allocator and the memory manager to different cache lines in order to prevent false sharing
 		size_t thread_local_allocation_size = ((linear_allocator_cache_lines + memory_manager_cache_lines + 2) * 2 + sizeof(LinearAllocator*) + sizeof(MemoryManager*)) * thread_count;
-		void* thread_local_allocation = memory_manager->Allocate(thread_local_allocation_size);
+		void* thread_local_allocation = memory->Allocate(thread_local_allocation_size);
 		uintptr_t thread_local_ptr = (uintptr_t)thread_local_allocation;
+
+		size_t linear_allocator_total_size = thread_linear_allocator_size * thread_count;
+		void* linear_allocation = memory->Allocate(linear_allocator_total_size);
 
 		// The linear allocators first
 		m_thread_linear_allocators = (LinearAllocator**)thread_local_ptr;
@@ -165,7 +180,9 @@ namespace ECSEngine {
 		for (size_t index = 0; index < thread_count; index++) {
 			m_thread_linear_allocators[index] = (LinearAllocator*)thread_local_ptr;
 			thread_local_ptr += (linear_allocator_cache_lines + 1) * ECS_CACHE_LINE_SIZE;
-			*m_thread_linear_allocators[index] = LinearAllocator(memory_manager->Allocate(THREAD_LOCAL_LINEAR_ALLOCATOR_SIZE), THREAD_LOCAL_LINEAR_ALLOCATOR_SIZE);
+			*m_thread_linear_allocators[index] = LinearAllocator(linear_allocation, thread_linear_allocator_size);
+
+			linear_allocation = function::OffsetPointer(linear_allocation, thread_linear_allocator_size);
 		}
 
 		m_thread_memory_managers = (MemoryManager**)thread_local_ptr;
@@ -174,22 +191,27 @@ namespace ECSEngine {
 		for (size_t index = 0; index < thread_count; index++) {
 			m_thread_memory_managers[index] = (MemoryManager*)thread_local_ptr;
 			thread_local_ptr += (memory_manager_cache_lines + 1) * ECS_CACHE_LINE_SIZE;
-			*m_thread_memory_managers[index] = MemoryManager(THREAD_LOCAL_MEMORY_MANAGER_SIZE, 1024, THREAD_LOCAL_MEMORY_MANAGER_SIZE, memory_manager->m_backup);
+			*m_thread_memory_managers[index] = MemoryManager(thread_memory_manager_size, 1024, thread_memory_manager_size, memory);
 		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::AddTask(ThreadTask task) {
+		ECS_ASSERT(task.name != nullptr);
+
 		if (task.data_size > 0) {
 			void* allocation = Allocate(m_tasks.allocator, task.data_size);
 			memcpy(allocation, task.data, task.data_size);
 			task.data = allocation;
 		}
-#ifdef ECS_THREAD_TASK_NAME
+
+#if 0
 		if (task.name != nullptr) {
 			task.name = function::StringCopy(m_tasks.allocator, task.name).buffer;
 		}
+#else
+		task.name = function::StringCopy(m_tasks.allocator, task.name).buffer;
 #endif
 		m_tasks.Add(task);
 	}
@@ -215,15 +237,20 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id) {
+		ECS_ASSERT(task.name != nullptr);
+
 		if (task.data_size > 0) {
 			void* allocation = m_thread_memory_managers[thread_id]->Allocate(task.data_size);
 			memcpy(allocation, task.data, task.data_size);
 			task.data = allocation;
 		}
-#ifdef ECS_THREAD_TASK_NAME
+
+#if 0
 		if (task.name != nullptr) {
 			task.name = function::StringCopy(m_tasks.allocator, task.name).buffer;
 		}
+#else
+		task.name = function::StringCopy(m_tasks.allocator, task.name).buffer;
 #endif
 		m_thread_queue[thread_id]->Push(task);
 	}
@@ -269,6 +296,11 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::ClearTaskStream() {
+		for (size_t index = 0; index < m_tasks.size; index++) {
+			if (m_tasks[index].data_size > 0) {
+				Deallocate(m_tasks.allocator, m_tasks[index].data);
+			}
+		}
 		m_tasks.size = 0;
 	}
 
@@ -281,8 +313,17 @@ namespace ECSEngine {
 				ThreadProcedure(this, index);
 			});
 
+			// Register the handle
+			m_thread_handles[index] = thread.native_handle();
+
 			thread.detach();
 		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::DestroyThreads()
+	{
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -296,12 +337,6 @@ namespace ECSEngine {
 
 	void TaskManager::IncrementThreadTaskIndex(unsigned int thread_id) {
 		m_thread_task_index[thread_id]->fetch_add(1, ECS_ACQ_REL);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	Timer* TaskManager::GetTimer() {
-		return &m_timer;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -383,12 +418,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::SetTimerMarker() {
-		m_timer.SetMarker();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	void TaskManager::SetThreadTaskIndex(unsigned int thread_id, int value) {
 		m_thread_task_index[thread_id]->store(value, ECS_RELEASE);
 	}
@@ -396,7 +425,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::SleepThread(unsigned int thread_id) {
-		m_events[thread_id].Wait();
+		m_sleep_wait[thread_id].Wait();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -436,7 +465,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::WakeThread(unsigned int thread_id) {
-		m_events[thread_id].Notify();
+		m_sleep_wait[thread_id].Notify();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -445,6 +474,13 @@ namespace ECSEngine {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
 			WakeThread(index);
 		}
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	MemoryManager DefaultTaskManagerAllocator(GlobalMemoryManager* global_memory)
+	{
+		return MemoryManager(500'000, 256, 500'000, global_memory);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------

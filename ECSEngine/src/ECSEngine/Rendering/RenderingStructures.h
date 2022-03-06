@@ -141,8 +141,7 @@ namespace ECSEngine {
 		};
 		float alpha;
 	};
-		
-#define VERTEX_BUFFER 0
+
 	struct ECSENGINE_API VertexBuffer {
 		VertexBuffer();
 		VertexBuffer(UINT _stride, UINT _size, ID3D11Buffer* _buffer);
@@ -172,7 +171,6 @@ namespace ECSEngine {
 		ID3D11Buffer* buffer;
 	};
 
-#define INDEX_BUFFER 1
 	struct ECSENGINE_API IndexBuffer {
 		IndexBuffer();
 
@@ -201,7 +199,6 @@ namespace ECSEngine {
 		ID3D11Buffer* buffer;
 	};
 
-#define VERTEX_SHADER 2
 	// The byte code is mostly needed to check the input layout
 	// against the shader's signature; Path is stable and null terminated
 	// The byte code can be released after the input layout has been created
@@ -226,13 +223,12 @@ namespace ECSEngine {
 			return shader->Release();
 		}
 
-		static VertexShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
+		static VertexShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
-		containers::Stream<void> byte_code;
+		Stream<void> byte_code;
 		ID3D11VertexShader* shader;
 	};
 
-#define INPUT_LAYOUT 3
 	struct ECSENGINE_API InputLayout {
 		InputLayout();
 
@@ -254,12 +250,11 @@ namespace ECSEngine {
 			return layout->Release();
 		}
 
-		static InputLayout RawCreate(GraphicsDevice* device, containers::Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, containers::Stream<void> byte_code);
+		static InputLayout RawCreate(GraphicsDevice* device, Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, Stream<void> byte_code);
 
 		ID3D11InputLayout* layout;
 	};
 
-#define PIXEL_SHADER 4
 	// Path is stable and null terminated
 	struct ECSENGINE_API PixelShader {
 		PixelShader();
@@ -283,7 +278,7 @@ namespace ECSEngine {
 			return shader->Release();
 		}
 
-		static PixelShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
+		static PixelShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
 		ID3D11PixelShader* shader;
 	};
@@ -310,7 +305,7 @@ namespace ECSEngine {
 			return shader->Release();
 		}
 
-		static GeometryShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
+		static GeometryShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
 		ID3D11GeometryShader* shader;
 	};
@@ -337,7 +332,7 @@ namespace ECSEngine {
 			return shader->Release();
 		}
 
-		static DomainShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
+		static DomainShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
 		ID3D11DomainShader* shader;
 	};
@@ -364,7 +359,7 @@ namespace ECSEngine {
 			return shader->Release();
 		}
 
-		static HullShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
+		static HullShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
 		ID3D11HullShader* shader;
 	};
@@ -391,12 +386,11 @@ namespace ECSEngine {
 			return shader->Release();
 		}
 
-		static ComputeShader RawCreate(GraphicsDevice* device, containers::Stream<void> byte_code);
+		static ComputeShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
 		ID3D11ComputeShader* shader;
 	};
 
-#define PRIMITIVE_TOPOLOGY 5
 	struct ECSENGINE_API Topology {
 		Topology();
 		Topology(D3D11_PRIMITIVE_TOPOLOGY _topology);
@@ -407,7 +401,6 @@ namespace ECSEngine {
 		D3D11_PRIMITIVE_TOPOLOGY value;
 	};
 
-#define VERTEX_CONSTANT_BUFFER 6
 	struct ECSENGINE_API ConstantBuffer {
 		ConstantBuffer();
 		ConstantBuffer(ID3D11Buffer* buffer);
@@ -435,7 +428,6 @@ namespace ECSEngine {
 		ID3D11Buffer* buffer;
 	};
 
-#define PS_RESOURCE_VIEW 8
 	struct ECSENGINE_API ResourceView {
 		ResourceView();
 		ResourceView(ID3D11ShaderResourceView* _view);
@@ -463,7 +455,6 @@ namespace ECSEngine {
 		ID3D11ShaderResourceView* view;
 	};
 
-#define SAMPLER_STATE 9
 	struct ECSENGINE_API SamplerState {
 		SamplerState();
 		SamplerState(ID3D11SamplerState* _sampler);
@@ -1035,8 +1026,7 @@ namespace ECSEngine {
 		unsigned int vertex_count;
 	};
 
-	// Contains the actual pipeline objects that can be bound to the 
-	// graphics context
+	// Contains the actual pipeline objects that can be bound to the graphics context
 	struct ECSENGINE_API Material {
 		Material();
 
@@ -1076,18 +1066,18 @@ namespace ECSEngine {
 		unsigned char unordered_view_count;
 	};
 
-	struct ECSENGINE_API PBRMaterial {
+	struct PBRMaterial {
 		const char* name;
 		float metallic_factor;
 		float roughness_factor;
 		Color tint;
 		float3 emissive_factor;
-		containers::Stream<wchar_t> color_texture;
-		containers::Stream<wchar_t> normal_texture;
-		containers::Stream<wchar_t> metallic_texture;
-		containers::Stream<wchar_t> roughness_texture;
-		containers::Stream<wchar_t> occlusion_texture;
-		containers::Stream<wchar_t> emissive_texture;
+		Stream<wchar_t> color_texture;
+		Stream<wchar_t> normal_texture;
+		Stream<wchar_t> metallic_texture;
+		Stream<wchar_t> roughness_texture;
+		Stream<wchar_t> occlusion_texture;
+		Stream<wchar_t> emissive_texture;
 	};
 
 	enum PBRMaterialTextureIndex : unsigned char {
@@ -1100,14 +1090,14 @@ namespace ECSEngine {
 		ECS_PBR_MATERIAL_MAPPING_COUNT
 	};
 
-	struct ECSENGINE_API PBRMaterialMapping {
-		containers::Stream<wchar_t> texture;
+	struct PBRMaterialMapping {
+		Stream<wchar_t> texture;
 		PBRMaterialTextureIndex index;
 	};
 
 	struct CoallescedMesh {
 		Mesh mesh;
-		containers::Stream<Submesh> submeshes;
+		Stream<Submesh> submeshes;
 	};
 
 	// Each submesh has associated a material
@@ -1116,12 +1106,12 @@ namespace ECSEngine {
 		PBRMaterial* materials;
 	};
 
-	ECSENGINE_API void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, containers::Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index);
+	ECSENGINE_API void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index);
 
 	ECSENGINE_API void AllocatePBRMaterial(
 		PBRMaterial& material, 
-		containers::Stream<char> name, 
-		containers::Stream<PBRMaterialMapping> mappings,
+		Stream<char> name, 
+		Stream<PBRMaterialMapping> mappings,
 		AllocatorPolymorphic allocator
 	);
 
@@ -1134,11 +1124,11 @@ namespace ECSEngine {
 	// to look for, by default it will search for all
 	// Might change the texture mask 
 	ECSENGINE_API PBRMaterial CreatePBRMaterialFromName(
-		containers::Stream<char> material_name,
-		containers::Stream<char> texture_base_name, 
-		containers::Stream<wchar_t> search_directory, 
+		Stream<char> material_name,
+		Stream<char> texture_base_name, 
+		Stream<wchar_t> search_directory, 
 		AllocatorPolymorphic allocator,
-		containers::Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
+		Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
 	);
 
 	// It will search every directory in order to find each texture - they can be situated
@@ -1146,11 +1136,11 @@ namespace ECSEngine {
 	// to look for, by default it will search for all
 	// Might change the texture mask 
 	ECSENGINE_API PBRMaterial CreatePBRMaterialFromName(
-		containers::Stream<char> material_name,
-		containers::Stream<wchar_t> texture_base_name,
-		containers::Stream<wchar_t> search_directory,
+		Stream<char> material_name,
+		Stream<wchar_t> texture_base_name,
+		Stream<wchar_t> search_directory,
 		AllocatorPolymorphic allocator,
-		containers::Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
+		Stream<PBRMaterialTextureIndex>* texture_mask = nullptr
 	);
 
 	ECSENGINE_API VertexBuffer GetMeshVertexBuffer(const Mesh& mesh, ECS_MESH_INDEX buffer_type);

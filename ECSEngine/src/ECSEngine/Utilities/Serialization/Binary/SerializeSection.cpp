@@ -2,8 +2,6 @@
 #include "SerializeSection.h"
 #include "../SerializationHelpers.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------

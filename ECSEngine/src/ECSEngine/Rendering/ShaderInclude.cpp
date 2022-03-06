@@ -6,8 +6,6 @@
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/ForEachFiles.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------

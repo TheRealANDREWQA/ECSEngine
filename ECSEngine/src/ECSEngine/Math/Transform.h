@@ -441,4 +441,19 @@ namespace ECSEngine {
 
 #pragma endregion
 
+
+	// It will first select a slice inside the XZ plane using the rotation given by the x component
+	// Then it will rotate in the plane determined by the diameter of that rotation and the Y axis
+	// The point is centered around the origin, if a translation is desired, it should be added afterwards
+	// Rotation is in degrees
+	ECS_INLINE float3 OrbitPoint(float radius, float2 rotation) {
+		float4 position;
+		Matrix matrix = MatrixRotation({ rotation.x, rotation.y, 0.0f });
+
+		Vector4 new_position = TransformPointSIMD({ 0.0f, 0.0f, -radius }, matrix);
+		new_position.Store(&position);
+
+		return { position.x, position.y, position.z };
+	}
+
 }

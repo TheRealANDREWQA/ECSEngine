@@ -4,91 +4,103 @@
 
 namespace ECSEngine {
 
-	struct ECS_REFLECT TO_BE_REFLECT {
-		CapacityStream<float2> type;
-		float3* ptr;
-		float* other_ptr;
-		CapacityStream<double> dob;
-	};
+	// ---------------------------------------------------------------------------------------------------------------------
 
-	World::World() : memory(nullptr), entity_manager(nullptr), system_manager(nullptr), task_manager(nullptr),
-		resource_manager(nullptr) {};
+	World::World() : memory(nullptr), entity_manager(nullptr), task_manager(nullptr), resource_manager(nullptr) {};
 
-	World::World(GlobalMemoryManager* _memory, EntityManager* _entity_manager, SystemManager* _system_manager,
-		ResourceManager* _resource_manager) : memory(_memory), entity_manager(_entity_manager), system_manager(_system_manager),
-		resource_manager(_resource_manager) {
-		task_manager = system_manager->m_task_manager;
-	};
+	World::World(
+		GlobalMemoryManager* _memory, 
+		EntityManager* _entity_manager, 
+		ResourceManager* _resource_manager,
+		TaskManager* _task_manager,
+		HID::Mouse* _mouse,
+		HID::Keyboard* _keyboard
+	) : memory(_memory), entity_manager(_entity_manager), resource_manager(_resource_manager), task_manager(_task_manager),
+		graphics(_resource_manager->m_graphics), mouse(_mouse), keyboard(_keyboard) {};
+
+	// ---------------------------------------------------------------------------------------------------------------------
 
 	World::World(const WorldDescriptor& descriptor) {
 		// first the global allocator
 		memory = new GlobalMemoryManager(descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
+		graphics = descriptor.graphics;
+		mouse = descriptor.mouse;
+		keyboard = descriptor.keyboard;
 
-		MemoryManager* temp_internal_memory;
-		// the internal memory manager
-		if (descriptor.internal_allocator == nullptr) {
-			temp_internal_memory = new MemoryManager(descriptor.memory_manager_size, descriptor.memory_manager_maximum_pool_count, descriptor.memory_manager_new_allocation_size, memory);
-			internal_memory = temp_internal_memory;
-		}
-		else {
-			temp_internal_memory = descriptor.internal_allocator;
-			internal_memory = nullptr;
-		}
+		// Coallesce all the allocations for these objects such that as to not take useful slots from the global memory manager
+		size_t coallesced_allocation_size =
+			sizeof(MemoryManager) + // Entity manager allocator
+			sizeof(MemoryManager) +  // Resource manager allocator
+			sizeof(ResourceManager) +
+			sizeof(TaskManager) +
+			sizeof(EntityManager) +
+			sizeof(MemoryManager) + // Entity Pool allocator
+			sizeof(SystemManager); 
 
-		// the graphics object
-		Graphics* temp_graphics;
-		if (descriptor.resource_manager_graphics == nullptr) {
-			GraphicsDescriptor graphics_descriptor;
-			graphics_descriptor.window_size = { descriptor.graphics_window_size_x, descriptor.graphics_window_size_y };
-			temp_graphics = new Graphics(descriptor.graphics_hWnd, &graphics_descriptor);
-			graphics = temp_graphics;
-		}
-		else {
-			temp_graphics = descriptor.resource_manager_graphics;
-			graphics = nullptr;
-		}
+		void* allocation = memory->Allocate(coallesced_allocation_size);
+		MemoryManager* entity_manager_memory = (MemoryManager*)allocation;
+		new (entity_manager_memory) MemoryManager(
+			descriptor.entity_manager_memory_size,
+			descriptor.entity_manager_memory_pool_count,
+			descriptor.entity_manager_memory_new_allocation_size,
+			memory
+		);
+		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+
+		MemoryManager* resource_manager_allocator = (MemoryManager*)allocation;
+		*resource_manager_allocator = DefaultResourceManagerAllocator(memory);
+		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
 
 		// resource manager
-		resource_manager = new ResourceManager(temp_internal_memory, temp_graphics, descriptor.thread_count);
+		resource_manager = (ResourceManager*)allocation;
+		new (resource_manager) ResourceManager(resource_manager_allocator, graphics, descriptor.thread_count);
+		allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
 
 		// task manager
-		task_manager = new TaskManager(descriptor.thread_count, internal_memory, descriptor.task_manager_max_dynamic_tasks);
+		task_manager = (TaskManager*)allocation;
+		new (task_manager) TaskManager(descriptor.thread_count, memory);
 		task_manager->SetWorld(this);
+		allocation = function::OffsetPointer(allocation, sizeof(TaskManager));
 
 		// entity pool
-		EntityPool* entity_pool_temp;
-		if (descriptor.entity_pool == nullptr) {
-			entity_pool_temp = new EntityPool(temp_internal_memory, descriptor.entity_pool_arena_count, descriptor.entity_pool_power_of_two);
-			entity_pool = entity_pool_temp;
-		}
-		else {
-			entity_pool_temp = descriptor.entity_pool;
-			entity_pool = nullptr;
-		}
+		MemoryManager* entity_pool_allocator = (MemoryManager*)allocation;
+		*entity_pool_allocator = DefaultEntityPoolManager(memory);
+		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+
+		EntityPool* entity_pool = (EntityPool*)allocation;
+		new (entity_pool) EntityPool(entity_pool_allocator, descriptor.entity_pool_power_of_two);
+		allocation = function::OffsetPointer(allocation, sizeof(EntityPool));
 
 		EntityManagerDescriptor entity_descriptor;
-		entity_descriptor.memory_manager = temp_internal_memory;
-		entity_descriptor.entity_pool = entity_pool_temp;
+		entity_descriptor.memory_manager = entity_manager_memory;
+		entity_descriptor.entity_pool = entity_pool;
 		// entity manager
-		entity_manager = new EntityManager(entity_descriptor);
+		entity_manager = (EntityManager*)allocation;
+		new (entity_manager) EntityManager(entity_descriptor);
+		allocation = function::OffsetPointer(allocation, sizeof(EntityManager));
 
-		// system manager
-		system_manager = new SystemManager(task_manager, temp_internal_memory, descriptor.system_manager_max_systems);
+		system_manager = (SystemManager*)allocation;
+		*system_manager = SystemManager(memory);
+		allocation = function::OffsetPointer(allocation, sizeof(SystemManager));
 	}
 
-	void World::ReleaseResources() {
-		delete memory;
-		delete resource_manager;
-		delete task_manager;
-		delete entity_manager;
-		delete system_manager;
+	// ---------------------------------------------------------------------------------------------------------------------
 
-		if (internal_memory != nullptr) {
-			delete internal_memory;
-		}
-		if (entity_pool != nullptr) {
-			delete entity_pool;
-		}
+	void DestroyWorld(World* world)
+	{
+		// Pretty much all that there is left to do is delete the graphics resources, unload everything from the resource manager
+		// and deallocate the global memory manager
+		
+		// Start with the resource manager
+		world->resource_manager->UnloadAll();
+
+		// Destory the graphics object
+		DestroyGraphics(world->graphics);
+
+		// Release the global allocator
+		world->memory->ReleaseResources();
 	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
 
 }

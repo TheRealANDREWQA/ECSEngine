@@ -23,8 +23,6 @@ constexpr size_t ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE = ECS_MB * 10;
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 #define ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT 100
 
 
@@ -255,7 +253,7 @@ namespace ECSEngine {
 
 	void UnloadTextureHandler(void* parameter, ResourceManager* resource_manager) {
 		ID3D11ShaderResourceView* reinterpretation = (ID3D11ShaderResourceView*)parameter;
-		resource_manager->m_graphics->FreeShaderView(reinterpretation);
+		resource_manager->m_graphics->FreeResourceView(reinterpretation);
 	}
 
 	void DeleteTexture(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -441,21 +439,25 @@ namespace ECSEngine {
 			m_thread_resources[index].offsets.InitializeFromBuffer(buffer, 0, ECS_RESOURCE_MANAGER_MAX_THREAD_PATH);
 		}
 
-		m_resource_types = ResizableStream<InternalResourceType>(GetAllocatorPolymorphic(m_memory), 0);
+		m_resource_types.Initialize(m_memory, (unsigned int)ResourceType::TypeCount);
+		// Set to 0 the initial data for these resource types such that if a type is not being constructed but it is
+		// accessed it will cause a crash
+		memset(m_resource_types.buffer, 0, m_resource_types.MemoryOf(m_resource_types.size));
+
 		m_shader_directory.Initialize(m_memory, 0, 256);
 
 		// Set the initial shader directory
 		SetShaderDirectory(ToStream(ECS_SHADER_DIRECTORY));
 
-		// initializing WIC loader
-#if (_WIN32_WINNT >= 0x0A00 /*_WIN32_WINNT_WIN10*/)
-		Microsoft::WRL::Wrappers::RoInitializeWrapper initialize(RO_INIT_MULTITHREADED);
-		if (FAILED(initialize))
-			// error
-#else
-		HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(hr, L"Initializing WIC loader failed!", true);
-#endif
+//		// initializing WIC loader
+//#if (_WIN32_WINNT >= 0x0A00 /*_WIN32_WINNT_WIN10*/)
+//		Microsoft::WRL::Wrappers::RoInitializeWrapper initialize(RO_INIT_MULTITHREADED);
+//		if (FAILED(initialize))
+//			// error
+//#else
+//		HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+//		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(hr, L"Initializing WIC loader failed!", true);
+//#endif
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -494,7 +496,8 @@ namespace ECSEngine {
 		void* allocation = Allocate(table_size);
 		memset(allocation, 0, table_size);
 		type.table.InitializeFromBuffer(allocation, resource_count);
-		m_resource_types.Add(type);
+
+		m_resource_types[(unsigned int)resource_type] = type;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1080,7 +1083,7 @@ namespace ECSEngine {
 
 		GLTFData data = LoadGLTFFile(path);
 		// The load failed
-		if (data.data == nullptr) {
+		if (data.data == nullptr || data.mesh_count == 0) {
 			return nullptr;
 		}
 		ECS_ASSERT(data.mesh_count < 200);
@@ -1918,6 +1921,31 @@ namespace ECSEngine {
 	void ResourceManager::UnloadResourceImplementation(void* resource, ResourceType type, size_t flags)
 	{
 		UNLOAD_FUNCTIONS[(unsigned int)type](resource, this);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::UnloadAll()
+	{
+		for (size_t index = 0; index < m_resource_types.size; index++) {
+			// If the types exists, iterate through the table and unload those resources
+			if (m_resource_types[index].name != nullptr) {
+				unsigned int type_resource_count = m_resource_types[index].table.GetCount();
+				if (type_resource_count > 0) {
+					unsigned int table_capacity = m_resource_types[index].table.GetExtendedCapacity();
+					unsigned int unload_count = 0;
+					for (size_t subindex = 0; subindex < table_capacity && unload_count < type_resource_count; subindex++) {
+						if (m_resource_types[index].table.IsItemAt(subindex)) {
+							ResourceManagerEntry entry = m_resource_types[index].table.GetValueFromIndex(subindex);
+							UnloadResourceImplementation(entry.data_pointer.GetPointer(), (ResourceType)index);
+
+							// Helps to early exit if the resources are clumped together towards the beginning of the table
+							unload_count++;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------

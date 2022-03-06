@@ -5,7 +5,12 @@
 #include "File.h"
 #include "Path.h"
 
-ECS_CONTAINERS;
+#include <DbgHelp.h>
+
+#pragma comment(lib, "dbghelp.lib")
+
+bool SYM_INITIALIZED = false;
+
 ECS_TOOLS;
 
 namespace ECSEngine {
@@ -481,7 +486,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		size_t GetFileLastWrite(containers::Stream<wchar_t> path)
+		size_t GetFileLastWrite(Stream<wchar_t> path)
 		{
 			if (path[path.size] == L'\0') {
 				return GetFileLastWrite(path.buffer);
@@ -497,6 +502,78 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		void InitializeSymbolicLinksPaths(Stream<wchar_t*> module_paths)
+		{
+			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 8);
+			for (size_t index = 0; index < module_paths.size; index++) {
+				search_paths.AddStream(ToStream(module_paths[index]));
+				search_paths.AddSafe(L':');
+			}
+			search_paths[search_paths.size - 1] = L'\0';
+
+			bool success = false;
+			if (!SYM_INITIALIZED) {
+				success = SymInitializeW(GetCurrentProcess(), search_paths.buffer, true);
+				SYM_INITIALIZED = true;
+			}
+			else {
+				success = SymSetSearchPathW(GetCurrentProcess(), search_paths.buffer);
+			}
+
+			ECS_ASSERT(success, "Initializing symbolic link paths failed.");
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void SetSymbolicLinksPaths(Stream<wchar_t*> module_paths)
+		{
+			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 8);
+			for (size_t index = 0; index < module_paths.size; index++) {
+				search_paths.AddStream(ToStream(module_paths[index]));
+				search_paths.AddSafe(L':');
+			}
+			search_paths[search_paths.size - 1] = L'\0';
+
+			bool success = SymSetSearchPathW(GetCurrentProcess(), search_paths.buffer);
+			ECS_ASSERT(success, "Setting symbolic link paths failed.");
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void GetCallStackFunctionNames(CapacityStream<char>& string)
+		{
+			bool success;
+			STACKFRAME64 stack_frame;
+			memset(&stack_frame, 0, sizeof(stack_frame));
+
+			CONTEXT context;
+			RtlCaptureContext(&context);
+
+			stack_frame.AddrPC.Offset = context.Rip;
+			stack_frame.AddrPC.Mode = AddrModeFlat;
+			stack_frame.AddrStack.Offset = context.Rsp;
+			stack_frame.AddrStack.Mode = AddrModeFlat;
+			stack_frame.AddrFrame.Offset = context.Rsp;
+			stack_frame.AddrFrame.Mode = AddrModeFlat;
+			IMAGEHLP_SYMBOL64* image_symbol = (IMAGEHLP_SYMBOL64*)ECS_STACK_ALLOC(sizeof(IMAGEHLP_SYMBOL64) + 512);
+			image_symbol->MaxNameLength = 511;
+			image_symbol->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
+
+			HANDLE process_handle = GetCurrentProcess();
+
+			size_t displacement = 0;
+			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, GetCurrentThread(), &stack_frame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
+				SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
+				UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);
+				string.Add('\n');
+			}
+
+			string.AssertCapacity();
+			string[string.size] = '\0';
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region Error With Window Or Console
@@ -505,7 +582,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void ErrorWindow(Stream<wchar_t> path, UISystem* system, FolderFunction function, const char* error_string) {
+		void ErrorWindow(Stream<wchar_t> path, FolderFunction function, const char* error_string, UISystem* system) {
 			bool success = function(path);
 			if (!success) {
 				char temp_characters[512];
@@ -515,34 +592,34 @@ namespace ECSEngine {
 			}
 		}
 
-		void ErrorConsole(Stream<wchar_t> path, Console* console, FolderFunction function, const char* error_string) {
+		void ErrorConsole(Stream<wchar_t> path, FolderFunction function, const char* error_string) {
 			bool success = function(path);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, error_string, path);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define LAUNCH_FILE_EXPLORER_ERROR_STRING "Launching file explorer at {0} failed. Incorrect path."
+#define LAUNCH_FILE_EXPLORER_ERROR_STRING "Launching file explorer at {#} failed. Incorrect path."
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void LaunchFileExplorerWithError(containers::Stream<wchar_t> path, UISystem* system)
+		void LaunchFileExplorerWithError(Stream<wchar_t> path, UISystem* system)
 		{
-			ErrorWindow(path, system, OS::LaunchFileExplorer, LAUNCH_FILE_EXPLORER_ERROR_STRING);
+			ErrorWindow(path, OS::LaunchFileExplorer, LAUNCH_FILE_EXPLORER_ERROR_STRING, system);
 		}
 
-		void LaunchFileExplorerWithError(containers::Stream<wchar_t> path, Console* console) {
-			ErrorConsole(path, console, OS::LaunchFileExplorer, LAUNCH_FILE_EXPLORER_ERROR_STRING);
+		void LaunchFileExplorerWithError(Stream<wchar_t> path) {
+			ErrorConsole(path, OS::LaunchFileExplorer, LAUNCH_FILE_EXPLORER_ERROR_STRING);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define GET_FILE_TIMES_ERROR_STRING "Getting file {0} times failed!"
+#define GET_FILE_TIMES_ERROR_STRING "Getting file {#} times failed!"
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -605,7 +682,6 @@ namespace ECSEngine {
 		template<typename PointerType>
 		void GetFileTimesWithError(
 			Stream<wchar_t> path,
-			Console* console,
 			PointerType* ECS_RESTRICT creation_time,
 			PointerType* ECS_RESTRICT access_time,
 			PointerType* ECS_RESTRICT last_write_time
@@ -621,20 +697,19 @@ namespace ECSEngine {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, Console*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetFileTimesWithError(Stream<wchar_t>, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
 		// -----------------------------------------------------------------------------------------------------
 
 		template<typename PointerType>
 		void GetRelativeFileTimesWithError(
 			Stream<wchar_t> path,
-			Console* console,
 			PointerType* ECS_RESTRICT creation_time,
 			PointerType* ECS_RESTRICT access_time,
 			PointerType* ECS_RESTRICT last_write_time
@@ -650,32 +725,32 @@ namespace ECSEngine {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, GET_FILE_TIMES_ERROR_STRING, path);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
-		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, Console*, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT, wchar_t* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, char* ECS_RESTRICT, char* ECS_RESTRICT, char* ECS_RESTRICT);
+		template ECSENGINE_API void GetRelativeFileTimesWithError(Stream<wchar_t>, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT, size_t* ECS_RESTRICT);
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define CLEAR_FILE_ERROR_STRING "Clearing file {0} failed. Incorrect path or access denied."
+#define CLEAR_FILE_ERROR_STRING "Clearing file {#} failed. Incorrect path or access denied."
 
 		// -----------------------------------------------------------------------------------------------------
 
 		void ClearFileWithError(Stream<wchar_t> path, UISystem* system)
 		{
-			ErrorWindow(path, system, ClearFile, CLEAR_FILE_ERROR_STRING);
+			ErrorWindow(path, ClearFile, CLEAR_FILE_ERROR_STRING, system);
 		}
 
 		void ClearFileWithError(Stream<wchar_t> path, Console* console) {
-			ErrorConsole(path, console, ClearFile, CLEAR_FILE_ERROR_STRING);
+			ErrorConsole(path, ClearFile, CLEAR_FILE_ERROR_STRING);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define FILE_COPY_ERROR_STRING "Copying file {0} to {1} failed. Make sure that both file exist."
+#define FILE_COPY_ERROR_STRING "Copying file {#} to {#} failed. Make sure that both file exist."
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -689,19 +764,19 @@ namespace ECSEngine {
 			}
 		}
 
-		void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, Console* console) {
+		void FileCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to) {
 			bool success = FileCopy(from, to);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, FILE_COPY_ERROR_STRING, from, to);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define FOLDER_COPY_ERROR_STRING "Copying folder {0} to {1} failed. Make sure that both folders exist."
+#define FOLDER_COPY_ERROR_STRING "Copying folder {#} to {#} failed. Make sure that both folders exist."
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -715,63 +790,63 @@ namespace ECSEngine {
 			}
 		}
 
-		void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to, Console* console) {
+		void FolderCopyWithError(Stream<wchar_t> from, Stream<wchar_t> to) {
 			bool success = FolderCopy(from, to);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, FOLDER_COPY_ERROR_STRING, from, to);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define CREATE_FOLDER_ERROR_STRING "Creating folder {0} failed. Incorrect path, access denied or folder already exists."
+#define CREATE_FOLDER_ERROR_STRING "Creating folder {#} failed. Incorrect path, access denied or folder already exists."
 
 		// -----------------------------------------------------------------------------------------------------
 
 		void CreateFolderWithError(Stream<wchar_t> path, UISystem* system)
 		{
-			ErrorWindow(path, system, CreateFolder, CREATE_FOLDER_ERROR_STRING);
+			ErrorWindow(path, CreateFolder, CREATE_FOLDER_ERROR_STRING, system);
 		}
 
 		void CreateFolderWithError(Stream<wchar_t> path, Console* console) {
-			ErrorConsole(path, console, CreateFolder, CREATE_FOLDER_ERROR_STRING);
+			ErrorConsole(path, CreateFolder, CREATE_FOLDER_ERROR_STRING);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define DELETE_FOLDER_ERROR_STRING "Deleting folder {0} failed. Incorrect path, access denied or folder doesn't exist."
+#define DELETE_FOLDER_ERROR_STRING "Deleting folder {#} failed. Incorrect path, access denied or folder doesn't exist."
 
 		// -----------------------------------------------------------------------------------------------------
 
 		void DeleteFolderWithError(Stream<wchar_t> path, UISystem* system)
 		{
-			ErrorWindow(path, system, RemoveFolder, DELETE_FOLDER_ERROR_STRING);
+			ErrorWindow(path, RemoveFolder, DELETE_FOLDER_ERROR_STRING, system);
 		}
 
 		void DeleteFolderWithError(Stream<wchar_t> path, Console* console) {
-			ErrorConsole(path, console, RemoveFolder, DELETE_FOLDER_ERROR_STRING);
+			ErrorConsole(path, RemoveFolder, DELETE_FOLDER_ERROR_STRING);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define DELETE_FILE_ERROR_STRING "Deleting file {0} failed. Incorrect path, access denied or file doesn't exist."
+#define DELETE_FILE_ERROR_STRING "Deleting file {#} failed. Incorrect path, access denied or file doesn't exist."
 
 		// -----------------------------------------------------------------------------------------------------
 
 		void DeleteFileWithError(Stream<wchar_t> path, UISystem* system) {
-			ErrorWindow(path, system, RemoveFile, DELETE_FILE_ERROR_STRING);
+			ErrorWindow(path, RemoveFile, DELETE_FILE_ERROR_STRING, system);
 		}
 
-		void DeleteFileWithError(Stream<wchar_t> path, Console* console) {
-			ErrorConsole(path, console, RemoveFile, DELETE_FILE_ERROR_STRING);
+		void DeleteFileWithError(Stream<wchar_t> path) {
+			ErrorConsole(path, RemoveFile, DELETE_FILE_ERROR_STRING);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define RENAME_FOLDER_ERROR_STRING "Renaming file/folder {0} to {1} failed. Incorrect path, invalid new name or access denied."
+#define RENAME_FOLDER_ERROR_STRING "Renaming file/folder {#} to {#} failed. Incorrect path, invalid new name or access denied."
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -785,19 +860,19 @@ namespace ECSEngine {
 			}
 		}
 
-		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name, Console* console) {
+		void RenameFolderOrFileWithError(Stream<wchar_t> path, Stream<wchar_t> new_name) {
 			bool success = RenameFolderOrFile(path, new_name);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, RENAME_FOLDER_ERROR_STRING, path, new_name);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define RESIZE_FILE_ERROR_STRING "Resizing file {0} to {1} size failed. Incorrect path or access denied"
+#define RESIZE_FILE_ERROR_STRING "Resizing file {#} to {#} size failed. Incorrect path or access denied"
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -811,19 +886,19 @@ namespace ECSEngine {
 			}
 		}
 
-		void ResizeFileWithError(Stream<wchar_t> path, size_t new_size, Console* console) {
+		void ResizeFileWithError(Stream<wchar_t> path, size_t new_size) {
 			bool success = ResizeFile(path, new_size);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, RESIZE_FILE_ERROR_STRING, path, new_size);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define CHANGE_FILE_EXTENSION_ERROR_STRING "Changing file {0} extension to {1} failed. Incorrect file, invalid extension or access denied."
+#define CHANGE_FILE_EXTENSION_ERROR_STRING "Changing file {#} extension to {#} failed. Incorrect file, invalid extension or access denied."
 
 		// -----------------------------------------------------------------------------------------------------
 
@@ -837,45 +912,45 @@ namespace ECSEngine {
 			}
 		}
 
-		void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> new_extension, Console* console) {
+		void ChangeFileExtensionWithError(Stream<wchar_t> path, Stream<wchar_t> new_extension) {
 			bool success = ChangeFileExtension(path, new_extension);
 			if (!success) {
 				char temp_characters[512];
 				size_t written_characters = function::FormatString(temp_characters, CHANGE_FILE_EXTENSION_ERROR_STRING, path, new_extension);
 				ECS_ASSERT(written_characters < 512);
-				console->Error(Stream<char>(temp_characters, written_characters));
+				GetConsole()->Error(Stream<char>(temp_characters, written_characters));
 			}
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define EXISTS_FILE_OR_FOLDER_ERROR_STRING "File or folder {0} does not exists."
+#define EXISTS_FILE_OR_FOLDER_ERROR_STRING "File or folder {#} does not exists."
 
 		// -----------------------------------------------------------------------------------------------------
 
 		void ExistsFileOrFolderWithError(Stream<wchar_t> path, UISystem* system)
 		{
-			ErrorWindow(path, system, ExistsFileOrFolder, EXISTS_FILE_OR_FOLDER_ERROR_STRING);
+			ErrorWindow(path, ExistsFileOrFolder, EXISTS_FILE_OR_FOLDER_ERROR_STRING, system);
 		}
 
-		void ExistsFileOrFolderWithError(Stream<wchar_t> path, Console* console)
+		void ExistsFileOrFolderWithError(Stream<wchar_t> path)
 		{
-			ErrorConsole(path, console, ExistsFileOrFolder, EXISTS_FILE_OR_FOLDER_ERROR_STRING);
+			ErrorConsole(path, ExistsFileOrFolder, EXISTS_FILE_OR_FOLDER_ERROR_STRING);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
-#define DELETE_FOLDER_CONTENTS_ERROR_STRING "Deleting folder contents {0} failed."
+#define DELETE_FOLDER_CONTENTS_ERROR_STRING "Deleting folder contents {#} failed."
 
 		// -----------------------------------------------------------------------------------------------------
 
 		void DeleteFolderContentsWithError(Stream<wchar_t> path, UISystem* system)
 		{
-			ErrorWindow(path, system, DeleteFolderContents, DELETE_FOLDER_CONTENTS_ERROR_STRING);
+			ErrorWindow(path, DeleteFolderContents, DELETE_FOLDER_CONTENTS_ERROR_STRING, system);
 		}
 
-		void DeleteFolderContentsWithError(Stream<wchar_t> path, Console* console) {
-			ErrorConsole(path, console, DeleteFolderContents, DELETE_FOLDER_CONTENTS_ERROR_STRING);
+		void DeleteFolderContentsWithError(Stream<wchar_t> path) {
+			ErrorConsole(path, DeleteFolderContents, DELETE_FOLDER_CONTENTS_ERROR_STRING);
 		}
 		
 		// -----------------------------------------------------------------------------------------------------
@@ -888,11 +963,11 @@ namespace ECSEngine {
 			}
 		}
 
-		void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path, Console* console) {
+		void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path) {
 			ECS_TEMP_ASCII_STRING(error_message, 256);
 			bool success = OpenFileWithDefaultApplication(path, &error_message);
 			if (!success) {
-				console->Error(error_message);
+				GetConsole()->Error(error_message);
 			}
 		}
 

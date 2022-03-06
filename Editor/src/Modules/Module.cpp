@@ -5,9 +5,9 @@
 #include "..\Editor\EditorEvent.h"
 #include "..\Project\ProjectOperations.h"
 #include "ECSEngineWorld.h"
+#include "ModuleSettings.h"
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 
 constexpr const char* CMB_BUILD_SYSTEM_PATH = "cd C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE";
 constexpr const char* CMD_BUILD_SYSTEM = "MSBuild.exe";
@@ -34,7 +34,8 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 	L"source"
 };
 
-constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 250;
+constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
+#define BLOCK_THREAD_FOR_MODULE_STATUS_SLEEP_TICK 20
 
 #define MODULE_BUILD_USING_SHELL
 
@@ -56,28 +57,28 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
 				debug_ptr += wcslen(CMD_BUILD_SYSTEM_LOG_FILE_PATH);
 				const wchar_t* underscore_after_library_name = wcschr(debug_ptr, L'_');
 				if (underscore_after_library_name != nullptr) {
-					ECS_FORMAT_TEMP_STRING(error_message, "Module {0} have failed to build. Check the {1} log.",
+					ECS_FORMAT_TEMP_STRING(error_message, "Module {#} have failed to build. Check the {1} log.",
 						Stream<wchar_t>(debug_ptr, underscore_after_library_name - debug_ptr), CMD_BUILD_SYSTEM);
-					EditorSetConsoleError(editor_state, error_message);
+					EditorSetConsoleError(error_message);
 					return false;
 				}
 				else {
 					ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name (it's missing the underscore)."
-						" Check the {0} log.", CMD_BUILD_SYSTEM);
-					EditorSetConsoleError(editor_state, error_message);
+						" Check the {#} log.", CMD_BUILD_SYSTEM);
+					EditorSetConsoleError(error_message);
 					return false;
 				}
 			}
 			else {
-				ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {0} log.", CMD_BUILD_SYSTEM);
-				EditorSetConsoleError(editor_state, error_message);
+				ECS_FORMAT_TEMP_STRING(error_message, "A module failed to build. Could not deduce library name. Check the {#} log.", CMD_BUILD_SYSTEM);
+				EditorSetConsoleError(error_message);
 				return false;
 			}
 		}
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(error_message, "Could not open {0} to read the log. Open the file externally to check the command status.", log_path);
-		EditorSetConsoleWarn(editor_state, error_message);
+		ECS_FORMAT_TEMP_STRING(error_message, "Could not open {#} to read the log. Open the file externally to check the command status.", log_path);
+		EditorSetConsoleWarn(error_message);
 		return false;
 	}
 
@@ -113,32 +114,32 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 
 	if (!ExistsFileOrFolder(solution_path)) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Project module {0} solution does not exist.", solution_path);
+		error_message.size = function::FormatString(error_message.buffer, "Project module {#} solution does not exist.", solution_path);
 		error_message.AssertCapacity();
-		EditorSetConsoleError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		return false;
 	}
 
 	unsigned int module_index = ProjectModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Project module {0} already exists.", solution_path);
+		error_message.size = function::FormatString(error_message.buffer, "Project module {#} already exists.", solution_path);
 		error_message.AssertCapacity();
-		EditorSetConsoleError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		return false;
 	}
 
 	if ((unsigned int)configuration >= (unsigned int)EditorModuleConfiguration::Count) {
 		ECS_FORMAT_TEMP_STRING(
 			error_message,
-			"Project module {0} has configuration {1} which is invalid. Expected {2}, {3} or {4}.",
+			"Project module {#} has configuration {#} which is invalid. Expected {#}, {#} or {#}.",
 			solution_path,
 			(unsigned char)configuration,
 			STRING(EditorModuleConfiguration::Debug),
 			STRING(EditorModuleConfiguration::Release),
 			STRING(EditorModuleConfiguration::Distribution)
 		);
-		EditorSetConsoleError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		return false;
 	}
 
@@ -161,6 +162,9 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 	module->solution_path[module->solution_path.size] = L'\0';
 	module->library_name.Copy(library_name);
 	module->library_name[module->library_name.size] = L'\0';
+
+	module->reflected_settings = HashTableDefault<void*>();
+	module->current_settings_path = { nullptr, 0 };
 	project_modules->size++;
 
 	// Add the module to the reflection table
@@ -171,14 +175,22 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 		// Launch thread tasks to process this new entry
 		success = editor_state->module_reflection->reflection->ProcessFolderHierarchy(folder_hierarchy, editor_state->task_manager);
 		if (!success) {
-			ECS_FORMAT_TEMP_STRING(console_message, "Could not reflect the new added module {0} at {1}.", module->library_name, module->solution_path);
-			EditorSetConsoleWarn(editor_state, console_message);
+			ECS_FORMAT_TEMP_STRING(console_message, "Could not reflect the new added module {#} at {#}.", module->library_name, module->solution_path);
+			EditorSetConsoleWarn(console_message);
 		}
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(console_message, "Could not find source folder for module {0} at {1}.", module->library_name, module->solution_path);
-		EditorSetConsoleWarn(editor_state, console_message);
+		ECS_FORMAT_TEMP_STRING(console_message, "Could not find source folder for module {#} at {#}.", module->library_name, module->solution_path);
+		EditorSetConsoleWarn(console_message);
 	}
+
+	UpdateProjectModuleLastWrite(editor_state, project_modules->size - 1);
+
+	// Update the console such that it contains as filter string the module
+	Console* console = GetConsole();
+	ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
+	function::ConvertWideCharsToASCII(module->library_name, ascii_name);
+	console->AddSystemFilterString(ascii_name);
 
 	return true;
 }
@@ -188,6 +200,7 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 struct CheckBuildStatusThreadData {
 	EditorState* editor_state;
 	Stream<wchar_t> path;
+	unsigned char* report_status;
 };
 
 ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
@@ -217,13 +230,21 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 		if (underscore != nullptr) {
 			Stream<wchar_t> command(extension.buffer + 1, extension.size - 1);
 
-			ECS_FORMAT_TEMP_STRING(console_string, "Command {0} for module {1} with configuration {2} completed successfully.", command, library_name, configuration);
-			EditorSetConsoleInfo(data->editor_state, console_string);
+			ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} with configuration {#} completed successfully.", command, library_name, configuration);
+			EditorSetConsoleInfo(console_string);
 		}
 		else {
-			EditorSetConsoleWarn(data->editor_state, ToStream("Could not deduce build command type, library name or configuration."));
-			EditorSetConsoleInfo(data->editor_state, ToStream("A module finished building successfully."));
+			EditorSetConsoleWarn(ToStream("Could not deduce build command type, library name or configuration."));
+			EditorSetConsoleInfo(ToStream("A module finished building successfully."));
 		}
+
+		if (data->report_status != nullptr) {
+			*data->report_status = 1;
+		}
+
+	}
+	else if (data->report_status != nullptr) {
+		*data->report_status = 0;
 	}
 
 	Stream<wchar_t> launched_compilation_string(library_name.buffer, configuration.buffer + configuration.size - library_name.buffer);
@@ -244,8 +265,8 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 
 	// Warn if the module could not be find in the launched module compilation
 	if (index != -1) {
-		ECS_FORMAT_TEMP_STRING(console_string, "Module {0} with configuration {1} could not be find in the compilation list.", library_name, configuration);
-		EditorSetConsoleWarn(data->editor_state, console_string);
+		ECS_FORMAT_TEMP_STRING(console_string, "Module {#} with configuration {#} could not be find in the compilation list.", library_name, configuration);
+		EditorSetConsoleWarn(console_string);
 	}
 
 	// The path must be deallocated
@@ -255,7 +276,12 @@ ECS_THREAD_TASK(CheckBuildStatusThreadTask) {
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void ForEachProjectModule(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses, EDITOR_LAUNCH_BUILD_COMMAND_STATUS (*build_function)(EditorState*, unsigned int)) {
+void ForEachProjectModule (
+	EditorState* editor_state,
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses,
+	unsigned char* build_statuses,
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS (*build_function)(EditorState*, unsigned int, unsigned char*)
+) {
 	EDITOR_STATE(editor_state);
 
 	// Clear the log file first
@@ -265,9 +291,36 @@ void ForEachProjectModule(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND
 	size_t module_count = project_modules->size;
 	// The graphics module located at 1 must be skipped if it is not set
 	bool starting_index = project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size == 0;
-	for (unsigned int index = starting_index; index < module_count; index++) {
-		statuses[index] = build_function(editor_state, index);
+
+	// Make sure that the graphics module is set to skipped if it doesn't exist
+	statuses[GRAPHICS_MODULE_INDEX] = EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED;
+
+	if (build_statuses) {
+		build_statuses[GRAPHICS_MODULE_INDEX] = 1;
+		for (unsigned int index = starting_index; index < module_count; index++) {
+			build_statuses[index] = -1;
+			statuses[index] = build_function(editor_state, index, build_statuses + index);
+		}
+
+		auto have_finished = [build_statuses, module_count]() {
+			for (size_t index = 0; index < module_count; index++) {
+				if (build_statuses[index] == -1) {
+					return false;
+				}
+			}
+			return true;
+		};
+		
+		while (!have_finished()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(BLOCK_THREAD_FOR_MODULE_STATUS_SLEEP_TICK));
+		}
 	}
+	else {
+		for (unsigned int index = starting_index; index < module_count; index++) {
+			statuses[index] = build_function(editor_state, index, nullptr);
+		}
+	}
+
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -315,7 +368,7 @@ void CommandLineString(const EditorState* editor_state, CapacityStream<wchar_t>&
 
 // Returns whether or not the command actually will be executed. The command can be skipped if the module is in flight
 // running another command
-EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t> command) {
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(EditorState* editor_state, unsigned int index, Stream<wchar_t> command, unsigned char* report_status = nullptr) {
 	EDITOR_STATE(editor_state);
 
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
@@ -366,13 +419,13 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(EditorState* editor_state, unsi
 	bool succeded = PrintCommandStatus(editor_state, log_path);
 
 	if (succeded) {
-		ECS_FORMAT_TEMP_STRING(console_string, "Command {0} for module {1} ({2}) with configuration {3} completed successfully.", command, library_name, solution_path, configuration);
+		ECS_FORMAT_TEMP_STRING(console_string, "Command {#} for module {#} ({#}) with configuration {#} completed successfully.", command, library_name, solution_path, configuration);
 		EditorSetConsoleInfoFocus(editor_state, console_string);
 	}
 #else
 	HINSTANCE value = ShellExecute(NULL, L"runas", L"C:\\Windows\\System32\\cmd.exe", command_string.buffer, L"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\MSBuild\\Current\\Bin", SW_HIDE);
 	if ((uint64_t)value < 32) {
-		EditorSetConsoleError(editor_state, ToStream("An error occured when creating the command prompt that builds the module."));
+		EditorSetConsoleError(ToStream("An error occured when creating the command prompt that builds the module."));
 		return EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING;
 	}
 	else {
@@ -386,8 +439,9 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(EditorState* editor_state, unsi
 		check_data.editor_state = editor_state;
 		check_data.path.buffer = (wchar_t*)multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * (flag_file.size + 1));
 		check_data.path.Copy(flag_file);
+		check_data.report_status = report_status;
 		
-		task_manager->AddDynamicTaskAndWake({ CheckBuildStatusThreadTask, &check_data, sizeof(check_data) });
+		task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(CheckBuildStatusThreadTask, &check_data, sizeof(check_data)));
 	}
 	return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 #endif
@@ -395,14 +449,15 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(EditorState* editor_state, unsi
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildProjectModule(EditorState* editor_state, unsigned int index) {
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildProjectModule(EditorState* editor_state, unsigned int index, unsigned char* report_status) {
 	ProjectModules* modules = editor_state->project_modules;
 	if (UpdateProjectModuleLastWrite(editor_state, index) || modules->buffer[index].load_status != EditorModuleLoadStatus::Good) {
-		return RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING_WIDE));
+		modules->buffer[index].load_status = EditorModuleLoadStatus::Failed;
+		return RunCmdCommand(editor_state, index, ToStream(BUILD_PROJECT_STRING_WIDE), report_status);
 	}
 	// The callback will check the status of this function and report accordingly to the console
 	/*else {
-		ECS_FORMAT_TEMP_STRING(console_message, "Module {0} with configuration {1} is up to date.", 
+		ECS_FORMAT_TEMP_STRING(console_message, "Module {#} with configuration {#} is up to date.", 
 			modules->buffer[index].library_name, MODULE_CONFIGURATIONS[(unsigned int)modules->buffer[index].configuration]);
 		EditorSetConsoleInfo(editor_state, console_message);
 	}*/
@@ -411,33 +466,64 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildProjectModule(EditorState* editor_state,
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void BuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses)
+bool BuildProjectModulesAndLoad(EditorState* editor_state)
 {
-	ForEachProjectModule(editor_state, statuses, BuildProjectModule);
+	size_t module_count = editor_state->project_modules->size;
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * module_count);
+	unsigned char* build_status = (unsigned char*)ECS_STACK_ALLOC(sizeof(unsigned char) * module_count);
+	
+	BuildProjectModules(editor_state, launch_statuses, build_status);
+
+	size_t starting_index = !HasGraphicsModule(editor_state);
+	for (size_t index = starting_index; index < module_count; index++) {
+		if (launch_statuses[index] == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING || launch_statuses[index] == EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING
+			|| build_status[index] == 0) {
+			return false;
+		}
+	}
+
+	// Go through all modules and try to load their modules
+	for (size_t index = starting_index; index < module_count; index++) {
+		bool load_success = LoadEditorModule(editor_state, index);
+		if (!load_success) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanProjectModule(EditorState* editor_state, unsigned int index) {
+void BuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses, unsigned char* build_statuses)
+{
+	ForEachProjectModule(editor_state, launch_statuses, build_statuses, BuildProjectModule);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanProjectModule(EditorState* editor_state, unsigned int index, unsigned char* build_status) {
+	editor_state->project_modules->buffer[index].load_status = EditorModuleLoadStatus::Failed;
 	return RunCmdCommand(editor_state, index, ToStream(CLEAN_PROJECT_STRING_WIDE));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void CleanProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses) {
-	ForEachProjectModule(editor_state, statuses, CleanProjectModule);
+void CleanProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses, unsigned char* build_statuses) {
+	ForEachProjectModule(editor_state, launch_statuses, build_statuses, CleanProjectModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildProjectModule(EditorState* editor_state, unsigned int index) {
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildProjectModule(EditorState* editor_state, unsigned int index, unsigned char* build_status) {
+	editor_state->project_modules->buffer[index].load_status = EditorModuleLoadStatus::Failed;
 	return RunCmdCommand(editor_state, index, ToStream(REBUILD_PROJECT_STRING_WIDE));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void RebuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses) {
-	ForEachProjectModule(editor_state, statuses, RebuildProjectModule);
+void RebuildProjectModules(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses, unsigned char* build_statuses) {
+	ForEachProjectModule(editor_state, launch_statuses, build_statuses, RebuildProjectModule);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -450,7 +536,7 @@ void DeleteProjectModuleFlagFiles(EditorState* editor_state)
 	auto functor = [](const wchar_t* path, void* _data) {
 		bool success = RemoveFile(path);
 		if (!success) {
-			EditorSetConsoleWarn((EditorState*)_data, ToStream("Could not delete a build flag file. A manual deletion should be done."));
+			EditorSetConsoleWarn(ToStream("Could not delete a build flag file. A manual deletion should be done."));
 		}
 		return true;
 	};
@@ -497,6 +583,12 @@ void InitializeModuleConfigurations(EditorState* editor_state)
 		editor_state->module_configuration_definitions[index].InitializeFromBuffer(buffer, string_sizes[index]);
 		editor_state->module_configuration_definitions[index].Copy(Stream<char>(MODULE_CONFIGURATIONS[index], string_sizes[index]));
 	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index) {
+	return editor_state->project_modules->buffer[index].ecs_module.code = ModuleStatus::ECS_GET_MODULE_OK;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -675,7 +767,7 @@ unsigned char GetModuleConfigurationChar(const EditorState* editor_state, unsign
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int index, containers::CapacityStream<wchar_t>& path)
+bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int index, CapacityStream<wchar_t>& path)
 {
 	Stream<wchar_t> solution_path = editor_state->project_modules->buffer[index].solution_path;
 	Stream<wchar_t> solution_parent = function::PathParent(solution_path);
@@ -696,11 +788,54 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void LoadEditorModule( EditorState* editor_state, unsigned int index) {
+unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, unsigned int module_index)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, reflection_path, 512);
+	bool success = GetModuleReflectSolutionPath(editor_state, module_index, reflection_path);
+	if (success) {
+		return editor_state->module_reflection->reflection->GetHierarchyIndex(reflection_path.buffer);
+	}
+	return -1;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool CreateEditorModuleTemporaryDLL(CapacityStream<wchar_t> library_path, CapacityStream<wchar_t>& temporary_path) {
+	temporary_path.Copy(library_path);
+	temporary_path.size -= wcslen(ECS_MODULE_EXTENSION);
+	temporary_path.AddStream(ToStream(L"_temp"));
+	temporary_path.AddStreamSafe(ToStream(ECS_MODULE_EXTENSION));
+	temporary_path[temporary_path.size] = L'\0';
+
+	// Copy the .dll to a temporary dll such that it will allow building the module again
+	return FileCopy(library_path.buffer, temporary_path.buffer, false, true);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool LoadEditorModule(EditorState* editor_state, unsigned int index) {
+	// If the module is already loaded, release it
+	if (IsEditorModuleLoaded(editor_state, index)) {
+		ReleaseProjectModuleTasks(editor_state, index);
+		editor_state->project_modules->buffer[index].ecs_module.code = ModuleStatus::ECS_GET_MODULE_FAULTY_PATH;
+	}
+
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	ECS_TEMP_STRING(library_path, 256);
+	ECS_TEMP_STRING(library_path, 512);
 	GetModulePath(editor_state, modules->buffer[index].library_name, modules->buffer[index].configuration, library_path);
-	modules->buffer[index].ecs_module = LoadModule(library_path);
+
+	ECS_TEMP_STRING(temporary_library, 512);
+	// Copy the .dll to a temporary dll such that it will allow building the module again
+	bool copy_success = CreateEditorModuleTemporaryDLL(library_path, temporary_library);
+	if (copy_success) {
+		modules->buffer[index].ecs_module = LoadModule(temporary_library, editor_state->ActiveWorld(), GetAllocatorPolymorphic(editor_state->editor_allocator));
+		return modules->buffer[index].load_status == EditorModuleLoadStatus::Good;
+	}
+	else {
+		ECS_FORMAT_TEMP_STRING(error_message, "Could not create temporary module for {#}. The module tasks have not been loaded.", library_path);
+		EditorSetConsoleError(error_message);
+	}
+	return false;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -745,7 +880,10 @@ bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, Capaci
 	if (project_modules->buffer[index].ecs_module.code != ECS_GET_MODULE_OK) {
 		ECS_TEMP_STRING(module_path, 256);
 		GetModulePath(editor_state, project_modules->buffer[index].library_name, project_modules->buffer[index].configuration, module_path);
-		project_modules->buffer[index].ecs_module = LoadModule(module_path, editor_state->ActiveWorld(), GetAllocatorPolymorphic(editor_allocator));
+		ECS_TEMP_STRING(temporary_path, 512);
+		if (CreateEditorModuleTemporaryDLL(module_path, temporary_path)) {
+			project_modules->buffer[index].ecs_module = LoadModule(temporary_path, editor_state->ActiveWorld(), GetAllocatorPolymorphic(editor_allocator));
+		}
 	}
 
 	if (project_modules->buffer[index].ecs_module.tasks.buffer != nullptr) {
@@ -761,6 +899,13 @@ bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, Capaci
 	project_modules->buffer[index].load_status = EditorModuleLoadStatus::Failed;
 	project_modules->buffer[index].ecs_module.tasks = { nullptr, 0 };
 	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void ReleaseProjectModuleTasks(EditorState* editor_state, unsigned int index)
+{
+	ReleaseModule(editor_state->project_modules->buffer[index].ecs_module, GetAllocatorPolymorphic(editor_state->editor_allocator));
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -793,18 +938,42 @@ bool UpdateProjectModuleSolutionLastWrite(EditorState* editor_state, unsigned in
 
 	// Update the reflection types if it necessary
 	if (solution_last_write < modules->buffer[index].solution_last_write_time) {
+		if (modules->buffer[index].current_settings_path.buffer != nullptr) {
+			// Save the current settings, destroy it, recreate it and load the file
+			bool success = SaveModuleSettings(editor_state, index);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "Failed to save settings before re-updating the reflection types for module {#}.", modules->buffer[index].library_name);
+				EditorSetConsoleWarn(error_message);
+			}
+			DestroyModuleSettings(editor_state, index);
+		}
+
 		ECS_TEMP_STRING(source_path, 512);
 		bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 		if (success) {
 			success = editor_state->module_reflection->reflection->UpdateFolderHierarchy(source_path.buffer, editor_state->task_manager);
 			if (!success) {
-				ECS_FORMAT_TEMP_STRING(console_message, "An error occured during reflection update for module {0}.", modules->buffer[index].solution_path);
-				EditorSetConsoleWarn(editor_state, console_message);
+				ECS_FORMAT_TEMP_STRING(console_message, "An error occured during reflection update for module {#}.", modules->buffer[index].solution_path);
+				EditorSetConsoleWarn(console_message);
 			}
 		}
 		else {
-			ECS_FORMAT_TEMP_STRING(console_message, "Could not find module's {0} source folder.", modules->buffer[index].library_name);
-			EditorSetConsoleWarn(editor_state, console_message);
+			ECS_FORMAT_TEMP_STRING(console_message, "Could not find module's {#} source folder.", modules->buffer[index].library_name);
+			EditorSetConsoleWarn(console_message);
+		}
+
+		if (modules->buffer[index].current_settings_path.buffer == nullptr) {
+			ChangeModuleSettings(editor_state, ToStream(MODULE_DEFAULT_SETTINGS_PATH), index);
+			CreateModuleSettings(editor_state, index);
+		}
+		else {
+			CreateModuleSettings(editor_state, index);
+			success = LoadModuleSettings(editor_state, index);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "Failed to reload the settings values from path {#} for module {#}. The current settings have default values or zeroed out.",
+					modules->buffer[index].current_settings_path, modules->buffer[index].library_name);
+				EditorSetConsoleWarn(error_message);
+			}
 		}
 	}
 
@@ -834,21 +1003,20 @@ void ReleaseProjectModule(EditorState* editor_state, unsigned int index) {
 	bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 	if (success) {
 		// Release the UI instances and types
-		unsigned int hierarchy_index = editor_state->ui_reflection->reflection->GetHierarchyIndex(source_path.buffer);
+		unsigned int hierarchy_index = editor_state->module_reflection->reflection->GetHierarchyIndex(source_path.buffer);
 		ECS_ASSERT(hierarchy_index != -1);
-		editor_state->ui_reflection->DestroyAllFromFolderHierarchy(hierarchy_index);
-		editor_state->ui_reflection->reflection->RemoveFolderHierarchy(hierarchy_index);
+		editor_state->module_reflection->DestroyAllFromFolderHierarchy(hierarchy_index);
+		editor_state->module_reflection->reflection->RemoveFolderHierarchy(hierarchy_index);
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(console_message, "Could not find module's {0} source folder.", modules->buffer[index].library_name);
-		EditorSetConsoleWarn(editor_state, console_message);
+		ECS_FORMAT_TEMP_STRING(console_message, "Could not find module's {#} source folder.", modules->buffer[index].library_name);
+		EditorSetConsoleWarn(console_message);
 	}
 
-	if (modules->buffer[index].load_status != EditorModuleLoadStatus::Failed) {
+	if (IsEditorModuleLoaded(editor_state, index)) {
 		ReleaseModule(modules->buffer[index].ecs_module, GetAllocatorPolymorphic(editor_allocator));
-
-		RemoveProjectModuleAssociatedFiles(editor_state, index);
 	}
+	RemoveProjectModuleAssociatedFiles(editor_state, index);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -879,8 +1047,8 @@ void RemoveProjectModule(EditorState* editor_state, Stream<wchar_t> solution_pat
 		return;
 	}
 	ECS_TEMP_ASCII_STRING(error_message, 256);
-	error_message.size = function::FormatString(error_message.buffer, "Removing project module {0} failed. No such module exists.", solution_path);
-	EditorSetError(editor_state, error_message);
+	error_message.size = function::FormatString(error_message.buffer, "Removing project module {#} failed. No such module exists.", solution_path);
+	EditorSetConsoleError(error_message);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -901,7 +1069,7 @@ void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, unsigned int 
 		path.size = path_size;
 		path.AddStreamSafe(ToStream(MODULE_ASSOCIATED_FILES[index]));
 		if (ExistsFileOrFolder(path)) {
-			OS::DeleteFileWithError(path, console);
+			OS::DeleteFileWithError(path);
 		}
 	}
 }
@@ -913,8 +1081,8 @@ void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_
 	unsigned int module_index = ProjectModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
 		RemoveProjectModuleAssociatedFiles(editor_state, module_index);
-		ECS_FORMAT_TEMP_STRING(error_message, "Could not find module with solution path {0}.", solution_path);
-		EditorSetConsoleError(editor_state, error_message);
+		ECS_FORMAT_TEMP_STRING(error_message, "Could not find module with solution path {#}.", solution_path);
+		EditorSetConsoleError(error_message);
 	}
 }
 
@@ -970,37 +1138,39 @@ bool SetProjectGraphicsModule(EditorState* editor_state, Stream<wchar_t> solutio
 
 	if (!ExistsFileOrFolder(solution_path)) {
 		ECS_TEMP_ASCII_STRING(error_message, 512);
-		error_message.size = function::FormatString(error_message.buffer, "Graphics module {0} solution does not exist.", solution_path);
+		error_message.size = function::FormatString(error_message.buffer, "Graphics module {#} solution does not exist.", solution_path);
 		error_message.AssertCapacity();
-		EditorSetConsoleError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		return false;
 	}
 
 	unsigned int module_index = ProjectModuleIndex(editor_state, solution_path);
 	if (module_index != -1) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Graphics module {0} already exists.", solution_path);
+		error_message.size = function::FormatString(error_message.buffer, "Graphics module {#} already exists.", solution_path);
 		error_message.AssertCapacity();
-		EditorSetConsoleError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		return false;
 	}
 
 	if ((unsigned int)configuration >= (unsigned int)EditorModuleConfiguration::Count) {
 		ECS_FORMAT_TEMP_STRING(
 			error_message,
-			"Graphics module {0} has configuration {1} which is invalid. Expected {2}, {3} or {4}.",
+			"Graphics module {#} has configuration {#} which is invalid. Expected {#}, {#} or {#}.",
 			solution_path,
 			(unsigned char)configuration,
 			STRING(EditorModuleConfiguration::Debug),
 			STRING(EditorModuleConfiguration::Release),
 			STRING(EditorModuleConfiguration::Distribution)
 		);
-		EditorSetConsoleError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		return false;
 	}
 
-	ReleaseProjectModule(editor_state, GRAPHICS_MODULE_INDEX);
 	EditorModule* module = project_modules->buffer + GRAPHICS_MODULE_INDEX;
+	if (module->solution_path.buffer != nullptr) {
+		ReleaseProjectModule(editor_state, GRAPHICS_MODULE_INDEX);
+	}
 
 	size_t total_size = (solution_path.size + library_name.size) * sizeof(wchar_t);
 	void* allocation = editor_allocator->Allocate(total_size, alignof(wchar_t));
@@ -1012,6 +1182,9 @@ bool SetProjectGraphicsModule(EditorState* editor_state, Stream<wchar_t> solutio
 
 	module->solution_path.Copy(solution_path);
 	module->library_name.Copy(library_name);
+
+	UpdateProjectModuleLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
+
 	return true;
 }
 

@@ -10,10 +10,58 @@
 #include "../Modules/Module.h"
 #include "../Metafiles/Metafiles.h"
 #include "../Project/ProjectFolders.h"
+#include "../Project/ProjectBackup.h"
+#include "EditorWorld.h"
 
 using namespace ECSEngine;
 
-unsigned short LAZY_EVALUATION_CREATE_DEFAULT_METAFILES_THRESHOLD = 500;
+#define LAZY_EVALUATION_CREATE_DEFAULT_METAFILES_THRESHOLD 500
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorSetConsoleError(Stream<char> error_message) {
+	Console* console = GetConsole();
+	console->Error(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorSetConsoleWarn(Stream<char> error_message) {
+	Console* console = GetConsole();
+	console->Warn(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorSetConsoleInfo(Stream<char> error_message) {
+	Console* console = GetConsole();
+	console->Info(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorSetConsoleTrace(Stream<char> error_message) {
+	Console* console = GetConsole();
+	console->Trace(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorStateSetFlag(EditorState* editor_state, size_t flag) {
+	function::SetFlagAtomic(editor_state->flags, flag);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorStateClearFlag(EditorState* editor_state, size_t flag) {
+	function::ClearFlagAtomic(editor_state->flags, flag);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+bool EditorStateHasFlag(EditorState* editor_state, size_t flag) {
+	return function::HasFlagAtomic(editor_state->flags, flag);
+}
 
 // -----------------------------------------------------------------------------------------------------------------
 
@@ -24,10 +72,11 @@ void TickEvents(EditorState* editor_state) {
 
 	EditorEvent editor_event;
 	unsigned int event_index = 0;
-	while (event_count < event_count) {
+	while (event_index < event_count) {
 		editor_state->event_queue.PopNonAtomic(editor_event);
 		EditorEventFunction event_function = (EditorEventFunction)editor_event.function;
 		event_function(editor_state, editor_event.data);
+		event_index++;
 	}
 }
 
@@ -63,7 +112,7 @@ void TickCreateDefaultMetafiles(EditorState* editor_state) {
 void TickGPUTasks(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
-	if (editor_state->gpu_tasks.GetSize() > 0 && !function::HasFlagAtomic(editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
+	if (editor_state->gpu_tasks.GetSize() > 0 && !EditorStateHasFlag(editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 		ThreadTask gpu_task;
 		while (editor_state->gpu_tasks.Pop(gpu_task)) {
 			gpu_task.function(0, nullptr, gpu_task.data);
@@ -78,7 +127,7 @@ void TickGPUTasks(EditorState* editor_state) {
 
 void TickPendingTasks(EditorState* editor_state) {
 	// If there are pending tasks left to add and the flag is not set
-	if (editor_state->pending_background_tasks.GetSize() > 0 && !function::HasFlagAtomic(editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
+	if (editor_state->pending_background_tasks.GetSize() > 0 && !EditorStateHasFlag(editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 		ThreadTask background_task;
 		while (editor_state->pending_background_tasks.Pop(background_task)) {
 			editor_state->task_manager->AddDynamicTaskAndWake(background_task);
@@ -94,13 +143,22 @@ void TickPendingTasks(EditorState* editor_state) {
 void EditorStateProjectTick(EditorState* editor_state) {
 	TickLazyEvaluationCounters(editor_state);
 
-	DirectoryExplorerTick(editor_state);
-	ModuleExplorerTick(editor_state);
-	FileExplorerTick(editor_state);
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_FREEZE_TICKS)) {
+		if (ProjectNeedsBackup(editor_state)) {
+			bool autosave_success = SaveProjectBackup(editor_state);
+			if (autosave_success) {
+				ResetProjectNeedsBackup(editor_state);
+			}
+		}
 
-	TickEvents(editor_state);
-	TickPendingTasks(editor_state);
-	TickCreateDefaultMetafiles(editor_state);
+		DirectoryExplorerTick(editor_state);
+		ModuleExplorerTick(editor_state);
+		FileExplorerTick(editor_state);
+
+		TickEvents(editor_state);
+		TickPendingTasks(editor_state);
+		TickCreateDefaultMetafiles(editor_state);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -114,7 +172,7 @@ void EditorStateHubTick(EditorState* editor_state) {
 
 void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTask task)
 {
-	if (!function::HasFlagAtomic(editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 		editor_state->task_manager->AddDynamicTaskAndWake(task);
 	}
 	else {
@@ -179,19 +237,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->viewport_texture_depth = viewport_depth_view;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
-	*editor_task_manager = TaskManager(std::thread::hardware_concurrency() - 1, editor_allocator, 32);
+	*editor_task_manager = TaskManager(std::thread::hardware_concurrency() - 1, global_memory_manager, 1000, 100'000);
 	editor_state->task_manager = editor_task_manager;
-
-#if 1
-	MemoryManager* system_manager_allocator = (MemoryManager*)malloc(sizeof(MemoryManager)); 
-	*system_manager_allocator = DefaultSystemManagerAllocator(global_memory_manager);
-
-	SystemManager* system_manager = (SystemManager*)malloc(sizeof(SystemManager));
-	*system_manager = SystemManager(editor_task_manager, system_manager_allocator);
-#endif
-
-	World* dummy_world = (World*)malloc(sizeof(World));
-	*dummy_world = World(global_memory_manager, nullptr, system_manager, nullptr);
 
 	// The task wrappers use the 
 	editor_task_manager->m_world = nullptr;
@@ -274,18 +321,16 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->hub_data = hub_data;
 	
 	ProjectFile* project_file = (ProjectFile*)malloc(sizeof(ProjectFile));
-	project_file->source_dll_name.Initialize(resizable_arena, 0, 64);
+	project_file->project_settings.Initialize(resizable_arena, 0, 64);
 	project_file->project_name.Initialize(resizable_arena, 0, 64);
 	project_file->path.Initialize(resizable_arena, 0, 256);
 	editor_state->project_file = project_file;
 
 	MemoryManager* console_memory_manager = (MemoryManager*)malloc(sizeof(MemoryManager));
 	*console_memory_manager = DefaultConsoleAllocator(global_memory_manager);
-	Console* console = (Console*)malloc(sizeof(Console));
-	*console = Console(console_memory_manager, editor_task_manager, CONSOLE_RELATIVE_DUMP_PATH);
-	editor_state->console = console;
+	SetConsole(console_memory_manager, editor_task_manager, CONSOLE_RELATIVE_DUMP_PATH);
 
-	console->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
+	GetConsole()->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
 	InitializeModuleConfigurations(editor_state);
 
 	FileExplorerData* file_explorer_data = (FileExplorerData*)calloc(1, sizeof(FileExplorerData));
@@ -309,9 +354,15 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	InspectorData* inspector_data = (InspectorData*)calloc(1, sizeof(InspectorData));
 	editor_state->inspector_data = inspector_data;
 
-	World* scene_worlds = (World*)calloc(EDITOR_SCENE_BUFFERING_COUNT, sizeof(World));
+	EditorState::EditorWorld* scene_worlds = (EditorState::EditorWorld*)calloc(EDITOR_SCENE_BUFFERING_COUNT, sizeof(EditorState::EditorWorld));
 	editor_state->active_world = 0;
+	editor_state->scene_world = 0;
+	editor_state->copy_world_count.store(0, ECS_RELAXED);
 	editor_state->worlds.InitializeFromBuffer(scene_worlds, EDITOR_SCENE_BUFFERING_COUNT, EDITOR_SCENE_BUFFERING_COUNT);
+	// The is_emtpy flag must be set, not cleared
+	for (size_t index = 0; index < EDITOR_SCENE_BUFFERING_COUNT; index++) {
+		editor_state->worlds[index].is_empty = true;
+	}
 	
 	// Allocate the lazy evaluation counters
 	editor_state->lazy_evaluation_counters = (unsigned short*)malloc(EDITOR_LAZY_EVALUATION_COUNTERS_COUNT * sizeof(unsigned short));
@@ -319,6 +370,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	memset(editor_state->lazy_evaluation_counters, 0xFF, sizeof(unsigned short) * EDITOR_LAZY_EVALUATION_COUNTERS_COUNT);
 
 	ResetProjectGraphicsModule(editor_state);
+	editor_state->lazy_evalution_timer.SetNewStart();
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -363,5 +415,7 @@ void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index,
 {
 	editor_state->lazy_evaluation_counters[index] = value;
 }
+
+// -----------------------------------------------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------------------------------------------

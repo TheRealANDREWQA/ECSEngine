@@ -4,8 +4,6 @@
 #include "../File.h"
 #include "../../Containers/Stream.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------

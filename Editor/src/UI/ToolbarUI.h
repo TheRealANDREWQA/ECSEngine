@@ -15,10 +15,12 @@ enum TOOLBAR_WINDOW_MENU_INDEX {
 	TOOLBAR_WINDOW_MENU_FILE_EXPLORER,
 	TOOLBAR_WINDOW_MENU_MODULE_EXPLORER,
 	TOOLBAR_WINDOW_MENU_INSPECTOR,
+	TOOLBAR_WINDOW_MENU_SETTINGS,
+	TOOLBAR_WINDOW_MENU_BACKUPS,
 	TOOLBAR_WINDOW_MENU_COUNT
 };
 
-#define TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION "Inject Window\nGame\nConsole\nDirectory Explorer\nFile Explorer\nModule Explorer\nInspector"
+#define TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION "Inject Window\nGame\nConsole\nDirectory Explorer\nFile Explorer\nModule Explorer\nInspector\nSettings\nBackups"
 
 struct EditorState;
 

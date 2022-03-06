@@ -1402,6 +1402,8 @@ namespace ECSEngine {
 			template<bool destroy_dockspace_if_last = true>
 			ECSENGINE_API void RemoveWindowFromDockspaceRegion(unsigned int window_index);
 
+			// The last boolean tells the system if to keep the fixed dockspace even if it doesn't currently hold any windows
+			// Useful for pop up windows
 			template<bool destroy_windows = true>
 			ECSENGINE_API void RemoveDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, DockspaceType type);
 

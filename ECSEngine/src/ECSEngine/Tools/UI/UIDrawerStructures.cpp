@@ -237,18 +237,18 @@ namespace ECSEngine {
 			hierarchy_extra->row_y_scale = bounds.y - bounds.x;
 		}
 
-		void UIDrawerSentenceBase::SetWhitespaceCharacters(const char* characters, size_t character_count)
+		void UIDrawerSentenceBase::SetWhitespaceCharacters(const char* characters, size_t character_count, char parse_token)
 		{
 			unsigned int temp_chars[256];
 			Stream<unsigned int> temp_stream = { temp_chars, 0 };
-			function::FindWhitespaceCharacters(characters, temp_stream);
+			function::FindWhitespaceCharacters(temp_stream, characters, parse_token);
 
 			for (size_t index = 0; index < temp_stream.size; index++) {
 				whitespace_characters[index].position = temp_stream[index];
 				whitespace_characters[index].type = characters[temp_stream[index]];
 			}
 			whitespace_characters.size = temp_stream.size;
-			whitespace_characters.Add({ (unsigned short)character_count, ' ' });
+			whitespace_characters.Add({ (unsigned short)character_count, parse_token });
 		}
 
 	}

@@ -4,8 +4,6 @@
 
 namespace ECSEngine {
 
-	namespace containers {
-
 #define ECS_BIT0 unsigned char(128)
 #define ECS_BIT1 unsigned char(64)
 #define ECS_BIT2 unsigned char(32)
@@ -34,7 +32,7 @@ namespace ECSEngine {
 
 			void ClearBit(size_t index);
 
-		private:
+		//private:
 			unsigned char m_value;
 		};
 
@@ -46,7 +44,7 @@ namespace ECSEngine {
 		};
 
 		// 1 means empty, 0 means full in context of block range in order to use Bitscan intrinsic
-		class ECSENGINE_API BooleanBitField
+		struct ECSENGINE_API BooleanBitField
 		{
 		public:
 			BooleanBitField(void* buffer, size_t size);
@@ -71,10 +69,10 @@ namespace ECSEngine {
 
 			static size_t MemoryOf(size_t bytes);
 
-		private:
+		//private:
 			byte64* m_buffer;
 			size_t m_size;
 		};
-	}
+
 }
 

@@ -5,7 +5,6 @@
 #include "MiscellaneousBar.h"
 #include "..\HelperWindows.h"
 
-
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 

@@ -1531,110 +1531,11 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console) {
-			// temporarly swap the \0 to \n in order to have it formatted correctly
-			char* mutable_ptr = (char*)console->messages[index].message.buffer;
-			mutable_ptr[console->messages[index].message.size] = '\n';
-			bool success = WriteFile(file, { mutable_ptr, console->messages[index].message.size + 1 });
-			mutable_ptr[console->messages[index].message.size] = '\0';
-			return success;
-		}
-
-		// ------------------------------------------------------------------------------------
-
-		void ConsoleDump(unsigned int thread_index, World* world, void* _data) {
-			ConsoleDumpData* data = (ConsoleDumpData*)_data;
-			ECS_FILE_HANDLE file = 0;
-			ECS_FILE_STATUS_FLAGS status = FileCreate(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE);
-
-			ECS_ASSERT(status == ECS_FILE_STATUS_OK);
-
-			data->console->dump_lock.lock();
-
-#pragma region Header
-
-			SYSTEMTIME system_time;
-			GetLocalTime(&system_time);
-
-			bool success = true;
-			const char header_annotation[] = "**********************************************\n";
-			size_t annotation_size = std::size(header_annotation) - 1;
-			success &= WriteFile(file, { header_annotation, annotation_size });
-
-			char time_characters[256];
-			Stream<char> time_stream = Stream<char>(time_characters, 0);
-			function::ConvertIntToChars(time_stream, system_time.wHour);
-			time_stream.Add(':');
-			function::ConvertIntToChars(time_stream, system_time.wMinute);
-			time_stream.Add(':');
-			function::ConvertIntToChars(time_stream, system_time.wSecond);
-			time_stream.Add(':');
-			function::ConvertIntToChars(time_stream, system_time.wMilliseconds);
-			time_stream.Add(' ');
-			function::ConvertIntToChars(time_stream, system_time.wDay);
-			time_stream.Add('-');
-			function::ConvertIntToChars(time_stream, system_time.wMonth);
-			time_stream.Add('-');
-			function::ConvertIntToChars(time_stream, system_time.wYear);
-			time_stream.Add(' ');
-			const char description[] = "Console output\n";
-			time_stream.AddStream(Stream<char>(description, std::size(description) - 1));
-
-			success &= WriteFile(file, { time_characters, time_stream.size });
-			success &= WriteFile(file, { header_annotation, annotation_size });
-
-#pragma endregion
-
-#pragma region Messages
-
-			for (size_t index = 0; index < data->console->messages.size && success; index++) {
-				success &= ConsoleAppendMessageToDump(file, index, data->console);
-			}
-
-			data->console->dump_lock.unlock();
-			data->console->last_dumped_message = data->console->messages.size;
-
-#pragma endregion
-
-			CloseFile(file);
-			ECS_ASSERT(success);
-		}
-
-		void ConsoleAppendToDump(unsigned int thread_index, World* world, void* _data)
-		{
-			ConsoleDumpData* data = (ConsoleDumpData*)_data;
-			ECS_FILE_HANDLE file = 0;
-			ECS_FILE_STATUS_FLAGS status = OpenFile(data->console->dump_path, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_APEND | ECS_FILE_ACCESS_TEXT);
-
-			ECS_ASSERT(status == ECS_FILE_STATUS_OK);
-
-			data->console->dump_lock.lock();
-
-			bool write_success = true;
-			for (size_t index = data->starting_index; index < data->console->messages.size && write_success; index++) {
-				write_success &= ConsoleAppendMessageToDump(file, index, data->console);
-			}
-			data->console->last_dumped_message += data->console->messages.size - data->starting_index;
-
-			data->console->dump_lock.unlock();
-			CloseFile(file);
-			ECS_ASSERT(write_success);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
 		void ConsoleClearAction(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			Console* console = (Console*)_data;
+			ECSEngine::Console* console = (ECSEngine::Console*)_data;
 			console->Clear();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		MemoryManager DefaultConsoleAllocator(GlobalMemoryManager* global_manager)
-		{
-			return MemoryManager(500'000, 1024, 500'000, global_manager);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1649,8 +1550,19 @@ namespace ECSEngine {
 			if (initialize) {
 				const size_t unique_message_default_capacity = 256;
 				data->unique_messages.Initialize(drawer.system->m_memory, unique_message_default_capacity);
-				data->system_filter = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->console->system_filter_strings.size);
-				memset(data->system_filter, 1, sizeof(bool) * data->console->system_filter_strings.size);
+				data->system_filter.buffer = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->console->system_filter_strings.size);
+				memset(data->system_filter.buffer, 1, sizeof(bool) * data->console->system_filter_strings.size);
+				data->system_filter.size = data->console->system_filter_strings.size;
+			}
+			else {
+				// Check to see if a new system was added such that we can readjust the system filter array
+				if (data->system_filter.size != data->console->system_filter_strings.size) {
+					drawer.RemoveAllocation(data->system_filter.buffer);
+					data->system_filter.buffer = (bool*)drawer.GetMainAllocatorBuffer(sizeof(bool) * data->console->system_filter_strings.size);
+					// Just set everything to 1
+					memset(data->system_filter.buffer, 1, sizeof(bool) * data->console->system_filter_strings.size);
+					data->system_filter.size = data->console->system_filter_strings.size;
+				}
 			}
 
 			UIDrawConfig config;
@@ -1714,7 +1626,7 @@ namespace ECSEngine {
 			UIConfigFilterMenuNotify menu_notify;
 			menu_notify.notifier = &data->filter_message_type_changed;
 			config.AddFlag(menu_notify);
-			drawer.FilterMenu(filter_menu_configuration, config, "Filter", filter_stream, &data->filter_info);
+			drawer.FilterMenu(filter_menu_configuration | UI_CONFIG_FILTER_MENU_COPY_LABEL_NAMES, config, "Filter", filter_stream, &data->filter_info);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1723,7 +1635,7 @@ namespace ECSEngine {
 			menu_notify.notifier = &data->system_filter_changed;
 			config.AddFlag(menu_notify);
 			Stream<const char*> system_filter_stream = Stream<const char*>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
-			drawer.FilterMenu(filter_menu_configuration, config, "System", system_filter_stream, data->system_filter);
+			drawer.FilterMenu(filter_menu_configuration, config, "System", system_filter_stream, data->system_filter.buffer);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
@@ -1783,21 +1695,22 @@ namespace ECSEngine {
 			const bool* filter_ptr = &data->filter_info;
 
 			size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
-			
-			auto draw_sentence = [&](const ConsoleMessage& console_message) {
+
+			auto draw_sentence = [&](const ConsoleMessage& console_message, unsigned int index) {
 				drawer.NextRow();
-				if (console_message.icon_type == ConsoleMessageType::None) {
+
+				if (console_message.type == ConsoleMessageType::None) {
 					drawer.OffsetX(icon_scale.x + drawer.layout.element_indentation);
 				}
 				else {
-					if (console_message.icon_type == ConsoleMessageType::Error) {
+					if (console_message.type == ConsoleMessageType::Error) {
 						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ConsoleMessageType::Error]);
 					}
 					else {
-						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.icon_type], console_message.color);
+						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.type], CONSOLE_COLORS[(unsigned int)console_message.type]);
 					}
 				}
-				parameters.color = console_message.color;
+				parameters.color = CONSOLE_COLORS[(unsigned int)console_message.type];
 
 				config.AddFlag(parameters);
 				drawer.Sentence(
@@ -1808,30 +1721,30 @@ namespace ECSEngine {
 				config.flag_count--;
 			};
 
-			auto draw_sentence_collapsed = [&](const ConsoleMessage& console_message) {
+			auto draw_sentence_collapsed = [&](const ConsoleMessage& console_message, unsigned int index) {
 				bool do_draw = true;
-				unsigned char type_index = (unsigned char)console_message.icon_type;
+				unsigned char type_index = (unsigned char)console_message.type;
 				bool is_verbosity_valid = console_message.verbosity <= data->console->verbosity_level;
 				bool is_system_valid = (console_message.system_filter & system_mask) != 0;
 				do_draw = filter_ptr[type_index] && is_verbosity_valid && is_system_valid;
 
 				if (do_draw) {
-					draw_sentence(console_message);
+					draw_sentence(console_message, index);
 				}
 
 				return do_draw;
 			};
 
 			if (data->collapse) {
-				// Draw only unique message alongside their  ounter
+				// Draw only unique message alongside their counter
 				Stream<UniqueConsoleMessage> unique_counters = data->unique_messages.GetValueStream();
 				for (size_t index = 0; index < unique_counters.size; index++) {
 					if (data->unique_messages.IsItemAt(index)) {
-						bool do_draw = draw_sentence_collapsed(unique_counters[index].message);
+						bool do_draw = draw_sentence_collapsed(unique_counters[index].message, index);
 
 						if (do_draw) {
 							// draw the counter
-							parameters.color = unique_counters[index].message.color;
+							parameters.color = CONSOLE_COLORS[(unsigned int)unique_counters[index].message.type];
 							char temp_characters[256];
 							Stream<char> temp_stream = Stream<char>(temp_characters, 0);
 							function::ConvertIntToChars(temp_stream, unique_counters[index].counter);
@@ -1856,7 +1769,7 @@ namespace ECSEngine {
 			else {
 				// Draw each message one by one
 				for (size_t index = 0; index < data->filtered_message_indices.size; index++) {
-					draw_sentence(data->console->messages[data->filtered_message_indices[index]]);
+					draw_sentence(data->console->messages[data->filtered_message_indices[index]], index);
 				}
 			}
 
@@ -2017,7 +1930,7 @@ namespace ECSEngine {
 					size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
 					for (size_t index = starting_index; index < data->console->messages.size; index++) {
-						(*ptrs[(unsigned int)data->console->messages[index].icon_type])++;
+						(*ptrs[(unsigned int)data->console->messages[index].type])++;
 						ResourceIdentifier identifier = {
 							data->console->messages[index].message.buffer + data->console->messages[index].client_message_start,
 							(unsigned int)data->console->messages[index].message.size - data->console->messages[index].client_message_start
@@ -2039,7 +1952,7 @@ namespace ECSEngine {
 						}
 
 						bool is_system_valid = (data->console->messages[index].system_filter & system_mask) != 0;
-						bool is_type_valid = type_ptrs[(unsigned int)data->console->messages[index].icon_type];
+						bool is_type_valid = type_ptrs[(unsigned int)data->console->messages[index].type];
 						bool is_verbosity_valid = data->console->messages[index].verbosity <= data->console->verbosity_level;
 						if (is_system_valid && is_type_valid && is_verbosity_valid) {
 							data->filtered_message_indices.Add(index);
@@ -2078,7 +1991,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		unsigned int CreateConsoleWindow(UISystem* system, Console* console) {
+		unsigned int CreateConsoleWindow(UISystem* system) {
 			UIWindowDescriptor descriptor;
 
 			descriptor.draw = ConsoleWindowDraw;
@@ -2089,7 +2002,7 @@ namespace ECSEngine {
 			descriptor.initial_size_y = CONSOLE_WINDOW_SIZE.y;
 
 			ConsoleWindowData window_data;
-			CreateConsoleWindowData(window_data, console);
+			CreateConsoleWindowData(window_data);
 
 			descriptor.window_data = &window_data;
 			descriptor.window_data_size = sizeof(window_data);
@@ -2100,15 +2013,15 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void CreateConsole(UISystem* system, Console* console) {
+		void CreateConsole(UISystem* system) {
 			unsigned int window_index = system->GetWindowFromName(CONSOLE_WINDOW_NAME);
 
 			if (window_index == -1) {
-				window_index = CreateConsoleWindow(system, console);
+				window_index = CreateConsoleWindow(system);
 				float2 window_position = system->GetWindowPosition(window_index);
 				float2 window_scale = system->GetWindowScale(window_index);
 				system->CreateDockspace({ window_position, window_scale }, DockspaceType::FloatingHorizontal, window_index, false);
-				console->Dump();
+				GetConsole()->Dump();
 			}
 			else {
 				system->SetActiveWindow(window_index);
@@ -2121,16 +2034,14 @@ namespace ECSEngine {
 		{
 			UI_UNPACK_ACTION_DATA;
 
-			// Create console handles the case if it already exists
-			Console* console = (Console*)_data;
-			CreateConsole(system, console);
+			CreateConsole(system);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void CreateConsoleWindowData(ConsoleWindowData& data, Console* console)
+		void CreateConsoleWindowData(ConsoleWindowData& data)
 		{
-			data.console = console;
+			data.console = GetConsole();
 			data.clear_on_play = false;
 			data.collapse = false;
 			data.filter_all = true;
@@ -2143,432 +2054,7 @@ namespace ECSEngine {
 			data.warn_count = 0;
 			data.trace_count = 0;
 			data.last_frame_message_count = 0;
-			data.filtered_message_indices = containers::ResizableStream<unsigned int>(console->messages.allocator, 0);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		Console::Console(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* _dump_path) : allocator(allocator),
-			pause_on_error(false), verbosity_level(CONSOLE_VERBOSITY_DETAILED), dump_type(ConsoleDumpType::CountMessages),
-			task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
-			format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
-			messages = containers::ResizableStream<ConsoleMessage>(GetAllocatorPolymorphic(allocator), 0);
-			system_filter_strings = containers::ResizableStream<const char*>(GetAllocatorPolymorphic(allocator), 0);
-
-			// Make a stable reference to the dump path
-			size_t dump_path_size = wcslen(_dump_path) + 1;
-			void* allocation = allocator->Allocate(sizeof(wchar_t) * dump_path_size, alignof(wchar_t));
-			memcpy(allocation, _dump_path, sizeof(wchar_t) * dump_path_size);
-			dump_path = (const wchar_t*)allocation;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Lock()
-		{
-			lock.lock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Clear()
-		{
-			for (size_t index = 0; index < messages.size; index++) {
-				allocator->Deallocate(messages[index].message.buffer);
-			}
-			messages.FreeBuffer();
-			last_dumped_message = 0;
-			Dump();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::AddSystemFilterString(const char* string)
-		{
-			AddSystemFilterString(Stream<char>(string, strlen(string)));
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::AddSystemFilterString(Stream<char> string) {
-			char* new_string = (char*)function::Copy(messages.allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char));
-			new_string[string.size] = '\0';
-			system_filter_strings.Add(new_string);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		size_t Console::GetFormatCharacterCount() const
-		{
-			size_t count = 0;
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS), 4, 0);
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS), 3, 0);
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES), 3, 0);
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR), 2, 0);
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY), 3, 0);
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH), 3, 0);
-			count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR), 5, 0);
-
-			count += 3;
-			return count;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::ConvertToMessage(const char* message, ConsoleMessage& console_message)
-		{
-			size_t size = strlen(message);
-			size_t format_character_count = GetFormatCharacterCount();
-
-			void* allocation = allocator->Allocate(sizeof(char) * (size + 1 + format_character_count), alignof(char));
-
-			Stream<char> stream = Stream<char>(allocation, 0);
-			WriteFormatCharacters(stream);
-			console_message.client_message_start = stream.size;
-
-			memcpy((void*)((uintptr_t)allocation + stream.size), message, sizeof(char) * size);
-			stream.size += size;
-			stream[stream.size] = '\0';
-			console_message.message = stream;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::ConvertToMessage(Stream<char> message, ConsoleMessage& console_message)
-		{
-			size_t format_character_count = GetFormatCharacterCount();
-
-			void* allocation = allocator->Allocate(sizeof(char) * (message.size + 1 + format_character_count), alignof(char));
-
-			Stream<char> stream = Stream<char>(allocation, 0);
-			WriteFormatCharacters(stream);
-			console_message.client_message_start = stream.size;
-
-			memcpy((void*)((uintptr_t)allocation + stream.size), message.buffer, sizeof(char) * message.size);
-			stream.size += message.size;
-			stream[stream.size] = '\0';
-			console_message.message = stream;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::ChangeDumpPath(const wchar_t* new_path)
-		{
-			ChangeDumpPath(ToStream(new_path));
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::ChangeDumpPath(Stream<wchar_t> new_path)
-		{
-			allocator->Deallocate(dump_path);
-			size_t new_path_size = new_path.size + 1;
-			void* allocation = allocator->Allocate(sizeof(wchar_t) * new_path_size, alignof(wchar_t));
-			new_path.CopyTo(allocation);
-			wchar_t* temp_char = (wchar_t*)allocation;
-			temp_char[new_path.size] = L'\0';
-			dump_path = (const wchar_t*)allocation;
-
-			Dump();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::AppendDump()
-		{
-			ConsoleDumpData dump_data;
-			dump_data.console = this;
-			dump_data.starting_index = last_dumped_message;
-
-			ThreadTask task = { ConsoleAppendToDump, &dump_data, sizeof(dump_data) };
-			task_manager->AddDynamicTaskAndWake(task);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Dump()
-		{
-			ConsoleDumpData dump_data;
-			dump_data.console = this;
-			dump_data.starting_index = 0;
-
-			ThreadTask task = { ConsoleDump, &dump_data, sizeof(dump_data) };
-			task_manager->AddDynamicTaskAndWake(task);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Message(const char* message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity)
-		{
-			using WriteFunction = void (Console::*)(const char*, size_t, unsigned char);
-			WriteFunction write_functions[] = { &Console::Info, &Console::Warn, &Console::Error, &Console::Trace, &Console::Info };
-			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Message(Stream<char> message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity) {
-			using WriteFunction = void (Console::*)(Stream<char>, size_t, unsigned char);
-			WriteFunction write_functions[] = { &Console::Info, &Console::Warn, &Console::Error, &Console::Trace, &Console::Info };
-			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::MessageAtomic(const char* message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity)
-		{
-			using WriteFunction = void (Console::*)(const char*, size_t, unsigned char);
-			WriteFunction write_functions[] = { &Console::InfoAtomic, &Console::WarnAtomic, &Console::ErrorAtomic, &Console::TraceAtomic, &Console::InfoAtomic };
-			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::MessageAtomic(Stream<char> message, ConsoleMessageType type, size_t system_filter, unsigned char verbosity)
-		{
-			using WriteFunction = void (Console::*)(Stream<char>, size_t, unsigned char);
-			WriteFunction write_functions[] = { &Console::InfoAtomic, &Console::WarnAtomic, &Console::ErrorAtomic, &Console::TraceAtomic, &Console::InfoAtomic };
-			(this->*write_functions[(unsigned int)type])(message, system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Write(const char* message, ConsoleMessage& console_message)
-		{
-			ConvertToMessage(message, console_message);
-			messages.Add(console_message);
-			if (dump_type == ConsoleDumpType::CountMessages) {
-				if (messages.size > last_dumped_message) {
-					if (messages.size - last_dumped_message >= dump_count_for_commit) {
-						ConsoleDumpData dump_data;
-						dump_data.console = this;
-						dump_data.starting_index = last_dumped_message;
-
-						ThreadTask task = { ConsoleAppendToDump, &dump_data, sizeof(dump_data) };
-						task_manager->AddDynamicTaskAndWake(task);
-					}
-				}
-				else {
-					ConsoleDumpData dump_data;
-					dump_data.console = this;
-					dump_data.starting_index = 0;
-
-					ThreadTask task = { ConsoleDump, &dump_data, sizeof(dump_data) };
-					task_manager->AddDynamicTaskAndWake(task);
-				}
-			}
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Write(Stream<char> stream, ConsoleMessage& console_message) {
-			ConvertToMessage(stream, console_message);
-			messages.Add(console_message);
-			if (dump_type == ConsoleDumpType::CountMessages) {
-				if (messages.size > last_dumped_message) {
-					if (messages.size - last_dumped_message >= dump_count_for_commit) {
-						ConsoleDumpData dump_data;
-						dump_data.console = this;
-						dump_data.starting_index = last_dumped_message;
-
-						ThreadTask task = { ConsoleAppendToDump, &dump_data, sizeof(dump_data) };
-						task_manager->AddDynamicTaskAndWake(task);
-					}
-				}
-				else {
-					ConsoleDumpData dump_data;
-					dump_data.console = this;
-					dump_data.starting_index = 0;
-
-					ThreadTask task = { ConsoleDump, &dump_data, sizeof(dump_data) };
-					task_manager->AddDynamicTaskAndWake(task);
-				}
-			}
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::WriteAtomic(const char* message, ConsoleMessage& console_message) {
-			Lock();
-			Write(message, console_message);
-			Unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::WriteAtomic(Stream<char> message, ConsoleMessage& console_message) {
-			Lock();
-			Write(message, console_message);
-			Unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Info(const char* message, size_t system_filter, unsigned char verbosity) {
-			Info(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Info(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			ConsoleMessage console_message;
-			console_message.icon_type = ConsoleMessageType::Info;
-			console_message.system_filter = system_filter;
-			console_message.verbosity = verbosity;
-			console_message.color = CONSOLE_INFO_COLOR;
-			Write(message, console_message);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::InfoAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
-			InfoAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::InfoAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			Lock();
-			Info(message, system_filter, verbosity);
-			Unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Warn(const char* message, size_t system_filter, unsigned char verbosity) {
-			Warn(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Warn(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			ConsoleMessage console_message;
-			console_message.icon_type = ConsoleMessageType::Warn;
-			console_message.system_filter = system_filter;
-			console_message.verbosity = verbosity;
-			console_message.color = CONSOLE_WARN_COLOR;
-			Write(message, console_message);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::WarnAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
-			WarnAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::WarnAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			Lock();
-			Warn(message, system_filter, verbosity);
-			Unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Error(const char* message, size_t system_filter, unsigned char verbosity) {
-			Error(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Error(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			ConsoleMessage console_message;
-			console_message.icon_type = ConsoleMessageType::Error;
-			console_message.system_filter = system_filter;
-			console_message.verbosity = verbosity;
-			console_message.color = CONSOLE_ERROR_COLOR;
-			Write(message, console_message);
-			if (pause_on_error) {
-				__debugbreak();
-			}
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::ErrorAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
-			ErrorAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::ErrorAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			Lock();
-			Error(message, system_filter, verbosity);
-			Unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Trace(const char* message, size_t system_filter, unsigned char verbosity) {
-			Trace(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Trace(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			ConsoleMessage console_message;
-			console_message.icon_type = ConsoleMessageType::Trace;
-			console_message.system_filter = system_filter;
-			console_message.verbosity = verbosity;
-			console_message.color = CONSOLE_TRACE_COLOR;
-			Write(message, console_message);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::TraceAtomic(const char* message, size_t system_filter, unsigned char verbosity) {
-			TraceAtomic(Stream<char>(message, strlen(message)), system_filter, verbosity);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::TraceAtomic(Stream<char> message, size_t system_filter, unsigned char verbosity) {
-			Lock();
-			Trace(message, system_filter, verbosity);
-			Unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::WriteFormatCharacters(Stream<char>& characters)
-		{
-			Date current_date = OS::GetLocalTime();
-			function::ConvertDateToString(current_date, characters, format);
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::Unlock() {
-			lock.unlock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::TryLock() {
-			lock.try_lock();
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::SetDumpType(ConsoleDumpType type, unsigned int count)
-		{
-			dump_type = type;
-			dump_count_for_commit = count;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::SetFormat(size_t _format)
-		{
-			format = _format;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		void Console::SetVerbosity(unsigned char new_level)
-		{
-			verbosity_level = new_level;
+			data.filtered_message_indices = ResizableStream<unsigned int>(GetConsole()->messages.allocator, 0);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -2640,6 +2126,7 @@ namespace ECSEngine {
 						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 							type.fields[0].info.basic_type_count = 1;
 						}
+						type.fields[0].info.has_default_value = false;
 
 						UIReflectionType* ui_type = data->ui_reflection->CreateType(type);
 						UIReflectionInstance* instance = data->ui_reflection->CreateInstance(type.name, ui_type);
@@ -2655,7 +2142,7 @@ namespace ECSEngine {
 							data->ui_reflection->BindInstanceStreamCapacity(instance, { &capacity, 1 });
 
 							capacity.capacity = data->sections[index].elements[subindex].stream_size;
-							data->ui_reflection->BindInstanceStreamInitialSize(instance, { &capacity, 1 });
+							data->ui_reflection->BindInstanceStreamSize(instance, { &capacity, 1 });
 						}
 					}
 				}

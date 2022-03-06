@@ -6,7 +6,6 @@
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
-ECS_CONTAINERS;
 
 constexpr size_t LINEAR_ALLOCATOR_SIZE = 5'000;
 constexpr size_t POINTER_CAPACITY = 256;
@@ -146,7 +145,7 @@ void DirectoryExplorerDeleteFolder(ActionData* action_data) {
 			ECS_TEMP_ASCII_STRING(error_message, 256);
 			size_t parent_size = function::PathParentSize(*data->current_path);
 			CapacityStream<wchar_t> folder_name(data->current_path->buffer + parent_size + 1, data->current_path->size - parent_size - 1, data->current_path->size - parent_size - 1 );
-			error_message.size = function::FormatString(error_message.buffer, "Cannot delete {0} folder.", folder_name);
+			error_message.size = function::FormatString(error_message.buffer, "Cannot delete {#} folder.", folder_name);
 			CreateErrorMessageWindow(system, error_message);
 		}
 	}
