@@ -5,8 +5,6 @@
 
 namespace ECSEngine {
 	
-	ECS_CONTAINERS;
-
 	// -----------------------------------------------------------------------------------------
 
 	// It will serialize into a memory buffer and then commit to the file

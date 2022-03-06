@@ -13,7 +13,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
 	ECS_MICROSOFT_WRL;
 
 	//using namespace HID;
@@ -1224,7 +1223,7 @@ namespace ECSEngine {
 			memcpy((void*)ptr, name, sizeof(char) * name_size);
 			ResourceIdentifier identifier{(void*)ptr, (unsigned int)name_size};
 			unsigned int hash = UIHash::Hash(identifier);
-			InsertToDynamicTable(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, { (void*)ptr, name_size });
+			InsertToDynamicTable(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, ResourceIdentifier((void*)ptr, name_size));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2067,16 +2066,13 @@ namespace ECSEngine {
 			if (total_pixels > 512 * 512) {
 				m_resources.texture_semaphore.Enter();
 
-				ThreadTask process_texture_task;
-				process_texture_task.function = ProcessTexture;
-
 				ProcessTextureData data;
 				data.filename = function::StringCopy(&m_resources.thread_resources[0].temp_allocator, filename).buffer;
 				data.system = this;
 				data.texture = sprite_texture;
 				
-				process_texture_task.data = &data;
-				process_texture_task.data_size = sizeof(data);
+				ThreadTask process_texture_task;
+				process_texture_task = ECS_THREAD_TASK_NAME(ProcessTexture, &data, sizeof(data));
 				m_task_manager->AddDynamicTaskAndWake(process_texture_task);
 			}	
 		}
@@ -11224,7 +11220,8 @@ namespace ECSEngine {
 						unsigned int window_index = system->GetWindowFromName(data->name);
 						if (window_index != -1) {
 							UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, type);
-							system->RemoveDockspaceBorder(dockspace, border_index, type);
+							system->DestroyDockspace(dockspace->borders.buffer, type);
+							//system->RemoveDockspaceBorder(dockspace, border_index, type, true);
 						}
 						system->PopFrameHandler();
 						if (data->flag_destruction != nullptr) {
@@ -11256,7 +11253,7 @@ namespace ECSEngine {
 						dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
 						float2 region_position = system->GetDockspaceRegionPosition(dockspace, border_index, system->GetDockspaceMaskFromType(dockspace_type));
 						float2 region_scale = system->GetDockspaceRegionScale(dockspace, border_index, system->GetDockspaceMaskFromType(dockspace_type));
-						if (!IsPointInRectangle(mouse_position, region_position, region_scale)) {
+						if (!IsPointInRectangle(mouse_position, region_position, region_scale) && system->m_event != ResizeDockspaceEvent) {
 							destroy_lambda();
 						}
 					}
@@ -12158,7 +12155,8 @@ namespace ECSEngine {
 #pragma endregion
 
 #pragma region Events
-		// ---------------------------------------------------------- Events -------------------------------------------------------
+
+		// ---------------------------------------------------------- Events -----------------------------------------------------------------
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 

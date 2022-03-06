@@ -31,7 +31,7 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	hub->projects.size++;
 
 	if (!SaveEditorFile(editor_state)) {
-		EditorSetError(editor_state, ToStream("Error when saving editor file after project addition"));
+		EditorSetConsoleError(ToStream("Error when saving editor file after project addition"));
 	}
 }
 
@@ -64,7 +64,7 @@ void AddExistingProjectAction(ActionData* action_data) {
 	FileExplorerGetFile(&get_data);
 
 	if (get_data.error_message.size > 0) {
-		EditorSetError((EditorState*)_data, get_data.error_message);
+		EditorSetConsoleError(get_data.error_message);
 	}
 	else {
 		if (get_data.path.size > 0) {
@@ -137,7 +137,7 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 				editor_allocator->Deallocate(hub_data->projects[index].error_message);
 			}
 			hub_data->projects.Remove(index);
-			task_manager->AddDynamicTaskAndWake({ SaveEditorFileThreadTask, editor_state, 0 });
+			task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(SaveEditorFileThreadTask, editor_state, 0));
 			return;
 		}
 	}

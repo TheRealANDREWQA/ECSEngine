@@ -3,6 +3,7 @@
 #include "../../Internal/Multithreading/ConcurrentPrimitives.h"
 #include "UIReflection.h"
 #include "UIResourcePaths.h"
+#include "../../Utilities/Console.h"
 
 #define ECS_TOOLS using namespace ECSEngine::Tools
 constexpr const char* ECS_TOOLS_UI_ERROR_MESSAGE_WINDOW_NAME = "Error Message";
@@ -180,136 +181,9 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API MemoryManager DefaultConsoleAllocator(GlobalMemoryManager* global_manager);
-
 		ECSENGINE_API void ConsoleWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
-		constexpr const char* CONSOLE_WINDOW_NAME = "Console";
-		constexpr size_t CONSOLE_APPEREANCE_TABLE_COUNT = 256;
-
-#define CONSOLE_VERBOSITY_MINIMAL 0
-#define CONSOLE_VERBOSITY_MEDIUM 1
-#define CONSOLE_VERBOSITY_DETAILED 2
-
-#define CONSOLE_SYSTEM_FILTER_ALL 0xFFFFFFFFFFFFFFFF
-
-		enum class ConsoleMessageType : unsigned char {
-			Info,
-			Warn,
-			Error,
-			Trace,
-			None
-		};
-
-		enum class ConsoleDumpType : unsigned char {
-			CountMessages,
-			OnCall,
-			None
-		};
-
-		struct ECSENGINE_API ConsoleMessage {
-			Stream<char> message;
-			Color color;
-			unsigned char client_message_start;
-			ConsoleMessageType icon_type = ConsoleMessageType::None;
-			unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL;
-			size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL;
-		};
-
-		// Dump path can be allocated on the stack, it will copy to a private buffer
-		struct ECSENGINE_API Console {
-			Console() = default;
-			Console(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* _dump_path);
-
-			Console(const Console& other) = default;
-			Console& operator = (const Console& other) = default;
-
-			void Lock();
-			void Clear();
-
-			void AddSystemFilterString(const char* string);
-			void AddSystemFilterString(Stream<char> string);
-
-			size_t GetFormatCharacterCount() const;
-			void ConvertToMessage(const char* message, ConsoleMessage& console_message);
-			void ConvertToMessage(Stream<char> message, ConsoleMessage& console_message);
-
-			void ChangeDumpPath(const wchar_t* new_path);
-			void ChangeDumpPath(Stream<wchar_t> new_path);
-
-			// Appends to the dump output
-			void AppendDump();
-
-			// Dumps from the start
-			void Dump();
-
-			void Message(const char* message, ConsoleMessageType type, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void Message(Stream<char> message, ConsoleMessageType type, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void MessageAtomic(const char* message, ConsoleMessageType type, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void MessageAtomic(Stream<char> message, ConsoleMessageType type, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-
-			void Write(const char* message, ConsoleMessage& console_message);
-			void Write(Stream<char> message, ConsoleMessage& console_message);
-			void WriteAtomic(const char* message, ConsoleMessage& console_message);
-			void WriteAtomic(Stream<char> message, ConsoleMessage& console_message);
-
-			void Info(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void Info(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void InfoAtomic(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void InfoAtomic(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-
-			void Warn(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void Warn(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void WarnAtomic(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void WarnAtomic(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-
-			void Error(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void Error(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void ErrorAtomic(const char* mssage, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void ErrorAtomic(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-
-			void Trace(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void Trace(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void TraceAtomic(const char* message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-			void TraceAtomic(Stream<char> message, size_t system_filter = CONSOLE_SYSTEM_FILTER_ALL, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
-
-			void WriteFormatCharacters(Stream<char>& characters);
-
-			void Unlock();
-			void TryLock();
-
-			void SetDumpType(ConsoleDumpType type, unsigned int count = 1);
-
-			void SetFormat(size_t format);
-			void SetVerbosity(unsigned char new_level);
-
-			MemoryManager* allocator;
-			TaskManager* task_manager;
-			containers::ResizableStream<ConsoleMessage> messages;
-			containers::ResizableStream<const char*> system_filter_strings;
-			size_t format;
-			SpinLock lock;
-			bool pause_on_error;
-			unsigned char verbosity_level;
-			ConsoleDumpType dump_type;
-			unsigned int last_dumped_message;
-			unsigned int dump_count_for_commit;
-			const wchar_t* dump_path;
-			SpinLock dump_lock;
-		};
-
-		struct ECSENGINE_API ConsoleDumpData {
-			Console* console;
-			unsigned int starting_index;
-		};
-
-		ECSENGINE_API bool ConsoleAppendMessageToDump(ECS_FILE_HANDLE file, unsigned int index, Console* console);
-
-		// Thread task
-		ECSENGINE_API void ConsoleDump(unsigned int thread_index, World* world, void* data);
-		
-		// Thread task
-		ECSENGINE_API void ConsoleAppendToDump(unsigned int thread_index, World* world, void* data);
+		constexpr const char* CONSOLE_WINDOW_NAME = "Console";	
 
 		using ConsoleUIHashFunction = HashFunctionMultiplyString;
 
@@ -319,7 +193,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ConsoleWindowData {
-			Console* console;
+			ECSEngine::Console* console;
 			bool collapse;
 			bool clear_on_play;
 
@@ -332,30 +206,32 @@ namespace ECSEngine {
 				bool filter_all;
 			};
 			bool filter_message_type_changed;
+			bool system_filter_changed;
+			unsigned char previous_verbosity_level;
 
 			unsigned int last_frame_message_count;
 			unsigned int info_count;
 			unsigned int warn_count;
 			unsigned int error_count;
 			unsigned int trace_count;
-			bool system_filter_changed;
-			unsigned char previous_verbosity_level;
-			containers::ResizableStream<unsigned int> filtered_message_indices;
-			containers::HashTable<UniqueConsoleMessage, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> unique_messages;
-			bool* system_filter;
+			ResizableStream<unsigned int> filtered_message_indices;
+			HashTable<UniqueConsoleMessage, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> unique_messages;
+			Stream<bool> system_filter;
 		};
 
 		ECSENGINE_API void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer& drawer);
 
 		ECSENGINE_API size_t GetSystemMaskFromConsoleWindowData(const ConsoleWindowData* data);
 
-		ECSENGINE_API unsigned int CreateConsoleWindow(UISystem* system, Console* console);
+		ECSENGINE_API unsigned int CreateConsoleWindow(UISystem* system);
 
-		ECSENGINE_API void CreateConsole(UISystem* system, Console* console);
+		ECSENGINE_API void CreateConsole(UISystem* system);
 
 		ECSENGINE_API void CreateConsoleAction(ActionData* action_data);
 
-		ECSENGINE_API void CreateConsoleWindowData(ConsoleWindowData& data, Console* console);
+		ECSENGINE_API void CreateConsoleWindowData(ConsoleWindowData& data);
+
+		// --------------------------------------------------------------------------------------------------------------
 
 		struct InjectWindowElement {
 			void* data;
@@ -369,12 +245,12 @@ namespace ECSEngine {
 		};
 
 		struct InjectWindowSection {
-			containers::Stream<InjectWindowElement> elements;
+			Stream<InjectWindowElement> elements;
 			const char* name;
 		};
 
 		struct InjectWindowData {
-			containers::Stream<InjectWindowSection> sections;
+			Stream<InjectWindowSection> sections;
 			UIReflectionDrawer* ui_reflection;
 		};
 

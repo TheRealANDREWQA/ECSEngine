@@ -138,13 +138,13 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		size_t ParseWordsFromSentence(const char* sentence)
+		size_t ParseWordsFromSentence(const char* sentence, char separator_token)
 		{
 			size_t length = strlen(sentence);
 
 			size_t count = 0;
 			for (size_t index = 0; index < length; index++) {
-				count += (sentence[index] == ' ' || sentence[index] == '\n');
+				count += (sentence[index] == separator_token || sentence[index] == '\n');
 			}
 			return count;
 		}
@@ -488,18 +488,20 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void ConvertDateToString(Date date, Stream<char>& characters, size_t format_flags)
-		{
-			characters.Add('[');
-
+		template<typename CharacterType>
+		void ConvertDateToStringImplementation(Date date, Stream<CharacterType>& characters, size_t format_flags) {
 			auto flag = [&](size_t integer) {
-				char temp[256];
-				Stream<char> temp_stream = Stream<char>(temp, 0);
+				CharacterType temp[256];
+				Stream<CharacterType> temp_stream = Stream<CharacterType>(temp, 0);
 				function::ConvertIntToChars(temp_stream, integer);
-				for (size_t index = 0; index < temp_stream.size; index++) {
-					characters.Add(temp_stream[index]);
-				}
+
+				characters.AddStream(temp_stream);
+				//for (size_t index = 0; index < temp_stream.size; index++) {
+				//	characters.Add(temp_stream[index]);
+				//}
 			};
+
+			CharacterType colon_or_dash = (format_flags & ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON) != 0 ? Character<CharacterType>('-') : Character<CharacterType>(':');
 
 			bool has_hour = false;
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_HOUR)) {
@@ -510,7 +512,7 @@ namespace ECSEngine {
 			bool has_minutes = false;
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MINUTES)) {
 				if (has_hour) {
-					characters.Add(':');
+					characters.Add(colon_or_dash);
 				}
 				has_minutes = true;
 				flag(date.minute);
@@ -519,7 +521,7 @@ namespace ECSEngine {
 			bool has_seconds = false;
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_SECONDS)) {
 				if (has_minutes || has_hour) {
-					characters.Add(':');
+					characters.Add(colon_or_dash);
 				}
 				has_seconds = true;
 				flag(date.seconds);
@@ -528,7 +530,7 @@ namespace ECSEngine {
 			bool has_milliseconds = false;
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MILLISECONDS)) {
 				if (has_hour || has_minutes || has_seconds) {
-					characters.Add(':');
+					characters.Add(colon_or_dash);
 				}
 				has_milliseconds = true;
 				flag(date.milliseconds);
@@ -540,7 +542,7 @@ namespace ECSEngine {
 			bool has_day = false;
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_DAY)) {
 				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-					characters.Add(' ');
+					characters.Add(Character<CharacterType>(' '));
 					has_space_been_written = true;
 				}
 				has_day = true;
@@ -550,11 +552,11 @@ namespace ECSEngine {
 			bool has_month = false;
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_MONTH)) {
 				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-					characters.Add(' ');
+					characters.Add(Character<CharacterType>(' '));
 					has_space_been_written = true;
 				}
 				if (has_day) {
-					characters.Add('-');
+					characters.Add(Character<CharacterType>('-'));
 				}
 				has_month = true;
 				flag(date.month);
@@ -562,17 +564,21 @@ namespace ECSEngine {
 
 			if (function::HasFlag(format_flags, ECS_LOCAL_TIME_FORMAT_YEAR)) {
 				if (!has_space_been_written && has_hour_minutes_seconds_milliseconds) {
-					characters.Add(' ');
+					characters.Add(Character<CharacterType>(' '));
 					has_space_been_written = true;
 				}
 				if (has_day || has_month) {
-					characters.Add('-');
+					characters.Add(Character<CharacterType>('-'));
 				}
 				flag(date.year);
 			}
 
-			characters.Add(']');
-			characters.Add(' ');
+			characters[characters.size] = Character<CharacterType>('\0');
+		}
+
+		void ConvertDateToString(Date date, Stream<char>& characters, size_t format_flags)
+		{
+			ConvertDateToStringImplementation(date, characters, format_flags);
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -583,6 +589,255 @@ namespace ECSEngine {
 			ConvertDateToString(date, stream, format_flags);
 			characters.size = stream.size;
 			characters.AssertCapacity();
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ConvertDateToString(Date date, Stream<wchar_t>& characters, size_t format_flags) {
+			ConvertDateToStringImplementation(date, characters, format_flags);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, size_t format_flags) {
+			Stream<wchar_t> stream(characters);
+			ConvertDateToString(date, stream, format_flags);
+			characters.size = stream.size;
+			characters.AssertCapacity();
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		Date ConvertStringToDateImplementation(Stream<CharacterType> characters, size_t format_flags) {
+			Date date;
+
+			if (characters[0] == Character<CharacterType>('[')) {
+				characters.buffer++;
+				characters.size--;
+			}
+
+			const CharacterType* boundary = characters.buffer + characters.size;
+			auto strchr_byte_by_byte = [](const CharacterType* characters, const CharacterType* boundary, CharacterType character) {
+				while (characters < boundary && *characters != Character<CharacterType>(character)) {
+					characters++;
+				}
+				return characters;
+			};
+
+			auto skip = [](const CharacterType* characters, const CharacterType* boundary) {
+				while (characters < boundary && (*characters < Character<CharacterType>('0') || *characters > Character<CharacterType>('9'))) {
+					characters++;
+				}
+				return characters;
+			};
+
+			auto get_integer = [](const CharacterType** characters, const CharacterType* boundary) {
+				int64_t number = 0;
+				while (*characters < boundary && (**characters >= Character<CharacterType>('0') && **characters <= Character<CharacterType>('9'))) {
+					number = number * 10 + ((int64_t)(**characters) - (int64_t)Character<CharacterType>('0'));
+					(*characters)++;
+				}
+				return number;
+			};
+
+			/*unsigned char semicolon_count = 0;
+			unsigned char dash_count = 0;
+
+			const CharacterType* semicolon = strchr_byte_by_byte(characters.buffer, boundary, Character<CharacterType>(':'));
+			if (semicolon < boundary) {
+				semicolon_count++;
+				semicolon = strchr_byte_by_byte(semicolon + 1, boundary, Character<CharacterType>(':'));
+				if (semicolon < boundary) {
+					semicolon_count++;
+					semicolon = strchr_byte_by_byte(semicolon + 1, boundary, Character<CharacterType>(':'));
+					if (semicolon < boundary) {
+						semicolon_count++;
+					}
+				}
+			}
+
+			const CharacterType* dash = strchr_byte_by_byte(characters.buffer, boundary, Character<CharacterType>('-'));
+			if (dash < boundary) {
+				dash_count++;
+				dash = strchr_byte_by_byte(dash + 1, boundary, Character<CharacterType>('-'));
+				if (dash < boundary) {
+					dash_count++;
+				}
+			}*/
+
+			int64_t numbers[10];
+			unsigned char number_count = 0;
+
+			const CharacterType* current_character = characters.buffer;
+			while (current_character < boundary) {
+				current_character = skip(current_character, boundary);
+				numbers[number_count++] = get_integer(&current_character, boundary);
+			}
+
+			ECS_ASSERT(number_count > 0);
+			unsigned char numbers_parsed = 0;
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_HOUR) {
+				date.hour = numbers[0];
+				numbers_parsed++;
+			}
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_MINUTES) {
+				ECS_ASSERT(number_count > numbers_parsed);
+				date.minute = numbers[numbers_parsed];
+				numbers_parsed++;
+			}
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_SECONDS) {
+				ECS_ASSERT(number_count > numbers_parsed);
+				date.seconds = numbers[numbers_parsed];
+				numbers_parsed++;
+			}
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_MILLISECONDS) {
+				ECS_ASSERT(number_count > numbers_parsed);
+				date.milliseconds = numbers[numbers_parsed];
+				numbers_parsed++;
+			}
+
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_DAY) {
+				ECS_ASSERT(number_count > numbers_parsed);
+				date.day = numbers[numbers_parsed];
+				numbers_parsed++;
+			}
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_MONTH) {
+				ECS_ASSERT(number_count > numbers_parsed);
+				date.month = numbers[numbers_parsed];
+				numbers_parsed++;
+			}
+			if (format_flags & ECS_LOCAL_TIME_FORMAT_YEAR) {
+				ECS_ASSERT(number_count > numbers_parsed);
+				date.year = numbers[numbers_parsed];
+				numbers_parsed++;
+			}
+
+			return date;
+		}
+
+		Date ConvertStringToDate(Stream<char> characters, size_t format_flags)
+		{
+			return ConvertStringToDateImplementation(characters, format_flags);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Date ConvertStringToDate(Stream<wchar_t> characters, size_t format_flags)
+		{
+			return ConvertStringToDateImplementation(characters, format_flags);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType, typename StreamType>
+		void ConvertByteSizeToStringImplementation(size_t byte_size, StreamType& characters) {
+			if (byte_size < ECS_KB) {
+				function::ConvertIntToChars(characters, byte_size);
+				characters.Add(Character<CharacterType>(' '));
+				characters.Add(Character<CharacterType>('b'));
+				characters.Add(Character<CharacterType>('y'));
+				characters.Add(Character<CharacterType>('t'));
+				characters.Add(Character<CharacterType>('e'));
+				characters.Add(Character<CharacterType>('s'));
+			}
+			else if (byte_size < ECS_MB) {
+				float kilobytes = (float)byte_size / (float)ECS_KB;
+				function::ConvertFloatToChars(characters, kilobytes, 2);
+				characters.Add(Character<CharacterType>(' '));
+				characters.Add(Character<CharacterType>('K'));
+				characters.Add(Character<CharacterType>('B'));
+			}
+			else if (byte_size < ECS_GB) {
+				float mb = (float)byte_size / (float)ECS_MB;
+				function::ConvertFloatToChars(characters, mb, 2);
+				characters.Add(Character<CharacterType>(' '));
+				characters.Add(Character<CharacterType>('M'));
+				characters.Add(Character<CharacterType>('B'));
+			}
+			else if (byte_size < ECS_TB) {
+				float gb = (float)byte_size / (float)ECS_GB;
+				function::ConvertFloatToChars(characters, gb, 2);
+				characters.Add(Character<CharacterType>(' '));
+				characters.Add(Character<CharacterType>('G'));
+				characters.Add(Character<CharacterType>('B'));
+			}
+			else if (byte_size < ECS_TB * ECS_KB) {
+				float tb = (float)byte_size / (float)ECS_TB;
+				function::ConvertFloatToChars(characters, tb, 2);
+				characters.Add(Character<CharacterType>(' '));
+				characters.Add(Character<CharacterType>('T'));
+				characters.Add(Character<CharacterType>('B'));
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			characters[characters.size] = Character<CharacterType>('\0');
+		}
+
+		void ConvertByteSizeToString(size_t byte_size, Stream<char>& characters)
+		{
+			ConvertByteSizeToStringImplementation<char>(byte_size, characters);
+		}
+
+		void ConvertByteSizeToString(size_t byte_size, CapacityStream<char>& characters)
+		{
+			ConvertByteSizeToStringImplementation<char>(byte_size, characters);
+			characters.AssertCapacity();
+		}
+		
+		void ConvertByteSizeToString(size_t byte_size, Stream<wchar_t>& characters) {
+			ConvertByteSizeToStringImplementation<wchar_t>(byte_size, characters);
+		}
+
+		void ConvertByteSizeToString(size_t byte_size, CapacityStream<wchar_t>& characters)
+		{
+			ConvertByteSizeToStringImplementation<wchar_t>(byte_size, characters);
+			characters.AssertCapacity();
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		bool IsDateLater(Date first, Date second)
+		{
+			if (second.year > first.year) {
+				return true;
+			}
+			if (second.year == first.year) {
+				if (second.month > first.month) {
+					return true;
+				}
+				if (second.month == first.month) {
+					if (second.day > first.day) {
+						return true;
+					}
+					if (second.day == first.day) {
+						if (second.hour > first.hour) {
+							return true;
+						}
+						if (second.hour == first.hour) {
+							if (second.minute > first.minute) {
+								return true;
+							}
+							if (second.minute == first.minute) {
+								if (second.seconds > first.seconds) {
+									return true;
+								}
+								if (second.seconds == first.seconds) {
+									return second.milliseconds > first.milliseconds;
+								}
+								return false;
+							}
+							return false;
+						}
+						return false;
+					}
+					return false;
+				}
+				return false;
+			}
+			return false;
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -601,32 +856,6 @@ namespace ECSEngine {
 			if (error_message != nullptr) {
 				error_message->AddStreamSafe(ToStream(message));
 			}
-		}
-
-		// --------------------------------------------------------------------------------------------------
-
-		float3 OrbitPoint(float radius, float2 rotation)
-		{
-			// Offset the rotation along the x axis such that at 0 degrees it is facing in the direction of the Z axis
-			rotation.x -= 90.0f;
-
-			rotation = { DegToRad(rotation.x), DegToRad(rotation.y) };
-
-			// Calculate the point in the XZ plane
-			float x_position = radius * cos(rotation.x);
-			float z_position = radius * sin(rotation.x);
-
-			// Calculate the symmetric point - the signs are inverted
-			float2 symmetric_point = { fabsf(x_position), fabsf(z_position) };
-
-			// The cosine of the y rotation will serve as an interpolation between the 2 points for the x and z components
-			// The sine of the y rotation will serve as the final y position
-			float interpolation_xz = (cos(rotation.y) + 1.0f) * 0.5f;
-			float final_x = Lerp(x_position, symmetric_point.x, interpolation_xz);
-			float final_z = Lerp(z_position, symmetric_point.y, interpolation_xz);
-			float final_y = radius * sin(rotation.y);
-
-			return { final_x, final_y, final_z };
 		}
 
 		// --------------------------------------------------------------------------------------------------

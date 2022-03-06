@@ -21,8 +21,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	using ResourceManagerHash = HashFunctionMultiplyString;
 	using ResourceManagerAllocator = MemoryManager;
 	
@@ -523,6 +521,9 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
+		// Unloads everything
+		void UnloadAll();
+
 		// Unloads all resources of a type
 		void UnloadAll(ResourceType resource_type);
 
@@ -531,7 +532,7 @@ namespace ECSEngine {
 	//private:
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
-		ResizableStream<InternalResourceType> m_resource_types;
+		Stream<InternalResourceType> m_resource_types;
 		CapacityStream<ThreadResource> m_thread_resources;
 		CapacityStream<wchar_t> m_shader_directory;
 	};

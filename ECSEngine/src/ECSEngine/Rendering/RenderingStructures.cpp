@@ -5,8 +5,6 @@
 #include "../Utilities/File.h"
 #include "../Utilities/ForEachFiles.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	constexpr const wchar_t* PBR_MATERIAL_COLOR_TEXTURE_STRINGS[] = {
@@ -563,7 +561,7 @@ namespace ECSEngine {
 	}
 
 	Matrix Camera::GetProjectionViewMatrix() const {
-		return MatrixTranslation(-translation) * MatrixRotation(-rotation) * projection;
+		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -588,8 +586,8 @@ namespace ECSEngine {
 
 	void AllocatePBRMaterial(
 		PBRMaterial& material, 
-		containers::Stream<char> name, 
-		containers::Stream<PBRMaterialMapping> mappings,
+		Stream<char> name, 
+		Stream<PBRMaterialMapping> mappings,
 		AllocatorPolymorphic allocator
 	)
 	{

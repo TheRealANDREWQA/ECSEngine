@@ -13,6 +13,7 @@ namespace ECSEngine {
 		capacity = other.capacity;
 		return *this;
 	}
+
 	void TaskAllocator::Clear()
 	{
 		top = 0;

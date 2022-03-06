@@ -8,12 +8,6 @@
 
 #define ECS_ASSERT_TRIGGER
 
-#define ECS_TEMP_ASCII_STRING(name, size) char name##_temp_memory[size]; \
-ECSEngine::containers::CapacityStream<char> name(name##_temp_memory, 0, size);
-
-#define ECS_TEMP_STRING(name, size) wchar_t name##_temp_memory[size]; \
-ECSEngine::containers::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
-
 namespace ECSEngine {
 
 	constexpr size_t ECS_LOCAL_TIME_FORMAT_HOUR = 1 << 0;
@@ -23,12 +17,21 @@ namespace ECSEngine {
 	constexpr size_t ECS_LOCAL_TIME_FORMAT_DAY = 1 << 4;
 	constexpr size_t ECS_LOCAL_TIME_FORMAT_MONTH = 1 << 5;
 	constexpr size_t ECS_LOCAL_TIME_FORMAT_YEAR = 1 << 6;
+	constexpr size_t ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON = 1 << 7;
 	constexpr size_t ECS_LOCAL_TIME_FORMAT_ALL = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS
 		| ECS_LOCAL_TIME_FORMAT_MILLISECONDS | ECS_LOCAL_TIME_FORMAT_DAY | ECS_LOCAL_TIME_FORMAT_MONTH | ECS_LOCAL_TIME_FORMAT_YEAR;
 
 	namespace function {
 
-		ECS_CONTAINERS;
+		template<typename CharacterType>
+		CharacterType Character(char character) {
+			if constexpr (std::is_same_v<CharacterType, char>) {
+				return character;
+			}
+			else if constexpr (std::is_same_v<CharacterType, wchar_t>) {
+				return (wchar_t)((int)L'\0' + (int)character);
+			}
+		}
 
 		inline bool is_power_of_two(int x) {
 			return (x & (x - 1)) == 0;
@@ -43,8 +46,6 @@ namespace ECSEngine {
 
 		/* Supports alignments up to 256 bytes */
 		inline uintptr_t align_pointer_stack(uintptr_t pointer, size_t alignment) {
-			ECS_ASSERT(is_power_of_two(alignment));
-
 			uintptr_t first_aligned_pointer = align_pointer(pointer, alignment);
 			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
 		}
@@ -156,7 +157,7 @@ namespace ECSEngine {
 		}
 
 		// it searches for spaces and next line characters
-		ECSENGINE_API size_t ParseWordsFromSentence(const char* sentence);
+		ECSENGINE_API size_t ParseWordsFromSentence(const char* sentence, char separator_token = ' ');
 
 		// positions will be filled with the 4 corners of the rectangle
 		ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
@@ -326,6 +327,13 @@ namespace ECSEngine {
 			}
 			return pointer;
 		}
+
+		inline const wchar_t* SkipWhitespace(const wchar_t* pointer) {
+			while (*pointer == L' ' || *pointer == L'\t') {
+				pointer++;
+			}
+			return pointer;
+		}
 		
 		inline const char* SkipCodeIdentifier(const char* pointer) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
@@ -403,17 +411,29 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<char>& characters, size_t format_flags);
 
+		ECSENGINE_API void ConvertDateToString(Date date, Stream<wchar_t>& characters, size_t format_flags);
+
+		ECSENGINE_API void ConvertDateToString(Date date, CapacityStream<wchar_t>& characters, size_t format_flags);
+
+		ECSENGINE_API Date ConvertStringToDate(Stream<char> characters, size_t format_flags);
+
+		ECSENGINE_API Date ConvertStringToDate(Stream<wchar_t> characters, size_t format_flags);
+
+		ECSENGINE_API void ConvertByteSizeToString(size_t byte_size, Stream<char>& characters);
+
+		ECSENGINE_API void ConvertByteSizeToString(size_t byte_size, CapacityStream<char>& characters);
+
+		ECSENGINE_API void ConvertByteSizeToString(size_t byte_size, Stream<wchar_t>& characters);
+
+		ECSENGINE_API void ConvertByteSizeToString(size_t byte_size, CapacityStream<wchar_t>& characters);
+
+		ECSENGINE_API bool IsDateLater(Date first, Date second);
+
 		// If the pointer is null, it will commit the message
 		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, Stream<char> message);
 
 		// If the pointer is null, it will commit the message
 		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, const char* message);
-
-		// It will first select a slice inside the XZ plane using the rotation given by the x component
-		// Then it will rotate in the plane determined by the diameter of that rotation and the Y axis
-		// The point is centered around the origin, if a translation is disired, it should be added afterwards
-		// Rotation is in degrees
-		ECSENGINE_API float3 OrbitPoint(float radius, float2 rotation);
 
 	}
 

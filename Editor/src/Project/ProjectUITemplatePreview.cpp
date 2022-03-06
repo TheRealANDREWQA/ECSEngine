@@ -13,9 +13,10 @@
 #include "..\UI\ModuleExplorer.h"
 #include "..\UI\Inspector.h"
 #include "..\UI\NotificationBar.h"
+#include "..\UI\Settings.h"
+#include "..\UI\Backups.h"
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 ECS_TOOLS;
 
 constexpr const char* SAVE_LAYOUT_WINDOW_NAME = "Save Layout";
@@ -260,6 +261,8 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		action_data[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, INSPECTOR_WINDOW_NAME, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_SETTINGS] = { data->editor_state, SETTINGS_WINDOW_NAME, {0.4f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
 
 #define SET_HANDLER(string) data->handlers[string] = {CreatePlaceholderDockspaceAction, action_data + string, 0, UIDrawPhase::System}
 
@@ -270,6 +273,8 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_FILE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_MODULE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INSPECTOR);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_SETTINGS);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_BACKUPS);
 
 #undef SET_HANDLER
 	}

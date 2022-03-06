@@ -45,7 +45,7 @@
 //	PrintStruct* reinterpretation = (PrintStruct*)data;
 //	reinterpretation->lock->lock();
 //	// print function
-//	//ECSENGINE_CORE_INFO("Integer is {0}. Thread: {1}", reinterpretation->val->load(ECS_ACQUIRE), thread_id);
+//	//ECSENGINE_CORE_INFO("Integer is {#}. Thread: {#}", reinterpretation->val->load(ECS_ACQUIRE), thread_id);
 //	std::cout << "Integer is " << reinterpretation->val->load(ECS_ACQUIRE) << ". Thread: " << thread_id << "\n";
 //	reinterpretation->lock->unlock();
 //	//std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -99,7 +99,7 @@
 //	ECSEngine::Timer timer;
 //	ECSEngine::HID::Mouse mouse;
 //	ECSEngine::HID::Keyboard<ECSEngine::GlobalMemoryManager> keyboard;
-//	ECSEngine::containers::Stream<HCURSOR> cursors;
+//	ECSEngine::Stream<HCURSOR> cursors;
 //	ECSEngine::CursorType current_cursor;
 //public:
 //
@@ -181,7 +181,6 @@
 //		print_task.data = (void*)&print_struct;
 //
 //		//bool succes = manager.GetThreadQueue(0)->Pop(dummy);
-//		//ECSENGINE_CORE_INFO("{0}", succes);
 //		manager.SetTask(do_task);
 //		manager.SetTask(wait_condition_variable);
 //		//manager.SetTask(print_task);
@@ -359,7 +358,6 @@
 //		while (true) {
 //			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
 //				auto mouse_state = mouse.GetState();
-//				ECSENGINE_CORE_INFO("Mouse x: {0}. Mouse y: {0}", mouse_state.x, mouse_state.y);
 //				switch (message.message) {
 //				case WM_QUIT:
 //					result = -1;
@@ -924,7 +922,7 @@
 //	HCURSOR* cursor_stream = new HCURSOR[ECS_CURSOR_COUNT];
 //
 //	// hInstance is null because these are predefined cursors
-//	cursors = ECSEngine::containers::Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
+//	cursors = ECSEngine::Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
 //	cursors[(unsigned int)ECSEngine::CursorType::AppStarting] = LoadCursor(NULL, IDC_APPSTARTING);
 //	cursors[(unsigned int)ECSEngine::CursorType::Cross] = LoadCursor(NULL, IDC_CROSS);
 //	cursors[(unsigned int)ECSEngine::CursorType::Default] = LoadCursor(NULL, IDC_ARROW);

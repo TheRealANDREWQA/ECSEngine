@@ -16,12 +16,10 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
-		ECS_CONTAINERS;
-
 		using ReflectionHash = HashFunctionMultiplyString;
-		using ReflectionFieldTable = containers::HashTable<ReflectionFieldInfo, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
-		using ReflectionTypeTable = containers::HashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
-		using ReflectionEnumTable = containers::HashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
+		using ReflectionFieldTable = HashTable<ReflectionFieldInfo, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
+		using ReflectionTypeTable = HashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
+		using ReflectionEnumTable = HashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
 
 		constexpr size_t ECS_REFLECTION_MAX_TYPE_COUNT = 128;
 		constexpr size_t ECS_REFLECTION_MAX_ENUM_COUNT = 32;
@@ -32,6 +30,11 @@ namespace ECSEngine {
 			struct FolderHierarchy {
 				const wchar_t* root;
 				const void* allocated_buffer;
+			};
+
+			struct TypeTag {
+				const char* tag_name;
+				ResizableStream<const char*> type_names;
 			};
 
 			ReflectionManager(MemoryManager* allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
@@ -56,13 +59,27 @@ namespace ECSEngine {
 			void FreeFolderHierarchy(unsigned int folder_index);
 
 			ReflectionType GetType(const char* name) const;
+			ReflectionType GetType(unsigned int index) const;
+
 			ReflectionEnum GetEnum(const char* name) const;
+			ReflectionEnum GetEnum(unsigned int index) const;
 
 			// Returns -1 if it fails
 			unsigned int GetHierarchyIndex(const wchar_t* hierarchy) const;
+			
+			void GetHierarchyTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>& type_indices);
 
 			void* GetTypeInstancePointer(const char* name, void* instance, unsigned int pointer_index = 0) const;
 			void* GetTypeInstancePointer(ReflectionType type, void* instance, unsigned int pointer_index = 0) const;
+
+			const char* GetTypeTag(unsigned int type_index) const;
+			const char* GetTypeTag(const char* name) const;
+
+			bool IsTypeTag(unsigned int type_index, const char* tag) const;
+			bool IsTypeTag(const char* name, const char* tag) const;
+
+			// Fills in the type indices with the types that correspond to the tag
+			void GetAllFromTypeTag(const char* tag, CapacityStream<unsigned int>& type_indices) const;
 
 			bool TryGetType(const char* name, ReflectionType& type) const;
 			bool TryGetEnum(const char* name, ReflectionEnum& enum_) const;
@@ -72,48 +89,49 @@ namespace ECSEngine {
 			void InitializeEnumTable(size_t count);
 
 			// It will not set the paths that need to be searched; thread memory will be allocated from the heap, must be freed manually
-			void InitializeParseThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerParseStructuresThreadTaskData& data, containers::CapacityStream<char>* error_message = nullptr);
+			void InitializeParseThreadTaskData(size_t thread_memory, size_t path_count, ReflectionManagerParseStructuresThreadTaskData& data, CapacityStream<char>* error_message = nullptr);
 
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(const wchar_t* root, containers::CapacityStream<char>* faulty_path = nullptr);
+			bool ProcessFolderHierarchy(const wchar_t* root, CapacityStream<char>* faulty_path = nullptr);
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(const wchar_t* root, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
+			bool ProcessFolderHierarchy(const wchar_t* root, TaskManager* task_manager, CapacityStream<char>* error_message = nullptr);
 
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(unsigned int index, containers::CapacityStream<char>* error_message = nullptr);
+			bool ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message = nullptr);
 			// Returns success, error message will pe pointer to a predefined message, no need to allocate
 			// Faulty path must have been previously allocated, 256 characters should be enough
-			bool ProcessFolderHierarchy(unsigned int index, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
+			bool ProcessFolderHierarchy(unsigned int index, TaskManager* task_manager, CapacityStream<char>* error_message = nullptr);
 
 			void RemoveFolderHierarchy(unsigned int index);
 			void RemoveFolderHierarchy(const wchar_t* root);
 
 			// keeps reference intact, it is the same as removing all types from the respective folder hierarchy,
 			// calling recreate on the folder hierarchy and then process it
-			bool UpdateFolderHierarchy(unsigned int index, containers::CapacityStream<char>* error_message = nullptr);
+			bool UpdateFolderHierarchy(unsigned int index, CapacityStream<char>* error_message = nullptr);
 
 			// keeps reference intact, it is the same as removing all types from the respective folder hierarchy,
 			// calling recreate on the folder hierarchy and then process it
-			bool UpdateFolderHierarchy(unsigned int index, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
+			bool UpdateFolderHierarchy(unsigned int index, TaskManager* task_manager, CapacityStream<char>* error_message = nullptr);
 
 			// keeps reference intact
-			bool UpdateFolderHierarchy(const wchar_t* root, containers::CapacityStream<char>* error_message = nullptr);
+			bool UpdateFolderHierarchy(const wchar_t* root, CapacityStream<char>* error_message = nullptr);
 
 			// keeps reference intact
-			bool UpdateFolderHierarchy(const wchar_t* root, TaskManager* task_manager, containers::CapacityStream<char>* error_message = nullptr);
+			bool UpdateFolderHierarchy(const wchar_t* root, TaskManager* task_manager, CapacityStream<char>* error_message = nullptr);
 
+			ResizableStream<TypeTag> type_tags;
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
 			ReflectionFieldTable field_table;
-			containers::ResizableStream<FolderHierarchy> folders;
+			ResizableStream<FolderHierarchy> folders;
 		};
 
-		ECSENGINE_API bool IsTypeCharacter(char character);
+		ECSENGINE_API size_t GetTypeByteSize(ReflectionType type);
 
-		ECSENGINE_API size_t PtrDifference(const void* ptr1, const void* ptr2);
+		ECSENGINE_API bool IsTypeCharacter(char character);
 
 		ECSENGINE_API void AddEnumDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,

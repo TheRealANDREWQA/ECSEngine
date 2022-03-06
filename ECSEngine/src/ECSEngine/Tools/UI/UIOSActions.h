@@ -11,8 +11,6 @@ namespace ECSEngine {
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	namespace Tools {
 		
 		// ---------------------------------------------------------------------------------------------------

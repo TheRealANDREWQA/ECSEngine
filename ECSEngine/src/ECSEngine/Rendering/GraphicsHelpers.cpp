@@ -6,8 +6,6 @@
 #include "../Utilities/Path.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -82,6 +80,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	template<typename View>
+	ID3D11Resource* GetResourceView(View view) {
+		ID3D11Resource* resource;
+		view.view->GetResource(&resource);
+		unsigned int count = resource->Release();
+		return resource;
+	}
+
 	ID3D11Resource* GetResource(RenderTargetView target)
 	{
 		ID3D11Resource* resource;
@@ -94,110 +100,78 @@ namespace ECSEngine {
 
 	ID3D11Resource* GetResource(DepthStencilView depth_view)
 	{
-		ID3D11Resource* resource;
-		depth_view.view->GetResource(&resource);
-		unsigned int count = resource->Release();
-		return resource;
+		return GetResourceView(depth_view);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* GetResource(ResourceView view)
 	{
-		ID3D11Resource* resource;
-		view.view->GetResource(&resource);
-		unsigned int count = resource->Release();
-		return resource;
+		return GetResourceView(view);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ID3D11Resource* GetResource(VertexBuffer buffer)
-	{
+	ID3D11Resource* GetResource(UAView view) {
+		return GetResourceView(view);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	template<typename Buffer>
+	ID3D11Resource* GetResourceBuffer(Buffer buffer, const wchar_t* error_message) {
 		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
 		com_buffer.Attach(buffer.buffer);
 		HRESULT result = com_buffer.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Vertex Buffer to resource failed!", true);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_message, true);
 
 		return _resource.Detach();
+	}
+
+	ID3D11Resource* GetResource(VertexBuffer buffer)
+	{
+		return GetResourceBuffer(buffer, L"Converting Vertex Buffer to resource failed!");
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* GetResource(IndexBuffer index_buffer)
+	{
+		return GetResourceBuffer(index_buffer, L"Converting Index Buffer to resource failed!");
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* GetResource(ConstantBuffer vc_buffer)
 	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
-		com_buffer.Attach(vc_buffer.buffer);
-		HRESULT result = com_buffer.As(&_resource);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Constant Buffer to resource failed!", true);
-
-		return _resource.Detach();
+		return GetResourceBuffer(vc_buffer, L"Converting Constant Buffer to resource failed!");
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* GetResource(StructuredBuffer buffer) {
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
-		com_buffer.Attach(buffer.buffer);
-		HRESULT result = com_buffer.As(&_resource);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Structured Buffer to resource failed!", true);
-
-		return _resource.Detach();
+		return GetResourceBuffer(buffer, L"Converting Structured Buffer to resource failed!");
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* GetResource(StandardBuffer buffer) {
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
-		com_buffer.Attach(buffer.buffer);
-		HRESULT result = com_buffer.As(&_resource);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Standard Buffer to resource failed!", true);
-
-		return _resource.Detach();
+		return GetResourceBuffer(buffer, L"Converting Standard Buffer to resource failed!");
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* GetResource(IndirectBuffer buffer) {
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
-		com_buffer.Attach(buffer.buffer);
-		HRESULT result = com_buffer.As(&_resource);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Indirect Buffer to resource failed!", true);
-
-		return _resource.Detach();
+		return GetResourceBuffer(buffer, L"Converting Indirect Buffer to resource failed!");
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* GetResource(UABuffer buffer)
 	{
-		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
-		com_buffer.Attach(buffer.buffer);
-		HRESULT result = com_buffer.As(&_resource);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting UA Buffer to resource failed!", true);
-
-		return _resource.Detach();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
-	ID3D11Resource* GetResource(UAView view) {
-		ID3D11Resource* resource;
-		view.view->GetResource(&resource);
-		unsigned int count = resource->Release();
-		return resource;
+		return GetResourceBuffer(buffer, L"Converting UA Buffer to resource failed!");
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1043,9 +1017,9 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	uint2 GetTextureDimensions(containers::Stream<void> data, TextureExtension extension)
+	uint2 GetTextureDimensions(Stream<void> data, TextureExtension extension)
 	{
-		using function = uint2(*)(containers::Stream<void> data);
+		using function = uint2(*)(Stream<void> data);
 		function functions[] = {
 			GetTextureDimensionsJPG,
 			GetTextureDimensionsPNG,
@@ -1059,7 +1033,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	}
 
 	template<typename Handler>
-	uint2 GetTextureDimensionsExtension(containers::Stream<void> data, Handler&& handler) {
+	uint2 GetTextureDimensionsExtension(Stream<void> data, Handler&& handler) {
 		uint2 dimensions = { 0,0 };
 
 		DirectX::TexMetadata metadata;
@@ -1075,42 +1049,42 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		return dimensions;
 	}
 
-	uint2 GetTextureDimensionsPNG(containers::Stream<void> data)
+	uint2 GetTextureDimensionsPNG(Stream<void> data)
 	{
 		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
 			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
 		});
 	}
 
-	uint2 GetTextureDimensionsJPG(containers::Stream<void> data)
+	uint2 GetTextureDimensionsJPG(Stream<void> data)
 	{
 		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
 			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
 			});
 	}
 
-	uint2 GetTextureDimensionsBMP(containers::Stream<void> data)
+	uint2 GetTextureDimensionsBMP(Stream<void> data)
 	{
 		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
 			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
 			});
 	}
 
-	uint2 GetTextureDimensionsTIFF(containers::Stream<void> data)
+	uint2 GetTextureDimensionsTIFF(Stream<void> data)
 	{
 		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
 			return DirectX::GetMetadataFromWICMemory(data.buffer, data.size, DirectX::WIC_FLAGS_NONE, metadata);
 			});
 	}
 
-	uint2 GetTextureDimensionsTGA(containers::Stream<void> data)
+	uint2 GetTextureDimensionsTGA(Stream<void> data)
 	{
 		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
 			return DirectX::GetMetadataFromTGAMemory(data.buffer, data.size, metadata);
 			});
 	}
 
-	uint2 GetTextureDimensionsHDR(containers::Stream<void> data)
+	uint2 GetTextureDimensionsHDR(Stream<void> data)
 	{
 		return GetTextureDimensionsExtension(data, [=](DirectX::TexMetadata& metadata) {
 			return DirectX::GetMetadataFromHDRMemory(data.buffer, data.size, metadata);

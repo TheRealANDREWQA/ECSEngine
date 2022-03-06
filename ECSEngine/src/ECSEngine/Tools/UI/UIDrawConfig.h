@@ -15,8 +15,9 @@ namespace ECSEngine {
 					ECS_ASSERT(associated_bits[index] != associated_bit, "Repeated flag addition");
 				}
 
-				parameter_start[flag_count + 1] = parameter_start[flag_count] + flag.GetParameterCount();
-				memcpy(parameters + parameter_start[flag_count], flag.GetParameters(), sizeof(float) * flag.GetParameterCount());
+				size_t parameter_count = sizeof(flag) / sizeof(float) + (sizeof(flag) % sizeof(float) != 0);
+				parameter_start[flag_count + 1] = parameter_start[flag_count] + parameter_count;
+				memcpy(parameters + parameter_start[flag_count], &flag, sizeof(float) * parameter_count);
 				associated_bits[flag_count] = associated_bit;
 				flag_count++;
 			}

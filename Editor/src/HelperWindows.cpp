@@ -4,7 +4,6 @@
 
 using namespace ECSEngine;
 ECS_TOOLS;
-ECS_CONTAINERS;
 
 constexpr float2 CHOOSE_DIRECTORY_OR_FILE_NAME_SCALE = float2(0.6f, 0.25f);
 

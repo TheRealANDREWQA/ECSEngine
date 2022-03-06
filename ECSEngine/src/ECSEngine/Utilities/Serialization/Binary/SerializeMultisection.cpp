@@ -8,7 +8,7 @@ namespace ECSEngine {
 
 	const size_t MAX_ACCELERATION_TABLE_MULTISECTIONS = ECS_KB * 16;
 
-	using AccelerationTable = containers::HashTable<SerializeMultisectionData*, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString>;
+	using AccelerationTable = HashTable<SerializeMultisectionData*, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString>;
 
 	// Add 32 to the multisection size so as to avoid breaking the load factor of the hash table for values like 29 -> 32
 #define CREATE_ACCELERATION_TABLE(multisections) ECS_ASSERT(multisections.size < MAX_ACCELERATION_TABLE_MULTISECTIONS); \

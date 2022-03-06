@@ -22,24 +22,24 @@ namespace ECSEngine {
 		GLTFMesh& operator = (const GLTFMesh& other) = default;
 
 		const char* name;
-		containers::Stream<float3> positions;
-		containers::Stream<float3> normals;
-		containers::Stream<float2> uvs;
-		containers::Stream<Color> colors;
-		containers::Stream<float4> skin_weights;
-		containers::Stream<uint4> skin_influences;
-		containers::Stream<unsigned int> indices;
+		Stream<float3> positions;
+		Stream<float3> normals;
+		Stream<float2> uvs;
+		Stream<Color> colors;
+		Stream<float4> skin_weights;
+		Stream<uint4> skin_influences;
+		Stream<unsigned int> indices;
 	};
 
 	// Cgltf uses const char* internally, so a conversion must be done
-	ECSENGINE_API GLTFData LoadGLTFFile(const wchar_t* path, containers::CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(const wchar_t* path, CapacityStream<char>* error_message = nullptr);
 
 	// Cgltf uses const char* internally, so a conversion must be done
-	ECSENGINE_API GLTFData LoadGLTFFile(containers::Stream<wchar_t> path, containers::CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(Stream<wchar_t> path, CapacityStream<char>* error_message = nullptr);
 
-	ECSENGINE_API GLTFData LoadGLTFFile(const char* path, containers::CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(const char* path, CapacityStream<char>* error_message = nullptr);
 
-	ECSENGINE_API GLTFData LoadGLTFFile(containers::Stream<char> path, containers::CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message = nullptr);
 
 	ECSENGINE_API bool LoadMeshFromGLTF(
 		GLTFData data,
@@ -47,7 +47,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator,
 		unsigned int mesh_index = 0,
 		bool invert_z_axis = true,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	ECSENGINE_API bool LoadMaterialFromGLTF(
@@ -55,7 +55,7 @@ namespace ECSEngine {
 		PBRMaterial& material,
 		AllocatorPolymorphic allocator,
 		unsigned int mesh_index = 0,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	ECSENGINE_API bool LoadMeshesFromGLTF(
@@ -63,7 +63,7 @@ namespace ECSEngine {
 		GLTFMesh* meshes,
 		AllocatorPolymorphic allocator,
 		bool invert_z_axis = true,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// For each mesh it will create a separate material
@@ -71,7 +71,7 @@ namespace ECSEngine {
 		GLTFData data,
 		PBRMaterial* materials,
 		AllocatorPolymorphic allocator,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// It will discard materials that repeat - at most data.count materials can be created
@@ -79,10 +79,10 @@ namespace ECSEngine {
 	// the material that is using
 	ECSENGINE_API bool LoadDisjointMaterialsFromGLTF(
 		GLTFData data,
-		containers::Stream<PBRMaterial>& materials,
-		containers::Stream<unsigned int>& submesh_material_index,
+		Stream<PBRMaterial>& materials,
+		Stream<unsigned int>& submesh_material_index,
 		AllocatorPolymorphic allocator,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// GLTFData contains the mesh count that can be used to determine the size of the GLTFMesh stream
@@ -93,7 +93,7 @@ namespace ECSEngine {
 		PBRMaterial* materials,
 		AllocatorPolymorphic allocator,
 		bool invert_z_axis = true,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// GLTFData contains the mesh count that can be used to determine the size of the GLTFMesh stream
@@ -102,11 +102,11 @@ namespace ECSEngine {
 	ECSENGINE_API bool LoadMeshesAndDisjointMaterialsFromGLTF(
 		GLTFData data,
 		GLTFMesh* meshes,
-		containers::Stream<PBRMaterial>& materials,
+		Stream<PBRMaterial>& materials,
 		unsigned int* submesh_material_index,
 		AllocatorPolymorphic allocator,
 		bool invert_z_axis = true,
-		containers::CapacityStream<char>* error_message = nullptr
+		CapacityStream<char>* error_message = nullptr
 	);
 
 	// Can run on multiple threads

@@ -3,8 +3,6 @@
 #include "../../../Containers/Stream.h"
 #include "../../File.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// If the name is nullptr, the name will be skipped when serializing

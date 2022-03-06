@@ -3,11 +3,61 @@
 #include "ToolbarUI.h"
 #include "..\Editor\EditorState.h"
 #include "..\Editor\EditorPalette.h"
+#include "..\Modules\Module.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
 constexpr float TOOP_TIP_OFFSET = 0.01f;
+
+// ----------------------------------------------------------------------------------------------------------------------
+
+void RunProjectAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	// Check to see that all modules can be compiled and loaded
+	if (BuildProjectModulesAndLoad(editor_state)) {
+		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+
+		// Now the runtime should be launched - the tasks should be commited into the system manager
+		
+	}
+	else {
+		EditorSetConsoleError(ToStream("Could not start the runtime: the modules could be compiled or loaded."));
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------
+
+void PauseProjectAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
+	}
+	else {
+		EditorSetConsoleWarn(ToStream("Could not pause the runtime - the runtime is not active."));
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------
+
+void StepProjectAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
+		EditorStateSetFlag(editor_state, EDITOR_STATE_STEP);
+	}
+	else {
+		EditorSetConsoleWarn(ToStream("Could not step the runtime - the runtime is not yet paused"));
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------
 
 void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -68,10 +118,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	}
 	
 	float2 action_scale = { transform.scale.x - border_size_horizontal, transform.scale.y };
-	UIChangeAtomicStateData state_data;
-	state_data.state = &editor_state->flags;
-	state_data.flag = EDITOR_STATE_IS_PLAYING;
-	drawer.AddDefaultClickableHoverable(transform.position, action_scale, { ChangeAtomicStateAction, &state_data, sizeof(state_data) }, drawer.color_theme.theme);
+	drawer.AddDefaultClickableHoverable(transform.position, action_scale, { RunProjectAction, editor_state, 0 }, drawer.color_theme.theme);
 	
 	config.flag_count--;
 	transform.position.x += button_scale.x;
@@ -87,7 +134,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	float2 bar_position = { AlignMiddle(transform.position.x, button_scale.x, bar_scale_x * 3), AlignMiddle(transform.position.y, button_scale.y, bar_scale_y) };
 	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
 	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
-	drawer.AddDefaultClickableHoverable(transform.position, action_scale, { SkipAction, nullptr, 0 });
+	drawer.AddDefaultClickableHoverable(transform.position, action_scale, { PauseProjectAction, nullptr, 0 });
 	drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
 
 	transform.position.x += transform.scale.x;
@@ -101,7 +148,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	Color frame_color = drawer.color_theme.unavailable_text;
 	if (function::HasFlag(editor_state->flags, EDITOR_STATE_IS_PAUSED)) {
 		frame_color = EDITOR_GREEN_COLOR;
-		drawer.AddDefaultClickableHoverable(transform.position, action_scale, { SkipAction, nullptr, 0 });
+		drawer.AddDefaultClickableHoverable(transform.position, action_scale, { StepProjectAction, nullptr, 0 });
 		drawer.TextToolTip("Frame", transform.position, transform.scale, &base_tool_tip);
 	}
 	drawer.SpriteRectangle(configuration, triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, frame_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
@@ -128,8 +175,7 @@ void CreateMiscellaneousBar(EditorState* editor_state) {
 	descriptor.initial_size_x = 2.0f;
 	descriptor.initial_size_y = MISCELLANEOUS_BAR_SIZE_Y;
 
-	size_t stack_memory[128];
-	MiscellaneousBarSetDescriptor(descriptor, editor_state, stack_memory);
+	MiscellaneousBarSetDescriptor(descriptor, editor_state, nullptr);
 
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BORDER_NOTHING | UI_DOCKSPACE_FIXED 
 		| UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_BACKGROUND);

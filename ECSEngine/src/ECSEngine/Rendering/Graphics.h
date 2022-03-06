@@ -15,8 +15,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 #ifdef ECSENGINE_PLATFORM_WINDOWS
 
 #ifdef ECSENGINE_DIRECTX11
@@ -925,7 +923,7 @@ namespace ECSEngine {
 		// If it doesn't find the resource, it does nothing
 		void RemovePossibleResourceFromTracking(void* resource);
 		
-		void FreeShaderView(ResourceView view);
+		void FreeResourceView(ResourceView view);
 
 		void FreeUAView(UAView view);
 
@@ -1004,10 +1002,10 @@ namespace ECSEngine {
 		BlendState m_blend_enabled;
 		ShaderReflection* m_shader_reflection;
 		MemoryManager* m_allocator;
-		containers::CapacityStream<GraphicsShaderHelper> m_shader_helpers;
+		CapacityStream<GraphicsShaderHelper> m_shader_helpers;
 		// Keep a track of the created resources, for leaks and for winking out the device
 		// For some reason DX11 does not provide a winking method for the device!!!!!!!!
-		containers::AtomicStream<GraphicsInternalResource> m_internal_resources;
+		AtomicStream<GraphicsInternalResource> m_internal_resources;
 	private:
 		char padding_1[ECS_CACHE_LINE_SIZE - sizeof(std::atomic<unsigned int>)];
 	public:
@@ -1304,6 +1302,12 @@ namespace ECSEngine {
 
 	ECSENGINE_API void RestorePipelineState(GraphicsContext* context, const GraphicsPipelineState* state);
 
+	// Transfers a shared GPU texture/buffer from a Graphics instance to another - should only create
+	// another runtime DX11 reference to that texture, there should be no memory blit or copy
+	// It does not affect samplers, input layouts, shaders, other pipeline objects (rasterizer/blend/depth states)
+	template<typename Resource>
+	ECSENGINE_API Resource TransferGPUResource(Resource resource, GraphicsDevice* device);
+
 	template<typename Texture>
 	ECSENGINE_API void UpdateTexture(
 		Texture texture,
@@ -1351,7 +1355,7 @@ namespace ECSEngine {
 	// The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
-	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, containers::Stream<Mesh> meshes, Submesh* submeshes, unsigned int misc_flags = 0);
+	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, unsigned int misc_flags = 0);
 
 	// Same as the non mask variant - the difference is that it will only convert the meshes specified
 	// in the mesh mask
@@ -1360,9 +1364,9 @@ namespace ECSEngine {
 	// The submeshes will inherit the mesh name if it has one
 	ECSENGINE_API Mesh MeshesToSubmeshes(
 		Graphics* graphics, 
-		containers::Stream<Mesh> meshes, 
+		Stream<Mesh> meshes, 
 		Submesh* submeshes,
-		containers::Stream<unsigned int> mesh_mask, 
+		Stream<unsigned int> mesh_mask, 
 		unsigned int misc_flags = 0
 	);
 

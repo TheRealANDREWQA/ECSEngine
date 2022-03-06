@@ -3,8 +3,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	namespace Tools {
 		
 		void UIDrawerTextInput::SetZoomFactor(float2 zoom)

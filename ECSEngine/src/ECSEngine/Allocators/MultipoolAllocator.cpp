@@ -60,11 +60,11 @@ namespace ECSEngine {
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {
-		return containers::BlockRange::MemoryOf(pool_count) + size + 8;
+		return BlockRange::MemoryOf(pool_count) + size + 8;
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count) {
-		return containers::BlockRange::MemoryOf(pool_count);
+		return BlockRange::MemoryOf(pool_count);
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

@@ -11,7 +11,7 @@
 											} \
 											else { \
 												wchar_t _null_path[512]; \
-												containers::CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
+												CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
 												null_path.Copy(stream); \
 												null_path[stream.size] = L'\0'; \
 												return function(null_path.buffer, __VA_ARGS__); \

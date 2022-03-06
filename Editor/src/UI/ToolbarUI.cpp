@@ -13,6 +13,8 @@
 #include "Game.h"
 #include "ModuleExplorer.h"
 #include "Inspector.h"
+#include "Settings.h"
+#include "Backups.h"
 
 #endif
 
@@ -54,7 +56,7 @@ void DefaultUITemplate(ActionData* action_data) {
 	}
 	else {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
-		error_message.size = function::FormatString(error_message.buffer, "Could not find default template {0}. It has been deleted.", template_path);
+		error_message.size = function::FormatString(error_message.buffer, "Could not find default template {#}. It has been deleted.", template_path);
 		error_message.AssertCapacity();
 		CreateErrorMessageWindow(system, error_message);
 	}
@@ -94,11 +96,13 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		// The action data is the inject data + the window name
 		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, UIDrawPhase::System };
 		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, editor_state->console, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, GetConsole(), 0, UIDrawPhase::System };
 		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, UIDrawPhase::System };
 		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, UIDrawPhase::System };
 		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, UIDrawPhase::System };
 		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_SETTINGS] = { CreateSettingsWindowAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, UIDrawPhase::System };
 
 #pragma endregion
 
@@ -253,8 +257,8 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	drawer.Menu(configuration, config, "File", &current_state);
 
 	current_state.right_characters = nullptr;
-	current_state.separation_lines[0] = 1;
-	current_state.separation_lines[1] = 4;
+	current_state.separation_lines[0] = 2;
+	current_state.separation_lines[1] = 5;
 	current_state.separation_line_count = 2;
 	current_state.left_characters = (char*)TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
 	current_state.click_handlers = data->window_actions;

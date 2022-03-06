@@ -33,7 +33,6 @@ namespace ECSEngine {
 	struct LinearAllocator;
 	struct ConditionVariable;
 
-	ECS_CONTAINERS;
 	using ThreadQueue = ThreadSafeQueue<ThreadTask>;
 
 	enum class TaskManagerWrapper : unsigned char {
@@ -47,7 +46,7 @@ namespace ECSEngine {
 	public:
 		TaskManager(
 			size_t thread_count, 
-			MemoryManager* memory_manager,
+			GlobalMemoryManager* memory_manager,
 			size_t thread_linear_allocator_size = ECS_TASK_MANAGER_THREAD_LINEAR_ALLOCATOR_SIZE,
 			size_t thread_memory_manager_size = ECS_TASK_MANAGER_THREAD_MEMORY_MANAGER_SIZE,
 			size_t max_dynamic_tasks = ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
@@ -84,11 +83,14 @@ namespace ECSEngine {
 
 		void CreateThreads();
 
+		// It will call ExitThread to kill the thread. It does so by adding a dynamic task and waking the thread
+		// This helps eliminate dangerous state changes that are not fully commited, like writing files, modifying global state,
+		// locks or allocations
+		void DestroyThreads();
+
 		void DecrementThreadTaskIndex(unsigned int thread_id);
 
 		void IncrementThreadTaskIndex(unsigned int thread_id);
-
-		Timer* GetTimer();
 
 		unsigned int GetTaskCount() const;
 
@@ -113,8 +115,6 @@ namespace ECSEngine {
 
 		void SetWorld(World* world);
 
-		void SetTimerMarker();
-
 		void SetThreadTaskIndex(unsigned int thread_index, int value);
 
 		void SleepThread(unsigned int thread_id);
@@ -132,11 +132,14 @@ namespace ECSEngine {
 
 	//private:
 		World* m_world;
+		void** m_thread_handles;
+
 		Stream<ThreadQueue*> m_thread_queue;
 		ResizableStream<ThreadTask> m_tasks;
 		std::atomic<int>** m_thread_task_index;
-		ConditionVariable* m_events;
-		Timer m_timer;
+
+		ConditionVariable* m_sleep_wait;
+
 		unsigned int m_last_thread_index;
 		LinearAllocator** m_thread_linear_allocators;
 		MemoryManager** m_thread_memory_managers;

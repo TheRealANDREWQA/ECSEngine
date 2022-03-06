@@ -413,7 +413,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddString(float3 position, float3 direction, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = function::StringCopy(allocator, text);
 		strings.Add({ position, direction, size, text_copy, color, options });
@@ -421,7 +421,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, containers::Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
 		Stream<char> text_copy = function::StringCopy(allocator, text);
 		float3 direction = GetRightVector(rotation);
@@ -585,7 +585,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringThread(float3 position, float3 direction, float size, containers::Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringThread(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -598,7 +598,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void DebugDrawer::AddStringRotationThread(float3 position, float3 rotation, float size, containers::Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
+	void DebugDrawer::AddStringRotationThread(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, unsigned int thread_index, DebugDrawCallOptions options)
 	{
 		// Check to see if the queue is full
 		// If it is, then a flush is needed to clear the queue
@@ -940,7 +940,7 @@ namespace ECSEngine {
 		float3 translation,
 		float3 rotation,
 		float size,
-		containers::Stream<char> text,
+		Stream<char> text,
 		ColorFloat color,
 		DebugDrawCallOptions options
 	) {
@@ -1098,7 +1098,7 @@ namespace ECSEngine {
 		VertexBuffer model_normals,
 		float size,
 		ColorFloat color,
-		containers::Stream<Matrix> world_matrices,
+		Stream<Matrix> world_matrices,
 		DebugDrawCallOptions options
 	) {
 		DrawDebugVertexLine(this, model_position, model_normals, 3, size, color, world_matrices, options);

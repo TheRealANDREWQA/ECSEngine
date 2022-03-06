@@ -21,6 +21,7 @@ namespace ECSEngine {
 			value.load(values);
 		}
 		ECS_INLINE ECS_VECTORCALL Quaternion(Vec4f _value) : value(_value) {}
+		ECS_INLINE ECS_VECTORCALL Quaternion(Vector4 _value) : value(_value.value) {}
 
 		ECS_INLINE Quaternion(const Quaternion& other) = default;
 		ECS_INLINE Quaternion& ECS_VECTORCALL operator = (const Quaternion& other) = default;
@@ -79,6 +80,7 @@ namespace ECSEngine {
 			value.load(values);
 		}
 		ECS_INLINE ECS_VECTORCALL PackedQuaternion(Vec8f _value) : value(_value) {}
+		ECS_INLINE ECS_VECTORCALL PackedQuaternion(Vector8 _value) : value(_value.value) {}
 		ECS_INLINE ECS_VECTORCALL PackedQuaternion(Quaternion first, Quaternion second) : value(first.value, second.value) {}
 
 		ECS_INLINE PackedQuaternion(const PackedQuaternion& other) = default;
@@ -190,7 +192,7 @@ namespace ECSEngine {
 		Vector4 right = first_permutation_right * second_permutation_right * third_permutation_right;
 		right = change_sign<0, 1, 0, 1>(right);
 
-		quaternion.value = Vec4f(left + right);
+		quaternion.value = (left + right).value;
 		return quaternion;
 	}
 
@@ -224,7 +226,7 @@ namespace ECSEngine {
 		Vector8 right = first_permutation_right * second_permutation_right * third_permutation_right;
 		right = change_sign<0, 1, 0, 1, 0, 1, 0, 1>(right);
 
-		quaternion.value = Vec8f(left + right);
+		quaternion.value = (left + right).value;
 		return quaternion;
 	}
 
@@ -729,10 +731,10 @@ namespace ECSEngine {
 		PackedQuaternion negated = -quat_b;
 		PackedQuaternion result = quat_b;
 		if (value1 < 0.0f) {
-			result = blend8<8, 9, 10, 11, 4, 5, 6, 7>(quat_b.value, negated.value);
+			result = Vector8(blend8<8, 9, 10, 11, 4, 5, 6, 7>(quat_b.value, negated.value));
 		}
 		if (value2 < 0.0f) {
-			result = blend8<0, 1, 2, 3, 12, 13, 14, 15>(result.value, negated.value);
+			result = Vector8(blend8<0, 1, 2, 3, 12, 13, 14, 15>(result.value, negated.value));
 		}
 		return result;
 	}

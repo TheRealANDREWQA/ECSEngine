@@ -2,8 +2,6 @@
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	using Path = Stream<wchar_t>;

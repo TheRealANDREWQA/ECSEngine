@@ -5,7 +5,6 @@
 #include "EditorEvent.h"
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 ECS_TOOLS;
 
 #define SAVE_FILE_ERROR_MESSAGE "Saving editor file failed."
@@ -176,7 +175,7 @@ void SaveEditorFileThreadTask(unsigned int thread_index, World* world, void* dat
 	if (!success) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
 		error_message.Copy(ToStream(SAVE_FILE_ERROR_MESSAGE));
-		EditorSetError((EditorState*)data, error_message);
+		EditorSetConsoleError(error_message);
 	}
 }
 
@@ -187,7 +186,7 @@ void SaveEditorFileAction(ActionData* action_data) {
 	if (!success) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
 		error_message.Copy(ToStream(SAVE_FILE_ERROR_MESSAGE));
-		EditorSetError((EditorState*)_data, error_message);
+		EditorSetConsoleError(error_message);
 	}
 }
 
@@ -198,6 +197,6 @@ void LoadEditorFileAction(ActionData* action_data) {
 	if (!success) {
 		ECS_TEMP_ASCII_STRING(error_message, 256);
 		error_message.Copy(ToStream(LOAD_FILE_ERROR_MESSAGE));
-		EditorSetError((EditorState*)_data, error_message);
+		EditorSetConsoleError(error_message);
 	}
 }

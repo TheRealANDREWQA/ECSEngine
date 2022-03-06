@@ -12,13 +12,9 @@ using namespace ECSEngine::Tools;
 struct EditorState;
 
 struct ProjectOperationData {
-	containers::CapacityStream<char> error_message;
+	CapacityStream<char> error_message;
 	EditorState* editor_state;
 	ProjectFile* file_data;
-};
-
-struct ProjectEntityData {
-
 };
 
 struct CreateProjectWizardData {
@@ -38,8 +34,6 @@ void CreateProjectWizard(UISystem* system, CreateProjectWizardData* wizard_data)
 
 bool CheckProjectDirectoryIntegrity(const ProjectFile* project);
 
-bool CheckProjectIntegrity(const ProjectFile* project);
-
 void DeallocateCurrentProject(EditorState* editor_state);
 
 bool ExistsProjectInFolder(const ProjectFile* project_file);
@@ -52,10 +46,6 @@ void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile*
 bool OpenProjectFile(ProjectOperationData data);
 
 void OpenProjectFileAction(ActionData* action_data);
-
-bool OpenProjectContents(ProjectOperationData data);
-
-void OpenProjectContentsAction(ActionData* action_data);
 
 bool OpenProject(ProjectOperationData data);
 
@@ -74,12 +64,8 @@ bool SaveProjectUI(ProjectOperationData data);
 
 void SaveProjectUIAction(ActionData* action_data);
 
-bool SaveProjectContents(ProjectOperationData data);
-
 // Internal use
 bool SaveCurrentProjectConverted(EditorState* _editor_state, bool (*function)(ProjectOperationData));
-
-void SaveProjectContentsAction(ActionData* action_data);
 
 bool SaveProject(ProjectOperationData data);
 
@@ -94,11 +80,6 @@ bool SaveCurrentProjectFile(EditorState* editor_state);
 
 // Data is editor_state
 void SaveCurrentProjectFileAction(ActionData* action_data);
-
-bool SaveCurrentProjectContents(EditorState* editor_state);
-
-// Data is editor_state
-void SaveCurrentProjectContentsAction(ActionData* action_data);
 
 void SaveCurrentProjectWithConfirmation(EditorState* editor_state, Stream<char> description, UIActionHandler callback);
 

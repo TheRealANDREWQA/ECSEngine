@@ -10,7 +10,6 @@ namespace ECSEngine {
 		size_t pool_index;
 
 		pool_index = m_free_list.Request();
-
 		ECS_ASSERT(pool_index < m_pool_count);
 
 		return m_buffer + pool_index * m_pool_size;

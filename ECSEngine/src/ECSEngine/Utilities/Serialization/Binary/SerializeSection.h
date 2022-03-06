@@ -1,8 +1,6 @@
 #pragma once
 #include "../../../Containers/Stream.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	struct SerializeSectionData {

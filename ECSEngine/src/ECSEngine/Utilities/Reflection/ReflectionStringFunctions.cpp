@@ -7,8 +7,6 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
-		ECS_CONTAINERS;
-
 #define FIELD_TYPE_STRING(string) ToStream(STRING(string))
 
 		// Jump table

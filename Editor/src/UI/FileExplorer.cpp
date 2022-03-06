@@ -13,7 +13,6 @@
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
-ECS_CONTAINERS;
 
 constexpr float2 WINDOW_SIZE = float2(1.0f, 0.6f);
 constexpr size_t DOUBLE_CLICK_DURATION = 350;
@@ -329,13 +328,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 				current_success = FolderCut(data->copied_files[index], data->current_directory);
 			}
 			else {
-				ECS_FILE_STATUS_FLAGS code = FileCut(data->copied_files[index], data->current_directory, true);
-				if (code == ECS_FILE_STATUS_OK) {
-					current_success = true;
-				}
-				else {
-					current_success = false;
-				}
+				current_success = FileCut(data->copied_files[index], data->current_directory, true);
 			}
 
 			if (!current_success) {
@@ -352,13 +345,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 				current_success = FolderCopy(data->copied_files[index], data->current_directory);
 			}
 			else {
-				ECS_FILE_STATUS_FLAGS code = FileCopy(data->copied_files[index], data->current_directory, true);
-				if (code == ECS_FILE_STATUS_OK) {
-					current_success = true;
-				}
-				else {
-					current_success = false;
-				}
+				current_success = FileCopy(data->copied_files[index], data->current_directory, true, true);
 			}
 
 			if (!current_success) {
@@ -386,7 +373,7 @@ void FileExplorerPasteElements(ActionData* action_data) {
 			function::ConvertWideCharsToASCII(data->copied_files[invalid_files[index]], error_message);
 		}
 
-		EditorSetError(editor_state, error_message);
+		EditorSetConsoleError(error_message);
 		ECS_FREEA(_error_message);
 		// Also reset the copied files
 		FileExplorerResetCopiedFiles(data);
@@ -1024,8 +1011,8 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 		for (size_t index = 0; index < data->data->overwrite_files.size; index++) {
 			if (data->states[index]) {
 				Stream<wchar_t> path_to_copy = data->data->explorer_data->selected_files[data->data->overwrite_files[index]];
-				ECS_FILE_STATUS_FLAGS code = FileCut(path_to_copy, data->data->destination, true);
-				if (code != ECS_FILE_STATUS_OK) {
+				bool code = FileCut(path_to_copy, data->data->destination, true);
+				if (!code) {
 					error_message.Add('\n');
 					error_message.Add('\t');
 					function::ConvertWideCharsToASCII(path_to_copy, error_message);
@@ -1367,9 +1354,7 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 			thread_data->editor_state = editor_state;
 			thread_data->semaphore = semaphore;
 
-			ThreadTask thread_task;
-			thread_task.data = thread_data;
-			thread_task.function = FileExplorerPreloadTextureThreadTask;
+			ThreadTask thread_task = ECS_THREAD_TASK_NAME(FileExplorerPreloadTextureThreadTask, thread_data, 0);
 			task_manager->AddDynamicTaskAndWake(thread_task);
 
 			total_texture_count += thread_texture_count;
@@ -1391,10 +1376,13 @@ void FileExplorerReleaseMeshThumbnail(EditorState* editor_state, FileExplorerDat
 	ResourceIdentifier identifier = explorer_data->mesh_thumbnails.GetIdentifiers()[table_index];
 
 	editor_allocator->Deallocate(identifier.ptr);
-	Texture2D texture = GetResource(thumbnail.texture);
-	Graphics* graphics = editor_state->Graphics();
-	graphics->FreeResource(texture);
-	graphics->FreeResource(thumbnail.texture);
+	// Release the resources only if the thumbnail could be loaded
+	if (thumbnail.could_be_read) {
+		Texture2D texture = GetResource(thumbnail.texture);
+		Graphics* graphics = editor_state->Graphics();
+		graphics->FreeResource(texture);
+		graphics->FreeResource(thumbnail.texture);
+	}
 
 	explorer_data->mesh_thumbnails.EraseFromIndex(table_index);
 }
@@ -1410,7 +1398,8 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 		if (data->mesh_thumbnails.IsItemAt(index)) {
 			Stream<wchar_t> path = { identifiers[index].ptr, identifiers[index].size };
 			// If the mesh was changed or deleted, remove it
-			if (!ExistsFileOrFolder(path) || OS::GetFileLastWrite(path.buffer) > thumbnails[index].last_write_time) {
+			size_t last_write = OS::GetFileLastWrite(path.buffer);
+			if (!ExistsFileOrFolder(path) || last_write > thumbnails[index].last_write_time) {
 				FileExplorerReleaseMeshThumbnail(editor_state, data, index);
 				index--;
 			}
@@ -1440,18 +1429,18 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 			CoallescedMesh* mesh = data->resource_manager->LoadCoallescedMeshImplementation(path);
 			// If the mesh is nullptr, the read failed
 			thumbnail.could_be_read = mesh != nullptr;
+			thumbnail.last_write_time = OS::GetFileLastWrite(path);
 			if (thumbnail.could_be_read) {
 				// Call the GLTFThumbnail generator
 				GLTFThumbnail gltf_thumbnail = GLTFGenerateThumbnail(data->resource_manager->m_graphics, FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE, &mesh->mesh);
 				thumbnail.texture = gltf_thumbnail.texture;
-				thumbnail.last_write_time = OS::GetFileLastWrite(path);
 
 				// Free the coallesced mesh
 				data->resource_manager->UnloadCoallescedMeshImplementation(mesh);
 			}
 
 			// Update the hash table
-			InsertToDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, allocated_path);
+			InsertToDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, ResourceIdentifier(allocated_path.buffer, allocated_path.size * sizeof(wchar_t)));
 
 			data->thumbnail_found = true;
 
@@ -1988,7 +1977,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 						}
 					}
 				}
-				else if (function::HasFlagAtomic(_data->editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
+				else if (EditorStateHasFlag(_data->editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 					functor = FileBlankDraw;
 				}
 				functor(&action_data);
@@ -2120,20 +2109,22 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 					for (size_t index = 0; index < data->selected_files.size; index++) {
 						Stream<wchar_t> current_file = data->selected_files[index];
-						ECS_FILE_STATUS_FLAGS error_code = FileCut(current_file, mouse_element_path);
-						if (error_code == ECS_FILE_STATUS_ALREADY_EXISTS) {
-							overwrite_files.Add(index);
-						}
-						else if (error_code != ECS_FILE_STATUS_OK) {
-							error_file_count++;
-							error_files.AddSafe('\n');
-							error_files.Add('\t');
-							function::ConvertWideCharsToASCII(current_file, error_files);
+						bool error_code = FileCut(current_file, mouse_element_path);
+						if (!error_code) {
+							if (ExistsFileOrFolder(mouse_element_path)) {
+								overwrite_files.Add(index);
+							}
+							else {
+								error_file_count++;
+								error_files.AddSafe('\n');
+								error_files.Add('\t');
+								function::ConvertWideCharsToASCII(current_file, error_files);
+							}
 						}
 					}
 
 					if (error_file_count > 0) {
-						EditorSetConsoleError(editor_state, error_files);
+						EditorSetConsoleError(error_files);
 					}
 
 					if (overwrite_files.size > 0) {

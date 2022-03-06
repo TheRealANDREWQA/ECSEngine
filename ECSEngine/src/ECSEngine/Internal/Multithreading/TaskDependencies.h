@@ -3,19 +3,17 @@
 #include "../../Allocators/MemoryManager.h"
 #include "../../Containers/Stream.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	struct TaskDependencyElement {
 		ThreadTask task;
-		Stream<char> task_name;
 		Stream<Stream<char>> dependencies;
+		ECS_THREAD_TASK_GROUP task_group;
 	};
 
 	struct ECSENGINE_API TaskDependencies {
-		TaskDependencies() : solved_task_count(0) {}
-		TaskDependencies(MemoryManager* allocator) : elements(GetAllocatorPolymorphic(allocator), 0), solved_task_count(0) {}
+		TaskDependencies() {}
+		TaskDependencies(MemoryManager* allocator) : elements(GetAllocatorPolymorphic(allocator, AllocationType::MultiThreaded), 0) {}
 
 		TaskDependencies(const TaskDependencies& other) = default;
 		TaskDependencies& operator = (const TaskDependencies & other) = default;
@@ -39,7 +37,6 @@ namespace ECSEngine {
 		bool Solve();
 
 		ResizableStream<TaskDependencyElement> elements;
-		unsigned int solved_task_count;
 	};
 
 }

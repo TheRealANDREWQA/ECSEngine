@@ -6,12 +6,12 @@
 namespace ECSEngine {
 
 	/* the free list is going to receive its own pool, so pool_count needs to be 1 more than the desired number */
-	class ECSENGINE_API PoolAllocator
+	struct ECSENGINE_API PoolAllocator
 	{
 	public:
 		PoolAllocator(unsigned char* buffer, size_t pool_count, size_t pool_size) 
 			: m_buffer(buffer + pool_size * sizeof(unsigned short)), m_pool_count(pool_count - 1), m_pool_size(pool_size), 
-			m_free_list((containers::byte64*)buffer, (size_t)(pool_count - 1), true) {}
+			m_free_list((byte64*)buffer, (size_t)(pool_count - 1), true) {}
 
 		void* Allocate(size_t size, size_t alignment = 8);
 
@@ -27,12 +27,12 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 
-	private:
+	//private:
 		unsigned char* m_buffer;
 		size_t m_pool_count;
 		size_t m_pool_size;
 		SpinLock m_spin_lock;
-		containers::BooleanBitField m_free_list;
+		BooleanBitField m_free_list;
 	};
 
 }

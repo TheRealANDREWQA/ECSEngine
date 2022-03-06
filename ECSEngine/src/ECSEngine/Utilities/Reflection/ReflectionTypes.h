@@ -1,6 +1,7 @@
 #pragma once
 #include "../../Core.h"
 #include "../../Containers/Stream.h"
+#include "../BasicTypes.h"
 
 namespace ECSEngine {
 
@@ -70,7 +71,7 @@ namespace ECSEngine {
 			COUNT
 		};
 
-		struct ECSENGINE_API ReflectionFieldInfo {
+		struct ReflectionFieldInfo {
 			ReflectionFieldInfo() {}
 			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionStreamFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
 				: stream_type(_extended_type), basic_type(_basic_type), byte_size(_byte_size), basic_type_count(_basic_type_count) {}
@@ -78,10 +79,57 @@ namespace ECSEngine {
 			ReflectionFieldInfo(const ReflectionFieldInfo& other) = default;
 			ReflectionFieldInfo& operator = (const ReflectionFieldInfo& other) = default;
 
+			union {
+				char default_char;
+				unsigned char default_uchar;
+				short default_short;
+				unsigned short default_ushort;
+				int default_int;
+				unsigned int default_uint;
+				long long default_long;
+				unsigned long long default_ulong;
+				float default_float;
+				double default_double;
+				bool default_bool;
+				char2 default_char2;
+				uchar2 default_uchar2;
+				short2 default_short2;
+				ushort2 default_ushort2;
+				int2 default_int2;
+				uint2 default_uint2;
+				long2 default_long2;
+				ulong2 default_ulong2;
+				float2 default_float2;
+				double2 default_double2;
+				bool2 default_bool2;
+				char3 default_char3;
+				uchar3 default_uchar3;
+				short3 default_short3;
+				ushort3 default_ushort3;
+				int3 default_int3;
+				uint3 default_uint3;
+				long3 default_long3;
+				ulong3 default_ulong3;
+				float3 default_float3;
+				double3 default_double3;
+				bool3 default_bool3;
+				char4 default_char4;
+				uchar4 default_uchar4;
+				short4 default_short4;
+				ushort4 default_ushort4;
+				int4 default_int4;
+				uint4 default_uint4;
+				long4 default_long4;
+				ulong4 default_ulong4;
+				float4 default_float4;
+				double4 default_double4;
+				bool4 default_bool4;
+			};
+			bool has_default_value;
 			ReflectionStreamFieldType stream_type;
 			ReflectionBasicFieldType basic_type;
 			unsigned short basic_type_count;
-			unsigned short additional_flags;
+			unsigned short stream_byte_size;
 			unsigned short byte_size;
 			unsigned short pointer_offset;
 		};
@@ -94,13 +142,13 @@ namespace ECSEngine {
 
 		struct ReflectionType {
 			const char* name;
-			containers::Stream<ReflectionField> fields;
+			Stream<ReflectionField> fields;
 			unsigned int folder_hierarchy_index;
 		};
 
 		struct ReflectionEnum {
 			const char* name;
-			containers::Stream<const char*> fields;
+			Stream<const char*> fields;
 			unsigned int folder_hierarchy_index;
 		};
 

@@ -10,7 +10,7 @@ namespace ECSEngine {
 	struct Graphics;
 
 	struct DecodedTexture {
-		containers::Stream<void> data;
+		Stream<void> data;
 		size_t width;
 		size_t height;
 		DXGI_FORMAT format;
@@ -76,7 +76,11 @@ namespace ECSEngine {
 
 	ECSENGINE_API ID3D11Resource* GetResource(DepthStencilView depth_view);
 
+	ECSENGINE_API ID3D11Resource* GetResource(UAView view);
+
 	ECSENGINE_API ID3D11Resource* GetResource(VertexBuffer vertex_buffer);
+
+	ECSENGINE_API ID3D11Resource* GetResource(IndexBuffer index_buffer);
 
 	ECSENGINE_API ID3D11Resource* GetResource(ConstantBuffer vc_buffer);
 
@@ -87,8 +91,6 @@ namespace ECSEngine {
 	ECSENGINE_API ID3D11Resource* GetResource(IndirectBuffer buffer);
 
 	ECSENGINE_API ID3D11Resource* GetResource(UABuffer buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(UAView view);
 
 	ECSENGINE_API void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer, bool temporary = false);
 
@@ -195,7 +197,7 @@ namespace ECSEngine {
 
 	// Resizing is done on the CPU; an allocation will be made for the newly resized data
 	// If it fails, it will return { nullptr, 0 }
-	ECSENGINE_API containers::Stream<void> ResizeTexture(
+	ECSENGINE_API Stream<void> ResizeTexture(
 		void* texture_data,
 		size_t current_width,
 		size_t current_height,
@@ -209,20 +211,20 @@ namespace ECSEngine {
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
 	// decompressed data; Momentarly there are no flags
 	// If it fails it returns a { nullptr, 0 } 
-	ECSENGINE_API DecodedTexture DecodeTexture(containers::Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags = 0);
+	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
 	// decompressed data; Momentarly there are no flags. The filename is needed in for the texture extension
 	// If it fails it returns a { nullptr, 0 } 
-	ECSENGINE_API DecodedTexture DecodeTexture(containers::Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags = 0);
+	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// It will invert the mesh on the Z axis
 	ECSENGINE_API void InvertMeshZAxis(Graphics* graphics, Mesh& mesh);
 
 	// Convert a texture from DXGI_FORMAT_R8_UNROM to DXGI_FORMAT_R8G8B8A8_UNORM texture
 	// Allocator nullptr means use malloc
-	ECSENGINE_API containers::Stream<containers::Stream<void>> ConvertSingleChannelTextureToGrayscale(
-		containers::Stream<containers::Stream<void>> mip_data,
+	ECSENGINE_API Stream<Stream<void>> ConvertSingleChannelTextureToGrayscale(
+		Stream<Stream<void>> mip_data,
 		size_t width,
 		size_t height,
 		AllocatorPolymorphic allocator = {nullptr}
@@ -265,31 +267,31 @@ namespace ECSEngine {
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensions(containers::Stream<void> data, TextureExtension texture_extension);
+	ECSENGINE_API uint2 GetTextureDimensions(Stream<void> data, TextureExtension texture_extension);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensionsPNG(containers::Stream<void> data);
+	ECSENGINE_API uint2 GetTextureDimensionsPNG(Stream<void> data);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensionsJPG(containers::Stream<void> data);
+	ECSENGINE_API uint2 GetTextureDimensionsJPG(Stream<void> data);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensionsBMP(containers::Stream<void> data);
+	ECSENGINE_API uint2 GetTextureDimensionsBMP(Stream<void> data);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensionsTIFF(containers::Stream<void> data);
+	ECSENGINE_API uint2 GetTextureDimensionsTIFF(Stream<void> data);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensionsTGA(containers::Stream<void> data);
+	ECSENGINE_API uint2 GetTextureDimensionsTGA(Stream<void> data);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensionsHDR(containers::Stream<void> data);
+	ECSENGINE_API uint2 GetTextureDimensionsHDR(Stream<void> data);
 
 
 

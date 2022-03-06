@@ -12,8 +12,6 @@ namespace ECSEngine {
 
 #define EXPORT(function, integer) template ECSENGINE_API void function<integer>(ActionData*);
 
-		ECS_CONTAINERS;
-
 		// --------------------------------------------------------------------------------------------------------------
 		
 		void WindowHandlerInitializer(ActionData* action_data) {
@@ -923,7 +921,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		constexpr float INPUT_DRAG_FACTOR = 25.0f;
+		constexpr float INPUT_DRAG_FACTOR = 60.0f;
 
 		void DoubleInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -2371,10 +2369,9 @@ namespace ECSEngine {
 			UIDrawConfig color_input_config;
 			UIConfigWindowDependentSize color_input_transform;
 			color_input_transform.type = WindowSizeTransformType::Horizontal;
-			color_input_transform.scale_factor = { 0.28f, 1.0f };
+			color_input_transform.scale_factor = { 0.34f, 1.0f };
 
 			color_input_config.AddFlag(color_input_transform);
-
 			drawer.ColorInput(COLOR_INPUT_CONFIGURATION, color_input_config, "ColorInput", main_input->rgb);
 #pragma endregion
 

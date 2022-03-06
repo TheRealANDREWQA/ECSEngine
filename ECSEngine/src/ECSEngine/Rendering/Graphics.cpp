@@ -1417,7 +1417,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::FreeShaderView(ResourceView view)
+	void Graphics::FreeResourceView(ResourceView view)
 	{
 		ID3D11Resource* resource = GetResource(view);
 		FreeResource(view);
@@ -3886,6 +3886,85 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	template<typename Resource>
+	Resource TransferGPUResource(Resource resource, GraphicsDevice* device)
+	{
+		ID3D11Resource* dx_resource = GetResource(resource);
+
+		// Acquire the DXGIResource interface from the DX resource
+		IDXGIResource* dxgi_resource;
+		HRESULT result = dx_resource->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Getting the DXGI resource from shared resource failed.", true);
+
+		// Query interface updates the reference count, release it to maintain invariance
+		dxgi_resource->Release();
+
+		HANDLE handle;
+		result = dxgi_resource->GetSharedHandle(&handle);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Acquiring a handle for a shared resource failed.", true);
+
+		ID3D11Resource* new_dx_resource;
+		result = device->OpenSharedResource(handle, __uuidof(ID3D11Resource), (void**)&new_dx_resource);
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Obtaining shared resource from handle failed.", true);
+
+		// In order to construct the new type, use constexpr if to properly construct the type
+		auto get_buffer_resource = [](ID3D11Resource* resource) {
+			ID3D11Buffer* buffer;
+			HRESULT result = resource->QueryInterface(__uuidof(ID3D11Buffer), (void**)&buffer);
+			ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting a shared resource to buffer failed.", true);
+			
+			buffer->Release();
+			return buffer;
+		};
+
+		Resource new_resource;
+		memcpy(&new_resource, &resource, sizeof(Resource));
+		if constexpr (std::is_same_v<Resource, VertexBuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, IndexBuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, ConstantBuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, StandardBuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, StructuredBuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, UABuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, IndirectBuffer>) {
+			new_resource.buffer = get_buffer_resource(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, Texture1D>) {
+			new_resource = Texture1D(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, Texture2D>) {
+			new_resource = Texture2D(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, Texture3D>) {
+			new_resource = Texture3D(new_dx_resource);
+		}
+		else if constexpr (std::is_same_v<Resource, TextureCube>) {
+			new_resource = TextureCube(new_dx_resource);
+		}
+		else {
+			ECS_ASSERT(false);
+		}
+
+		return new_resource;
+	}
+
+#define EXPORT_TRANSFER_GPU(resource) template ECSENGINE_API resource TransferGPUResource(resource, GraphicsDevice*);
+
+	ECS_GRAPHICS_RESOURCES(EXPORT_TRANSFER_GPU);
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	template<typename Texture>
 	void UpdateTexture(
 		Texture texture,
@@ -4042,23 +4121,23 @@ namespace ECSEngine {
 		// Same as constant buffers, their reference count was incremented upon
 		// assignment alongside the resource that they view
 		for (size_t index = 0; index < material.vertex_texture_count; index++) {
-			graphics->FreeShaderView(material.vertex_textures[index]);
+			graphics->FreeResourceView(material.vertex_textures[index]);
 		}
 
 		for (size_t index = 0; index < material.pixel_texture_count; index++) {
-			graphics->FreeShaderView(material.pixel_textures[index]);
+			graphics->FreeResourceView(material.pixel_textures[index]);
 		}
 
 		for (size_t index = 0; index < material.domain_texture_count; index++) {
-			graphics->FreeShaderView(material.domain_textures[index]);
+			graphics->FreeResourceView(material.domain_textures[index]);
 		}
 
 		for (size_t index = 0; index < material.hull_texture_count; index++) {
-			graphics->FreeShaderView(material.hull_textures[index]);
+			graphics->FreeResourceView(material.hull_textures[index]);
 		}
 
 		for (size_t index = 0; index < material.geometry_texture_count; index++) {
-			graphics->FreeShaderView(material.geometry_textures[index]);
+			graphics->FreeResourceView(material.geometry_textures[index]);
 		}
 
 		// Release the UAVs

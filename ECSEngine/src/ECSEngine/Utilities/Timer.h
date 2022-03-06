@@ -16,9 +16,11 @@ namespace ECSEngine {
 			m_marker = m_start;
 		}
 
-		void PrintDuration() const;
+		// Increases the start point by the given amount in nanoseconds
+		void DelayStart(size_t nanoseconds);
 
-		void PrintDurationSinceMarker() const;
+		// Increases the marker point by the given amount in nanoseconds
+		void DelayMarker(size_t nanoseconds);
 
 		void SetNewStart();
 
@@ -35,10 +37,6 @@ namespace ECSEngine {
 		unsigned long long GetDurationSinceMarker_us() const;
 
 		unsigned long long GetDurationSinceMarker_ms() const;
-
-		~Timer() {
-			PrintDuration();
-		}
 
 	private:
 		std::chrono::high_resolution_clock::time_point m_start;

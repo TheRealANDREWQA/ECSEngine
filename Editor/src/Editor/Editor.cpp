@@ -17,6 +17,7 @@
 #include "EntryPoint.h"
 #include "../UI/NotificationBar.h"
 #include "../UI/InspectorData.h"
+#include <DbgHelp.h>
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -26,24 +27,6 @@ using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
 #pragma comment(lib, "d3d11.lib")
-
-struct ECS_REFLECT MyStruct {
-	bool boolean;
-	unsigned int integer0;
-	size_t integer1;
-	int64_t integer2;
-	float float0;
-	float3 float3;
-	float4 float4;
-	double double0;
-	double3 double3;
-	Stream<char> characters;
-	Stream<wchar_t> stream_characters;
-	Stream<float> float_values;
-	const char* ascii_string;
-	const wchar_t* wide_char;
-};
-
 #pragma comment(lib, "Shcore.lib")
 
 class Editor : public ECSEngine::Application {
@@ -107,7 +90,6 @@ public:
 
 	int Run() override {
 		using namespace ECSEngine;
-		using namespace ECSEngine::containers;
 		using namespace ECSEngine::Tools;
 		
 		EditorState editor_state;
@@ -402,7 +384,7 @@ public:
 		//
 		//GraphicsDevice* device = nullptr;
 		//GraphicsContext* context = nullptr;
-		//// create device, front and back buffers, swap chain and rendering context
+		// create device, front and back buffers, swap chain and rendering context
 		//HRESULT device_result = D3D11CreateDevice(
 		//	nullptr,
 		//	D3D_DRIVER_TYPE_HARDWARE,
@@ -420,6 +402,10 @@ public:
 		//texture_desc.context = graphics->GetContext();
 		//texture_desc.misc_flags = D3D11_RESOURCE_MISC_SHARED;
 		//ResourceView texture_view = resource_manager->LoadTextureImplementation(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\brown_planks_03_diff_1k.jpg", &texture_desc);
+
+		//Texture2D old_texture = GetResource(texture_view);
+		//Texture2D new_texture = TransferGPUResource(old_texture, device);
+		//IndexBuffer new_index_buffer = TransferGPUResource(cerberus_mesh->mesh.index_buffer, device);
 
 		//ID3D11Resource* texture_resource = GetResource(texture_view);
 
@@ -467,6 +453,79 @@ public:
 		//context->IASetIndexBuffer(buffer, DXGI_FORMAT_R32_UINT, 0);
 		//UINT offsets[] = { 0, 0 };
 		//context->IASetVertexBuffers(0, 1, &v_buffer, &cerberus_mesh->mesh.vertex_buffers[0].stride, offsets);
+
+		//const size_t SIGNATURE_COUNT = 256;
+		//const size_t COMPONENT_COUNT = 12;
+		//Component components[SIGNATURE_COUNT * COMPONENT_COUNT];
+		//ComponentSignature signatures[SIGNATURE_COUNT];
+		//bool RESULTS[SIGNATURE_COUNT];
+		//
+		//size_t counter = 0;
+		//for (size_t index = 0; index < SIGNATURE_COUNT; index++) {
+		//	//signatures[index] = new ComponentSignature(components + COMPONENT_COUNT * index, COMPONENT_COUNT);
+		//	signatures[index].indices = components + COMPONENT_COUNT * index;
+		//	signatures[index].count = COMPONENT_COUNT;
+
+		//	for (size_t subindex = 0; subindex < COMPONENT_COUNT; subindex++) {
+		//		signatures[index].indices[subindex].value = counter % (2);
+		//		counter++;
+		//	}
+		//}
+
+		//bool has_signatures = true;
+		//Component query_components[COMPONENT_COUNT];
+		//ComponentSignature query(query_components, COMPONENT_COUNT);
+
+		//for (size_t index = 0; index < COMPONENT_COUNT; index++) {
+		//	//query_components[index] = components[rand() % (SIGNATURE_COUNT * COMPONENT_COUNT)];
+		//	query_components[index].value = index;
+		//}
+
+		//timer.SetMarker();
+		//for (size_t iteration = 0; iteration < 1024; iteration++) {
+		//	for (size_t index = 0; index < SIGNATURE_COUNT; index++) {
+		//		RESULTS[index] = HasComponents(query, signatures[index]);
+		//		has_signatures &= RESULTS[index];
+		//	}
+		//}
+		//size_t duration = timer.GetDurationSinceMarker_us();
+		//ECS_STACK_CAPACITY_STREAM(char, output, 512);
+		//function::ConvertIntToChars(output, has_signatures);
+		//output.Add(' ');
+		//function::ConvertIntToChars(output, duration);
+		//output.Add(' ');
+		//
+		//VectorComponentSignature vector_query(query);
+		//VectorComponentSignature vectors[SIGNATURE_COUNT];
+		//for (size_t index = 0; index < SIGNATURE_COUNT; index++) {
+		//	vectors[index].ConvertComponents(signatures[index]);
+		//}
+
+		//bool VECTOR_RESULTS[SIGNATURE_COUNT];
+		//timer.SetMarker();
+		//bool new_signature = true;
+
+		//for (size_t iteration = 0; iteration < 1024; iteration++) {
+		//	for (size_t index = 0; index < SIGNATURE_COUNT; index++) {
+		//		VECTOR_RESULTS[index] = vectors[index].HasComponents(vector_query);
+		//		//VECTOR_RESULTS[index] = VectorComponentSignatureHasComponents(vectors[index], vector_query, COMPONENT_COUNT);
+		//		new_signature &= VECTOR_RESULTS[index];
+		//	}
+		//}
+		//duration = timer.GetDurationSinceMarker_us();
+
+		//for (size_t index = 0; index < SIGNATURE_COUNT; index++) {
+		//	ECS_ASSERT(VECTOR_RESULTS[index] == RESULTS[index]);
+		//}
+
+		///*VECTOR_RESULTS[0] = vector_query.HasComponents(*vectors[348]);
+		//VECTOR_RESULTS[1] = vector_query.HasComponents(*vectors[370]);*/
+		//function::ConvertIntToChars(output, new_signature);
+		//output.Add(' ');
+		//function::ConvertIntToChars(output, duration);
+		//output.Add('\n');
+		//output[output.size] = '\0';
+		//OutputDebugStringA(output.buffer);
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -751,7 +810,7 @@ public:
 		ECSEngine::Timer timer;
 		ECSEngine::HID::Mouse mouse;
 		ECSEngine::HID::Keyboard keyboard;
-		ECSEngine::containers::Stream<HCURSOR> cursors;
+		ECSEngine::Stream<HCURSOR> cursors;
 		ECSEngine::CursorType current_cursor;
 
 		// singleton that manages registering and unregistering the editor class
@@ -816,7 +875,7 @@ Editor::Editor(int _width, int _height, LPCWSTR name) noexcept : timer("Editor")
 	HCURSOR* cursor_stream = new HCURSOR[ECS_CURSOR_COUNT];
 
 	// hInstance is null because these are predefined cursors
-	cursors = ECSEngine::containers::Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
+	cursors = ECSEngine::Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
 	cursors[(unsigned int)ECSEngine::CursorType::AppStarting] = LoadCursor(NULL, IDC_APPSTARTING);
 	cursors[(unsigned int)ECSEngine::CursorType::Cross] = LoadCursor(NULL, IDC_CROSS);
 	cursors[(unsigned int)ECSEngine::CursorType::Default] = LoadCursor(NULL, IDC_ARROW);

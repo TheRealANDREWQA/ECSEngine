@@ -6,7 +6,6 @@
 #include "../Editor/EditorEvent.h"
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 
 const wchar_t* METAFILE_EXTENSIONS[] = {
 	L".jpg",
@@ -136,8 +135,8 @@ bool CreateProjectMetafile(EditorState* editor_state, CapacityStream<wchar_t> pa
 			CloseFile(file_handle);
 		}
 		else {
-			ECS_FORMAT_TEMP_STRING(console_message, "An error has occured when trying to create default metafile for {0}.", path);
-			EditorSetConsoleError(editor_state, console_message);
+			ECS_FORMAT_TEMP_STRING(console_message, "An error has occured when trying to create default metafile for {#}.", path);
+			EditorSetConsoleError(console_message);
 		}
 
 		// The metafile doesn't exist
@@ -180,7 +179,7 @@ void CreateProjectMissingMetafiles(EditorState* editor_state)
 	});
 
 	if (functor_data.error) {
-		EditorSetConsoleError(editor_state, ToStream("An error has occured when creating metafile folder."));
+		EditorSetConsoleError(ToStream("An error has occured when creating metafile folder."));
 	}
 
 	ForEachFileInDirectoryRecursiveWithExtension(assets_folder, Stream<const wchar_t*>(METAFILE_EXTENSIONS, METAFILE_EXTENSION_COUNT), editor_state,

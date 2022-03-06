@@ -13,7 +13,6 @@
 bool DISPLAY_LOCKED_FILES_SIZE = false;
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 ECS_TOOLS;
 
 #define MODULE_EXPLORER_DATA_NAME "Module Explorer Data"
@@ -197,22 +196,31 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 			function::ConvertASCIIToWide(library_name, *data->library_name);
 			data->solution_path_wide->size = wcslen(data->solution_path_wide->buffer);
 
+			bool success = false;
 			if (data->graphics_module) {
-				SetProjectGraphicsModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
+				success = SetProjectGraphicsModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(error_message, "Could not add graphics module with name {#} and path {#}.", *data->library_name, *data->solution_path_wide);
+					EditorSetConsoleError(error_message);
+				}
 			}
 			else {
-				AddProjectModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
+				success = AddProjectModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
+				if (!success) {
+					ECS_FORMAT_TEMP_STRING(error_message, "Could not add new module with name {#} and path {#}.", *data->library_name, *data->solution_path_wide);
+					EditorSetConsoleError(error_message);
+				}
 			}
 
-			EDITOR_STATE(data->editor_state);
+			if (success) {
+				EDITOR_STATE(data->editor_state);
 
-			ThreadTask task;
-			ECS_SET_TASK_FUNCTION(task, SaveProjectModuleFileThreadTask);
-			task.data = data->editor_state;
-			task_manager->AddDynamicTaskAndWake(task);
+				ThreadTask task = ECS_THREAD_TASK_NAME(SaveProjectModuleFileThreadTask, data->editor_state, 0);
+				task_manager->AddDynamicTaskAndWake(task);
+			}
 		}
 		else {
-			EditorSetConsoleError(data->editor_state, ToStream("Could not add new project module. Invalid data."));
+			EditorSetConsoleError(ToStream("Could not add new project module. Invalid data."));
 		}
 
 		CloseXBorderClickableAction(action_data);
@@ -280,20 +288,20 @@ void ModuleExplorerPrintConsoleMessageAfterBuildCommand(ModuleExplorerRunModuleB
 	ECS_TEMP_ASCII_STRING(console_message, 256);
 	switch (command_status) {
 	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
-		ECS_FORMAT_STRING(console_message, "Command for module {0} with configuration {1} launched successfully.", library_name, configuration_string);
-		EditorSetConsoleInfo(data->editor_state, console_message);
+		ECS_FORMAT_STRING(console_message, "Command for module {#} with configuration {#} launched successfully.", library_name, configuration_string);
+		EditorSetConsoleInfo(console_message);
 		break;
 	case EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED:
-		ECS_FORMAT_STRING(console_message, "The module {0} with configuration {1} is up to date. The command is skipped", library_name, configuration_string);
-		EditorSetConsoleInfo(data->editor_state, console_message);
+		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is up to date. The command is skipped", library_name, configuration_string);
+		EditorSetConsoleInfo(console_message);
 		break;
 	case EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING:
-		ECS_FORMAT_STRING(console_message, "An error has occured when launching the command line for module {0} with configuration {1}. The command is aborted.", library_name, configuration_string);
-		EditorSetConsoleError(data->editor_state, console_message);
+		ECS_FORMAT_STRING(console_message, "An error has occured when launching the command line for module {#} with configuration {#}. The command is aborted.", library_name, configuration_string);
+		EditorSetConsoleError(console_message);
 		break;
 	case EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING:
-		ECS_FORMAT_STRING(console_message, "The module {0} with configuration {1} is already executing a command.", library_name, configuration_string);
-		EditorSetConsoleError(data->editor_state, console_message);
+		ECS_FORMAT_STRING(console_message, "The module {#} with configuration {#} is already executing a command.", library_name, configuration_string);
+		EditorSetConsoleError(console_message);
 		break;
 	}
 }
@@ -323,20 +331,20 @@ void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_s
 		}
 	};
 
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING, "{0} modules have launched successfully their command. These are:\n");
-	EditorSetConsoleInfo(editor_state, console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING, "{#} modules have launched successfully their command. These are:\n");
+	EditorSetConsoleInfo(console_message);
 	console_message.size = 0;
 	
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED, "{0} modules have been skipped (they are up to date). These are:\n");
-	EditorSetConsoleInfo(editor_state, console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED, "{#} modules have been skipped (they are up to date). These are:\n");
+	EditorSetConsoleInfo(console_message);
 	console_message.size = 0;
 
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING, "{0} modules have failed to launch their command line prompt. These are:\n");
-	EditorSetConsoleError(editor_state, console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING, "{#} modules have failed to launch their command line prompt. These are:\n");
+	EditorSetConsoleError(console_message);
 	console_message.size = 0;
 
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING, "{0} modules are already running. The current command will be ignored. These are:\n");
-	EditorSetConsoleError(editor_state, console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING, "{#} modules are already running. The current command will be ignored. These are:\n");
+	EditorSetConsoleError(console_message);
 }
 
 void ModuleExplorerBuildModule(ActionData* action_data) {
@@ -399,7 +407,7 @@ void ModuleExplorerReset(ActionData* action_data) {
 	data->selected_module = -1;
 	bool success = SaveModuleFile(data->editor_state);
 	if (!success) {
-		EditorSetConsoleError(data->editor_state, ToStream("Could not save module file after reset."));
+		EditorSetConsoleError(ToStream("Could not save module file after reset."));
 	}
 }
 
@@ -445,7 +453,7 @@ void ModuleExplorerSetAllConfiguration(ActionData* action_data, EditorModuleConf
 
 	bool success = SaveModuleFile(editor_state);
 	if (!success) {
-		EditorSetConsoleError(editor_state, ToStream(error_message));
+		EditorSetConsoleError(ToStream(error_message));
 	}
 }
 
@@ -878,7 +886,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 			bool success = SaveModuleFile(data->editor_state);
 
 			if (!success) {
-				EditorSetConsoleError(data->editor_state, ToStream("Could not save module file after module configuration change."));
+				EditorSetConsoleError(ToStream("Could not save module file after module configuration change."));
 			}
 		};
 
@@ -996,9 +1004,9 @@ void ModuleExplorerTick(EditorState* editor_state)
 	size_t locked_files_size = GetVisualStudioLockedFilesSize(editor_state);
 	if (locked_files_size > ECS_GB) {
 		if (!DISPLAY_LOCKED_FILES_SIZE) {
-			ECS_FORMAT_TEMP_STRING(console_output, "Visual studio locked files size surpassed 1 GB (actual size is {0}). Consider deleting the files now"
+			ECS_FORMAT_TEMP_STRING(console_output, "Visual studio locked files size surpassed 1 GB (actual size is {#}). Consider deleting the files now"
 				" if the debugger is not opened or by reopening the project.", locked_files_size);
-			EditorSetConsoleWarn(editor_state, console_output);
+			EditorSetConsoleWarn(console_output);
 			DISPLAY_LOCKED_FILES_SIZE = true;
 		}
 	}

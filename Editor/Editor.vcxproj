@@ -184,6 +184,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>editorpch.h</PrecompiledHeaderFile>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -208,7 +209,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>editorpch.h</PrecompiledHeaderFile>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <ExceptionHandling>false</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -236,6 +240,7 @@
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <Optimization>MaxSpeed</Optimization>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -259,18 +264,23 @@
     <ClInclude Include="src\Editor\EditorParameters.h" />
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
+    <ClInclude Include="src\Editor\EditorWorld.h" />
     <ClInclude Include="src\Metafiles\Metafiles.h" />
     <ClInclude Include="src\Modules\Module.h" />
     <ClInclude Include="src\Modules\ModuleConfigurationGroup.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />
+    <ClInclude Include="src\Modules\ModuleSettings.h" />
     <ClInclude Include="src\OSFunctions.h" />
+    <ClInclude Include="src\Project\ProjectBackup.h" />
     <ClInclude Include="src\Project\ProjectFile.h" />
     <ClInclude Include="src\Project\ProjectFolders.h" />
     <ClInclude Include="src\Project\ProjectOperations.h" />
+    <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\Project\ProjectUITemplate.h" />
     <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
     <ClInclude Include="src\Test.h" />
+    <ClInclude Include="src\UI\Backups.h" />
     <ClInclude Include="src\UI\FileExplorerData.h" />
     <ClInclude Include="src\UI\HubData.h" />
     <ClInclude Include="src\UI\InspectorData.h" />
@@ -283,6 +293,7 @@
     <ClInclude Include="src\UI\MiscellaneousBar.h" />
     <ClInclude Include="src\UI\ModuleExplorer.h" />
     <ClInclude Include="src\UI\Scene.h" />
+    <ClInclude Include="src\UI\Settings.h" />
     <ClInclude Include="src\UI\ToolbarUI.h" />
     <ClInclude Include="src\HelperWindows.h" />
   </ItemGroup>
@@ -296,16 +307,21 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Editor\EditorState.cpp" />
+    <ClCompile Include="src\Editor\EditorWorld.cpp" />
     <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Modules\Module.cpp" />
     <ClCompile Include="src\Modules\ModuleConfigurationGroup.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
+    <ClCompile Include="src\Modules\ModuleSettings.cpp" />
     <ClCompile Include="src\OSFunctions.cpp" />
+    <ClCompile Include="src\Project\ProjectBackup.cpp" />
     <ClCompile Include="src\Project\ProjectFolders.cpp" />
     <ClCompile Include="src\Project\ProjectOperations.cpp" />
+    <ClCompile Include="src\Project\ProjectSettings.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />
     <ClCompile Include="src\TestUI.cpp" />
+    <ClCompile Include="src\UI\Backups.cpp" />
     <ClCompile Include="src\UI\NotificationBar.cpp" />
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
     <ClCompile Include="src\UI\FileExplorer.cpp" />
@@ -315,6 +331,7 @@
     <ClCompile Include="src\UI\MiscellaneousBar.cpp" />
     <ClCompile Include="src\UI\ModuleExplorer.cpp" />
     <ClCompile Include="src\UI\Scene.cpp" />
+    <ClCompile Include="src\UI\Settings.cpp" />
     <ClCompile Include="src\UI\ToolbarUI.cpp" />
     <ClCompile Include="src\HelperWindows.cpp" />
   </ItemGroup>

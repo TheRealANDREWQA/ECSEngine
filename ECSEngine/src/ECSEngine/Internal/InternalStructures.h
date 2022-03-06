@@ -12,10 +12,6 @@
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
 
-#define ECS_MAX_MAIN_ARCHETYPES (1 << 12)
-#define ECS_ARCHETYPE_MAX_CHUNKS /* How many chunks an archetype can have at maximum */ (1 << 12)
-#define ECS_ARCHETYPE_MAX_BASE_ARCHETYPES /* How many base archetypes a main archetype can have */ (1 << 8)
-
 
 namespace ECSEngine {
 
@@ -39,29 +35,48 @@ namespace ECSEngine {
 		}
 	}
 
-	ECS_CONTAINERS;
+#define ECS_ENTITY_MAX_COUNT (1 << 26)
 
 	struct ECSENGINE_API Entity {
 		Entity() : value(0) {}
+		Entity(unsigned int _index, unsigned int _generation_count) : index(_index), generation_count(_generation_count) {}
 		Entity(unsigned int _value) : value(_value) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(Entity);
 
-		unsigned int value;
+		ECS_INLINE bool operator == (const Entity& other) const {
+			return value == other.value;
+		}
+
+		union {
+			struct {
+				unsigned int index : 26;
+				unsigned int generation_count : 6;
+			};
+			unsigned int value;
+		};
 	};
 
+#define ECS_MAIN_ARCHETYPE_MAX_COUNT (1 << 10)
+#define ECS_BASE_ARCHETYPE_MAX_COUNT (1 << 10)
+#define ECS_STREAM_ARCHETYPE_MAX_COUNT (1 << 24)
+
 	struct ECSENGINE_API EntityInfo {
-		EntityInfo() : chunk(0), main_archetype(0), base_archetype(0), stream_index(0) {}
-		EntityInfo(unsigned short _chunk_index, unsigned short _archetype_index, unsigned short _subarchetype_index, unsigned int _index) :
-			chunk(_chunk_index), main_archetype(_archetype_index), base_archetype(_subarchetype_index), stream_index(_index) {}
+		EntityInfo() : main_archetype(0), base_archetype(0), stream_index(0) {}
+		EntityInfo(unsigned short _archetype_index, unsigned short _subarchetype_index, unsigned int _index) :
+			main_archetype(_archetype_index), base_archetype(_subarchetype_index), stream_index(_index) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(EntityInfo);
 
-		// Pack the info so no space is wasted
-		unsigned int chunk : 12;
-		unsigned int main_archetype : 12;
-		unsigned int base_archetype : 8;
-		unsigned int stream_index;
+		// 32 bits for these 4 fields
+		unsigned int main_archetype : 10;
+		unsigned int base_archetype : 10;
+		unsigned int generation_count : 6;
+		unsigned int tags : 6;
+
+		// 32 bits for these 2 fields
+		unsigned int stream_index : 24;
+		unsigned int layer : 8;
 	};
 
 	struct Component {
@@ -152,6 +167,35 @@ namespace ECSEngine {
 		unsigned char count;
 	};
 
+	static bool HasComponents(ComponentSignature query, ComponentSignature archetype_component) {
+		for (size_t index = 0; index < query.count; index++) {
+			unsigned char subindex = 0;
+			for (; subindex < archetype_component.count; subindex++) {
+				if (archetype_component.indices[subindex] == query.indices[index]) {
+					// Exit the loop
+					subindex = -2;
+				}
+			}
+			if (subindex != 255) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	static bool ExcludesComponents(ComponentSignature query, ComponentSignature archetype_component) {
+		for (size_t index = 0; index < query.count; index++) {
+			unsigned char subindex = 0;
+			for (; subindex < archetype_component.count; subindex++) {
+				if (archetype_component.indices[subindex] == query.indices[index]) {
+					// Exit the loop
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
 	struct ECSENGINE_API SharedComponentSignature {
 		SharedComponentSignature() : indices(nullptr), instances(nullptr), count(0) {}
 		SharedComponentSignature(Component* _indices, SharedInstance* _instances, unsigned char _count) : indices(_indices), instances(_instances), count(_count) {}
@@ -163,90 +207,13 @@ namespace ECSEngine {
 		unsigned char count;
 	};
 
-	struct ECSENGINE_API VectorComponentSignature {
-		VectorComponentSignature() : value(0) {}
-		VectorComponentSignature(Vec16us _value) : value(_value) {}
-
-		VectorComponentSignature(ComponentSignature signature) { ConvertComponents(signature); }
-
-		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(VectorComponentSignature);
-
-		ECS_INLINE bool ECS_VECTORCALL operator == (VectorComponentSignature other) const {
-			return horizontal_and(value == other.value);
-		}
-
-		inline operator Vec32uc() {
-			return value;
-		}
-
-		void ConvertComponents(ComponentSignature signature);
-
-		void ConvertInstances(const SharedInstance* instances, unsigned char count);
-
-		bool ECS_VECTORCALL HasComponents(VectorComponentSignature components) const;
-
-		bool ECS_VECTORCALL ExcludesComponents(VectorComponentSignature components) const;
-
-		void InitializeSharedComponent(SharedComponentSignature shared_signature);
-
-		void InitializeSharedInstances(SharedComponentSignature shared_signature);
-
-		Vec16us value;
-	};
-
-	bool ECS_VECTORCALL SharedComponentSignatureHasInstances(
-		VectorComponentSignature archetype_components,
-		VectorComponentSignature archetype_instances,
-		VectorComponentSignature query_components,
-		VectorComponentSignature query_instances
-	);
-
-	struct ECSENGINE_API ArchetypeQuery {
-		ArchetypeQuery();
-		ArchetypeQuery(VectorComponentSignature unique, VectorComponentSignature shared);
-
-		bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const;
-
-		bool ECS_VECTORCALL VerifiesUnique(VectorComponentSignature unique) const;
-
-		bool ECS_VECTORCALL VerifiesShared(VectorComponentSignature shared) const;
-
-		VectorComponentSignature unique;
-		VectorComponentSignature shared;
-	};
-
-	struct ECSENGINE_API ArchetypeQueryExclude {
-		ArchetypeQueryExclude();
-		ArchetypeQueryExclude(
-			VectorComponentSignature unique,
-			VectorComponentSignature shared,
-			VectorComponentSignature exclude_unique,
-			VectorComponentSignature exclude_shared
-		);
-
-		bool ECS_VECTORCALL Verifies(VectorComponentSignature unique, VectorComponentSignature shared) const;
-
-		bool ECS_VECTORCALL VerifiesUnique(VectorComponentSignature unique) const;
-
-		bool ECS_VECTORCALL VerifiesShared(VectorComponentSignature shared) const;
-
-		VectorComponentSignature unique;
-		VectorComponentSignature shared;
-		VectorComponentSignature unique_excluded;
-		VectorComponentSignature shared_excluded;
-	};
-
-	struct EntitySequence {
-		unsigned short chunk_index;
-		unsigned int stream_offset;
-		unsigned int entity_count;
-	};
+	// Returns a memory manager that would suit an EntityPool with the given pool capacity
+	ECSENGINE_API MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory);
 
 	struct ECSENGINE_API EntityPool {
 	public:
 		EntityPool(
 			MemoryManager* memory_manager,
-			unsigned int pool_capacity,
 			unsigned int pool_power_of_two
 		);
 
@@ -254,11 +221,13 @@ namespace ECSEngine {
 
 		void CreatePool();
 
+		void CopyEntities(const EntityPool* entity_pool);
+
 		// Allocates a single Entity
 		Entity Allocate();
 
 		// Allocates a single Entity and assigns the info to that entity
-		Entity AllocateEx(EntityInfo info);
+		Entity AllocateEx(unsigned short archetype, unsigned short base_archetype, unsigned int stream_index);
 
 		// Allocates multiple entities
 		// It will fill in the buffer with the entities generated
@@ -266,30 +235,50 @@ namespace ECSEngine {
 
 		// Allocates multiple entities and it will assign to them the values from infos
 		// It will fill in the buffer with entities generated
-		void AllocateEx(Stream<Entity> entities, EntityInfo* infos);
+		void AllocateEx(Stream<Entity> entities,  const unsigned short* archetypes, const unsigned short* base_archetypes, const unsigned int* stream_indices);
 
 		// It will set the infos according to the archetype indices and chunk positions
-		void AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, Stream<EntitySequence> chunk_positions);
+		void AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, unsigned int copy_position);
+
+		// The tag should be the bit position, not the actual value
+		void ClearTag(Entity entity, unsigned char tag);
 
 		void Deallocate(Entity entity);
 
 		void Deallocate(Stream<Entity> entities);
 
+		// Checks to see if the given entity is valid in the current context
+		bool IsValid(Entity entity);
+
+		// The tag should be the bit position, not the actual value
+		bool HasTag(Entity entity, unsigned char tag) const;
+
 		EntityInfo GetInfo(Entity entity) const;
+
+		EntityInfo GetInfoNoChecks(Entity entity) const;
 
 		EntityInfo* GetInfoPtr(Entity entity);
 
-		void SetEntityInfo(Entity entity, EntityInfo new_info);
+		EntityInfo* GetInfoPtrNoChecks(Entity entity);
+
+		void SetEntityInfo(Entity entity, unsigned short archetype, unsigned short base_archetype, unsigned int stream_index);
+
+		// The tag should be the bit position, not the actual value
+		void SetTag(Entity entity, unsigned char tag);
+
+		void SetLayer(Entity entity, unsigned int layer);
 
 	//private:
 		struct TaggedStableReferenceStream {
-			StableReferenceStream<EntityInfo> stream;
+			// Use a queue free list because having a stack free list can pound multiple times
+			// on the same free slot, creating problems for the generation counter
+			StableReferenceStream<EntityInfo, true> stream;
 			bool is_in_use;
 		};
 
 		MemoryManager* m_memory_manager;
 		ResizableStream<TaggedStableReferenceStream> m_entity_infos;
-		unsigned int m_pool_capacity;
+		//unsigned int m_pool_capacity;
 		unsigned int m_pool_power_of_two;
 	};
 

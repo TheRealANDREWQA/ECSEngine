@@ -506,7 +506,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		});
 	}
 
-	bool ShaderReflection::ReflectVertexShaderInputSource(containers::Stream<char> source_code, containers::CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, containers::CapacityStream<char> semantic_name_pool)
+	bool ShaderReflection::ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool)
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';
@@ -744,7 +744,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		});
 	}
 
-	bool ShaderReflection::ReflectShaderBuffersSource(containers::Stream<char> source_code, containers::CapacityStream<ShaderReflectedBuffer>& buffers, containers::CapacityStream<char> name_pool)
+	bool ShaderReflection::ReflectShaderBuffersSource(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, CapacityStream<char> name_pool)
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';
@@ -877,14 +877,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, containers::CapacityStream<ECS_MESH_INDEX>& mapping)
+	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping)
 	{
 		return ReflectProperty(this, path, [&](Stream<char> data) {
 			return ReflectVertexBufferMappingSource(data, mapping);
 		});
 	}
 
-	bool ShaderReflection::ReflectVertexBufferMappingSource(containers::Stream<char> source_code, containers::CapacityStream<ECS_MESH_INDEX>& mapping)
+	bool ShaderReflection::ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping)
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';

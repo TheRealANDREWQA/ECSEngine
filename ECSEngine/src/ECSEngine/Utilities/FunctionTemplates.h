@@ -309,7 +309,7 @@ namespace ECSEngine {
 		//	return flag;
 		//}
 
-		template<bool exact_length = false, typename Allocator>
+		/*template<bool exact_length = false, typename Allocator>
 		wchar_t* ConvertASCIIToWide(const char* pointer, Allocator* allocator) {
 			if constexpr (!exact_length) {
 				wchar_t* w_string = (wchar_t*)allocator->Allocate(1024 * sizeof(wchar_t), alignof(wchar_t));
@@ -322,7 +322,7 @@ namespace ECSEngine {
 				MultiByteToWideChar(CP_ACP, 0, pointer, char_length + 1, w_string, char_length + 1);
 				return w_string;
 			}
-		}
+		}*/
 
 		// non digit characters are discarded
 		template<typename Integer, typename Stream>
@@ -424,17 +424,6 @@ namespace ECSEngine {
 				min = Select(min > current_value, current_value, min);
 				max = Select(max < current_value, current_value, max);
 			}
-		}
-
-		// the functions provided must take as parameter the pointer to the buffer element to act on
-		template<typename Function1, typename Function2, typename Buffer>
-		void SimdForLoop(Function1&& simd_function, Function2&& scalar_function, Buffer* buffer, size_t count, size_t vector_size) {
-			size_t regular_size = function::GetSimdCount(count, vector_size);
-			size_t index = 0;
-			for (; index < regular_size; index += vector_size) {
-				simd_function(buffer + regular_size);
-			}
-			scalar_function(buffer + index);
 		}
 
 		constexpr size_t CONVERT_INT_TO_HEX_DO_NOT_WRITE_0X = 1 << 0;
@@ -548,7 +537,7 @@ namespace ECSEngine {
 		size_t FormatString(char* destination, const char* base_characters, Parameter parameter) {
 			size_t base_character_count = strlen(base_characters);
 			
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter, "{0}");
+			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter, "{#}");
 			characters_written.y += 3;
 			
 			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
@@ -562,9 +551,9 @@ namespace ECSEngine {
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2) {
 			size_t base_character_count = strlen(base_characters);
 			
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{0}");
+			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{1}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
 			characters_written.y += 3;
 			
 			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
@@ -578,11 +567,11 @@ namespace ECSEngine {
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3) {
 			size_t base_character_count = strlen(base_characters);
 			
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{0}");
+			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{1}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{2}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
 			characters_written.y += 3;
 
 			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
@@ -596,13 +585,13 @@ namespace ECSEngine {
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4) {
 			size_t base_character_count = strlen(base_characters);
 
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{0}");
+			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{1}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{2}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{3}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{#}");
 			characters_written.y += 3;
 
 			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
@@ -616,15 +605,15 @@ namespace ECSEngine {
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5) {
 			size_t base_character_count = strlen(base_characters);
 
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{0}");
+			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{1}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{2}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{3}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter5, "{4}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter5, "{#}");
 			characters_written.y += 3;
 
 			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
@@ -638,17 +627,17 @@ namespace ECSEngine {
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6) {
 			size_t base_character_count = strlen(base_characters);
 
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{0}");
+			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{1}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{2}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{3}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter5, "{4}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter5, "{#}");
 			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter6, "{5}");
+			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter6, "{#}");
 			characters_written.y += 3;
 
 			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);

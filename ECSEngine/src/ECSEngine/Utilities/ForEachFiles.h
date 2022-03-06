@@ -5,8 +5,6 @@
 
 namespace ECSEngine {
 
-	ECS_CONTAINERS;
-
 	ECSENGINE_API bool IsFileWithExtension(
 		const wchar_t* ECS_RESTRICT path,
 		const wchar_t* ECS_RESTRICT extension,

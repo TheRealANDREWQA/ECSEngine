@@ -12,9 +12,10 @@
 #include "..\UI\ModuleExplorer.h"
 #include "..\UI\Inspector.h"
 #include "..\UI\NotificationBar.h"
+#include "..\UI\Settings.h"
+#include "..\UI\Backups.h"
 
 using namespace ECSEngine;
-ECS_CONTAINERS;
 ECS_TOOLS;
 
 void CreateProjectDefaultUI(EditorState* editor_state) {
@@ -98,7 +99,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	bool success = ui_system->LoadUIFile(_template.ui_file, file_window_names);
 	if (!success) {
 		if (error_message.buffer != nullptr) {
-			error_message.size = function::FormatString(error_message.buffer, "Error when loading Project UI template: {0} does not exist or it is corrupted!", _template.ui_file);
+			error_message.size = function::FormatString(error_message.buffer, "Error when loading Project UI template: {#} does not exist or it is corrupted!", _template.ui_file);
 			error_message.AssertCapacity();
 		}
 		return false;
@@ -114,7 +115,9 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			ToStream(FILE_EXPLORER_WINDOW_NAME),
 			ToStream(GAME_WINDOW_NAME),
 			ToStream(MODULE_EXPLORER_WINDOW_NAME),
-			ToStream(INSPECTOR_WINDOW_NAME)
+			ToStream(INSPECTOR_WINDOW_NAME),
+			ToStream(SETTINGS_WINDOW_NAME),
+			ToStream(BACKUPS_WINDOW_NAME)
 		};
 		using SetDescriptorFunction = void (*)(UIWindowDescriptor&, EditorState*, void*);
 
@@ -129,7 +132,9 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			FileExplorerSetDescriptor,
 			GameSetDecriptor,
 			ModuleExplorerSetDescriptor,
-			InspectorSetDescriptor
+			InspectorSetDescriptor,
+			SettingsWindowSetDescriptor,
+			BackupsWindowSetDescriptor
 		};
 
 		for (size_t index = 0; index < file_window_names.size; index++) {

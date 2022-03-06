@@ -87,6 +87,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COMBO_BOX_CALLBACK = (size_t)1 << 48;
 
 		constexpr size_t UI_CONFIG_CHECK_BOX_NO_NAME = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_CHECK_BOX_CALLBACK = (size_t)1 << 46;
 
 		constexpr size_t UI_CONFIG_CROSS_LINE_DO_NOT_INFER = (size_t)1 << 45;
 
@@ -116,7 +117,9 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_SENTENCE_HOVERABLE_HANDLERS = (size_t)1 << 48;
 		constexpr size_t UI_CONFIG_SENTENCE_CLICKABLE_HANDLERS = (size_t)1 << 49;
 		constexpr size_t UI_CONFIG_SENTENCE_GENERAL_HANDLERS = (size_t)1 << 50;
-		//constexpr size_t UI_CONFIG_SENTENCE_WRAPP = (size_t)1 << 47;
+		// Can make the sentence fit space even tho the draw mode is different.
+		// And can change the token after which the fit space is done for.
+		constexpr size_t UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN = (size_t)1 << 51;
 
 		constexpr size_t UI_CONFIG_TEXT_TABLE_DO_NOT_INFER = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_TEXT_TABLE_NO_BORDER = (size_t)1 << 46;
@@ -172,14 +175,14 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_LABEL_LIST_NO_NAME = (size_t)1 << 45;
 
-		constexpr size_t UI_CONFIG_ARRAY_FIXED_SIZE = (size_t)1 << 45;
-		constexpr size_t UI_CONFIG_ARRAY_PROVIDE_NAMES = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT = (size_t)1 << 47;
-		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 48;
-		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 49;
+		constexpr size_t UI_CONFIG_ARRAY_FIXED_SIZE = (size_t)1 << 55;
+		constexpr size_t UI_CONFIG_ARRAY_PROVIDE_NAMES = (size_t)1 << 56;
+		constexpr size_t UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT = (size_t)1 << 57;
+		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 58;
+		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 59;
 
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 46;
-
+		
 		const Color MULTI_GRAPH_COLORS[] = {Color(40, 180, 40), Color(35, 150, 35), Color(40, 120, 30), Color(30, 100, 40)};
 	}
 

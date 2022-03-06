@@ -10,52 +10,60 @@ namespace ECSEngine {
 	
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void TextSerializeConvertToFieldAPI(ReflectionType type, const void* data, TextSerializeField* serialize_fields) {
-		for (int64_t index = 0; index < (int64_t)type.fields.size; index++) {
-			serialize_fields[index].basic_type = type.fields[index].info.basic_type;
-			serialize_fields[index].name = type.fields[index].name;
+	unsigned int TextSerializeConvertToFieldAPI(ReflectionType type, const void* data, TextSerializeField* serialize_fields) {
+		unsigned int write_index = 0;
+		for (size_t index = 0; index < type.fields.size; index++) {
+			serialize_fields[write_index].basic_type = type.fields[index].info.basic_type;
+			serialize_fields[write_index].name = type.fields[index].name;
 
 			bool is_stream_type = (type.fields[index].info.stream_type != ReflectionStreamFieldType::Basic
 				&& type.fields[index].info.stream_type != ReflectionStreamFieldType::Unknown);
-			serialize_fields[index].character_stream = is_stream_type && type.fields[index].info.basic_type == ReflectionBasicFieldType::Int8;
+			serialize_fields[write_index].character_stream = is_stream_type && type.fields[index].info.basic_type == ReflectionBasicFieldType::Int8;
 			if (is_stream_type) {
-				serialize_fields[index].is_stream = type.fields[index].info.basic_type != ReflectionBasicFieldType::Wchar_t && !serialize_fields[index].character_stream;
-				serialize_fields[index].data.buffer = *(void**)function::OffsetPointer(data, type.fields[index].info.pointer_offset);
+				serialize_fields[write_index].is_stream = type.fields[index].info.basic_type != ReflectionBasicFieldType::Wchar_t && !serialize_fields[write_index].character_stream;
+				serialize_fields[write_index].data.buffer = *(void**)function::OffsetPointer(data, type.fields[index].info.pointer_offset);
 
 				// Only level 1 pointers should be accepted
 				if (type.fields[index].info.stream_type == ReflectionStreamFieldType::Pointer) {
 					if (GetReflectionFieldPointerIndirection(type.fields[index].info) == 1) {
 						// If only a pointer type - check for char and wchar_t, these are the only one for which we can serialize pointer only types
 						// Else a stream must be used
-						if (serialize_fields[index].character_stream) {
-							serialize_fields[index].data.size = strlen((char*)serialize_fields[index].data.buffer);
+						if (serialize_fields[write_index].character_stream) {
+							serialize_fields[write_index].data.size = strlen((char*)serialize_fields[index].data.buffer);
 						}
-						else if (serialize_fields[index].basic_type == ReflectionBasicFieldType::Wchar_t) {
-							serialize_fields[index].data.size = wcslen((wchar_t*)serialize_fields[index].data.buffer);
+						else if (serialize_fields[write_index].basic_type == ReflectionBasicFieldType::Wchar_t) {
+							serialize_fields[write_index].data.size = wcslen((wchar_t*)serialize_fields[index].data.buffer);
+						}
+						else {
+							write_index--;
 						}
 					}
 					// If it a multi level indirection, skip it
 					else {
-						index--;
+						write_index--;
 					}
 				}
 				else if (type.fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
-					serialize_fields[index].data.buffer = function::OffsetPointer(data, type.fields[index].info.pointer_offset);
-					serialize_fields[index].data.size = type.fields[index].info.basic_type_count;
+					serialize_fields[write_index].data.buffer = function::OffsetPointer(data, type.fields[index].info.pointer_offset);
+					serialize_fields[write_index].data.size = type.fields[index].info.basic_type_count;
 				}
 				else {
-					serialize_fields[index].data.size = GetReflectionFieldStreamSize(
+					serialize_fields[write_index].data.size = GetReflectionFieldStreamSize(
 						type.fields[index].info, 
 						data
 					);
 				}
 			}
 			else {
-				serialize_fields[index].is_stream = false;
-				serialize_fields[index].data.buffer = function::OffsetPointer(data, type.fields[index].info.pointer_offset);
-				serialize_fields[index].data.size = 1;
+				serialize_fields[write_index].is_stream = false;
+				serialize_fields[write_index].data.buffer = function::OffsetPointer(data, type.fields[index].info.pointer_offset);
+				serialize_fields[write_index].data.size = 1;
 			}
+
+			write_index++;
 		}
+
+		return write_index;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
@@ -137,11 +145,13 @@ namespace ECSEngine {
 									CapacityStream<void>* stream = (CapacityStream<void>*)stream_offset;
 									stream->buffer = stream_data;
 									stream->size = stream_size;
+									stream->capacity = stream_size;
 								}
 								else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
 									ResizableStream<char>* stream = (ResizableStream<char>*)stream_offset;
 									stream->buffer = (char*)stream_data;
 									stream->size = stream_size;
+									stream->capacity = stream_size;
 								}
 								// Some error must have occured - incorrect stream type
 								else {
@@ -188,10 +198,10 @@ namespace ECSEngine {
 
 		// Create a mapping for the serialize API
 		TextSerializeField* serialize_fields = (TextSerializeField*)ECS_STACK_ALLOC(sizeof(TextSerializeField) * type.fields.size);
-		TextSerializeConvertToFieldAPI(type, data, serialize_fields);
+		unsigned int serialize_field_count = TextSerializeConvertToFieldAPI(type, data, serialize_fields);
 
 		// Send the call to the API
-		return TextSerializeFields({ serialize_fields, type.fields.size }, file, allocator);
+		return TextSerializeFields({ serialize_fields, serialize_field_count }, file, allocator);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
@@ -204,10 +214,10 @@ namespace ECSEngine {
 
 		// Create a mapping for the serialize API
 		TextSerializeField* serialize_fields = (TextSerializeField*)ECS_STACK_ALLOC(sizeof(TextSerializeField) * type.fields.size);
-		TextSerializeConvertToFieldAPI(type, data, serialize_fields);
+		unsigned int serialize_field_count = TextSerializeConvertToFieldAPI(type, data, serialize_fields);
 
 		// Send the call to the API
-		TextSerializeFields({ serialize_fields, type.fields.size }, stream);
+		TextSerializeFields({ serialize_fields, serialize_field_count }, stream);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
@@ -219,9 +229,9 @@ namespace ECSEngine {
 
 		// Create a mapping for the serialize API
 		TextSerializeField* serialize_fields = (TextSerializeField*)ECS_STACK_ALLOC(sizeof(TextSerializeField) * type.fields.size);
-		TextSerializeConvertToFieldAPI(type, data, serialize_fields);
+		unsigned int serialize_field_count = TextSerializeConvertToFieldAPI(type, data, serialize_fields);
 
-		return TextSerializeFieldsSize({ serialize_fields, type.fields.size });
+		return TextSerializeFieldsSize({ serialize_fields, serialize_field_count });
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
@@ -235,7 +245,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	)
 	{
-		const size_t MAX_DESERIALIZE_FIELDS = ECS_KB;
+		const size_t MAX_DESERIALIZE_FIELDS = 256;
 		ECS_STACK_CAPACITY_STREAM(TextDeserializeField, deserialize_fields, MAX_DESERIALIZE_FIELDS);
 
 		ECS_TEXT_DESERIALIZE_STATUS first_status = TextDeserializeFields(deserialize_fields, memory_pool, file, allocator);

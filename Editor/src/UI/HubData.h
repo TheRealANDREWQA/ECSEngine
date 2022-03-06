@@ -10,6 +10,6 @@ struct HubProject {
 };
 
 struct HubData {
-	ECSEngine::containers::CapacityStream<HubProject> projects;
+	ECSEngine::CapacityStream<HubProject> projects;
 	ECSEngine::Tools::UIReflectionDrawer* ui_reflection;
 };

@@ -6,8 +6,6 @@
 #include "../../Internal/Multithreading/ConcurrentPrimitives.h"
 #include "../../Allocators/AllocatorTypes.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	struct Graphics;

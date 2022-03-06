@@ -7,8 +7,6 @@
 #include "../Rendering/Graphics.h"
 #include "../Allocators/AllocatorPolymorphic.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// Helpers
@@ -75,14 +73,14 @@ namespace ECSEngine {
 
 			if (!is_valid) {
 				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh attribute has invalid type. Attribute name is {0}.", attribute->name);
+					ECS_FORMAT_STRING(*error_message, "Mesh attribute has invalid type. Attribute name is {#}.", attribute->name);
 				}
 				return false;
 			}
 
 			if (accessor->type != cgltf_type_vec2 && accessor->type != cgltf_type_vec3 && accessor->type != cgltf_type_vec4) {
 				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh data type is invalid. Expected float2, float3 or float4 but found {0}.", accessor->type);
+					ECS_FORMAT_STRING(*error_message, "Mesh data type is invalid. Expected float2, float3 or float4 but found {#}.", accessor->type);
 				}
 				return false;
 			}
@@ -91,7 +89,7 @@ namespace ECSEngine {
 			Stream<float> values = GetScalarValues(allocator, accessor, component_count, &is_valid);
 			if (!is_valid) {
 				if (error_message != nullptr) {
-					ECS_FORMAT_STRING(*error_message, "Mesh data values are invalid. Attribute name is {0}.", attribute->name);
+					ECS_FORMAT_STRING(*error_message, "Mesh data values are invalid. Attribute name is {#}.", attribute->name);
 				}
 				return false;
 			}
@@ -144,7 +142,7 @@ namespace ECSEngine {
 						if (horizontal_and((SquareLength3(normal) < tolerance))) {
 							normal = VectorGlobals::UP_4;
 							/*if (error_message != nullptr) {
-								ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {0}", index);
+								ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {#}", index);
 							}
 							return false;*/
 						}
@@ -163,7 +161,7 @@ namespace ECSEngine {
 						if (horizontal_and((SquareLength3(normal) < tolerance))) {
 							normal = VectorGlobals::UP_4;
 							/*if (error_message != nullptr) {
-								ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {0}", index);
+								ECS_FORMAT_STRING(*error_message, "Mesh normal data is invalid. A normal has a squared length smaller than the tolerance. Index is {#}", index);
 							}
 							return false;*/
 						}
@@ -196,7 +194,7 @@ namespace ECSEngine {
 
 					if (!is_valid) {
 						if (error_message != nullptr) {
-							ECS_FORMAT_STRING(*error_message, "Mesh skin influences are invalid. Joint index is {0}.", index);
+							ECS_FORMAT_STRING(*error_message, "Mesh skin influences are invalid. Joint index is {#}.", index);
 						}
 						return false;
 					}
@@ -293,7 +291,7 @@ namespace ECSEngine {
 
 		if (result != cgltf_result_success) {
 			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Could not load {0}. Parsing failed.", path);
+				ECS_FORMAT_STRING(*error_message, "Could not load {#}. Parsing failed.", path);
 			}
 			data.data = nullptr;
 			return data;
@@ -302,7 +300,7 @@ namespace ECSEngine {
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
 			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Could not load {0}. Loading buffers failed.", path);
+				ECS_FORMAT_STRING(*error_message, "Could not load {#}. Loading buffers failed.", path);
 			}
 			data.data = nullptr;
 			return data;
@@ -311,7 +309,7 @@ namespace ECSEngine {
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
 			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Invalid file {0}. Validation failed.", path);
+				ECS_FORMAT_STRING(*error_message, "Invalid file {#}. Validation failed.", path);
 			}
 			data.data = nullptr;
 			return data;
@@ -575,14 +573,14 @@ namespace ECSEngine {
 		}
 
 		if (error_message != nullptr) {
-			ECS_FORMAT_STRING(*error_message, "No mesh with index {0} has been found. The file contains only {1}", mesh_index, current_mesh_index);
+			ECS_FORMAT_STRING(*error_message, "No mesh with index {#} has been found. The file contains only {1}", mesh_index, current_mesh_index);
 		}
 		return false;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadMaterialFromGLTF(GLTFData data, PBRMaterial& material, AllocatorPolymorphic allocator, unsigned int mesh_index, containers::CapacityStream<char>* error_message)
+	bool LoadMaterialFromGLTF(GLTFData data, PBRMaterial& material, AllocatorPolymorphic allocator, unsigned int mesh_index, CapacityStream<char>* error_message)
 	{
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
@@ -598,7 +596,7 @@ namespace ECSEngine {
 		}
 
 		if (error_message != nullptr) {
-			ECS_FORMAT_STRING(*error_message, "No mesh with index {0} has been found. The file contains only {1}", mesh_index, current_mesh_index);
+			ECS_FORMAT_STRING(*error_message, "No mesh with index {#} has been found. The file contains only {1}", mesh_index, current_mesh_index);
 		}
 		return false;
 	}
@@ -610,7 +608,7 @@ namespace ECSEngine {
 		GLTFMesh* meshes,
 		AllocatorPolymorphic allocator,
 		bool invert_z_axis,
-		containers::CapacityStream<char>* error_message
+		CapacityStream<char>* error_message
 	) {
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
@@ -628,7 +626,7 @@ namespace ECSEngine {
 					error_message
 				);
 				if (!success) {
-					ECS_FORMAT_TEMP_STRING(additional_info, "The mesh index is {0}", mesh_index);
+					ECS_FORMAT_TEMP_STRING(additional_info, "The mesh index is {#}", mesh_index);
 					error_message->AddStreamSafe(additional_info);
 					return false;
 				}
@@ -642,7 +640,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	bool LoadMaterialsFromGLTF(GLTFData data, PBRMaterial* materials, AllocatorPolymorphic allocator, containers::CapacityStream<char>* error_message)
+	bool LoadMaterialsFromGLTF(GLTFData data, PBRMaterial* materials, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		unsigned int node_count = data.data->nodes_count;
 		const cgltf_node* nodes = data.data->nodes;
@@ -652,7 +650,7 @@ namespace ECSEngine {
 			if (nodes[index].mesh != nullptr) {
 				bool success = LoadMaterialFromGLTF(materials[material_index], allocator, nodes, index, error_message);
 				if (!success) {
-					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", material_index);
+					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {#}.", material_index);
 					error_message->AddStreamSafe(additional_info);
 					return false;
 				}
@@ -691,7 +689,7 @@ namespace ECSEngine {
 			// Load the material as normally
 			bool success = LoadMaterialFromGLTF(materials[materials.size], allocator, nodes, index, error_message);
 			if (!success) {
-				ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", materials.size);
+				ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {#}.", materials.size);
 				error_message->AddStreamSafe(additional_info);
 				return false;
 			}
@@ -761,7 +759,7 @@ namespace ECSEngine {
 				);
 
 				if (!success) {
-					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", mesh_material_index);
+					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {#}.", mesh_material_index);
 					error_message->AddStreamSafe(additional_info);
 					return false;
 				}
@@ -807,7 +805,7 @@ namespace ECSEngine {
 				}
 
 				if (!success) {
-					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {0}.", mesh_index);
+					ECS_FORMAT_TEMP_STRING(additional_info, "The material index is {#}.", mesh_index);
 					error_message->AddStreamSafe(additional_info);
 					return false;
 				}

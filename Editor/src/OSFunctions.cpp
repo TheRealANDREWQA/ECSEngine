@@ -3,7 +3,6 @@
 
 using namespace ECSEngine;
 ECS_TOOLS;
-ECS_CONTAINERS;
 
 void SetBasicErrorMessage(const char* error, CapacityStream<char>& message) {
 	if (message.buffer != nullptr) {

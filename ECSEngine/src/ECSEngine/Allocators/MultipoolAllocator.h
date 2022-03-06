@@ -47,7 +47,7 @@ namespace ECSEngine {
 		unsigned char* m_buffer;
 		size_t m_size;
 		SpinLock m_spin_lock;
-		containers::BlockRange m_range;
+		BlockRange m_range;
 	};
 
 }

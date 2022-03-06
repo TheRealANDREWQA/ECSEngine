@@ -2,89 +2,96 @@
 #include "ArchetypeBase.h"
 #include "../Utilities/Function.h"
 #include "../Allocators/MemoryManager.h"
+#include "../Utilities/Crash.h"
 
-#define TRIM_COUNT 10
+#define GROW_FACTOR (1.5f)
 
 namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	ArchetypeBase::ArchetypeBase(
-		MemoryManager* small_memory_manager,
 		MemoryManager* memory_manager,
-		unsigned int chunk_size,
+		unsigned int starting_size,
 		const ComponentInfo* infos,
 		ComponentSignature components
-	) : m_chunk_size(chunk_size), m_memory_manager(memory_manager), m_entity_count(0), m_chunks(GetAllocatorPolymorphic(small_memory_manager), 0),
-		m_infos(infos), m_components(components)
+	) : m_memory_manager(memory_manager), m_infos(infos), m_components(components), m_size(0), m_capacity(0), m_entities(nullptr), m_buffers(nullptr)
 	{
-		// Creating an initial chunk
-		CreateChunk();
+		if (starting_size > 0) {
+			Reserve(starting_size);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	uint2 ArchetypeBase::AddEntity(Entity entity)
+	unsigned int ArchetypeBase::AddEntity(Entity entity)
 	{
-		EntitySequence position;
-		CapacityStream<EntitySequence> chunk_position(&position, 0, 1);
-		AddEntities({ &entity, 1 }, chunk_position);
-		return { position.chunk_index, position.stream_offset };
+		return AddEntities({ &entity, 1 });
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	uint2 ArchetypeBase::AddEntity(Entity entity, ComponentSignature components, const void** data)
+	unsigned int ArchetypeBase::AddEntity(Entity entity, ComponentSignature components, const void** data)
 	{
-		EntitySequence position;
-		CapacityStream<EntitySequence> chunk_position(&position, 0, 1);
-		AddEntities({ &entity, 1 }, chunk_position);
-		CopyByComponents(chunk_position, data, components);
-		return { position.chunk_index, position.stream_offset };
+		unsigned int copy_position = AddEntities({ &entity, 1 });
+		CopyByComponents({copy_position, 1}, data, components);
+		return copy_position;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::AddEntities(Stream<Entity> entities, CapacityStream<EntitySequence>& chunk_positions)
+	unsigned int ArchetypeBase::AddEntities(Stream<Entity> entities)
 	{
-		Reserve(entities.size, chunk_positions);
-		unsigned int written_count = 0;
-		for (unsigned int index = 0; index < chunk_positions.size; index++) {
-			memcpy(
-				m_chunks[chunk_positions[index].chunk_index].entities + chunk_positions[index].stream_offset,
-				entities.buffer + written_count, 
-				chunk_positions[index].entity_count * sizeof(Entity)
-			);
+		unsigned int copy_position = Reserve(entities.size);
+		entities.CopyTo(m_entities + copy_position);
+		m_size += entities.size;
+
+		return copy_position;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void ArchetypeBase::CopyOther(const ArchetypeBase* other)
+	{
+		// Assert they have the same capacity
+		ECS_CRASH_RETURN(other->GetCapacity() == m_capacity, "Trying to copy a base archetype with different capacity. Expected {#}, got {#}.", m_capacity, other->GetCapacity());
+
+		// Normally, we would have to assert that they have the same component order, but that should already be taken care of
+		// E.g. don't call copy other if they are from different archetypes
+
+		unsigned int other_size = other->GetSize();
+		// Copy the entities
+		memcpy(m_entities, other->m_entities, sizeof(Entity) * other_size);
+		// Copy the components now
+		for (size_t index = 0; index < m_components.count; index++) {
+			memcpy(m_buffers[index], other->m_buffers[index], m_infos[m_components.indices[index].value].size * other_size);
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	void CopyEntitiesInternal(ArchetypeBase* archetype, ComponentSignature components, Stream<EntitySequence> chunk_positions, Functor&& functor) {
+	void CopyEntitiesInternal(ArchetypeBase* archetype, ComponentSignature components, unsigned int copy_position, Functor&& functor) {
 		for (size_t index = 0; index < components.count; index++) {
 			unsigned char component_index = archetype->FindComponentIndex(components.indices[index]);
-			ECS_ASSERT(component_index != -1);
+			ECS_CRASH_RETURN(component_index != -1, "Incorrect component {#} when trying to copy entities. The component is missing from the base archetype.", components.indices[index].value);
 
 			unsigned short component_size = archetype->m_infos[components.indices[index].value].size;
-			unsigned int entity_pivot = 0;
-			for (size_t chunk_index = 0; chunk_index < chunk_positions.size; chunk_index++) {
-				void* component_data = function::OffsetPointer(
-					archetype->m_chunks[chunk_positions[chunk_index].chunk_index].buffers[component_index], 
-					chunk_positions[chunk_index].stream_offset * component_size
-				);
-				functor(index, chunk_positions[chunk_index].entity_count, entity_pivot, component_data, component_size);
-				entity_pivot += chunk_positions[chunk_index].entity_count;
-			}
+
+			void* component_data = function::OffsetPointer(
+				archetype->m_buffers[component_index],
+				copy_position * component_size
+			);
+			functor(index, component_data, component_size);
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CopySplatComponents(Stream<EntitySequence> chunk_positions, const void** data, ComponentSignature components)
+	void ArchetypeBase::CopySplatComponents(uint2 copy_position, const void** data, ComponentSignature components)
 	{
-		CopyEntitiesInternal(this, components, chunk_positions, [=](size_t component_index, unsigned int entity_count, unsigned int entity_pivot, void* component_data, unsigned short component_size) {
-			for (unsigned int index = 0; index < entity_count; index++) {
+		CopyEntitiesInternal(this, components, copy_position.x, [=](size_t component_index, void* component_data, unsigned short component_size) {
+			for (unsigned int index = 0; index < copy_position.y; index++) {
 				memcpy(component_data, data[component_index], component_size);
 				component_data = function::OffsetPointer(component_data, component_size);
 			}
@@ -94,7 +101,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void ArchetypeBase::CopyFromAnotherArchetype(
-		Stream<EntitySequence> chunk_positions, 
+		uint2 copy_position, 
 		const ArchetypeBase* source_archetype,
 		const Entity* entities, 
 		const EntityPool* entity_pool,
@@ -107,7 +114,11 @@ namespace ECSEngine {
 			// Determine what the component index is in both archetypes
 			unsigned char component_index = FindComponentIndex(components_to_copy.indices[index]);
 			// If the components was not found fail
-			ECS_ASSERT(component_index != -1);
+			ECS_CRASH_RETURN(
+				component_index != -1, 
+				"Could not find component {#} in destination archetype when copying entities from another base archetype.", 
+				components_to_copy.indices[index].value
+			);
 
 			unsigned short component_size = m_infos[m_components.indices[component_index].value].size;
 
@@ -120,40 +131,40 @@ namespace ECSEngine {
 				}
 			}
 			// If no match was found, fail
-			ECS_ASSERT(archetype_to_copy_component_index != -1);
+			ECS_CRASH_RETURN(
+				archetype_to_copy_component_index != -1,
+				"Could not find component {#} in source archetype when copying entities from another base archetype.",
+				components_to_copy.indices[index]
+			);
 
-			size_t total_entity_index = 0;
-			for (size_t chunk_index = 0; chunk_index < chunk_positions.size; chunk_index++) {
-				void* component_data = function::OffsetPointer(
-					m_chunks[chunk_positions[chunk_index].chunk_index].buffers[component_index],
-					component_size * chunk_positions[chunk_index].stream_offset
+			void* component_data = function::OffsetPointer(
+				m_buffers[component_index],
+				component_size * copy_position.x
+			);
+
+			for (size_t entity_index = 0; entity_index < copy_position.y; entity_index++) {
+				EntityInfo entity_info = entity_pool->GetInfo(entities[entity_index]);
+				const void* data_to_copy = function::OffsetPointer(
+					source_archetype->m_buffers[archetype_to_copy_component_index], 
+					component_size * entity_info.stream_index
 				);
+				memcpy(component_data, data_to_copy, component_size);
 
-				for (size_t entity_index = 0; entity_index < chunk_positions[chunk_index].entity_count; entity_index++) {
-					EntityInfo entity_info = entity_pool->GetInfo(entities[total_entity_index]);
-					const void* data_to_copy = function::OffsetPointer(
-						source_archetype->m_chunks[entity_info.chunk].buffers[archetype_to_copy_component_index], 
-						component_size * entity_info.stream_index
-					);
-					memcpy(component_data, data_to_copy, component_size);
-
-					component_data = function::OffsetPointer(component_data, component_size);
-					total_entity_index++;
-				}
+				component_data = function::OffsetPointer(component_data, component_size);
 			}
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CopyByEntity(Stream<EntitySequence> chunk_positions, const void** data, ComponentSignature components)
+	void ArchetypeBase::CopyByEntity(uint2 copy_position, const void** data, ComponentSignature components)
 	{
-		CopyEntitiesInternal(this, components, chunk_positions, [=](size_t component_index, unsigned int entity_count, unsigned int entity_pivot, void* component_data, unsigned short component_size) {
+		CopyEntitiesInternal(this, components, copy_position.x, [=](size_t component_index, void* component_data, unsigned short component_size) {
 			// Try to use the write combine effect of the cache line when writing these components even tho 
 			// the read of the data pointer is going to be cold (if the prefetcher is sufficiently smart it could
 			// detect this pattern and prefetch it for us)
-			for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
-				memcpy(component_data, data[(entity_pivot + entity_index) * components.count + component_index], component_size);
+			for (size_t entity_index = 0; entity_index < copy_position.y; entity_index++) {
+				memcpy(component_data, data[entity_index * components.count + component_index], component_size);
 				component_data = function::OffsetPointer(component_data, component_size);
 			}
 		});
@@ -161,21 +172,21 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CopyByEntityContiguous(Stream<EntitySequence> chunk_positions, const void** data, ComponentSignature components)
+	void ArchetypeBase::CopyByEntityContiguous(uint2 copy_position, const void** data, ComponentSignature components)
 	{
 		unsigned short* component_sizes = (unsigned short*)ECS_STACK_ALLOC(sizeof(unsigned short) * components.count);
 		for (size_t index = 0; index < components.count; index++) {
 			component_sizes[index] = m_infos[components.indices[index].value].size;
 		}
 
-		CopyEntitiesInternal(this, components, chunk_positions, [=](size_t component_index, unsigned int entity_count, unsigned int entity_pivot, void* component_data, unsigned short component_size) {
+		CopyEntitiesInternal(this, components, copy_position.x, [=](size_t component_index, void* component_data, unsigned short component_size) {
 			unsigned short current_component_offset = 0;
 			for (size_t index = 0; index < component_index; index++) {
 				current_component_offset += component_sizes[index];
 			}
 
-			for (size_t entity_index = 0; entity_index, entity_count; entity_index++) {
-				memcpy(component_data, function::OffsetPointer(data[entity_pivot + entity_index], current_component_offset), component_size);
+			for (size_t entity_index = 0; entity_index, copy_position.y; entity_index++) {
+				memcpy(component_data, function::OffsetPointer(data[entity_index], current_component_offset), component_size);
 				component_data = function::OffsetPointer(component_data, component_size);
 			}
 		});
@@ -183,21 +194,15 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CopyByComponents(Stream<EntitySequence> chunk_positions, const void** data, ComponentSignature components)
+	void ArchetypeBase::CopyByComponents(uint2 copy_position, const void** data, ComponentSignature components)
 	{
-		// Determine the total entity count from the chunk positions
-		unsigned int total_entity_count = 0;
-		for (size_t index = 0; index < chunk_positions.size; index++) {
-			total_entity_count += chunk_positions[index].entity_count;
-		}
-
-		CopyEntitiesInternal(this, components, chunk_positions, [=](size_t component_index, unsigned int entity_count, unsigned int entity_pivot, void* component_data, unsigned short component_size) {
+		CopyEntitiesInternal(this, components, copy_position.x, [=](size_t component_index, void* component_data, unsigned short component_size) {
 			// Try to use the write combine effect of the cache line when writing these components even tho 
 			// the read of the data pointer is going to be cold (if the prefetcher is sufficiently smart it could
 			// detect this pattern and prefetch it for us)
-			unsigned int component_offset = component_index * total_entity_count;
-			for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
-				memcpy(component_data, data[entity_pivot + entity_index + component_offset], component_size);
+			unsigned int component_offset = component_index * copy_position.y;
+			for (size_t entity_index = 0; entity_index < copy_position.y; entity_index++) {
+				memcpy(component_data, data[entity_index + component_offset], component_size);
 				component_data = function::OffsetPointer(component_data, component_size);
 			}
 		});
@@ -205,97 +210,24 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CopyByComponentsContiguous(Stream<EntitySequence> chunk_positions, const void** data, ComponentSignature signature)
+	void ArchetypeBase::CopyByComponentsContiguous(uint2 copy_position, const void** data, ComponentSignature signature)
 	{
-		CopyEntitiesInternal(this, signature, chunk_positions, [=](size_t index, unsigned int entity_count, unsigned int entity_pivot, void* component_data, unsigned short component_size) {
-			memcpy(component_data, data[index], component_size * entity_count);
+		CopyEntitiesInternal(this, signature, copy_position.x, [=](size_t index, void* component_data, unsigned short component_size) {
+			memcpy(component_data, data[index], component_size * copy_position.y);
 		});
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::CreateChunk() {
-		// adding 8 bytes for table buffer alignment
-		void* allocation = m_memory_manager->Allocate(ChunkMemorySize());
-		uintptr_t buffer = (uintptr_t)allocation;
-
-		Entity* entities = (Entity*)buffer;
-		buffer += sizeof(Entity) * m_chunk_size;
-
-		void** chunk_buffers = (void**)buffer;
-		buffer += sizeof(void*) * m_components.count;
-		for (size_t index = 0; index < m_components.count; index++) {
-			buffer = function::align_pointer(buffer, ECS_CACHE_LINE_SIZE);
-			chunk_buffers[index] = (void*)buffer;
-			buffer += m_infos[m_components.indices[index].value].size * m_chunk_size;
-		}
-
-		unsigned int chunk_index = m_chunks.Add({ entities, chunk_buffers, 0 });
-		ECS_ASSERT(chunk_index < ECS_ARCHETYPE_MAX_CHUNKS);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void ArchetypeBase::CreateChunks(unsigned int count) {
-		for (size_t index = 0; index < count; index++) {
-			CreateChunk();
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void ArchetypeBase::ClearChunk(unsigned int chunk_index) {
-		ECS_ASSERT(chunk_index < m_chunks.size);
-		m_entity_count -= m_chunks[chunk_index].size;
-		m_chunks[chunk_index].size = 0;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	size_t ArchetypeBase::ChunkMemorySize() const {
-		size_t per_entity_size = 0;
-		for (size_t index = 0; index < m_components.count; index++) {
-			per_entity_size = m_infos[m_components.indices[index].value].size;
-		}
-		// A void* must be allocated for each component, also add + ECS_CACHE_LINE_SIZE for alignment purposes
-		return per_entity_size * m_chunk_size + (sizeof(void*) + ECS_CACHE_LINE_SIZE) * m_components.count;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
+	// Only a single allocation is made
 	void ArchetypeBase::Deallocate() {
-		for (size_t index = 0; index < m_chunks.size; index++) {
-			DeallocateChunk(index);
+		if (m_entities != nullptr && m_buffers != nullptr) {
+			m_memory_manager->Deallocate(m_entities);
 		}
-		m_chunks.FreeBuffer();
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void ArchetypeBase::DeallocateChunk(unsigned int chunk_index)
-	{
-		ECS_ASSERT(chunk_index < m_chunks.size);
-		m_memory_manager->Deallocate(m_chunks[chunk_index].entities);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void ArchetypeBase::DestroyChunk(unsigned int chunk_index, EntityPool* pool) {
-		DeallocateChunk(chunk_index);
-		m_chunks.RemoveSwapBack(chunk_index);
-
-		// Update the pool infos for the entities that got swapped
-		// Do this only if the index is different from the last element
-		if (m_chunks.size != chunk_index) {
-			for (size_t index = 0; index < m_chunks[chunk_index].size; index++) {
-				EntityInfo* info_ptr = pool->GetInfoPtr(m_chunks[chunk_index].entities[index]);
-				info_ptr->chunk = chunk_index;
-			}
-		}
-
-		// TODO: Determine if trimming is helpful
-		// Might not be worth the fragmentation cost
-		m_chunks.TrimThreshold(TRIM_COUNT);
+		m_size = 0;
+		m_capacity = 0;
+		m_entities = nullptr;
+		m_buffers = nullptr;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -315,144 +247,148 @@ namespace ECSEngine {
 	void ArchetypeBase::FindComponents(ComponentSignature components) const
 	{
 		for (size_t index = 0; index < components.count; index++) {
-			components.indices[index].value = FindComponentIndex(components.indices[index]);
-			ECS_ASSERT(components.indices[index].value != -1);
+			unsigned char component_index = FindComponentIndex(components.indices[index]);
+			components.indices[index].value = component_index == (unsigned char)-1 ? (unsigned short)-1 : component_index;
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::GetBuffers(void*** buffers) const {
-		for (size_t chunk_index = 0; chunk_index < m_chunks.size; chunk_index++) {
-			buffers[chunk_index] = m_chunks[chunk_index].buffers;
+	void ArchetypeBase::GetBuffers(void** buffers, ComponentSignature signature) {
+		for (size_t component = 0; component <= signature.count; component++) {
+			unsigned char component_index = FindComponentIndex(signature.indices[component]);
+			buffers[component] = m_buffers[component_index];
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::GetBuffers(void*** buffers, size_t* chunk_sizes, ComponentSignature signature) const {
-		size_t buffer_index = 0;
-
-		for (size_t chunk_index = 0; chunk_index < m_chunks.size; chunk_index++) {
-			for (size_t component = 0; component <= signature.count; component++) {
-				buffers[chunk_index][component] = m_chunks[chunk_index].buffers[signature.indices[component].value];
-			}
-			chunk_sizes[chunk_index] = m_chunks[chunk_index].size;
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned int ArchetypeBase::GetChunkCount() const {
-		return m_chunks.size;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void* ArchetypeBase::GetComponent(EntityInfo info, Component component) const
+	void* ArchetypeBase::GetComponent(EntityInfo info, Component component)
 	{
 		unsigned char component_index = FindComponentIndex(component);
-		ECS_ASSERT(component_index != -1);
+		ECS_CRASH_RETURN_VALUE(component_index != -1, nullptr, "The entity {#} does not have component {#} when trying to retrieve it.", m_entities[info.stream_index].value);
 		return GetComponentByIndex(info, component_index);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void* ArchetypeBase::GetComponentByIndex(EntityInfo info, unsigned char component_index) const
+	void* ArchetypeBase::GetComponentByIndex(EntityInfo info, unsigned char component_index)
 	{
-		return function::OffsetPointer(m_chunks[info.chunk].buffers[component_index], info.stream_index * m_infos[m_components.indices[component_index].value].size);
+		return GetComponentByIndex(info.stream_index, component_index);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned int ArchetypeBase::GetEntityCount() const {
-		return m_entity_count;
+	void* ArchetypeBase::GetComponentByIndex(unsigned int stream_index, unsigned char component_index)
+	{
+		return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::GetEntities(Stream<Entity>* entities) const
-	{
-		for (size_t index = 0; index < m_chunks.size; index++) {
-			entities[index] = { m_chunks[index].entities, m_chunks[index].size };
-		}
+	unsigned int ArchetypeBase::GetSize() const {
+		return m_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::GetEntities(CapacityStream<Entity>& entities) const
-	{
-		for (size_t chunk_index = 0; chunk_index < m_chunks.size; chunk_index++) {
-			for (size_t entity_index = 0; entity_index < m_chunks[chunk_index].size; entity_index++) {
-				entities.AddSafe(m_chunks[chunk_index].entities[entity_index]);
-			}
-		}
+	unsigned int ArchetypeBase::GetCapacity() const {
+		return m_capacity;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::Reserve(unsigned int count)
+	Stream<Entity> ArchetypeBase::GetEntities() const
 	{
-		m_entity_count += count;
-		for (size_t index = 0; index < m_chunks.size; index++) {
-			unsigned int available_positions = m_chunk_size - m_chunks[index].size;
-			if (available_positions >= count) {
-				m_chunks[index].size += count;
-				return;
-			}
-			else {
-				count -= available_positions;
-				m_chunks[index].size = m_chunk_size;
-			}
-		}
-
-		// There is not enough space in the current chunks, allocate new ones
-		// Determine how many chunks are necessary
-		unsigned int before_chunk_size = m_chunks.size;
-
-		unsigned int chunk_remainder = count % m_chunk_size;
-		unsigned int chunks_necessary = count / m_chunk_size + (chunk_remainder != 0);
-		CreateChunks(chunks_necessary);
-
-		for (size_t index = before_chunk_size; index < m_chunks.size - 1; index++) {
-			m_chunks[index].size = m_chunk_size;
-		}
-		m_chunks[m_chunks.size - 1].size = chunk_remainder;
+		return { m_entities, m_size };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::Reserve(unsigned int count, CapacityStream<EntitySequence>& chunk_positions)
+	void ArchetypeBase::GetEntitiesCopy(Entity* entities) const
 	{
-		m_entity_count += count;
-		for (size_t index = 0; index < m_chunks.size; index++) {
-			unsigned int available_positions = m_chunk_size - m_chunks[index].size;
-			if (available_positions >= count) {
-				chunk_positions.AddSafe({ (unsigned short)index, m_chunks[index].size, count });
-				m_chunks[index].size += count;
-				return;
-			}
-			else {
-				chunk_positions.AddSafe({ (unsigned short)index, m_chunks[index].size, available_positions });
-				count -= available_positions;
-				m_chunks[index].size = m_chunk_size;
-			}
+		memcpy(entities, m_entities, sizeof(Entity) * m_size);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void ArchetypeBase::Resize(unsigned int count) {
+		const size_t STACK_LIMIT = ECS_KB * 128;
+		// If the size of the components to be copied is small, copy to a temporary stack buffer,
+		// deallocate the allocation and reallocate. In this way, the fragmentation is reduced and 
+		// it will lower the pressure on the allocator		
+
+		size_t current_total_byte_size = sizeof(Entity) * m_size;
+		size_t per_entity_size = 0;
+
+		size_t new_total_byte_size = sizeof(Entity) * count;
+		for (size_t component_index = 0; component_index < m_components.count; component_index) {
+			per_entity_size += m_infos[m_components.indices[component_index].value].size;
+		}
+		// Add a cache line for component alignment
+		current_total_byte_size += per_entity_size * m_size + m_components.count * ECS_CACHE_LINE_SIZE;
+		new_total_byte_size += per_entity_size * count + m_components.count * ECS_CACHE_LINE_SIZE;
+
+		void* stack_buffer = ECS_STACK_ALLOC(current_total_byte_size);
+		void* copy_buffer = m_entities;
+		Entity* old_entities = m_entities;
+
+		if (current_total_byte_size < STACK_LIMIT) {
+			copy_buffer = stack_buffer;
+			memcpy(stack_buffer, m_entities, current_total_byte_size);
+
+			m_memory_manager->Deallocate(m_entities);
 		}
 
-		// There is not enough space in the current chunks, allocate new ones
-		// Determine how many chunks are necessary
-		unsigned int before_chunk_size = m_chunks.size;
+		void* allocation = m_memory_manager->Allocate(new_total_byte_size, alignof(Entity));
 
-		unsigned int chunk_remainder = count % m_chunk_size;
-		unsigned int chunks_necessary = count / m_chunk_size + (chunk_remainder != 0);
-		CreateChunks(chunks_necessary);
+		uintptr_t ptr = (uintptr_t)allocation;
+		uintptr_t ptr_to_copy = (uintptr_t)copy_buffer;
 
-		for (size_t index = before_chunk_size; index < m_chunks.size - 1; index++) {
-			chunk_positions.AddSafe({ (unsigned short)index, 0, m_chunk_size });
-			m_chunks[index].size = m_chunk_size;
+		// Copy the entities first
+		m_entities = (Entity*)ptr;
+		memcpy(m_entities, (void*)ptr_to_copy, sizeof(Entity) * m_size);
+
+		ptr += sizeof(Entity) * count;
+		ptr = function::align_pointer(ptr, ECS_CACHE_LINE_SIZE);
+		ptr_to_copy += sizeof(Entity) * m_capacity;
+		ptr_to_copy = function::align_pointer(ptr_to_copy, ECS_CACHE_LINE_SIZE);
+
+		// Now copy the components
+		for (size_t component_index = 0; component_index < m_components.count; component_index++) {
+			unsigned short component_size = m_infos[m_components.indices[component_index].value].size;
+			m_buffers[component_index] = (void*)ptr;
+			memcpy(m_buffers[component_index], (void*)ptr_to_copy, component_size * m_size);
+
+			ptr = function::align_pointer(ptr + component_size * count, ECS_CACHE_LINE_SIZE);
+			ptr_to_copy = function::align_pointer(ptr_to_copy + component_size * m_capacity, ECS_CACHE_LINE_SIZE);
 		}
-		m_chunks[m_chunks.size - 1].size = chunk_remainder;
-		chunk_positions.AddSafe({ (unsigned short)(m_chunks.size - 1), 0, chunk_remainder });
+
+		// Now set the new capacity
+		m_capacity = count;
+
+		// If it is not the stack buffer, deallocate the buffer
+		if (current_total_byte_size >= STACK_LIMIT) {
+			m_memory_manager->Deallocate(old_entities);
+		}
+	}
+
+	unsigned int ArchetypeBase::Reserve(unsigned int count)
+	{
+		if (m_size + count > m_capacity) {
+			Resize((unsigned int)((float)m_capacity * GROW_FACTOR));
+		}
+		return m_size;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void ArchetypeBase::ShrinkToFit(unsigned int supplementary_elements)
+	{
+		if (m_size + supplementary_elements < m_capacity) {
+			// Shrink the vector
+			Resize(m_size + supplementary_elements);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -460,68 +396,50 @@ namespace ECSEngine {
 	void ArchetypeBase::RemoveEntity(Entity entity, EntityPool* pool)
 	{
 		EntityInfo info = pool->GetInfo(entity);
-		
-		m_chunks[info.chunk].size--;
-		if (m_chunks[info.chunk].size == 0) {
-			// There are no other entities left in this chunk - deallocate it and swap back into the slot
-			// Also update the entity infos for those entities
-			DestroyChunk(info.chunk, pool);
-			return;
-		}
+		RemoveEntity(info.stream_index, pool);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void ArchetypeBase::RemoveEntity(unsigned int stream_index, EntityPool* pool)
+	{
 		// If it is the last entity, skip the update of the components and that of the entity info
-		else if (info.stream_index == m_chunks[info.chunk].size) {
+		if (stream_index == m_size) {
 			return;
 		}
 
 		// Every component content must be manually moved
-		EntityInfo last_info = info;
-		last_info.stream_index = m_chunks[info.chunk].size;
 		for (size_t index = 0; index < m_components.count; index++) {
-			const void* last_element_data = GetComponentByIndex(last_info, index);
-			UpdateComponentByIndex(info, index, last_element_data);
+			const void* last_element_data = GetComponentByIndex(m_size, index);
+			UpdateComponentByIndex(stream_index, index, last_element_data);
 		}
 		// Also the entity must be updated
-		m_chunks[info.chunk].entities[info.stream_index] = m_chunks[info.chunk].entities[m_chunks[info.chunk].size];
-		EntityInfo* last_entity_info = pool->GetInfoPtr(m_chunks[info.chunk].entities[info.stream_index]);
-		last_entity_info->stream_index = info.stream_index;
+		m_entities[stream_index] = m_entities[m_size];
+		EntityInfo* last_entity_info = pool->GetInfoPtr(m_entities[stream_index]);
+		last_entity_info->stream_index = stream_index;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::RemoveEntities(Stream<Entity> entities, EntityPool* pool)
+	void ArchetypeBase::SetEntities(Stream<Entity> entities, unsigned int copy_position)
 	{
-		for (size_t index = 0; index < entities.size; index++) {
-			RemoveEntity(entities[index], pool);
-		}
+		memcpy(m_entities + copy_position, entities.buffer, sizeof(Entity) * entities.size);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::SetEntities(const Entity* entities, Stream<EntitySequence> chunk_positions)
-	{
-		unsigned int total_entity_count = 0;
-		for (size_t index = 0; index < chunk_positions.size; index++) {
-			for (size_t subindex = 0; subindex < chunk_positions[index].entity_count; subindex++) {
-				m_chunks[chunk_positions[index].chunk_index].entities[chunk_positions[index].stream_offset + subindex] = entities[total_entity_count];
-				total_entity_count++;
-			}
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void ArchetypeBase::UpdateComponent(EntityInfo info, Component component, const void* data)
+	void ArchetypeBase::UpdateComponent(unsigned int stream_index, Component component, const void* data)
 	{
 		unsigned char component_index = FindComponentIndex(component);
-		ECS_ASSERT(component_index != -1);
-		UpdateComponentByIndex(info, component_index, data);
+		ECS_CRASH_RETURN(component_index != -1, "The entity {#} does not have component {#} when trying to update it.", m_entities[stream_index].value, component.value);
+		UpdateComponentByIndex(stream_index, component_index, data);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void ArchetypeBase::UpdateComponentByIndex(EntityInfo info, unsigned char component_index, const void* data)
+	void ArchetypeBase::UpdateComponentByIndex(unsigned int stream_index, unsigned char component_index, const void* data)
 	{
-		void* component_data = GetComponentByIndex(info, component_index);
+		void* component_data = GetComponentByIndex(stream_index, component_index);
 		memcpy(component_data, data, m_infos[m_components.indices[component_index].value].size);
 	}
 

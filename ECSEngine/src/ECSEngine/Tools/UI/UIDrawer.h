@@ -636,7 +636,7 @@ namespace ECSEngine {
 					base_data->user_action = user_callback->handler.action;
 					
 					if (user_callback->handler.data_size > 0) {
-						void* user_data = function::OffsetPointer(base_data, sizeof(*base_data));
+						void* user_data = function::OffsetPointer(base_data, callback_data_size);
 						memcpy(user_data, user_callback->handler.data, user_callback->handler.data_size);
 						base_data->user_action_data = user_data;
 					}
@@ -798,7 +798,7 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					FinalizeRectangle(configuration, position, scale);
+					FinalizeRectangle(configuration, position, { scale.x + layout.element_indentation + input->name.scale.x, scale.y });
 				}
 			}
 
@@ -1020,15 +1020,15 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void* SentenceInitializer(size_t configuration, const UIDrawConfig& config, const char* text);
+			void* SentenceInitializer(size_t configuration, const UIDrawConfig& config, const char* text, char separator_token = ' ');
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t SentenceWhitespaceCharactersCount(const char* identifier, CapacityStream<unsigned int> stack_buffer);
+			size_t SentenceWhitespaceCharactersCount(const char* identifier, CapacityStream<unsigned int> stack_buffer, char separator_token = ' ');
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data);
+			void SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data, char separator_token = ' ');
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1599,7 +1599,9 @@ namespace ECSEngine {
 			template<typename Element>
 			void Array(
 				size_t configuration,
+				size_t element_configuration,
 				const UIDrawConfig& config, 
+				const UIDrawConfig* element_config,
 				const char* name, 
 				CapacityStream<Element>* elements,
 				void* additional_data,
@@ -1622,7 +1624,9 @@ namespace ECSEngine {
 
 						ArrayDrawer(
 							configuration | UI_CONFIG_DO_NOT_VALIDATE_POSITION,
-							config, 
+							element_configuration,
+							config,
+							element_config,
 							data, 
 							name, 
 							elements,
@@ -1647,7 +1651,7 @@ namespace ECSEngine {
 							initialize_data.element_count = elements->size;
 							InitializeDrawerElement(*this, &initialize_data, name, InitializeArrayElement, DynamicConfiguration(configuration));
 						}
-						Array<Element>(DynamicConfiguration(configuration), config, name, elements, additional_data, draw_function, drag_function);
+						Array<Element>(DynamicConfiguration(configuration), element_configuration, config, element_config, name, elements, additional_data, draw_function, drag_function);
 					}
 				}
 				else {
@@ -1662,7 +1666,9 @@ namespace ECSEngine {
 			template<typename Element>
 			void ArrayDrawer(
 				size_t configuration,
+				size_t element_configuration,
 				const UIDrawConfig& config,
+				const UIDrawConfig* element_config,
 				UIDrawerArrayData* data, 
 				const char* name, 
 				CapacityStream<Element>* elements,
@@ -1688,7 +1694,7 @@ namespace ECSEngine {
 					if (config.associated_bits[index] != UI_CONFIG_ABSOLUTE_TRANSFORM && config.associated_bits[index] != UI_CONFIG_RELATIVE_TRANSFORM
 						&& config.associated_bits[index] != UI_CONFIG_WINDOW_DEPENDENT_SIZE && config.associated_bits[index] != UI_CONFIG_MAKE_SQUARE) {
 						size_t header_config_count = header_config.flag_count;
-						size_t config_byte_size = config.parameter_start[index + 1] - config.parameter_start[index];
+						size_t config_byte_size = (config.parameter_start[index + 1] - config.parameter_start[index]) * sizeof(float);
 						header_config.associated_bits[header_config_count] = config.associated_bits[index];
 						header_config.parameter_start[header_config_count + 1] = header_config.parameter_start[header_config_count]
 							+ config_byte_size;
@@ -1747,6 +1753,20 @@ namespace ECSEngine {
 					UIDrawConfig arrow_config;
 					UIConfigAbsoluteTransform arrow_transform;
 					arrow_transform.scale = ARROW_SIZE;
+
+					// If there is window dependent size, modify it such that it conforms to the window alignment
+					if (element_config != nullptr) {
+						if (element_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+							UIConfigWindowDependentSize* size = (UIConfigWindowDependentSize*)element_config->GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+							float x_scale = GetWindowSizeScaleElement(size->type, size->scale_factor).x;
+							x_scale -= layout.node_indentation;
+							
+							// The arrow size must also be taken into account
+							x_scale -= ARROW_SIZE.x + layout.element_indentation;
+							size->scale_factor.x = GetWindowSizeFactors(size->type, { x_scale, 0.0f }).x;
+
+						}
+					}
 
 					const char* draw_element_name = temp_name.buffer;
 
@@ -1807,6 +1827,8 @@ namespace ECSEngine {
 						function_data.additional_data = additional_data;
 						function_data.current_index = index;
 						function_data.element_data = elements->buffer + index;
+						function_data.configuration = element_configuration;
+						function_data.config = (UIDrawConfig*)element_config;
 
 						draw_function(*this, draw_element_name, function_data);
 
@@ -1854,6 +1876,8 @@ namespace ECSEngine {
 						function_data.additional_data = additional_data;
 						function_data.current_index = index;
 						function_data.element_data = elements->buffer + index;
+						function_data.configuration = element_configuration;
+						function_data.config = (UIDrawConfig*)element_config;
 
 						draw_function(*this, draw_element_name, function_data);
 
@@ -2027,6 +2051,19 @@ namespace ECSEngine {
 						}
 					}
 
+					// If there is window dependent size, restore the previous config
+					if (element_config != nullptr) {
+						if (element_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+							UIConfigWindowDependentSize* size = (UIConfigWindowDependentSize*)element_config->GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+							float x_scale = GetWindowSizeScaleElement(size->type, size->scale_factor).x;
+							x_scale += layout.node_indentation;
+
+							// The arrow size must also be taken into account
+							x_scale += ARROW_SIZE.x + layout.element_indentation;
+							size->scale_factor.x = GetWindowSizeFactors(size->type, { x_scale, 0.0f }).x;
+						}
+					}
+
 					if (data->row_y_scale > 0.0f) {
 						// Skip all the elements that are the outside the view region - the elements that come after
 						skip_count = elements->size - index;
@@ -2180,7 +2217,7 @@ namespace ECSEngine {
 					if (header_config.associated_bits[header_config.flag_count - 1] == UI_CONFIG_ABSOLUTE_TRANSFORM) {
 						header_config.flag_count--;
 					}
-					transform.position.x = header_position.x + header_scale.x + layout.element_indentation;
+					transform.position.x = header_position.x + header_scale.x + layout.element_indentation + region_render_offset.x;
 					transform.scale.x = SIZE_INPUT_X_SCALE * zoom_ptr->x;
 					header_config.AddFlag(transform);
 
@@ -2225,23 +2262,54 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayFloat(const char* name, CapacityStream<float>* values);
+			void ArrayFloat(const char* name, CapacityStream<float>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayFloat(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float>* values);
+			void ArrayFloat(
+				size_t configuration,
+				const UIDrawConfig& config,
+				const char* name,
+				CapacityStream<float>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayDouble(const char* name, CapacityStream<double>* values);
+			void ArrayDouble(
+				const char* name, 
+				CapacityStream<double>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
-			void ArrayDouble(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double>* values);
+			void ArrayDouble(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name,
+				CapacityStream<double>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			ECSENGINE_API void ArrayInteger(const char* name, CapacityStream<Integer>* values);
+			ECSENGINE_API void ArrayInteger(
+				const char* name, 
+				CapacityStream<Integer>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			template<typename Integer>
-			ECSENGINE_API void ArrayInteger(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer>* values);
+			ECSENGINE_API void ArrayInteger(
+				size_t configuration, 
+				const UIDrawConfig& config,
+				const char* name, 
+				CapacityStream<Integer>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2251,33 +2319,60 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayFloat2(const char* name, CapacityStream<float2>* values);
+			void ArrayFloat2(const char* name, CapacityStream<float2>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayFloat2(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float2>* values);
+			void ArrayFloat2(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name,
+				CapacityStream<float2>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayDouble2(const char* name, CapacityStream<double2>* values);
+			void ArrayDouble2(const char* name, CapacityStream<double2>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayDouble2(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double2>* values);
+			void ArrayDouble2(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<double2>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename BaseInteger, typename Integer2>
-			ECSENGINE_API void ArrayInteger2(const char* name, CapacityStream<Integer2>* values);
+			ECSENGINE_API void ArrayInteger2(const char* name, CapacityStream<Integer2>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
 			template<typename BaseInteger, typename Integer2>
-			ECSENGINE_API void ArrayInteger2(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer2>* values);
+			ECSENGINE_API void ArrayInteger2(
+				size_t configuration, 
+				const UIDrawConfig& config,
+				const char* name, 
+				CapacityStream<Integer2>* values, 
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// it will infer the extended type
 			template<typename BaseInteger>
-			ECSENGINE_API void ArrayInteger2Infer(const char* name, CapacityStream<void>* values);
+			ECSENGINE_API void ArrayInteger2Infer(const char* name, CapacityStream<void>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
 			// it will infer the extended type
 			template<typename BaseInteger>
-			ECSENGINE_API void ArrayInteger2Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values);
+			ECSENGINE_API void ArrayInteger2Infer(
+				size_t configuration,
+				const UIDrawConfig& config,
+				const char* name,
+				CapacityStream<void>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2287,33 +2382,61 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayFloat3(const char* name, CapacityStream<float3>* values);
+			void ArrayFloat3(const char* name, CapacityStream<float3>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayFloat3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float3>* values);
+			void ArrayFloat3(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<float3>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayDouble3(const char* name, CapacityStream<double3>* values);
+			void ArrayDouble3(const char* name, CapacityStream<double3>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayDouble3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double3>* values);
+			void ArrayDouble3(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<double3>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename BaseInteger, typename Integer3>
-			ECSENGINE_API void ArrayInteger3(const char* name, CapacityStream<Integer3>* values);
+			ECSENGINE_API void ArrayInteger3(const char* name, CapacityStream<Integer3>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
 			template<typename BaseInteger, typename Integer3>
-			ECSENGINE_API void ArrayInteger3(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer3>* values);
+			ECSENGINE_API void ArrayInteger3(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<Integer3>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// it will infer the extended type
 			template<typename BaseInteger>
-			ECSENGINE_API void ArrayInteger3Infer(const char* name, CapacityStream<void>* values);
+			ECSENGINE_API void ArrayInteger3Infer(const char* name, CapacityStream<void>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
 			// it will infer the extended type
 			template<typename BaseInteger>
-			ECSENGINE_API void ArrayInteger3Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values);
+			ECSENGINE_API void ArrayInteger3Infer(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<void>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2323,33 +2446,61 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayFloat4(const char* name, CapacityStream<float4>* values);
+			void ArrayFloat4(const char* name, CapacityStream<float4>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayFloat4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<float4>* values);
+			void ArrayFloat4(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name,
+				CapacityStream<float4>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayDouble4(const char* name, CapacityStream<double4>* values);
+			void ArrayDouble4(const char* name, CapacityStream<double4>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayDouble4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<double4>* values);
+			void ArrayDouble4(
+				size_t configuration,
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<double4>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename BaseInteger, typename Integer4>
-			ECSENGINE_API void ArrayInteger4(const char* name, CapacityStream<Integer4>* values);
+			ECSENGINE_API void ArrayInteger4(const char* name, CapacityStream<Integer4>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
 			template<typename BaseInteger, typename Integer4>
-			ECSENGINE_API void ArrayInteger4(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Integer4>* values);
+			ECSENGINE_API void ArrayInteger4(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<Integer4>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// it will infer the extended type
 			template<typename BaseInteger>
-			ECSENGINE_API void ArrayInteger4Infer(const char* name, CapacityStream<void>* values);
+			ECSENGINE_API void ArrayInteger4Infer(const char* name, CapacityStream<void>* values, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
 			// it will infer the extended type
 			template<typename BaseInteger>
-			ECSENGINE_API void ArrayInteger4Infer(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<void>* values);
+			ECSENGINE_API void ArrayInteger4Infer(
+				size_t configuration, 
+				const UIDrawConfig& config,
+				const char* name,
+				CapacityStream<void>* values,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2359,9 +2510,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayColor(const char* name, CapacityStream<Color>* colors);
+			void ArrayColor(const char* name, CapacityStream<Color>* colors, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayColor(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<Color>* colors);
+			void ArrayColor(
+				size_t configuration,
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<Color>* colors,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2371,9 +2529,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayColorFloat(const char* name, CapacityStream<ColorFloat>* colors);
+			void ArrayColorFloat(const char* name, CapacityStream<ColorFloat>* colors, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayColorFloat(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<ColorFloat>* colors);
+			void ArrayColorFloat(
+				size_t configuration,
+				const UIDrawConfig& config,
+				const char* name, 
+				CapacityStream<ColorFloat>* colors,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2384,9 +2549,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayCheckBox(const char* name, CapacityStream<bool>* states);
+			void ArrayCheckBox(const char* name, CapacityStream<bool>* states, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 			
-			void ArrayCheckBox(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<bool>* states);
+			void ArrayCheckBox(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<bool>* states,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2396,9 +2568,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayTextInput(const char* name, CapacityStream<CapacityStream<char>>* texts);
+			void ArrayTextInput(const char* name, CapacityStream<CapacityStream<char>>* texts, size_t element_configuration = 0, const UIDrawConfig* element_config = nullptr);
 
-			void ArrayTextInput(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<CapacityStream<char>>* texts);
+			void ArrayTextInput(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				const char* name, 
+				CapacityStream<CapacityStream<char>>* texts,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2408,9 +2587,23 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ArrayComboBox(const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels);
+			void ArrayComboBox(
+				const char* name,
+				CapacityStream<unsigned char>* flags,
+				CapacityStream<Stream<const char*>> flag_labels,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
-			void ArrayComboBox(size_t configuration, const UIDrawConfig& config, const char* name, CapacityStream<unsigned char>* flags, CapacityStream<Stream<const char*>> flag_labels);
+			void ArrayComboBox(
+				size_t configuration, 
+				const UIDrawConfig& config,
+				const char* name, 
+				CapacityStream<unsigned char>* flags,
+				CapacityStream<Stream<const char*>> flag_labels,
+				size_t element_configuration = 0,
+				const UIDrawConfig* element_config = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2653,18 +2846,18 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			// States should be a stack pointer with bool* to the members that need to be changed
+			// States needs to be stable
 			void FilterMenu(const char* name, Stream<const char*> label_names, bool** states);
 
-			// States should be a stack pointer with bool* to the members that need to be changed
+			// States needs to be stable
 			void FilterMenu(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool** states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			// States should be a stack pointer to a stable bool array
+			// States should be a stable bool array
 			void FilterMenu(const char* name, Stream<const char*> label_names, bool* states);
 
-			// States should be a stack pointer to a stable bool array
+			// States should be a stable bool array
 			void FilterMenu(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool* states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3025,6 +3218,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// Indent's a percentage of the window's size
+			void IndentWindowSize(float percentage);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 #pragma region Label hierarchy
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3216,6 +3414,9 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void NextRow(float count);
+
+			// Moves the current position by a percentage of the window size
+			void NextRowWindowSize(float percentage);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3520,6 +3721,11 @@ namespace ECSEngine {
 			// Currently, draw_mode_floats is needed for column draw, only the y component needs to be filled
 			// with the desired y spacing
 			void SetDrawMode(UIDrawerMode mode, unsigned int target = 0, float draw_mode_float = 0.0f);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Can be used when some sort of caching is used to cull many objects at once
+			void SetRenderSpan(float2 value);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

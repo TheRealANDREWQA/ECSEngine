@@ -15,9 +15,16 @@ constexpr float PI = 3.14159265358979323846f;
 constexpr float PI_INVERSE = 1.0f / PI;
 constexpr float DEG_TO_RAD_FACTOR = PI / 180.0f;
 constexpr float RAD_TO_DEG_FACTOR = 180.0f / PI;
+
 constexpr size_t ECS_KB = 1 << 10;
 constexpr size_t ECS_MB = ECS_KB * ECS_KB;
 constexpr size_t ECS_GB = ECS_MB * ECS_KB;
+constexpr size_t ECS_TB = ECS_GB * ECS_KB;
+
+constexpr size_t ECS_KB_10 = 1'000;
+constexpr size_t ECS_MB_10 = 1'000'000;
+constexpr size_t ECS_GB_10 = 1'000'000'000;
+constexpr size_t ECS_TB_10 = 1'000'000'000'000;
 
 #define ECS_OS_PATH_SEPARATOR L'\\'
 #define ECS_OS_PATH_SEPARATOR_ASCII '\\'
@@ -39,13 +46,13 @@ namespace ECSEngine {
 #define STRING(s) #s
 #define ECS_CACHE_LINE_SIZE 64
 #define ECS_MICROSOFT_WRL using namespace Microsoft::WRL
-#define ECS_CONTAINERS using namespace ECSEngine::containers
 #define ECS_VECTORCALL __vectorcall
 #define ECS_INLINE __forceinline
 #define ECS_NOINLINE __declspec(noinline)
 #define ECS_RESTRICT __restrict
 
-#define ECS_LOCATION __FILE__, (unsigned int)__LINE__
+#define ECS_FILE_LINE __FILE__, (unsigned int)__LINE__
+#define ECS_LOCATION __builtin_FILE(), __builtin_FUNCTION(), __builtin_LINE()
 
 #define ECS_STACK_ALLOC(size) _alloca(size)
 #define ECS_MALLOCA(size) _malloca(size)
@@ -76,7 +83,7 @@ struct_name.field10 = field10;
 											} \
 											else { \
 												char _null_path[512]; \
-												containers::CapacityStream<char> null_path(_null_path, 0, 512); \
+												CapacityStream<char> null_path(_null_path, 0, 512); \
 												null_path.Copy(stream); \
 												null_path[stream.size] = '\0'; \
 												return function(null_path.buffer, __VA_ARGS__); \
@@ -86,7 +93,7 @@ struct_name.field10 = field10;
 											} \
 											else { \
 												wchar_t _null_path[512]; \
-												containers::CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
+												CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
 												null_path.Copy(stream); \
 												null_path[stream.size] = L'\0'; \
 												return function(null_path.buffer, __VA_ARGS__); \

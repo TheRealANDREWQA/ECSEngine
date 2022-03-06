@@ -7,8 +7,6 @@
 #include "FunctionTemplates.h"
 #include "ForEachFiles.h"
 
-ECS_CONTAINERS;
-
 namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
@@ -20,29 +18,29 @@ namespace ECSEngine {
 			ECS_TEMP_ASCII_STRING(temp_string, 256);
 			switch (error) {
 			case ECS_FILE_STATUS_ACCESS_DENIED:
-				ECS_FORMAT_STRING(temp_string, "Access to {0} was not granted. Possible causes: tried to open a read-only file for writing,"
+				ECS_FORMAT_STRING(temp_string, "Access to {#} was not granted. Possible causes: tried to open a read-only file for writing,"
 					"\nfile's sharing mode does not allow the specified operations, or the given path is a directory", path);
 				break;
 			case ECS_FILE_STATUS_ALREADY_EXISTS:
-				ECS_FORMAT_STRING(temp_string, "File {0} already exists.", path);
+				ECS_FORMAT_STRING(temp_string, "File {#} already exists.", path);
 				break;
 			case ECS_FILE_STATUS_INCORRECT_PATH:
-				ECS_FORMAT_STRING(temp_string, "Incorrect path {0}.", path);
+				ECS_FORMAT_STRING(temp_string, "Incorrect path {#}.", path);
 				break;
 			case ECS_FILE_STATUS_INVALID_ARGUMENTS:
-				ECS_FORMAT_STRING(temp_string, "Invalid combination of arguments for {0}.", path);
+				ECS_FORMAT_STRING(temp_string, "Invalid combination of arguments for {#}.", path);
 				break;
 			case ECS_FILE_STATUS_TOO_MANY_OPENED_FILES:
-				ECS_FORMAT_STRING(temp_string, "Too many opened files when trying to create {0}.", path);
+				ECS_FORMAT_STRING(temp_string, "Too many opened files when trying to create {#}.", path);
 				break;
 			case ECS_FILE_STATUS_READING_FILE_FAILED:
-				ECS_FORMAT_STRING(temp_string, "Reading from file {0} failed.", path);
+				ECS_FORMAT_STRING(temp_string, "Reading from file {#} failed.", path);
 				break;
 			case ECS_FILE_STATUS_WRITING_FILE_FAILED:
-				ECS_FORMAT_STRING(temp_string, "Writing to file {0} failed.", path);
+				ECS_FORMAT_STRING(temp_string, "Writing to file {#} failed.", path);
 				break;
 			case ECS_FILE_STATUS_ERROR:
-				ECS_FORMAT_STRING(temp_string, "An unidentifier error occured for {0}.", path);
+				ECS_FORMAT_STRING(temp_string, "An unidentifier error occured for {#}.", path);
 				break;
 			}
 
@@ -369,68 +367,81 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	ECS_FILE_STATUS_FLAGS FileCopy(const wchar_t* from, const wchar_t* to, bool overwrite_existent, CapacityStream<char>* error_message)
+	bool FileCopy(const wchar_t* from, const wchar_t* to, bool use_filename_from, bool overwrite_existent)
 	{
-		// Open file in binary mode using POSIX api's
-		ECS_FILE_HANDLE read_handle = 0;
-		ECS_FILE_STATUS_FLAGS read_status = OpenFile(from, &read_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY);
-		if (read_status != ECS_FILE_STATUS_OK) {
-			SetErrorMessage(error_message, read_status, from);
-			return read_status;
-		}
-		ScopedFile scoped_read(read_handle);
+		// Decide if the Win32 variant should be kept or the Posix API one
 
-		// Get the file size of the file to be copied
-		size_t file_size = GetFileByteSize(read_handle);
-		if (file_size == 0) {
-			SetErrorMessage(error_message, ECS_FILE_STATUS_ERROR, from);
-			return ECS_FILE_STATUS_ERROR;
-		}
+		//// Open file in binary mode using POSIX api's
+		//ECS_FILE_HANDLE read_handle = 0;
+		//ECS_FILE_STATUS_FLAGS read_status = OpenFile(from, &read_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY);
+		//if (read_status != ECS_FILE_STATUS_OK) {
+		//	return false;
+		//}
+		//ScopedFile scoped_read(read_handle);
 
-		// Append the filename (the stem and the extension) to the to path
+		//// Get the file size of the file to be copied
+		//size_t file_size = GetFileByteSize(read_handle);
+		//if (file_size == 0) {
+		//	return false;
+		//}
+
+		//// Append the filename (the stem and the extension) to the to path
+		//ECS_TEMP_STRING(complete_to_path, 512);
+		//complete_to_path.Copy(ToStream(to));
+		//bool is_absolute = function::PathIsAbsolute(complete_to_path);
+		//complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
+		//Stream<wchar_t> from_filename = function::PathFilenameBoth(ToStream(from));
+		//complete_to_path.AddStream(from_filename);
+		//complete_to_path.Add(L'\0');
+		//
+		//ECS_FILE_HANDLE write_handle = 0;
+		//ECS_FILE_CREATE_FLAGS create_flags = ECS_FILE_CREATE_READ_WRITE;
+		//create_flags |= overwrite_existent ? (ECS_FILE_CREATE_FLAGS)0 : ECS_FILE_CREATE_FAIL_IF_EXISTS;
+		//ECS_FILE_STATUS_FLAGS write_status = FileCreate(complete_to_path.buffer, &write_handle, ECS_FILE_ACCESS_WRITE_ONLY 
+		//	| ECS_FILE_ACCESS_TRUNCATE_FILE | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY, create_flags);
+		//if (write_status != ECS_FILE_STATUS_OK) {	
+		//	return false;
+		//}
+		//ScopedFile scoped_write(write_handle);
+
+		//// Use malloc to read all the bytes from that file and copy them over to the other file
+		//void* buffer = ECS_MALLOCA(file_size);
+		//ScopedMalloca malloca(buffer);
+
+		//unsigned int read_bytes = ReadFromFile(read_handle, { buffer, file_size });
+		//if (read_bytes == -1) {
+		//	return false;
+		//}
+
+		//// Write the bytes now
+		//unsigned int written_bytes = WriteToFile(write_handle, { buffer, read_bytes });
+		//if (written_bytes != read_bytes) {
+		//	return false;
+		//}
+
+		//return true;
+
 		ECS_TEMP_STRING(complete_to_path, 512);
-		complete_to_path.Copy(ToStream(to));
-		bool is_absolute = function::PathIsAbsolute(complete_to_path);
-		complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
-		Stream<wchar_t> from_filename = function::PathFilenameBoth(ToStream(from));
-		complete_to_path.AddStream(from_filename);
-		complete_to_path.Add(L'\0');
-		
-		ECS_FILE_HANDLE write_handle = 0;
-		ECS_FILE_CREATE_FLAGS create_flags = ECS_FILE_CREATE_READ_WRITE;
-		create_flags |= overwrite_existent ? (ECS_FILE_CREATE_FLAGS)0 : ECS_FILE_CREATE_FAIL_IF_EXISTS;
-		ECS_FILE_STATUS_FLAGS write_status = FileCreate(complete_to_path.buffer, &write_handle, ECS_FILE_ACCESS_WRITE_ONLY 
-			| ECS_FILE_ACCESS_TRUNCATE_FILE | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY, create_flags);
-		if (write_status != ECS_FILE_STATUS_OK) {	
-			SetErrorMessage(error_message, write_status, from_filename.buffer);
-			return write_status;
-		}
-		ScopedFile scoped_write(write_handle);
+		const wchar_t* to_path = to;
+		if (use_filename_from) {
+			complete_to_path.Copy(ToStream(to));
+			bool is_absolute = function::PathIsAbsolute(complete_to_path);
+			complete_to_path.Add(is_absolute ? ECS_OS_PATH_SEPARATOR : ECS_OS_PATH_SEPARATOR_REL);
+			Stream<wchar_t> from_filename = function::PathFilenameBoth(ToStream(from));
+			complete_to_path.AddStream(from_filename);
+			complete_to_path.Add(L'\0');
 
-		// Use malloc to read all the bytes from that file and copy them over to the other file
-		void* buffer = ECS_MALLOCA(file_size);
-		ScopedMalloca malloca(buffer);
-
-		unsigned int read_bytes = ReadFromFile(read_handle, { buffer, file_size });
-		if (read_bytes == -1) {
-			SetErrorMessage(error_message, ECS_FILE_STATUS_READING_FILE_FAILED, from);
-			return ECS_FILE_STATUS_READING_FILE_FAILED;
+			to_path = complete_to_path.buffer;
 		}
 
-		// Write the bytes now
-		unsigned int written_bytes = WriteToFile(write_handle, { buffer, read_bytes });
-		if (written_bytes != read_bytes) {
-			SetErrorMessage(error_message, ECS_FILE_STATUS_WRITING_FILE_FAILED, from_filename.buffer);
-			return ECS_FILE_STATUS_WRITING_FILE_FAILED;
-		}
-
-		return ECS_FILE_STATUS_OK;
+		BOOL success = CopyFile(from, to_path, !overwrite_existent);
+		return success;
 	}
 
-	ECS_FILE_STATUS_FLAGS FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent, CapacityStream<char>* error_message)
+	bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool use_filename_from, bool overwrite_existent)
 	{
 		if (from[from.size] == L'\0' && to[to.size] == L'\0') {
-			return FileCopy(from.buffer, to.buffer, overwrite_existent, error_message);
+			return FileCopy(from.buffer, to.buffer, use_filename_from, overwrite_existent);
 		}
 		else {
 			ECS_TEMP_STRING(null_from, 512);
@@ -440,32 +451,26 @@ namespace ECSEngine {
 
 			null_from.Add(L'\0');
 			null_to.Add(L'\0');
-			return FileCopy(null_from.buffer, null_to.buffer, overwrite_existent, error_message);
+			return FileCopy(null_from.buffer, null_to.buffer, use_filename_from, overwrite_existent);
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------
 
-	ECS_FILE_STATUS_FLAGS FileCut(const wchar_t* from, const wchar_t* to, bool overwrite_existent, CapacityStream<char>* error_message)
+	bool FileCut(const wchar_t* from, const wchar_t* to, bool use_filename_from, bool overwrite_existent)
 	{
-		ECS_FILE_STATUS_FLAGS status = FileCopy(from, to, overwrite_existent, error_message);
-		if (status != ECS_FILE_STATUS_OK) {
+		bool status = FileCopy(from, to, use_filename_from, overwrite_existent);
+		if (!status) {
 			return status;
 		}
 
 		bool success = RemoveFile(from);
-		if (success) {
-			return ECS_FILE_STATUS_OK;
-		}
-		else {
-			SetErrorMessage(error_message, ECS_FILE_STATUS_ERROR, from);
-			return ECS_FILE_STATUS_ERROR;
-		}
+		return success;
 	}
 
-	ECS_FILE_STATUS_FLAGS FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool overwrite_existent, CapacityStream<char>* error_message) {
+	bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool use_filename_from, bool overwrite_existent) {
 		if (from[from.size] == L'\0' && to[to.size] == L'\0') {
-			return FileCut(from.buffer, to.buffer, overwrite_existent, error_message);
+			return FileCut(from.buffer, to.buffer, use_filename_from, overwrite_existent);
 		}
 		else {
 			ECS_TEMP_STRING(null_from, 512);
@@ -475,7 +480,7 @@ namespace ECSEngine {
 
 			null_from.Add(L'\0');
 			null_to.Add(L'\0');
-			return FileCut(null_from.buffer, null_to.buffer, overwrite_existent, error_message);
+			return FileCut(null_from.buffer, null_to.buffer, use_filename_from, overwrite_existent);
 		}
 	}
 
@@ -495,8 +500,6 @@ namespace ECSEngine {
 		null_from.Add(L'\0');
 
 		null_to.Copy(to);
-		null_to.Add(ECS_OS_PATH_SEPARATOR);
-		null_to.Add(L'*');
 		null_to.Add(L'\0');
 		null_to.Add(L'\0');
 
@@ -634,6 +637,18 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	bool HideFolder(const wchar_t* path)
+	{
+		return SetFileAttributes(path, FILE_ATTRIBUTE_HIDDEN);
+	}
+
+	bool HideFolder(Stream<wchar_t> path)
+	{
+		ECS_FORWARD_STREAM_WIDE(path, HideFolder);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	Stream<void> ReadWholeFile(const wchar_t* path, bool binary, AllocatorPolymorphic allocator)
 	{
 		if (binary) {
@@ -670,7 +685,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool IsFile(containers::Stream<wchar_t> path)
+	bool IsFile(Stream<wchar_t> path)
 	{
 		ECS_FORWARD_STREAM_WIDE(path, IsFile);
 	}
@@ -689,7 +704,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool IsFolder(containers::Stream<wchar_t> path)
+	bool IsFolder(Stream<wchar_t> path)
 	{
 		ECS_FORWARD_STREAM_WIDE(path, IsFolder);
 	}
@@ -774,6 +789,72 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(const wchar_t* path, Stream<void> buffer, bool append_data)
+	{
+		ECS_FILE_HANDLE handle = 0;
+		ECS_FILE_ACCESS_FLAGS access_flags = append_data ? ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_APEND | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL
+			: ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE;
+
+		ECS_FILE_STATUS_FLAGS status = OpenFile(path, &handle, access_flags);
+		if (status != ECS_FILE_STATUS_OK) {
+			return status;
+		}
+
+		bool success = WriteFile(handle, buffer);
+		CloseFile(handle);
+
+		return success ? ECS_FILE_STATUS_OK : ECS_FILE_STATUS_WRITING_FILE_FAILED;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(Stream<wchar_t> path, Stream<void> buffer, bool append_data)
+	{
+		ECS_FORWARD_STREAM_WIDE(path, WriteBufferToFileBinary, buffer, append_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	ECS_FILE_STATUS_FLAGS WriteBufferToFileText(const wchar_t* path, Stream<void> buffer, bool append_data)
+	{
+		ECS_FILE_HANDLE handle = 0;
+		ECS_FILE_ACCESS_FLAGS access_flags = append_data ? ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_APEND | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL
+			: ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL;
+
+		ECS_FILE_STATUS_FLAGS status = FileCreate(path, &handle, access_flags);
+		if (status != ECS_FILE_STATUS_OK) {
+			return status;
+		}
+
+		bool success = WriteFile(handle, buffer);
+		CloseFile(handle);
+
+		return success ? ECS_FILE_STATUS_OK : ECS_FILE_STATUS_WRITING_FILE_FAILED;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	ECS_FILE_STATUS_FLAGS WriteBufferToFileText(Stream<wchar_t> path, Stream<void> buffer, bool append_data)
+	{
+		ECS_FORWARD_STREAM_WIDE(path, WriteBufferToFileText, buffer, append_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	ECS_FILE_STATUS_FLAGS WriteBufferToFile(const wchar_t* path, Stream<void> buffer, bool binary, bool append_data)
+	{
+		return binary ? WriteBufferToFileBinary(path, buffer, append_data) : WriteBufferToFileText(path, buffer, append_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	ECS_FILE_STATUS_FLAGS WriteBufferToFile(Stream<wchar_t> path, Stream<void> buffer, bool binary, bool append_data)
+	{
+		ECS_FORWARD_STREAM_WIDE(path, WriteBufferToFile, buffer, append_data);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	bool ExistsFileOrFolder(const wchar_t* path)
 	{
 		return _waccess(path, 0) == 0;
@@ -781,7 +862,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	bool ExistsFileOrFolder(containers::Stream<wchar_t> path)
+	bool ExistsFileOrFolder(Stream<wchar_t> path)
 	{
 		ECS_FORWARD_STREAM_WIDE(path, ExistsFileOrFolder);
 	}
