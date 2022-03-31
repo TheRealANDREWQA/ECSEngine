@@ -31,7 +31,7 @@ namespace ECSEngine {
 	) {
 		Write(&stream, &header.size, sizeof(header.size));
 		if (header.buffer != nullptr && header.size > 0) {
-			Write(&stream, header);
+			Write(&stream, header.buffer, header.size);
 		}
 
 		// Multi section count
@@ -473,7 +473,9 @@ namespace ECSEngine {
 	void DeserializeMultisectionHeader(uintptr_t stream, CapacityStream<void>& header) {
 		size_t header_size = 0;
 		Read(&stream, &header_size, sizeof(header_size));
-		Read(&stream, header, header_size);
+		ECS_ASSERT(header_size <= header.capacity);
+		Read(&stream, header.buffer, header_size);
+		header.size = header_size;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------

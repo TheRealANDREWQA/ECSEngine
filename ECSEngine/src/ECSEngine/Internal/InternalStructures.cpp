@@ -3,6 +3,7 @@
 #include "InternalStructures.h"
 #include "VectorComponentSignature.h"
 #include "../Utilities/Crash.h"
+#include "../Utilities/Serialization/SerializationHelpers.h"
 
 namespace ECSEngine {
 
@@ -40,8 +41,8 @@ namespace ECSEngine {
 	{
 		// Assume that everything is deallocated before
 		// Everything can be just memcpy'ed after the correct number of pools have been allocated
-		ECS_ASSERT(m_entity_infos.size == 0);
-		ECS_ASSERT(m_pool_power_of_two == entity_pool->m_pool_power_of_two);
+		ECS_CRASH_RETURN(m_entity_infos.size == 0, "Copying entity pool failed. The destination pool is not deallocated.");
+		ECS_CRASH_RETURN(m_pool_power_of_two == entity_pool->m_pool_power_of_two, "Copying entity pool failed. The power of two of the chunks is different.");
 
 		for (size_t index = 0; index < entity_pool->m_entity_infos.size; index++) {
 			CreatePool();
@@ -345,15 +346,7 @@ namespace ECSEngine {
 		info->generation_count = 0;
 
 		if (m_entity_infos[entity_indices.x].stream.size == 0) {
-			// Deallocate the buffer and mark as unused
-			m_memory_manager->Deallocate(m_entity_infos[entity_indices.x].stream.buffer);
-			// When iterating for an allocation, since the size and the capacity are both set to 0
-			// The iteration will just skip this block - as it should
-			m_entity_infos[entity_indices.x].stream.buffer = nullptr;
-			m_entity_infos[entity_indices.x].stream.free_list = nullptr;
-			m_entity_infos[entity_indices.x].stream.size = 0;
-			m_entity_infos[entity_indices.x].stream.capacity = 0;
-			m_entity_infos[entity_indices.x].is_in_use = false;
+			DeallocatePool(entity_indices.x);
 		}
 	}
 
@@ -368,7 +361,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool EntityPool::IsValid(Entity entity) {
+	void EntityPool::DeallocatePool(unsigned int pool_index)
+	{
+		// Deallocate the buffer and mark as unused
+		m_memory_manager->Deallocate(m_entity_infos[pool_index].stream.buffer);
+		// When iterating for an allocation, since the size and the capacity are both set to 0
+		// The iteration will just skip this block - as it should
+		m_entity_infos[pool_index].stream.buffer = nullptr;
+		m_entity_infos[pool_index].stream.free_list = nullptr;
+		m_entity_infos[pool_index].stream.size = 0;
+		m_entity_infos[pool_index].stream.capacity = 0;
+		m_entity_infos[pool_index].is_in_use = false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool EntityPool::IsValid(Entity entity) const {
 		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
 		if (entity_indices.x >= m_entity_infos.size || m_entity_infos[entity_indices.y].is_in_use) {
 			return false;
@@ -391,6 +399,13 @@ namespace ECSEngine {
 		);
 
 		return (info.tags & tag) != 0;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Entity EntityPool::GetEntityFromPosition(unsigned int chunk_index, unsigned int stream_index) const
+	{
+		return Entity(chunk_index * (1 << m_pool_power_of_two) + stream_index);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -467,6 +482,179 @@ namespace ECSEngine {
 	{
 		size_t whole_chunk_memory = StableReferenceStream<EntityInfo>::MemoryOf(505'000);
 		return MemoryManager(whole_chunk_memory, 4096, whole_chunk_memory, global_memory);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+#define ENTITY_POOL_SERIALIZE_VERSION 1
+
+	struct SerializeEntityInfo {
+		EntityInfo info;
+		Entity entity;
+	};
+
+	struct SerializeEntityPoolHeader {
+		unsigned int version;
+		unsigned int entity_count;
+	};
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	template<typename StreamType>
+	bool SerializeEntityPoolImplementation(const EntityPool* entity_pool, StreamType stream) {
+		bool success = true;
+
+		// Write the header first
+		SerializeEntityPoolHeader header;
+		header.version = ENTITY_POOL_SERIALIZE_VERSION;
+		header.entity_count = entity_pool->m_entity_infos.size;
+
+		unsigned int entity_count = 0;
+		for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
+			entity_count += entity_pool->m_entity_infos[index].is_in_use * entity_pool->m_entity_infos[index].stream.size;
+		}
+		header.entity_count = entity_count;
+
+		success = WriteHelper(stream, &header, sizeof(header));
+
+		if (success) {
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, chunk_entities, 1 << entity_pool->m_pool_power_of_two);
+
+			if constexpr (std::is_same_v<StreamType, uintptr_t&>) {
+				// Write the compacted entities now
+				for (unsigned int index = 0; index < entity_pool->m_entity_infos.size; index++) {
+					if (entity_pool->m_entity_infos[index].is_in_use) {
+						SerializeEntityInfo serialize_info;
+						chunk_entities.size = 0;
+						entity_pool->m_entity_infos[index].stream.GetItemIndices(chunk_entities);
+						for (unsigned int stream_index = 0; stream_index < entity_pool->m_entity_infos[index].stream.size; stream_index++) {
+							serialize_info.entity = entity_pool->GetEntityFromPosition(index, chunk_entities[stream_index]);
+							serialize_info.info = entity_pool->m_entity_infos[index].stream[chunk_entities[stream_index]];
+							Write(&stream, &serialize_info, sizeof(serialize_info));
+						}
+					}
+				}
+			}
+			else {
+				ECS_STACK_CAPACITY_STREAM_DYNAMIC(SerializeEntityInfo, serialize_entities, 1 << entity_pool->m_pool_power_of_two);
+
+				// Write the compacted entities now
+				for (unsigned int index = 0; index < entity_pool->m_entity_infos.size && success; index++) {
+					if (entity_pool->m_entity_infos[index].is_in_use) {
+						SerializeEntityInfo serialize_info;
+						chunk_entities.size = 0;
+						entity_pool->m_entity_infos[index].stream.GetItemIndices(chunk_entities);
+						for (unsigned int stream_index = 0; stream_index < entity_pool->m_entity_infos[index].stream.size; stream_index++) {
+							serialize_entities[stream_index].entity = entity_pool->GetEntityFromPosition(index, chunk_entities[stream_index]);
+							serialize_entities[stream_index].info = entity_pool->m_entity_infos[index].stream[chunk_entities[stream_index]];
+						}
+						success &= WriteHelper(stream, serialize_entities.buffer, entity_pool->m_entity_infos[index].stream.size * sizeof(SerializeEntityInfo));
+					}
+				}
+			}
+		}
+
+		return success;
+	}
+
+	bool SerializeEntityPool(const EntityPool* entity_pool, ECS_FILE_HANDLE file)
+	{
+		return SerializeEntityPoolImplementation(entity_pool, file);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void SerializeEntityPool(const EntityPool* entity_pool, uintptr_t* stream)
+	{
+		SerializeEntityPoolImplementation(entity_pool, stream);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	size_t SerializeEntityPoolSize(const EntityPool* entity_pool)
+	{
+		size_t size = sizeof(SerializeEntityPoolHeader);
+
+		for (size_t index = 0; index < entity_pool->m_entity_infos.size; index++) {
+			size += sizeof(SerializeEntityInfo) * entity_pool->m_entity_infos[index].is_in_use * entity_pool->m_entity_infos[index].stream.size;
+		}
+
+		return size;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	template<typename StreamType>
+	bool DeserializeEntityPoolImplementation(EntityPool* entity_pool, StreamType stream) {
+		// Read the header first
+		SerializeEntityPoolHeader header;
+		bool success = ReadHelper(stream, &header, sizeof(header));
+
+		if (!success || header.version != ENTITY_POOL_SERIALIZE_VERSION || (header.entity_count > ECS_MB * 20)) {
+			return false;
+		}
+
+		// Free the buffer
+		entity_pool->m_entity_infos.FreeBuffer();
+
+		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)malloc(sizeof(SerializeEntityInfo) * header.entity_count);
+		success = ReadHelper(stream, serialize_infos, sizeof(SerializeEntityInfo) * header.entity_count);
+
+		if (success) {
+			// Walk through the entities and determine the "biggest one" in order to preallocate the streams
+			Entity highest_entity = { 0 };
+			for (unsigned int index = 0; index < header.entity_count; index++) {
+				highest_entity.index = std::max(highest_entity.index, serialize_infos[index].entity.index);
+			}
+
+			// Create the necessary pools - add a pool if the modulo is different from 0
+			unsigned int necessary_pool_count = highest_entity.index >> entity_pool->m_pool_power_of_two +
+				(highest_entity.index & ((1 << entity_pool->m_pool_power_of_two) - 1) != 0);
+			for (unsigned int index = 0; index < necessary_pool_count; index++) {
+				entity_pool->CreatePool();
+			}
+
+			// Update the entity infos
+			for (unsigned int index = 0; index < header.entity_count; index++) {
+				EntityInfo* info = entity_pool->GetInfoPtrNoChecks(serialize_infos[index].entity);
+				*info = serialize_infos[index].info;
+			}
+
+			// Set the is_in_use status for the chunks
+			for (unsigned int index = 0; index < necessary_pool_count; index++) {
+				entity_pool->m_entity_infos[index].is_in_use = entity_pool->m_entity_infos[index].stream.size > 0;
+				if (!entity_pool->m_entity_infos[index].is_in_use) {
+					entity_pool->DeallocatePool(index);
+				}
+			}
+		}
+
+		free(serialize_infos);
+		return success;
+	}
+
+	bool DeserializeEntityPool(EntityPool* entity_pool, ECS_FILE_HANDLE file)
+	{
+		return DeserializeEntityPoolImplementation(entity_pool, file);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void DeserializeEntityPool(EntityPool* entity_pool, uintptr_t* stream)
+	{
+		DeserializeEntityPoolImplementation(entity_pool, stream);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	size_t DeserializeEntityPoolSize(uintptr_t stream) {
+		SerializeEntityPoolHeader header;
+		Read(&stream, &header, sizeof(header));
+
+		if (header.version != ENTITY_POOL_SERIALIZE_VERSION || header.entity_count > ECS_GB) {
+			return -1;
+		}
+		return header.entity_count;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

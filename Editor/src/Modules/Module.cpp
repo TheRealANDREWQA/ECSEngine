@@ -34,6 +34,15 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 	L"source"
 };
 
+const wchar_t* ECS_RUNTIME_PDB_PATHS[] = {
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug-windows-x86_64\\ECSEngine",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug-windows-x86_64\\Editor",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release-windows-x86_64\\ECSEngine",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release-windows-x86_64\\Editor",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution-windows-x86_64\\ECSEngine",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution-windows-x86_64\\Editor"
+};
+
 constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 #define BLOCK_THREAD_FOR_MODULE_STATUS_SLEEP_TICK 20
 
@@ -83,6 +92,38 @@ bool PrintCommandStatus(EditorState* editor_state, Stream<wchar_t> log_path) {
 	}
 
 	return true;
+}
+
+void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
+	unsigned int ecs_runtime_pdb_index = 0;
+#ifdef ECSENGINE_RELEASE
+	ecs_runtime_pdb_index = 2;
+#endif
+
+#ifdef ECSENGINE_DISTRIBUTION
+	ecs_runtime_pdb_index = 4;
+#endif
+
+	size_t starting_index = !HasGraphicsModule(editor_state);
+
+	size_t path_count = 2 + editor_state->project_modules->size - starting_index;
+	// Update the pdb paths in order to get stack unwinding for the crash handler
+	const wchar_t** pdb_paths = (const wchar_t**)ECS_STACK_ALLOC(sizeof(const wchar_t*) * path_count);
+	pdb_paths[0] = ECS_RUNTIME_PDB_PATHS[ecs_runtime_pdb_index];
+	pdb_paths[1] = ECS_RUNTIME_PDB_PATHS[ecs_runtime_pdb_index + 1];
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, pdb_characters, ECS_KB * 8);
+
+	for (size_t index = starting_index; index < editor_state->project_modules->size; index++) {
+		const wchar_t* current_path = pdb_characters.buffer + pdb_characters.size;
+
+		const EditorModule* current_module = editor_state->project_modules->buffer + index;
+		GetModuleFolder(editor_state, current_module->library_name, current_module->configuration, pdb_characters);
+		// Advance the '\0'
+		pdb_characters.size++;
+		pdb_paths[2 + index - starting_index] = current_path;
+	}
+	OS::SetSymbolicLinksPaths({ pdb_paths, path_count });
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -163,8 +204,6 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 	module->library_name.Copy(library_name);
 	module->library_name[module->library_name.size] = L'\0';
 
-	module->reflected_settings = HashTableDefault<void*>();
-	module->current_settings_path = { nullptr, 0 };
 	project_modules->size++;
 
 	// Add the module to the reflection table
@@ -191,6 +230,8 @@ bool AddProjectModule(EditorState* editor_state, Stream<wchar_t> solution_path, 
 	ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
 	function::ConvertWideCharsToASCII(module->library_name, ascii_name);
 	console->AddSystemFilterString(ascii_name);
+
+	SetCrashHandlerPDBPaths(editor_state);
 
 	return true;
 }
@@ -672,12 +713,23 @@ void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& 
 
 void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, CapacityStream<wchar_t>& module_path)
 {
-	GetModulesFolder(editor_state, module_path);
-	module_path.Add(ECS_OS_PATH_SEPARATOR);
-	module_path.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]));
+	GetModuleFolder(editor_state, library_name, configuration, module_path);
 	module_path.Add(ECS_OS_PATH_SEPARATOR);
 	module_path.AddStream(library_name);
 	module_path.AddStreamSafe(ToStream(ECS_MODULE_EXTENSION));
+	module_path[module_path.size] = L'\0';
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleFolder(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, CapacityStream<wchar_t>& module_path)
+{
+	GetModulesFolder(editor_state, module_path);
+	module_path.Add(ECS_OS_PATH_SEPARATOR);
+	// This is the folder part
+	module_path.AddStream(library_name);
+	module_path.Add(ECS_OS_PATH_SEPARATOR);
+	module_path.AddStream(ToStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]));
 	module_path[module_path.size] = L'\0';
 }
 
@@ -827,14 +879,14 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index) {
 	ECS_TEMP_STRING(temporary_library, 512);
 	// Copy the .dll to a temporary dll such that it will allow building the module again
 	bool copy_success = CreateEditorModuleTemporaryDLL(library_path, temporary_library);
-	if (copy_success) {
+	/*if (copy_success) {
 		modules->buffer[index].ecs_module = LoadModule(temporary_library, editor_state->ActiveWorld(), GetAllocatorPolymorphic(editor_state->editor_allocator));
 		return modules->buffer[index].load_status == EditorModuleLoadStatus::Good;
 	}
 	else {
 		ECS_FORMAT_TEMP_STRING(error_message, "Could not create temporary module for {#}. The module tasks have not been loaded.", library_path);
 		EditorSetConsoleError(error_message);
-	}
+	}*/
 	return false;
 }
 
@@ -864,15 +916,6 @@ bool HasGraphicsModule(const EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool ProjectModulesNeedsBuild(const EditorState* editor_state, unsigned int index)
-{
-	size_t new_last_write = GetProjectModuleSolutionLastWrite(editor_state, index);
-	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
-	return modules->buffer[index].solution_last_write_time > new_last_write || modules->buffer[index].library_last_write_time == 0;
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, CapacityStream<char>* error_message) {
 	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = editor_state->project_modules;
@@ -882,7 +925,7 @@ bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, Capaci
 		GetModulePath(editor_state, project_modules->buffer[index].library_name, project_modules->buffer[index].configuration, module_path);
 		ECS_TEMP_STRING(temporary_path, 512);
 		if (CreateEditorModuleTemporaryDLL(module_path, temporary_path)) {
-			project_modules->buffer[index].ecs_module = LoadModule(temporary_path, editor_state->ActiveWorld(), GetAllocatorPolymorphic(editor_allocator));
+			//project_modules->buffer[index].ecs_module = LoadModule(temporary_path, editor_state->ActiveWorld(), GetAllocatorPolymorphic(editor_allocator));
 		}
 	}
 
@@ -893,7 +936,7 @@ bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, Capaci
 		else {
 			project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
 		}
-		project_task_graph->Add(project_modules->buffer[index].ecs_module.tasks);
+		//task_dependencies->Add(project_modules->buffer[index].ecs_module.tasks);
 		return true;
 	}
 	project_modules->buffer[index].load_status = EditorModuleLoadStatus::Failed;
@@ -938,15 +981,15 @@ bool UpdateProjectModuleSolutionLastWrite(EditorState* editor_state, unsigned in
 
 	// Update the reflection types if it necessary
 	if (solution_last_write < modules->buffer[index].solution_last_write_time) {
-		if (modules->buffer[index].current_settings_path.buffer != nullptr) {
-			// Save the current settings, destroy it, recreate it and load the file
-			bool success = SaveModuleSettings(editor_state, index);
-			if (!success) {
-				ECS_FORMAT_TEMP_STRING(error_message, "Failed to save settings before re-updating the reflection types for module {#}.", modules->buffer[index].library_name);
-				EditorSetConsoleWarn(error_message);
-			}
-			DestroyModuleSettings(editor_state, index);
-		}
+		//if (modules->buffer[index].current_settings_path.buffer != nullptr) {
+		//	// Save the current settings, destroy it, recreate it and load the file
+		//	bool success = SaveModuleSettings(editor_state, index);
+		//	if (!success) {
+		//		ECS_FORMAT_TEMP_STRING(error_message, "Failed to save settings before re-updating the reflection types for module {#}.", modules->buffer[index].library_name);
+		//		EditorSetConsoleWarn(error_message);
+		//	}
+		//	DestroyModuleSettings(editor_state, index);
+		//}
 
 		ECS_TEMP_STRING(source_path, 512);
 		bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
@@ -962,7 +1005,7 @@ bool UpdateProjectModuleSolutionLastWrite(EditorState* editor_state, unsigned in
 			EditorSetConsoleWarn(console_message);
 		}
 
-		if (modules->buffer[index].current_settings_path.buffer == nullptr) {
+		/*if (modules->buffer[index].current_settings_path.buffer == nullptr) {
 			ChangeModuleSettings(editor_state, ToStream(MODULE_DEFAULT_SETTINGS_PATH), index);
 			CreateModuleSettings(editor_state, index);
 		}
@@ -974,7 +1017,7 @@ bool UpdateProjectModuleSolutionLastWrite(EditorState* editor_state, unsigned in
 					modules->buffer[index].current_settings_path, modules->buffer[index].library_name);
 				EditorSetConsoleWarn(error_message);
 			}
-		}
+		}*/
 	}
 
 	return needs_update;
@@ -1017,6 +1060,7 @@ void ReleaseProjectModule(EditorState* editor_state, unsigned int index) {
 		ReleaseModule(modules->buffer[index].ecs_module, GetAllocatorPolymorphic(editor_allocator));
 	}
 	RemoveProjectModuleAssociatedFiles(editor_state, index);
+	SetCrashHandlerPDBPaths(editor_state);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1062,7 +1106,7 @@ void RemoveProjectModuleAssociatedFiles(EditorState* editor_state, unsigned int 
 	Stream<const wchar_t*> associated_file_extensions(MODULE_ASSOCIATED_FILES, std::size(MODULE_ASSOCIATED_FILES));
 
 	ECS_TEMP_STRING(path, 256);
-	GetModulePath(editor_state, modules->buffer[module_index].library_name, modules->buffer[module_index].configuration, path);
+	GetModuleFolder(editor_state, modules->buffer[module_index].library_name, modules->buffer[module_index].configuration, path);
 	size_t path_size = path.size;
 
 	for (size_t index = 0; index < std::size(MODULE_ASSOCIATED_FILES); index++) {
@@ -1184,6 +1228,7 @@ bool SetProjectGraphicsModule(EditorState* editor_state, Stream<wchar_t> solutio
 	module->library_name.Copy(library_name);
 
 	UpdateProjectModuleLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
+	SetCrashHandlerPDBPaths(editor_state);
 
 	return true;
 }

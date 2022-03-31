@@ -42,6 +42,43 @@ namespace ECSEngine {
 		ECS_MESH_BONE_INFLUENCE,
 		ECS_MESH_BUFFER_COUNT
 	};
+
+	enum ECS_SHADER_TYPE {
+		ECS_SHADER_VERTEX,
+		ECS_SHADER_PIXEL,
+		ECS_SHADER_DOMAIN,
+		ECS_SHADER_HULL,
+		ECS_SHADER_GEOMETRY,
+		ECS_SHADER_COMPUTE,
+		ECS_SHADER_TYPE_COUNT
+	};
+
+	struct ShaderMacro {
+		const char* name;
+		const char* definition;
+	};
+
+	enum ShaderTarget : unsigned char {
+		ECS_SHADER_TARGET_5_0,
+		ECS_SHADER_TARGET_5_1,
+		ECS_SHADER_TARGET_COUNT
+	};
+
+	enum ShaderCompileFlags : unsigned char {
+		ECS_SHADER_COMPILE_NONE = 0,
+		ECS_SHADER_COMPILE_DEBUG = 1 << 0,
+		ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST = 1 << 1,
+		ECS_SHADER_COMPILE_OPTIMIZATION_LOW = 1 << 2,
+		ECS_SHADER_COMPILE_OPTIMIZATION_HIGH = 1 << 3,
+		ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST = 1 << 4
+	};
+
+	// Default is no macros, shader target 5 and no compile flags
+	struct ShaderCompileOptions {
+		Stream<ShaderMacro> macros = { nullptr, 0 };
+		ShaderTarget target = ECS_SHADER_TARGET_5_0;
+		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
+	};
 	
 	struct ECSENGINE_API ColorFloat;
 

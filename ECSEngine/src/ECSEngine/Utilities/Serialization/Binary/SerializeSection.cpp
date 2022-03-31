@@ -20,7 +20,7 @@ namespace ECSEngine {
 
 		Write(&stream, &header.size, sizeof(header.size));
 		if (header.buffer != nullptr && header.size > 0) {
-			Write(&stream, header);
+			Write(&stream, header.buffer, header.size);
 		}
 
 		// Write the section count
@@ -234,7 +234,7 @@ namespace ECSEngine {
 		size_t header_size = 0;
 		Read(&data, &header_size, sizeof(header_size));
 		ECS_ASSERT(header_size <= header.capacity);
-		Read(&data, header, header_size);
+		Read(&data, header.buffer, header_size);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------

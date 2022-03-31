@@ -17,7 +17,7 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API EntityHierarchy {
 		EntityHierarchy() = default;
-		// table initial size must be a power of two
+		// children and parent table initial size must be a power of two
 		EntityHierarchy(
 			MemoryManager* memory_manager,
 			unsigned int root_initial_size = -1, 
@@ -26,6 +26,9 @@ namespace ECSEngine {
 		);
 
 		void AddEntry(Entity parent, Entity child);
+		
+		// The allocator should already be initialized
+		void CopyOther(const EntityHierarchy* other);
 
 		// Updates the parent of an entity to another parent
 		void ChangeParent(Entity new_parent, Entity child);
@@ -80,5 +83,34 @@ namespace ECSEngine {
 		HashTable<Children, Entity, HashFunctionPowerOfTwo, EntityHierarchyHash> children_table;
 		HashTable<Entity, Entity, HashFunctionPowerOfTwo, EntityHierarchyHash> parent_table;
 	};
+
+	// -----------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API bool SerializeEntityHierarchy(const EntityHierarchy* hierarchy, ECS_FILE_HANDLE file);
+
+	// -----------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t* ptr);
+
+	// -----------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API size_t SerializeEntityHierarchySize(const EntityHierarchy* hierarchy);
+
+	// -----------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file);
+
+	// -----------------------------------------------------------------------------------------------------
+
+	// The hierarchy must have its allocator set
+	// Returns true if the data was valid, else false if the data was corrupted
+	ECSENGINE_API bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t* ptr);
+
+	// -----------------------------------------------------------------------------------------------------
+
+	// Returns the amount of pointer data required for the children table entries
+	ECSENGINE_API size_t DeserializeEntityHierarchySize(uintptr_t ptr);
+
+	// -----------------------------------------------------------------------------------------------------
 
 }

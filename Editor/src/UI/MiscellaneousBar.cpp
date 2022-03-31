@@ -19,12 +19,13 @@ void RunProjectAction(ActionData* action_data) {
 	// Check to see that all modules can be compiled and loaded
 	if (BuildProjectModulesAndLoad(editor_state)) {
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+		// Check to see if the editor still has to commit copying the main world to other worlds
 
 		// Now the runtime should be launched - the tasks should be commited into the system manager
 		
 	}
 	else {
-		EditorSetConsoleError(ToStream("Could not start the runtime: the modules could be compiled or loaded."));
+		EditorSetConsoleError(ToStream("Could not start the runtime: the modules could not be compiled or loaded."));
 	}
 }
 

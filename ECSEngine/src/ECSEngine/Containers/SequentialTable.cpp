@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "../Utilities/Function.h"
-#include "../Utilities/FunctionTemplates.h"
+#include "../Utilities/FunctionInterfaces.h"
 #include "SequentialTable.h"
 
 namespace ECSEngine {

@@ -53,8 +53,8 @@ void CreateSettingsCallback(ActionData* action_data) {
 	WorldDescriptor default_descriptor = GetDefaultSettings(editor_state);
 	bool success = SaveWorldParametersFile(editor_state, wide_name, &default_descriptor);
 	if (success) {
-		editor_state->project_descriptor = default_descriptor;
-		SetSettingsPath(editor_state, wide_name);
+		/*editor_state->project_descriptor = default_descriptor;
+		SetSettingsPath(editor_state, wide_name);*/
 	}
 
 	// If it failed, they should already be notified about the error. 
@@ -103,7 +103,7 @@ void SettingsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		ui_reflection->BindTypeDefaultData(ui_type, &default_descriptor);
 
 		UIReflectionInstance* instance = ui_reflection->CreateInstance(UI_REFLECTION_INSTANCE_NAME, ui_type);
-		ui_reflection->BindInstancePtrs(instance, &editor_state->project_descriptor, reflection_type);
+		/*ui_reflection->BindInstancePtrs(instance, &editor_state->project_descriptor, reflection_type);*/
 	}
 	else {
 		linear_allocator = (LinearAllocator*)drawer.GetResource(LINEAR_ALLOCATOR_NAME);
@@ -180,21 +180,21 @@ void SettingsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			};
 
 			auto set_new_setting = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
+				//UI_UNPACK_ACTION_DATA;
 
-				SetNewSettingData* data = (SetNewSettingData*)_data;
+				//SetNewSettingData* data = (SetNewSettingData*)_data;
 
-				// Try to load the data first
-				WorldDescriptor world_descriptor = LoadWorldParametersFile(data->editor_state, data->name, true);
-				// Check for failure - thread count is zero
-				if (world_descriptor.thread_count == 0) {
-					// Just return. Can't change the setting if the load fails
-					return;
-				}
+				//// Try to load the data first
+				//WorldDescriptor world_descriptor = LoadWorldParametersFile(data->editor_state, data->name, true);
+				//// Check for failure - thread count is zero
+				//if (world_descriptor.thread_count == 0) {
+				//	// Just return. Can't change the setting if the load fails
+				//	return;
+				//}
 
-				SetSettingsPath(data->editor_state, data->name);
-				// Update the world descriptor aswell
-				data->editor_state->project_descriptor = world_descriptor;
+				//SetSettingsPath(data->editor_state, data->name);
+				//// Update the world descriptor aswell
+				//data->editor_state->project_descriptor = world_descriptor;
 			};
 			
 			void* name_allocation = data->temp_allocator->Allocate((filename.size + 1) * sizeof(wchar_t));
@@ -259,11 +259,11 @@ void SettingsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	auto save_file_after_change = [](ActionData* action_data) {
 		UI_UNPACK_ACTION_DATA;
 
-		EditorState* editor_state = (EditorState*)_data;
+		/*EditorState* editor_state = (EditorState*)_data;
 		bool success = SaveWorldParametersFile(editor_state, editor_state->project_file->project_settings, &editor_state->project_descriptor);
 		if (!success) {
 			EditorSetConsoleError(ToStream("An error occured when saving the setting file after value change. The modification has not been commited."));
-		}
+		}*/
 	};
 
 	UIConfigTextInputCallback write_file_callback;
@@ -280,12 +280,12 @@ void SettingsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	config.flag_count--;
 
 	auto set_default_values = [](ActionData* action_data) {
-		EditorState* editor_state = (EditorState*)action_data->data;
+		/*EditorState* editor_state = (EditorState*)action_data->data;
 		editor_state->project_descriptor = GetDefaultSettings(editor_state);
 		bool success = SaveWorldParametersFile(editor_state, editor_state->project_file->project_settings, &editor_state->project_descriptor);
 		if (!success) {
 			EditorSetConsoleError(ToStream("An error has occured when trying to save default values for settings file. The modification has not been commited."));
-		}
+		}*/
 	};
 
 	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Default Values", { set_default_values, editor_state, 0 });

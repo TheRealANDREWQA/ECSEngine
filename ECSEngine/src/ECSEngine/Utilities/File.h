@@ -338,18 +338,6 @@ namespace ECSEngine {
 		}
 	}
 
-	struct BufferedFile {
-		ECS_FILE_HANDLE file;
-		CapacityStream<void> buffering;
-	};
-
-	inline void FileBufferingScopeDeleter(BufferedFile file) {
-		if (file.file != 0) {
-			CloseFile(file.file, file.buffering);
-		}
-	}
-
 	using ScopedFile = StackScope<ECS_FILE_HANDLE, FileScopeDeleter>;
-	using ScopedBufferedFile = StackScope<BufferedFile, FileBufferingScopeDeleter>;
 
 }

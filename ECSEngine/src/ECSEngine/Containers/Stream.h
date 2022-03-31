@@ -10,7 +10,7 @@
 namespace ECSEngine {
 
 #define ECS_STACK_CAPACITY_STREAM(type, name, capacity) type _##name[capacity]; ECSEngine::CapacityStream<type> name(_##name, 0, capacity);
-#define ECS_STACK_CAPACITY_STREAM_DYNAMIC(type, name, capacity) void* _##name = ECS_STACK_ALLOC(sizeof(type) * capacity); ECSEngine::CapacityStream<type> name(_##name, 0, capacity);
+#define ECS_STACK_CAPACITY_STREAM_DYNAMIC(type, name, capacity) void* _##name = ECS_STACK_ALLOC(sizeof(type) * (capacity)); ECSEngine::CapacityStream<type> name(_##name, 0, (capacity));
 
 #define ECS_TEMP_ASCII_STRING(name, size) char name##_temp_memory[size]; \
 ECSEngine::CapacityStream<char> name(name##_temp_memory, 0, size);
@@ -107,6 +107,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			for (size_t index = 0; index < size >> 1; index++) {
 				Swap(index, size - index - 1);
 			}
+		}
+
+		size_t Search(T element) const {
+			for (size_t index = 0; index < size; index++) {
+				if (element == buffer[index]) {
+					return index;
+				}
+			}
+
+			return -1;
 		}
 
 		ECS_INLINE T& operator [](size_t index) {
@@ -310,6 +320,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			for (unsigned int index = 0; index < size >> 1; index++) {
 				Swap(index, size - index - 1);
 			}
+		}
+
+		unsigned int Search(T element) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (buffer[index] == element) {
+					return index;
+				}
+			}
+
+			return -1;
 		}
 
 		ECS_INLINE T& operator [](unsigned int index) {
@@ -610,7 +630,9 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// makes sure there is enough space for extra count elements
 		ECS_INLINE void ReserveNewElements(unsigned int count) {
 			if (size + count > capacity) {
-				Resize(static_cast<unsigned int>(ECS_RESIZABLE_STREAM_FACTOR * capacity + 1));
+				unsigned int new_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 1;
+				unsigned int resize_count = new_capacity < capacity + count ? capacity + count : new_capacity;
+				Resize(resize_count);
 			}
 		}
 
@@ -624,7 +646,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			T* new_buffer = (T*)Allocate(allocator, new_capacity * sizeof(T), alignof(T));
 			ECS_ASSERT(new_buffer != nullptr);
 
-			memcpy(new_buffer, buffer, sizeof(T) * size);
+			memcpy(new_buffer, buffer, sizeof(T) * (size < new_capacity ? size : new_capacity));
 
 			if (buffer != nullptr)
 				Deallocate(allocator, buffer);
@@ -654,6 +676,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			for (unsigned int index = 0; index < size >> 1; index++) {
 				Swap(index, size - index - 1);
 			}
+		}
+
+		unsigned int Search(T element) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (buffer[index] == element) {
+					return index;
+				}
+			}
+
+			return -1;
 		}
 
 		void Trim() {

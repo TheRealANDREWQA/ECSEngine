@@ -2,7 +2,6 @@
 #include "ecspch.h"
 #include "../Function.h"
 #include "../FunctionInterfaces.h"
-#include "../FunctionTemplates.h"
 #include "../../Allocators/MemoryManager.h"
 #include "../../Internal/Multithreading/TaskManager.h"
 #include "../../Internal/InternalStructures.h"
@@ -130,6 +129,12 @@ namespace ECSEngine {
 		};
 
 		ECSENGINE_API size_t GetTypeByteSize(ReflectionType type);
+
+		ECSENGINE_API size_t GetTypeAlignment(ReflectionType type);
+
+		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
+
+		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
 
 		ECSENGINE_API bool IsTypeCharacter(char character);
 

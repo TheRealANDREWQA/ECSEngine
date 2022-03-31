@@ -2,7 +2,6 @@
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
-;
 ECS_TOOLS;
 
 constexpr const char* INSPECTOR_WINDOW_NAME = "Inspector";

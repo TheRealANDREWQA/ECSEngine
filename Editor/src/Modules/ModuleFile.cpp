@@ -25,7 +25,6 @@ void GetProjectModuleFilePath(const EditorState* editor_state, CapacityStream<wc
 enum SERIALIZE_ORDER {
 	SERIALIZE_SOLUTION_PATH,
 	SERIALIZE_LIBRARY_NAME,
-	SERIALIZE_SETTINGS_PATH,
 	SERIALIZE_CONFIGURATION,
 	SERIALIZE_COUNT
 };
@@ -63,28 +62,20 @@ bool LoadModuleFile(EditorState* editor_state) {
 
 			Stream<wchar_t> solution_path(serialize_data[0].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[0].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
 			Stream<wchar_t> library_name(serialize_data[0].data[SERIALIZE_LIBRARY_NAME].buffer, serialize_data[0].data[SERIALIZE_LIBRARY_NAME].size / sizeof(wchar_t));
-			Stream<wchar_t> settings_filename(serialize_data[0].data[SERIALIZE_SETTINGS_PATH].buffer, serialize_data[0].data[SERIALIZE_SETTINGS_PATH].size / sizeof(wchar_t));
 			Stream<void> configuration(serialize_data[0].data[SERIALIZE_CONFIGURATION]);
 
 			if (solution_path.buffer != nullptr && library_name.buffer != nullptr) {
 				SetProjectGraphicsModule(editor_state, solution_path, library_name, (EditorModuleConfiguration)(*(unsigned char*)configuration.buffer));
-				if (settings_filename.size > 0) {
-					ChangeModuleSettings(editor_state, settings_filename, GRAPHICS_MODULE_INDEX);
-				}
 			}
 
 			for (size_t index = 1; index < serialize_data.size; index++) {
 				Stream<wchar_t> solution_path(serialize_data[index].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[index].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
 				Stream<wchar_t> library_name(serialize_data[index].data[SERIALIZE_LIBRARY_NAME].buffer, serialize_data[index].data[SERIALIZE_LIBRARY_NAME].size / sizeof(wchar_t));
-				Stream<wchar_t> settings_filename(serialize_data[index].data[SERIALIZE_SETTINGS_PATH].buffer, serialize_data[index].data[SERIALIZE_SETTINGS_PATH].size / sizeof(wchar_t));
 				Stream<void> configuration(serialize_data[index].data[SERIALIZE_CONFIGURATION]);
 
 				if (AddProjectModule(editor_state, solution_path, library_name, (EditorModuleConfiguration)(*(unsigned char*)configuration.buffer))) {
 					valid_projects++;
 
-					if (settings_filename.size > 0) {
-						ChangeModuleSettings(editor_state, settings_filename, valid_projects);
-					}
 					UpdateProjectModuleLastWrite(editor_state, valid_projects);
 					bool success = HasModuleFunction(editor_state, project_modules->size - 1);
 					if (!success) {
@@ -146,10 +137,6 @@ bool SaveModuleFile(EditorState* editor_state) {
 		serialize_data[index].data.size = SERIALIZE_COUNT;
 		serialize_data[index].data[SERIALIZE_SOLUTION_PATH] = editor_module->solution_path;
 		serialize_data[index].data[SERIALIZE_LIBRARY_NAME] = editor_module->library_name;
-		serialize_data[index].data[SERIALIZE_SETTINGS_PATH] = editor_module->current_settings_path;
-		if (editor_module->current_settings_path.buffer == nullptr) {
-			serialize_data[index].data[SERIALIZE_SETTINGS_PATH].size = 0;
-		}
 		
 		serialize_data[index].data[SERIALIZE_CONFIGURATION].buffer = &editor_module->configuration;
 		serialize_data[index].data[SERIALIZE_CONFIGURATION].size = sizeof(editor_module->configuration);

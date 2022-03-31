@@ -54,12 +54,12 @@ namespace ECSEngine {
 	void ArchetypeBase::CopyOther(const ArchetypeBase* other)
 	{
 		// Assert they have the same capacity
-		ECS_CRASH_RETURN(other->GetCapacity() == m_capacity, "Trying to copy a base archetype with different capacity. Expected {#}, got {#}.", m_capacity, other->GetCapacity());
+		ECS_CRASH_RETURN(other->m_capacity == m_capacity, "Trying to copy a base archetype with different capacity. Expected {#}, got {#}.", m_capacity, other->m_capacity);
 
 		// Normally, we would have to assert that they have the same component order, but that should already be taken care of
 		// E.g. don't call copy other if they are from different archetypes
 
-		unsigned int other_size = other->GetSize();
+		unsigned int other_size = other->m_size;
 		// Copy the entities
 		memcpy(m_entities, other->m_entities, sizeof(Entity) * other_size);
 		// Copy the components now
@@ -282,25 +282,6 @@ namespace ECSEngine {
 	void* ArchetypeBase::GetComponentByIndex(unsigned int stream_index, unsigned char component_index)
 	{
 		return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned int ArchetypeBase::GetSize() const {
-		return m_size;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned int ArchetypeBase::GetCapacity() const {
-		return m_capacity;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	Stream<Entity> ArchetypeBase::GetEntities() const
-	{
-		return { m_entities, m_size };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

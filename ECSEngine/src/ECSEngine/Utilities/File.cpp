@@ -4,7 +4,6 @@
 #include "FunctionInterfaces.h"
 #include "Path.h"
 #include "../Allocators/AllocatorPolymorphic.h"
-#include "FunctionTemplates.h"
 #include "ForEachFiles.h"
 
 namespace ECSEngine {

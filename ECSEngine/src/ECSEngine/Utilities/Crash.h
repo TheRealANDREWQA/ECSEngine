@@ -1,7 +1,6 @@
 #pragma once
 #include "../Core.h"
 #include "FunctionInterfaces.h"
-#include "FunctionTemplates.h"
 
 namespace ECSEngine {
 
@@ -12,12 +11,6 @@ namespace ECSEngine {
 		void* data;
 	};
 
-	enum OVERRIDE_CRASH_HANDLER : unsigned char {
-		OVERRIDE_CRASH_HANDLER_NONE,
-		OVERRIDE_CRASH_HANDLER_NORMAL,
-		OVERRIDE_CRASH_HANDLER_DEFERRED
-	};
-
 	extern CrashHandler ECS_GLOBAL_CRASH_HANDLER;
 	extern CrashHandler ECS_GLOBAL_DEFERRED_CRASH_HANDLER;
 	extern const char* ECS_GLOBAL_DEFERRED_FILE;
@@ -26,18 +19,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API void SetCrashHandler(CrashHandlerFunction handler, void* data);
 
-	ECSENGINE_API void SetDeferredCrashHandler(CrashHandlerFunction handler, void* data);
-
 	// It will __debugbreak() only
 	ECSENGINE_API void DefaultCrashHandler(void* data, const char* error_string);
 
 	ECSENGINE_API void Crash(const char* error_string);
 
-	// It will concatenate the given string with the caller site (file, function and line).
-	// Use the SetDeferredCrashCaller() to set those parameters
-	ECSENGINE_API void DeferredCrash(const char* error_string);
+	ECSENGINE_API void SetCrashHandlerCaller(const char* file, const char* function, unsigned int line);
 
-	ECSENGINE_API void SetDeferredCrashCaller(const char* file, const char* function, unsigned int line);
+	ECSENGINE_API void ResetCrashHandlerCaller();
 
 #define ECS_STRING_CONCAT_INNER(a, b) a ## b
 #define ECS_STRING_CONCAT(a, b) ECS_STRING_CONCAT_INNER(a, b)
@@ -60,19 +49,10 @@ namespace ECSEngine {
 #define ECS_CRASH(error_string, ...) ECS_CRASH_IMPLEMENTATION(error_string, Crash, __VA_ARGS__);
 #define ECS_CRASH_EX(error_string, file, function, line, ...) ECS_CRASH_IMPLEMENTATION_EX(error_string, Crash, file, function, line, __VA_ARGS__);
 
-#define ECS_DEFERRED_CRASH(error_string, ...) ECS_CRASH_IMPLEMENTATION(error_string, DeferredCrash, __VA_ARGS__);
-#define ECS_DEFERRED_CRASH_EX(error_string, file, function, line, ...) ECS_CRASH_IMPLEMENTATION_EX(error_string, DeferredCrash, file, function, line, __VA_ARGS__);
-
 #define ECS_CRASH_RETURN(condition, error_string, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH, error_string, __VA_ARGS__)
 #define ECS_CRASH_RETURN_VALUE(condition, return_value, error_string, ...) ECS_CRASH_RETURN_VALUE_IMPLEMENTATION(condition, ECS_CRASH, return_value, error_string, __VA_ARGS__)
 
-#define ECS_DEFERRED_CRASH_RETURN(condition, error_string, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_DEFERRED_CRASH, error_string, __VA_ARGS__)
-#define ECS_DEFERRED_CRASH_RETURN_VALUE(condition, return_value, error_string, ...) ECS_CRASH_RETURN_VALUE_IMPLEMENTATION(condition, ECS_DEFERRED_CRASH, return_value, error_string, __VA_ARGS__)
-
 #define ECS_CRASH_RETURN_EX(condition, error_string, file, function, line, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_CRASH_EX, error_string, file, function, line, __VA_ARGS__)
 #define ECS_CRASH_RETURN_VALUE_EX(condition, return_value, error_string, file, function, line, ...) if (!(condition)) { ECS_CRASH_EX(error_string, file, function, file, __VA_ARGS__); return return_value; }
-
-#define ECS_DEFERRED_CRASH_RETURN_EX(condition, error_string, file, function, line, ...) ECS_CRASH_RETURN_IMPLEMENTATION(condition, ECS_DEFERRED_CRASH_EX, error_string, file, function, line, __VA_ARGS__)
-#define ECS_DEFERRED_CRASH_RETURN_VALUE_EX(condition, return_value, error_string, file, function, line, ...) if (!(condition)) { ECS_DEFERRED_CRASH_EX(error_string, file, function, file, __VA_ARGS__); return return_value; }
 
 }

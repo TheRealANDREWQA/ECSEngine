@@ -1234,7 +1234,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
 	// Reserve space for some preloads
-	data->staging_preloaded_textures.ReserveNewElements(16);
+	data->staging_preloaded_textures.ReserveNewElements(8);
 	bool* was_verified = (bool*)ECS_STACK_ALLOC(sizeof(bool) * data->preloaded_textures.size);
 	memset(was_verified, 0, sizeof(bool) * data->preloaded_textures.size);
 
@@ -1425,11 +1425,12 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 			Stream<wchar_t> allocated_path = function::StringCopy(data->editor_allocator, path);
 			FileExplorerMeshThumbnail thumbnail;
 
-			// Try to read the mesh here and create it's buffers GPU buffers
+			//Try to read the mesh here and create it's buffers GPU buffers
 			CoallescedMesh* mesh = data->resource_manager->LoadCoallescedMeshImplementation(path);
 			// If the mesh is nullptr, the read failed
 			thumbnail.could_be_read = mesh != nullptr;
 			thumbnail.last_write_time = OS::GetFileLastWrite(path);
+			thumbnail.texture = nullptr;
 			if (thumbnail.could_be_read) {
 				// Call the GLTFThumbnail generator
 				GLTFThumbnail gltf_thumbnail = GLTFGenerateThumbnail(data->resource_manager->m_graphics, FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE, &mesh->mesh);
@@ -1438,6 +1439,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 				// Free the coallesced mesh
 				data->resource_manager->UnloadCoallescedMeshImplementation(mesh);
 			}
+			//thumbnail.could_be_read = false;
 
 			// Update the hash table
 			InsertToDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, ResourceIdentifier(allocated_path.buffer, allocated_path.size * sizeof(wchar_t)));

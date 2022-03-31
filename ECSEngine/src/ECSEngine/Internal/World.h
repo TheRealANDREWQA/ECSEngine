@@ -15,9 +15,9 @@
 namespace ECSEngine {
 
 	struct ECS_REFLECT WorldDescriptor {
-		Graphics* ECS_OMIT_FIELD_REFLECT(8) graphics;
-		HID::Mouse* ECS_OMIT_FIELD_REFLECT(8) mouse;
-		HID::Keyboard* ECS_OMIT_FIELD_REFLECT(8) keyboard;
+		Graphics* ECS_OMIT_FIELD_REFLECT(sizeof(Graphics*) == 8) graphics;
+		HID::Mouse* ECS_OMIT_FIELD_REFLECT(sizeof(HID::Mouse*) == 8) mouse;
+		HID::Keyboard* ECS_OMIT_FIELD_REFLECT(sizeof(HID::Keyboard*) == 8) keyboard;
 		size_t global_memory_size; 
 		size_t global_memory_pool_count;
 		size_t global_memory_new_allocation_size;

@@ -75,14 +75,20 @@ namespace ECSEngine {
 		}
 	}
 
+	void Semaphore::TickWait(size_t sleep_nanoseconds)
+	{
+		while (count.load(ECS_ACQUIRE) != target) {
+			std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_nanoseconds));
+		}
+	}
+
 	ConditionVariable::ConditionVariable() : signal_count(0) {}
 
 	ConditionVariable::ConditionVariable(unsigned int _signal_count) : signal_count(_signal_count) {}
 
 	void ConditionVariable::Wait(unsigned int count) {
-		unsigned int current_count = signal_count.load(ECS_ACQUIRE);
-		cv.wait(lock, [&]() {
-			return (signal_count.load(ECS_ACQUIRE) - current_count) >= count;
+		cv.wait(lock, [=]() {
+			return signal_count.load(ECS_ACQUIRE) >= count;
 		});
 		signal_count.store(0, ECS_RELEASE);
 		lock.unlock();
@@ -105,5 +111,48 @@ namespace ECSEngine {
 		signal_count.store(0, ECS_RELEASE);
 	}
 
+
+	bool ReadWriteLock::EnterWrite()
+	{
+		unsigned int count = write_lock.load(ECS_RELAXED);
+		if (count == 0) {
+			unsigned int index = write_lock.fetch_add(ECS_RELAXED);
+			if (index == 0) {
+				// Spin while the readers exit
+				while (reader_count.load(ECS_ACQUIRE)) {
+					_mm_pause();
+				}
+				return true;
+			}
+			else {
+				write_lock.fetch_sub(ECS_RELAXED);
+			}
+		}
+		return false;
+	}
+
+	void ReadWriteLock::EnterRead()
+	{
+		// Test to see if there is a pending write
+		while (IsLocked()) {
+			_mm_pause();
+		}
+		reader_count.fetch_add(1);
+	}
+
+	void ReadWriteLock::ExitRead()
+	{
+		reader_count.fetch_sub(1);
+	}
+
+	bool ReadWriteLock::IsLocked() const
+	{
+		return write_lock.load(ECS_RELAXED) > 0;
+	}
+
+	void ReadWriteLock::ExitWrite()
+	{
+		write_lock.fetch_sub(ECS_ACQ_REL);
+	}
 
 }

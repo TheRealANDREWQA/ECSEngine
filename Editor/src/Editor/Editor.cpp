@@ -17,17 +17,233 @@
 #include "EntryPoint.h"
 #include "../UI/NotificationBar.h"
 #include "../UI/InspectorData.h"
+#include "../UI/Inspector.h"
 #include <DbgHelp.h>
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
-#define ECS_COMPONENT
+
+//#define TEST_C_ARRAYS
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "Shcore.lib")
+
+#ifdef TEST_C_ARRAYS
+
+#include <list>
+
+typedef struct {
+	void* buffer;
+	size_t size;
+	size_t capacity;
+	size_t element_size;
+} ContiguousStream;
+
+typedef struct {
+	void** buffer;
+	size_t size;
+	size_t capacity;
+	size_t element_size;
+} PointerStream;
+
+#pragma region Contiguous Stream
+
+size_t ResizeCapacity(size_t capacity) {
+	return (size_t)(1.5f * (float)capacity + 1);
+}
+
+void* GetElement(ContiguousStream stream, size_t index) {
+	return function::OffsetPointer(stream.buffer, index * stream.element_size);
+}
+
+void SetElement(ContiguousStream stream, size_t index, const void* new_value) {
+	void* element = GetElement(stream, index);
+	memcpy(element, new_value, stream.element_size);
+}
+
+void Add(ContiguousStream* stream, const void* element) {
+	if (stream->size == stream->capacity) {
+		stream->capacity = ResizeCapacity(stream->capacity);
+		if (stream->buffer != NULL) {
+			stream->buffer = realloc(stream->buffer, stream->capacity * stream->element_size);
+		}
+		else {
+			stream->buffer = malloc(stream->element_size * stream->capacity);
+		}
+	}
+
+	SetElement(*stream, stream->size, element);
+	stream->size++;
+}
+
+ContiguousStream CreateStream(size_t capacity, size_t element_size) {
+	if (capacity > 0) {
+		void* buffer = malloc(element_size * capacity);
+		return { buffer, 0, capacity, element_size };
+	}
+	else {
+		return { NULL, 0, 0, element_size };
+	}
+}
+
+void FreeStream(ContiguousStream stream) {
+	if (stream.buffer != NULL) {
+		free(stream.buffer);
+	}
+}
+
+void Remove(ContiguousStream* stream, size_t index) {
+	memmove(function::OffsetPointer(stream->buffer, stream->element_size * index), function::OffsetPointer(stream->buffer, stream->element_size * (index + 1)), stream->element_size * (stream->size - index - 1));
+	stream->size--;
+}
+
+void RemoveSwapBack(ContiguousStream* stream, size_t index) {
+	stream->size--;
+	memcpy(function::OffsetPointer(stream->buffer, stream->element_size * index), function::OffsetPointer(stream->buffer, stream->element_size * stream->size), stream->element_size);
+}
+
+size_t Find(ContiguousStream stream, const void* element) {
+	for (size_t index = 0; index < stream.size; index++) {
+		if (memcmp(function::OffsetPointer(stream.buffer, stream.element_size * index), element, stream.element_size) == 0) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+size_t FindFunctor(ContiguousStream stream, const void* element, int (*find_functor)(const void* array_element, const void* element)) {
+	for (size_t index = 0; index < stream.size; index++) {
+		if (find_functor(function::OffsetPointer(stream.buffer, stream.element_size * index), element) == 1) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+void Insert(ContiguousStream* stream, size_t index, const void* element) {
+	memmove(
+		function::OffsetPointer(stream->buffer, (index + 1) * stream->element_size),
+		function::OffsetPointer(stream->buffer, index * stream->element_size),
+		stream->element_size * (stream->size - index)
+	);
+	SetElement(*stream, index, element);
+}
+
+void Resize(ContiguousStream* stream, size_t new_capacity) {
+	stream->capacity = new_capacity;
+	if (stream->buffer != NULL) {
+		stream->buffer = realloc(stream->buffer, stream->capacity * stream->element_size);
+	}
+	else {
+		stream->buffer = malloc(stream->element_size * stream->capacity);
+	}
+}
+
+void Reserve(ContiguousStream* stream, size_t element_count) {
+	if (stream->size + element_count > stream->capacity) {
+		Resize(stream, ResizeCapacity(stream->capacity));
+	}
+}
+
+
+#pragma endregion
+
+#pragma region Pointer Stream
+
+void SetElementAllocation(PointerStream stream, size_t index, const void* new_value) {
+	void* value = malloc(stream.element_size);
+	memcpy(value, new_value, stream.element_size);
+	stream.buffer[index] = value;
+}
+
+void Resize(PointerStream* stream, size_t new_capacity) {
+	stream->capacity = new_capacity;
+	if (stream->buffer != NULL) {
+		stream->buffer = (void**)realloc(stream->buffer, stream->capacity * sizeof(void*));
+	}
+	else {
+		stream->buffer = (void**)malloc(stream->element_size * sizeof(void*));
+	}
+}
+
+void Add(PointerStream* stream, const void* element) {
+	if (stream->size == stream->capacity) {
+		Resize(stream, ResizeCapacity(stream->capacity));
+	}
+
+	SetElementAllocation(*stream, stream->size, element);
+	stream->size++;
+}
+
+PointerStream CreatePointerStream(size_t capacity, size_t element_size) {
+	if (capacity > 0) {
+		void* buffer = malloc(sizeof(void*) * capacity);
+		return { (void**)buffer, 0, capacity, element_size };
+	}
+	else {
+		return { NULL, 0, 0, element_size };
+	}
+}
+
+void FreeStream(PointerStream stream) {
+	if (stream.buffer != NULL) {
+		for (size_t index = 0; index < stream.size; index++) {
+			free(stream.buffer[index]);
+		}
+		free(stream.buffer);
+	}
+}
+
+void* GetElement(PointerStream stream, size_t index) {
+	return stream.buffer[index];
+}
+
+void Remove(PointerStream* stream, size_t index) {
+	free(stream->buffer[index]);
+	memmove(stream->buffer + index, stream->buffer + index + 1, sizeof(void*) * (stream->size - index - 1));
+	stream->size--;
+}
+
+void RemoveSwapBack(PointerStream* stream, size_t index) {
+	free(stream->buffer[index]);
+	stream->size--;
+	stream->buffer[index] = stream->buffer[stream->size];
+}
+
+size_t Find(PointerStream stream, const void* element) {
+	for (size_t index = 0; index < stream.size; index++) {
+		if (memcmp(GetElement(stream, index), element, stream.element_size) == 0) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+size_t FindFunctor(PointerStream stream, const void* element, int (*find_functor)(const void* array_element, const void* element)) {
+	for (size_t index = 0; index < stream.size; index++) {
+		if (find_functor(GetElement(stream, index), element) == 1) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+void Reserve(PointerStream* stream, size_t element_count) {
+	if (stream->size + element_count > stream->capacity) {
+		Resize(stream, ResizeCapacity(stream->capacity));
+	}
+}
+
+void SetElement(PointerStream stream, size_t index, void* value) {
+	stream.buffer[index] = value;
+}
+
+#pragma endregion
+
+#endif
 
 class Editor : public ECSEngine::Application {
 public:
@@ -91,10 +307,20 @@ public:
 	int Run() override {
 		using namespace ECSEngine;
 		using namespace ECSEngine::Tools;
+
+		unsigned int ecs_runtime_index = 0;
+#ifdef ECSENGINE_RELEASE
+		ecs_runtime_index = 2;
+#endif
+
+#ifdef ECSENGINE_DISTRIBUTION
+		ecs_runtime_index = 4;
+#endif
+		OS::InitializeSymbolicLinksPaths({ ECS_RUNTIME_PDB_PATHS + ecs_runtime_index, 2 });
 		
 		EditorState editor_state;
 		EditorStateInitialize(this, &editor_state, hWnd, mouse, keyboard);
-
+		
 		ResourceManager* resource_manager = editor_state.resource_manager;
 		Graphics* graphics = editor_state.Graphics();
 
@@ -193,6 +419,243 @@ public:
 		//descriptor.Filter = D3D11_FILTER_ANISOTROPIC;
 		//descriptor.MaxAnisotropy = 16;
 		//SamplerState sampler = graphics->CreateSamplerState(descriptor);
+
+		Stream<wchar_t> files_to_be_packed[] = {
+			ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ram_Bronze Ram_BaseColor.jpg"),
+			ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ram_Bronze Ram_Metallic.jpg"),
+			ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ram_Bronze Ram_Roughness.jpg"),
+			ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Ram_Bronze Ram_Normal.jpg"),
+			ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\Graphics.h"),
+		};
+
+		/*timer.SetMarker();
+		void* memory = malloc(ECS_GB);
+		EncryptBuffer({ memory, ECS_GB }, 50);
+		size_t duration = timer.GetDurationSinceMarker_us();
+
+		ECS_STACK_CAPACITY_STREAM(char, CHARACTERS, 64);
+		function::ConvertIntToChars(CHARACTERS, duration);
+		OutputDebugStringA(CHARACTERS.buffer);*/
+
+		//auto PackFunctor = [](Stream<void> contents, void* _data) {
+		//	EncryptBuffer(contents, contents.size);
+		//	return contents;
+		//};
+
+		//bool is_file_text[] = {
+		//	false,
+		//	false,
+		//	false,
+		//	false,
+		//	true
+		//};
+		//unsigned int status = PackFiles(
+		//	{ files_to_be_packed, std::size(files_to_be_packed) },
+		//	{ is_file_text, std::size(is_file_text) }, 
+		//	ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\packed.bin"),
+		//	PackFunctor
+		//);
+
+		//ECS_FILE_HANDLE packed_file = -1;
+		//ECS_FILE_STATUS_FLAGS status__ = OpenFile(ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\packed.bin"), &packed_file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY);
+		//PackFilesLookupTable lookup_table = GetPackedFileLookupTable(packed_file);
+
+		//timer.SetMarker();
+		//for (size_t index = 0; index < std::size(files_to_be_packed); index++) {
+		//	Stream<void> file_content = UnpackFile(files_to_be_packed[index], &lookup_table, packed_file);
+		//	DecryptBuffer(file_content, file_content.size);
+		//	Stream<void> original_content = ReadWholeFile(files_to_be_packed[index], !is_file_text[index]);
+
+		//	ECS_ASSERT(file_content.size == original_content.size);
+		//	ECS_ASSERT(memcmp(file_content.buffer, original_content.buffer, original_content.size) == 0);
+		//	//ECS_ASSERT(memcmp(file_content.buffer, memory, original_content.size) != 0);
+		//}
+		//size_t duration = timer.GetDurationSinceMarker_us();
+		//ECS_STACK_CAPACITY_STREAM(char, CHARACTERS, 64);
+		//function::ConvertIntToChars(CHARACTERS, duration);
+		//OutputDebugStringA(CHARACTERS.buffer);
+
+#ifdef TEST_C_ARRAYS
+
+		const int array_test_size = 100'000;
+
+		ContiguousStream contiguous_stream = CreateStream(0, sizeof(int));
+		PointerStream pointer_stream = CreatePointerStream(array_test_size, sizeof(int));
+		
+		std::list<int> list;
+		//list.resize(array_test_size + 10);
+
+		timer.SetMarker();
+
+		for (int index = 0; index < array_test_size; index++) {
+			Add(&contiguous_stream, &index);
+		}
+
+		size_t contiguous_stream_populate_time = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+
+		ContiguousStream fuzz_stream = CreateStream(100'000'000, sizeof(int));
+		for (int index = 0; index < array_test_size; index++) {
+			Add(&pointer_stream, &index);
+#if 1
+			for (int subindex = 0; subindex < 5; subindex++) {
+				Add(&fuzz_stream, malloc(sizeof(int)));
+			}
+#endif
+		}
+
+		size_t pointer_stream_populate_time = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+		
+		for (int index = 0; index < array_test_size; index++) {
+			list.push_back(index);
+#if 1
+			for (int subindex = 0; subindex < 5; subindex++) {
+				Add(&fuzz_stream, malloc(sizeof(int) * 7));
+			}
+#endif
+		}
+
+		size_t list_populate_time = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+
+		int sum = 0;
+		for (int index = 0; index < array_test_size; index++) {
+			sum += *(int*)GetElement(contiguous_stream, index);
+		}
+
+		size_t contiguous_stream_access_time = timer.GetDurationSinceMarker_ns();
+
+		ECS_STACK_CAPACITY_STREAM(char, CHARS, 256);
+		function::ConvertIntToChars(CHARS, sum);
+		CHARS.Add('\n');
+		CHARS.Add('\0');
+		OutputDebugStringA(CHARS.buffer);
+
+		timer.SetMarker();
+
+		sum = 0;
+		for (int index = 0; index < array_test_size; index++) {
+			sum += *(int*)GetElement(pointer_stream, index);
+		}
+
+		size_t pointer_stream_access_time = timer.GetDurationSinceMarker_ns();
+
+		CHARS.size = 0;
+		function::ConvertIntToChars(CHARS, sum);
+		CHARS.Add('\n');
+		CHARS.Add('\0');
+		OutputDebugStringA(CHARS.buffer);
+
+		timer.SetMarker();
+
+		sum = 0;
+		for (int element : list) {
+			sum += element;
+		}
+
+		size_t list_access_time = timer.GetDurationSinceMarker_ns();
+
+		CHARS.size = 0;
+		function::ConvertIntToChars(CHARS, sum);
+		CHARS.Add('\n');
+		CHARS.Add('\0');
+		OutputDebugStringA(CHARS.buffer);
+
+		size_t insert_position = array_test_size / 2;
+		//size_t insert_position = array_test_size / 10 * 9;
+		timer.SetMarker();
+		for (int index = 0; index < 10; index++) {
+			Insert(&contiguous_stream, insert_position, &index);
+		}
+		size_t array_insert = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+		for (int index = 0; index < 10; index++) {
+			auto insert_iterator = list.begin();
+			std::advance(insert_iterator, insert_position);
+			list.insert(insert_iterator, index);
+		}
+		size_t list_insert = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+		FreeStream(contiguous_stream);
+		size_t contiguous_stream_free_time = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+		FreeStream(pointer_stream);
+		size_t pointer_stream_free_time = timer.GetDurationSinceMarker_ns();
+
+		timer.SetMarker();
+		list.clear();
+		size_t list_free_time = timer.GetDurationSinceMarker_ns();
+
+		CHARS.size = 0;
+		CHARS.AddStream(ToStream("Populate time: "));
+		function::ConvertIntToChars(CHARS, contiguous_stream_populate_time);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, pointer_stream_populate_time);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, list_populate_time);
+		CHARS.Add('\n');
+		
+		CHARS.AddStream(ToStream("Access time: "));
+		function::ConvertIntToChars(CHARS, contiguous_stream_access_time);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, pointer_stream_access_time);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, list_access_time);
+		CHARS.Add('\n');
+
+		CHARS.AddStream(ToStream("Free time: "));
+		function::ConvertIntToChars(CHARS, contiguous_stream_free_time);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, pointer_stream_free_time);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, list_free_time);
+		CHARS.Add('\n');
+
+		function::ConvertIntToChars(CHARS, array_insert);
+		CHARS.Add(' ');
+		function::ConvertIntToChars(CHARS, list_insert);
+		CHARS.Add('\n');
+
+		float ratio_1_add = (float)pointer_stream_populate_time / (float)contiguous_stream_populate_time;
+		float ratio_2_add = (float)list_populate_time / (float)contiguous_stream_populate_time;
+		float ratio_1_iterate = (float)pointer_stream_access_time / (float)contiguous_stream_access_time;
+		float ratio_2_iterate = (float)list_access_time / (float)contiguous_stream_access_time;
+		float ratio_1_free = (float)pointer_stream_free_time  / (float)contiguous_stream_free_time;
+		float ratio_2_free = (float)list_free_time / (float)contiguous_stream_free_time;
+
+		float ratio_insert = (float)list_insert / (float)array_insert;
+ 
+		CHARS.AddStream(ToStream("Populate ratios: "));
+		function::ConvertFloatToChars(CHARS, ratio_1_add);
+		CHARS.Add(' ');
+		function::ConvertFloatToChars(CHARS, ratio_2_add);
+		CHARS.Add('\n');
+		CHARS.AddStream(ToStream("Access ratios: "));
+		function::ConvertFloatToChars(CHARS, ratio_1_iterate);
+		CHARS.Add(' ');
+		function::ConvertFloatToChars(CHARS, ratio_2_iterate);
+		CHARS.Add('\n');
+		CHARS.AddStream(ToStream("Free ratios: "));
+		function::ConvertFloatToChars(CHARS, ratio_1_free);
+		CHARS.Add(' ');
+		function::ConvertFloatToChars(CHARS, ratio_2_free);
+		CHARS.Add('\n');
+		CHARS.AddStream(ToStream("Insert ratio: "));
+		function::ConvertFloatToChars(CHARS, ratio_insert, 8);
+		CHARS.Add('\n');
+
+		CHARS.Add('\0');
+		OutputDebugStringA(CHARS.buffer);
+		
+
+#endif
 
 		Camera camera;
 		camera.translation = { 0.0f, 0.0f, 0.0f };
@@ -790,7 +1253,7 @@ public:
 		}
 
 		editor_state.task_manager->SleepUntilDynamicTasksFinish();
-
+		//ChangeInspectorToNothing(&editor_state);
 		DestroyGraphics(editor_state.Graphics());
 
 		if (result == -1)

@@ -3,7 +3,7 @@
 #include "../../Utilities/Function.h"
 #include "../../Internal/World.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
-#include "../../Utilities/FunctionTemplates.h"
+#include "../../Utilities/FunctionInterfaces.h"
 
 
 namespace ECSEngine {

@@ -565,23 +565,23 @@ bool OpenProject(ProjectOperationData data)
 
 	bool is_valid = CheckProjectSettingsValidity(data.editor_state);
 	if (is_valid) {
-		data.editor_state->project_descriptor = LoadWorldParametersFile(data.editor_state, data.file_data->project_settings, true);
+		//data.editor_state->project_descriptor = LoadWorldParametersFile(data.editor_state, data.file_data->project_settings, true);
 
-		// If the thread count is 0, it means it failed
-		if (data.editor_state->project_descriptor.thread_count == 0) {
-			bool success = SaveDefaultSettingsFile(data.editor_state);
-			if (success) {
-				SetSettingsPath(data.editor_state, ToStream(DEFAULT_SETTINGS_FILE_NAME));
-			}
-			else {
-				editor_allocator->Deallocate(data.editor_state->project_file->project_settings.buffer);
-				data.editor_state->project_file->project_settings.buffer = nullptr;
-				data.editor_state->project_file->project_settings.size = 0;
-				data.editor_state->project_file->project_settings.capacity = 0;
-			}
-		}
+		//// If the thread count is 0, it means it failed
+		//if (data.editor_state->project_descriptor.thread_count == 0) {
+		//	bool success = SaveDefaultSettingsFile(data.editor_state);
+		//	if (success) {
+		//		SetSettingsPath(data.editor_state, ToStream(DEFAULT_SETTINGS_FILE_NAME));
+		//	}
+		//	else {
+		//		editor_allocator->Deallocate(data.editor_state->project_file->project_settings.buffer);
+		//		data.editor_state->project_file->project_settings.buffer = nullptr;
+		//		data.editor_state->project_file->project_settings.size = 0;
+		//		data.editor_state->project_file->project_settings.capacity = 0;
+		//	}
+		//}
 	}
-	
+
 	if (ExistsFileOrFolder(ui_template_stream)) {
 		bool success = LoadProjectUITemplate(data.editor_state, ui_template, error_message);
 		if (!success) {

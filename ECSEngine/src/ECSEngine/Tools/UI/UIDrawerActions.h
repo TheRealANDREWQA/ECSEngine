@@ -1,7 +1,7 @@
 #pragma once
 #include "UIDrawerStructures.h"
 #include "UIDrawerActionStructures.h"
-#include "../../Utilities/FunctionTemplates.h"
+#include "../../Utilities/FunctionInterfaces.h"
 
 namespace ECSEngine {
 

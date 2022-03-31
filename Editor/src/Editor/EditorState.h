@@ -7,6 +7,7 @@
 #include "../UI/FileExplorerData.h"
 #include "../UI/HubData.h"
 #include "../Modules/ModuleDefinition.h"
+#include "EditorSandbox.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
 
@@ -26,21 +27,13 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS {
 	EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER,
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES,
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL,
-	EDITOR_LAZY_EVALUATION_MODULE_EXPLORER,
+	EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS,
+	EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_CREATE_DEFAULT_METAFILES,
 	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT
 };
 
 struct EditorState {
-	struct EditorWorld {
-		ECSEngine::World world;
-		bool is_empty;
-	};
-
-	inline ECSEngine::World* ActiveWorld() {
-		return &worlds[active_world].world;
-	}
-
 	inline void Tick() {
 		editor_tick(this);
 	}
@@ -59,18 +52,17 @@ struct EditorState {
 
 	EditorStateTick editor_tick;
 	ECSEngine::Tools::UISystem* ui_system;
+	ECSEngine::ResourceManager* resource_manager;
 
 	ECSEngine::Tools::UIReflectionDrawer* ui_reflection;
 	ECSEngine::Tools::UIReflectionDrawer* module_reflection;
 	
 	ECSEngine::MemoryManager* editor_allocator;
 	ECSEngine::MemoryManager* multithreaded_editor_allocator;
-	ECSEngine::ResourceView viewport_texture;
-	ECSEngine::DepthStencilView viewport_texture_depth;
-	ECSEngine::RenderTargetView viewport_render_target;
-	ECSEngine::ResourceManager* resource_manager;
 	ECSEngine::TaskManager* task_manager;
-	ECSEngine::TaskDependencies* project_task_graph;
+
+	ECSEngine::ResourceManager* cache_resource_manager;
+	ECSEngine::Graphics* cache_graphics;
 	
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation;
 	// Needed to syncronize the threads when removing the launched module compilation
@@ -85,15 +77,11 @@ struct EditorState {
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function
 	ECSEngine::ThreadSafeQueue<EditorEvent> event_queue;
+
+	ECSEngine::ResizableStream<EditorSandbox> sandboxes;
 	
 	ECSEngine::Stream<ECSEngine::Stream<char>> module_configuration_definitions;
 	ECSEngine::ResizableStream<ModuleConfigurationGroup> module_configuration_groups;
-	
-	ECSEngine::WorldDescriptor project_descriptor;
-	ECSEngine::CapacityStream<EditorWorld> worlds;
-	unsigned short active_world;
-	unsigned short scene_world;
-	std::atomic<unsigned short> copy_world_count;
 
 	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> pending_background_tasks;
 
@@ -163,5 +151,4 @@ void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index,
 UISystem* ui_system = ((EditorState*)editor_state)->ui_system; \
 MemoryManager* editor_allocator = ((EditorState*)editor_state)->editor_allocator; \
 MemoryManager* multithreaded_editor_allocator = ((EditorState*)editor_state)->multithreaded_editor_allocator; \
-TaskManager* task_manager = ((EditorState*)editor_state)->task_manager; \
-TaskDependencies* project_task_graph = ((EditorState*)editor_state)->project_task_graph;
+TaskManager* task_manager = ((EditorState*)editor_state)->task_manager;

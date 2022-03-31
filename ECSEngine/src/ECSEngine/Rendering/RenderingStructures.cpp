@@ -615,6 +615,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	// Everything is coallesced into a single allocation
 	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
 	{
 		if (material.name != nullptr) {

@@ -106,13 +106,6 @@ namespace ECSEngine {
 		// The component index will be used to directly index into the buffers
 		void* GetComponentByIndex(unsigned int stream_index, unsigned char component_index);
 
-		unsigned int GetSize() const;
-
-		unsigned int GetCapacity() const;
-
-		// The entities stream must have a capacity of at least chunk
-		Stream<Entity> GetEntities() const;
-
 		// It will copy the entities - consider using the other variant since it will alias the 
 		// values inside the chunks and no copies are needed
 		void GetEntitiesCopy(Entity* entities) const;

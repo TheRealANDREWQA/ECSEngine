@@ -10,8 +10,6 @@
 #include "..\Editor\EditorEvent.h"
 #include "..\Project\ProjectOperations.h"
 
-bool DISPLAY_LOCKED_FILES_SIZE = false;
-
 using namespace ECSEngine;
 ECS_TOOLS;
 
@@ -527,8 +525,6 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		explorer_data->selected_module = -1;
 		explorer_data->selected_module_configuration_group = -1;
 		explorer_data->editor_state = editor_state;
-
-		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_MODULE_EXPLORER);
 	}
 	else {
 		explorer_data = (ModuleExplorerData*)drawer.GetResource(MODULE_EXPLORER_DATA_NAME);
@@ -964,53 +960,4 @@ unsigned int CreateModuleExplorerWindow(EditorState* _editor_state) {
 	ModuleExplorerSetDescriptor(descriptor, _editor_state, stack_memory);
 
 	return ui_system->Create_Window(descriptor);
-}
-
-void ModuleExplorerTick(EditorState* editor_state)
-{
-	EDITOR_STATE(editor_state);
-
-	unsigned int window_index = ui_system->GetWindowFromName(MODULE_EXPLORER_WINDOW_NAME);
-	ProjectModules* project_modules = editor_state->project_modules;
-
-	bool has_graphics_module = HasGraphicsModule(editor_state);
-	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_MODULE_EXPLORER, LAZY_SOLUTION_LAST_WRITE_TARGET_MILLISECONDS)) {
-		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
-			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
-				bool success = false;
-				if (project_modules->buffer[index].library_last_write_time != 0) {
-					success = HasModuleFunction(editor_state, index);
-				}
-				SetModuleLoadStatus(project_modules->buffer + index, success);
-			}
-			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, index);
-			if (is_updated && project_modules->buffer[index].load_status == EditorModuleLoadStatus::Good) {
-				project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
-			}
-		}
-	}
-
-	if (has_graphics_module) {
-		bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
-		if (is_updated && project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status == EditorModuleLoadStatus::Good) {
-			project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status = EditorModuleLoadStatus::OutOfDate;
-		}
-		if (UpdateProjectModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
-			LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX);
-		}
-	}
-
-	// Inform the user when many .pdb.locked files gathered
-	size_t locked_files_size = GetVisualStudioLockedFilesSize(editor_state);
-	if (locked_files_size > ECS_GB) {
-		if (!DISPLAY_LOCKED_FILES_SIZE) {
-			ECS_FORMAT_TEMP_STRING(console_output, "Visual studio locked files size surpassed 1 GB (actual size is {#}). Consider deleting the files now"
-				" if the debugger is not opened or by reopening the project.", locked_files_size);
-			EditorSetConsoleWarn(console_output);
-			DISPLAY_LOCKED_FILES_SIZE = true;
-		}
-	}
-	else {
-		DISPLAY_LOCKED_FILES_SIZE = false;
-	}
 }

@@ -1,7 +1,7 @@
 #include "ecspch.h"
 #include "ReflectionStringFunctions.h"
 #include "../FunctionInterfaces.h"
-#include "../FunctionTemplates.h"
+#include "../Function.h"
 
 namespace ECSEngine {
 

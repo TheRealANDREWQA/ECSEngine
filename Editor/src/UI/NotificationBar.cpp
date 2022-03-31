@@ -106,8 +106,16 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		text_alignment.horizontal = TextAlignment::Left;
 		config.AddFlag(text_alignment);
 
+		char* new_line = strchr(message->message.buffer, '\n');
+		// Only display a single line
+		if (new_line != nullptr) {
+			*new_line = '\0';
+		}
 		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_PARAMETERS
 			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT, config, message->message.buffer);
+		if (new_line != nullptr) {
+			*new_line = '\n';
+		}
 
 		float2 action_scale = { drawer.current_x - action_position.x, TEXT_LABEL_Y_SIZE };
 		drawer.AddClickable(action_position, action_scale, { FocusConsole, data->editor_state, 0 });

@@ -61,6 +61,9 @@ namespace ECSEngine {
 		// It will spin wait until the target is reached
 		void SpinWait();
 
+		// It will check the value at certain intervals. In between it will sleep 
+		void TickWait(size_t sleep_nanoseconds);
+
 		std::atomic<unsigned int> count;
 		unsigned int target;
 	};
@@ -82,6 +85,24 @@ namespace ECSEngine {
 		std::condition_variable_any cv;
 		std::atomic<unsigned int> signal_count;
 
+	};
+
+	struct ECSENGINE_API ReadWriteLock {
+		ReadWriteLock() = default;
+
+		// Returns true if the lock was acquired
+		bool EnterWrite();
+
+		void EnterRead();
+
+		void ExitRead();
+
+		bool IsLocked() const;
+
+		void ExitWrite();
+		
+		std::atomic<unsigned int> reader_count;
+		std::atomic<unsigned int> write_lock;
 	};
 
 }

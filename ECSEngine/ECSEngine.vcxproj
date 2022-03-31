@@ -209,9 +209,14 @@
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityHierarchy.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\ForEach.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabase.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetLoading.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadata.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\Scene.h" />
     <ClInclude Include="src\ECSEngine\Internal\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\VectorComponentSignature.h" />
     <ClInclude Include="src\ECSEngine\Math\Bezier.h" />
@@ -248,11 +253,14 @@
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Encryption.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\FilePackaging.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeserializeTable.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\InputSerialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.h" />
@@ -284,7 +292,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\FunctionTemplates.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Mouse.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Keyboard.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
@@ -345,7 +352,11 @@
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabase.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetLoading.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadata.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\ResourceManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\Scene.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\SystemManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\VectorComponentSignature.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MaxSpeed</Optimization>
@@ -385,6 +396,8 @@
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
@@ -412,6 +425,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeserializeTable.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\InputSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeSection.cpp" />
