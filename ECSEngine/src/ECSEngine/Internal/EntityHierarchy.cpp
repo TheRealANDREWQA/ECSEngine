@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "EntityHierarchy.h"
 #include "../Utilities/Crash.h"
+#include "../Utilities/Serialization/SerializationHelpers.h"
 
 #define ROOT_STARTING_SIZE ECS_KB
 #define CHILDREN_TABLE_INITIAL_SIZE ECS_KB
@@ -9,7 +10,16 @@
 #define ENTITY_HIERARCHY_ALLOCATOR_SIZE ECS_MB * 2
 #define ENTITY_HIERARCHY_ALLOCATOR_CHUNKS 2048
 
+#define SERIALIZE_VERSION 1
+
 namespace ECSEngine {
+    
+    struct SerializeEntityHierarchyHeader {
+        unsigned int version;
+        unsigned int root_count;
+        unsigned int children_count;
+        unsigned int parent_count;
+    };
 
     void RemoveEntityFromParent(EntityHierarchy* hierarchy, Entity entity, Entity parent) {
         // Remove the entity from its parent and the entry from the parent table
@@ -39,15 +49,23 @@ namespace ECSEngine {
             for (size_t index = 0; index < children->count; index++) {
                 if (entities_to_search[index] == entity) {
                     entities_to_search[index] = entities_to_search[children->count];
+
+                    // Move from pointer to static storage
+                    if (children->count == ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                        memcpy(children->static_children, entities_to_search, sizeof(Entity) * children->count);
+                        // Deallocate the pointer
+                        hierarchy->allocator->Deallocate(entities_to_search);
+                    }
+                    else if (children->count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                        // The buffer must be relocated in order to keep up with the count
+                        Entity* new_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children->count);
+                        memcpy(new_allocation, entities_to_search, sizeof(Entity) * children->count);
+                        hierarchy->allocator->Deallocate(entities_to_search);
+
+                        children->entities = new_allocation;
+                    }
                     break;
                 }
-            }
-
-            // Move from pointer to static storage
-            if (children->count == ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
-                memcpy(children->static_children, entities_to_search, sizeof(Entity) * children->count);
-                // Deallocate the pointer
-                hierarchy->allocator->Deallocate(entities_to_search);
             }
         }
     }
@@ -89,7 +107,14 @@ namespace ECSEngine {
                 children->static_children[children->count++] = child;
             }
             else {
-                children->entities[children->count++] = child;
+                // Need to reallocate the buffer
+                children->count++;
+                Entity* new_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children->count);
+                memcpy(new_allocation, children->entities, sizeof(Entity) * (children->count - 1));
+                hierarchy->allocator->Deallocate(children->entities);
+
+                children->entities = new_allocation;
+                children->entities[children->count - 1] = child;
             }
         }
         else {
@@ -120,6 +145,60 @@ namespace ECSEngine {
 
         // Insert the child into the parent table aswell
         InsertToDynamicTable(parent_table, allocator, parent, child);
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    void EntityHierarchy::CopyOther(const EntityHierarchy* other)
+    {
+        // The roots can be just memcpy'ed
+        roots.FreeBuffer();
+        roots.Initialize(GetAllocatorPolymorphic(allocator), other->roots.size);
+
+        other->roots.CopyTo(roots.buffer);
+
+        // Copy the parent table - this can be blitted
+        const void* allocated_buffer = parent_table.GetAllocatedBuffer();
+        if (allocated_buffer != nullptr) {
+            allocator->Deallocate(allocated_buffer);
+        }
+
+        parent_table.Copy(GetAllocatorPolymorphic(allocator), &other->parent_table);
+
+        // The children cannot be memcpy'ed because of the children allocations
+        allocated_buffer = children_table.GetAllocatedBuffer();
+        if (allocated_buffer != nullptr) {
+            allocator->Deallocate(allocated_buffer);
+        }
+
+        children_table.Initialize(allocator, other->children_table.GetCapacity());
+        // For each entry, insert it manually and keep track of allocations
+        unsigned int extended_capacity = other->children_table.GetExtendedCapacity();
+        for (unsigned int index = 0; index < extended_capacity; index++) {
+            if (other->children_table.IsItemAt(index)) {
+                Children other_children = other->children_table.GetValueFromIndex(index);
+
+                Children* current_children = children_table.GetValuePtrFromIndex(index);
+                current_children->count = other_children.count;
+                current_children->is_root = other_children.is_root;
+                current_children->root_index = other_children.root_index;
+                if (other_children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                    // This is allocated from the allocator - must do the same
+                    void* children_allocation = allocator->Allocate(sizeof(Entity) * other_children.count);
+                    memcpy(children_allocation, other_children.entities, sizeof(Entity) * other_children.count);
+
+                    current_children->entities = (Entity*)children_allocation;
+                }
+                else {
+                    current_children->entities = nullptr;
+                    memcpy(current_children->static_children, other_children.static_children, sizeof(Entity) * other_children.count);
+                }
+            }
+        }
+
+        // Now the metadata and the identifiers can be blitted
+        memcpy(children_table.m_identifiers, other->children_table.m_identifiers, sizeof(Entity) * extended_capacity);
+        memcpy(children_table.m_metadata, other->children_table.m_metadata, sizeof(unsigned char) * extended_capacity);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -290,6 +369,301 @@ namespace ECSEngine {
     MemoryManager DefaultEntityHierarchyAllocator(GlobalMemoryManager* global_memory)
     {
         return MemoryManager(ENTITY_HIERARCHY_ALLOCATOR_SIZE, ENTITY_HIERARCHY_ALLOCATOR_CHUNKS, ENTITY_HIERARCHY_ALLOCATOR_SIZE, global_memory);
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    bool SerializeEntityHierarchy(const EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
+    {
+        // Write the header first
+        SerializeEntityHierarchyHeader header;
+        header.version = SERIALIZE_VERSION;
+        header.root_count = hierarchy->roots.size;
+        header.parent_count = hierarchy->parent_table.GetCount();
+        header.children_count = hierarchy->children_table.GetCount();
+
+        bool success = WriteFile(file, { &header, sizeof(header) });
+        if (!success) {
+            return false;
+        }
+
+        // Now write the roots
+        success = WriteFile(file, { hierarchy->roots.buffer, hierarchy->roots.size });
+        if (!success) {
+            return false;
+        }
+
+        // Now the children table
+        unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
+        const Entity* children_keys = hierarchy->children_table.GetIdentifiers();
+
+        void* temp_buffer = ECS_STACK_ALLOC(sizeof(unsigned char) * ECS_KB * 64);
+        uintptr_t temp_ptr = (uintptr_t)temp_buffer;
+
+        for (unsigned int index = 0; index < children_capacity; index++) {
+            if (hierarchy->children_table.IsItemAt(index)) {
+                temp_ptr = (uintptr_t)temp_buffer;
+
+                auto children = hierarchy->children_table.GetValueFromIndex(index);
+                Write(&temp_ptr, children_keys + index, sizeof(Entity));
+                Write(&temp_ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+                Write(&temp_ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+
+                success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
+                if (!success) {
+                    return false;
+                }
+            }
+        }
+
+        // The parent table can be deduced from the children table
+        return true;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    void SerializeEntityHierarchy(const EntityHierarchy* hierarchy, uintptr_t* ptr)
+    {
+        // Write the header first
+        SerializeEntityHierarchyHeader header;
+        header.version = SERIALIZE_VERSION;
+        header.root_count = hierarchy->roots.size;
+        header.parent_count = hierarchy->parent_table.GetCount();
+        header.children_count = hierarchy->children_table.GetCount();
+
+        Write(ptr, &header, sizeof(header));
+
+        // Now write the roots
+        Write(ptr, hierarchy->roots.buffer, hierarchy->roots.size);
+
+        // Now the children table
+        unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
+        const Entity* children_keys = hierarchy->children_table.GetIdentifiers();
+        for (unsigned int index = 0; index < children_capacity; index++) {
+            if (hierarchy->children_table.IsItemAt(index)) {
+                auto children = hierarchy->children_table.GetValueFromIndex(index);
+                Write(ptr, children_keys + index, sizeof(Entity));
+                Write(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+                Write(ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+            }
+        }
+
+        // The parent table can be deduced from the children table
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    size_t SerializeEntityHierarchySize(const EntityHierarchy* hierarchy)
+    {
+        // The roots need to be written
+        size_t size = sizeof(Entity) * hierarchy->roots.size + sizeof(SerializeEntityHierarchyHeader);
+
+        // First determine how many entries in the children are and how much memory they require
+        unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
+        for (unsigned int index = 0; index < children_capacity; index++) {
+            if (hierarchy->children_table.IsItemAt(index)) {
+                auto children = hierarchy->children_table.GetValueFromIndex(index);
+                // The entities must be written aswell. The final entity represents the key which will be used
+                // when reinserting the values back on deserialization
+                // The unsigned int contains all the necessary extra data
+                size += children.count * sizeof(Entity) + sizeof(unsigned int) + sizeof(Entity);
+            }
+        }
+
+        // The parent table can be deduced from the children table
+        return size;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
+    {
+        // Firstly read the header
+        SerializeEntityHierarchyHeader header;
+        bool success = ReadFile(file, { &header, sizeof(header) });
+        if (!success) {
+            return false;
+        }
+
+        if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
+            return false;
+        }
+
+        if (header.root_count > ECS_MB_10 || header.children_count > ECS_MB_10 || header.parent_count > ECS_MB_10) {
+            return false;
+        }
+
+        if (hierarchy->children_table.GetCapacity() != 0) {
+            hierarchy->allocator->Deallocate(hierarchy->children_table.GetAllocatedBuffer());
+        }
+
+        if (hierarchy->parent_table.GetCapacity() != 0) {
+            hierarchy->allocator->Deallocate(hierarchy->parent_table.GetAllocatedBuffer());
+        }
+
+        if (header.children_count > 0 || header.parent_count > 0) {
+            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
+            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
+            size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
+            size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
+
+            void* children_table_allocation = hierarchy->allocator->Allocate(children_table_allocation_size);
+            void* parent_table_allocation = hierarchy->allocator->Allocate(parent_table_allocation_size);
+
+            hierarchy->children_table.InitializeFromBuffer(children_table_allocation, power_of_two_children_table_size);
+            hierarchy->parent_table.InitializeFromBuffer(parent_table_allocation, power_of_two_parent_table_size);
+        }
+        else {
+            hierarchy->children_table.m_capacity = 0;
+            hierarchy->parent_table.m_capacity = 0;
+        }
+
+        // Read the roots now
+        hierarchy->roots.Resize(header.root_count);
+        success = ReadFile(file, { hierarchy->roots.buffer, sizeof(Entity) * header.root_count });
+        hierarchy->roots.size = header.root_count;
+        if (!success) {
+            return false;
+        }
+
+        void* temp_buffer = ECS_STACK_ALLOC(sizeof(char) * ECS_KB * 64);
+        uintptr_t temp_ptr = (uintptr_t)temp_buffer;
+
+
+        // Read the children table now
+        for (unsigned int index = 0; index < header.children_count; index++) {
+            EntityHierarchy::Children children;
+            success = ReadFile(file, { &children.padding, sizeof(unsigned int) + sizeof(Entity) });
+            if (!success) {
+                return false;
+            }
+            Entity key_entity = { children.padding };
+
+            if (children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
+                success = ReadFile(file, { children_allocation, sizeof(Entity) * children.count });
+                children.entities = children_allocation;
+            }
+            else {
+                success = ReadFile(file, { children.static_children, sizeof(Entity) * children.count });
+            }
+            if (!success) {
+                return false;
+            }
+
+            // Insert the value into the hash table now
+            hierarchy->children_table.Insert(children, key_entity);
+
+            // Iterate through the list of children and insert them into the parent table aswell
+            const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
+            for (unsigned int child_index = 0; child_index < children.count; child_index++) {
+                hierarchy->parent_table.Insert(key_entity, children_entities[child_index]);
+            }
+        }
+
+        return true;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, uintptr_t* ptr)
+    {
+        // Firstly read the header
+        SerializeEntityHierarchyHeader header;
+        Read(ptr, &header, sizeof(header));
+        if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
+            return false;
+        }
+
+        if (header.root_count > ECS_MB_10 || header.children_count > ECS_MB_10 || header.parent_count > ECS_MB_10) {
+            return false;
+        }
+
+        if (hierarchy->children_table.GetCapacity() != 0) {
+            hierarchy->allocator->Deallocate(hierarchy->children_table.GetAllocatedBuffer());
+        }
+
+        if (hierarchy->parent_table.GetCapacity() != 0) {
+            hierarchy->allocator->Deallocate(hierarchy->parent_table.GetAllocatedBuffer());
+        }
+
+        if (header.children_count > 0 || header.parent_count > 0) {
+            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
+            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
+            size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
+            size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
+
+            void* children_table_allocation = hierarchy->allocator->Allocate(children_table_allocation_size);
+            void* parent_table_allocation = hierarchy->allocator->Allocate(parent_table_allocation_size);
+
+            hierarchy->children_table.InitializeFromBuffer(children_table_allocation, power_of_two_children_table_size);
+            hierarchy->parent_table.InitializeFromBuffer(parent_table_allocation, power_of_two_parent_table_size);
+        }
+        else {
+            hierarchy->children_table.m_capacity = 0;
+            hierarchy->parent_table.m_capacity = 0;
+        }
+
+        // Read the roots now
+        hierarchy->roots.Resize(header.root_count);
+        Read(ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
+        hierarchy->roots.size = header.root_count;
+
+        // Read the children table now
+        for (unsigned int index = 0; index < header.children_count; index++) {
+            EntityHierarchy::Children children;
+            Read(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Entity key_entity;
+            Read(ptr, &key_entity, sizeof(key_entity));
+
+            if (children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
+                Read(ptr, children_allocation, sizeof(Entity) * children.count);
+                children.entities = children_allocation;
+            }
+            else {
+                Read(ptr, children.static_children, sizeof(Entity) * children.count);
+            }
+
+            // Insert the value into the hash table now
+            hierarchy->children_table.Insert(children, key_entity);
+
+            // Iterate through the list of children and insert them into the parent table aswell
+            const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
+            for (unsigned int child_index = 0; child_index < children.count; child_index++) {
+                hierarchy->parent_table.Insert(key_entity, children_entities[child_index]);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    size_t DeserializeEntityHierarchySize(uintptr_t ptr)
+    {
+        SerializeEntityHierarchyHeader header;
+        Read(&ptr, &header, sizeof(header));
+        if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
+            return -1;
+        }
+
+        if (header.root_count > ECS_MB_10 || header.children_count > ECS_MB_10 || header.parent_count > ECS_MB_10) {
+            return -1;
+        }
+
+        ptr += sizeof(Entity) * header.root_count;
+        size_t size = 0;
+
+        for (unsigned int index = 0; index < header.children_count; index++) {
+            unsigned int data_int;
+            Read(&ptr, &data_int, sizeof(data_int));
+
+            EntityHierarchy::Children child;
+            memcpy(function::OffsetPointer(&child.padding, sizeof(unsigned int)), &data_int, sizeof(data_int));
+            ptr += sizeof(Entity) * (child.count + 1);
+            size += sizeof(Entity) * child.count;
+        }
+
+        return size;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

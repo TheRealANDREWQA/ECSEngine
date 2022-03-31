@@ -2,8 +2,8 @@
 #include "ArchetypeBase.h"
 #include "VectorComponentSignature.h"
 
-#ifndef ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE 
-#define ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE (1 << 6)
+#ifndef ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT 
+#define ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT (1 << 4)
 #endif
 
 namespace ECSEngine {
@@ -24,7 +24,7 @@ namespace ECSEngine {
 		// The shared component order is needed in order to assign in the correct order the instances indices
 		unsigned short CreateBaseArchetype(
 			SharedComponentSignature shared_signature, 
-			unsigned int archetype_starting_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
+			unsigned int archetype_starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
 
 		void CopyOther(const Archetype* other);
@@ -59,23 +59,23 @@ namespace ECSEngine {
 		void FindSharedInstances(unsigned short archetype_index, SharedComponentSignature signature) const;
 
 		// If it fails it returns nullptr
-		ArchetypeBase* FindArchetypeBase(SharedComponentSignature shared_signature);
+		ArchetypeBase* FindBase(SharedComponentSignature shared_signature);
 
 		// If it fails it returns nullptr
-		ArchetypeBase* ECS_VECTORCALL FindArchetypeBase(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
+		ArchetypeBase* ECS_VECTORCALL FindBase(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
 
 		// If it fails it returns -1
-		unsigned short FindArchetypeBaseIndex(SharedComponentSignature shared_signature) const;
+		unsigned short FindBaseIndex(SharedComponentSignature shared_signature) const;
 
-		unsigned short ECS_VECTORCALL FindArchetypeBaseIndex(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
+		unsigned short ECS_VECTORCALL FindBaseIndex(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
 
-		SharedInstance* GetArchetypeBaseInstances(unsigned short index);
+		SharedInstance* GetBaseInstances(unsigned short index);
 
-		const SharedInstance* GetArchetypeBaseInstances(unsigned short index) const;
+		const SharedInstance* GetBaseInstances(unsigned short index) const;
 
-		ArchetypeBase* GetArchetypeBase(unsigned short index);
+		ArchetypeBase* GetBase(unsigned short index);
 
-		const ArchetypeBase* GetArchetypeBase(unsigned short index) const;
+		const ArchetypeBase* GetBase(unsigned short index) const;
 		
 		ComponentSignature GetUniqueSignature() const;
 
@@ -83,9 +83,7 @@ namespace ECSEngine {
 
 		SharedComponentSignature GetSharedSignature(unsigned short base_index) const;
 
-		Stream<ArchetypeBase> GetArchetypeStream() const;
-
-		unsigned short GetArchetypeBaseCount() const;
+		unsigned short GetBaseCount() const;
 
 		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned short base_index) const;
 

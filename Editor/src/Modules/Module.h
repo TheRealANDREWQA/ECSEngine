@@ -6,6 +6,9 @@ using namespace ECSEngine;
 
 constexpr unsigned int GRAPHICS_MODULE_INDEX = 0;
 
+extern const wchar_t* ECS_RUNTIME_PDB_PATHS[];
+
+
 struct EditorState;
 
 enum EDITOR_LAUNCH_BUILD_COMMAND_STATUS {
@@ -69,6 +72,8 @@ void GetProjectModuleBuildLogPath(const EditorState* editor_state, unsigned int 
 
 void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
 
+void GetModuleFolder(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, CapacityStream<wchar_t>& module_path);
+
 void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration, CapacityStream<wchar_t>& module_path);
 
 size_t GetProjectModuleSolutionLastWrite(Stream<wchar_t> solution_path);
@@ -90,19 +95,17 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 // Returns -1 if it fails
 unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, unsigned int module_index);
 
-// This function can also fail if the temporary dll could not be created
-bool LoadEditorModule(EditorState* editor_state, unsigned int index);
-
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EditorModuleConfiguration configuration);
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index);
 
 bool HasGraphicsModule(const EditorState* editor_state);
 
-bool ProjectModulesNeedsBuild(const EditorState* editor_state, unsigned int index);
-
 // Returns true if the loading succeeded and the necessary function is found
 bool LoadEditorModuleTasks(EditorState* editor_state, unsigned int index, CapacityStream<char>* error_message = nullptr);
+
+// This function can also fail if the temporary dll could not be created
+bool LoadEditorModule(EditorState* editor_state, unsigned int index);
 
 void ReleaseProjectModuleTasks(EditorState* editor_state, unsigned int index);
 

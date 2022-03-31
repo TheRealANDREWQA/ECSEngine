@@ -19,15 +19,9 @@ namespace ECSEngine {
 
 	struct EntityManager;
 
-	struct DeferredDebugInfo {
-		const char* file;
-		const char* function;
-		int line;
-	};
-
 	struct DeferredAction {
 		DataPointer data_and_type;
-		DeferredDebugInfo debug_info;
+		DebugInfo debug_info;
 	};
 
 	/*typedef void (*EntityManagerEventCallback)(EntityManager*, void*);
@@ -91,7 +85,7 @@ namespace ECSEngine {
 		void AddComponentCommit(Entity entity, Component component);
 
 		// Deferred Call
-		void AddComponent(Entity entity, Component component, DeferredActionParameters parameters = {}, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void AddComponent(Entity entity, Component component, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -103,7 +97,7 @@ namespace ECSEngine {
 			Component component,
 			const void* data,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -111,7 +105,7 @@ namespace ECSEngine {
 		void AddComponentCommit(Entity entity, ComponentSignature components);
 
 		// Deferred Call - it will register it inside the command stream
-		void AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters = {}, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void AddComponent(Entity entity, ComponentSignature components, DeferredActionParameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -123,7 +117,7 @@ namespace ECSEngine {
 			ComponentSignature components,
 			const void** data,
 			DeferredActionParameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -137,7 +131,7 @@ namespace ECSEngine {
 			Stream<Entity> entities,
 			Component component,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -148,7 +142,7 @@ namespace ECSEngine {
 		// Deferred Call - it will register it inside a command stream
 		// entities must belong to the same base archetype; data will be used to initialize all components to the same value
 		void AddComponent(Stream<Entity> entities, Component component, const void* data, DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION });
+			DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -158,7 +152,7 @@ namespace ECSEngine {
 		// Deferred Call - it will register it inside a command stream
 		// entities must belong to the same base archetype
 		void AddComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION });
+			DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -175,7 +169,7 @@ namespace ECSEngine {
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -188,7 +182,7 @@ namespace ECSEngine {
 			Component shared_component,
 			SharedInstance instance,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -203,7 +197,7 @@ namespace ECSEngine {
 			Component shared_component,
 			SharedInstance instance,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -215,7 +209,7 @@ namespace ECSEngine {
 			Entity entity,
 			SharedComponentSignature components,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -229,7 +223,7 @@ namespace ECSEngine {
 			unsigned short hierarchy_index,
 			Stream<EntityPair> pairs,
 			DeferredActionParameters parameters,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -243,7 +237,7 @@ namespace ECSEngine {
 			Stream<Entity> entities,
 			SharedComponentSignature components,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -254,7 +248,7 @@ namespace ECSEngine {
 			unsigned short hierarchy_index,
 			Stream<EntityPair> pairs,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -265,7 +259,7 @@ namespace ECSEngine {
 			unsigned short hierarchy_index,
 			Stream<EntityPair> pairs, 
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -275,7 +269,7 @@ namespace ECSEngine {
 
 		// Deferred call
 		// The tag should be only the bit index, not the actual value
-		void ClearEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void ClearEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
 		// It will copy everything. The components, the shared components, the archetypes, the entities inside the entity pool
 		void CopyOther(const EntityManager* entity_manager);
@@ -288,7 +282,7 @@ namespace ECSEngine {
 			ComponentSignature unique_signature,
 			ComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -298,7 +292,7 @@ namespace ECSEngine {
 		ushort2 CreateArchetypeBaseCommit(
 			ComponentSignature unique_signature,
 			SharedComponentSignature shared_signature,
-			unsigned int archetype_chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
+			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
 
 		// Deferred Call
@@ -307,8 +301,8 @@ namespace ECSEngine {
 			ComponentSignature unique_signature,
 			SharedComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
-			unsigned int archetype_chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT,
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -317,7 +311,7 @@ namespace ECSEngine {
 		unsigned short CreateArchetypeBaseCommit(
 			unsigned short archetype_index,
 			SharedComponentSignature shared_signature,
-			unsigned int archetype_chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
+			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
 
 		// Deferred Call
@@ -325,8 +319,8 @@ namespace ECSEngine {
 			unsigned short archetype_index,
 			SharedComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
-			unsigned int archetype_chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT,
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -339,7 +333,7 @@ namespace ECSEngine {
 			ComponentSignature unique_components,
 			SharedComponentSignature shared_components,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -363,7 +357,7 @@ namespace ECSEngine {
 			ComponentSignature unique_components,
 			SharedComponentSignature shared_components,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -393,7 +387,7 @@ namespace ECSEngine {
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// Creates a new hierarchy. Must be called from a single threaded environment. The hierarchy index needs to be specified
@@ -411,21 +405,21 @@ namespace ECSEngine {
 		void DeleteEntityCommit(Entity entity);
 
 		// Deferred Call - it will register it inside the command stream
-		void DeleteEntity(Entity entity, EntityManagerCommandStream* command_stream = nullptr, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void DeleteEntity(Entity entity, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void DeleteEntitiesCommit(Stream<Entity> entities);
 
 		// Deferred Call 
-		void DeleteEntities(Stream<Entity> entities, DeferredActionParameters parameters = {}, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void DeleteEntities(Stream<Entity> entities, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void DestroyArchetypeCommit(unsigned short archetype_index);
 
 		// Deferred Call
-		void DestroyArchetype(unsigned short archetype_index, EntityManagerCommandStream* command_stream = nullptr, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void DestroyArchetype(unsigned short archetype_index, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -436,7 +430,7 @@ namespace ECSEngine {
 			ComponentSignature unique_components, 
 			ComponentSignature shared_components, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -448,7 +442,7 @@ namespace ECSEngine {
 			unsigned short archetype_index,
 			unsigned short archetype_subindex,
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -460,7 +454,7 @@ namespace ECSEngine {
 			ComponentSignature unique_components, 
 			SharedComponentSignature shared_components, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 		
 		// ---------------------------------------------------------------------------------------------------
@@ -511,7 +505,7 @@ namespace ECSEngine {
 		// It will look for an exact match
 		// Returns -1, -1 if the main archetype cannot be found
 		// Returns main_index, -1 if the main archetype is found but the base is not
-		ushort2 ECS_VECTORCALL FindArchetypeBase(
+		ushort2 ECS_VECTORCALL FindBase(
 			ArchetypeQuery query,
 			VectorComponentSignature shared_instances
 		) const;
@@ -548,7 +542,7 @@ namespace ECSEngine {
 		ushort2 FindOrCreateArchetypeBase(
 			ComponentSignature unique_signature,
 			SharedComponentSignature shared_signature,
-			unsigned int chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
+			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
 
 		// Executes all deferred calls, including clearing tags and setting them
@@ -557,13 +551,28 @@ namespace ECSEngine {
 		// Executes all deferred calls inside a command stream
 		void Flush(EntityManagerCommandStream command_stream);
 
+		// Verifies if the entity is still valid. It might become invalid if another system deleted it in the meantime
+		bool ExistsEntity(Entity entity) const;
+
+		// Verifies if a component already exists at that slot
+		bool ExistsComponent(Component component) const;
+
+		// Verifies if a shared component was already allocated at that slot
+		bool ExistsSharedComponent(Component component) const;
+
+		// Verifies if a shared instance is a valid instance - checks to see if the component also exists
+		bool ExistsSharedInstance(Component component, SharedInstance instance) const;
+
+		// Verifies if the hierarchy is already allocated
+		bool ExistsHierarchy(unsigned short hierarchy_index) const;
+
 		Archetype* GetArchetype(unsigned short index);
 
 		const Archetype* GetArchetype(unsigned short index) const;
 
-		ArchetypeBase* GetArchetypeBase(unsigned short main_index, unsigned short base_index);
+		ArchetypeBase* GetBase(unsigned short main_index, unsigned short base_index);
 
-		const ArchetypeBase* GetArchetypeBase(unsigned short main_index, unsigned short base_index) const;
+		const ArchetypeBase* GetBase(unsigned short main_index, unsigned short base_index) const;
 
 		// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
 		Archetype* GetOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
@@ -571,7 +580,7 @@ namespace ECSEngine {
 		ArchetypeBase* GetOrCreateArchetypeBase(
 			ComponentSignature unique_signature, 
 			SharedComponentSignature shared_signature,
-			unsigned int chunk_size = ECS_ARCHETYPE_DEFAULT_CHUNK_SIZE_FOR_NEW_BASE
+			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
 
 		// It will fill in the indices of the archetypes that verify the query
@@ -685,52 +694,69 @@ namespace ECSEngine {
 			Stream<Entity> entities,
 			bool destroy_children = true,
 			DeferredActionParameters parameters = {},
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void RegisterComponentCommit(Component component, unsigned short size);
 
+		// Deferred call
 		void RegisterComponent(
 			Component component, 
 			unsigned short size, 
 			EntityManagerCommandStream* command_stream = nullptr, 
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		void RegisterSharedComponentCommit(Component component, unsigned short size);
 
+		// Deferred call
 		void RegisterSharedComponent(
 			Component component, 
 			unsigned short size, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		SharedInstance RegisterSharedInstanceCommit(Component component, const void* data);
 
+		// Deferred call
 		void RegisterSharedInstance(
 			Component component, 
 			const void* data, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		SharedInstance RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, const void* data);
-
+		
+		// Deferred call
 		void RegisterNamedSharedInstance(
 			Component component, 
 			ResourceIdentifier identifier, 
 			const void* data, 
 			EntityManagerCommandStream* command_stream = nullptr,
-			DeferredDebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = { ECS_LOCATION }
+		);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		void RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, SharedInstance instance);
+
+		// Deferred call
+		void RegisterNamedSharedInstance(
+			Component component,
+			ResourceIdentifier identifier,
+			SharedInstance instance,
+			EntityManagerCommandStream* command_stream = nullptr,
+			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
@@ -748,7 +774,7 @@ namespace ECSEngine {
 
 		// Deferred call
 		// The tag should only be the bit index, not the actual value
-		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DeferredDebugInfo debug_info = { ECS_LOCATION });
+		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
 	//private:
 

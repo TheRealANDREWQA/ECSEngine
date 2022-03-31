@@ -43,10 +43,9 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool Read(uintptr_t* stream, void* data, size_t data_size) {
+	void Read(uintptr_t* stream, void* data, size_t data_size) {
 		memcpy(data, (const void*)*stream, data_size);
 		*stream += data_size;
-		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------

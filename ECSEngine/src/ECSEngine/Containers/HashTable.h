@@ -5,7 +5,7 @@
 #include "../Utilities/Function.h"
 
 #ifndef ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR
-#define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 85
+#define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 90
 #endif
 
 #ifndef ECS_HASHTABLE_DYNAMIC_GROW_FACTOR
@@ -542,6 +542,8 @@ namespace ECSEngine {
 		// the return value tells the caller if the hash table needs to grow or allocate another hash table
 		bool Insert(T value, Identifier identifier, unsigned int& position) {
 			unsigned int key = ObjectHashFunction::Hash(identifier);
+			// Signal that the position has not yet been determined
+			position = -1;
 
 			// calculating the index at which the key wants to be
 			unsigned int index = m_function(key, m_capacity);
@@ -570,7 +572,7 @@ namespace ECSEngine {
 					m_values[index] = value;
 					m_identifiers[index] = identifier;
 					m_count++;
-					position = index;
+					position = position == -1 ? index : position;
 					break;
 				}
 
@@ -587,6 +589,7 @@ namespace ECSEngine {
 					hash_key_bits = metadata_temp & ECS_HASH_TABLE_HASH_BITS_MASK;
 					value = value_temp;
 					identifier = identifier_temp;
+					position = position == -1 ? index : position;
 					index++;
 				}
 			}
@@ -758,7 +761,21 @@ namespace ECSEngine {
 			return TableHashFunction::Next(capacity);
 		}
 
-		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+		// Equivalent to memcpy'ing the data from the other table
+		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction>* table) {
+			size_t table_size = MemoryOf(table->GetCapacity());
+			void* allocation = AllocateEx(allocator, table_size);
+
+			InitializeFromBuffer(allocation, table->GetCapacity(), 0);
+			m_function = table->m_function;
+
+			// Now blit the data - it can just be memcpy'ed from the other
+			memcpy(allocation, table->GetAllocatedBuffer(), table_size);
+		}
+
+		// It will set the buffers accordingly to the buffer. It does not modify anything
+		// This function is used mostly for serialization, deserialization purposes
+		void SetBuffers(void* buffer, unsigned int capacity) {
 			unsigned int extended_capacity = capacity + 31;
 
 			m_values = (T*)buffer;
@@ -768,11 +785,16 @@ namespace ECSEngine {
 			ptr += sizeof(Identifier) * extended_capacity;
 			m_metadata = (unsigned char*)ptr;
 
-			// make distance 0 for keys, account for padding elements
-			memset(m_metadata, 0, sizeof(unsigned char) * extended_capacity);
-
 			m_capacity = capacity;
 			m_count = 0;
+		}
+
+		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+			unsigned int extended_capacity = capacity + 31;
+			SetBuffers(buffer, capacity);
+
+			// make distance 0 for keys, account for padding elements
+			memset(m_metadata, 0, sizeof(unsigned char) * extended_capacity);
 			m_function = TableHashFunction(additional_info);
 		}
 
@@ -915,6 +937,8 @@ namespace ECSEngine {
 		// the return value tells the caller if the hash table needs to grow or allocate another hash table
 		bool Insert(T value, Identifier identifier, unsigned int& position) {
 			unsigned int key = ObjectHashFunction::Hash(identifier);
+			// Signal that the position has not yet been found
+			position = -1;
 
 			// calculating the index at which the key wants to be
 			unsigned int index = m_function(key, m_capacity);
@@ -943,7 +967,7 @@ namespace ECSEngine {
 					m_values[index] = value;
 					m_identifiers[index] = identifier;
 					m_count++;
-					position = index;
+					position = position == -1 ? index : position;
 					break;
 				}
 
@@ -960,6 +984,7 @@ namespace ECSEngine {
 					hash_key_bits = metadata_temp & ECS_EXTENDED_HASH_TABLE_HASH_BITS_MAKK;
 					value = value_temp;
 					identifier = identifier_temp;
+					position = position == -1 ? index : position;
 					index++;
 				}
 			}
@@ -1131,7 +1156,21 @@ namespace ECSEngine {
 			return TableHashFunction::Next(capacity);
 		}
 
-		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+		// Equivalent to memcpy'ing the data from the other table
+		void Copy(AllocatorPolymorphic allocator, const ExtendedHashTable<T, Identifier, TableHashFunction, ObjectHashFunction>* table) {
+			size_t table_size = MemoryOf(table->GetCapacity());
+			void* allocation = AllocateEx(allocator, table_size);
+
+			InitializeFromBuffer(allocation, table->GetCapacity(), 0);
+			m_function = table->m_function;
+
+			// Now blit the data - it can just be memcpy'ed from the other
+			memcpy(allocation, table->GetAllocatedBuffer(), table_size);
+		}
+
+		// It will set the buffers accordingly to the buffer. It does not modify anything
+		// This function is used mostly for serialization, deserialization purposes
+		void SetBuffers(void* buffer, unsigned int capacity) {
 			unsigned int extended_capacity = capacity + 63;
 
 			m_values = (T*)buffer;
@@ -1139,13 +1178,16 @@ namespace ECSEngine {
 			ptr += sizeof(T) * extended_capacity;
 			m_identifiers = (Identifier*)ptr;
 			ptr += sizeof(Identifier) * extended_capacity;
-			m_metadata = (unsigned short*)ptr;
-
-			// make distance 0 for keys, account for padding elements
-			memset(m_metadata, 0, sizeof(unsigned short) * extended_capacity);
+			m_metadata = (unsigned char*)ptr;
 
 			m_capacity = capacity;
 			m_count = 0;
+		}
+
+		void InitializeFromBuffer(void* buffer, unsigned int capacity, size_t additional_info = 0) {
+			SetBuffers(buffer, capacity);
+			// make distance 0 for keys, account for padding elements
+			memset(m_metadata, 0, sizeof(unsigned short) * extended_capacity);
 			m_function = TableHashFunction(additional_info);
 		}
 

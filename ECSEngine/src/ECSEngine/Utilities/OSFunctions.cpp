@@ -527,7 +527,7 @@ namespace ECSEngine {
 
 		void SetSymbolicLinksPaths(Stream<wchar_t*> module_paths)
 		{
-			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 8);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 16);
 			for (size_t index = 0; index < module_paths.size; index++) {
 				search_paths.AddStream(ToStream(module_paths[index]));
 				search_paths.AddSafe(L':');
@@ -562,9 +562,11 @@ namespace ECSEngine {
 			HANDLE process_handle = GetCurrentProcess();
 
 			size_t displacement = 0;
+			string.AddStreamSafe(ToStream("Stack trace:\n"));
 			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, GetCurrentThread(), &stack_frame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
-				SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
-				UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);
+				success = SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
+				DWORD characters_written = UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);
+				string.size += characters_written;
 				string.Add('\n');
 			}
 
@@ -744,7 +746,7 @@ namespace ECSEngine {
 			ErrorWindow(path, ClearFile, CLEAR_FILE_ERROR_STRING, system);
 		}
 
-		void ClearFileWithError(Stream<wchar_t> path, Console* console) {
+		void ClearFileWithError(Stream<wchar_t> path) {
 			ErrorConsole(path, ClearFile, CLEAR_FILE_ERROR_STRING);
 		}
 
@@ -811,7 +813,7 @@ namespace ECSEngine {
 			ErrorWindow(path, CreateFolder, CREATE_FOLDER_ERROR_STRING, system);
 		}
 
-		void CreateFolderWithError(Stream<wchar_t> path, Console* console) {
+		void CreateFolderWithError(Stream<wchar_t> path) {
 			ErrorConsole(path, CreateFolder, CREATE_FOLDER_ERROR_STRING);
 		}
 
@@ -826,7 +828,7 @@ namespace ECSEngine {
 			ErrorWindow(path, RemoveFolder, DELETE_FOLDER_ERROR_STRING, system);
 		}
 
-		void DeleteFolderWithError(Stream<wchar_t> path, Console* console) {
+		void DeleteFolderWithError(Stream<wchar_t> path) {
 			ErrorConsole(path, RemoveFolder, DELETE_FOLDER_ERROR_STRING);
 		}
 

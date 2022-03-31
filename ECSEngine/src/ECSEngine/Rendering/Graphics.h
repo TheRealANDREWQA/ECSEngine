@@ -126,34 +126,7 @@ namespace ECSEngine {
 		GraphicsViewport viewport;
 	};
 
-	struct ShaderMacro {
-		const char* name;
-		const char* definition;
-	};
-
-	enum ShaderTarget : unsigned char {
-		ECS_SHADER_TARGET_5_0,
-		ECS_SHADER_TARGET_5_1,
-		ECS_SHADER_TARGET_COUNT
-	};
-
-	enum ShaderCompileFlags : unsigned char {
-		ECS_SHADER_COMPILE_NONE = 0,
-		ECS_SHADER_COMPILE_DEBUG = 1 << 0,
-		ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST = 1 << 1,
-		ECS_SHADER_COMPILE_OPTIMIZATION_LOW = 1 << 2,
-		ECS_SHADER_COMPILE_OPTIMIZATION_HIGH = 1 << 3,
-		ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST = 1 << 4
-	};
-
-	// Default is no macros, shader target 5 and no compile flags
-	struct ShaderCompileOptions {
-		Stream<ShaderMacro> macros = { nullptr, 0 };
-		ShaderTarget target = ECS_SHADER_TARGET_5_0;
-		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
-	};
-
-	enum GraphicsShaderHelpers {
+	enum GraphicsShaderHelpers : unsigned char {
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_TEXTURE_CUBE,
 		ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE,
 		ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT,
@@ -170,7 +143,7 @@ namespace ECSEngine {
 		SamplerState pixel_sampler;
 	};
 
-	enum ECS_GRAPHICS_RESOURCE_TYPE {
+	enum ECS_GRAPHICS_RESOURCE_TYPE : unsigned char {
 		ECS_GRAPHICS_RESOURCE_VERTEX_SHADER,
 		ECS_GRAPHICS_RESOURCE_PIXEL_SHADER,
 		ECS_GRAPHICS_RESOURCE_DOMAIN_SHADER,
@@ -207,12 +180,14 @@ namespace ECSEngine {
 		inline GraphicsInternalResource& operator = (const GraphicsInternalResource& other) {
 			interface_pointer = other.interface_pointer;
 			type = other.type;
+			debug_info = other.debug_info;
 			is_deleted.store(other.is_deleted.load(std::memory_order_acquire), std::memory_order_release);
 
 			return *this;
 		}
 
 		void* interface_pointer;
+		DebugInfo debug_info;
 		ECS_GRAPHICS_RESOURCE_TYPE type;
 		std::atomic<bool> is_deleted;
 	};
@@ -345,7 +320,7 @@ namespace ECSEngine {
 	{
 	public:
 		Graphics(HWND hWnd, const GraphicsDescriptor* descriptor);
-		Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target, DepthStencilView new_depth_view, MemoryManager* new_allocator = nullptr);
+		Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target = { nullptr }, DepthStencilView new_depth_view = { nullptr }, MemoryManager* new_allocator = nullptr);
 
 		Graphics& operator = (const Graphics& other) = default;
 
@@ -476,7 +451,8 @@ namespace ECSEngine {
 			bool temporary = false, 
 			D3D11_USAGE usage = D3D11_USAGE_DEFAULT, 
 			unsigned int cpu_access = 0, 
-			unsigned int misc_flags = 0
+			unsigned int misc_flags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		IndexBuffer CreateIndexBuffer(
@@ -486,58 +462,95 @@ namespace ECSEngine {
 			bool temporary = false, 
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, 
 			unsigned int cpu_access = 0,
-			unsigned int misc_flags = 0
+			unsigned int misc_flags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices, bool temporary = false);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned char> indices, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices, bool temporary = false);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned short> indices, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices, bool temporary = false);
+		IndexBuffer CreateIndexBuffer(Stream<unsigned int> indices, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		PixelShader CreatePixelShader(Stream<void> byte_code, bool temporary = false);
+		PixelShader CreatePixelShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		PixelShader CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
+		PixelShader CreatePixelShaderFromSource(
+			Stream<char> source_code, 
+			ID3DInclude* include_policy,
+			bool temporary = false,
+			ShaderCompileOptions options = {}, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		VertexShader CreateVertexShader(Stream<void> byte_code, bool temporary = false);
+		VertexShader CreateVertexShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		VertexShader CreateVertexShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
+		VertexShader CreateVertexShaderFromSource(
+			Stream<char> source_code, 
+			ID3DInclude* include_policy, 
+			bool temporary = false,
+			ShaderCompileOptions options = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		DomainShader CreateDomainShader(Stream<void> byte_code, bool temporary = false);
+		DomainShader CreateDomainShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		DomainShader CreateDomainShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
+		DomainShader CreateDomainShaderFromSource(
+			Stream<char> source_code,
+			ID3DInclude* include_policy, 
+			bool temporary = false, 
+			ShaderCompileOptions options = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		HullShader CreateHullShader(Stream<void> byte_code, bool temporary = false);
+		HullShader CreateHullShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		HullShader CreateHullShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
+		HullShader CreateHullShaderFromSource(
+			Stream<char> source_code, 
+			ID3DInclude* include_policy,
+			bool temporary = false,
+			ShaderCompileOptions options = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		GeometryShader CreateGeometryShader(Stream<void> byte_code, bool temporary = false);
+		GeometryShader CreateGeometryShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		GeometryShader CreateGeometryShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
+		GeometryShader CreateGeometryShaderFromSource(
+			Stream<char> source_code, 
+			ID3DInclude* include_policy, 
+			bool temporary = false, 
+			ShaderCompileOptions options = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		ComputeShader CreateComputeShader(Stream<void> path, bool temporary = false);
+		ComputeShader CreateComputeShader(Stream<void> path, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
-		ComputeShader CreateComputeShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary = false, ShaderCompileOptions options = {});
+		ComputeShader CreateComputeShaderFromSource(
+			Stream<char> source_code,
+			ID3DInclude* include_policy, 
+			bool temporary = false, 
+			ShaderCompileOptions options = {},
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
-		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader, bool temporary = false);
+		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		VertexBuffer CreateVertexBuffer(
 			size_t element_size, 
@@ -545,7 +558,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC, 
 			unsigned int cpuFlags = D3D11_CPU_ACCESS_WRITE, 
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		VertexBuffer CreateVertexBuffer(
@@ -555,7 +569,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuFlags = 0,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 		
 		ConstantBuffer CreateConstantBuffer(
@@ -564,7 +579,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		ConstantBuffer CreateConstantBuffer(
@@ -572,7 +588,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		StandardBuffer CreateStandardBuffer(
@@ -581,7 +598,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		StandardBuffer CreateStandardBuffer(
@@ -591,7 +609,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		StructuredBuffer CreateStructuredBuffer(
@@ -600,7 +619,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		StructuredBuffer CreateStructuredBuffer(
@@ -610,7 +630,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		UABuffer CreateUABuffer(
@@ -619,7 +640,8 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
 			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		UABuffer CreateUABuffer(
@@ -629,24 +651,25 @@ namespace ECSEngine {
 			bool temporary = false,
 			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
 			unsigned int cpuAccessFlags = 0,
-			unsigned int miscFlags = 0
+			unsigned int miscFlags = 0,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		IndirectBuffer CreateIndirectBuffer(bool temporary = false);
+		IndirectBuffer CreateIndirectBuffer(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		AppendStructuredBuffer CreateAppendStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false);
+		AppendStructuredBuffer CreateAppendStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false);
+		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		SamplerState CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor, bool temporary = false);
+		SamplerState CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor, bool temporary = false);
+		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor, bool temporary = false);
+		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor, bool temporary = false);
+		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor, bool temporary = false);
+		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
@@ -654,10 +677,11 @@ namespace ECSEngine {
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1,
-			bool temporary = false
+			bool temporary = false,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		ResourceView CreateTextureShaderViewResource(Texture1D texture, bool temporary = false);
+		ResourceView CreateTextureShaderViewResource(Texture1D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
@@ -665,10 +689,11 @@ namespace ECSEngine {
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1,
-			bool temporary = false
+			bool temporary = false,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		ResourceView CreateTextureShaderViewResource(Texture2D texture, bool temporary = false);
+		ResourceView CreateTextureShaderViewResource(Texture2D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
@@ -676,10 +701,11 @@ namespace ECSEngine {
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1,
-			bool temporary = false
+			bool temporary = false,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		ResourceView CreateTextureShaderViewResource(Texture3D texture, bool temporary = false);
+		ResourceView CreateTextureShaderViewResource(Texture3D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
@@ -687,40 +713,41 @@ namespace ECSEngine {
 			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT, 
 			unsigned int most_detailed_mip = 0u, 
 			unsigned int mip_levels = -1,
-			bool temporary = false
+			bool temporary = false,
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		ResourceView CreateTextureShaderViewResource(TextureCube texture, bool temporary = false);
+		ResourceView CreateTextureShaderViewResource(TextureCube texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		RenderTargetView CreateRenderTargetView(Texture2D texture, unsigned int mip_level = 0, bool temporary = false);
+		RenderTargetView CreateRenderTargetView(Texture2D texture, unsigned int mip_level = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0, bool temporary = false);
+		RenderTargetView CreateRenderTargetView(TextureCube cube, TextureCubeFace face, unsigned int mip_level = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		DepthStencilView CreateDepthStencilView(Texture2D texture, bool temporary = false);
+		DepthStencilView CreateDepthStencilView(Texture2D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		ResourceView CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format, bool temporary = false);
+		ResourceView CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		ResourceView CreateBufferView(StructuredBuffer buffer, bool temporary = false);
+		ResourceView CreateBufferView(StructuredBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element = 0, bool temporary = false);
+		UAView CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(AppendStructuredBuffer buffer, bool temporary = false);
+		UAView CreateUAView(AppendStructuredBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(ConsumeStructuredBuffer buffer, bool temporary = false);
+		UAView CreateUAView(ConsumeStructuredBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(IndirectBuffer buffer, bool temporary = false);
+		UAView CreateUAView(IndirectBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(Texture1D texture, unsigned int mip_slice = 0, bool temporary = false);
+		UAView CreateUAView(Texture1D texture, unsigned int mip_slice = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(Texture2D texture, unsigned int mip_slice = 0, bool temporary = false);
+		UAView CreateUAView(Texture2D texture, unsigned int mip_slice = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0, bool temporary = false);
+		UAView CreateUAView(Texture3D texture, unsigned int mip_slice = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		RasterizerState CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary = false);
+		RasterizerState CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		DepthStencilState CreateDepthStencilState(const D3D11_DEPTH_STENCIL_DESC& descriptor, bool temporary = false);
+		DepthStencilState CreateDepthStencilState(const D3D11_DEPTH_STENCIL_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		BlendState CreateBlendState(const D3D11_BLEND_DESC& descriptor, bool temporary = false);
+		BlendState CreateBlendState(const D3D11_BLEND_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 #pragma endregion
 
@@ -786,7 +813,7 @@ namespace ECSEngine {
 
 		void EnableCulling(GraphicsContext* context, bool wireframe = false);
 
-		CommandList FinishCommandList(bool restore_state = false);
+		CommandList FinishCommandList(bool restore_state = false, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		void GenerateMips(ResourceView view);
 
@@ -821,7 +848,7 @@ namespace ECSEngine {
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
 		// Path nullptr means take the path from the shader
-		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code, bool temporary = false);
+		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
 		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers);
@@ -843,12 +870,13 @@ namespace ECSEngine {
 		void CommitInternalResourcesToBeFreed();
 
 		template<typename Resource>
-		void AddInternalResource(Resource resource) {
+		void AddInternalResource(Resource resource, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			ECS_GRAPHICS_RESOURCE_TYPE resource_type = GetGraphicsResourceType(resource);
 			void* interface_ptr = GetGraphicsResourceInterface(resource);
 
 			GraphicsInternalResource internal_res = { 
 				interface_ptr,
+				debug_info,
 				resource_type,
 				false
 			};
@@ -933,7 +961,7 @@ namespace ECSEngine {
 
 		void CreateInitialDepthStencilView();
 
-		GraphicsContext* CreateDeferredContext(UINT context_flags = 0u);
+		GraphicsContext* CreateDeferredContext(UINT context_flags = 0u, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		void FreeAllocatedBuffer(const void* buffer);
 
@@ -1017,6 +1045,9 @@ namespace ECSEngine {
 		bool m_copied_graphics;
 	};
 
+	// Does not deallocate the entire allocator - care must be taken to make sure that if this graphics is used with a world and
+	// the allocator comes from another allocator than the world's when destroying the world the memory used by graphics might not
+	// be all deallocated
 	ECSENGINE_API void DestroyGraphics(Graphics* graphics);
 
 	// -------------------------------------------------------------------------------------------------------------------
@@ -1236,8 +1267,6 @@ namespace ECSEngine {
 
 	ECSENGINE_API void DrawInstancedIndirect(IndirectBuffer buffer, GraphicsContext* context);
 
-	ECSENGINE_API CommandList FinishCommandList(GraphicsContext* context, bool restore_state = false);
-
 	ECSENGINE_API GraphicsPipelineBlendState GetBlendState(GraphicsContext* context);
 
 	ECSENGINE_API GraphicsPipelineDepthStencilState GetDepthStencilState(GraphicsContext* context);
@@ -1346,7 +1375,10 @@ namespace ECSEngine {
 	ECSENGINE_API void UnmapTexture(Texture texture, GraphicsContext* context, unsigned int subresource_index = 0);
 
 	// Releases the graphics resources of this material
-	ECSENGINE_API void FreeMaterial(Graphics* graphics, const Material& material);
+	ECSENGINE_API void FreeMaterial(Graphics* graphics, const Material* material);
+
+	// Releases the mesh GPU resources and the names of the submeshes if any
+	ECSENGINE_API void FreeCoallescedMesh(Graphics* graphics, const CoallescedMesh* mesh);
 
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
 	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh

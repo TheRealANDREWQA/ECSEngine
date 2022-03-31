@@ -313,31 +313,35 @@ namespace ECSEngine {
 			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == '_';
 		}
 
-		inline const char* SkipSpace(const char* pointer) {
+		// Can use the increment to go backwards by setting it to -1
+		inline const char* SkipSpace(const char* pointer, int increment = 1) {
 			while (*pointer == ' ') {
-				pointer++;
+				pointer += increment;
 			}
 			return pointer;
 		}
 
 		// Tabs and spaces
-		inline const char* SkipWhitespace(const char* pointer) {
+		// Can use the increment to go backwards by setting it to -1
+		inline const char* SkipWhitespace(const char* pointer, int increment = 1) {
 			while (*pointer == ' ' || *pointer == '\t') {
-				pointer++;
+				pointer += increment;
 			}
 			return pointer;
 		}
 
-		inline const wchar_t* SkipWhitespace(const wchar_t* pointer) {
+		// Can use the increment to go backwards by setting it to -1
+		inline const wchar_t* SkipWhitespace(const wchar_t* pointer, int increment = 1) {
 			while (*pointer == L' ' || *pointer == L'\t') {
-				pointer++;
+				pointer += increment;
 			}
 			return pointer;
 		}
 		
-		inline const char* SkipCodeIdentifier(const char* pointer) {
+		// Can use the increment to go backwards by setting it to -1
+		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
-				pointer++;
+				pointer += increment;
 			}
 			return pointer;
 		}

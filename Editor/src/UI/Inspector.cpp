@@ -532,13 +532,13 @@ void CreateModuleSettingsCallback(ActionData* action_data) {
 	wide_name.AddStreamSafe(ToStream(L".config"));
 	wide_name[wide_name.size] = L'\0';
 
-	// Save the current file and destroy the module settings
-	if (data->editor_state->project_modules->buffer[data->module_index].current_settings_path.buffer != nullptr) {
-		bool save_success = SaveModuleSettings(data->editor_state, data->module_index);
-		if (!save_success) {
-			EditorSetConsoleWarn(ToStream("An error has occured when trying to save the module settings file before creating a new setting."));
-		}
-	}
+	//// Save the current file and destroy the module settings
+	//if (data->editor_state->project_modules->buffer[data->module_index].current_settings_path.buffer != nullptr) {
+	//	bool save_success = SaveModuleSettings(data->editor_state, data->module_index);
+	//	if (!save_success) {
+	//		EditorSetConsoleWarn(ToStream("An error has occured when trying to save the module settings file before creating a new setting."));
+	//	}
+	//}
 
 	DestroyModuleSettings(data->editor_state, data->module_index);
 	// Assign the new path to the module
@@ -606,30 +606,30 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 		collapsing_headers_state = data->header_states;
 	}
 
-	ECS_STACK_CAPACITY_STREAM(wchar_t, setting_absolute_path, 512);
-	GetProjectConfigurationModuleFolder(editor_state, setting_absolute_path);
-	setting_absolute_path.Add(ECS_OS_PATH_SEPARATOR);
-	setting_absolute_path.AddStreamSafe(editor_state->project_modules->buffer[module_index].current_settings_path);
-	setting_absolute_path[setting_absolute_path.size] = L'\0';
-
 	UIDrawConfig config;
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.default_text, drawer->color_theme.theme);
-	
-	if (editor_state->project_modules->buffer[module_index].current_settings_path.buffer != nullptr) {
-		// Display the configuration's name
-		ECS_STACK_CAPACITY_STREAM(char, ascii_setting_name, 256);
-		function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[module_index].current_settings_path, ascii_setting_name);
+	//ECS_STACK_CAPACITY_STREAM(wchar_t, setting_absolute_path, 512);
+	//GetProjectConfigurationModuleFolder(editor_state, setting_absolute_path);
+	//setting_absolute_path.Add(ECS_OS_PATH_SEPARATOR);
+	//setting_absolute_path.AddStreamSafe(editor_state->project_modules->buffer[module_index].current_settings_path);
+	//setting_absolute_path[setting_absolute_path.size] = L'\0';
 
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, "Current setting:");
+	//InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.default_text, drawer->color_theme.theme);
+	//
+	//if (editor_state->project_modules->buffer[module_index].current_settings_path.buffer != nullptr) {
+	//	// Display the configuration's name
+	//	ECS_STACK_CAPACITY_STREAM(char, ascii_setting_name, 256);
+	//	function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[module_index].current_settings_path, ascii_setting_name);
 
-		// Null terminate the string
-		ascii_setting_name.AddSafe('\0');
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, ascii_setting_name.buffer);
-	}
-	else {
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, "No module settings path is selected.");
-	}
+	//	drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, "Current setting:");
+
+	//	// Null terminate the string
+	//	ascii_setting_name.AddSafe('\0');
+	//	drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, ascii_setting_name.buffer);
+	//}
+	//else {
+	//	drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, "No module settings path is selected.");
+	//}
 	drawer->NextRow();
 
 	// Allow the user to create a different profile
@@ -671,114 +671,114 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 
 	FunctorData functor_data = { drawer, editor_state, linear_allocator, module_index };
 
-	ForEachFileInDirectoryWithExtension(settings_folder, { settings_extensions, std::size(settings_extensions) }, &functor_data,
-		[](const wchar_t* path, void* _data) {
-			FunctorData* data = (FunctorData*)_data;
+	//ForEachFileInDirectoryWithExtension(settings_folder, { settings_extensions, std::size(settings_extensions) }, &functor_data,
+	//	[](const wchar_t* path, void* _data) {
+	//		FunctorData* data = (FunctorData*)_data;
 
-			Stream<wchar_t> stream_path = ToStream(path);
-			Stream<wchar_t> filename = function::PathFilename(stream_path);
+	//		Stream<wchar_t> stream_path = ToStream(path);
+	//		Stream<wchar_t> filename = function::PathFilename(stream_path);
 
-			// Only display the settings for this module only - use the first part of the name to distinguish between modules
-			const wchar_t* underscore = wcschr(filename.buffer, L'_');
-			if (underscore == nullptr || !function::CompareStrings(data->editor_state->project_modules->buffer[data->module_index].library_name, Stream<wchar_t>(filename.buffer, underscore - filename.buffer))) {
-				return true;
-			}
-			filename.buffer = (wchar_t*)underscore + 1;
-			filename.size -= data->editor_state->project_modules->buffer[data->module_index].library_name.size + 1;
+	//		// Only display the settings for this module only - use the first part of the name to distinguish between modules
+	//		const wchar_t* underscore = wcschr(filename.buffer, L'_');
+	//		if (underscore == nullptr || !function::CompareStrings(data->editor_state->project_modules->buffer[data->module_index].library_name, Stream<wchar_t>(filename.buffer, underscore - filename.buffer))) {
+	//			return true;
+	//		}
+	//		filename.buffer = (wchar_t*)underscore + 1;
+	//		filename.size -= data->editor_state->project_modules->buffer[data->module_index].library_name.size + 1;
 
-			bool is_active = function::CompareStrings(filename, data->editor_state->project_modules->buffer[data->module_index].current_settings_path);
-			UIDrawConfig config;
-			UIConfigCheckBoxCallback callback;
+	//		bool is_active = function::CompareStrings(filename, data->editor_state->project_modules->buffer[data->module_index].current_settings_path);
+	//		UIDrawConfig config;
+	//		UIConfigCheckBoxCallback callback;
 
-			struct SetNewSettingData {
-				EditorState* editor_state;
-				Stream<wchar_t> name;
-				unsigned int module_index;
-			};
+	//		struct SetNewSettingData {
+	//			EditorState* editor_state;
+	//			Stream<wchar_t> name;
+	//			unsigned int module_index;
+	//		};
 
-			auto set_new_setting = [](ActionData* action_data) {
-				UI_UNPACK_ACTION_DATA;
+	//		auto set_new_setting = [](ActionData* action_data) {
+	//			UI_UNPACK_ACTION_DATA;
 
-				SetNewSettingData* data = (SetNewSettingData*)_data;
+	//			SetNewSettingData* data = (SetNewSettingData*)_data;
 
-				ECS_STACK_CAPACITY_STREAM(wchar_t, old_name, 512);
-				old_name.Copy(data->editor_state->project_modules->buffer[data->module_index].current_settings_path);
+	//			ECS_STACK_CAPACITY_STREAM(wchar_t, old_name, 512);
+	//			old_name.Copy(data->editor_state->project_modules->buffer[data->module_index].current_settings_path);
 
-				ChangeModuleSettings(data->editor_state, data->name, data->module_index);
-				// Try to load the data
-				bool success = LoadModuleSettings(data->editor_state, data->module_index);
+	//			ChangeModuleSettings(data->editor_state, data->name, data->module_index);
+	//			// Try to load the data
+	//			bool success = LoadModuleSettings(data->editor_state, data->module_index);
 
-				if (!success) {
-					ChangeModuleSettings(data->editor_state, old_name, data->module_index);
-					ECS_FORMAT_TEMP_STRING(error_message, "Could not switch module settings to {#} from {#}. The values could not be read from the file.", old_name, data->name);
-					EditorSetConsoleError(error_message);
-				}
-			};
+	//			if (!success) {
+	//				ChangeModuleSettings(data->editor_state, old_name, data->module_index);
+	//				ECS_FORMAT_TEMP_STRING(error_message, "Could not switch module settings to {#} from {#}. The values could not be read from the file.", old_name, data->name);
+	//				EditorSetConsoleError(error_message);
+	//			}
+	//		};
 
-			void* name_allocation = data->temp_allocator->Allocate((filename.size + 1) * sizeof(wchar_t));
-			memcpy(name_allocation, filename.buffer, sizeof(wchar_t) * (filename.size + 1));
+	//		void* name_allocation = data->temp_allocator->Allocate((filename.size + 1) * sizeof(wchar_t));
+	//		memcpy(name_allocation, filename.buffer, sizeof(wchar_t) * (filename.size + 1));
 
-			Stream<wchar_t> stem = function::PathStem(filename);
-			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 64);
-			function::ConvertWideCharsToASCII(stem, ascii_name);
+	//		Stream<wchar_t> stem = function::PathStem(filename);
+	//		ECS_STACK_CAPACITY_STREAM(char, ascii_name, 64);
+	//		function::ConvertWideCharsToASCII(stem, ascii_name);
 
-			SetNewSettingData callback_data = { data->editor_state, {name_allocation, filename.size}, data->module_index };
-			callback.handler.action = set_new_setting;
-			callback.handler.data = &callback_data;
-			callback.handler.data_size = sizeof(callback_data);
-			callback.disable_value_to_modify = true;
-			config.AddFlag(callback);
+	//		SetNewSettingData callback_data = { data->editor_state, {name_allocation, filename.size}, data->module_index };
+	//		callback.handler.action = set_new_setting;
+	//		callback.handler.data = &callback_data;
+	//		callback.handler.data_size = sizeof(callback_data);
+	//		callback.disable_value_to_modify = true;
+	//		config.AddFlag(callback);
 
-			data->drawer->CheckBox(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_CHECK_BOX_CALLBACK, config, ascii_name.buffer, &is_active);
+	//		data->drawer->CheckBox(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_CHECK_BOX_CALLBACK, config, ascii_name.buffer, &is_active);
 
-			if (!function::CompareStrings(filename, ToStream(MODULE_DEFAULT_SETTINGS_PATH))) {
-				UIConfigAbsoluteTransform right_transform;
-				right_transform.scale = data->drawer->GetSquareScale(data->drawer->layout.default_element_y * 0.75f);
-				right_transform.position = data->drawer->GetAlignedToRight(right_transform.scale.x);
-				config.AddFlag(right_transform);
-				data->drawer->SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW, config, ECS_TOOLS_UI_TEXTURE_X, data->drawer->color_theme.default_text);
+	//		if (!function::CompareStrings(filename, ToStream(MODULE_DEFAULT_SETTINGS_PATH))) {
+	//			UIConfigAbsoluteTransform right_transform;
+	//			right_transform.scale = data->drawer->GetSquareScale(data->drawer->layout.default_element_y * 0.75f);
+	//			right_transform.position = data->drawer->GetAlignedToRight(right_transform.scale.x);
+	//			config.AddFlag(right_transform);
+	//			data->drawer->SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW, config, ECS_TOOLS_UI_TEXTURE_X, data->drawer->color_theme.default_text);
 
-				struct DeleteActionData {
-					const wchar_t* filename;
-					EditorState* editor_state;
-					unsigned int module_index;
-				};
+	//			struct DeleteActionData {
+	//				const wchar_t* filename;
+	//				EditorState* editor_state;
+	//				unsigned int module_index;
+	//			};
 
-				auto delete_action = [](ActionData* action_data) {
-					UI_UNPACK_ACTION_DATA;
+	//			auto delete_action = [](ActionData* action_data) {
+	//				UI_UNPACK_ACTION_DATA;
 
-					DeleteActionData* data = (DeleteActionData*)_data;
+	//				DeleteActionData* data = (DeleteActionData*)_data;
 
-					ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-					GetProjectConfigurationModuleFolder(data->editor_state, absolute_path);
-					absolute_path.Add(ECS_OS_PATH_SEPARATOR);
-					absolute_path.AddStreamSafe(ToStream(data->filename));
-					absolute_path[absolute_path.size] = L'\0';
-					bool success = RemoveFile(absolute_path);
-					if (!success) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Could not delete module settings file {#}.", absolute_path);
-						EditorSetConsoleError(error_message);
-					}
-					else {
-						// Check to see if that is the current setting
-						if (function::CompareStrings(ToStream(data->filename), data->editor_state->project_modules->buffer[data->module_index].current_settings_path)) {
-							DestroyModuleSettings(data->editor_state, data->module_index);
-							ChangeModuleSettings(data->editor_state, { nullptr, 0 }, data->module_index);
-						}
-					}
-				};
-				DeleteActionData action_data = { (wchar_t*)name_allocation, data->editor_state, data->module_index };
-				data->drawer->AddDefaultClickableHoverable(
-					{ right_transform.position - data->drawer->region_render_offset }, 
-					right_transform.scale,
-					{ delete_action, &action_data, sizeof(action_data) }
-				);
-			}
+	//				ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	//				GetProjectConfigurationModuleFolder(data->editor_state, absolute_path);
+	//				absolute_path.Add(ECS_OS_PATH_SEPARATOR);
+	//				absolute_path.AddStreamSafe(ToStream(data->filename));
+	//				absolute_path[absolute_path.size] = L'\0';
+	//				bool success = RemoveFile(absolute_path);
+	//				if (!success) {
+	//					ECS_FORMAT_TEMP_STRING(error_message, "Could not delete module settings file {#}.", absolute_path);
+	//					EditorSetConsoleError(error_message);
+	//				}
+	//				else {
+	//					// Check to see if that is the current setting
+	//					if (function::CompareStrings(ToStream(data->filename), data->editor_state->project_modules->buffer[data->module_index].current_settings_path)) {
+	//						DestroyModuleSettings(data->editor_state, data->module_index);
+	//						ChangeModuleSettings(data->editor_state, { nullptr, 0 }, data->module_index);
+	//					}
+	//				}
+	//			};
+	//			DeleteActionData action_data = { (wchar_t*)name_allocation, data->editor_state, data->module_index };
+	//			data->drawer->AddDefaultClickableHoverable(
+	//				{ right_transform.position - data->drawer->region_render_offset }, 
+	//				right_transform.scale,
+	//				{ delete_action, &action_data, sizeof(action_data) }
+	//			);
+	//		}
 
-			data->drawer->NextRow();
+	//		data->drawer->NextRow();
 
-			return true;
-		});
+	//		return true;
+	//	});
 
 	drawer->CrossLine();
 

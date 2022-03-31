@@ -38,6 +38,7 @@ namespace ECSEngine {
 			sizeof(SystemManager); 
 
 		void* allocation = memory->Allocate(coallesced_allocation_size);
+
 		MemoryManager* entity_manager_memory = (MemoryManager*)allocation;
 		new (entity_manager_memory) MemoryManager(
 			descriptor.entity_manager_memory_size,

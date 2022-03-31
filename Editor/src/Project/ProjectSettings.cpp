@@ -133,26 +133,26 @@ bool CheckProjectSettingsValidity(EditorState* editor_state)
 {
 	EDITOR_STATE(editor_state);
 
-	// Check to see the project settings file integrity
-	if (!ExistsProjectSettings(editor_state)) {
-		editor_allocator->Deallocate(editor_state->project_file->project_settings.buffer);
-		editor_state->project_descriptor = GetDefaultSettings(editor_state);
+	//// Check to see the project settings file integrity
+	//if (!ExistsProjectSettings(editor_state)) {
+	//	editor_allocator->Deallocate(editor_state->project_file->project_settings.buffer);
+	//	editor_state->project_descriptor = GetDefaultSettings(editor_state);
 
-		bool success_saved_default_file = SaveDefaultSettingsFile(editor_state);
-		if (success_saved_default_file) {
-			// Change the settings file to the default one
-			size_t default_settings_size = wcslen(DEFAULT_SETTINGS_FILE_NAME);
-			editor_state->project_file->project_settings.Initialize(editor_allocator, default_settings_size, default_settings_size);
-			editor_state->project_file->project_settings.Copy(Stream<wchar_t>(DEFAULT_SETTINGS_FILE_NAME, default_settings_size));
-		}
-		else {
-			editor_state->project_file->project_settings.buffer = nullptr;
-			editor_state->project_file->project_settings.size = 0;
-			editor_state->project_file->project_settings.capacity = 0;
-		}
+	//	bool success_saved_default_file = SaveDefaultSettingsFile(editor_state);
+	//	if (success_saved_default_file) {
+	//		// Change the settings file to the default one
+	//		size_t default_settings_size = wcslen(DEFAULT_SETTINGS_FILE_NAME);
+	//		editor_state->project_file->project_settings.Initialize(editor_allocator, default_settings_size, default_settings_size);
+	//		editor_state->project_file->project_settings.Copy(Stream<wchar_t>(DEFAULT_SETTINGS_FILE_NAME, default_settings_size));
+	//	}
+	//	else {
+	//		editor_state->project_file->project_settings.buffer = nullptr;
+	//		editor_state->project_file->project_settings.size = 0;
+	//		editor_state->project_file->project_settings.capacity = 0;
+	//	}
 
-		return false;
-	}
+	//	return false;
+	//}
 	return true;
 }
 

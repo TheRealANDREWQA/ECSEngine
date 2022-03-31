@@ -9,10 +9,6 @@ constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {
 	L".exp"
 };
 
-namespace ECSEngine {
-	struct World;
-}
-
 constexpr const char* MODULE_CONFIGURATION_DEBUG = "Debug";
 constexpr const char* MODULE_CONFIGURATION_RELEASE = "Release";
 constexpr const char* MODULE_CONFIGURATION_DISTRIBUTION = "Distribution";
@@ -50,14 +46,12 @@ struct EditorModule {
 	ECSEngine::Stream<wchar_t> solution_path;
 	ECSEngine::Stream<wchar_t> library_name;
 	ECSEngine::Module ecs_module;
+
 	EditorModuleConfiguration configuration;
 	EditorModuleLoadStatus load_status;
+
 	size_t solution_last_write_time;
 	size_t library_last_write_time;
-
-	// These are needed for reflection of the settings
-	ECSEngine::HashTableDefault<void*> reflected_settings;
-	ECSEngine::Stream<wchar_t> current_settings_path;
 };
 
 using ProjectModules = ECSEngine::ResizableStream<EditorModule>;

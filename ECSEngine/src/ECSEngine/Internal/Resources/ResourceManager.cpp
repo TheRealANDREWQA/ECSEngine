@@ -306,7 +306,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->mesh.submeshes.size; index++) {
 			FreePBRMaterial(data->materials[index], allocator);
 		}
-		resource_manager->m_graphics->FreeMesh(data->mesh.mesh);
+		FreeCoallescedMesh(resource_manager->m_graphics, &data->mesh);
 	}
 
 	void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -318,8 +318,7 @@ namespace ECSEngine {
 	void UnloadCoallescedMeshHandler(void* parameter, ResourceManager* resource_manager) {
 		// Free the coallesced mesh - the submeshes get the deallocated at the same time as this resource
 		CoallescedMesh* mesh = (CoallescedMesh*)parameter;
-
-		resource_manager->m_graphics->FreeMesh(mesh->mesh);
+		FreeCoallescedMesh(resource_manager->m_graphics, mesh);
 	}
 
 	void DeleteCoallescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
@@ -976,8 +975,8 @@ namespace ECSEngine {
 		}
 
 		if (!temporary) {
-			m_graphics->AddInternalResource(ResourceView(texture_view));
-			m_graphics->AddInternalResource(texture);
+			m_graphics->AddInternalResource(ResourceView(texture_view), ECS_DEBUG_INFO);
+			m_graphics->AddInternalResource(texture, ECS_DEBUG_INFO);
 		}
 
 		return texture_view;

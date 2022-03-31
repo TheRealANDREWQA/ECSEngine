@@ -38,8 +38,15 @@ namespace ECSEngine {
 			const char* type_tag;
 		};
 
+		struct ParseOmitFieldByType {
+			const char* type;
+			unsigned int field_index;
+			const char* target_type;
+		};
+
 		struct ReflectionManagerParseStructuresThreadTaskData {
 			CapacityStream<char> thread_memory;
+			CapacityStream<ParseOmitFieldByType> omit_fields_by_type;
 			Stream<const wchar_t*> paths;
 			CapacityStream<ParseReflectionType> types;
 			CapacityStream<ReflectionEnum> enums;
@@ -176,6 +183,54 @@ namespace ECSEngine {
 			ECS_ASSERT(difference <= total_memory);
 
 			folders[folder_index].allocated_buffer = allocation;
+
+			// Resolve references to the omit fields by type
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t index = 0; index < data[data_index].omit_fields_by_type.size; index++) {
+					ReflectionType* type = type_definitions.GetValuePtr(data[data_index].omit_fields_by_type[index].type);
+					// Test to see if the reference could be solved
+					ReflectionType* target_type;
+					if (type_definitions.TryGetValuePtr(data[data_index].omit_fields_by_type[index].target_type, target_type)) {
+						// Offset all the fields after it with the corresponding size
+						size_t type_size = GetTypeByteSize(*target_type);
+						size_t type_alignment = GetTypeAlignment(*target_type);
+
+						if (data[data_index].omit_fields_by_type[index].field_index > 0) {
+							unsigned int previous_field = data[data_index].omit_fields_by_type[index].field_index - 1;
+							size_t omit_field_offset = type->fields[previous_field].info.pointer_offset + type->fields[previous_field].info.byte_size;
+							size_t misalignment = omit_field_offset % type_alignment;
+							type_size += misalignment;
+						}
+
+						// Can't handle this case - the byte size will not be preserved
+						if (data[data_index].omit_fields_by_type[index].field_index == type->fields.size) {
+							ECS_ASSERT(false);
+						}
+						else {
+							// Check to see if the type is properly alignment aftwerwards
+							size_t first_field_alignment = 0;
+							unsigned int field_index = data[data_index].omit_fields_by_type[index].field_index;
+							if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Basic || type->fields[field_index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+								first_field_alignment = GetFieldTypeAlignment(type->fields[field_index].info.basic_type);
+							}
+							else {
+								first_field_alignment = GetFieldTypeAlignment(type->fields[field_index].info.stream_type);
+							}
+							size_t misalignment = type_size % first_field_alignment;
+							type_size += misalignment;
+
+							for (size_t field_index = data[data_index].omit_fields_by_type[index].field_index; field_index < type->fields.size; field_index++) {
+								type->fields[field_index].info.pointer_offset += type_size;
+							}
+						}
+					}
+					else {
+						// Assert false for the time being
+						ECS_ASSERT(false);
+					}
+				}
+			}
+
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -207,6 +262,7 @@ namespace ECSEngine {
 			Deallocate(folders.allocator, data.types.buffer);
 			Deallocate(folders.allocator, data.enums.buffer);
 			Deallocate(folders.allocator, data.paths.buffer);
+			Deallocate(folders.allocator, data.omit_fields_by_type.buffer);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -504,13 +560,16 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			data.error_message = error_message;
 
 			// Allocate memory for the type and enum stream; speculate 64 types and 32 enums
-			constexpr size_t max_types = 64;
-			constexpr size_t max_enums = 32;
-			constexpr size_t path_size = 128;
+			const size_t max_types = 64;
+			const size_t max_enums = 32;
+			const size_t path_size = 128;
+			const size_t max_omit_fields = 128;
+			
 
 			data.types.Initialize(folders.allocator, 0, max_types);
 			data.enums.Initialize(folders.allocator, 0, max_enums);
 			data.paths.Initialize(folders.allocator, path_count);
+			data.omit_fields_by_type.Initialize(folders.allocator, 0, max_omit_fields);
 
 			void* thread_allocation = malloc(thread_memory);
 			data.thread_memory.InitializeFromBuffer(thread_allocation, 0, thread_memory);
@@ -819,6 +878,103 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		size_t GetTypeAlignment(ReflectionType type)
+		{
+			size_t alignment = 0;
+
+			for (size_t index = 0; index < type.fields.size; index++) {
+				if (type.fields[index].info.stream_type == ReflectionStreamFieldType::Basic ||
+					type.fields[index].info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+					alignment = std::max(alignment, GetFieldTypeAlignment(type.fields[index].info.basic_type));
+				}
+				else {
+					alignment = std::max(alignment, GetFieldTypeAlignment(type.fields[index].info.stream_type));
+				}
+			}
+
+			return alignment;
+		}
+
+		unsigned char ECS_BASIC_FIELD_TYPE_ALIGNMENT[] = {
+			alignof(int8_t),
+			alignof(uint8_t),
+			alignof(int16_t),
+			alignof(uint16_t),
+			alignof(int32_t),
+			alignof(uint32_t),
+			alignof(int64_t),
+			alignof(uint64_t),
+			alignof(wchar_t),
+			alignof(float),
+			alignof(double),
+			alignof(bool),
+			// enum
+			alignof(unsigned char),
+			alignof(char2),
+			alignof(uchar2),
+			alignof(short2),
+			alignof(ushort2),
+			alignof(int2),
+			alignof(uint2),
+			alignof(long2),
+			alignof(ulong2),
+			alignof(char3),
+			alignof(uchar3),
+			alignof(short3),
+			alignof(ushort3),
+			alignof(int3),
+			alignof(uint3),
+			alignof(long3),
+			alignof(ulong3),
+			alignof(char4),
+			alignof(uchar4),
+			alignof(short4),
+			alignof(ushort4),
+			alignof(int4),
+			alignof(uint4),
+			alignof(long4),
+			alignof(ulong4),
+			alignof(float2),
+			alignof(float3),
+			alignof(float4),
+			alignof(double2),
+			alignof(double3),
+			alignof(double4),
+			alignof(bool2),
+			alignof(bool3),
+			alignof(bool4),
+			// User defined
+			8,
+			// Unknown
+			8
+		};
+
+		unsigned char ECS_STREAM_FIELD_TYPE_ALIGNMENT[] = {
+			// Basic - should not be accessed
+			8,
+			alignof(void*),
+			// BasicTypeArray - should not be accessed
+			8,
+			alignof(Stream<void>),
+			alignof(CapacityStream<void>),
+			alignof(ResizableStream<char>),
+			// Unknown
+			8
+		};
+
+		static_assert(std::size(ECS_BASIC_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionBasicFieldType::COUNT);
+		static_assert(std::size(ECS_STREAM_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionStreamFieldType::COUNT);
+
+		size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type) {
+			return ECS_BASIC_FIELD_TYPE_ALIGNMENT[(unsigned int)field_type];
+		}
+
+		size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type) {
+			return ECS_STREAM_FIELD_TYPE_ALIGNMENT[(unsigned int)stream_type];
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool IsTypeCharacter(char character)
 		{
 			if ((character >= '0' && character <= '9') || (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') 
@@ -830,9 +986,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t PtrDifference(const void* ptr1, const void* ptr2)
+		size_t PtrDifference(const void* start, const void* end)
 		{
-			return (uintptr_t)ptr2 - (uintptr_t)ptr1;
+			return (uintptr_t)end - (uintptr_t)start;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1203,11 +1359,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// verify that ECS_REFLECT_OMIT_FIELD is not specified
 			const char* omit_field = strstr(last_line_character, STRING(ECS_OMIT_FIELD_REFLECT));
+			const char* omit_by_type_field = strstr(last_line_character, STRING(ECS_OMIT_FIELD_BY_TYPE_REFLECT));
 
-			if (omit_field == nullptr) {
-				// check only name reflect
-				const char* reflect_only_name = strstr(last_line_character, STRING(ECS_REGISTER_ONLY_NAME_REFLECT));
-
+			if (omit_field == nullptr && omit_by_type_field == nullptr) {
 				const char* current_character = semicolon_character - 1;
 
 				unsigned short embedded_array_size = 0;
@@ -1229,156 +1383,131 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 				current_character++;
 
-				if (reflect_only_name == nullptr) {
-					bool success = DeduceFieldType(data, type, pointer_offset, current_character, last_line_character, last_field_character - 1);
-					if (success) {
-						ReflectionFieldInfo& info = type.fields[type.fields.size - 1].info;
-						// Set the default value to false initially
-						info.has_default_value = false;
+				bool success = DeduceFieldType(data, type, pointer_offset, current_character, last_line_character, last_field_character - 1);
+				if (success) {
+					ReflectionFieldInfo& info = type.fields[type.fields.size - 1].info;
+					// Set the default value to false initially
+					info.has_default_value = false;
 
-						if (embedded_array_size > 0) {
-							info.basic_type_count = embedded_array_size;
-							pointer_offset -= info.byte_size;
-							info.byte_size *= embedded_array_size;
-							pointer_offset += info.byte_size;
+					if (embedded_array_size > 0) {
+						info.basic_type_count = embedded_array_size;
+						pointer_offset -= info.byte_size;
+						info.byte_size *= embedded_array_size;
+						pointer_offset += info.byte_size;
 
-							// change the extended type to array
-							info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
+						// change the extended type to array
+						info.stream_type = ReflectionStreamFieldType::BasicTypeArray;
+					}
+					// Get the default value if possible
+					if (equal_character != nullptr && info.stream_type == ReflectionStreamFieldType::Basic) {
+						// it was decremented before to place a '\0'
+						equal_character += 2;
+
+						const char* default_value_parse = function::SkipWhitespace(equal_character);
+
+						auto parse_default_value = [&](const char* default_value_parse, char value_to_stop) {
+							// Continue until the closing brace
+							const char* start_default_value = default_value_parse + 1;
+
+							const char* ending_default_value = start_default_value;
+							while (*ending_default_value != value_to_stop && *ending_default_value != '\0' && *ending_default_value != '\n') {
+								ending_default_value++;
+							}
+							if (*ending_default_value == '\0' || *ending_default_value == '\n') {
+								// Abort. Can't deduce default value
+								return;
+							}
+							// Use the parse function, any member from the union can be used
+							bool parse_success = ParseReflectionBasicFieldType(
+								info.basic_type, 
+								Stream<char>(start_default_value, ending_default_value - start_default_value),
+								&info.default_bool
+							);
+							info.has_default_value = parse_success;
+						};
+						// If it is an opening brace, it's ok.
+						if (*default_value_parse == '{') {
+							parse_default_value(default_value_parse, '}');
 						}
-						// Get the default value if possible
-						if (equal_character != nullptr && info.stream_type == ReflectionStreamFieldType::Basic) {
-							// it was decremented before to place a '\0'
-							equal_character += 2;
+						else if (function::IsCodeIdentifierCharacter(*default_value_parse)) {
+							// Check to see that it is the constructor type - else it is the actual value
+							const char* start_parse_value = default_value_parse;
+							while (function::IsCodeIdentifierCharacter(*default_value_parse)) {
+								*default_value_parse++;
+							}
 
-							const char* default_value_parse = function::SkipWhitespace(equal_character);
-
-							auto parse_default_value = [&](const char* default_value_parse, char value_to_stop) {
-								// Continue until the closing brace
-								const char* start_default_value = default_value_parse + 1;
-
-								const char* ending_default_value = start_default_value;
-								while (*ending_default_value != value_to_stop && *ending_default_value != '\0' && *ending_default_value != '\n') {
-									ending_default_value++;
-								}
-								if (*ending_default_value == '\0' || *ending_default_value == '\n') {
-									// Abort. Can't deduce default value
-									return;
-								}
-								// Use the parse function, any member from the union can be used
-								bool parse_success = ParseReflectionBasicFieldType(
+							// If it is an open paranthese, it is a constructor
+							if (*default_value_parse == '(') {
+								// Look for the closing paranthese
+								parse_default_value(default_value_parse, ')');
+							}
+							else {
+								// If it is a space, tab or semicolon, it means that we skipped the value
+								info.has_default_value = ParseReflectionBasicFieldType(
 									info.basic_type, 
-									Stream<char>(start_default_value, ending_default_value - start_default_value),
+									Stream<char>(start_parse_value, default_value_parse - start_parse_value),
 									&info.default_bool
 								);
-								info.has_default_value = parse_success;
-							};
-							// If it is an opening brace, it's ok.
-							if (*default_value_parse == '{') {
-								parse_default_value(default_value_parse, '}');
-							}
-							else if (function::IsCodeIdentifierCharacter(*default_value_parse)) {
-								// Check to see that it is the constructor type - else it is the actual value
-								const char* start_parse_value = default_value_parse;
-								while (function::IsCodeIdentifierCharacter(*default_value_parse)) {
-									*default_value_parse++;
-								}
-
-								// If it is an open paranthese, it is a constructor
-								if (*default_value_parse == '(') {
-									// Look for the closing paranthese
-									parse_default_value(default_value_parse, ')');
-								}
-								else {
-									// If it is a space, tab or semicolon, it means that we skipped the value
-									info.has_default_value = ParseReflectionBasicFieldType(
-										info.basic_type, 
-										Stream<char>(start_parse_value, default_value_parse - start_parse_value),
-										&info.default_bool
-									);
-								}
 							}
 						}
 					}
-					return success;
 				}
-				else {
-					const char* initial_reflect_ptr = reflect_only_name;
-					data->total_memory += PtrDifference(current_character, last_field_character) + 1;
-
-					ReflectionField field;
-					field.name = current_character;
-					
-					field.info.stream_byte_size = 0;
-					field.info.basic_type = ReflectionBasicFieldType::UserDefined;
-					field.info.stream_type = ReflectionStreamFieldType::Unknown;
-					field.info.basic_type_count = 1;
-
-					// determine the definition
-					reflect_only_name--;
-					while (!IsTypeCharacter(*reflect_only_name)) {
-						reflect_only_name--;
-					}
-					char* mutable_ptr = (char*)reflect_only_name + 1;
-					*mutable_ptr = '\0';
-					while (IsTypeCharacter(*reflect_only_name)) {
-						reflect_only_name--;
-					}
-					reflect_only_name++;
-					data->total_memory += strlen(reflect_only_name);
-					field.definition = reflect_only_name;
-					
-					reflect_only_name = initial_reflect_ptr;
-					// getting the byte size from the argument specified
-					const char* opening_parenthese = strchr(reflect_only_name, '(');
-					const char* closing_parenthese = strchr(reflect_only_name, ')');
-
-					size_t alignment = 8;
-					// check for alignment
-					const char* comma = strchr(opening_parenthese, ',');
-					if (comma != nullptr) {
-						closing_parenthese = comma;
-						while (*comma < '0' && *comma > '9') {
-							comma++;
-						}
-						alignment = function::ConvertCharactersToInt<size_t>(Stream<char>(comma, PtrDifference(comma, closing_parenthese)));
-					}
-
-					field.info.byte_size = function::ConvertCharactersToInt<unsigned short>(Stream<char>((void*)(opening_parenthese + 1), PtrDifference(opening_parenthese + 1, closing_parenthese)));
-						
-					pointer_offset = function::align_pointer(pointer_offset, alignment);
-					field.info.pointer_offset = pointer_offset;
-					pointer_offset += field.info.byte_size;
-
-					type.fields.Add(field);
-					return true;
-				}
+				return success;
 			}
 			else {
-				while (*omit_field != '(') {
-					omit_field++;
-				}
-				omit_field++;
-				const char* starting_byte_position = omit_field;
-				while (*omit_field >= '0' && *omit_field <= '9') {
-					omit_field++;
-				}
-				Stream<char> temp_stream = Stream<char>(starting_byte_position, PtrDifference(starting_byte_position, omit_field));
-				
-				size_t alignment = 8;
-
-				const char* comma = strchr(omit_field, ',');
-				if (comma != nullptr) {
-					while (*omit_field != ')') {
+				if (omit_field != nullptr) {
+					while (*omit_field != '(') {
 						omit_field++;
 					}
-					Stream<char> temp_alignment = Stream<char>(comma + 1, PtrDifference(comma + 1, omit_field));
-					alignment = function::ConvertCharactersToInt<size_t>(temp_alignment);
-				}
+					omit_field++;
+					while (*omit_field < '0' || *omit_field > '9') {
+						omit_field++;
+					}
+					const char* starting_byte_position = omit_field;
 
-				pointer_offset = function::align_pointer(pointer_offset, alignment);
-				size_t byte_size = function::ConvertCharactersToInt<size_t>(temp_stream);
-				pointer_offset += byte_size;
+					while (*omit_field >= '0' && *omit_field <= '9') {
+						omit_field++;
+					}
+					Stream<char> temp_stream = Stream<char>(starting_byte_position, PtrDifference(starting_byte_position, omit_field));
+
+					size_t alignment = 8;
+
+					const char* comma = strchr(omit_field, ',');
+					if (comma != nullptr) {
+						while (*omit_field != ')') {
+							omit_field++;
+						}
+						Stream<char> temp_alignment = Stream<char>(comma + 1, PtrDifference(comma + 1, omit_field));
+						alignment = function::ConvertCharactersToInt<size_t>(temp_alignment);
+					}
+
+					pointer_offset = function::align_pointer(pointer_offset, alignment);
+					size_t byte_size = function::ConvertCharactersToInt<size_t>(temp_stream);
+					pointer_offset += byte_size;
+				}
+				else {
+					const char* current_character = omit_by_type_field - 1;
+					current_character = function::SkipWhitespace(current_character, -1);
+					// Skip * from pointer
+					while (*current_character == '*') {
+						current_character--;
+					}
+
+					const char* end_name = (const char*)current_character;
+					current_character = function::SkipCodeIdentifier(current_character, -1) + 1;
+
+					// Account for the null terminator
+					size_t write_type_target_count = PtrDifference(current_character, end_name) + 1;
+					const char* field_target = data->thread_memory.buffer + data->thread_memory.size;
+					memcpy(data->thread_memory.buffer + data->thread_memory.size, current_character, write_type_target_count);
+					data->thread_memory.size += write_type_target_count;
+					data->thread_memory[data->thread_memory.size] = '\0';
+					data->thread_memory.size++;
+
+					data->omit_fields_by_type.AddSafe({ type.name, (unsigned int)type.fields.size, field_target });
+				}
 			}
+
 			return true;
 		}
 

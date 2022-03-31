@@ -101,12 +101,10 @@ namespace ECSEngine {
 		// Generate the draw call
 		graphics->DrawIndexed(mesh->index_buffer.count);
 
-		// Release all the temporary resources - the depth stencil texture, the render target, the constant buffers
+		// Release all the temporary resources - the constant buffers
 		// Restore the previous pipeline state
 		graphics->RestorePipelineState(&pipeline_state);
 		
-		target_view.Release();
-		depth_view.Release();
 		vertex_constant.Release();
 		pixel_constant.Release();
 	}
@@ -186,6 +184,7 @@ namespace ECSEngine {
 		DepthStencilView depth_stencil_view = graphics->CreateDepthStencilView(depth_stencil, true);
 
 		DrawObject(target, depth_stencil_view, graphics, info, mesh, texture_size);
+		depth_stencil_view.Release();
 		depth_stencil.Release();
 	}
 
@@ -211,8 +210,9 @@ namespace ECSEngine {
 		RenderTargetView render_view = data->graphics->CreateRenderTargetView(texture, 0, true);
 		
 		data->thumbnail_to_update->info = info;
-		GLTFRenderThumbnail(render_view, data->graphics, data->mesh, info, data->texture_size);
 		data->thumbnail_to_update->texture = resource_view;
+		GLTFRenderThumbnail(render_view, data->graphics, data->mesh, info, data->texture_size);
+		render_view.Release();
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -235,6 +235,7 @@ namespace ECSEngine {
 		RenderTargetView render_view = data->graphics->CreateRenderTargetView(initial_texture, 0, true);
 
 		GLTFRenderThumbnail(render_view, data->graphics, data->mesh, data->thumbnail->info, texture_dimensions);
+		render_view.Release();
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

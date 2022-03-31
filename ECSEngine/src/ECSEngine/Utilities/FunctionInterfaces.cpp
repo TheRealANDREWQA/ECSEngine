@@ -443,51 +443,51 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		// non digit characters are discarded
-		template<typename Integer, typename Stream>
-		Integer ConvertCharactersToInt(Stream stream) {
-			Integer integer = Integer(0);
-			size_t starting_index = Select(stream[0] == '-', 1, 0);
+		//// non digit characters are discarded
+		//template<typename Integer, typename Stream>
+		//Integer ConvertCharactersToInt(Stream stream) {
+		//	Integer integer = Integer(0);
+		//	size_t starting_index = Select(stream[0] == '-', 1, 0);
 
-			for (size_t index = starting_index; index < stream.size; index++) {
-				if (stream[index] >= '0' && stream[index] <= '9') {
-					integer = integer * 10 + stream[index] - '0';
-				}
-			}
-			integer = Select<Integer>(starting_index == 1, -integer, integer);
+		//	for (size_t index = starting_index; index < stream.size; index++) {
+		//		if (stream[index] >= '0' && stream[index] <= '9') {
+		//			integer = integer * 10 + stream[index] - '0';
+		//		}
+		//	}
+		//	integer = Select<Integer>(starting_index == 1, -integer, integer);
 
-			return integer;
-		}
+		//	return integer;
+		//}
 
-		template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(Stream<char>);
-		template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>);
-		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>);
-		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>);
+		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(Stream<char>);
+		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>);
+		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>);
+		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>);
 
-		// ----------------------------------------------------------------------------------------------------------
+		//// ----------------------------------------------------------------------------------------------------------
 
-		// non digit characters are discarded
-		template<typename Integer, typename Stream>
-		Integer ConvertCharactersToInt(Stream stream, size_t& digit_count) {
-			Integer integer = Integer(0);
-			size_t starting_index = Select(stream[0] == '-', 1, 0);
-			digit_count = 0;
+		//// non digit characters are discarded
+		//template<typename Integer, typename Stream>
+		//Integer ConvertCharactersToInt(Stream stream, size_t& digit_count) {
+		//	Integer integer = Integer(0);
+		//	size_t starting_index = Select(stream[0] == '-', 1, 0);
+		//	digit_count = 0;
 
-			for (size_t index = starting_index; index < stream.size; index++) {
-				if (stream[index] >= '0' && stream[index] <= '9') {
-					integer = integer * 10 + stream[index] - '0';
-					digit_count++;
-				}
-			}
-			integer = Select(starting_index == 1, -integer, integer);
+		//	for (size_t index = starting_index; index < stream.size; index++) {
+		//		if (stream[index] >= '0' && stream[index] <= '9') {
+		//			integer = integer * 10 + stream[index] - '0';
+		//			digit_count++;
+		//		}
+		//	}
+		//	integer = Select(starting_index == 1, -integer, integer);
 
-			return integer;
-		}
+		//	return integer;
+		//}
 
-		template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(Stream<char>, size_t&);
-		template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>, size_t&);
-		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>, size_t&);
-		template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>, size_t&);
+		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(Stream<char>, size_t&);
+		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>, size_t&);
+		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>, size_t&);
+		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>, size_t&);
 
 		// ----------------------------------------------------------------------------------------------------------
 

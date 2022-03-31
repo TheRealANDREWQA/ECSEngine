@@ -245,7 +245,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		CopyGraphicsResource(new_texture, texture, graphics->GetContext());
 		if (!temporary) {
-			graphics->AddInternalResource(new_texture);
+			graphics->AddInternalResource(new_texture, ECS_DEBUG_INFO);
 		}
 		return new_texture;
 	}
@@ -277,7 +277,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		CopyGraphicsResource(new_buffer, buffer, graphics->GetContext());
 		if (!temporary) {
-			graphics->AddInternalResource(new_buffer);
+			graphics->AddInternalResource(new_buffer, ECS_DEBUG_INFO);
 		}
 		return new_buffer;
 	}
@@ -329,7 +329,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		staging_texture.Release();
 
 		if (!temporary) {
-			graphics->AddInternalResource(new_texture);
+			graphics->AddInternalResource(new_texture, ECS_DEBUG_INFO);
 		}
 		return new_texture;
 	}
@@ -369,7 +369,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		new_buffer = _new_buffer;
 		if (!temporary) {
-			graphics->AddInternalResource(new_buffer);
+			graphics->AddInternalResource(new_buffer, ECS_DEBUG_INFO);
 		}
 		return new_buffer;
 	}
@@ -408,7 +408,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		}
 
 		if (!temporary) {
-			graphics->AddInternalResource(new_texture);
+			graphics->AddInternalResource(new_texture, ECS_DEBUG_INFO);
 		}
 		return new_texture;
 	}
@@ -440,7 +440,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		new_buffer = _new_buffer;
 		if (!temporary) {
-			graphics->AddInternalResource(new_buffer);
+			graphics->AddInternalResource(new_buffer, ECS_DEBUG_INFO);
 		}
 		return new_buffer;
 	}
@@ -571,7 +571,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		new_texture = _new_texture;
 		if (!temporary){
-			graphics->AddInternalResource(new_texture);
+			graphics->AddInternalResource(new_texture, ECS_DEBUG_INFO);
 		}
 		return new_texture;
 	}
@@ -890,7 +890,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		}
 
 		if (!temporary) {
-			graphics->AddInternalResource(cube_texture);
+			graphics->AddInternalResource(cube_texture, ECS_DEBUG_INFO);
 		}
 		return cube_texture;
 	}

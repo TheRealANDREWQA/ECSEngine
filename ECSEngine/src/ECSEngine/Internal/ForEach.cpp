@@ -42,8 +42,8 @@ namespace ECSEngine {
 			ComponentSignature archetype_shared_signature = archetype->GetSharedSignature();
 			// Iterate through the base archetypes now
 			for (size_t base_index = 0; base_index < archetype->m_base_archetypes.size; base_index++) {
-				ArchetypeBase* base = (ArchetypeBase*)archetype->GetArchetypeBase(base_index);
-				const SharedInstance* base_instances = archetype->GetArchetypeBaseInstances(base_index);
+				ArchetypeBase* base = (ArchetypeBase*)archetype->GetBase(base_index);
+				const SharedInstance* base_instances = archetype->GetBaseInstances(base_index);
 
 				for (size_t shared_index = 0; shared_index < shared_count; shared_index++) {
 					SharedInstance instance = base_instances[shared_component_indices[shared_index]];
@@ -115,8 +115,8 @@ namespace ECSEngine {
 
 			// Iterate through the base archetypes now
 			for (size_t base_index = 0; base_index < archetype->m_base_archetypes.size; base_index++) {
-				ArchetypeBase* base = archetype->GetArchetypeBase(base_index);
-				const SharedInstance* base_instances = archetype->GetArchetypeBaseInstances(base_index);
+				ArchetypeBase* base = archetype->GetBase(base_index);
+				const SharedInstance* base_instances = archetype->GetBaseInstances(base_index);
 
 				// Get the shared components
 				SharedInstance shared_instances[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
@@ -170,7 +170,7 @@ namespace ECSEngine {
 			unsigned char shared_component_indices[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
 			VectorComponentSignature archetype_components = entity_manager->GetArchetypeSharedComponents(matched_archetypes[index]);
 
-			size_t base_count = archetype->GetArchetypeBaseCount();
+			size_t base_count = archetype->GetBaseCount();
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				VectorComponentSignature archetype_instances = archetype->GetVectorInstances(base_index);
 

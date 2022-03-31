@@ -2,7 +2,6 @@
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
-;
 
 constexpr const char* MODULE_EXPLORER_WINDOW_NAME = "Module Explorer";
 
@@ -20,5 +19,3 @@ void CreateModuleExplorerAction(Tools::ActionData* action_data);
 
 // It only creates the window, it will not be assigned to any dockspace and returns the window index
 unsigned int CreateModuleExplorerWindow(EditorState* editor_state);
-
-void ModuleExplorerTick(EditorState* editor_state);

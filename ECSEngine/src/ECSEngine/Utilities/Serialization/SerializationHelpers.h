@@ -12,15 +12,26 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Write(CapacityStream<void>& stream, Stream<void> data);
-
-	// -----------------------------------------------------------------------------------------
-
 	ECSENGINE_API void Write(uintptr_t* stream, const void* data, size_t data_size);
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API void Write(uintptr_t* stream, Stream<void> data);
+	template<typename StreamType>
+	bool WriteHelper(StreamType stream, const void* data, size_t data_size) {
+		if constexpr (std::is_same_v<StreamType, uintptr_t*>) {
+			Write(stream, data, data_size);
+			return true;
+		}
+		else if constexpr (std::is_same_v<StreamType, ECS_FILE_HANDLE>) {
+			return WriteFile(stream, { data, data_size });
+		}
+		else if constexpr (std::is_same_v<StreamType, CapacityStream<void>&>) {
+			return Write(stream, data, data_size);
+		}
+
+		ECS_ASSERT(false);
+		return false;
+	}
 
 	// -----------------------------------------------------------------------------------------
 
@@ -28,11 +39,24 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool Read(uintptr_t* stream, void* data, size_t data_size);
+	ECSENGINE_API void Read(uintptr_t* stream, void* data, size_t data_size);
 
-	// -----------------------------------------------------------------------------------------
+	template<typename StreamType>
+	bool ReadHelper(StreamType stream, void* data, size_t data_size) {
+		if constexpr (std::is_same_v<StreamType, uintptr_t&>) {
+			Read(&stream, data, data_size);
+			return true;
+		}
+		else if constexpr (std::is_same_v<StreamType, ECS_FILE_HANDLE>) {
+			return ReadFile(stream, { data, data_size });
+		}
+		else if constexpr (std::is_same_v<StreamType, CapacityStream<void>&>) {
+			return Read(stream, data, data_size);
+		}
 
-	ECSENGINE_API bool Read(uintptr_t* stream, CapacityStream<void>& data, size_t data_size);
+		ECS_ASSERT(false);
+		return false;
+	}
 
 	// -----------------------------------------------------------------------------------------
 

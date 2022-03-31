@@ -1,17 +1,10 @@
 #pragma once
 #include "../../Core.h"
-#include "../../Internal/Multithreading/TaskDependencies.h"
-#include "../../Allocators/AllocatorTypes.h"
+#include "ModuleDefinition.h"
 
-#define ECS_MODULE_FUNCTION_NAME "ModuleFunction"
 #define ECS_MODULE_EXTENSION L".dll"
 
-
 namespace ECSEngine {
-
-	struct World;
-
-	using ModuleFunction = void (*)(World* world, Stream<TaskDependencyElement>& module_stream);
 
 	// Module function missing is returned for either graphics function missing
 	enum ModuleStatus : unsigned char {

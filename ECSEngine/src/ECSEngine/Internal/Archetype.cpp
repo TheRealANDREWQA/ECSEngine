@@ -69,13 +69,13 @@ namespace ECSEngine {
 		shared_signature.count = other->m_shared_components.count;
 		shared_signature.indices = other->m_shared_components.indices;
 		// Create the base archetypes now
-		for (size_t base_index = 0; base_index < other->GetArchetypeBaseCount(); base_index++) {
-			shared_signature.instances = (SharedInstance*)other->GetArchetypeBaseInstances(base_index);
-			const ArchetypeBase* copy_base = other->GetArchetypeBase(base_index);
-			CreateBaseArchetype(shared_signature, copy_base->GetCapacity());
+		for (size_t base_index = 0; base_index < other->GetBaseCount(); base_index++) {
+			shared_signature.instances = (SharedInstance*)other->GetBaseInstances(base_index);
+			const ArchetypeBase* copy_base = other->GetBase(base_index);
+			CreateBaseArchetype(shared_signature, copy_base->m_capacity);
 
 			// Copy the data into the base archetype now
-			ArchetypeBase* current_base = GetArchetypeBase(base_index);
+			ArchetypeBase* current_base = GetBase(base_index);
 			current_base->CopyOther(copy_base);
 		}
 	}
@@ -176,23 +176,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ArchetypeBase* Archetype::FindArchetypeBase(SharedComponentSignature shared_signature)
+	ArchetypeBase* Archetype::FindBase(SharedComponentSignature shared_signature)
 	{
-		unsigned short index = FindArchetypeBaseIndex(shared_signature);
+		unsigned short index = FindBaseIndex(shared_signature);
 		return index != -1 ? &m_base_archetypes[index].archetype : nullptr;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ArchetypeBase* Archetype::FindArchetypeBase(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances)
+	ArchetypeBase* Archetype::FindBase(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances)
 	{
-		unsigned short index = FindArchetypeBaseIndex(shared_signature, shared_instances);
+		unsigned short index = FindBaseIndex(shared_signature, shared_instances);
 		return index != -1 ? &m_base_archetypes[index].archetype : nullptr;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned short Archetype::FindArchetypeBaseIndex(SharedComponentSignature shared_signature) const
+	unsigned short Archetype::FindBaseIndex(SharedComponentSignature shared_signature) const
 	{
 		unsigned char* temporary_mapping = (unsigned char*)ECS_STACK_ALLOC(sizeof(unsigned char) * shared_signature.count);
 		for (size_t index = 0; index < shared_signature.count; index++) {
@@ -220,7 +220,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned short Archetype::FindArchetypeBaseIndex(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances)
+	unsigned short Archetype::FindBaseIndex(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances)
 	{
 		VectorComponentSignature vector_components(m_shared_components);
 		VectorComponentSignature vector_instances;
@@ -236,7 +236,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	SharedInstance* Archetype::GetArchetypeBaseInstances(unsigned short index)
+	SharedInstance* Archetype::GetBaseInstances(unsigned short index)
 	{
 		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve shared instances pointer from archetype.", index);
 		return m_base_archetypes[index].shared_instances;
@@ -244,7 +244,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	const SharedInstance* Archetype::GetArchetypeBaseInstances(unsigned short index) const
+	const SharedInstance* Archetype::GetBaseInstances(unsigned short index) const
 	{
 		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve shared instances pointer from archetype.", index);
 		return m_base_archetypes[index].shared_instances;
@@ -252,7 +252,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ArchetypeBase* Archetype::GetArchetypeBase(unsigned short index)
+	ArchetypeBase* Archetype::GetBase(unsigned short index)
 	{
 		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve archetype base pointer from archetype.", index);
 		return &m_base_archetypes[index].archetype;
@@ -260,7 +260,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	const ArchetypeBase* Archetype::GetArchetypeBase(unsigned short index) const
+	const ArchetypeBase* Archetype::GetBase(unsigned short index) const
 	{
 		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve archetype base pointer from archetype.", index);
 		return &m_base_archetypes[index].archetype;
@@ -290,14 +290,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	Stream<ArchetypeBase> Archetype::GetArchetypeStream() const
-	{
-		return { m_base_archetypes.buffer, m_base_archetypes.size };
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	unsigned short Archetype::GetArchetypeBaseCount() const
+	unsigned short Archetype::GetBaseCount() const
 	{
 		return m_base_archetypes.size;
 	}

@@ -14,6 +14,12 @@ namespace ECSEngine {
 		unsigned short milliseconds;
 	};
 
+	struct DebugInfo {
+		const char* file;
+		const char* function;
+		int line;
+	};
+
 #pragma region Alphabet and character type
 
 	// Helper Visualing enum

@@ -74,7 +74,6 @@ namespace ECSEngine {
 	constexpr AllocateFunction ECS_ALLOCATE_FUNCTIONS[] = {
 		AllocateFunctionAllocator<LinearAllocator>,
 		AllocateFunctionAllocator<StackAllocator>,
-		AllocateFunctionAllocator<PoolAllocator>,
 		AllocateFunctionAllocator<MultipoolAllocator>,
 		AllocateFunctionAllocator<MemoryManager>,
 		AllocateFunctionAllocator<GlobalMemoryManager>,
@@ -85,7 +84,6 @@ namespace ECSEngine {
 	constexpr AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[] = {
 		AllocateFunctionSizeAllocator<LinearAllocator>,
 		AllocateFunctionSizeAllocator<StackAllocator>,
-		AllocateFunctionSizeAllocator<PoolAllocator>,
 		AllocateFunctionSizeAllocator<MultipoolAllocator>,
 		AllocateFunctionSizeAllocator<MemoryManager>,
 		AllocateFunctionSizeAllocator<GlobalMemoryManager>,
@@ -96,7 +94,6 @@ namespace ECSEngine {
 	constexpr AllocateFunction ECS_ALLOCATE_TS_FUNCTIONS[] = {
 		AllocateFunctionAllocatorTs<LinearAllocator>,
 		AllocateFunctionAllocatorTs<StackAllocator>,
-		AllocateFunctionAllocatorTs<PoolAllocator>,
 		AllocateFunctionAllocatorTs<MultipoolAllocator>,
 		AllocateFunctionAllocatorTs<MemoryManager>,
 		AllocateFunctionAllocatorTs<GlobalMemoryManager>,
@@ -107,7 +104,6 @@ namespace ECSEngine {
 	constexpr AllocateSizeFunction ECS_ALLOCATE_SIZE_TS_FUNCTIONS[] = {
 		AllocateFunctionSizeAllocatorTs<LinearAllocator>,
 		AllocateFunctionSizeAllocatorTs<StackAllocator>,
-		AllocateFunctionSizeAllocatorTs<PoolAllocator>,
 		AllocateFunctionSizeAllocatorTs<MultipoolAllocator>,
 		AllocateFunctionSizeAllocatorTs<MemoryManager>,
 		AllocateFunctionSizeAllocatorTs<GlobalMemoryManager>,
@@ -118,7 +114,6 @@ namespace ECSEngine {
 	constexpr DeallocateFunction ECS_DEALLOCATE_FUNCTIONS[] = {
 		DeallocateFunctionAllocator<LinearAllocator>,
 		DeallocateFunctionAllocator<StackAllocator>,
-		DeallocateFunctionAllocator<PoolAllocator>,
 		DeallocateFunctionAllocator<MultipoolAllocator>,
 		DeallocateFunctionAllocator<MemoryManager>,
 		DeallocateFunctionAllocator<GlobalMemoryManager>,
@@ -129,7 +124,6 @@ namespace ECSEngine {
 	constexpr DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_FUNCTIONS[] = {
 		DeallocateMutableFunctionAllocator<LinearAllocator>,
 		DeallocateMutableFunctionAllocator<StackAllocator>,
-		DeallocateMutableFunctionAllocator<PoolAllocator>,
 		DeallocateMutableFunctionAllocator<MultipoolAllocator>,
 		DeallocateMutableFunctionAllocator<MemoryManager>,
 		DeallocateMutableFunctionAllocator<GlobalMemoryManager>,
@@ -140,7 +134,6 @@ namespace ECSEngine {
 	constexpr DeallocateFunction ECS_DEALLOCATE_TS_FUNCTIONS[] = {
 		DeallocateFunctionAllocatorTs<LinearAllocator>,
 		DeallocateFunctionAllocatorTs<StackAllocator>,
-		DeallocateFunctionAllocatorTs<PoolAllocator>,
 		DeallocateFunctionAllocatorTs<MultipoolAllocator>,
 		DeallocateFunctionAllocatorTs<MemoryManager>,
 		DeallocateFunctionAllocatorTs<GlobalMemoryManager>,
@@ -151,7 +144,6 @@ namespace ECSEngine {
 	constexpr DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_TS_FUNCTIONS[] = {
 		DeallocateMutableFunctionAllocatorTs<LinearAllocator>,
 		DeallocateMutableFunctionAllocatorTs<StackAllocator>,
-		DeallocateMutableFunctionAllocatorTs<PoolAllocator>,
 		DeallocateMutableFunctionAllocatorTs<MultipoolAllocator>,
 		DeallocateMutableFunctionAllocatorTs<MemoryManager>,
 		DeallocateMutableFunctionAllocatorTs<GlobalMemoryManager>,
@@ -289,9 +281,6 @@ namespace ECSEngine {
 		}
 		else if constexpr (std::is_same_v<Allocator, StackAllocator>) {
 			allocator_type = AllocatorType::StackAllocator;
-		}
-		else if constexpr (std::is_same_v<Allocator, PoolAllocator>) {
-			allocator_type = AllocatorType::PoolAllocator;
 		}
 		else if constexpr (std::is_same_v<Allocator, MultipoolAllocator>) {
 			allocator_type = AllocatorType::MultipoolAllocator;

@@ -9,22 +9,13 @@ namespace ECSEngine {
 	CrashHandler ECS_GLOBAL_DEFERRED_CRASH_HANDLER = { DefaultCrashHandler, nullptr };
 	const char* ECS_GLOBAL_DEFERRED_FILE = nullptr;
 	const char* ECS_GLOBAL_DEFERRED_FUNCTION = nullptr;
-	unsigned int ECS_GLOBAL_DEFERRED_LINE = 0;
-
-	OVERRIDE_CRASH_HANDLER ECS_GLOBAL_OVERRIDE_CRASH_HANDLER = OVERRIDE_CRASH_HANDLER_NONE;
+	unsigned int ECS_GLOBAL_DEFERRED_LINE = -1;
 
 	// --------------------------------------------------------------------------------------------------------
 
 	void SetCrashHandler(CrashHandlerFunction function, void* data) {
 		ECS_GLOBAL_CRASH_HANDLER.function = function;
 		ECS_GLOBAL_CRASH_HANDLER.data = data;
-	}
-
-	// --------------------------------------------------------------------------------------------------------
-
-	void SetDeferredCrashHandler(CrashHandlerFunction function, void* data) {
-		ECS_GLOBAL_DEFERRED_CRASH_HANDLER.function = function;
-		ECS_GLOBAL_DEFERRED_CRASH_HANDLER.data = data;
 	}
 
 	// --------------------------------------------------------------------------------------------------------
@@ -37,39 +28,41 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------
 
 	void Crash(const char* error_string) {
-		if (ECS_GLOBAL_OVERRIDE_CRASH_HANDLER != OVERRIDE_CRASH_HANDLER_DEFERRED) {
+		if (ECS_GLOBAL_DEFERRED_FILE == nullptr && ECS_GLOBAL_DEFERRED_FUNCTION == nullptr && ECS_GLOBAL_DEFERRED_LINE == -1) {
 			ECS_GLOBAL_CRASH_HANDLER.function(ECS_GLOBAL_CRASH_HANDLER.data, error_string);
 		}
 		else {
-			DeferredCrash(error_string);
-		}
-	}
-
-	// --------------------------------------------------------------------------------------------------------
-
-	void DeferredCrash(const char* error_string) {
-		if (ECS_GLOBAL_OVERRIDE_CRASH_HANDLER != OVERRIDE_CRASH_HANDLER_NORMAL) {
 			const char* COPY_STRING = "\nCaller: {#}, File: {#}; Line: {#}.";
 
 			size_t string_size = strlen(error_string);
-			size_t copy_string_size = strlen(COPY_STRING);
-			size_t total_size = string_size + copy_string_size;
-			char* new_string = (char*)ECS_STACK_ALLOC(sizeof(char) * (total_size + 1));
-			memcpy(new_string, error_string, string_size * sizeof(char));
-			memcpy(new_string + string_size, COPY_STRING, copy_string_size * sizeof(char));
-			new_string[string_size + copy_string_size] = '\0';
+			Stream<char> file_string = ECS_GLOBAL_DEFERRED_FILE != nullptr ? ToStream(ECS_GLOBAL_DEFERRED_FILE) : Stream<char>(nullptr, 0);
+			Stream<char> function_string = ECS_GLOBAL_DEFERRED_FILE != nullptr ? ToStream(ECS_GLOBAL_DEFERRED_FUNCTION) : Stream<char>(nullptr, 0);
+			unsigned int line = ECS_GLOBAL_DEFERRED_LINE;
 
-			ECS_GLOBAL_DEFERRED_CRASH_HANDLER.function(ECS_GLOBAL_DEFERRED_CRASH_HANDLER.data, new_string);
-		}
-		else {
-			Crash(error_string);
+			// Estimate how many characters will be needed
+			// The line needs at most another 10
+			size_t characters_needed = file_string.size + function_string.size + 10;
+
+			// Approximate that the caller + file + line will need at most another 512 characters
+			char* new_string = (char*)ECS_STACK_ALLOC(sizeof(char) * (string_size + characters_needed));
+			memcpy(new_string, error_string, string_size);
+			CapacityStream<char> new_string_stream(new_string, string_size, string_size + characters_needed);
+
+			ECS_FORMAT_STRING(new_string_stream, "\nCaller: {#}, File: {#}, Line: {#}", function_string, file_string, line);
+			ECS_GLOBAL_CRASH_HANDLER.function(ECS_GLOBAL_CRASH_HANDLER.data, new_string_stream.buffer);
 		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------
 
-	void SetDeferredCrashCaller(const char* file, const char* function, unsigned int line)
+	void ResetCrashHandlerCaller()
 	{
+		SetCrashHandlerCaller(nullptr, nullptr, -1);
+	}
+
+	// --------------------------------------------------------------------------------------------------------
+
+	void SetCrashHandlerCaller(const char* file, const char* function, unsigned int line) {
 		ECS_GLOBAL_DEFERRED_FILE = file;
 		ECS_GLOBAL_DEFERRED_FUNCTION = function;
 		ECS_GLOBAL_DEFERRED_LINE = line;

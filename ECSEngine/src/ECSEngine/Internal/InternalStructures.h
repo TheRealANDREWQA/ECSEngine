@@ -8,6 +8,7 @@
 #include "ecspch.h"
 #include "../Math/VCLExtensions.h"
 #include "../Containers/StableReferenceStream.h"
+#include "../Utilities/File.h"
 
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
@@ -247,11 +248,15 @@ namespace ECSEngine {
 
 		void Deallocate(Stream<Entity> entities);
 
+		void DeallocatePool(unsigned int pool_index);
+
 		// Checks to see if the given entity is valid in the current context
-		bool IsValid(Entity entity);
+		bool IsValid(Entity entity) const;
 
 		// The tag should be the bit position, not the actual value
 		bool HasTag(Entity entity, unsigned char tag) const;
+
+		Entity GetEntityFromPosition(unsigned int chunk_index, unsigned int stream_index) const;
 
 		EntityInfo GetInfo(Entity entity) const;
 
@@ -281,6 +286,34 @@ namespace ECSEngine {
 		//unsigned int m_pool_capacity;
 		unsigned int m_pool_power_of_two;
 	};
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API bool SerializeEntityPool(const EntityPool* entity_pool, ECS_FILE_HANDLE file);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void SerializeEntityPool(const EntityPool* entity_pool, uintptr_t* stream);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API size_t SerializeEntityPoolSize(const EntityPool* entity_pool);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API bool DeserializeEntityPool(EntityPool* entity_pool, ECS_FILE_HANDLE file);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void DeserializeEntityPool(EntityPool* entity_pool, uintptr_t* stream);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	// Returns the number of entities in the data
+	// If the version is incorrect, it will return -1
+	ECSENGINE_API size_t DeserializeEntityPoolSize(uintptr_t stream);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
 
 }
 

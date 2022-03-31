@@ -16,7 +16,7 @@ namespace ECSEngine {
 	// ----------------------------------------------------- Global Memory Manager ---------------------------------------------------
 
 	GlobalMemoryManager::GlobalMemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size) : m_allocator_count(0) {
-		m_allocators = new MultipoolAllocator[ECS_GLOBAL_MANAGER_SIZE];
+		m_allocators = (MultipoolAllocator*)malloc(sizeof(MultipoolAllocator) * ECS_GLOBAL_MANAGER_SIZE);
 		m_new_allocation_size = new_allocation_size;
 		m_maximum_pool_count = maximum_pool_count;
 		CreateAllocator(size, maximum_pool_count);
@@ -24,7 +24,7 @@ namespace ECSEngine {
 
 	void GlobalMemoryManager::CreateAllocator(size_t size, size_t maximum_pool_count) {
 		ECS_ASSERT(m_allocator_count < ECS_GLOBAL_MANAGER_SIZE);
-		void* allocation = (void*) (new unsigned char[MultipoolAllocator::MemoryOf(maximum_pool_count, size)]);
+		void* allocation = malloc(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
 		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)allocation, size, maximum_pool_count);
 		m_allocator_count++;
 	}
@@ -33,7 +33,7 @@ namespace ECSEngine {
 	{
 		for (size_t index = 1; index < m_allocator_count; index++) {
 			if (m_allocators[index].IsEmpty()) {
-				delete[] m_allocators[index].GetAllocatedBuffer();
+				free(m_allocators[index].GetAllocatedBuffer());
 				m_allocator_count--;
 				m_allocators[index] = m_allocators[m_allocator_count];
 				index--;
@@ -44,9 +44,9 @@ namespace ECSEngine {
 	void GlobalMemoryManager::ReleaseResources()
 	{
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			delete[] m_allocators[index].GetAllocatedBuffer();
+			free(m_allocators[index].GetAllocatedBuffer());
 		}
-		delete[] m_allocators;
+		free(m_allocators);
 	}
 
 	void* GlobalMemoryManager::Allocate(size_t size, size_t alignment) {
@@ -68,7 +68,7 @@ namespace ECSEngine {
 			if (buffer <= block && function::OffsetPointer(buffer, capacity) > block) {
 				m_allocators[index].Deallocate<trigger_error_if_not_found>(block);
 				if (index > 0 && m_allocators[index].IsEmpty()) {
-					delete[] m_allocators[index].GetAllocatedBuffer();
+					free(m_allocators[index].GetAllocatedBuffer());
 					m_allocator_count--;
 					m_allocators[index] = m_allocators[m_allocator_count];
 				}

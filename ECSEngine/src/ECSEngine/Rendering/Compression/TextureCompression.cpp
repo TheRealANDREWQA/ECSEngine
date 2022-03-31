@@ -235,7 +235,7 @@ namespace ECSEngine {
 		staging_texture.Release();
 		old_texture->Release();
 		graphics->RemovePossibleResourceFromTracking(old_texture);
-		graphics->AddInternalResource(texture);
+		graphics->AddInternalResource(texture, ECS_DEBUG_INFO);
 
 		return true;
 	}

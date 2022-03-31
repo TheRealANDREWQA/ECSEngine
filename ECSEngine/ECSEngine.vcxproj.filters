@@ -71,7 +71,6 @@
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\FunctionTemplates.h" />
     <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
@@ -162,6 +161,14 @@
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Internal\SystemManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityHierarchy.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\Scene.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\FilePackaging.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Encryption.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\InputSerialization.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetLoading.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadata.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabase.h" />
+    <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp">
@@ -262,6 +269,13 @@
     <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\SystemManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityHierarchy.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\Scene.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Serialization\InputSerialization.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetLoading.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadata.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabase.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

@@ -1,7 +1,6 @@
 #include "editorpch.h"
 #include "EditorState.h"
 #include "../UI/DirectoryExplorer.h"
-#include "../UI/ModuleExplorer.h"
 #include "../UI/FileExplorer.h"
 #include "ECSEngineApplicationUtilities.h"
 #include "EditorParameters.h"
@@ -15,7 +14,11 @@
 
 using namespace ECSEngine;
 
+bool DISPLAY_LOCKED_FILES_SIZE = false;
+
 #define LAZY_EVALUATION_CREATE_DEFAULT_METAFILES_THRESHOLD 500
+#define LAZY_EVALUATION_MODULE_STATUS 500
+#define LAZY_EVALUATION_GRAPHICS_MODULE_STATUS 300
 
 // -----------------------------------------------------------------------------------------------------------------
 
@@ -61,6 +64,58 @@ void EditorStateClearFlag(EditorState* editor_state, size_t flag) {
 
 bool EditorStateHasFlag(EditorState* editor_state, size_t flag) {
 	return function::HasFlagAtomic(editor_state->flags, flag);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void TickGraphicsModuleStatus(EditorState* editor_state) {
+	// Build the graphics module only if no previous build failed for the same write time
+	const EditorModule* module = editor_state->project_modules->buffer + GRAPHICS_MODULE_INDEX;
+
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS, LAZY_EVALUATION_GRAPHICS_MODULE_STATUS) 
+		&& HasGraphicsModule(editor_state)) {
+		UpdateProjectModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
+		if (UpdateProjectModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
+			LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void TickModuleStatus(EditorState* editor_state) {
+	EDITOR_STATE(editor_state);
+	ProjectModules* project_modules = editor_state->project_modules;
+
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS, LAZY_EVALUATION_MODULE_STATUS)) {
+		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
+			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
+				bool success = false;
+				if (project_modules->buffer[index].library_last_write_time != 0) {
+					success = HasModuleFunction(editor_state, index);
+				}
+				SetModuleLoadStatus(project_modules->buffer + index, success);
+			}
+			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, index);
+			if (is_updated && project_modules->buffer[index].load_status == EditorModuleLoadStatus::Good) {
+				project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
+			}
+		}
+
+		// Inform the user when many .pdb.locked files gathered
+		size_t locked_files_size = GetVisualStudioLockedFilesSize(editor_state);
+		if (locked_files_size > ECS_GB) {
+			if (!DISPLAY_LOCKED_FILES_SIZE) {
+				ECS_FORMAT_TEMP_STRING(console_output, "Visual studio locked files size surpassed 1 GB (actual size is {#}). Consider deleting the files now"
+					" if the debugger is not opened or by reopening the project.", locked_files_size);
+				EditorSetConsoleWarn(console_output);
+				DISPLAY_LOCKED_FILES_SIZE = true;
+			}
+		}
+		else {
+			DISPLAY_LOCKED_FILES_SIZE = false;
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -151,8 +206,10 @@ void EditorStateProjectTick(EditorState* editor_state) {
 			}
 		}
 
+		TickGraphicsModuleStatus(editor_state);
+		TickModuleStatus(editor_state);
+
 		DirectoryExplorerTick(editor_state);
-		ModuleExplorerTick(editor_state);
 		FileExplorerTick(editor_state);
 
 		TickEvents(editor_state);
@@ -216,28 +273,28 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	MemoryManager* multithreaded_editor_allocator = new MemoryManager(50'000'000, 4096, 50'000'000, global_memory_manager);
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
-	GraphicsTexture2DDescriptor viewport_texture_descriptor;
-	viewport_texture_descriptor.size = graphics->m_window_size;
-	viewport_texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS);
-	viewport_texture_descriptor.mip_levels = 1u;
-	//viewport_texture_descriptor.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	//GraphicsTexture2DDescriptor viewport_texture_descriptor;
+	//viewport_texture_descriptor.size = graphics->m_window_size;
+	//viewport_texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS);
+	//viewport_texture_descriptor.mip_levels = 1u;
+	////viewport_texture_descriptor.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 
-	Texture2D viewport_texture = graphics->CreateTexture(&viewport_texture_descriptor);
-	ResourceView viewport_view = graphics->CreateTextureShaderViewResource(viewport_texture);
-	RenderTargetView viewport_render_view = graphics->CreateRenderTargetView(viewport_texture);
+	//Texture2D viewport_texture = graphics->CreateTexture(&viewport_texture_descriptor);
+	//ResourceView viewport_view = graphics->CreateTextureShaderViewResource(viewport_texture);
+	//RenderTargetView viewport_render_view = graphics->CreateRenderTargetView(viewport_texture);
 
-	editor_state->viewport_texture = viewport_view;
-	editor_state->viewport_render_target = viewport_render_view;
+	//editor_state->viewport_texture = viewport_view;
+	//editor_state->viewport_render_target = viewport_render_view;
 
-	viewport_texture_descriptor.bind_flag = D3D11_BIND_DEPTH_STENCIL;
-	viewport_texture_descriptor.format = DXGI_FORMAT_D32_FLOAT;
-	Texture2D viewport_depth_texture = graphics->CreateTexture(&viewport_texture_descriptor);
-	DepthStencilView viewport_depth_view = graphics->CreateDepthStencilView(viewport_depth_texture);
+	//viewport_texture_descriptor.bind_flag = D3D11_BIND_DEPTH_STENCIL;
+	//viewport_texture_descriptor.format = DXGI_FORMAT_D32_FLOAT;
+	//Texture2D viewport_depth_texture = graphics->CreateTexture(&viewport_texture_descriptor);
+	//DepthStencilView viewport_depth_view = graphics->CreateDepthStencilView(viewport_depth_texture);
 
-	editor_state->viewport_texture_depth = viewport_depth_view;
+	//editor_state->viewport_texture_depth = viewport_depth_view;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
-	*editor_task_manager = TaskManager(std::thread::hardware_concurrency() - 1, global_memory_manager, 1000, 100'000);
+	*editor_task_manager = TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1000, 100'000);
 	editor_state->task_manager = editor_task_manager;
 
 	// The task wrappers use the 
@@ -347,22 +404,22 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->launched_module_compilation.Initialize(polymorphic_editor_allocator, 4);
 	editor_state->launched_module_compilation_lock.unlock();
 
-	TaskDependencies* project_task_graph = (TaskDependencies*)calloc(1, sizeof(TaskDependencies));
-	*project_task_graph = TaskDependencies(editor_allocator);
-	editor_state->project_task_graph = project_task_graph;
+	/*TaskDependencies* task_dependencies = (TaskDependencies*)calloc(1, sizeof(TaskDependencies));
+	*task_dependencies = TaskDependencies(editor_allocator);
+	editor_state->task_dependencies = task_dependencies;*/
 
 	InspectorData* inspector_data = (InspectorData*)calloc(1, sizeof(InspectorData));
 	editor_state->inspector_data = inspector_data;
 
-	EditorState::EditorWorld* scene_worlds = (EditorState::EditorWorld*)calloc(EDITOR_SCENE_BUFFERING_COUNT, sizeof(EditorState::EditorWorld));
-	editor_state->active_world = 0;
-	editor_state->scene_world = 0;
-	editor_state->copy_world_count.store(0, ECS_RELAXED);
-	editor_state->worlds.InitializeFromBuffer(scene_worlds, EDITOR_SCENE_BUFFERING_COUNT, EDITOR_SCENE_BUFFERING_COUNT);
-	// The is_emtpy flag must be set, not cleared
-	for (size_t index = 0; index < EDITOR_SCENE_BUFFERING_COUNT; index++) {
-		editor_state->worlds[index].is_empty = true;
-	}
+	//EditorState::EditorWorld* scene_worlds = (EditorState::EditorWorld*)calloc(EDITOR_SCENE_BUFFERING_COUNT, sizeof(EditorState::EditorWorld));
+	//editor_state->active_world = 0;
+	//editor_state->scene_world = 0;
+	//editor_state->copy_world_count.store(0, ECS_RELAXED);
+	//editor_state->worlds.InitializeFromBuffer(scene_worlds, EDITOR_SCENE_BUFFERING_COUNT, EDITOR_SCENE_BUFFERING_COUNT);
+	//// The is_emtpy flag must be set, not cleared
+	//for (size_t index = 0; index < EDITOR_SCENE_BUFFERING_COUNT; index++) {
+	//	editor_state->worlds[index].is_empty = true;
+	//}
 	
 	// Allocate the lazy evaluation counters
 	editor_state->lazy_evaluation_counters = (unsigned short*)malloc(EDITOR_LAZY_EVALUATION_COUNTERS_COUNT * sizeof(unsigned short));

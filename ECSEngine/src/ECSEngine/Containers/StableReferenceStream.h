@@ -103,6 +103,42 @@ namespace ECSEngine {
 			}
 		}
 
+		void GetItemIndices(CapacityStream<unsigned int>& indices) const {
+			// Use a compressed mask of bit indices from the stack
+			ECS_ASSERT(capacity < 4'000'000);
+			unsigned char* bit_masks = (unsigned char*)ECS_STACK_ALLOC(sizeof(unsigned char) * (capacity / 8 + 1));
+
+			auto byte_index = [](unsigned int index) {
+				return index & (~0xFFFFFFF8);
+			};
+
+			auto bit_index = [](unsigned int index) {
+				return index & 0xFFFFFFF8;
+			};
+
+			for (unsigned int index = 0; index < capacity - size; index++) {
+				unsigned int current_index = 0;
+				if constexpr (!queue_free_list) {
+					current_index = free_list[capacity - size + 1 - index];
+				}
+				else {
+					unsigned int free_list_index = (free_list_starting_index + index) == capacity ? 0 : free_list_starting_index + index;
+					current_index = free_list[free_list_index];
+				}
+				unsigned int current_byte = byte_index(current_index);
+				unsigned int current_bit = bit_index(current_index);
+				bit_masks[current_byte] |= 1 << current_bit;
+			}
+
+			unsigned int current_byte = 0;
+			unsigned int current_bit = 0;
+			for (unsigned int index = 0; index < capacity; index++) {
+				if ((bit_masks[current_byte] & (1 << current_bit)) != 0) {
+					indices.AddSafe(index);
+				}
+			}
+		}
+
 		ECS_INLINE const T& operator [](unsigned int index) const {
 			return buffer[index];
 		}
@@ -122,8 +158,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int count) {
-			size_t main_size = (sizeof(T) + sizeof(unsigned int)) * count;
-			return main_size;
+			return (sizeof(T) + sizeof(unsigned int)) * count;
 		}
 
 		void InitializeFromBuffer(void* _buffer, unsigned int _capacity) {

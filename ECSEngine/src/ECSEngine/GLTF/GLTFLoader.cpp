@@ -1,7 +1,7 @@
 // Credit to Hands-On Game Animation Programming by Gabor Szauer
+// For some loading code snippets
 #include "ecspch.h"
 #include "GLTFLoader.h"
-#include "../Utilities/FunctionTemplates.h"
 #include "../Rendering/RenderingStructures.h"
 #include "../Utilities/FunctionInterfaces.h"
 #include "../Rendering/Graphics.h"
