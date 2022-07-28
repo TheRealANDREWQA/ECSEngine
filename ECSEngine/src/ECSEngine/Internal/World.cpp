@@ -13,10 +13,11 @@ namespace ECSEngine {
 		EntityManager* _entity_manager, 
 		ResourceManager* _resource_manager,
 		TaskManager* _task_manager,
+		TaskScheduler* _task_scheduler,
 		HID::Mouse* _mouse,
 		HID::Keyboard* _keyboard
 	) : memory(_memory), entity_manager(_entity_manager), resource_manager(_resource_manager), task_manager(_task_manager),
-		graphics(_resource_manager->m_graphics), mouse(_mouse), keyboard(_keyboard) {};
+		graphics(_resource_manager->m_graphics), mouse(_mouse), keyboard(_keyboard), task_scheduler(_task_scheduler) {};
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
@@ -24,6 +25,7 @@ namespace ECSEngine {
 		// first the global allocator
 		memory = new GlobalMemoryManager(descriptor.global_memory_size, descriptor.global_memory_pool_count, descriptor.global_memory_new_allocation_size);
 		graphics = descriptor.graphics;
+		task_scheduler = descriptor.task_scheduler;
 		mouse = descriptor.mouse;
 		keyboard = descriptor.keyboard;
 
@@ -34,7 +36,6 @@ namespace ECSEngine {
 			sizeof(ResourceManager) +
 			sizeof(TaskManager) +
 			sizeof(EntityManager) +
-			sizeof(MemoryManager) + // Entity Pool allocator
 			sizeof(SystemManager); 
 
 		void* allocation = memory->Allocate(coallesced_allocation_size);
@@ -63,13 +64,8 @@ namespace ECSEngine {
 		task_manager->SetWorld(this);
 		allocation = function::OffsetPointer(allocation, sizeof(TaskManager));
 
-		// entity pool
-		MemoryManager* entity_pool_allocator = (MemoryManager*)allocation;
-		*entity_pool_allocator = DefaultEntityPoolManager(memory);
-		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
-
 		EntityPool* entity_pool = (EntityPool*)allocation;
-		new (entity_pool) EntityPool(entity_pool_allocator, descriptor.entity_pool_power_of_two);
+		new (entity_pool) EntityPool(entity_manager_memory, descriptor.entity_pool_power_of_two);
 		allocation = function::OffsetPointer(allocation, sizeof(EntityPool));
 
 		EntityManagerDescriptor entity_descriptor;
@@ -89,17 +85,39 @@ namespace ECSEngine {
 
 	void DestroyWorld(World* world)
 	{
-		// Pretty much all that there is left to do is delete the graphics resources, unload everything from the resource manager
-		// and deallocate the global memory manager
-		
-		// Start with the resource manager
-		world->resource_manager->UnloadAll();
+		// Pretty much all that there is left to do is delete the graphics resources and deallocate the global memory manager
 
 		// Destory the graphics object
 		DestroyGraphics(world->graphics);
 
 		// Release the global allocator
 		world->memory->ReleaseResources();
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	WorldDescriptor GetDefaultWorldDescriptor()
+	{
+		WorldDescriptor world_descriptor;
+
+		world_descriptor.graphics = nullptr;
+		world_descriptor.mouse = nullptr;
+		world_descriptor.keyboard = nullptr;
+
+		world_descriptor.thread_count = std::thread::hardware_concurrency();
+
+		world_descriptor.entity_manager_memory_new_allocation_size = ECS_MB * 20;
+		world_descriptor.entity_manager_memory_size = ECS_MB * 50;
+		world_descriptor.entity_manager_memory_pool_count = 1024;
+
+		// 256 * ECS_KB entities per chunk
+		world_descriptor.entity_pool_power_of_two = 18;
+
+		world_descriptor.global_memory_new_allocation_size = ECS_MB * 25;
+		world_descriptor.global_memory_pool_count = 1024;
+		world_descriptor.global_memory_size = ECS_MB * 60;
+
+		return world_descriptor;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

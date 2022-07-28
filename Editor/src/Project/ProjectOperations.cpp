@@ -13,7 +13,6 @@
 #include "ProjectUITemplate.h"
 #include "..\Modules\ModuleFile.h"
 #include "..\Modules\Module.h"
-#include "..\Modules\ModuleConfigurationGroup.h"
 #include "..\Project\ProjectSettings.h"
 
 using namespace ECSEngine;
@@ -217,7 +216,7 @@ void CreateProject(ProjectOperationData* data)
 		handler.action = delete_project;
 		handler.data = &delete_data;
 		handler.data_size = sizeof(delete_data);
-		handler.phase = UIDrawPhase::System;
+		handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
 		
 		CreateConfirmWindow(ui_system, error_message, handler);
 		return;
@@ -330,7 +329,6 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 	CapacityStream<char>* project_name_stream;
 	CapacityStream<char>* directory_stream;
 	CapacityStream<char>* resource_folder_stream;
-	CapacityStream<char>* source_dll_name_stream;
 	const wchar_t* project_name_wide;
 	OSFileExplorerGetDirectoryActionData* get_directory_data;
 	
@@ -353,7 +351,6 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 
 		project_name_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * project_name_stream_capacity), 0, project_name_stream_capacity - 1);
 		directory_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * directory_stream_capacity), 0, directory_stream_capacity - 1);
-		source_dll_name_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * source_dll_directory_capacity), 0, source_dll_directory_capacity - 1);
 
 		get_directory_data->get_directory_data.path.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(wchar_t) * get_directory_path_capacity), 0, get_directory_path_capacity);
 		get_directory_data->get_directory_data.error_message.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * get_directory_path_capacity), 0, get_directory_path_capacity);
@@ -400,13 +397,13 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 	bottom_button_transform.position = drawer.GetAlignedToBottom(drawer.GetElementDefaultScale().y);
 	bottom_button_transform.scale = drawer.GetElementDefaultScale();
 	config.AddFlag(bottom_button_transform);
-	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Create", { CreateProjectAction, &data->project_data, sizeof(data->project_data), UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Create", { CreateProjectAction, &data->project_data, sizeof(data->project_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 	config.flag_count = 0;
 	bottom_button_transform.position.x = drawer.GetAlignedToRight(drawer.GetElementDefaultScale().x).x;
 	config.AddFlag(bottom_button_transform);
 
-	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -564,23 +561,6 @@ bool OpenProject(ProjectOperationData data)
 	GetConsole()->ChangeDumpPath(console_dump_path);
 
 	bool is_valid = CheckProjectSettingsValidity(data.editor_state);
-	if (is_valid) {
-		//data.editor_state->project_descriptor = LoadWorldParametersFile(data.editor_state, data.file_data->project_settings, true);
-
-		//// If the thread count is 0, it means it failed
-		//if (data.editor_state->project_descriptor.thread_count == 0) {
-		//	bool success = SaveDefaultSettingsFile(data.editor_state);
-		//	if (success) {
-		//		SetSettingsPath(data.editor_state, ToStream(DEFAULT_SETTINGS_FILE_NAME));
-		//	}
-		//	else {
-		//		editor_allocator->Deallocate(data.editor_state->project_file->project_settings.buffer);
-		//		data.editor_state->project_file->project_settings.buffer = nullptr;
-		//		data.editor_state->project_file->project_settings.size = 0;
-		//		data.editor_state->project_file->project_settings.capacity = 0;
-		//	}
-		//}
-	}
 
 	if (ExistsFileOrFolder(ui_template_stream)) {
 		bool success = LoadProjectUITemplate(data.editor_state, ui_template, error_message);
@@ -619,25 +599,12 @@ bool OpenProject(ProjectOperationData data)
 		}
 	}
 	else {
-		ResetProjectModules(data.editor_state);
-		ResetProjectGraphicsModule(data.editor_state);
-	}
-	// Load the module configurations groups
-	CapacityStream<wchar_t> module_configuration_group_path(_temp_chars, 0, 256);
-	GetProjectModuleConfigurationGroupFilePath(data.editor_state, module_configuration_group_path);
-	if (ExistsFileOrFolder(module_configuration_group_path)) {
-		bool success = LoadModuleConfigurationGroupFile(data.editor_state);
-		if (!success) {
-			EditorSetConsoleError(ToStream("An error occured during module configuration group file load. No groups have been imported"));
-		}
-	}
-	else {
-		// Else reset the groups
-		ResetModuleConfigurationGroups(data.editor_state);
+		ResetModules(data.editor_state);
+		ResetGraphicsModule(data.editor_state);
 	}
 
 	// Delete all the auxiliary build files .build, .clean, .rebuild
-	DeleteProjectModuleFlagFiles(data.editor_state);
+	DeleteModuleFlagFiles(data.editor_state);
 
 	SaveProjectUIAutomaticallyData save_automatically_data;
 	save_automatically_data.editor_state = data.editor_state;

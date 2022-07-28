@@ -1,5 +1,5 @@
 #include "ecspch.h"
-#include "HashTable.h"
+#include "Hashing.h"
 
 namespace ECSEngine {
 
@@ -43,35 +43,16 @@ namespace ECSEngine {
 		}
 	}
 
-	unsigned int HashFunctionMultiplyString::Hash(Stream<const char> string)
+	unsigned int ResourceIdentifier::Hash() const
 	{
 		// Value must be clipped to 3 bytes only - that's the precision of the hash tables
+		const char* string = (const char*)ptr;
+
 		unsigned int sum = 0;
-		for (size_t index = 0; index < string.size; index++) {
+		for (size_t index = 0; index < size; index++) {
 			sum += string[index] * index;
 		}
-		return sum * (unsigned int)string.size;
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(Stream<const wchar_t> string) {
-		return Hash(Stream<const char>((void*)string.buffer, string.size * sizeof(wchar_t)));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(const char* string) {
-		return Hash(Stream<const char>((void*)string, strlen(string)));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(const wchar_t* string) {
-		return Hash(Stream<const char>((void*)string, sizeof(wchar_t) * wcslen(string)));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(const void* identifier, unsigned int identifier_size) {
-		return Hash(Stream<const char>((void*)identifier, identifier_size));
-	}
-
-	unsigned int HashFunctionMultiplyString::Hash(ResourceIdentifier identifier)
-	{
-		return Hash(identifier.ptr, identifier.size);
+		return sum * (unsigned int)size;
 	}
 
 }

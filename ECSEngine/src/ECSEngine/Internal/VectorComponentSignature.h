@@ -15,7 +15,7 @@ namespace ECSEngine {
 			return horizontal_and(value == other.value);
 		}
 
-		inline operator Vec32uc() {
+		inline operator Vec16us() {
 			return value;
 		}
 

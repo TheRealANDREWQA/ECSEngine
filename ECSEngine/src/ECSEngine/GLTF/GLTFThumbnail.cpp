@@ -55,9 +55,9 @@ namespace ECSEngine {
 			info.object_translation.y,
 			info.object_translation.z
 		);
-		vertex_constants.object_matrix = MatrixTranspose(object_matrix);
+		vertex_constants.object_matrix = object_matrix;
 
-		Matrix camera_matrix = camera.GetProjectionViewMatrix();
+		Matrix camera_matrix = camera.GetViewProjectionMatrix();
 		vertex_constants.mvp_matrix = MatrixTranspose(object_matrix * camera_matrix);
 
 		// Now render the object
@@ -221,7 +221,7 @@ namespace ECSEngine {
 	{
 		GLTFUpdateThumbnailTaskData* data = (GLTFUpdateThumbnailTaskData*)_data;
 
-		Texture2D initial_texture = GetResource(data->thumbnail->texture);
+		Texture2D initial_texture = data->thumbnail->texture.GetResource();
 		uint2 texture_dimensions = GetTextureDimensions(initial_texture);
 
 		// Update the state

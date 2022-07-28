@@ -10,7 +10,7 @@ namespace ECSEngine {
 		// calculating the current pointer and aligning it
 		uintptr_t current_pointer = (uintptr_t)(m_buffer + m_top);
 
-		uintptr_t offset = function::align_pointer_stack(current_pointer, alignment);
+		uintptr_t offset = function::AlignPointerStack(current_pointer, alignment);
 
 		// transforming to relative offset
 		offset -= (uintptr_t)m_buffer;
@@ -40,6 +40,12 @@ namespace ECSEngine {
 		m_top = 0;
 		m_marker = 0;
 		m_last_top = 0;
+	}
+
+	bool StackAllocator::Belongs(const void* pointer) const
+	{
+		uintptr_t ptr = (uintptr_t)pointer;
+		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_capacity;
 	}
 
 	void StackAllocator::SetMarker() {

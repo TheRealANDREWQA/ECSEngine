@@ -8,7 +8,7 @@ namespace ECSEngine {
 
 	const size_t MAX_ACCELERATION_TABLE_MULTISECTIONS = ECS_KB * 16;
 
-	using AccelerationTable = HashTable<SerializeMultisectionData*, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString>;
+	using AccelerationTable = HashTableDefault<SerializeMultisectionData*>;
 
 	// Add 32 to the multisection size so as to avoid breaking the load factor of the hash table for values like 29 -> 32
 #define CREATE_ACCELERATION_TABLE(multisections) ECS_ASSERT(multisections.size < MAX_ACCELERATION_TABLE_MULTISECTIONS); \
@@ -29,33 +29,33 @@ namespace ECSEngine {
 		uintptr_t& stream,
 		Stream<void> header
 	) {
-		Write(&stream, &header.size, sizeof(header.size));
+		Write<true>(&stream, &header.size, sizeof(header.size));
 		if (header.buffer != nullptr && header.size > 0) {
-			Write(&stream, header.buffer, header.size);
+			Write<true>(&stream, header.buffer, header.size);
 		}
 
 		// Multi section count
-		Write(&stream, &multisections.size, sizeof(multisections.size));
+		Write<true>(&stream, &multisections.size, sizeof(multisections.size));
 
 		// For each multisection copy every stream associated with the byte size and also the name if one exists
 		for (size_t index = 0; index < multisections.size; index++) {
 			// The name first - if it exists
 			if (multisections[index].name == nullptr) {
 				unsigned short zero = 0;
-				Write(&stream, &zero, sizeof(zero));
+				Write<true>(&stream, &zero, sizeof(zero));
 			}
 			else {
 				unsigned short name_size = (unsigned short)strlen(multisections[index].name);
-				Write(&stream, &name_size, sizeof(name_size));
-				Write(&stream, multisections[index].name, name_size + 1);
+				Write<true>(&stream, &name_size, sizeof(name_size));
+				Write<true>(&stream, multisections[index].name, name_size + 1);
 			}
 
-			Write(&stream, &multisections[index].data.size, sizeof(size_t));
+			Write<true>(&stream, &multisections[index].data.size, sizeof(size_t));
 			ECS_ASSERT(multisections[index].data.size > 0);
 			for (size_t stream_index = 0; stream_index < multisections[index].data.size; stream_index++) {
 				//ECS_ASSERT(multisections[index].data[stream_index].size > 0);
-				Write(&stream, &multisections[index].data[stream_index].size, sizeof(size_t));
-				Write(&stream, multisections[index].data[stream_index].buffer, multisections[index].data[stream_index].size);
+				Write<true>(&stream, &multisections[index].data[stream_index].size, sizeof(size_t));
+				Write<true>(&stream, multisections[index].data[stream_index].buffer, multisections[index].data[stream_index].size);
 			}
 		}
 	}
@@ -133,12 +133,12 @@ namespace ECSEngine {
 		CapacityStream<void>* header
 	) {
 		size_t header_size = 0;
-		Read(&stream, &header_size, sizeof(header_size));
+		Read<true>(&stream, &header_size, sizeof(header_size));
 		if (header != nullptr) {
 			if (header_size > header->capacity) {
 				return -1;
 			}
-			Read(&stream, header->buffer, header_size);
+			Read<true>(&stream, header->buffer, header_size);
 			header->size = header_size;
 		}
 		else {
@@ -146,21 +146,21 @@ namespace ECSEngine {
 		}
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 
 		size_t total_memory = 0;
 		for (size_t index = 0; index < multisection_count; index++) {
 			const char* name = nullptr;
 			// The name first
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			if (name_size > 0) {
 				name = (const char*)stream;
 				Ignore(&stream, name_size + 1);
 			}
 
 			size_t data_stream_count = 0;
-			Read(&stream, &data_stream_count, sizeof(size_t));
+			Read<true>(&stream, &data_stream_count, sizeof(size_t));
 
 			// If the data stream count is 0, just skip to the next field
 			if (data_stream_count == 0) {
@@ -173,7 +173,7 @@ namespace ECSEngine {
 
 			for (size_t stream_index = 0; stream_index < data_stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(data_size));
+				Read<true>(&stream, &data_size, sizeof(data_size));
 				if (data_size == 0) {
 					allocated_stream[stream_index] = { nullptr, 0 };
 				}
@@ -202,12 +202,12 @@ namespace ECSEngine {
 		CREATE_ACCELERATION_TABLE(data);
 
 		size_t header_size = 0;
-		Read(&stream, &header_size, sizeof(header_size));
+		Read<true>(&stream, &header_size, sizeof(header_size));
 		if (header != nullptr) {
 			if (header_size > header->capacity) {
 				return -1;
 			}
-			Read(&stream, header->buffer, header_size);
+			Read<true>(&stream, header->buffer, header_size);
 			header->size = header_size;
 		}
 		else {
@@ -215,21 +215,21 @@ namespace ECSEngine {
 		}
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 
 		size_t total_memory = 0;
 		for (size_t index = 0; index < multisection_count; index++) {
 			const char* name = nullptr;
 			// The name first
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			if (name_size > 0) {
 				name = (const char*)stream;
 				Ignore(&stream, name_size + 1);
 			}
 
 			size_t data_stream_count = 0;
-			Read(&stream, &data_stream_count, sizeof(size_t));
+			Read<true>(&stream, &data_stream_count, sizeof(size_t));
 
 			// If the data stream count is 0, just skip to the next field
 			if (data_stream_count == 0) {
@@ -241,7 +241,7 @@ namespace ECSEngine {
 
 			for (size_t stream_index = 0; stream_index < data_stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(data_size));
+				Read<true>(&stream, &data_size, sizeof(data_size));
 				if (data_size == 0) {
 					allocated_stream[stream_index] = { nullptr, 0 };
 				}
@@ -283,22 +283,22 @@ namespace ECSEngine {
 		size_t total_memory = 0;
 
 		size_t _header_size = 0;
-		Read(&stream, &_header_size, sizeof(_header_size));
+		Read<true>(&stream, &_header_size, sizeof(_header_size));
 		Ignore(&stream, _header_size);
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 		for (size_t index = 0; index < multisection_count; index++) {
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			Ignore(&stream, name_size);
 
 			size_t stream_count = 0;
-			Read(&stream, &stream_count, sizeof(size_t));
+			Read<true>(&stream, &stream_count, sizeof(size_t));
 
 			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(size_t));
+				Read<true>(&stream, &data_size, sizeof(size_t));
 				total_memory += data_size;
 				Ignore(&stream, data_size);
 			}
@@ -312,23 +312,23 @@ namespace ECSEngine {
 	void DeserializeMultisectionPerSectionSize(uintptr_t stream, CapacityStream<SerializeMultisectionData>& multisections)
 	{
 		size_t _header_size = 0;
-		Read(&stream, &_header_size, sizeof(_header_size));
+		Read<true>(&stream, &_header_size, sizeof(_header_size));
 		Ignore(&stream, _header_size);
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 
 		for (size_t index = 0; index < multisection_count; index++) {
 			const char* name = nullptr;
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			if (name_size > 0) {
 				name = (const char*)stream;
 			}
 			Ignore(&stream, name_size);
 
 			size_t stream_count = 0;
-			Read(&stream, &stream_count, sizeof(size_t));
+			Read<true>(&stream, &stream_count, sizeof(size_t));
 
 			if (stream_count == 0) {
 				continue;
@@ -337,7 +337,7 @@ namespace ECSEngine {
 			size_t multisection_size = 0;
 			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(size_t));
+				Read<true>(&stream, &data_size, sizeof(size_t));
 				Ignore(&stream, data_size);
 				multisection_size += data_size;
 			}
@@ -354,23 +354,23 @@ namespace ECSEngine {
 		CREATE_ACCELERATION_TABLE(multisections);
 
 		size_t _header_size = 0;
-		Read(&stream, &_header_size, sizeof(_header_size));
+		Read<true>(&stream, &_header_size, sizeof(_header_size));
 		Ignore(&stream, _header_size);
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 
 		for (size_t index = 0; index < multisection_count; index++) {
 			const char* name = nullptr;
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			if (name_size > 0) {
 				name = (const char*)stream;
 			}
 			Ignore(&stream, name_size);
 
 			size_t stream_count = 0;
-			Read(&stream, &stream_count, sizeof(size_t));
+			Read<true>(&stream, &stream_count, sizeof(size_t));
 
 			if (stream_count == 0) {
 				continue;
@@ -379,7 +379,7 @@ namespace ECSEngine {
 			size_t multisection_size = 0;
 			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(size_t));
+				Read<true>(&stream, &data_size, sizeof(size_t));
 				Ignore(&stream, data_size);
 				multisection_size += data_size;
 			}
@@ -398,24 +398,24 @@ namespace ECSEngine {
 	void DeserializeMultisectionStreamCount(uintptr_t stream, CapacityStream<size_t>& multisection_stream_count)
 	{
 		size_t _header_size = 0;
-		Read(&stream, &_header_size, sizeof(_header_size));
+		Read<true>(&stream, &_header_size, sizeof(_header_size));
 		Ignore(&stream, _header_size);
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 
 		for (size_t index = 0; index < multisection_count; index++) {
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			Ignore(&stream, name_size);
 
 			size_t stream_count = 0;
-			Read(&stream, &stream_count, sizeof(size_t));
+			Read<true>(&stream, &stream_count, sizeof(size_t));
 
 			multisection_stream_count.Add(stream_count);
 			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(size_t));
+				Read<true>(&stream, &data_size, sizeof(size_t));
 				Ignore(&stream, data_size);
 			}
 		}
@@ -429,23 +429,23 @@ namespace ECSEngine {
 		CREATE_ACCELERATION_TABLE(multisections);
 
 		size_t _header_size = 0;
-		Read(&stream, &_header_size, sizeof(_header_size));
+		Read<true>(&stream, &_header_size, sizeof(_header_size));
 		Ignore(&stream, _header_size);
 
 		size_t multisection_count = 0;
-		Read(&stream, &multisection_count, sizeof(size_t));
+		Read<true>(&stream, &multisection_count, sizeof(size_t));
 
 		for (size_t index = 0; index < multisection_count; index++) {
 			const char* name = nullptr;
 			unsigned short name_size = 0;
-			Read(&stream, &name_size, sizeof(name_size));
+			Read<true>(&stream, &name_size, sizeof(name_size));
 			if (name_size > 0) {
 				name = (const char*)stream;
 			}
 			Ignore(&stream, name_size);
 
 			size_t stream_count = 0;
-			Read(&stream, &stream_count, sizeof(size_t));
+			Read<true>(&stream, &stream_count, sizeof(size_t));
 
 			if (name != nullptr) {
 				SerializeMultisectionData* section;
@@ -456,7 +456,7 @@ namespace ECSEngine {
 			
 			for (size_t stream_index = 0; stream_index < stream_count; stream_index++) {
 				size_t data_size = 0;
-				Read(&stream, &data_size, sizeof(size_t));
+				Read<true>(&stream, &data_size, sizeof(size_t));
 				Ignore(&stream, data_size);
 			}
 		}
@@ -472,9 +472,9 @@ namespace ECSEngine {
 
 	void DeserializeMultisectionHeader(uintptr_t stream, CapacityStream<void>& header) {
 		size_t header_size = 0;
-		Read(&stream, &header_size, sizeof(header_size));
+		Read<true>(&stream, &header_size, sizeof(header_size));
 		ECS_ASSERT(header_size <= header.capacity);
-		Read(&stream, header.buffer, header_size);
+		Read<true>(&stream, header.buffer, header_size);
 		header.size = header_size;
 	}
 

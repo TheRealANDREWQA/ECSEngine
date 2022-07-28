@@ -6,8 +6,10 @@ namespace ECSEngine {
 
 	namespace Tools {
 
-		constexpr size_t UI_REFLECTION_DRAWER_TYPE_TABLE_COUNT = 128;
-		constexpr size_t UI_REFLECTION_DRAWER_INSTANCE_TABLE_COUNT = 256;
+#define UI_REFLECTION_DRAWER_TYPE_TABLE_COUNT (128)
+#define UI_REFLECTION_DRAWER_INSTANCE_TABLE_COUNT (256)
+
+#define ECS_UI_OMIT_FIELD_REFLECT
 
 		enum class UIReflectionIndex : unsigned char {
 			FloatSlider,
@@ -27,12 +29,16 @@ namespace ECSEngine {
 			ColorFloat,
 			CheckBox,
 			ComboBox,
+			DirectoryInput,
+			FileInput,
+			UserDefined,
 			Count
 		};
 
 		enum class UIReflectionStreamType : unsigned char {
 			None,
-			Basic,
+			Capacity,
+			Resizable,
 			Count
 		};
 
@@ -73,6 +79,10 @@ namespace ECSEngine {
 
 		ECSENGINE_API void UIReflectionComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
 
+		ECSENGINE_API void UIReflectionDirectoryInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+		
+		ECSENGINE_API void UIReflectionFileInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
 		ECSENGINE_API void UIReflectionFloatSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
 
 		ECSENGINE_API void UIReflectionDoubleSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
@@ -84,6 +94,8 @@ namespace ECSEngine {
 		ECSENGINE_API void UIReflectionDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
 
 		ECSENGINE_API void UIReflectionIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		ECSENGINE_API void UIReflectionUserDefined(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
 
 		constexpr UIReflectionFieldDraw UI_REFLECTION_FIELD_BASIC_DRAW[] = {
 			UIReflectionFloatSlider,
@@ -102,7 +114,10 @@ namespace ECSEngine {
 			UIReflectionColor,
 			UIReflectionColorFloat,
 			UIReflectionCheckBox,
-			UIReflectionComboBox
+			UIReflectionComboBox,
+			UIReflectionDirectoryInput,
+			UIReflectionFileInput,
+			UIReflectionUserDefined
 		};
 
 		// ------------------------------------------------------------ Basic ----------------------------------------------------------------------
@@ -125,6 +140,10 @@ namespace ECSEngine {
 
 		// Probably doesn't make too much sense to have a stream of combo boxes
 		ECSENGINE_API void UIReflectionStreamComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		ECSENGINE_API void UIReflectionStreamDirectoryInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		ECSENGINE_API void UIReflectionStreamFileInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
 
 		ECSENGINE_API void UIReflectionStreamFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
 
@@ -149,7 +168,9 @@ namespace ECSEngine {
 			UIReflectionStreamColor,
 			UIReflectionStreamColorFloat,
 			UIReflectionStreamCheckBox,
-			UIReflectionComboBox
+			UIReflectionStreamComboBox,
+			UIReflectionStreamDirectoryInput,
+			UIReflectionStreamFileInput
 		};
 
 		// ------------------------------------------------------------ Stream ----------------------------------------------------------------------
@@ -275,163 +296,22 @@ namespace ECSEngine {
 			CapacityStream<UIReflectionTypeField> fields;
 		};
 
-		struct UIReflectionFloatSliderData {
-			float* value_to_modify;
-			const char* name;
-			float lower_bound;
-			float upper_bound;
-			float default_value;
-			unsigned int precision = 2;
-		};
-
-		struct UIReflectionDoubleSliderData {
-			double* value_to_modify;
-			const char* name;
-			double lower_bound;
-			double upper_bound;
-			double default_value;
-			unsigned int precision = 2;
-		};
-
-		struct UIReflectionIntSliderData {
-			void* value_to_modify;
-			const char* name;
-			void* lower_bound;
-			void* upper_bound;
-			void* default_value;
-			unsigned int byte_size;
-		};
-
-		struct UIReflectionFloatInputData {
-			float* value;
-			const char* name;
-			float lower_bound;
-			float upper_bound;
-			float default_value;
-		};
-
-		struct UIReflectionDoubleInputData {
-			double* value;
-			const char* name;
-			double lower_bound;
-			double upper_bound;
-			double default_value;
-		};
-
-		struct UIReflectionIntInputData {
-			void* value_to_modify;
-			const char* name;
-			void* lower_bound;
-			void* upper_bound;
-			void* default_value;
-			unsigned int byte_size;
-		};
-
-		struct UIReflectionTextInputData {
-			CapacityStream<char>* characters;
-			const char* name;
-		};
-
-		struct UIReflectionColorData {
-			Color* color;
-			const char* name;
-			Color default_color;
-		};
-
-		struct UIReflectionColorFloatData {
-			ColorFloat* color;
-			const char* name;
-			ColorFloat default_color;
-		};
-
-		struct UIReflectionCheckBoxData {
-			bool* value;
-			const char* name;
-			bool default_value;
-		};
-
-		struct UIReflectionComboBoxData {
-			unsigned char* active_label;
-			const char* name;
-			Stream<const char*> labels;
-			unsigned int label_display_count;
-			unsigned char default_label;
-		};
-
-		template<typename Field>
-		struct UIReflectionGroupData {
-			Field** values;
-			const char* group_name;
-			const char** input_names;
-			const Field* lower_bound;
-			const Field* upper_bound;
-			const Field* default_values;
-			unsigned int count;
-			unsigned int precision = 3;
-			unsigned int byte_size;
-		};
-
-		struct UIReflectionStreamFloatInputData {
-			CapacityStream<float>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamDoubleInputData {
-			CapacityStream<double>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamIntInputData {
-			CapacityStream<void>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamTextInputData {
-			CapacityStream<CapacityStream<char>>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamColorData {
-			CapacityStream<Color>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamColorFloatData {
-			CapacityStream<ColorFloat>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamCheckBoxData {
-			CapacityStream<bool>* values;
-			const char* name;
-		};
-
-		struct UIReflectionStreamComboBoxData {
-			CapacityStream<unsigned char>* values;
-			Stream<const char*>* label_names;
-			const char* name;
-		};
-
-		struct UIReflectionStreamInputGroupData {
-			CapacityStream<void>* values;
-			const char* group_name;
-			unsigned int basic_type_count;
-		};
-
-		struct UIReflectionInstanceFieldData {
+		/*struct UIReflectionInstanceFieldData {
 			void* struct_data;
-			CapacityStream<void>* stream_data;
-		};
+			union {
+				CapacityStream<void>* capacity_data;
+				ResizableStream<void>* resizable_data;
+			};
+		};*/
 
 		struct UIReflectionInstance {
 			const char* type_name;
 			const char* name;
-			Stream<UIReflectionInstanceFieldData> datas;
+			Stream<void*> data;
 		};
 
-		using UIReflectionHash = HashFunctionMultiplyString;
-		using UIReflectionTypeTable = HashTable<UIReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, UIReflectionHash>;
-		using UIReflectionInstanceTable = HashTable<UIReflectionInstance, ResourceIdentifier, HashFunctionPowerOfTwo, UIReflectionHash>;
+		using UIReflectionTypeTable = HashTableDefault<UIReflectionType>;
+		using UIReflectionInstanceTable = HashTableDefault<UIReflectionInstance>;
 
 		struct UIReflectionBindDefaultValue {
 			const char* field_name;
@@ -457,9 +337,23 @@ namespace ECSEngine {
 			ECSEngine::CapacityStream<char>* stream;
 		};
 
+		struct UIReflectionBindDirectoryInput {
+			const char* field_name;
+			ECSEngine::CapacityStream<wchar_t>* stream;
+		};
+
+		typedef UIReflectionBindDirectoryInput UIReflectionBindFileInput;
+
 		struct UIReflectionBindStreamCapacity {
 			const char* field_name;
 			size_t capacity;
+		};
+
+		// If only the capacity is to be changed, leave the data pointer nullptr
+		// If the data pointer is not nullptr, then the data will be copied into the stream
+		struct UIReflectionBindResizableStreamData {
+			const char* field_name;
+			Stream<void> data = { nullptr, 0 };
 		};
 
 		struct UIReflectionBindStreamBuffer {
@@ -473,6 +367,11 @@ namespace ECSEngine {
 			size_t element_count;
 		};
 
+		struct UIReflectionBindResizableStreamAllocator {
+			const char* field_name;
+			AllocatorPolymorphic allocator;
+		};
+
 #define ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT 8
 
 		struct UIReflectionDrawConfig {
@@ -481,7 +380,9 @@ namespace ECSEngine {
 			size_t config_size[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
 			size_t associated_bits[ECS_UI_REFLECTION_DRAW_CONFIG_MAX_COUNT];
 			size_t configurations = 0;
+			// Indicates how many configs are currently applied - from the config arrays
 			unsigned char config_count = 0;
+			// This indicates how many indices it affects - deduced from the index static array
 			unsigned char index_count = 1;
 		};
 
@@ -499,6 +400,27 @@ namespace ECSEngine {
 
 		ECSENGINE_API void UIReflectionDrawConfigCopyToNormalConfig(const UIReflectionDrawConfig* ui_config, UIDrawConfig& config);
 
+		typedef void (*UIReflectionInstanceDrawCustom)(
+			UIDrawer& drawer,
+			UIDrawConfig& config,
+			void* field_data, 
+			const char* field_name,
+			UIReflectionStreamType stream_type, 
+			void* extra_data
+		);
+
+		struct UIReflectionInstanceDrawCustomFunctors {
+			UIReflectionInstanceDrawCustom functions[(unsigned char)UIReflectionIndex::Count] = { nullptr };
+			void* extra_data = nullptr;
+		};
+
+		struct UIReflectionDrawerSearchOptions {
+			Stream<const char*> include_tags = { nullptr, 0 };
+			Stream<const char*> exclude_tags = { nullptr, 0 };
+			const char* suffix = nullptr;
+			CapacityStream<unsigned int>* indices = nullptr;
+		};
+
 		// Responsible for creating type definitions and drawing of C++ types
 		struct ECSENGINE_API UIReflectionDrawer {
 			UIReflectionDrawer(
@@ -513,6 +435,13 @@ namespace ECSEngine {
 
 			void AddTypeConfiguration(const char* type_name, const char* field_name, size_t field_configuration);
 			void AddTypeConfiguration(UIReflectionType* type, const char* field_name, size_t field_configuration);
+
+			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
+			// for every text input, directory input or file input a default sized buffer (256 element long)
+			void AssignInstanceResizableAllocator(const char* instance_name, AllocatorPolymorphic allocator, bool allocate_inputs = true);
+			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
+			// for every text input, directory input or file input a default sized buffer (256 element long)
+			void AssignInstanceResizableAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, bool allocate_inputs = true);
 
 			void BindInstanceData(const char* instance_name, const char* field_name, void* field_data);
 			void BindInstanceData(UIReflectionInstance* instance, const char* field_name, void* field_data);
@@ -552,6 +481,12 @@ namespace ECSEngine {
 			void BindInstanceTextInput(const char* instance_name, Stream<UIReflectionBindTextInput> data);
 			void BindInstanceTextInput(UIReflectionInstance* instance, Stream<UIReflectionBindTextInput> data);
 
+			void BindInstanceDirectoryInput(const char* instance_name, Stream<UIReflectionBindDirectoryInput> data);
+			void BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<UIReflectionBindDirectoryInput> data);
+
+			void BindInstanceFileInput(const char* instance_name, Stream<UIReflectionBindFileInput> data);
+			void BindInstanceFileInput(UIReflectionInstance* instance, Stream<UIReflectionBindFileInput> data);
+
 			void BindInstanceStreamCapacity(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			void BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
@@ -561,6 +496,18 @@ namespace ECSEngine {
 			void BindInstanceStreamBuffer(const char* instance_name, Stream<UIReflectionBindStreamBuffer> data);
 			void BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<UIReflectionBindStreamBuffer> data);
 
+			void BindInstanceResizableStreamAllocator(const char* instance_name, Stream<UIReflectionBindResizableStreamAllocator> data);
+			void BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamAllocator> data);
+
+			void BindInstanceResizableStreamData(const char* instance_name, Stream<UIReflectionBindResizableStreamData> data);
+			void BindInstanceResizableStreamData(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamData> data);
+
+			void ConvertTypeResizableStream(const char* type_name, Stream<const char*> field_names);
+			void ConvertTypeResizableStream(UIReflectionType* type, Stream<const char*> field_names);
+
+			void ConvertTypeStreamsToResizable(const char* type_name);
+			void ConvertTypeStreamsToResizable(UIReflectionType* type);
+
 			// It will fill in the count for each field
 			void CopyInstanceStreams(const char* instance_name, Stream<UIReflectionStreamCopy> data);
 			// It will fill in the count for each field
@@ -568,6 +515,9 @@ namespace ECSEngine {
 
 			void ChangeInputToSlider(const char* type_name, const char* field_name);
 			void ChangeInputToSlider(UIReflectionType* type, const char* field_name);
+
+			void ChangeDirectoryToFile(const char* type_name, const char* field_name);
+			void ChangeDirectoryToFile(UIReflectionType* type, const char* field_name);
 
 			UIReflectionType* CreateType(const char* name);
 			UIReflectionType* CreateType(Reflection::ReflectionType type);
@@ -577,29 +527,33 @@ namespace ECSEngine {
 
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
-			unsigned int CreateTypesForHierarchy(unsigned int hierarchy_index, bool exclude_components = false);
+			// Options used: all except the suffix.
+			unsigned int CreateTypesForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
-			unsigned int CreateTypesForHierarchy(const wchar_t* hierarchy, bool exclude_components = false);
+			// Options used: all except the suffix.
+			unsigned int CreateTypesForHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
 
-			// It will create an instance for each type with the given hierarchy. The name of the instance
-			// is identical to that of the type
+			// It will create an instance for each type with the given hierarchy.
 			// Returns how many instances were created
-			unsigned int CreateInstanceForHierarchy(unsigned int hierarchy_index);
-			// It will create an instance for each type with the given hierarchy. The name of the instance
-			// is identical to that of the type
+			// Options used: all.
+			unsigned int CreateInstanceForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+			// It will create an instance for each type with the given hierarchy.
 			// Returns how many instances were created
-			unsigned int CreateInstanceForHierarchy(const wchar_t* hierarchy);
-
-			// It will create a type and an instance for each reflected type from the given hierarchy.
-			// The name of the instance is identical to that of the type
-			// Returns how many instances were created
-			unsigned int CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, bool exclude_components = false);
+			// Options used: all.
+			unsigned int CreateInstanceForHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
 
 			// It will create a type and an instance for each reflected type from the given hierarchy.
 			// The name of the instance is identical to that of the type
 			// Returns how many instances were created
-			unsigned int CreateTypesAndInstancesForHierarchy(const wchar_t* hierarchy, bool exclude_components = false);
+			// Options used: all except the suffix. The indices buffer will be populated with the instances' indices
+			unsigned int CreateTypesAndInstancesForHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+
+			// It will create a type and an instance for each reflected type from the given hierarchy.
+			// The name of the instance is identical to that of the type
+			// Returns how many instances were created
+			// Options used: all except the suffix. The indices buffer will be populated with the instances' indices
+			unsigned int CreateTypesAndInstancesForHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
 
 			void DestroyInstance(unsigned int index);
 			void DestroyInstance(const char* name);
@@ -608,21 +562,27 @@ namespace ECSEngine {
 
 			// The additional configuration will be applied to all fields
 			// It can be used to set size configs, text parameters, alignments
+			// This is the default draw type - basic. For a customized draw, 
+			// Or you can provide functors to override the drawing of certain field types
+			// use the other variant
 			void DrawInstance(
-				const char* ECS_RESTRICT instance_name,
+				const char* instance_name,
 				UIDrawer& drawer, 
 				UIDrawConfig& config,
-				Stream<UIReflectionDrawConfig> additional_configs = {nullptr, 0},
-				const char* ECS_RESTRICT default_value_button = nullptr
+				Stream<UIReflectionDrawConfig> additional_configs = { nullptr, 0 },
+				const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr,
+				const char* default_value_button = nullptr
 			);
 
 			// The additional configuration will be applied to all fields
 			// It can be used to set size configs, text parameters, alignments
+			// Or you can provide functors to override the drawing of certain field types
 			void DrawInstance(
 				UIReflectionInstance* instance,
 				UIDrawer& drawer,
 				UIDrawConfig& config,
 				Stream<UIReflectionDrawConfig> additional_configs = { nullptr, 0 },
+				const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr,
 				const char* default_value_button = nullptr
 			);
 
@@ -632,21 +592,37 @@ namespace ECSEngine {
 			// Destroys all instances and types that originate from the given hierarchy
 			void DestroyAllFromFolderHierarchy(const wchar_t* hierarchy);
 
+			// Destroys all instances from the given hierarchy. If a suffix is provided, only those instances
+			// that match the name of the type with the suffix appended will be deleted.
+			// The include and exclude tags are used for the instance's parent type tags
+			void DestroyAllInstancesFromFolderHierarchy(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options = {});
+			
+			// Destroys all instances from the given hierarchy. If a suffix is provided, only those instances
+			// that match the name of the type with the suffix appended will be deleted.
+			// The include and exclude tags are used for the instance's parent type tags
+			void DestroyAllInstancesFromFolderHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
+
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(const UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
-			void GetHierarchyTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>& indices);
-			void GetHierarchyTypes(const wchar_t* hierarchy, CapacityStream<unsigned int>& indices);
+			void GetHierarchyTypes(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options);
+			void GetHierarchyTypes(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options);
 
-			void GetHierarchyInstances(unsigned int hierarchy_index, CapacityStream<unsigned int>& indices);
-			void GetHierarchyInstances(const wchar_t* hierarchy, CapacityStream<unsigned int>& indices);
+			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
+			void GetHierarchyInstances(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options);
+			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
+			void GetHierarchyInstances(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options);
 
+			// It will assert that it exists
 			UIReflectionType GetType(const char* name) const;
+			// It will assert that it exists
 			UIReflectionType GetType(unsigned int index) const;
 
+			// Returns nullptr if it doesn't exist.
 			UIReflectionType* GetTypePtr(const char* name) const;
+			// Returns nullptr if it doesn't exist
 			UIReflectionType* GetTypePtr(unsigned int index) const;
 
 			unsigned int GetTypeCount() const;
@@ -659,7 +635,7 @@ namespace ECSEngine {
 			UIReflectionInstance* GetInstancePtr(unsigned int index) const;
 			
 			unsigned int GetTypeFieldIndex(UIReflectionType type, const char* field_name) const;
-			unsigned int GetTypeFieldIndex(const char* ECS_RESTRICT type_name, const char* ECS_RESTRICT field_name);
+			unsigned int GetTypeFieldIndex(const char* type_name, const char* field_name);
 
 			void OmitTypeField(const char* type_name, const char* field_name);
 			void OmitTypeField(UIReflectionType* type, const char* field_name);

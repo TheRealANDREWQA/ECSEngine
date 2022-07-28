@@ -94,8 +94,6 @@ enum DESELECTION_RIGHT_CLICK_INDEX {
 	DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES
 };
 
-using Hash = HashFunctionMultiplyString;
-
 void FileExplorerResetSelectedFiles(FileExplorerData* data) {
 	// Deallocate every string stored
 	for (size_t index = 0; index < data->selected_files.size; index++) {
@@ -555,16 +553,16 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	float label_horizontal_scale = drawer->GetSquareScale(THUMBNAIL_SIZE).x;
 
 	UIConfigWindowDependentSize transform;	
-	transform.type = WindowSizeTransformType::Horizontal;
+	transform.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 	transform.scale_factor = drawer->GetWindowSizeFactors(transform.type, { label_horizontal_scale, drawer->layout.default_element_y });
 	config->AddFlag(transform);
 	UIConfigTextParameters text_parameters;
-	text_parameters.color = drawer->color_theme.default_text;
+	text_parameters.color = drawer->color_theme.text;
 	text_parameters.character_spacing = drawer->font.character_spacing;
 	text_parameters.size *= {0.75f, 0.8f};
 	config->AddFlag(text_parameters);
 
-	drawer->element_descriptor.label_horizontal_padd *= 0.5f;
+	drawer->element_descriptor.label_padd.x *= 0.5f;
 
 	if (is_selected) {
 		UIConfigBorder border;
@@ -579,16 +577,20 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT, *config, ascii_stream.buffer);
 	}
 
-	drawer->element_descriptor.label_horizontal_padd *= 2.0f;
+	drawer->element_descriptor.label_padd.x *= 2.0f;
 
 	config->flag_count -= 2;
 
 	UIConfigGeneralAction general_action;
-	general_action.handler = { FileExplorerLabelRenameCallback, _data, sizeof(*_data), UIDrawPhase::System };
+	general_action.handler = { FileExplorerLabelRenameCallback, _data, sizeof(*_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 	config->AddFlag(general_action);
 
-	drawer->Rectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION
-		| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_CLICKABLE_ACTION, *config, drawer->GetCurrentPosition(), { label_horizontal_scale, drawer->layout.default_element_y });
+	drawer->Rectangle(
+		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_GENERAL_ACTION | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION,
+		*config, 
+		drawer->GetCurrentPosition(), 
+		{ label_horizontal_scale, drawer->layout.default_element_y }
+	);
 
 	config->flag_count--;
 
@@ -644,7 +646,7 @@ void TextureDraw(ActionData* action_data) {
 void FileBlankDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	Color sprite_color = drawer->color_theme.default_text;
+	Color sprite_color = drawer->color_theme.text;
 	sprite_color.alpha = white_color.alpha;
 	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, sprite_color);
 }
@@ -653,7 +655,7 @@ void FileOverlayDraw(ActionData* action_data, const wchar_t* overlay_texture) {
 	EXPAND_ACTION;
 
 	Color base_color = drawer->color_theme.theme;
-	Color overlay_color = drawer->color_theme.default_text;
+	Color overlay_color = drawer->color_theme.text;
 	base_color.alpha = white_color.alpha;
 	overlay_color.alpha = white_color.alpha;
 	drawer->SpriteRectangleDouble(
@@ -768,7 +770,7 @@ void FileExplorerDrag(ActionData* action_data) {
 				theme_color,
 				{ 0.0f, 0.0f },
 				{ 1.0f, 1.0f },
-				UIDrawPhase::System
+				ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM
 			);
 
 			// The directory or last file type used
@@ -842,7 +844,7 @@ void FileExplorerDrag(ActionData* action_data) {
 					transparent_color,
 					{ 0.0f, 0.0f },
 					{ 1.0f, 1.0f },
-					UIDrawPhase::System
+					ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM
 				);
 			}
 			else {
@@ -857,7 +859,7 @@ void FileExplorerDrag(ActionData* action_data) {
 					transparent_color,
 					{ 0.0f, 0.0f },
 					{ 1.0f, 1.0f },
-					UIDrawPhase::System
+					ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM
 				);
 			}
 
@@ -984,7 +986,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 	drawer.Button(DESELECT_ALL, { deselect_all_action, &internal_data, sizeof(internal_data) });
 
 	UIDrawConfig config;
-	drawer.Text(UI_CONFIG_TEXT_ALIGN_TO_ROW_Y, config, "Select the files you want to overwrite: ");
+	drawer.Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Select the files you want to overwrite: ");
 	drawer.NextRow();
 	
 	// Draw the checkboxes
@@ -1031,7 +1033,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 		CloseXBorderClickableAction(action_data);
 	};
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, OVERWRITE_TEXT, { overwrite_action, &internal_data, sizeof(internal_data), UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, OVERWRITE_TEXT, { overwrite_action, &internal_data, sizeof(internal_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 	config.flag_count--;
 	
 	// Aligned to the right
@@ -1047,7 +1049,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 	};
 	config.AddFlag(transform);
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, CANCEL_TEXT, { cancel_action, data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, CANCEL_TEXT, { cancel_action, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 }
 
 unsigned int CreateFileExplorerSelectOverwriteFiles(UISystem* system, FileExplorerSelectOverwriteFilesData data) {
@@ -1278,7 +1280,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 			if (!is_alive && data->new_preloads->size < data->new_preloads->capacity) {
 				FileExplorerPreloadTexture preload_texture;
 				preload_texture.last_write_time = file_last_write;
-				preload_texture.path = function::StringCopy(editor_allocator, stream_path);
+				preload_texture.path = function::StringCopy(GetAllocatorPolymorphic(editor_allocator), stream_path);
 				preload_texture.texture = nullptr;
 				data->explorer_data->staging_preloaded_textures.Add(preload_texture);
 			}
@@ -1340,7 +1342,7 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 		Semaphore* semaphore = (Semaphore*)editor_allocator->Allocate(sizeof(Semaphore));
 		semaphore->ClearCount();
 		unsigned int launch_thread_count = function::Select<unsigned int>(per_thread_textures > 0, thread_count, per_thread_remainder);
-		semaphore->SetTarget(launch_thread_count);
+		semaphore->target.store(launch_thread_count, ECS_RELAXED);
 
 		for (size_t index = 0; index < launch_thread_count; index++) {
 			bool has_remainder = per_thread_remainder > 0;
@@ -1378,8 +1380,8 @@ void FileExplorerReleaseMeshThumbnail(EditorState* editor_state, FileExplorerDat
 	editor_allocator->Deallocate(identifier.ptr);
 	// Release the resources only if the thumbnail could be loaded
 	if (thumbnail.could_be_read) {
-		Texture2D texture = GetResource(thumbnail.texture);
-		Graphics* graphics = editor_state->Graphics();
+		Texture2D texture = thumbnail.texture.GetResource();
+		Graphics* graphics = editor_state->UIGraphics();
 		graphics->FreeResource(texture);
 		graphics->FreeResource(thumbnail.texture);
 	}
@@ -1422,7 +1424,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 		// Also add it to the 
 		if (data->explorer_data->mesh_thumbnails.Find(path) == -1) {
 			// Allocate the identifier for the hash table
-			Stream<wchar_t> allocated_path = function::StringCopy(data->editor_allocator, path);
+			Stream<wchar_t> allocated_path = function::StringCopy(GetAllocatorPolymorphic(data->editor_allocator), path);
 			FileExplorerMeshThumbnail thumbnail;
 
 			//Try to read the mesh here and create it's buffers GPU buffers
@@ -1442,7 +1444,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 			//thumbnail.could_be_read = false;
 
 			// Update the hash table
-			InsertToDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, ResourceIdentifier(allocated_path.buffer, allocated_path.size * sizeof(wchar_t)));
+			InsertIntoDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, ResourceIdentifier(allocated_path.buffer, allocated_path.size * sizeof(wchar_t)));
 
 			data->thumbnail_found = true;
 
@@ -1535,10 +1537,10 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
 			data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
@@ -1550,9 +1552,9 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FOLDER_RIGHT_CLICK_ROW_COUNT);
 			data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, UIDrawPhase::System };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, UIDrawPhase::System };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
@@ -1614,7 +1616,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	deselection_right_click_data.state.left_characters = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS;
 	deselection_right_click_data.state.row_count = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT;
 
-	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_right_click_data, sizeof(deselection_right_click_data), UIDrawPhase::System };
+	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_right_click_data, sizeof(deselection_right_click_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 	drawer.SetWindowHoverable(&deselect_right_click_handler);
 
 #pragma endregion
@@ -1623,7 +1625,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 	float row_padding = drawer.layout.next_row_padding;
 	float next_row_offset = drawer.layout.next_row_y_offset;
-	drawer.SetDrawMode(UIDrawerMode::Nothing);
+	drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NOTHING);
 	drawer.SetRowPadding(0.001f);
 	drawer.SetNextRowYOffset(0.0025f);
 
@@ -1640,7 +1642,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 	UIConfigMenuSprite plus_sprite;
 	plus_sprite.texture = ECS_TOOLS_UI_TEXTURE_PLUS;
-	plus_sprite.color = drawer.color_theme.default_text;
+	plus_sprite.color = drawer.color_theme.text;
 	header_config.AddFlag(plus_sprite);
 
 	constexpr size_t HEADER_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW | UI_CONFIG_DO_NOT_ADVANCE;
@@ -1784,15 +1786,15 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	// Element Draw
 	if (!initialize) {
 
-		drawer.SetDrawMode(UIDrawerMode::ColumnDrawFitSpace, 2, THUMBNAIL_TO_LABEL_SPACING);
+		drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE, 2, THUMBNAIL_TO_LABEL_SPACING);
 		UIDrawConfig config;
 
 		UIConfigRelativeTransform transform;
-		transform.scale = drawer.GetSquareScale(THUMBNAIL_SIZE) / drawer.GetElementDefaultScale();
+		transform.scale = drawer.GetRelativeTransformFactorsZoomed(drawer.GetSquareScale(THUMBNAIL_SIZE));
 		config.AddFlag(transform);
 
 		UIConfigClickableAction drag_click;
-		drag_click = { FileExplorerDrag, data, 0, UIDrawPhase::System };
+		drag_click = { FileExplorerDrag, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 		config.AddFlag(drag_click);
 
 		ForEachData for_each_data;
@@ -1814,7 +1816,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			UIDrawConfig* config = _data->config;
 			UIDrawer* drawer = _data->drawer;
 
-			Path stream_path = function::StringCopy(&data->temporary_allocator, path);
+			Path stream_path = function::StringCopy(GetAllocatorPolymorphic(&data->temporary_allocator), path);
 
 			SelectableData selectable_data;
 			selectable_data.editor_state = _data->editor_state;
@@ -1866,11 +1868,11 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				right_click_data.state.submenu_index = 0;
 
 				UIConfigHoverableAction hoverable_action;
-				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), UIDrawPhase::System };
+				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 				config->AddFlag(hoverable_action);
 
-				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_HOVERABLE_ACTION
-					| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_GENERAL_ACTION | UI_CONFIG_CLICKABLE_ACTION | UI_CONFIG_GET_TRANSFORM;
+				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_RECTANGLE_HOVERABLE_ACTION
+					| UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_RECTANGLE_GENERAL_ACTION | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION | UI_CONFIG_GET_TRANSFORM;
 
 				float2 rectangle_position;
 				float2 rectangle_scale;
@@ -1920,7 +1922,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			UIDrawConfig* config = _data->config;
 			UIDrawer* drawer = _data->drawer;
 
-			Path stream_path = function::StringCopy(&data->temporary_allocator, path);
+			Path stream_path = function::StringCopy(GetAllocatorPolymorphic(&data->temporary_allocator), path);
 
 			Path extension = function::PathExtension(stream_path);
 
@@ -2021,7 +2023,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				};
 				
 				right_click_data.action = OnRightClickAction;
-				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), UIDrawPhase::System };
+				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 				config->AddFlag(hoverable_action);
 
 				float2 rectangle_position;
@@ -2031,8 +2033,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				get_transform.scale = &rectangle_scale;
 				config->AddFlag(get_transform);
 
-				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_GET_TRANSFORM | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_HOVERABLE_ACTION |
-					UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_CLICKABLE_ACTION;
+				constexpr size_t RECTANGLE_CONFIGURATION = UI_CONFIG_GET_TRANSFORM | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_HOVERABLE_ACTION |
+					UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
 
 				if (is_selected) {
 					// Add the border highlight

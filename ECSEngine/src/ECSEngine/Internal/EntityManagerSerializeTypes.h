@@ -27,17 +27,13 @@ namespace ECSEngine {
 #define ECS_DESERIALIZE_ENTITY_MANAGER_EXTRACT_COMPONENT(function_name) void function_name(const void* file_data, unsigned int data_size, void* component, void* extra_data)
 #define ECS_DESERIALIZE_ENTITY_MANAGER_EXTRACT_SHARED_COMPONENT(function_name) void function_name(SharedInstance instance, const void* file_data, unsigned int data_size, void* component, void* extra_data)
 
-	struct EntityManagerHashComponent {
-		static unsigned int Hash(Component component);
-	};
+	typedef HashTable<SerializeEntityManagerExtractComponent, Component, HashFunctionPowerOfTwo> SerializeEntityManagerComponentTable;
 
-	typedef HashTable<SerializeEntityManagerExtractComponent, Component, HashFunctionPowerOfTwo, EntityManagerHashComponent> SerializeEntityManagerComponentTable;
+	typedef HashTable<SerializeEntityManagerExtractSharedComponent, Component, HashFunctionPowerOfTwo> SerializeEntityManagerSharedComponentTable;
 
-	typedef HashTable<SerializeEntityManagerExtractSharedComponent, Component, HashFunctionPowerOfTwo, EntityManagerHashComponent> SerializeEntityManagerSharedComponentTable;
+	typedef HashTable<DeserializeEntityManagerExtractComponent, Component, HashFunctionPowerOfTwo> DeserializeEntityManagerComponentTable;
 
-	typedef HashTable<DeserializeEntityManagerExtractComponent, Component, HashFunctionPowerOfTwo, EntityManagerHashComponent> DeserializeEntityManagerComponentTable;
-
-	typedef HashTable<DeserializeEntityManagerExtractSharedComponent, Component, HashFunctionPowerOfTwo, EntityManagerHashComponent> DeserializeEntityManagerSharedComponentTable;
+	typedef HashTable<DeserializeEntityManagerExtractSharedComponent, Component, HashFunctionPowerOfTwo> DeserializeEntityManagerSharedComponentTable;
 
 	enum ECS_DESERIALIZE_ENTITY_MANAGER_STATUS {
 		ECS_DESERIALIZE_ENTITY_MANAGER_OK = 0,

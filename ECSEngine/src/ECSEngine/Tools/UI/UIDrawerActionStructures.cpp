@@ -163,7 +163,8 @@ namespace ECSEngine {
 			unsigned int* delete_position
 		)
 		{
-			UIDrawerTextInput* input = this;
+			trigger_callback = true;
+
 			if (current_selection > current_sprite_position) {
 				*delete_position = current_sprite_position;
 			}
@@ -180,14 +181,26 @@ namespace ECSEngine {
 				unsigned int* text_position = &command_info->text_position;
 				unsigned char* info_text = (unsigned char*)((uintptr_t)command_info + data_size);
 				char* text = deleted_characters;
-				command_info->input = input;
+				command_info->input = this;
 
-				input->Backspace(text_count, text_position, text);
+				Backspace(text_count, text_position, text);
 			}
 			InsertCharacters(characters, character_count, current_sprite_position, system);
 		}
 
+		void UIDrawerTextInput::Callback(ActionData* action_data)
+		{
+			action_data->data = callback_data;
+			callback(action_data);
+		}
+
+		bool UIDrawerTextInput::HasCallback() const
+		{
+			return callback != nullptr;
+		}
+
 		bool UIDrawerTextInput::Backspace(unsigned int* output_text_count, unsigned int* output_text_position, char* output_text) {
+			trigger_callback = true;
 			if (current_sprite_position == current_selection && current_sprite_position > 0) {
 				*output_text_count = 1;
 				*output_text_position = current_sprite_position;
@@ -300,6 +313,9 @@ namespace ECSEngine {
 
 		void UIDrawerTextInput::DeleteAllCharacters()
 		{
+			trigger_callback = true;
+
+			text->buffer[0] = '\0';
 			text->size = 0;
 			vertices.size = 0;
 			current_sprite_position = 0;
@@ -309,6 +325,8 @@ namespace ECSEngine {
 
 		void UIDrawerTextInput::InsertCharacters(const char* characters, unsigned int character_count, unsigned int character_position, UISystem* system)
 		{
+			trigger_callback = true;
+
 			if (character_count + text->size > text->capacity) {
 				character_count = text->capacity - text->size;
 			}
@@ -321,9 +339,10 @@ namespace ECSEngine {
 				};
 			}
 			else {
+				float y_position = system->AlignMiddleTextY(position.y, solid_color_y_scale, font_size.y, padding.y);
 				current_position = {
 					position.x + padding.x,
-					position.y + padding.y
+					y_position
 				};
 			}
 
@@ -333,10 +352,9 @@ namespace ECSEngine {
 			vertices.PushDownElements(current_sprite_position * 6, character_count * 6);
 			memcpy(text->buffer + current_selection, characters, sizeof(unsigned char) * character_count);
 			system->ConvertCharactersToTextSprites(
-				(const char*)characters,
+				{ characters, character_count },
 				current_position,
 				vertices.buffer,
-				character_count,
 				text_color,
 				current_sprite_position * 6,
 				font_size,
@@ -439,7 +457,6 @@ namespace ECSEngine {
 		void UIDrawerSlider::Callback(ActionData* action_data)
 		{
 			if (changed_value_callback.action != nullptr) {
-				action_data->additional_data_type = ActionAdditionalData::ReturnToDefault;
 				action_data->data = changed_value_callback.data;
 				changed_value_callback.action(action_data);
 			}
@@ -448,7 +465,6 @@ namespace ECSEngine {
 		void UIDrawerColorInput::Callback(ActionData* action_data)
 		{
 			if (callback.action != nullptr) {
-				action_data->additional_data_type = ActionAdditionalData::ReturnToDefault;
 				action_data->data = callback.data;
 				callback.action(action_data);
 			}
@@ -528,7 +544,6 @@ namespace ECSEngine {
 		{
 			name.SetZoomFactor(zoom);
 		}
-
 
 		bool UIDrawerTextInputActionData::IsTheSameData(const UIDrawerTextInputActionData* other) const
 		{

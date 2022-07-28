@@ -220,7 +220,7 @@ void SettingsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 				right_transform.scale = data->drawer->GetSquareScale(data->drawer->layout.default_element_y * 0.75f);
 				right_transform.position = data->drawer->GetAlignedToRight(right_transform.scale.x);
 				config.AddFlag(right_transform);
-				data->drawer->SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW, config, ECS_TOOLS_UI_TEXTURE_X, data->drawer->color_theme.default_text);
+				data->drawer->SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW, config, ECS_TOOLS_UI_TEXTURE_X, data->drawer->color_theme.text);
 
 				struct DeleteActionData {
 					const wchar_t* filename;
@@ -274,7 +274,7 @@ void SettingsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	ui_reflection_configs[0].configurations = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 	ui_reflection_configs[0].index[0] = UIReflectionIndex::Count;
 
-	ui_reflection_configs[1].configurations = UI_CONFIG_NUMBER_INPUT_DO_NOT_REDUCE_SCALE | UI_CONFIG_TEXT_INPUT_CALLBACK;
+	ui_reflection_configs[1].configurations = UI_CONFIG_TEXT_INPUT_CALLBACK;
 	ui_reflection_configs[1].index[0] = UIReflectionIndex::IntegerInput;
 	ui_reflection->DrawInstance(UI_REFLECTION_INSTANCE_NAME, drawer, config, { ui_reflection_configs, std::size(ui_reflection_configs) });
 	config.flag_count--;

@@ -51,6 +51,8 @@ namespace ECSEngine {
 #define ECS_NOINLINE __declspec(noinline)
 #define ECS_RESTRICT __restrict
 
+#define ECS_BIT(bit_index) (1 << bit_index)
+
 #define ECS_FILE_LINE __FILE__, (unsigned int)__LINE__
 #define ECS_LOCATION __builtin_FILE(), __builtin_FUNCTION(), __builtin_LINE()
 #define ECS_DEBUG_INFO { ECS_LOCATION } 
@@ -148,16 +150,18 @@ template ECSENGINE_API return_type function_name(MultipoolAllocator*, __VA_ARGS_
 template ECSENGINE_API return_type function_name(MemoryManager*, __VA_ARGS__); \
 template ECSENGINE_API return_type function_name(GlobalMemoryManager*, __VA_ARGS__); \
 template ECSENGINE_API return_type function_name(MemoryArena*, __VA_ARGS__); \
-template ECSENGINE_API return_type function_name(ResizableMemoryArena*, __VA_ARGS__);
+template ECSENGINE_API return_type function_name(ResizableMemoryArena*, __VA_ARGS__); \
+template ECSENGINE_API return_type function_name(ResizableLinearAllocator*, __VA_ARGS__);
 
 #define ECS_TEMPLATE_FUNCTION_ALLOCATOR(return_type, function_name, ...) template return_type function_name(LinearAllocator*, __VA_ARGS__); \
 template return_type function_name(StackAllocator*, __VA_ARGS__); \
-template return_type function_name(PoolAllocator*, __VA_ARGS__); \
+/*template return_type function_name(PoolAllocator*, __VA_ARGS__);*/ \
 template return_type function_name(MultipoolAllocator*, __VA_ARGS__); \
 template return_type function_name(MemoryManager*, __VA_ARGS__); \
 template return_type function_name(GlobalMemoryManager*, __VA_ARGS__); \
 template return_type function_name(MemoryArena*, __VA_ARGS__); \
-template return_type function_name(ResizableMemoryArena*, __VA_ARGS__);
+template return_type function_name(ResizableMemoryArena*, __VA_ARGS__); \
+template return_type function_name(ResizableLinearAllocator*, __VA_ARGS__);
 
 #define ECS_TEMPLATE_FUNCTION_INTEGER(function) function(char); function(int8_t); function(uint8_t); function(int16_t); function(uint16_t); \
 function(int32_t); function(uint32_t); function(int64_t); function(uint64_t);

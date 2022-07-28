@@ -15,6 +15,8 @@
 
 namespace ECSEngine {
 
+	extern ECSENGINE_API char DEVICE_NAME[128];
+
 #ifdef ECSENGINE_PLATFORM_WINDOWS
 
 #ifdef ECSENGINE_DIRECTX11
@@ -173,7 +175,8 @@ namespace ECSEngine {
 		ECS_GRAPHICS_RESOURCE_BLEND_STATE,
 		ECS_GRAPHICS_RESOURCE_DEPTH_STENCIL_STATE,
 		ECS_GRAPHICS_RESOURCE_RASTERIZER_STATE,
-		ECS_GRAPHICS_RESOURCE_COMMAND_LIST
+		ECS_GRAPHICS_RESOURCE_COMMAND_LIST,
+		ECS_GRAPHICS_RESOURCE_DX_RESOURCE_INTERFACE
 	};
 
 	struct GraphicsInternalResource {
@@ -295,8 +298,11 @@ namespace ECSEngine {
 		else if constexpr (std::is_same_v<Resource, TextureCube>) {
 			return ECS_GRAPHICS_RESOURCE_TEXTURE_CUBE;
 		}
+		else if constexpr (std::is_same_v<Resource, ID3D11Resource*>) {
+			return ECS_GRAPHICS_RESOURCE_DX_RESOURCE_INTERFACE;
+		}
 		else {
-			static_assert(false);
+			static_assert(false, "Invalid resource type when adding internal graphics resource");
 		}
 	}
 
@@ -320,9 +326,12 @@ namespace ECSEngine {
 	{
 	public:
 		Graphics(HWND hWnd, const GraphicsDescriptor* descriptor);
+		// If the render target and the depth view are nullptr, it will not create any target or depth view. If the new allocator
+		// is nullptr, it will use the one from the graphics_to_copy
 		Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target = { nullptr }, DepthStencilView new_depth_view = { nullptr }, MemoryManager* new_allocator = nullptr);
 
-		Graphics& operator = (const Graphics& other) = default;
+		Graphics(const Graphics& other);
+		Graphics& operator = (const Graphics& other);
 
 #pragma region Context Bindings
 
@@ -745,9 +754,15 @@ namespace ECSEngine {
 
 		RasterizerState CreateRasterizerState(const D3D11_RASTERIZER_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		RasterizerState CreateRasterizerStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+
 		DepthStencilState CreateDepthStencilState(const D3D11_DEPTH_STENCIL_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		DepthStencilState CreateDepthStencilStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+
 		BlendState CreateBlendState(const D3D11_BLEND_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		BlendState CreateBlendStateDefault(bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 #pragma endregion
 
@@ -884,14 +899,11 @@ namespace ECSEngine {
 			unsigned int write_index = m_internal_resources.RequestInt(1);
 			if (write_index >= m_internal_resources.capacity) {
 				bool do_resizing = m_internal_resources_lock.try_lock();
-				// The first one to acquire the semaphore - do the resizing or the flush of removals
+				// The first one to acquire the lock - do the resizing or the flush of removals
 				if (do_resizing) {
 					// Spin wait while there are still readers
 					unsigned int read_count = m_internal_resources_reader_count.load(ECS_RELAXED);
-					while (read_count > 0) {
-						read_count = m_internal_resources_reader_count.load(ECS_RELAXED);
-						_mm_pause();
-					}
+					SpinWait<'>'>(m_internal_resources_reader_count, (unsigned int)0);
 
 					// Commit the removals
 					CommitInternalResourcesToBeFreed();
@@ -905,24 +917,34 @@ namespace ECSEngine {
 					}
 					write_index = m_internal_resources.RequestInt(1);
 					m_internal_resources[write_index] = internal_res;
+					m_internal_resources.FinishRequest(1);
 
 					m_internal_resources_lock.unlock();
 				}
 				// Other thread got to do the resizing or freeing of the resources - stall until it finishes
 				else {
-					while (m_internal_resources_lock.is_locked()) {
-						_mm_pause();
-					}
+					m_internal_resources_lock.wait_locked();
 					// Rerequest the position
 					write_index = m_internal_resources.RequestInt(1);
 					m_internal_resources[write_index] = internal_res;
+					m_internal_resources.FinishRequest(1);
 				}
 			}
 			// Write into the internal resources
 			else {
 				m_internal_resources[write_index] = internal_res;
+				m_internal_resources.FinishRequest(1);
 			}
 		}
+
+		template<typename Resource>
+		void AddInternalResource(Resource resource, bool temporary, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			if (!temporary) {
+				AddInternalResource(resource, debug_info);
+			}
+		}
+
+		AllocatorPolymorphic Allocator() const;
 
 		// Only for basic resources
 		template<typename Resource>
@@ -938,11 +960,8 @@ namespace ECSEngine {
 				count = resource->Release();
 			}
 			else {
-				//ECS_GRAPHICS_ASSERT_GRAPHICS_RESOURCE;
 				count = resource.Release();
 			}
-
-			ECS_ASSERT(count < 100);
 		}
 
 		// It will assert FALSE if it doesn't exist
@@ -1013,6 +1032,20 @@ namespace ECSEngine {
 
 		void SetNewSize(HWND hWnd, unsigned int width, unsigned int height);
 
+		// It will register the newly created resources if not temporary
+		Mesh TransferMesh(const Mesh* mesh, bool temporary = false);
+
+		// Will keep the same submeshes stream, only the mesh portion gets actually transferred
+		// It will register the newly created resources if not temporary
+		CoallescedMesh TransferCoallescedMesh(const CoallescedMesh* mesh, bool temporary = false);
+
+		// Will keep the same material buffer and submesh stream, only the mesh portion gets actually transferred
+		// It will register the newly created resources if not temporary
+		PBRMesh TransferPBRMesh(const PBRMesh* mesh, bool temporary = false);
+
+		// It will register the newly created resources if not temporary
+		Material TransferMaterial(const Material* material, bool temporary = false);
+
 #pragma endregion
 
 	//private:
@@ -1026,8 +1059,7 @@ namespace ECSEngine {
 		size_t m_bound_render_target_count;
 		DepthStencilView m_depth_stencil_view;
 		DepthStencilView m_current_depth_stencil;
-		BlendState m_blend_disabled;
-		BlendState m_blend_enabled;
+
 		ShaderReflection* m_shader_reflection;
 		MemoryManager* m_allocator;
 		CapacityStream<GraphicsShaderHelper> m_shader_helpers;
@@ -1334,8 +1366,14 @@ namespace ECSEngine {
 	// Transfers a shared GPU texture/buffer from a Graphics instance to another - should only create
 	// another runtime DX11 reference to that texture, there should be no memory blit or copy
 	// It does not affect samplers, input layouts, shaders, other pipeline objects (rasterizer/blend/depth states)
+	// Use this function only for textures and buffers since these are the only ones who actually need transfering
 	template<typename Resource>
 	ECSENGINE_API Resource TransferGPUResource(Resource resource, GraphicsDevice* device);
+
+	// Transfers the deep target buffer or texture and then creates a new texture view that points to it
+	// Only views should be given
+	template<typename View>
+	ECSENGINE_API View TransferGPUView(View view, GraphicsDevice* device);
 
 	template<typename Texture>
 	ECSENGINE_API void UpdateTexture(

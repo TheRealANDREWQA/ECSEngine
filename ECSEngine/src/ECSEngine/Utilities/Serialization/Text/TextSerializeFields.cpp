@@ -387,7 +387,7 @@ namespace ECSEngine {
 			Stream<char> type_string(open_paranthese + 1, closed_paranthese - open_paranthese - 1);
 
 			// Now get the basic type
-			ReflectionBasicFieldType basic_type = ConvertStringToBasicFieldType(type_string);
+			ReflectionBasicFieldType basic_type = ConvertStringAliasToBasicFieldType(type_string);
 			if (basic_type == ReflectionBasicFieldType::Unknown || basic_type == ReflectionBasicFieldType::UserDefined) {
 				next_iteration(ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS, true);
 				continue;

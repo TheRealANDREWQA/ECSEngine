@@ -1,9 +1,119 @@
 #pragma once
-#include "EntityManager.h"
+#include "World.h"
+#include "Multithreading/TaskSchedulerTypes.h"
 
 namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
+
+	template<typename T>
+	struct Read {
+		using type = T;
+
+		constexpr static inline ECS_ACCESS_TYPE Access() {
+			return ECS_READ;
+		}
+
+		constexpr static inline bool IsExclude() {
+			return false;
+		}
+	};
+
+	template<typename T>
+	struct Write {
+		using type = T;
+
+		constexpr static inline ECS_ACCESS_TYPE Access() {
+			return ECS_WRITE;
+		}
+
+		constexpr static inline bool IsExclude() {
+			return false;
+		}
+	};
+
+	template<typename T>
+	struct ReadWrite {
+		using type = T;
+
+		constexpr static inline ECS_ACCESS_TYPE Access() {
+			return ECS_READ_WRITE;
+		}
+
+		constexpr static inline bool IsExclude() {
+			return false;
+		}
+	};
+
+	template<typename T>
+	struct Exclude {
+		using type = T;
+
+		constexpr static inline bool IsExclude() {
+			return true;
+		}
+	};
+
+	template<typename Head, typename... AccessTypes>
+	void QueryExtractComponent(TaskComponentQuery& query, LinearAllocator* allocator) {
+		unsigned short index = Head::type::Index();
+		constexpr bool exclude = Head::IsExclude();
+		constexpr bool is_shared = Head::type::IsShared();
+
+		if constexpr (exclude) {
+			if constexpr (is_shared) {
+				query.AddSharedComponentExclude({ index }, allocator);
+			}
+			else {
+				query.AddComponentExclude({ index }, allocator);
+			}
+		}
+		else {
+			ECS_ACCESS_TYPE access = Head::Access();
+			if constexpr (is_shared) {
+				query.AddSharedComponent({ index }, access, allocator);
+			}
+			else {
+				query.AddComponent({ index }, access, allocator);
+			}
+		}
+
+		if constexpr (sizeof...(AccessTypes) > 0) {
+			QueryExtractComponent<AccessTypes...>(query, allocator);
+		}
+	}
+
+	template<typename... AccessTypes>
+	struct QueryBuilder {
+		// The stack allocator is needed in case there are more components that can be stored in place
+		static TaskComponentQuery GetQuery(
+			LinearAllocator* stack_allocator, 
+			unsigned short batch_size = 0,
+			ECS_THREAD_TASK_READ_VISIBILITY_TYPE read_visibility = ECS_THREAD_TASK_READ_LAZY,
+			ECS_THREAD_TASK_WRITE_VISIBILITY_TYPE write_visibility = ECS_THREAD_TASK_WRITE_LAZY
+		) {
+			TaskComponentQuery query;
+
+			QueryExtractComponent<AccessTypes...>(query, stack_allocator);
+			query.batch_size = batch_size;
+			query.read_type = read_visibility;
+			query.write_type = write_visibility;
+
+			return query;
+		}
+
+		template<typename Functor>
+		static void ForEach(unsigned int thread_id, World* world, Functor&& functor) {
+			TaskScheduler* scheduler = world->task_scheduler;
+			Stream<unsigned short> archetypes = scheduler->GetQueryArchetypes(thread_id, world);
+			EntityManager* entity_manager = world->entity_manager;
+
+			for (size_t index = 0; index < archetypes.size; index++) {
+				const Archetype* archetype = entity_manager->GetArchetype(archetypes[index]);
+
+			}
+		}
+	};
 
 	typedef void (*ForEachEntityFunctor)(Entity entity, void** unique_components, void** shared_components, void* data);
 

@@ -33,6 +33,8 @@ namespace ECSEngine {
 
 		size_t GetSize() const;
 
+		bool Belongs(const void* buffer) const;
+
 		// --------------------------------------------------- Thread safe variants ------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);

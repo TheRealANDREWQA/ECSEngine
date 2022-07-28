@@ -111,7 +111,7 @@ void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool 
 	config.AddFlag(hint);
 
 	UIConfigWindowDependentSize size;
-	size.type = WindowSizeTransformType::Horizontal;
+	size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 	size.scale_factor.x = 1.0f;
 	config.AddFlag(size);
 
@@ -127,14 +127,14 @@ void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool 
 	absolute_transform.scale = label_size;
 
 	config.AddFlag(absolute_transform);
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Finish", { ChooseDirectoryOrFileNameButtonAction, data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Finish", { ChooseDirectoryOrFileNameButtonAction, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 	config.flag_count--;
 	
 
 	absolute_transform.scale = drawer.GetLabelScale("Cancel");
 	absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
 	config.AddFlag(absolute_transform);
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM,config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM,config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 }
 
 unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDirectoryOrFileNameData data)

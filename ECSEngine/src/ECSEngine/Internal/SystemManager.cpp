@@ -25,14 +25,7 @@ namespace ECSEngine {
 		system_data.InitializeFromBuffer(ptr, SYSTEM_DATA_COUNT);
 		temporary_table.InitializeFromBuffer(ptr, TEMPORARY_TABLE_COUNT);
 
-		task_dependencies = TaskDependencies(memory_manager);
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------------------
-
-	void SystemManager::AddSystem(Stream<TaskDependencyElement> system_tasks)
-	{
-		task_dependencies.Add(system_tasks);
+		allocator = GetAllocatorPolymorphic(memory_manager);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
@@ -41,7 +34,7 @@ namespace ECSEngine {
 	{
 		unsigned int index = system_data.Find(system_name);
 
-		data = function::Copy(task_dependencies.elements.allocator, data, data_size);
+		data = function::Copy(allocator, data, data_size);
 		if (index == -1) {
 			ECS_ASSERT(!system_data.Insert((void*)data, system_name));
 		}
@@ -57,7 +50,7 @@ namespace ECSEngine {
 	{
 		unsigned int index = temporary_table.Find(table_name);
 
-		data = function::Copy(task_dependencies.elements.allocator, data, data_size);
+		data = function::Copy(allocator, data, data_size);
 		if (index == -1) {
 			ECS_ASSERT(!temporary_table.Insert((void*)data, table_name));
 		}
@@ -65,13 +58,6 @@ namespace ECSEngine {
 			void** ptr = temporary_table.GetValuePtrFromIndex(index);
 			*ptr = (void*)data;
 		}
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------------------
-
-	void SystemManager::ClearDependencies()
-	{
-		task_dependencies.Reset();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
@@ -97,20 +83,6 @@ namespace ECSEngine {
 	void SystemManager::ResetTemporaryTable()
 	{
 		temporary_table.Clear();
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------------------
-
-	bool SystemManager::SolveDependencies(TaskManager* task_manager)
-	{
-		bool success = task_dependencies.Solve();
-		if (success) {
-			for (size_t index = 0; index < task_dependencies.elements.size; index++) {
-				task_manager->AddTask(task_dependencies.elements[index].task);
-			}
-			return true;
-		}
-		return false;
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------

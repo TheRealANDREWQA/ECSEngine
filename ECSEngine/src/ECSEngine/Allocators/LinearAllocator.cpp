@@ -8,7 +8,7 @@ namespace ECSEngine {
 		// calculating the current pointer and aligning it
 		uintptr_t current_pointer = (uintptr_t)m_buffer + m_top;
 
-		uintptr_t offset = function::align_pointer(current_pointer, alignment);
+		uintptr_t offset = function::AlignPointer(current_pointer, alignment);
 
 		// transforming to relative aligned offset
 		offset -= (uintptr_t)m_buffer;
@@ -19,13 +19,9 @@ namespace ECSEngine {
 		m_top = offset + size;
 
 		return pointer;
-
 	}
 
-	void LinearAllocator::Deallocate(const void* block) {
-		ECS_ASSERT(m_top >= m_marker);
-		m_top = m_marker;
-	}
+	void LinearAllocator::Deallocate(const void* block) {}
 
 	void LinearAllocator::Clear() {
 		m_top = 0;
@@ -43,6 +39,11 @@ namespace ECSEngine {
 		m_top = marker;
 	}
 
+	bool LinearAllocator::Belongs(const void* buffer) const
+	{
+		return function::IsPointerRange(m_buffer, m_top, buffer);
+	}
+
 	void LinearAllocator::SetMarker() {
 		m_marker = m_top;
 	}
@@ -56,11 +57,7 @@ namespace ECSEngine {
 		return pointer;
 	}
 
-	void LinearAllocator::Deallocate_ts(const void* block) {
-		m_spin_lock.lock();
-		Deallocate(block);
-		m_spin_lock.unlock();
-	}
+	void LinearAllocator::Deallocate_ts(const void* block) {}
 
 	void LinearAllocator::SetMarker_ts() {
 		m_spin_lock.lock();

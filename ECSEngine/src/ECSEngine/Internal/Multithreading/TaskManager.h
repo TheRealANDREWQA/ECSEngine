@@ -35,11 +35,34 @@ namespace ECSEngine {
 
 	using ThreadQueue = ThreadSafeQueue<ThreadTask>;
 
-	enum class TaskManagerWrapper : unsigned char {
-		None,
-		CountTasks,
-		Custom
+	// If partitioning a stream is desired with more explicit names that a uint2
+	struct ThreadPartition {
+		unsigned int offset;
+		unsigned int size;
 	};
+
+	enum ECS_THREAD_PRIORITY : unsigned char {
+		ECS_THREAD_PRIORITY_VERY_LOW,
+		ECS_THREAD_PRIORITY_LOW,
+		ECS_THREAD_PRIORITY_NORMAL,
+		ECS_THREAD_PRIORITY_HIGH,
+		ECS_THREAD_PRIORITY_VERY_HIGH
+	};
+
+	// Will distribute the task evenly across the threads taking into account the remainder
+	// The indices stream must have as its size the number of threads that want to be scheduled
+	// It returns the number of threads that need to be launched
+	ECSENGINE_API unsigned int ThreadPartitionStream(Stream<ThreadPartition> indices, unsigned int task_count);
+
+	// Obviously, it doesn't require any data when setting this wrapper
+	ECSENGINE_API ECS_THREAD_WRAPPER_TASK(ThreadWrapperNone);
+
+	struct ThreadWrapperCountTasksData {
+		std::atomic<unsigned int> count = 0;
+	};
+	
+	// It requires a ThreadWrapperCountTasksData to be allocated
+	ECSENGINE_API ECS_THREAD_WRAPPER_TASK(ThreadWrapperCountTasks);
 
 	struct ECSENGINE_API TaskManager
 	{
@@ -71,9 +94,13 @@ namespace ECSEngine {
 		// does not affect last thread id used
 		void AddDynamicTaskAndWakeWithAffinity(ThreadTask task, unsigned int thread_id);
 
-		void ChangeStaticWrapperMode(TaskManagerWrapper wrapper_mode, void* wrapper_data = nullptr, size_t wrapper_data_size = 0, ThreadFunctionWrapper custom_function = nullptr);
+		void* AllocateTempBuffer(unsigned int thread_id, size_t size, size_t alignment = 8);
 
-		void ChangeDynamicWrapperMode(TaskManagerWrapper wrapper_mode, void* wrapper_data = nullptr, size_t wrapper_data_size = 0, ThreadFunctionWrapper custom_function = nullptr);
+		void* AllocatePersistentBuffer(unsigned int thread_id, size_t size, size_t alignment = 8);
+
+		void ChangeStaticWrapperMode(ThreadFunctionWrapper custom_function, void* wrapper_data = nullptr, size_t wrapper_data_size = 0);
+
+		void ChangeDynamicWrapperMode(ThreadFunctionWrapper custom_function, void* wrapper_data = nullptr, size_t wrapper_data_size = 0);
 
 		void ClearTaskStream();
 
@@ -90,6 +117,8 @@ namespace ECSEngine {
 
 		void DecrementThreadTaskIndex(unsigned int thread_id);
 
+		void DeallocatePersistentBuffer(unsigned int thread_id, const void* data);
+
 		void IncrementThreadTaskIndex(unsigned int thread_id);
 
 		unsigned int GetTaskCount() const;
@@ -103,6 +132,10 @@ namespace ECSEngine {
 		ThreadTask* GetTaskPtr(unsigned int task_index) const;
 
 		int GetThreadTaskIndex(unsigned int thread_index) const;
+
+		AllocatorPolymorphic GetThreadTempAllocator(unsigned int thread_id) const;
+
+		AllocatorPolymorphic GetThreadPersistentAllocator(unsigned int thread_id) const;
 
 		void ReserveTasks(unsigned int count);
 
@@ -122,6 +155,9 @@ namespace ECSEngine {
 		// Max period is expressed as the amount of milliseconds that the thread waits at most
 		void SleepUntilDynamicTasksFinish(size_t max_period = ULLONG_MAX);
 
+		// Elevates or reduces the priority of the threads
+		void SetThreadPriorities(ECS_THREAD_PRIORITY priority);
+
 		void TerminateThread(unsigned int thread_id);
 
 		void TerminateThreads();
@@ -129,6 +165,15 @@ namespace ECSEngine {
 		void WakeThread(unsigned int thread_id);
 
 		void WakeThreads();
+
+		// Waits for the thread with thread_index to get to the task index
+		// It uses a spin wait
+		void WaitThread(int task_index, unsigned int thread_index);
+
+		// Wait for all threads to get to this task index
+		// It uses a spin wait. The thread that calls this function
+		// must be on this task index
+		void WaitAllThreads(int task_index);
 
 	//private:
 		World* m_world;
@@ -141,14 +186,16 @@ namespace ECSEngine {
 		ConditionVariable* m_sleep_wait;
 
 		unsigned int m_last_thread_index;
+		// These are pointer to pointers in order to have them on separated cache lines
+		// to avoid false sharing
 		LinearAllocator** m_thread_linear_allocators;
 		MemoryManager** m_thread_memory_managers;
+
+
 #ifdef ECS_TASK_MANAGER_WRAPPER
-		TaskManagerWrapper m_static_wrapper_mode;
 		ThreadFunctionWrapper m_static_wrapper;
 		void* m_static_wrapper_data;
 		size_t m_static_wrapper_data_size;
-		TaskManagerWrapper m_dynamic_wrapper_mode;
 		ThreadFunctionWrapper m_dynamic_wrapper;
 		void* m_dynamic_wrapper_data;
 		size_t m_dynamic_wrapper_data_size;

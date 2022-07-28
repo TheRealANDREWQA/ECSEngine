@@ -25,7 +25,6 @@ void GetProjectModuleFilePath(const EditorState* editor_state, CapacityStream<wc
 enum SERIALIZE_ORDER {
 	SERIALIZE_SOLUTION_PATH,
 	SERIALIZE_LIBRARY_NAME,
-	SERIALIZE_CONFIGURATION,
 	SERIALIZE_COUNT
 };
 
@@ -54,41 +53,40 @@ bool LoadModuleFile(EditorState* editor_state) {
 
 		success = DeserializeMultisection(serialize_data, memory_pool, file_ptr) != -1;
 		if (success) {
-			ResetProjectModules(editor_state);
-			ResetProjectGraphicsModule(editor_state);
+			ResetModules(editor_state);
+			ResetGraphicsModule(editor_state);
 
 			unsigned int valid_projects = 0;
 			ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 
 			Stream<wchar_t> solution_path(serialize_data[0].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[0].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
 			Stream<wchar_t> library_name(serialize_data[0].data[SERIALIZE_LIBRARY_NAME].buffer, serialize_data[0].data[SERIALIZE_LIBRARY_NAME].size / sizeof(wchar_t));
-			Stream<void> configuration(serialize_data[0].data[SERIALIZE_CONFIGURATION]);
 
 			if (solution_path.buffer != nullptr && library_name.buffer != nullptr) {
-				SetProjectGraphicsModule(editor_state, solution_path, library_name, (EditorModuleConfiguration)(*(unsigned char*)configuration.buffer));
+				SetGraphicsModule(editor_state, solution_path, library_name);
 			}
 
 			for (size_t index = 1; index < serialize_data.size; index++) {
 				Stream<wchar_t> solution_path(serialize_data[index].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[index].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
 				Stream<wchar_t> library_name(serialize_data[index].data[SERIALIZE_LIBRARY_NAME].buffer, serialize_data[index].data[SERIALIZE_LIBRARY_NAME].size / sizeof(wchar_t));
-				Stream<void> configuration(serialize_data[index].data[SERIALIZE_CONFIGURATION]);
 
-				if (AddProjectModule(editor_state, solution_path, library_name, (EditorModuleConfiguration)(*(unsigned char*)configuration.buffer))) {
+				if (AddModule(editor_state, solution_path, library_name)) {
 					valid_projects++;
 
-					UpdateProjectModuleLastWrite(editor_state, valid_projects);
-					bool success = HasModuleFunction(editor_state, project_modules->size - 1);
-					if (!success) {
-						ECS_FORMAT_TEMP_STRING(error_message, "Module with solution path {#} and library name {#} does not have a module function.", solution_path, library_name);
-						EditorSetConsoleWarn(error_message);
-						project_modules->buffer[valid_projects].load_status = EditorModuleLoadStatus::Failed;
-					}
-					else {
-						if (project_modules->buffer[valid_projects].solution_last_write_time > project_modules->buffer[valid_projects].library_last_write_time) {
-							project_modules->buffer[valid_projects].load_status = EditorModuleLoadStatus::OutOfDate;
-						}
-						else {
-							project_modules->buffer[valid_projects].load_status = EditorModuleLoadStatus::Good;
+					UpdateModuleLastWrite(editor_state, valid_projects);
+
+					for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+						EDITOR_MODULE_CONFIGURATION configuration = (EDITOR_MODULE_CONFIGURATION)configuration_index;
+						EditorModuleInfo* info = GetModuleInfo(editor_state, project_modules->size - 1, configuration);
+
+						bool success = HasModuleFunction(editor_state, project_modules->size - 1, configuration);
+						if (success) {
+							if (project_modules->buffer[valid_projects].solution_last_write_time > info->library_last_write_time) {
+								info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
+							}
+							else {
+								info->load_status = EDITOR_MODULE_LOAD_GOOD;
+							}
 						}
 					}
 				}
@@ -137,9 +135,7 @@ bool SaveModuleFile(EditorState* editor_state) {
 		serialize_data[index].data.size = SERIALIZE_COUNT;
 		serialize_data[index].data[SERIALIZE_SOLUTION_PATH] = editor_module->solution_path;
 		serialize_data[index].data[SERIALIZE_LIBRARY_NAME] = editor_module->library_name;
-		
-		serialize_data[index].data[SERIALIZE_CONFIGURATION].buffer = &editor_module->configuration;
-		serialize_data[index].data[SERIALIZE_CONFIGURATION].size = sizeof(editor_module->configuration);
+		;
 		serialize_data[index].name = nullptr;
 		current_void_stream += SERIALIZE_COUNT;
 	};	

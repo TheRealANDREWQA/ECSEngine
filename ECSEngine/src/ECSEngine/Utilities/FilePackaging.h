@@ -11,7 +11,7 @@ namespace ECSEngine {
 	// free the memory allocated (if any) on the next iteration or at the end of the call.
 	typedef Stream<void> (*PackFileFunctor)(Stream<void> file_contents, void* data);
 
-	typedef HashTable<uint2, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString> PackFilesLookupTable;
+	typedef HashTableDefault<uint2> PackFilesLookupTable;
 	
 	// Returns -1 for success, otherwise the index of the input file which failed to open or read or write
 	// The value of -2 indicates that the output file could not be created.

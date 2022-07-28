@@ -164,7 +164,7 @@ namespace ECSEngine {
 
 		ECS_INLINE bool Peek(T& element) const {
 			if (m_stack.size > 0) {
-				unsigned int index = function::Select(m_last_index != 0, m_last_item - 1, m_stack_size - 1);
+				unsigned int index = function::Select(m_last_item != 0, m_last_item - 1, m_stack.size - 1);
 				element = m_stack[index];
 				return true;
 			}

@@ -20,33 +20,37 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_LATE_DRAW = 1 << 12;
 		constexpr size_t UI_CONFIG_SYSTEM_DRAW = 1 << 13;
 		constexpr size_t UI_CONFIG_BORDER_DRAW_NORMAL = 1 << 14;
-		constexpr size_t UI_CONFIG_DO_NOT_NULLIFY_HOVERABLE_ACTION = 1 << 15;
-		constexpr size_t UI_CONFIG_DO_NOT_NULLIFY_CLICKABLE_ACTION = 1 << 16;
-		constexpr size_t UI_CONFIG_DO_NOT_NULLIFY_GENERAL_ACTION = 1 << 17;
-		constexpr size_t UI_CONFIG_DO_NOT_VALIDATE_POSITION = 1 << 18;
-		constexpr size_t UI_CONFIG_ELEMENT_NAME_FIRST = 1 << 19;
-		constexpr size_t UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW = 1 << 20;
-		constexpr size_t UI_CONFIG_HOVERABLE_ACTION = (size_t)1 << 21;
-		constexpr size_t UI_CONFIG_CLICKABLE_ACTION = (size_t)1 << 22;
-		constexpr size_t UI_CONFIG_GENERAL_ACTION = (size_t)1 << 23;
-		constexpr size_t UI_CONFIG_DISABLE_TRANSLATE_TEXT = (size_t)1 << 24;
-		constexpr size_t UI_CONFIG_UNAVAILABLE_TEXT = (size_t)1 << 25;
-		constexpr size_t UI_CONFIG_TOOL_TIP = (size_t)1 << 26;
-		constexpr size_t UI_CONFIG_TEXT_ALIGN_TO_ROW_Y = (size_t)1 << 27;
-		constexpr size_t UI_CONFIG_ACTIVE_STATE = (size_t)1 << 28;
-		constexpr size_t UI_CONFIG_DYNAMIC_RESOURCE = (size_t)1 << 60;
-		constexpr size_t UI_CONFIG_GET_TRANSFORM = (size_t)1 << 61;
-		constexpr size_t UI_CONFIG_INITIALIZER_DO_NOT_BEGIN = (size_t)1 << 62;
+		constexpr size_t UI_CONFIG_DO_NOT_VALIDATE_POSITION = 1 << 15;
+		constexpr size_t UI_CONFIG_ELEMENT_NAME_FIRST = 1 << 16;
+		constexpr size_t UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW = 1 << 17;
+		constexpr size_t UI_CONFIG_DISABLE_TRANSLATE_TEXT = (size_t)1 << 18;
+		constexpr size_t UI_CONFIG_UNAVAILABLE_TEXT = (size_t)1 << 19;
+		constexpr size_t UI_CONFIG_ALIGN_TO_ROW_Y = (size_t)1 << 20;
+		constexpr size_t UI_CONFIG_ACTIVE_STATE = (size_t)1 << 21;
+		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 22;
+		constexpr size_t UI_CONFIG_RECTANGLE_CLICKABLE_ACTION = (size_t)1 << 23;
+		constexpr size_t UI_CONFIG_RECTANGLE_GENERAL_ACTION = (size_t)1 << 24;
+		constexpr size_t UI_CONFIG_RECTANGLE_TOOL_TIP = (size_t)1 << 25;
+
+		// Slots available are 27, 28 and 29
+		
+		constexpr size_t UI_CONFIG_NAME_PADDING = (size_t)1 << 60;
+		constexpr size_t UI_CONFIG_DYNAMIC_RESOURCE = (size_t)1 << 61;
+		constexpr size_t UI_CONFIG_GET_TRANSFORM = (size_t)1 << 62;
+		constexpr size_t UI_CONFIG_INITIALIZER_DO_NOT_BEGIN = (size_t)1 << 63;
+
+		// Internal flag used by the group slider and text input to signal to element name
+		// that they should fit the group name to the scale
+		constexpr size_t UI_CONFIG_NAME_FIT_TO_SCALE = (size_t)1 << 63;
 
 		constexpr size_t UI_CONFIG_BUTTON_HOVERABLE = (size_t)1 << 40;
 		
 		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 30;
 
-		constexpr size_t UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS = (size_t)1 << 31;
+		constexpr size_t UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS = (size_t)1 << 35;
 
 		constexpr size_t UI_CONFIG_SPRITE_GRADIENT = (size_t)1 << 32;
 
-		constexpr size_t UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE = (size_t)1 << 29;
 		constexpr size_t UI_CONFIG_LABEL_TRANSPARENT = (size_t)1 << 30;
 		constexpr size_t UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X = (size_t)1 << 31;
 		constexpr size_t UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y = (size_t)1 << 32;
@@ -55,6 +59,12 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_TEXT_INPUT_HINT = (size_t)1 << 34;
 		constexpr size_t UI_CONFIG_TEXT_INPUT_CALLBACK = (size_t)1 << 35;
 		constexpr size_t UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER = (size_t)1 << 36;
+
+		constexpr size_t UI_CONFIG_PATH_INPUT_ROOT = (size_t)1 << 37;
+		constexpr size_t UI_CONFIG_PATH_INPUT_GIVE_FILES = (size_t)1 << 38;
+		constexpr size_t UI_CONFIG_PATH_INPUT_CUSTOM_FILESYSTEM = (size_t)1 << 39;
+		constexpr size_t UI_CONFIG_PATH_INPUT_CALLBACK = (size_t)1 << 40;
+		constexpr size_t UI_CONFIG_PATH_INPUT_SPRITE_TEXTURE = (size_t)1 << 41;
 
 		constexpr size_t UI_CONFIG_SLIDER_NO_TEXT = (size_t)1 << 38;
 		constexpr size_t UI_CONFIG_SLIDER_NO_NAME = (size_t)1 << 39;
@@ -140,15 +150,13 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_GRAPH_MIN_Y = (size_t)1 << 57;
 		constexpr size_t UI_CONFIG_GRAPH_MAX_Y = (size_t)1 << 58;
 
-		constexpr size_t UI_CONFIG_HISTOGRAM_NO_NAME = (size_t)1 << 45;
-		constexpr size_t UI_CONFIG_HISTOGRAM_COLOR = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_HISTOGRAM_REDUCE_FONT = (size_t)1 << 47;
-		constexpr size_t UI_CONFIG_HISTOGRAM_VARIANT_ZOOM_FONT = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_HISTOGRAM_COLOR = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_HISTOGRAM_REDUCE_FONT = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_HISTOGRAM_VARIANT_ZOOM_FONT = (size_t)1 << 47;
 
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_NO_RANGE = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_RANGE = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_DEFAULT = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE = (size_t)1 << 48;
-		constexpr size_t UI_CONFIG_NUMBER_INPUT_DO_NOT_REDUCE_SCALE = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS = (size_t)1 << 51;
@@ -181,7 +189,8 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 58;
 		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 59;
 
-		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 50;
+		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 51;
 		
 		const Color MULTI_GRAPH_COLORS[] = {Color(40, 180, 40), Color(35, 150, 35), Color(40, 120, 30), Color(30, 100, 40)};
 	}

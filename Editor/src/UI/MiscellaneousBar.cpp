@@ -15,18 +15,18 @@ constexpr float TOOP_TIP_OFFSET = 0.01f;
 void RunProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	EditorState* editor_state = (EditorState*)_data;
-	// Check to see that all modules can be compiled and loaded
-	if (BuildProjectModulesAndLoad(editor_state)) {
-		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
-		// Check to see if the editor still has to commit copying the main world to other worlds
+	//EditorState* editor_state = (EditorState*)_data;
+	//// Check to see that all modules can be compiled and loaded
+	//if (BuildProjectModulesAndLoad(editor_state)) {
+	//	EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PLAYING);
+	//	// Check to see if the editor still has to commit copying the main world to other worlds
 
-		// Now the runtime should be launched - the tasks should be commited into the system manager
-		
-	}
-	else {
-		EditorSetConsoleError(ToStream("Could not start the runtime: the modules could not be compiled or loaded."));
-	}
+	//	// Now the runtime should be launched - the tasks should be commited into the system manager
+	//	
+	//}
+	//else {
+	//	EditorSetConsoleError(ToStream("Could not start the runtime: the modules could not be compiled or loaded."));
+	//}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------
@@ -34,14 +34,14 @@ void RunProjectAction(ActionData* action_data) {
 void PauseProjectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	EditorState* editor_state = (EditorState*)_data;
+	/*EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
 		EditorStateClearFlag(editor_state, EDITOR_STATE_IS_PLAYING);
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
 	}
 	else {
 		EditorSetConsoleWarn(ToStream("Could not pause the runtime - the runtime is not active."));
-	}
+	}*/
 }
 
 // ----------------------------------------------------------------------------------------------------------------------
@@ -90,7 +90,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	transform.scale = button_scale;
 	config.AddFlag(transform);
 
-	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_TOOL_TIP;
+	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_RECTANGLE_TOOL_TIP;
 	const float triangle_scale_factor = 0.8f;
 	const float stop_scale_factor = 0.45f;
 

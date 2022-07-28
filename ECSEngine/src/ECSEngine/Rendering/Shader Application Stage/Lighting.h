@@ -10,24 +10,24 @@ namespace ECSEngine {
 
 	namespace Shaders {
 
-		struct ECS_REFLECT HemisphericConstants {
+		struct HemisphericConstants {
 			ColorFloat color_down;
 			ColorFloat color_up;
 		};
 
-		struct ECS_REFLECT DirectionalLight {
+		struct DirectionalLight {
 			float3 direction;
 			ColorFloat color;
 		};
 
-		struct ECS_REFLECT PointLight {
+		struct PointLight {
 			float3 position;
 			float range; 
 			float attenuation;
 			ColorFloat color;
 		};
 
-		struct ECS_REFLECT SpotLight {
+		struct SpotLight {
 			float3 position;
 			float3 direction;
 			float inner_angle_degrees;
@@ -38,7 +38,7 @@ namespace ECSEngine {
 			ColorFloat color;
 		};
 
-		struct ECS_REFLECT CapsuleLight {
+		struct CapsuleLight {
 			float3 first_point;
 			float3 direction;
 			float length;

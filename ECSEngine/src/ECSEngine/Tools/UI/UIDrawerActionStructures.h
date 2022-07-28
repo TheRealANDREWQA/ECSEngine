@@ -74,9 +74,13 @@ namespace ECSEngine {
 			bool IsTheSameData(const UIDrawerTextInput* other) const;
 
 			unsigned int GetSpritePositionFromMouse(float2 mouse_position) const;
+
 			void SetSpritePositionFromMouse(float2 mouse_position);
+
 			unsigned int GetVisibleSpriteCount(float right_bound) const;
+
 			float2 GetCaretPosition() const;
+
 			template<bool left = true>
 			float2 GetPositionFromSprite(unsigned int index) const {
 				constexpr unsigned int offset = left == false;
@@ -130,8 +134,10 @@ namespace ECSEngine {
 			}
 
 			void SetNewZoom(float2 new_zoom);
+
 			// returns whether or not it deleted something
 			bool Backspace(unsigned int* text_count, unsigned int* text_position, char* text);
+
 			void PasteCharacters(
 				const char* characters,
 				unsigned int character_count,
@@ -142,9 +148,15 @@ namespace ECSEngine {
 				unsigned int* delete_position
 			);
 
+			void Callback(ActionData* action_data);
+
+			bool HasCallback() const;
+
 			void CopyCharacters(UISystem* system);
+
 			// does not place a revert command
 			void DeleteAllCharacters();
+
 			void InsertCharacters(const char* characters, unsigned int character_count, unsigned int character_position, UISystem* system);
 
 			CapacityStream<char>* text;
@@ -177,6 +189,9 @@ namespace ECSEngine {
 			unsigned char word_click_count;
 			HID::Key repeat_key;
 			bool is_currently_selected;
+
+			// This is set by the functions that manipulate the input in order to preserve consistency
+			bool trigger_callback;
 			CapacityStream<UISpriteVertex> hint_vertices;
 			Action callback;
 			void* callback_data;
@@ -260,16 +275,15 @@ namespace ECSEngine {
 			Color default_color;
 			UIDrawerTextElement name;
 			UIActionHandler callback;
-			bool is_hex_input;
 		};
 
-		struct ECSENGINE_API ColorInputHSVGradientInfo {
+		struct ColorInputHSVGradientInfo {
 			UIDrawerColorInput* input;
 			float2 gradient_position;
 			float2 gradient_scale;
 		};
 
-		struct ECSENGINE_API UIDrawerSliderBringToMouse {
+		struct UIDrawerSliderBringToMouse {
 			UIDrawerSlider* slider;
 			float position;
 			float slider_length;
@@ -277,13 +291,13 @@ namespace ECSEngine {
 			std::chrono::high_resolution_clock::time_point start_point;
 		};
 
-		struct ECSENGINE_API UIDrawerTextInputAddCommandInfo {
+		struct UIDrawerTextInputAddCommandInfo {
 			UIDrawerTextInput* input;
 			unsigned int text_position;
 			unsigned int text_count;
 		};
 
-		struct ECSENGINE_API UIDrawerTextInputRemoveCommandInfo {
+		struct UIDrawerTextInputRemoveCommandInfo {
 			UIDrawerTextInput* input;
 			unsigned int text_position;
 			unsigned int text_count;
@@ -291,7 +305,7 @@ namespace ECSEngine {
 			bool deallocate_data;
 		};
 
-		struct ECSENGINE_API UIDrawerTextInputReplaceCommandInfo {
+		struct UIDrawerTextInputReplaceCommandInfo {
 			UIDrawerTextInput* input;
 			unsigned int text_position;
 			unsigned int text_count;
@@ -299,19 +313,19 @@ namespace ECSEngine {
 			void* deallocate_buffer;
 		};
 
-		struct ECSENGINE_API UIDrawerColorInputWindowData {
+		struct UIDrawerColorInputWindowData {
 			UIDrawerColorInput* input;
 			Color color;
 		};
 
-		struct ECSENGINE_API UIDrawerColorInputSliderCallback {
+		struct UIDrawerColorInputSliderCallback {
 			UIDrawerColorInput* input;
 			bool is_rgb;
 			bool is_hsv;
 			bool is_alpha;
 		};
 
-		struct ECSENGINE_API UIDrawerComboBox {
+		struct UIDrawerComboBox {
 			bool is_opened;
 			bool has_been_destroyed;
 			bool initial_click_state;
@@ -328,37 +342,37 @@ namespace ECSEngine {
 			void* callback_data;
 		};
 
-		struct ECSENGINE_API UIDrawerComboBoxClickable {
+		struct UIDrawerComboBoxClickable {
 			UIDrawerComboBox* box;
 			UIDrawConfig config;
 			size_t configuration;
 			bool is_opened_on_press;
 		};
 
-		struct ECSENGINE_API UIDrawerComboBoxLabelHoverable {
+		struct UIDrawerComboBoxLabelHoverable {
 			UIDrawerComboBox* box;
 			Color color;
 		};
 
-		struct ECSENGINE_API UIDrawerComboBoxLabelClickable {
+		struct UIDrawerComboBoxLabelClickable {
 			UIDrawerComboBox* box;
 			unsigned int index;
 		};
 
-		struct ECSENGINE_API UIDrawerBoolClickableWithPinData {
+		struct UIDrawerBoolClickableWithPinData {
 			bool* pointer;
 			bool is_horizontal = false;
 			bool is_vertical = false;
 			unsigned int pin_count = 1;
 		};
 
-		struct ECSENGINE_API UIDrawerHierarchySelectableData {
+		struct UIDrawerHierarchySelectableData {
 			UIDrawerBoolClickableWithPinData bool_data;
 			UIDrawerHierarchy* hierarchy;
 			unsigned int node_index;
 		};
 
-		struct ECSENGINE_API UIDrawerHierarchyDragNode {
+		struct UIDrawerHierarchyDragNode {
 			UIDrawerHierarchiesData* hierarchies_data;
 			UIDrawerHierarchySelectableData selectable_data;
 			unsigned int previous_index = 0;
@@ -366,14 +380,14 @@ namespace ECSEngine {
 			Timer timer;
 		};
 
-		struct ECSENGINE_API UIDrawerGraphHoverableData {
+		struct UIDrawerGraphHoverableData {
 			unsigned int sample_index;
 			float2 first_sample_values;
 			float2 second_sample_values;
 			UITextTooltipHoverableData tool_tip_data;
 		};
 
-		struct ECSENGINE_API UIDrawerHistogramHoverableData {
+		struct UIDrawerHistogramHoverableData {
 			unsigned int sample_index;
 			float sample_value;
 			UITextTooltipHoverableData tool_tip_data;
@@ -382,7 +396,7 @@ namespace ECSEngine {
 		// Name needs to be a stable reference; this does not allocate memory for it
 		// Action can be used to do additional stuff on right click; There can be
 		// 32 bytes of action data embedded into this structure
-		struct ECSENGINE_API UIDrawerMenuRightClickData {
+		struct UIDrawerMenuRightClickData {
 			const char* name;
 			unsigned int window_index;
 			UIDrawerMenuState state;
@@ -390,29 +404,29 @@ namespace ECSEngine {
 			char action_data[64];
 		};
 
-		struct ECSENGINE_API UIDrawerRightClickMenuSystemHandlerData {
+		struct UIDrawerRightClickMenuSystemHandlerData {
 			const char* menu_window_name;
 			const char* menu_resource_name;
 			const char* parent_window_name;
 		};
 
-		struct ECSENGINE_API UIDrawerColorInputSystemHandlerData {
+		struct UIDrawerColorInputSystemHandlerData {
 			UIDockspace* dockspace;
 			unsigned int border_index;
 			DockspaceType type;
 		};
 
-		struct ECSENGINE_API UIDrawerSliderReturnToDefaultMouseDraggable {
+		struct UIDrawerSliderReturnToDefaultMouseDraggable {
 			UIDefaultHoverableData hoverable_data;
 			UIDrawerSlider* slider;
 		};
 
-		struct ECSENGINE_API UIDrawerMenuCleanupSystemHandlerData {
+		struct UIDrawerMenuCleanupSystemHandlerData {
 			const char* window_names[6];
 			int64_t window_count;
 		};
 
-		struct ECSENGINE_API UIDrawerNumberInputCallbackData {
+		struct UIDrawerNumberInputCallbackData {
 			Action user_action;
 			void* user_action_data;
 			UIDrawerTextInput* input;
@@ -422,7 +436,7 @@ namespace ECSEngine {
 
 		// input, return_to_default and display_range must be the first data members
 		// for type punning inside the number input initializer
-		struct ECSENGINE_API UIDrawerFloatInputCallbackData {
+		struct UIDrawerFloatInputCallbackData {
 			UIDrawerNumberInputCallbackData number_data;
 			float* number;
 			float default_value;
@@ -432,7 +446,7 @@ namespace ECSEngine {
 
 		// input, return_to_default and display_range must be the first data members
 		// for type punning inside the number input initializer
-		struct ECSENGINE_API UIDrawerDoubleInputCallbackData {
+		struct UIDrawerDoubleInputCallbackData {
 			UIDrawerNumberInputCallbackData number_data;
 			double* number;
 			double default_value;
@@ -453,14 +467,14 @@ namespace ECSEngine {
 
 		// Type pun the types - all have UITextTooltipHoverableData as first field
 		// and second field a pointer to the input callback data
-		struct ECSENGINE_API UIDrawerFloatInputHoverableData {
+		struct UIDrawerFloatInputHoverableData {
 			UITextTooltipHoverableData tool_tip;
 			UIDrawerFloatInputCallbackData* data;
 		};
 
 		// Type pun the types - all have UITextTooltipHoverableData as first field
 		// and second field a pointer to the input callback data
-		struct ECSENGINE_API UIDrawerDoubleInputHoverableData {
+		struct UIDrawerDoubleInputHoverableData {
 			UITextTooltipHoverableData tool_tip;
 			UIDrawerDoubleInputCallbackData* data;
 		};
@@ -483,47 +497,47 @@ namespace ECSEngine {
 			float last_position;
 		};
 
-		struct ECSENGINE_API UIChangeStateData {
+		struct UIChangeStateData {
 			size_t* state;
 			size_t flag;
 		};
 
-		struct ECSENGINE_API UIChangeAtomicStateData {
+		struct UIChangeAtomicStateData {
 			std::atomic<size_t>* state;
 			size_t flag;
 		};
 
-		struct ECSENGINE_API UIDrawerStateTableAllButtonData {
+		struct UIDrawerStateTableAllButtonData {
 			bool all_true;
 			bool single_pointer;
 			Stream<bool*> states;
 			bool* notifier;
 		};
 
-		struct ECSENGINE_API UIDrawerLabelHierarchyRightClickData {
+		struct UIDrawerLabelHierarchyRightClickData {
 			void* data;
 			Stream<char> label;
 		};
 
-		struct ECSENGINE_API UIDrawerLabelHierarchyChangeStateData {
+		struct UIDrawerLabelHierarchyChangeStateData {
 			UIDrawerLabelHierarchy* hierarchy;
 			Stream<char> label;
 		};
 
-		struct ECSENGINE_API UIDrawerArrayDragData {
+		struct UIDrawerArrayDragData {
 			UIDrawerArrayData* array_data;
 			float row_y_scale;
 			unsigned int index;
 		};
 
-		struct ECSENGINE_API UIDrawerColorFloatInput {
+		struct UIDrawerColorFloatInput {
 			UIDrawerColorInput* color_input;
 			ColorFloat* color_float;
 			Color base_color;
 			float intensity;
 		};
 
-		struct ECSENGINE_API UIDrawerColorFloatInputCallbackData {
+		struct UIDrawerColorFloatInputCallbackData {
 			UIDrawerColorFloatInput* input;
 			Action callback;
 			void* callback_data;
@@ -542,6 +556,39 @@ namespace ECSEngine {
 			UIDrawerSlider* slider;
 			UIDrawerSliderConvertTextInput convert_input;
 			UIDrawerTextInputFilter filter_function;
+		};
+
+		struct UIDrawerPathInputFolderActionData {
+			UIDrawerTextInput* input;
+			CapacityStream<wchar_t>* path;
+			UIActionHandler custom_handler = { nullptr, nullptr, 0 };
+			Stream<const wchar_t*> extensions;
+			Stream<Stream<wchar_t>> roots;
+		};
+
+		struct UIDrawerPathInputFolderWindowData {
+			UIDrawerTextInput* input;
+			CapacityStream<wchar_t>* path;
+			UIActionHandler draw_handler;
+			// This is the name of the window that originally spawned the window
+			const char* window_bind;
+		};
+
+		struct ECSENGINE_API UIDrawerPathInputWithInputsActionData {
+			UIDrawerPathInputWithInputsActionData() {}
+
+			UIDrawerTextInput* input;
+			CapacityStream<wchar_t>* path;
+			union {
+				Stream<Stream<wchar_t>> files;
+				UIActionHandler callback_handler;
+			};
+			bool is_callback = false;
+		};
+
+		struct SliderMouseDraggableData {
+			UIDrawerSlider* slider;
+			bool interpolate_bounds;
 		};
 
 	}

@@ -392,11 +392,11 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------
 
 	ECS_INLINE Vector4 ZeroVector4() {
-		return _mm_setzero_ps();
+		return Vec4f(_mm_setzero_ps());
 	}
 
 	ECS_INLINE Vector8 ZeroVector8() {
-		return _mm256_setzero_ps();
+		return Vec8f(_mm256_setzero_ps());
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

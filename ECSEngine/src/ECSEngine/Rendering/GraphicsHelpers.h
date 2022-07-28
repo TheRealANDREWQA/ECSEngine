@@ -62,36 +62,6 @@ namespace ECSEngine {
 		return functions[face]();
 	}
 
-	ECSENGINE_API ID3D11Resource* GetResource(Texture1D texture);
-
-	ECSENGINE_API ID3D11Resource* GetResource(Texture2D texture);
-
-	ECSENGINE_API ID3D11Resource* GetResource(Texture3D texture);
-
-	ECSENGINE_API ID3D11Resource* GetResource(TextureCube texture);
-	
-	ECSENGINE_API ID3D11Resource* GetResource(ResourceView ps_view);
-
-	ECSENGINE_API ID3D11Resource* GetResource(RenderTargetView target_view);
-
-	ECSENGINE_API ID3D11Resource* GetResource(DepthStencilView depth_view);
-
-	ECSENGINE_API ID3D11Resource* GetResource(UAView view);
-
-	ECSENGINE_API ID3D11Resource* GetResource(VertexBuffer vertex_buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(IndexBuffer index_buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(ConstantBuffer vc_buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(StructuredBuffer buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(StandardBuffer buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(IndirectBuffer buffer);
-
-	ECSENGINE_API ID3D11Resource* GetResource(UABuffer buffer);
-
 	ECSENGINE_API void CreateCubeVertexBuffer(Graphics* graphics, float positive_span, VertexBuffer& vertex_buffer, IndexBuffer& index_buffer, bool temporary = false);
 
 	ECSENGINE_API VertexBuffer CreateRectangleVertexBuffer(Graphics* graphics, float3 top_left, float3 bottom_right, bool temporary = false);

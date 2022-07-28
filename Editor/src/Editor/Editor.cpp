@@ -255,7 +255,7 @@ public:
 
 public:
 
-	void ChangeCursor(ECSEngine::CursorType type) override {
+	void ChangeCursor(ECSEngine::ECS_CURSOR_TYPE type) override {
 		if (type != current_cursor) {
 			SetCursor(cursors[(unsigned int)type]);
 			SetClassLong(hWnd, -12, (LONG)cursors[(unsigned int)type]);
@@ -263,7 +263,7 @@ public:
 		}
 	}
 
-	ECSEngine::CursorType GetCurrentCursor() const override {
+	ECSEngine::ECS_CURSOR_TYPE GetCurrentCursor() const override {
 		return current_cursor;
 	}
 
@@ -322,7 +322,7 @@ public:
 		EditorStateInitialize(this, &editor_state, hWnd, mouse, keyboard);
 		
 		ResourceManager* resource_manager = editor_state.resource_manager;
-		Graphics* graphics = editor_state.Graphics();
+		Graphics* graphics = editor_state.UIGraphics();
 
 		Hub(&editor_state);
 
@@ -513,7 +513,7 @@ public:
 			list.push_back(index);
 #if 1
 			for (int subindex = 0; subindex < 5; subindex++) {
-				Add(&fuzz_stream, malloc(sizeof(int) * 7));
+				Add(&fuzz_stream, malloc(sizeof(int) * 6));
 			}
 #endif
 		}
@@ -565,7 +565,7 @@ public:
 		CHARS.Add('\0');
 		OutputDebugStringA(CHARS.buffer);
 
-		size_t insert_position = array_test_size / 2;
+		size_t insert_position = 0;
 		//size_t insert_position = array_test_size / 10 * 9;
 		timer.SetMarker();
 		for (int index = 0; index < 10; index++) {
@@ -683,6 +683,9 @@ public:
 		static ColorFloat pbr_light_color[4] = { ColorFloat(1.0f, 1.0f, 1.0f, 1.0f), ColorFloat(100.0f, 20.0f, 20.0f, 1.0f), ColorFloat(0.2f, 0.9f, 0.1f, 1.0f), ColorFloat(0.3f, 0.2f, 0.9f, 1.0f) };
 		static float pbr_light_range[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
+		static wchar_t WIDE_CHARS[256];
+		static Stream<wchar_t> WIDE_CHAR_STREAM(WIDE_CHARS, 0);
+
 		ConstantBuffer normal_strength_buffer = graphics->CreateConstantBuffer(sizeof(float));
 
 		InjectWindowElement inject_elements[16];
@@ -712,29 +715,27 @@ public:
 		inject_elements[4].basic_type_string = STRING(float);
 		inject_elements[4].data = &metallic;
 
-		inject_elements[5].name = "Roughness";
-		inject_elements[5].basic_type_string = STRING(float);
-		inject_elements[5].data = &roughness;
+		inject_elements[5].name = "Wide chars";
+		inject_elements[5].basic_type_string = STRING(wchar_t);
+		inject_elements[5].stream_type = Reflection::ReflectionStreamFieldType::Stream;
+		inject_elements[5].data = &WIDE_CHAR_STREAM;
 
 		inject_elements[6].name = "PBR light positions";
 		inject_elements[6].basic_type_string = STRING(float3);
 		inject_elements[6].data = pbr_light_pos;
 		inject_elements[6].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
-		inject_elements[6].stream_capacity = 4;
 		inject_elements[6].stream_size = 4;
 
 		inject_elements[7].name = "PBR light colors";
 		inject_elements[7].basic_type_string = STRING(ColorFloat);
 		inject_elements[7].data = pbr_light_color;
 		inject_elements[7].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
-		inject_elements[7].stream_capacity = 4;
 		inject_elements[7].stream_size = 4;
 
 		inject_elements[8].name = "PBR light ranges";
 		inject_elements[8].basic_type_string = STRING(float);
 		inject_elements[8].data = pbr_light_range;
 		inject_elements[8].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
-		inject_elements[8].stream_capacity = 4;
 		inject_elements[8].stream_size = 4;
 
 		static bool diffuse_cube = false;
@@ -989,6 +990,104 @@ public:
 		//output.Add('\n');
 		//output[output.size] = '\0';
 		//OutputDebugStringA(output.buffer);
+
+		/*char MEMORY[ECS_KB * 64];
+		uintptr_t memory_ptr = (uintptr_t)MEMORY;
+
+		const Reflection::ReflectionManager* reflection_manager = editor_state.ReflectionManager();
+		ShaderMetadata metadata;
+
+		char LINEAR_ALLOCATOR_MEMORY[ECS_KB * 16];
+		LinearAllocator _linear_allocator(LINEAR_ALLOCATOR_MEMORY, ECS_KB * 16);
+		AllocatorPolymorphic linear_allocator = GetAllocatorPolymorphic(editor_state.editor_allocator);
+
+		metadata.name = ToStream("Name");
+		metadata.path = ToStream(L"Path");
+		metadata.AddMacro("PogChamp", "New", linear_allocator);
+		metadata.AddMacro("Hey there", "Totally", linear_allocator);
+		
+		ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, reflection_manager->GetType(STRING(ShaderMetadata)), &metadata, memory_ptr);
+		ECS_ASSERT(serialize_code == ECS_SERIALIZE_OK);
+
+		memory_ptr = (uintptr_t)MEMORY;
+		ShaderMetadata deserialized_metadata;
+
+		DeserializeOptions options;
+		options.backup_allocator = linear_allocator;
+		options.field_allocator = linear_allocator;
+		ECS_DESERIALIZE_CODE deserialize_code = Deserialize(reflection_manager, reflection_manager->GetType(STRING(ShaderMetadata)), &deserialized_metadata, 
+			memory_ptr, &options);
+		ECS_ASSERT(deserialize_code == ECS_DESERIALIZE_OK);
+
+		uintptr_t database_ptr = memory_ptr;
+		AssetDatabase database;
+		database.SetAllocator(linear_allocator);
+
+		database.AddShader(metadata, false);
+
+		serialize_code = Serialize(reflection_manager, reflection_manager->GetType(STRING(AssetDatabase)), &database, memory_ptr);
+		ECS_ASSERT(serialize_code == ECS_SERIALIZE_OK);
+
+		AssetDatabase deserialized_database;
+		deserialize_code = Deserialize(reflection_manager, reflection_manager->GetType(STRING(AssetDatabase)), &deserialized_database,
+			database_ptr);
+		ECS_ASSERT(deserialize_code == ECS_DESERIALIZE_OK);
+
+		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[0].name, metadata.macros[0].name));
+		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[0].definition, metadata.macros[0].definition));
+		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[1].name, metadata.macros[1].name));
+		ECS_ASSERT(function::CompareStrings(deserialized_database.shader_metadata[0].macros[1].definition, metadata.macros[1].definition));
+
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.name.buffer));
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.path.buffer));
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.macros.buffer));
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.macros[0].name));
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.macros[0].definition));
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.macros[1].name));
+		ECS_ASSERT(BelongsToAllocator(linear_allocator, deserialized_metadata.macros[1].definition));
+
+		Deallocate(linear_allocator, deserialized_metadata.name.buffer);
+		Deallocate(linear_allocator, deserialized_metadata.path.buffer);
+		Deallocate(linear_allocator, deserialized_metadata.macros.buffer);
+		Deallocate(linear_allocator, deserialized_metadata.macros[0].name);
+		Deallocate(linear_allocator, deserialized_metadata.macros[0].definition);
+		Deallocate(linear_allocator, deserialized_metadata.macros[1].name);
+		Deallocate(linear_allocator, deserialized_metadata.macros[1].definition);*/
+
+		struct First {
+			constexpr static inline unsigned short Index() {
+				return 0;
+			}
+
+			constexpr static inline bool IsShared() {
+				return false;
+			}
+		};
+
+		struct Second {
+			constexpr static inline unsigned short Index() {
+				return 1;
+			}
+
+			constexpr static inline bool IsShared() {
+				return false;
+			}
+		};
+
+		struct Third {
+			constexpr static inline unsigned short Index() {
+				return 2;
+			}
+
+			constexpr static inline bool IsShared() {
+				return true;
+			}
+		};
+
+		char memory[8126];
+		LinearAllocator alloc(memory, 8000);
+		QueryBuilder<Read<First>, Write<Second>, ReadWrite<Third>> query_builder;
+		TaskComponentQuery query = query_builder.GetQuery(&alloc);
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -1254,7 +1353,9 @@ public:
 
 		editor_state.task_manager->SleepUntilDynamicTasksFinish();
 		//ChangeInspectorToNothing(&editor_state);
-		DestroyGraphics(editor_state.Graphics());
+		DestroyGraphics(editor_state.UIGraphics());
+
+		ConcurrentHashTableSmall<unsigned int, unsigned int, HashFunctionPowerOfTwo> table;
 
 		if (result == -1)
 			return -1;
@@ -1274,7 +1375,7 @@ public:
 		ECSEngine::HID::Mouse mouse;
 		ECSEngine::HID::Keyboard keyboard;
 		ECSEngine::Stream<HCURSOR> cursors;
-		ECSEngine::CursorType current_cursor;
+		ECSEngine::ECS_CURSOR_TYPE current_cursor;
 
 		// singleton that manages registering and unregistering the editor class
 		class EditorClass {
@@ -1339,20 +1440,20 @@ Editor::Editor(int _width, int _height, LPCWSTR name) noexcept : timer("Editor")
 
 	// hInstance is null because these are predefined cursors
 	cursors = ECSEngine::Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
-	cursors[(unsigned int)ECSEngine::CursorType::AppStarting] = LoadCursor(NULL, IDC_APPSTARTING);
-	cursors[(unsigned int)ECSEngine::CursorType::Cross] = LoadCursor(NULL, IDC_CROSS);
-	cursors[(unsigned int)ECSEngine::CursorType::Default] = LoadCursor(NULL, IDC_ARROW);
-	cursors[(unsigned int)ECSEngine::CursorType::Hand] = LoadCursor(NULL, IDC_HAND);
-	cursors[(unsigned int)ECSEngine::CursorType::Help] = LoadCursor(NULL, IDC_HELP);
-	cursors[(unsigned int)ECSEngine::CursorType::IBeam] = LoadCursor(NULL, IDC_IBEAM);
-	cursors[(unsigned int)ECSEngine::CursorType::SizeAll] = LoadCursor(NULL, IDC_SIZEALL);
-	cursors[(unsigned int)ECSEngine::CursorType::SizeEW] = LoadCursor(NULL, IDC_SIZEWE);
-	cursors[(unsigned int)ECSEngine::CursorType::SizeNESW] = LoadCursor(NULL, IDC_SIZENESW);
-	cursors[(unsigned int)ECSEngine::CursorType::SizeNS] = LoadCursor(NULL, IDC_SIZENS);
-	cursors[(unsigned int)ECSEngine::CursorType::SizeNWSE] = LoadCursor(NULL, IDC_SIZENWSE);
-	cursors[(unsigned int)ECSEngine::CursorType::Wait] = LoadCursor(NULL, IDC_WAIT);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_APP_STARTING] = LoadCursor(NULL, IDC_APPSTARTING);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_CROSS] = LoadCursor(NULL, IDC_CROSS);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT] = LoadCursor(NULL, IDC_ARROW);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_HAND] = LoadCursor(NULL, IDC_HAND);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_HELP] = LoadCursor(NULL, IDC_HELP);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_IBEAM] = LoadCursor(NULL, IDC_IBEAM);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_ALL] = LoadCursor(NULL, IDC_SIZEALL);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_EW] = LoadCursor(NULL, IDC_SIZEWE);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_NESW] = LoadCursor(NULL, IDC_SIZENESW);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_NS] = LoadCursor(NULL, IDC_SIZENS);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_NWSE] = LoadCursor(NULL, IDC_SIZENWSE);
+	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_WAIT] = LoadCursor(NULL, IDC_WAIT);
 
-	ChangeCursor(ECSEngine::CursorType::Default);
+	ChangeCursor(ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT);
 
 	// create window and get Handle
 	hWnd = CreateWindow(
@@ -1388,6 +1489,13 @@ Editor::Editor(int _width, int _height, LPCWSTR name) noexcept : timer("Editor")
 	UpdateWindow(hWnd);
 	RECT rect;
 	GetClientRect(hWnd, &rect);
+
+	timer.SetMarker();
+	HANDLE thread_handle = GetCurrentThread();
+	SetThreadPriority(thread_handle, THREAD_PRIORITY_HIGHEST);
+	size_t duration = timer.GetDurationSinceMarker_ns();
+	ECS_FORMAT_TEMP_STRING(duration_string, "Time: {#}.\n", duration);
+	OutputDebugStringA(duration_string.buffer);
 }
 Editor::~Editor() {
 	delete[] cursors.buffer;

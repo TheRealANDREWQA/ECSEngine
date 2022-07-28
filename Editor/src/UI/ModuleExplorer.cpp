@@ -4,7 +4,6 @@
 #include "..\HelperWindows.h"
 #include "..\Modules\Module.h"
 #include "..\Editor\EditorPalette.h"
-#include "..\OSFunctions.h"
 #include "..\Modules\ModuleFile.h"
 #include "Inspector.h"
 #include "..\Editor\EditorEvent.h"
@@ -50,7 +49,10 @@ struct ModuleExplorerData {
 	EditorState* editor_state;
 	unsigned int selected_module;
 	unsigned int selected_module_configuration_group;
+	EDITOR_MODULE_CONFIGURATION* configurations;
 };
+
+// --------------------------------------------------------------------------------------------------------
 
 void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -112,11 +114,13 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 		add_data->graphics_module = false;
 
 		folder_data->os_data.get_file_data.path = *solution_path_wide;
-		folder_data->os_data.get_file_data.filter = L".sln\0.vcxproj";
-		folder_data->os_data.get_file_data.filter_count = 2;
+		//folder_data->os_data.get_file_data.filter = L".sln\0.vcxproj";
+		//folder_data->os_data.get_file_data.filter_count = 2;
 		folder_data->os_data.get_file_data.error_message.buffer = nullptr;
 		folder_data->os_data.get_file_data.initial_directory = nullptr;
 		folder_data->os_data.get_file_data.hWnd = nullptr;
+
+		
 		folder_data->is_data_valid = false;
 		folder_data->os_data.update_stream = nullptr;
 	}
@@ -148,6 +152,14 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 
 		FolderActionData* data = (FolderActionData*)_data;
 		action_data->data = &data->os_data;
+
+		const wchar_t* extensions[] = {
+			L".sln",
+			L".vcxproj"
+		};
+
+		data->os_data.get_file_data.extensions = { extensions, std::size(extensions) };
+		
 		FileExplorerGetFileAction(action_data);
 		data->os_data.get_file_data.path.size = wcslen(data->os_data.get_file_data.path.buffer);
 		if (data->os_data.get_file_data.path.size > 0) {
@@ -196,14 +208,14 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 
 			bool success = false;
 			if (data->graphics_module) {
-				success = SetProjectGraphicsModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
+				success = SetGraphicsModule(data->editor_state, *data->solution_path_wide, library_name);
 				if (!success) {
 					ECS_FORMAT_TEMP_STRING(error_message, "Could not add graphics module with name {#} and path {#}.", *data->library_name, *data->solution_path_wide);
 					EditorSetConsoleError(error_message);
 				}
 			}
 			else {
-				success = AddProjectModule(data->editor_state, *data->solution_path_wide, library_name, EditorModuleConfiguration::Debug);
+				success = AddModule(data->editor_state, *data->solution_path_wide, library_name);
 				if (!success) {
 					ECS_FORMAT_TEMP_STRING(error_message, "Could not add new module with name {#} and path {#}.", *data->library_name, *data->solution_path_wide);
 					EditorSetConsoleError(error_message);
@@ -224,15 +236,17 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 		CloseXBorderClickableAction(action_data);
 	};
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Add", { add_project_action, add_data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Add", { add_project_action, add_data, 0, ECS_UI_DRAW_SYSTEM });
 
 	config.flag_count = 0;
 	add_transform.scale = drawer.GetLabelScale("Cancel");
 	add_transform.position.x = drawer.GetAlignedToRight(add_transform.scale.x).x;
 	config.AddFlag(add_transform);
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void CreateAddModuleWizard(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -252,6 +266,7 @@ void CreateAddModuleWizard(ActionData* action_data) {
 	system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_LOCK_WINDOW | UI_POP_UP_WINDOW_ALL);
 }
 
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	descriptor.draw = ModuleExplorerDraw;
@@ -261,12 +276,20 @@ void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* ed
 	descriptor.window_data_size = 0;
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void ModuleExplorerRemoveModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerData* data = (ModuleExplorerData*)_data;
 	if (data->selected_module != -1) {
-		RemoveProjectModule(data->editor_state, data->selected_module);
+		RemoveModule(data->editor_state, data->selected_module);
+
+		memmove(
+			data->configurations + data->selected_module,
+			data->configurations + data->selected_module + 1, 
+			(data->editor_state->project_modules->size - data->selected_module) * sizeof(EDITOR_MODULE_CONFIGURATION)
+		);
 		data->selected_module = -1;
 		bool success = SaveModuleFile(data->editor_state);
 		if (!success) {
@@ -275,14 +298,17 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 	}
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 struct ModuleExplorerRunModuleBuildCommandData {
 	EditorState* editor_state;
 	unsigned int module_index;
+	EDITOR_MODULE_CONFIGURATION configuration;
 };
 
 void ModuleExplorerPrintConsoleMessageAfterBuildCommand(ModuleExplorerRunModuleBuildCommandData* data, EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status) {
 	Stream<wchar_t> library_name = data->editor_state->project_modules->buffer[data->module_index].library_name;
-	const char* configuration_string = MODULE_CONFIGURATIONS[(unsigned int)data->editor_state->project_modules->buffer[data->module_index].configuration];
+	const char* configuration_string = MODULE_CONFIGURATIONS[data->configuration];
 	ECS_TEMP_ASCII_STRING(console_message, 256);
 	switch (command_status) {
 	case EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING:
@@ -303,6 +329,8 @@ void ModuleExplorerPrintConsoleMessageAfterBuildCommand(ModuleExplorerRunModuleB
 		break;
 	}
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* command_statuses) {
 	ECS_TEMP_ASCII_STRING(console_message, 8192);
@@ -345,69 +373,93 @@ void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_s
 	EditorSetConsoleError(console_message);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void ModuleExplorerBuildModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildProjectModule(data->editor_state, data->module_index);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = BuildModule(data->editor_state, data->module_index, data->configuration);
 	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerCleanModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = CleanProjectModule(data->editor_state, data->module_index);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = CleanModule(data->editor_state, data->module_index, data->configuration);
 	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerRebuildModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerRunModuleBuildCommandData* data = (ModuleExplorerRunModuleBuildCommandData*)_data;
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = RebuildProjectModule(data->editor_state, data->module_index);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS command_status = RebuildModule(data->editor_state, data->module_index, data->configuration);
 	ModuleExplorerPrintConsoleMessageAfterBuildCommand(data, command_status);
 }
 
-void ModuleExplorerBuildAll(ActionData* action_data) {
+// --------------------------------------------------------------------------------------------------------
+
+void ModuleExplorerCommandAll(ActionData* action_data, void (*function)
+	(
+		EditorState*,
+		Stream<unsigned int>,
+		EDITOR_MODULE_CONFIGURATION*,
+		EDITOR_LAUNCH_BUILD_COMMAND_STATUS*,
+		EDITOR_FINISH_BUILD_COMMAND_STATUS*
+	)
+) {
 	UI_UNPACK_ACTION_DATA;
 
-	EditorState* data = (EditorState*)_data;
+	ModuleExplorerData* data = (ModuleExplorerData*)_data;
 
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->project_modules->size);
-	BuildProjectModules(data, statuses);
-	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data, statuses);
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(
+		sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->editor_state->project_modules->size
+	);
+
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, data->editor_state->project_modules->size);
+	function::MakeSequence(indices);
+
+	function(data->editor_state, indices, data->configurations, statuses, nullptr);
+	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data->editor_state, statuses);
 }
+
+void ModuleExplorerBuildAll(ActionData* action_data) {
+	ModuleExplorerCommandAll(action_data, BuildModules);
+}
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerCleanAll(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	EditorState* data = (EditorState*)_data;
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->project_modules->size);
-	CleanProjectModules(data, statuses);
-	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data, statuses);
+	ModuleExplorerCommandAll(action_data, CleanModules);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerRebuildAll(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	EditorState* data = (EditorState*)_data;
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->project_modules->size);
-	RebuildProjectModules(data, statuses);
-	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data, statuses);
+	ModuleExplorerCommandAll(action_data, RebuildModules);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerReset(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerData* data = (ModuleExplorerData*)_data;
-	ResetProjectModules(data->editor_state);
+	ResetModules(data->editor_state);
 	data->selected_module = -1;
 	bool success = SaveModuleFile(data->editor_state);
 	if (!success) {
 		EditorSetConsoleError(ToStream("Could not save module file after reset."));
 	}
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerOpenBuildLog(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
@@ -426,6 +478,8 @@ void ModuleExplorerOpenBuildLog(ActionData* action_data) {
 	OpenFileWithDefaultApplicationStreamAction(action_data);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void ModuleExplorerOpenModuleFolder(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -440,75 +494,36 @@ void ModuleExplorerOpenModuleFolder(ActionData* action_data) {
 	OS::LaunchFileExplorerWithError(path, system);
 }
 
-void ModuleExplorerSetAllConfiguration(ActionData* action_data, EditorModuleConfiguration configuration, const char* error_message) {
+// --------------------------------------------------------------------------------------------------------
+
+void ModuleExplorerSetAllConfiguration(ActionData* action_data, EDITOR_MODULE_CONFIGURATION configuration) {
 	UI_UNPACK_ACTION_DATA;
 
-	EditorState* editor_state = (EditorState*)_data;
-	ProjectModules* modules = editor_state->project_modules;
-	for (size_t index = 0; index < modules->size; index++) {
-		modules->buffer[index].configuration = configuration;
-	}
-
-	bool success = SaveModuleFile(editor_state);
-	if (!success) {
-		EditorSetConsoleError(ToStream(error_message));
+	ModuleExplorerData* data = (ModuleExplorerData*)_data;
+	for (size_t index = 0; index < data->editor_state->project_modules->size; index++) {
+		data->configurations[index] = configuration;
 	}
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerSetAllDebug(ActionData* action_data) {
-	ModuleExplorerSetAllConfiguration(action_data, EditorModuleConfiguration::Debug, "An error occured when saving the module file after changing module configurations to debug");
+	ModuleExplorerSetAllConfiguration(action_data, EDITOR_MODULE_CONFIGURATION_DEBUG);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerSetAllRelease(ActionData* action_data) {
-	ModuleExplorerSetAllConfiguration(action_data, EditorModuleConfiguration::Release, "An error occured when saving the module file after changing module configurations to release");
+	ModuleExplorerSetAllConfiguration(action_data, EDITOR_MODULE_CONFIGURATION_RELEASE);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerSetAllDistribution(ActionData* action_data) {
-	ModuleExplorerSetAllConfiguration(action_data, EditorModuleConfiguration::Distribution, "An error occured when saving the module file after changing module configurations to distribution");
+	ModuleExplorerSetAllConfiguration(action_data, EDITOR_MODULE_CONFIGURATION_DISTRIBUTION);
 }
 
-struct SelectModuleConfigurationGroupData {
-	EditorState* editor_state;
-	ModuleExplorerData* explorer_data;
-	unsigned int group_index;
-};
-
-void ModuleExplorerSelectModuleConfigurationGroup(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	SelectModuleConfigurationGroupData* data = (SelectModuleConfigurationGroupData*)_data;
-	data->explorer_data->selected_module_configuration_group = data->group_index;
-	data->explorer_data->selected_module = -1;
-
-	ChangeInspectorToModuleConfigurationGroup(data->editor_state, data->group_index);
-}
-
-void ModuleExplorerApplyModuleConfigurationGroup(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	SelectModuleConfigurationGroupData* data = (SelectModuleConfigurationGroupData*)_data;
-	ApplyModuleConfigurationGroup(data->editor_state, data->group_index);
-}
-
-void ModuleExplorerDeleteModuleConfigurationGroup(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	SelectModuleConfigurationGroupData* data = (SelectModuleConfigurationGroupData*)_data;
-	RemoveModuleConfigurationGroup(data->editor_state, data->group_index);
-	if (data->explorer_data->selected_module_configuration_group == data->group_index) {
-		data->explorer_data->selected_module_configuration_group = -1;
-	}
-}
-
-void ModuleExplorerCreateModuleConfigurationGroupAction(ActionData* action_data) {
-	UI_UNPACK_ACTION_DATA;
-
-	SelectModuleConfigurationGroupData* data = (SelectModuleConfigurationGroupData*)_data;
-	data->explorer_data->selected_module = -1;
-	data->explorer_data->selected_module_configuration_group = data->editor_state->module_configuration_groups.size;
-	
-	CreateModuleConfigurationGroupAddWizard(data->editor_state, -1);
-}
+// --------------------------------------------------------------------------------------------------------
 
 void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -525,14 +540,20 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		explorer_data->selected_module = -1;
 		explorer_data->selected_module_configuration_group = -1;
 		explorer_data->editor_state = editor_state;
+
+		const size_t ALLOCATE_COUNT = 32;
+		explorer_data->configurations = (EDITOR_MODULE_CONFIGURATION*)drawer.GetMainAllocatorBuffer(
+			sizeof(EDITOR_MODULE_CONFIGURATION) * ALLOCATE_COUNT
+		);
+		memset(explorer_data->configurations, 0, sizeof(EDITOR_MODULE_CONFIGURATION) * ALLOCATE_COUNT);
 	}
 	else {
 		explorer_data = (ModuleExplorerData*)drawer.GetResource(MODULE_EXPLORER_DATA_NAME);
 	}
 
 	ProjectModules* project_modules = editor_state->project_modules;
-	TaskDependencyElement _elements[128];
-	Stream<TaskDependencyElement> elements(_elements, 0);
+	TaskSchedulerElement _elements[128];
+	Stream<TaskSchedulerElement> elements(_elements, 0);
 
 	UIDrawConfig config;
 
@@ -553,14 +574,14 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	drawer.SetRowPadding(ECS_TOOLS_UI_ONE_PIXEL_X * 2.0f);
 	drawer.SetNextRowYOffset(ECS_TOOLS_UI_ONE_PIXEL_Y);
 
-	drawer.SetDrawMode(UIDrawerMode::Nothing);
+	drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NOTHING);
 	UIConfigAbsoluteTransform header_transform;
 	header_transform.position.x = drawer.region_position.x + drawer.region_render_offset.x + border.thickness;
 	header_transform.position.y = drawer.current_y;
 	header_transform.scale = drawer.GetLabelScale(HEADER_ADD_MODULE);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_ADD_MODULE, {CreateAddModuleWizard, window_data, 0, UIDrawPhase::System});
+	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_ADD_MODULE, {CreateAddModuleWizard, window_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM});
 
 	config.flag_count = HEADER_BASE_CONFIGS;
 	UIConfigActiveState is_selected_state;
@@ -586,9 +607,9 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	UIDrawerMenuState menu_state;
 	if (initialize) {
 		UIActionHandler set_configuration_handlers[std::size(MODULE_CONFIGURATIONS)];
-		set_configuration_handlers[0] = { ModuleExplorerSetAllDebug, editor_state, 0, UIDrawPhase::System };
-		set_configuration_handlers[1] = { ModuleExplorerSetAllRelease, editor_state, 0, UIDrawPhase::System };
-		set_configuration_handlers[2] = { ModuleExplorerSetAllDistribution, editor_state, 0, UIDrawPhase::System };
+		set_configuration_handlers[0] = { ModuleExplorerSetAllDebug, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		set_configuration_handlers[1] = { ModuleExplorerSetAllRelease, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		set_configuration_handlers[2] = { ModuleExplorerSetAllDistribution, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 
 		ECS_TEMP_ASCII_STRING(set_module_configuration_menu_characters, 256);
 		for (size_t index = 0; index < std::size(MODULE_CONFIGURATIONS); index++) {
@@ -609,35 +630,35 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	header_transform.scale = drawer.GetLabelScale(HEADER_OPEN_MODULE_FOLDER);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_OPEN_MODULE_FOLDER, { ModuleExplorerOpenModuleFolder, editor_state, 0, UIDrawPhase::System });
+	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_OPEN_MODULE_FOLDER, { ModuleExplorerOpenModuleFolder, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 	config.flag_count--;
 
 	header_transform.position.x += header_transform.scale.x + border.thickness;
 	header_transform.scale = drawer.GetLabelScale(HEADER_OPEN_BUILD_LOG);
 	config.AddFlag(header_transform);
 	
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_OPEN_BUILD_LOG, { ModuleExplorerOpenBuildLog, editor_state, 0, UIDrawPhase::System });
+	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_OPEN_BUILD_LOG, { ModuleExplorerOpenBuildLog, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 	config.flag_count--;
 	header_transform.position.x += header_transform.scale.x + border.thickness;
 	header_transform.scale = drawer.GetLabelScale(HEADER_BUILD_ALL);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_BUILD_ALL, { ModuleExplorerBuildAll, editor_state, 0 });
+	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_BUILD_ALL, { ModuleExplorerBuildAll, explorer_data, 0 });
 
 	config.flag_count--;
 	header_transform.position.x += header_transform.scale.x + border.thickness;
 	header_transform.scale = drawer.GetLabelScale(HEADER_CLEAN_ALL);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_CLEAN_ALL, { ModuleExplorerCleanAll, editor_state, 0 });
+	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_CLEAN_ALL, { ModuleExplorerCleanAll, explorer_data, 0 });
 
 	config.flag_count--;
 	header_transform.position.x += header_transform.scale.x + border.thickness;
 	header_transform.scale = drawer.GetLabelScale(HEADER_REBUILD_ALL);
 	config.AddFlag(header_transform);
 
-	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_REBUILD_ALL, { ModuleExplorerRebuildAll, editor_state, 0 });
+	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_REBUILD_ALL, { ModuleExplorerRebuildAll, explorer_data, 0 });
 
 	config.flag_count--;
 	header_transform.position.x += header_transform.scale.x + border.thickness;
@@ -650,88 +671,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	drawer.SetRowPadding(next_row_padding);
 	drawer.SetNextRowYOffset(row_y_offset);
 	drawer.NextRow(0.25f);
-	drawer.SetDrawMode(UIDrawerMode::Indent);
-
-#pragma endregion
-
-#pragma region Module Configuration Group
-
-	UIDrawConfig header_config;
-
-	auto draw_module_configuration_group = [editor_state, explorer_data, &drawer](unsigned int group_index) {
-		constexpr const char* APPLY_BUTTON_TEXT = "Apply";
-		constexpr const char* DELETE_BUTTON_TEXT = "Delete";
-
-		const ModuleConfigurationGroup* group = editor_state->module_configuration_groups.buffer + group_index;
-		float2 apply_button_scale = drawer.GetLabelScale(APPLY_BUTTON_TEXT);
-		float2 delete_button_scale = drawer.GetLabelScale(DELETE_BUTTON_TEXT);
-
-		UIDrawConfig config;
-		float x_scale = drawer.GetXScaleUntilBorder(drawer.current_x);
-		UIConfigWindowDependentSize transform;
-		transform.scale_factor.x = drawer.GetWindowSizeFactors(WindowSizeTransformType::Horizontal, { x_scale - 2 * drawer.layout.element_indentation - apply_button_scale.x - delete_button_scale.x, 0.0f}).x;
-		config.AddFlag(transform);
-
-		SelectModuleConfigurationGroupData select_data;
-		select_data.editor_state = editor_state;
-		select_data.explorer_data = explorer_data;
-		select_data.group_index = group_index;
-
-		const size_t BUTTON_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X;
-
-		// Transparent label if not selected
-		if (explorer_data->selected_module_configuration_group == group_index) {
-			drawer.Button(
-				BUTTON_CONFIGURATION,
-				config, 
-				group->name.buffer, 
-				{ ModuleExplorerSelectModuleConfigurationGroup, &select_data, sizeof(select_data) }
-			);
-		}
-		else {
-			drawer.Button(
-				BUTTON_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT,
-				config,
-				group->name.buffer,
-				{ ModuleExplorerSelectModuleConfigurationGroup, &select_data, sizeof(select_data) }
-			);
-		}
-
-		drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
-		drawer.PushIdentifierStackRandom(group_index);
-
-		drawer.Button(UI_CONFIG_DO_NOT_CACHE, config, APPLY_BUTTON_TEXT, { ModuleExplorerApplyModuleConfigurationGroup, &select_data, sizeof(select_data) });
-		drawer.Button(UI_CONFIG_DO_NOT_CACHE, config, DELETE_BUTTON_TEXT, { ModuleExplorerDeleteModuleConfigurationGroup, &select_data, sizeof(select_data) });
-
-		config.flag_count--;
-
-		drawer.PopIdentifierStack();
-		drawer.PopIdentifierStack();
-		drawer.NextRow();
-	};
-
-	// The module configuration group header
-	drawer.CollapsingHeader("Configuration Groups", [&]() {
-		for (size_t index = 0; index < editor_state->module_configuration_groups.size; index++) {
-			draw_module_configuration_group(index);
-		}
-
-		// Add new module configuration group
-		UIConfigWindowDependentSize dependent_size;
-		dependent_size.scale_factor = drawer.GetWindowSizeScaleUntilBorder();
-		config.AddFlag(dependent_size);
-		SelectModuleConfigurationGroupData add_configuration_group_data;
-		add_configuration_group_data.editor_state = editor_state;
-		add_configuration_group_data.explorer_data = explorer_data;
-		add_configuration_group_data.group_index = -1;
-		drawer.Button(
-			UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X,
-			config,
-			"Add Configuration Group",
-			{ ModuleExplorerCreateModuleConfigurationGroupAction, &add_configuration_group_data, sizeof(add_configuration_group_data), UIDrawPhase::System }
-		);
-		config.flag_count--;
-	});
+	drawer.SetDrawMode(ECS_UI_DRAWER_INDENT);
 
 #pragma endregion
 
@@ -773,39 +713,39 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	drawer.RestoreHandlerState(handler_state);
 
 	// index GRAPHICS_MODULE_INDEX is used to signal the graphics module
-	auto module_draw_base = [&](Stream<wchar_t> module_name, EditorModuleLoadStatus load_status, unsigned int index) {
-		const size_t MODULE_SPRITE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM;
+	auto module_draw_base = [&](Stream<wchar_t> module_name, EDITOR_MODULE_LOAD_STATUS load_status, unsigned int index) {
+		const size_t MODULE_SPRITE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE;
 		const size_t MAIN_BUTTON_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X |
-			UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE | UI_CONFIG_TEXT_PARAMETERS;
+			UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_TEXT_PARAMETERS;
 		const size_t SECONDARY_BUTTON_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE;
 		const size_t COMBO_CONFIGURATION = UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX
-			| UI_CONFIG_COMBO_BOX_CALLBACK | UI_CONFIG_DO_NOT_CACHE;
+			| UI_CONFIG_DO_NOT_CACHE;
 
 		config.flag_count = 0;
 		UIConfigRelativeTransform transform;
-		const float SPRITE_SIZE = drawer.layout.default_element_y;
-		transform.scale = drawer.GetSquareScale(SPRITE_SIZE) / drawer.GetStaticElementDefaultScale();
 		config.AddFlag(transform);
 
 		switch (load_status) {
-			case EditorModuleLoadStatus::Good:
+			case EDITOR_MODULE_LOAD_GOOD:
 					drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_MODULE, EDITOR_GREEN_COLOR);
 					drawer.Indent();
 					drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, EDITOR_GREEN_COLOR);
 					drawer.Indent();
 					break;		
-			case EditorModuleLoadStatus::OutOfDate:
+			case EDITOR_MODULE_LOAD_OUT_OF_DATE:
 					drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_MODULE, EDITOR_YELLOW_COLOR);
 					drawer.Indent();
 					drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_CLOCK, EDITOR_YELLOW_COLOR);
 					drawer.Indent();
 					break;
-			case EditorModuleLoadStatus::Failed:
+			case EDITOR_MODULE_LOAD_FAILED:
 					drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_MODULE, EDITOR_RED_COLOR);
 					drawer.Indent();
 					drawer.SpriteRectangle(MODULE_SPRITE_CONFIGURATION, config, ECS_TOOLS_UI_TEXTURE_X, EDITOR_RED_COLOR);
 					drawer.Indent();
 					break;
+			default:
+				ECS_ASSERT(false, "Invalid load status for a module.");
 		}
 
 		ECS_TEMP_ASCII_STRING(ascii_module_name, 256);
@@ -834,8 +774,6 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		select_data.index = index;
 		select_data.explorer_data = explorer_data;
 
-		//float change_configuration = drawer.
-
 		config.flag_count = 0;
 		UIConfigWindowDependentSize main_button_size;
 		float main_button_x_scale = drawer.GetXScaleUntilBorder(drawer.current_x) - build_label_scale - clean_label_scale - rebuild_label_scale - combo_scale.x
@@ -844,14 +782,14 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		config.AddFlag(main_button_size);
 
 		UIConfigTextAlignment alignment;
-		alignment.horizontal = TextAlignment::Left;
-		alignment.vertical = TextAlignment::Middle;
+		alignment.horizontal = ECS_UI_TEXT_ALIGN_LEFT;
+		alignment.vertical = ECS_UI_TEXT_ALIGN_MIDDLE;
 		config.AddFlag(alignment);
 
 		UIConfigTextParameters text_parameters;
 		text_parameters.size = drawer.GetFontSize();
 		text_parameters.character_spacing = drawer.font.character_spacing;
-		text_parameters.color = MODULE_COLORS[GetModuleConfigurationChar(editor_state, index)];
+		text_parameters.color = MODULE_COLORS[explorer_data->configurations[index]];
 		config.AddFlag(text_parameters);
 
 		size_t SELECT_MODULE_CONFIGURATION = function::Select<size_t>(index == explorer_data->selected_module, MAIN_BUTTON_CONFIGURATION, MAIN_BUTTON_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT);
@@ -865,6 +803,8 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		ModuleExplorerRunModuleBuildCommandData build_data;
 		build_data.editor_state = editor_state;
 		build_data.module_index = index;
+		build_data.configuration = explorer_data->configurations[index];
+
 		drawer.Button(SECONDARY_BUTTON_CONFIGURATION, config, HEADER_BUILD_MODULE, { ModuleExplorerBuildModule, &build_data, sizeof(build_data) });
 		drawer.Button(SECONDARY_BUTTON_CONFIGURATION, config, HEADER_CLEAN_MODULE, { ModuleExplorerCleanModule, &build_data, sizeof(build_data) });
 		drawer.Button(SECONDARY_BUTTON_CONFIGURATION,config, HEADER_REBUILD_MODULE, { ModuleExplorerRebuildModule, &build_data, sizeof(build_data) });
@@ -873,24 +813,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		prefix.prefix = "Configuration: ";
 		config.AddFlag(prefix);
 
-		auto configuration_callback = [](ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
-
-			ModuleExplorerData* data = (ModuleExplorerData*)_data;
-			EDITOR_STATE(data->editor_state);
-			// Save new module file
-			bool success = SaveModuleFile(data->editor_state);
-
-			if (!success) {
-				EditorSetConsoleError(ToStream("Could not save module file after module configuration change."));
-			}
-		};
-
-		UIConfigComboBoxCallback callback;
-		callback.handler = { configuration_callback, explorer_data, 0 };
-		config.AddFlag(callback);
-
-		unsigned char* configuration_ptr = GetModuleConfigurationPtr(editor_state, index);
+		unsigned char* configuration_ptr = (unsigned char*)&explorer_data->configurations[index];
 
 		drawer.ComboBox(
 			COMBO_CONFIGURATION,
@@ -912,12 +835,14 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 
 #pragma region Graphics Module
 
+
 	drawer.CollapsingHeader("Graphics Module", [&]() {
+		EditorModuleInfo* info = GetModuleInfo(editor_state, GRAPHICS_MODULE_INDEX, explorer_data->configurations[GRAPHICS_MODULE_INDEX]);
 		if (project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name.size == 0 || project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path.size == 0) {
-			module_draw_base(ToStream(L"No graphics module is selected."), EditorModuleLoadStatus::Failed, GRAPHICS_MODULE_INDEX);
+			module_draw_base(ToStream(L"No graphics module is selected."), EDITOR_MODULE_LOAD_FAILED, GRAPHICS_MODULE_INDEX);
 		}
 		else {
-			module_draw_base(project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name, project_modules->buffer[GRAPHICS_MODULE_INDEX].load_status, GRAPHICS_MODULE_INDEX);
+			module_draw_base(project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name, info->load_status, GRAPHICS_MODULE_INDEX);
 		}
 	});
 
@@ -927,7 +852,8 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 
 	drawer.CollapsingHeader("Project Modules", [&]() {
 		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
-			module_draw_base(project_modules->buffer[index].library_name, project_modules->buffer[index].load_status, index);
+			EditorModuleInfo* info = GetModuleInfo(editor_state, index, explorer_data->configurations[index]);
+			module_draw_base(project_modules->buffer[index].library_name, info->load_status, index);
 		}
 	});
 
@@ -935,13 +861,19 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void CreateModuleExplorer(EditorState* editor_state) {
 	CreateDockspaceFromWindow(MODULE_EXPLORER_WINDOW_NAME, editor_state, CreateModuleExplorerWindow);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void CreateModuleExplorerAction(ActionData* action_data) {
 	CreateModuleExplorer((EditorState*)action_data->data);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 unsigned int CreateModuleExplorerWindow(EditorState* _editor_state) {
 	EDITOR_STATE(_editor_state);
@@ -961,3 +893,5 @@ unsigned int CreateModuleExplorerWindow(EditorState* _editor_state) {
 
 	return ui_system->Create_Window(descriptor);
 }
+
+// --------------------------------------------------------------------------------------------------------

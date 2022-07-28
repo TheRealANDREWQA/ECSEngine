@@ -10,16 +10,12 @@ namespace ECSEngine {
 	// Stream and Resizable stream are not used here because they will create a cycle with AllocatorPolymorphic
 	// which is included in Stream.h
 
-
-
 	struct ECSENGINE_API MemoryArena
 	{
-	//public:
 		MemoryArena();
 		// arena_buffer is the memory to hold the multipool allocators, should be determined with MemoryOf
 		MemoryArena(
-			void* arena_buffer,
-			void* buffer, 
+			void* buffer,
 			size_t capacity,
 			size_t allocator_count,
 			size_t blocks_per_allocator
@@ -29,8 +25,11 @@ namespace ECSEngine {
 		MemoryArena& operator = (const MemoryArena& other) = default;
 
 		void* Allocate(size_t size, size_t alignment = 8);
+
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate(const void* block);
+
+		bool Belongs(const void* buffer) const;
 
 		// ----------------------------------------  Thread safe --------------------------------------------------------
 
@@ -39,9 +38,10 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 
-		static size_t MemoryOf(size_t allocator_count, size_t blocks_per_allocator);
+		static size_t MemoryOfArenas(size_t allocator_count, size_t blocks_per_allocator);
 
-	//private:
+		static size_t MemoryOf(size_t capacity, size_t allocator_count, size_t blocks_per_allocator);
+
 		MultipoolAllocator* m_allocators;
 		size_t m_allocator_count;
 		void* m_initial_buffer;
@@ -70,6 +70,8 @@ namespace ECSEngine {
 
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate(const void* block);
+
+		bool Belongs(const void* buffer) const;
 
 		void CreateArena();
 		void CreateArena(unsigned int arena_capacity, unsigned int allocator_count, unsigned int blocks_per_allocator);

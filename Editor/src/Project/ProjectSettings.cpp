@@ -122,9 +122,9 @@ bool SaveDefaultSettingsFile(EditorState* editor_state)
 
 bool ExistsProjectSettings(const EditorState* editor_state)
 {
-	ECS_STACK_CAPACITY_STREAM(wchar_t, settings_path, 512);
-	GetProjectSettingsPath(editor_state, settings_path);
-	return ExistsFileOrFolder(settings_path);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, settings_name, 512);
+	GetProjectSettingsPath(editor_state, settings_name);
+	return ExistsFileOrFolder(settings_name);
 }
 
 // -------------------------------------------------------------------------------------------------------------

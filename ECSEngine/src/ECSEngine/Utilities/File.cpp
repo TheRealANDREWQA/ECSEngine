@@ -794,7 +794,7 @@ namespace ECSEngine {
 		ECS_FILE_ACCESS_FLAGS access_flags = append_data ? ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_APEND | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL
 			: ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE;
 
-		ECS_FILE_STATUS_FLAGS status = OpenFile(path, &handle, access_flags);
+		ECS_FILE_STATUS_FLAGS status = FileCreate(path, &handle, access_flags);
 		if (status != ECS_FILE_STATUS_OK) {
 			return status;
 		}

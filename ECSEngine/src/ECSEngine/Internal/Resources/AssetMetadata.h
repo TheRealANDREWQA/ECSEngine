@@ -1,7 +1,10 @@
+// ECS_REFLECT
 #pragma once
 #include "../../Core.h"
 #include "../../Containers/Stream.h"
 #include "../../Rendering/RenderingStructures.h"
+#include "../../Utilities/FunctionInterfaces.h"
+#include "../../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -24,36 +27,62 @@ namespace ECSEngine {
 		ECS_ASSET_METADATA_VERSION_INVALID_DATA
 	};
 
-	struct MeshMetadata {
+	// ------------------------------------------------------------------------------------------------------
+
+	struct ECSENGINE_API ECS_REFLECT MeshMetadata {
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
+
+		MeshMetadata Copy(AllocatorPolymorphic allocator) const;
+
+		Stream<char> name;
+		float scale_factor;
 		bool coallesced_mesh;
 		bool invert_z_axis;
 		unsigned char optimize_level;
-		float scale_factor;
 	};
 
-	struct TextureMetadata {
-		bool srgb : 1;
-		bool convert_to_nearest_power_of_two : 1;
-		bool generate_mip_maps : 1;
-		bool compression_type : 4;
+	struct ECSENGINE_API ECS_REFLECT TextureMetadata {
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
+		
+		TextureMetadata Copy(AllocatorPolymorphic allocator) const;
+
+		Stream<char> name;
+		bool srgb;
+		bool convert_to_nearest_power_of_two;
+		bool generate_mip_maps;
+		unsigned char compression_type;
 	};
 
-	struct GPUBufferMetadata {
-		char buffer_type : 4;
-		char cpu_access : 2;
+	struct ECSENGINE_API ECS_REFLECT GPUBufferMetadata {
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
+
+		GPUBufferMetadata Copy(AllocatorPolymorphic allocator) const;
+
+		Stream<char> name;
+		unsigned char buffer_type;
 	};
 
-	struct GPUSamplerMetadata {
-		char wrap_mode : 3;
-		char filter_mode : 1;
-		char anisotropic_level : 4;
+	struct ECSENGINE_API ECS_REFLECT GPUSamplerMetadata {
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
+
+		GPUSamplerMetadata Copy(AllocatorPolymorphic allocator) const;
+
+		Stream<char> name;
+		unsigned char wrap_mode;
+		unsigned char filter_mode;
+		unsigned char anisotropic_level;
 	};
 
-	struct ShaderMetadata {
+	// Each macro definition and name is separately allocated
+	struct ECSENGINE_API ECS_REFLECT ShaderMetadata {
 		ShaderMetadata();
-		ShaderMetadata(Stream<ShaderMacro> macros, AllocatorPolymorphic allocator);
+		ShaderMetadata(Stream<char> name, Stream<ShaderMacro> macros, AllocatorPolymorphic allocator);
 
 		void AddMacro(const char* name, const char* definition, AllocatorPolymorphic allocator);
+
+		ShaderMetadata Copy(AllocatorPolymorphic allocator) const;
+
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
 		void RemoveMacro(size_t index, AllocatorPolymorphic allocator);
 
@@ -66,25 +95,37 @@ namespace ECSEngine {
 		// Returns -1 if the macro is not found
 		size_t SearchMacro(const char* name) const;
 
+		Stream<char> name;
 		Stream<ShaderMacro> macros;
 	};
 
-	struct MaterialAssetResource {
-		unsigned int shader_index : 3;
-		unsigned int slot : 8;
-		unsigned int metadata_index;
+	struct ECS_REFLECT MaterialAssetResource {
+		unsigned char shader_type;
+		unsigned char slot;
+		unsigned int metadata_handle;
 	};
 
-	struct MaterialAsset {
+	// The name is separately allocated from the other buffers
+	// The MaterialAssetResource buffers are maintained as a single coallesced buffer
+	struct ECSENGINE_API ECS_REFLECT MaterialAsset {
+		MaterialAsset() = default;
+		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
+
 		void AddTexture(MaterialAssetResource texture, AllocatorPolymorphic allocator);
 
 		void AddBuffer(MaterialAssetResource buffer, AllocatorPolymorphic allocator);
 
 		void AddSampler(MaterialAssetResource sampler, AllocatorPolymorphic allocator);
 
-		MaterialAsset Copy(void* buffer);
+		void AddShader(MaterialAssetResource shader, AllocatorPolymorphic allocator);
+
+		MaterialAsset Copy(void* buffer) const;
+
+		MaterialAsset Copy(AllocatorPolymorphic allocator) const;
 
 		size_t CopySize() const;
+
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
 		void RemoveTexture(unsigned int index, AllocatorPolymorphic allocator);
 
@@ -92,92 +133,22 @@ namespace ECSEngine {
 
 		void RemoveSampler(unsigned int index, AllocatorPolymorphic allocator);
 
-		// These are indices into a shader metadata database
-		// Ignore the compute shader
-		unsigned int shaders[ECS_SHADER_TYPE_COUNT - 1];
+		void RemoveShader(unsigned int index, AllocatorPolymorphic allocator);
 
+		Stream<char> name;
 		// These are maintained as a coallesced buffer
 		Stream<MaterialAssetResource> textures;
 		Stream<MaterialAssetResource> buffers;
 		Stream<MaterialAssetResource> samplers;
+		Stream<MaterialAssetResource> shaders;
 	};
 
-	// ------------------------------------------------------------------------------------------------------
+	struct ECS_REFLECT MiscAsset {
+		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
-	ECSENGINE_API void SerializeMeshMetadata(MeshMetadata metadata, uintptr_t& buffer);
+		MiscAsset Copy(AllocatorPolymorphic allocator) const;
 
-	ECSENGINE_API size_t SerializeMeshMetadataSize();
+		Stream<wchar_t> path;
+	};
 
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeMeshMetadata(MeshMetadata* metadata, uintptr_t& buffer);
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void SerializeTextureMetadata(TextureMetadata metadata, uintptr_t& buffer);
-
-	ECSENGINE_API size_t SerializeTextureMetadataSize();
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeTextureMetadata(TextureMetadata* metadata, uintptr_t& buffer);
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void SerializeGPUBufferMetadata(GPUBufferMetadata metadata, uintptr_t& buffer);
-
-	ECSENGINE_API size_t SerializeGPUBufferMetadataSize();
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeGPUBufferMetadata(GPUBufferMetadata* metadata, uintptr_t& buffer);
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void SerializeGPUSamplerMetadata(GPUSamplerMetadata metadata, uintptr_t& buffer);
-
-	ECSENGINE_API size_t SerializeGPUSamplerMetadataSize();
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeGPUSamplerMetadata(GPUSamplerMetadata* metadata, uintptr_t& buffer);
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API void SerializeShaderMetadata(ShaderMetadata metadata, uintptr_t& buffer);
-
-	ECSENGINE_API size_t SerializeShaderMetadataSize(ShaderMetadata metadata);
-
-	// ------------------------------------------------------------------------------------------------------
-
-	// Each macro string will be separately allocated
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeShaderMetadata(ShaderMetadata* metadata, uintptr_t& buffer, AllocatorPolymorphic allocator = { nullptr });
-
-	// Returns -1 if the version is not valid
-	// Returns how many bytes of the current buffer are used for the shader metadata
-	ECSENGINE_API size_t DeserializeShaderMetadataSize(uintptr_t buffer);
-
-	// ------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool SerializeMaterialAsset(MaterialAsset material, Stream<wchar_t> file);
-
-	ECSENGINE_API void SerializeMaterialAsset(MaterialAsset material, uintptr_t& buffer);
-
-	ECSENGINE_API size_t SerializeMaterialAssetSize(MaterialAsset material);
-
-	// ------------------------------------------------------------------------------------------------------
-
-	// It will copy the streams into a separate buffer
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeMaterialAsset(MaterialAsset* material, Stream<wchar_t> file, AllocatorPolymorphic allocator);
-
-	// It will copy the streams into a separate buffer
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeMaterialAsset(MaterialAsset* material, uintptr_t& buffer, AllocatorPolymorphic allocator);
-
-	// The streams will point into the buffer memory
-	ECSENGINE_API ECS_ASSET_METADATA_CODE DeserializeMaterialAsset(MaterialAsset* material, uintptr_t& buffer);
-
-	// Returns -1 if the version is not valid
-	// Returns how many bytes belong to the material asset
-	ECSENGINE_API size_t DeserializeMaterialAssetSize(uintptr_t buffer);
-
-	// ------------------------------------------------------------------------------------------------------
 }

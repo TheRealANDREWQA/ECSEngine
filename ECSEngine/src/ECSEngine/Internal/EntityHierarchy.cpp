@@ -125,7 +125,7 @@ namespace ECSEngine {
                 children.root_index = 0;
                 children.count = 1;
                 children.static_children[0] = child;
-                InsertToDynamicTable(hierarchy->children_table, hierarchy->allocator, children, parent);
+                InsertIntoDynamicTable(hierarchy->children_table, hierarchy->allocator, children, parent);
             }
             else {
                 unsigned int stream_index = hierarchy->roots.Add(parent);
@@ -134,7 +134,7 @@ namespace ECSEngine {
                 children.root_index = stream_index;
                 children.count = 1;
                 children.static_children[0] = child;
-                InsertToDynamicTable(hierarchy->children_table, hierarchy->allocator, children, parent);
+                InsertIntoDynamicTable(hierarchy->children_table, hierarchy->allocator, children, parent);
             }
         }
     }
@@ -144,7 +144,7 @@ namespace ECSEngine {
         AddEntryImplementation(this, parent, child);
 
         // Insert the child into the parent table aswell
-        InsertToDynamicTable(parent_table, allocator, parent, child);
+        InsertIntoDynamicTable(parent_table, allocator, parent, child);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -405,9 +405,9 @@ namespace ECSEngine {
                 temp_ptr = (uintptr_t)temp_buffer;
 
                 auto children = hierarchy->children_table.GetValueFromIndex(index);
-                Write(&temp_ptr, children_keys + index, sizeof(Entity));
-                Write(&temp_ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-                Write(&temp_ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+                Write<true>(&temp_ptr, children_keys + index, sizeof(Entity));
+                Write<true>(&temp_ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+                Write<true>(&temp_ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
 
                 success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
                 if (!success) {
@@ -431,10 +431,10 @@ namespace ECSEngine {
         header.parent_count = hierarchy->parent_table.GetCount();
         header.children_count = hierarchy->children_table.GetCount();
 
-        Write(ptr, &header, sizeof(header));
+        Write<true>(ptr, &header, sizeof(header));
 
         // Now write the roots
-        Write(ptr, hierarchy->roots.buffer, hierarchy->roots.size);
+        Write<true>(ptr, hierarchy->roots.buffer, hierarchy->roots.size);
 
         // Now the children table
         unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
@@ -442,9 +442,9 @@ namespace ECSEngine {
         for (unsigned int index = 0; index < children_capacity; index++) {
             if (hierarchy->children_table.IsItemAt(index)) {
                 auto children = hierarchy->children_table.GetValueFromIndex(index);
-                Write(ptr, children_keys + index, sizeof(Entity));
-                Write(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-                Write(ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+                Write<true>(ptr, children_keys + index, sizeof(Entity));
+                Write<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+                Write<true>(ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
             }
         }
 
@@ -570,7 +570,7 @@ namespace ECSEngine {
     {
         // Firstly read the header
         SerializeEntityHierarchyHeader header;
-        Read(ptr, &header, sizeof(header));
+        Read<true>(ptr, &header, sizeof(header));
         if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
             return false;
         }
@@ -606,23 +606,23 @@ namespace ECSEngine {
 
         // Read the roots now
         hierarchy->roots.Resize(header.root_count);
-        Read(ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
+        Read<true>(ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
         hierarchy->roots.size = header.root_count;
 
         // Read the children table now
         for (unsigned int index = 0; index < header.children_count; index++) {
             EntityHierarchy::Children children;
-            Read(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Read<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
             Entity key_entity;
-            Read(ptr, &key_entity, sizeof(key_entity));
+            Read<true>(ptr, &key_entity, sizeof(key_entity));
 
             if (children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
                 Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
-                Read(ptr, children_allocation, sizeof(Entity) * children.count);
+                Read<true>(ptr, children_allocation, sizeof(Entity) * children.count);
                 children.entities = children_allocation;
             }
             else {
-                Read(ptr, children.static_children, sizeof(Entity) * children.count);
+                Read<true>(ptr, children.static_children, sizeof(Entity) * children.count);
             }
 
             // Insert the value into the hash table now
@@ -641,7 +641,7 @@ namespace ECSEngine {
     size_t DeserializeEntityHierarchySize(uintptr_t ptr)
     {
         SerializeEntityHierarchyHeader header;
-        Read(&ptr, &header, sizeof(header));
+        Read<true>(&ptr, &header, sizeof(header));
         if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
             return -1;
         }
@@ -655,7 +655,7 @@ namespace ECSEngine {
 
         for (unsigned int index = 0; index < header.children_count; index++) {
             unsigned int data_int;
-            Read(&ptr, &data_int, sizeof(data_int));
+            Read<true>(&ptr, &data_int, sizeof(data_int));
 
             EntityHierarchy::Children child;
             memcpy(function::OffsetPointer(&child.padding, sizeof(unsigned int)), &data_int, sizeof(data_int));

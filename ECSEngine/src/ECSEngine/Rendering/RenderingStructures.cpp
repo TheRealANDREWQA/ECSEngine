@@ -55,10 +55,59 @@ namespace ECSEngine {
 		L"Emiss"
 	};
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Buffer>
+	ID3D11Resource* GetResourceBuffer(Buffer buffer, const wchar_t* error_message) {
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
+		com_buffer.Attach(buffer.buffer);
+		HRESULT result = com_buffer.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_message, true);
+
+		return _resource.Detach();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	template<typename Texture>
+	ID3D11Resource* GetResourceTexture(Texture* texture, const wchar_t* error_message) {
+		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
+		Microsoft::WRL::ComPtr<Texture> com_tex;
+		com_tex.Attach(texture);
+		HRESULT result = com_tex.As(&_resource);
+
+		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_message, true);
+
+		return _resource.Detach();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	template<typename View>
+	ID3D11Resource* GetResourceView(View view) {
+		ID3D11Resource* resource;
+		view.view->GetResource(&resource);
+		unsigned int count = resource->Release();
+		return resource;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	VertexBuffer::VertexBuffer() : stride(0), buffer(nullptr) {}
 
 	VertexBuffer::VertexBuffer(UINT _stride, UINT _size, ID3D11Buffer* _buffer) 
 		: stride(_stride), size(_size), buffer(_buffer) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* VertexBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting VertexBuffer to resource failed.");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	VertexBuffer VertexBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
@@ -70,7 +119,18 @@ namespace ECSEngine {
 		return buffer;	
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	IndexBuffer::IndexBuffer() : count(0), buffer(nullptr) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* IndexBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting IndexBuffer to resource failed.");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	IndexBuffer IndexBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
@@ -81,6 +141,8 @@ namespace ECSEngine {
 
 		return buffer;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	InputLayout::InputLayout() : layout(nullptr) {}
 
@@ -101,6 +163,8 @@ namespace ECSEngine {
 		return layout;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	VertexShader::VertexShader() : byte_code(nullptr, 0), shader(nullptr) {}
 
 	VertexShader VertexShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
@@ -113,6 +177,8 @@ namespace ECSEngine {
 
 		return shader;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	PixelShader::PixelShader() : shader(nullptr) {}
 
@@ -127,6 +193,8 @@ namespace ECSEngine {
 		return shader;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	GeometryShader GeometryShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
 	{
 		GeometryShader shader;
@@ -137,6 +205,8 @@ namespace ECSEngine {
 
 		return shader;
 	}
+	
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	DomainShader DomainShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
 	{
@@ -147,6 +217,8 @@ namespace ECSEngine {
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
 		return shader;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	HullShader HullShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
 	{
@@ -159,6 +231,8 @@ namespace ECSEngine {
 		return shader;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	ComputeShader ComputeShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
 	{
 		ComputeShader shader;
@@ -170,13 +244,26 @@ namespace ECSEngine {
 		return shader;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	Topology::Topology() : value(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST) {}
 
 	Topology::Topology(D3D11_PRIMITIVE_TOPOLOGY topology) : value(topology) {}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	ResourceView::ResourceView() : view(nullptr) {}
 
 	ResourceView::ResourceView(ID3D11ShaderResourceView* _view) : view(_view) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* ResourceView::GetResource() const
+	{
+		return GetResourceView(*this);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	ResourceView ResourceView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor)
 	{
@@ -189,9 +276,30 @@ namespace ECSEngine {
 		return view;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView ResourceView::RawCopy(GraphicsDevice* device, ID3D11Resource* resource, ResourceView view)
+	{
+		D3D11_SHADER_RESOURCE_VIEW_DESC descriptor;
+		view.view->GetDesc(&descriptor);
+
+		return ResourceView::RawCreate(device, resource, &descriptor);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	ConstantBuffer::ConstantBuffer() : buffer(nullptr) {}
 
 	ConstantBuffer::ConstantBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* ConstantBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting ConstantBuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	ConstantBuffer ConstantBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
@@ -202,6 +310,8 @@ namespace ECSEngine {
 
 		return buffer;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	SamplerState::SamplerState() : sampler(nullptr) {}
 
@@ -217,6 +327,15 @@ namespace ECSEngine {
 		return state;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* UAView::GetResource() const
+	{
+		return GetResourceView(*this);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	UAView UAView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_UNORDERED_ACCESS_VIEW_DESC* descriptor)
 	{
 		UAView view;
@@ -227,14 +346,52 @@ namespace ECSEngine {
 		return view;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	UAView UAView::RawCopy(GraphicsDevice* device, ID3D11Resource* resource, UAView view)
+	{
+		D3D11_UNORDERED_ACCESS_VIEW_DESC descriptor;
+		view.view->GetDesc(&descriptor);
+
+		return UAView::RawCreate(device, resource, &descriptor);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* RenderTargetView::GetResource() const
+	{
+		return GetResourceView(*this);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	RenderTargetView RenderTargetView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_RENDER_TARGET_VIEW_DESC* descriptor)
 	{
 		RenderTargetView view;
-		HRESULT result = device->CreateRenderTargetView(resource, descriptor, &view.target);
+		HRESULT result = device->CreateRenderTargetView(resource, descriptor, &view.view);
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
 
 		return view;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	RenderTargetView RenderTargetView::RawCopy(GraphicsDevice* device, ID3D11Resource* resource, RenderTargetView view)
+	{
+		D3D11_RENDER_TARGET_VIEW_DESC descriptor;
+		view.view->GetDesc(&descriptor);
+
+		return RenderTargetView::RawCreate(device, resource, &descriptor);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* DepthStencilView::GetResource() const
+	{
+		return GetResourceView(*this);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	DepthStencilView DepthStencilView::RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_DEPTH_STENCIL_VIEW_DESC* descriptor)
 	{
@@ -246,6 +403,25 @@ namespace ECSEngine {
 		return view;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	DepthStencilView DepthStencilView::RawCopy(GraphicsDevice* device, ID3D11Resource* resource, DepthStencilView view)
+	{
+		D3D11_DEPTH_STENCIL_VIEW_DESC descriptor;
+		view.view->GetDesc(&descriptor);
+
+		return DepthStencilView::RawCreate(device, resource, &descriptor);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* StandardBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting StandardBuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	StandardBuffer StandardBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		StandardBuffer buffer;
@@ -255,6 +431,15 @@ namespace ECSEngine {
 
 		return buffer;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* StructuredBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting StructedBuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	StructuredBuffer StructuredBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
@@ -266,6 +451,15 @@ namespace ECSEngine {
 		return buffer;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* IndirectBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting IndirectBuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	IndirectBuffer IndirectBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		IndirectBuffer buffer;
@@ -275,6 +469,15 @@ namespace ECSEngine {
 
 		return buffer;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* UABuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting UABuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	UABuffer UABuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
@@ -286,6 +489,15 @@ namespace ECSEngine {
 		return buffer;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* AppendStructuredBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting AppendStructuredBuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	AppendStructuredBuffer AppendStructuredBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		AppendStructuredBuffer buffer;
@@ -296,6 +508,15 @@ namespace ECSEngine {
 		return buffer;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* ConsumeStructuredBuffer::GetResource() const
+	{
+		return GetResourceBuffer(*this, L"Converting ConsumeStructuredBuffer to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	ConsumeStructuredBuffer ConsumeStructuredBuffer::RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		ConsumeStructuredBuffer buffer;
@@ -305,6 +526,8 @@ namespace ECSEngine {
 
 		return buffer;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	Texture1D::Texture1D() : tex(nullptr) {}
 
@@ -321,6 +544,15 @@ namespace ECSEngine {
 
 	Texture1D::Texture1D(ID3D11Texture1D* _tex) : tex(_tex) {}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* Texture1D::GetResource() const
+	{
+		return GetResourceTexture(tex, L"Converting Texture1D into a resource failed.");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	Texture1D Texture1D::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		RawInterface* interface_;
@@ -329,6 +561,8 @@ namespace ECSEngine {
 
 		return interface_;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	Texture2D::Texture2D() : tex(nullptr) {}
 
@@ -345,6 +579,15 @@ namespace ECSEngine {
 		tex = com_tex.Detach();
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* Texture2D::GetResource() const
+	{
+		return GetResourceTexture(tex, L"Converting Texture2D to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	Texture2D Texture2D::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		RawInterface* interface_;
@@ -353,6 +596,8 @@ namespace ECSEngine {
 
 		return interface_;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	Texture3D::Texture3D() : tex(nullptr) {}
 
@@ -369,6 +614,15 @@ namespace ECSEngine {
 		tex = com_tex.Detach();
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* Texture3D::GetResource() const
+	{
+		return GetResourceTexture(tex, L"Converting Texture3D to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	Texture3D Texture3D::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		RawInterface* interface_;
@@ -377,6 +631,8 @@ namespace ECSEngine {
 
 		return interface_;
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	TextureCube::TextureCube() : tex(nullptr) {}
 
@@ -390,6 +646,15 @@ namespace ECSEngine {
 		tex = com_tex.Detach();
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ID3D11Resource* TextureCube::GetResource() const
+	{
+		return GetResourceTexture(tex, L"Converting TextureCube to resource failed!");
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	TextureCube TextureCube::RawCreate(GraphicsDevice* device, const RawDescriptor* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data)
 	{
 		RawInterface* interface_;
@@ -399,11 +664,17 @@ namespace ECSEngine {
 		return interface_;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	TextureCube::TextureCube(ID3D11Texture2D* _tex) : tex(_tex) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	Translation::Translation() : x(0.0f), y(0.0f), z(0.0f) {}
 
 	Translation::Translation(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
 
 	Color::Color() : red(0), green(0), blue(0), alpha(255) {}
 
@@ -491,6 +762,8 @@ namespace ECSEngine {
 		values[3] = (float)alpha * inverse;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	ColorFloat::ColorFloat() : red(0.0f), green(0.0f), blue(0.0f), alpha(1.0f) {}
 
 	ColorFloat::ColorFloat(float _red) : red(_red), green(0.0f), blue(0.0f), alpha(1.0f) {}
@@ -542,6 +815,8 @@ namespace ECSEngine {
 		values[3] = alpha;
 	}
 
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	Camera::Camera() : translation(0.0f, 0.0f, 0.0f), rotation(0.0f, 0.0f, 0.0f) {}
 
 	Camera::Camera(float3 _translation, float3 _rotation) : translation(_translation), rotation(_rotation) {}
@@ -560,14 +835,14 @@ namespace ECSEngine {
 		projection = MatrixPerspectiveFOV(angle_y, aspect_ratio, near_z, far_z);
 	}
 
-	Matrix Camera::GetProjectionViewMatrix() const {
+	Matrix Camera::GetViewProjectionMatrix() const {
 		return MatrixTranslation(-translation) * MatrixRotationZ(-rotation.z) * MatrixRotationY(-rotation.y) * MatrixRotationX(-rotation.x) * projection;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	void SetPBRMaterialTexture(PBRMaterial* material, uintptr_t& memory, Stream<wchar_t> texture, PBRMaterialTextureIndex texture_index) {
-		void* base_address = (void*)function::align_pointer(
+		void* base_address = (void*)function::AlignPointer(
 			(uintptr_t)function::OffsetPointer(material, sizeof(const char*) + sizeof(float) + sizeof(float) + sizeof(Color) + sizeof(float3)),
 			alignof(Stream<wchar_t>)
 		);
@@ -606,7 +881,7 @@ namespace ECSEngine {
 		material.name = (const char*)ptr;
 		ptr += sizeof(char) * (name.size + 1);
 
-		ptr = function::align_pointer(ptr, alignof(wchar_t));
+		ptr = function::AlignPointer(ptr, alignof(wchar_t));
 
 		for (size_t index = 0; index < mappings.size; index++) {
 			SetPBRMaterialTexture(&material, ptr, mappings[index].texture, mappings[index].index);
@@ -749,7 +1024,7 @@ namespace ECSEngine {
 		material.name = mutable_char;
 		buffer += (material_name.size + 1) * sizeof(char);
 
-		buffer = function::align_pointer(buffer, alignof(wchar_t));
+		buffer = function::AlignPointer(buffer, alignof(wchar_t));
 		for (size_t index = 0; index < valid_textures.size; index++) {
 			SetPBRMaterialTexture(&material, buffer, valid_textures[index].texture, valid_textures[index].index);
 		}

@@ -824,7 +824,7 @@ namespace ECSEngine {
 		Mesh mesh;
 
 		if (gltf_mesh.name != nullptr) {
-			mesh.name = function::StringCopy(graphics->m_allocator, gltf_mesh.name).buffer;
+			mesh.name = function::StringCopy(graphics->Allocator(), gltf_mesh.name).buffer;
 		}
 		else {
 			mesh.name = nullptr;
@@ -1014,7 +1014,7 @@ namespace ECSEngine {
 		// Propragate the names
 		for (size_t index = 0; index < count; index++) {
 			if (gltf_meshes[index].name != nullptr) {
-				submeshes[index].name = function::StringCopy(graphics->m_allocator, gltf_meshes[index].name).buffer;
+				submeshes[index].name = function::StringCopy(graphics->Allocator(), gltf_meshes[index].name).buffer;
 			}
 			else {
 				submeshes[index].name = nullptr;

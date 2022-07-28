@@ -251,6 +251,78 @@ namespace ECSEngine {
 			whitespace_characters.Add({ (unsigned short)character_count, parse_token });
 		}
 
+		UIDrawerSliderFunctions UIDrawerGetFloatSliderFunctions(unsigned int& precision)
+		{
+			UIDrawerSliderFunctions result;
+
+			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
+				float character_value = function::ConvertCharactersToFloat(characters);
+				float* value = (float*)_value;
+				*value = character_value;
+			};
+
+			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
+				characters.size = 0;
+				function::ConvertFloatToChars(characters, *(const float*)_value, *(unsigned int*)extra_data);
+			};
+
+			auto from_float = [](void* value, float float_percentage) {
+				float* float_value = (float*)value;
+				*float_value = float_percentage;
+			};
+
+			auto to_float = [](const void* value) {
+				return *(float*)value;
+			};
+
+			result.convert_text_input = convert_text_input;
+			result.to_string = to_string;
+			result.extra_data = &precision;
+			result.interpolate = UIDrawerSliderInterpolateImplementation<float>;
+			result.is_smaller = UIDrawerSliderIsSmallerImplementation<float>;
+			result.percentage = UIDrawerSliderPercentageImplementation<float>;
+			result.from_float = from_float;
+			result.to_float = to_float;
+
+			return result;
+		}
+
+		UIDrawerSliderFunctions UIDrawerGetDoubleSliderFunctions(unsigned int& precision)
+		{
+			UIDrawerSliderFunctions result;
+
+			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
+				double character_value = function::ConvertCharactersToDouble(characters);
+				double* value = (double*)_value;
+				*value = character_value;
+			};
+
+			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
+				characters.size = 0;
+				function::ConvertDoubleToChars(characters, *(const double*)_value, *(unsigned int*)extra_data);
+			};
+
+			auto from_float = [](void* value, float float_percentage) {
+				double* double_value = (double*)value;
+				*double_value = float_percentage;
+			};
+
+			auto to_float = [](const void* value) {
+				return (float)(*(double*)value);
+			};
+
+			result.convert_text_input = convert_text_input;
+			result.to_string = to_string;
+			result.extra_data = &precision;
+			result.interpolate = UIDrawerSliderInterpolateImplementation<double>;
+			result.is_smaller = UIDrawerSliderIsSmallerImplementation<double>;
+			result.percentage = UIDrawerSliderPercentageImplementation<double>;
+			result.from_float = from_float;
+			result.to_float = to_float;
+
+			return result;
+		}
+
 	}
 
 }

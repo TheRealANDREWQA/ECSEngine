@@ -1,149 +1,219 @@
+// ECS_REFLECT
 #pragma once
 #include "../../Core.h"
 #include "../../Containers/Stream.h"
-#include "../../Containers/HashTable.h"
+#include "../../Containers/SparseSet.h"
 #include "AssetMetadata.h"
+#include "../../Utilities/Reflection/ReflectionMacros.h"
+#include "../../Utilities/Reflection/Reflection.h"
 
 namespace ECSEngine {
 
-	struct MeshMetadataPath {
-		MeshMetadata metadata;
-		Stream<wchar_t> path;
-		Stream<char> name;
+	template<typename Asset>
+	struct ReferenceCountedAsset {
+		Asset asset;
+		unsigned int reference_count;
 	};
 
-	ECS_PACK(
-		struct TextureMetadataPath {
-			TextureMetadata metadata;
-			Stream<wchar_t> path;
-			Stream<char> name;
-		};
-	);
-
-	ECS_PACK(
-		struct GPUBufferMetadataPath {
-			GPUBufferMetadata metadata;
-			Stream<wchar_t> path;
-			Stream<char> name;
-		};
-	);
-	
-	ECS_PACK(
-		struct GPUSamplerMetadataPath {
-			GPUSamplerMetadata metadata;
-			Stream<wchar_t> path;
-			Stream<char> name;
-		};
-	);
-
-	struct ShaderMetadataPath {
-		ShaderMetadata metadata;
-		Stream<wchar_t> path;
-		Stream<char> name;
-	};
-
-	struct MaterialAssetPath {
-		MaterialAsset asset;
-		Stream<char> name;
-	};
-
-	struct ECSENGINE_API AssetDatabase {
-		AssetDatabase(AllocatorPolymorphic allocator);
+	struct ECSENGINE_API ECS_REFLECT AssetDatabase {		
+		AssetDatabase() = default;
+		AssetDatabase(Stream<wchar_t> file_location, AllocatorPolymorphic allocator, Reflection::ReflectionManager* reflection_manager);
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(AssetDatabase);
 
-		void AddMesh(MeshMetadata metadata, Stream<wchar_t> path, Stream<char> name);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddMesh(Stream<char> name);
 
-		void AddTexture(TextureMetadata metadata, Stream<wchar_t> path, Stream<char> name);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddTexture(Stream<char> name);
 
-		void AddGPUBuffer(GPUBufferMetadata metadata, Stream<wchar_t> path, Stream<char> name);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddGPUBuffer(Stream<char> name);
 
-		void AddGPUSampler(GPUSamplerMetadata metadata, Stream<wchar_t> path, Stream<char> name);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddGPUSampler(Stream<char> name);
 
-		void AddShader(ShaderMetadata metadata, Stream<wchar_t> path, Stream<char> name);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddShader(Stream<char> name);
 
-		// Here the path acts more like an identifier or name
-		// Because the material is contained in itself - it does not reference
-		// an external file unlike the metadata assets
-		void AddMaterial(MaterialAsset material, Stream<char> name);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddMaterial(Stream<char> name);
 
-		void AddMisc(Stream<wchar_t> path);
+		// It returns the handle to that asset. If it fails it returns -1
+		unsigned int AddMisc(Stream<wchar_t> path);
 
-		unsigned int FindMesh(Stream<char> name) const;
+		// It returns the handle to that asset. If it fails it returns -1
+		// For a misc asset, the path needs to be casted to a char type
+		unsigned int AddAsset(Stream<char> name, ECS_ASSET_TYPE type);
 
-		unsigned int FindTexture(Stream<char> name) const;
-
-		unsigned int FindGPUBuffer(Stream<char> name) const;
-
-		unsigned int FindGPUSampler(Stream<char> name) const;
-
-		unsigned int FindShader(Stream<char> name) const;
-
-		unsigned int FindMaterial(Stream<char> name) const;
-
-		unsigned int FindMisc(Stream<wchar_t> path) const;
-
-		// Can operate on it afterwards, like adding, removing or updating macros
-		// Returns nullptr if it doesn't exist
-		ShaderMetadata* GetShader(Stream<char> name);
+		// It increments by one the reference count for that asset.
+		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
 
 		// Retrive the allocator for this database
 		AllocatorPolymorphic Allocator() const;
 
+		bool CreateMeshFile(const MeshMetadata* metadata) const;
+
+		bool CreateTextureFile(const TextureMetadata* metadata) const;
+
+		bool CreateGPUBufferFile(const GPUBufferMetadata* metadata) const;
+
+		bool CreateGPUSamplerFile(const GPUSamplerMetadata* metadata) const;
+
+		bool CreateShaderFile(const ShaderMetadata* metadata) const;
+
+		bool CreateMaterialFile(const MaterialAsset* metadata) const;
+
+		bool CreateMiscFile(const MiscAsset* metadata) const;
+
+		bool CreateAssetFile(const void* asset, ECS_ASSET_TYPE type) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindMesh(Stream<char> name) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindTexture(Stream<char> name) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindGPUBuffer(Stream<char> name) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindGPUSampler(Stream<char> name) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindShader(Stream<char> name) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindMaterial(Stream<char> name) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		unsigned int FindMisc(Stream<wchar_t> path) const;
+
+		// Returns the handle to that asset. Returns -1 if it doesn't exist
+		// For misc asset, the path needs to be casted into a char type
+		unsigned int FindAsset(Stream<char> name, ECS_ASSET_TYPE type) const;
+
+		void FileLocationMesh(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationTexture(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationGPUBuffer(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationGPUSampler(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationShader(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationMaterial(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationMisc(CapacityStream<wchar_t>& path) const;
+
+		void FileLocationAsset(CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type) const;
+
+		MeshMetadata* GetMesh(unsigned int handle);
+
+		TextureMetadata* GetTexture(unsigned int handle);
+
+		GPUBufferMetadata* GetGPUBuffer(unsigned int handle);
+
+		GPUSamplerMetadata* GetGPUSampler(unsigned int handle);
+
+		// Can operate on it afterwards, like adding, removing or updating macros
+		ShaderMetadata* GetShader(unsigned int handle);
+
+		// Can operate on it afterwards, like adding or removing resources
+		MaterialAsset* GetMaterial(unsigned int handle);
+
+		MiscAsset* GetMisc(unsigned int handle);
+
+		void* GetAsset(unsigned int handle, ECS_ASSET_TYPE type);
+
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveMesh(Stream<char> name);
 
-		void RemoveMeshIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveMesh(unsigned int handle);
 
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveTexture(Stream<char> name);
 
-		void RemoveTextureIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveTexture(unsigned int handle);
 
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveGPUBuffer(Stream<char> name);
 
-		void RemoveGPUBUfferIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveGPUBuffer(unsigned int handle);
 
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveGPUSampler(Stream<char> name);
 
-		void RemoveGPUSamplerIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveGPUSampler(unsigned int handle);
 
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveShader(Stream<char> name);
 
-		void RemoveShaderIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveShader(unsigned int handle);
 
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveMaterial(Stream<char> name);
 
-		void RemoveMaterialIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveMaterial(unsigned int handle);
 
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
 		bool RemoveMisc(Stream<wchar_t> path);
 
-		void RemoveMiscIndex(unsigned int index);
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveMisc(unsigned int handle);
 
-		ResizableStream<MeshMetadataPath> mesh_asset;
-		ResizableStream<TextureMetadataPath> texture_asset;
-		ResizableStream<GPUBufferMetadataPath> gpu_buffer_asset;
-		ResizableStream<GPUSamplerMetadataPath> gpu_sampler_asset;
-		ResizableStream<ShaderMetadataPath> shader_asset;
-		ResizableStream<MaterialAssetPath> material_asset;
-		ResizableStream<Stream<wchar_t>> misc_asset;
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveAsset(Stream<char> name, ECS_ASSET_TYPE type);
+
+		// Returns true if the asset was evicted - e.g. it was the last reference
+		// Does not destroy the file
+		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type);
+
+		void SetAllocator(AllocatorPolymorphic allocator);
+
+		void SetFileLocation(Stream<wchar_t> file_location);
+
+		ResizableSparseSet<ReferenceCountedAsset<MeshMetadata>> mesh_metadata;
+		ResizableSparseSet<ReferenceCountedAsset<TextureMetadata>> texture_metadata;
+		ResizableSparseSet<ReferenceCountedAsset<GPUBufferMetadata>> gpu_buffer_metadata;
+		ResizableSparseSet<ReferenceCountedAsset<GPUSamplerMetadata>> gpu_sampler_metadata;
+		ResizableSparseSet<ReferenceCountedAsset<ShaderMetadata>> shader_metadata;
+		ResizableSparseSet<ReferenceCountedAsset<MaterialAsset>> material_asset;
+		ResizableSparseSet<ReferenceCountedAsset<MiscAsset>> misc_asset;
+		Stream<wchar_t> file_location;
+		Reflection::ReflectionManager* reflection_manager;
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API bool SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file);
+	// The serialize functions are not needed since they can be called directly upon the database
+	// For the deserialization, some buffer management needs to be made
+	
+	enum ECS_DESERIALIZE_CODE : unsigned char;
 
-	ECSENGINE_API void SerializeAssetDatabase(const AssetDatabase* database, uintptr_t& buffer);
-
-	ECSENGINE_API size_t SerializeAssetDatabaseSize(const AssetDatabase* database);
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	ECSENGINE_API bool DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file);
-
-	ECSENGINE_API bool DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& buffer);
-
-	// Returns the total amount needed for the paths and the assets to be loaded into the database
-	// Returns -1 if the version is invalid or the data is invalid
-	ECSENGINE_API size_t DeserializeAssetDatabaseSize(uintptr_t buffer);
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file);
 
 	// ------------------------------------------------------------------------------------------------------------
 

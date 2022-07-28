@@ -1,7 +1,7 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-using FileExplorerFunctorTable = ECSEngine::HashTable<ECSEngine::Tools::Action, ECSEngine::ResourceIdentifier, ECSEngine::HashFunctionPowerOfTwo, ECSEngine::HashFunctionMultiplyString>;
+using FileExplorerFunctorTable = ECSEngine::HashTableDefault<ECSEngine::Tools::Action>;
 
 struct EditorState;
 

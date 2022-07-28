@@ -269,15 +269,47 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Precull Horizontal Find First
+#pragma region Horizontal Find First
 
 	// Use horizontal or to precull the find first search
 	// Horizontal find first uses some SIMD and scalar instructions
 	// while horizontal or is mostly a single SIMD instruction
+	// Returns -1 if it doesn't exist
 	template<typename VectorType>
-	void ECS_VECTORCALL PrecullHorizontalFindFirst(VectorType vector, int& flag) {
+	int ECS_VECTORCALL HorizontalFindFirst(VectorType vector) {
 		if (horizontal_or(vector)) {
-			flag = horizontal_find_first(vector);
+			return horizontal_find_first(vector);
+		}
+		return -1;
+	}
+
+#pragma endregion
+
+#pragma region
+
+	// The functor can return true in order to early exit from the function
+	template<typename Functor>
+	void ECS_VECTORCALL ForEachBit(Vec32cb bit_mask, Functor&& functor) {
+		if (horizontal_or(bit_mask)) {
+			unsigned int match_bits = to_bits(bit_mask);
+			unsigned long vector_index = 0;
+			unsigned long offset = 0;
+
+			// Keep an offset because when a false positive is detected, that bit must be eliminated and in order to avoid
+			// using masks, shift to the right to make that bit 0
+			while (_BitScanForward(&vector_index, match_bits)) {
+				if (functor(offset + vector_index)) {
+					return;
+				}
+				bool is_shift_32 = vector_index + 1 == 32;
+				// Can't shift by 32, hardware does modulo % 32 shift amount and results in shifting 0 positions
+				// If it is the last bit, aka vector index == 31, then quit
+				if (is_shift_32) {
+					return;
+				}
+				match_bits >>= vector_index + 1;
+				offset += vector_index + 1;
+			}
 		}
 	}
 
@@ -634,7 +666,7 @@ namespace ECSEngine {
 
 #pragma region Dynamic Select Element
 
-	// All the other elements will be zerod
+	// All the other elements will be zero'ed
 	ECS_INLINE __m256d ECS_VECTORCALL SelectElement(__m256d vector, unsigned int position) {
 		__m256d zeros = ZeroVectorDouble();
 		switch (position) {
@@ -651,7 +683,7 @@ namespace ECSEngine {
 		return zeros;
 	}
 
-	// All the other elements will be zeroed
+	// All the other elements will be zero'ed
 	ECS_INLINE __m256 ECS_VECTORCALL SelectElement(__m256 vector, unsigned int position) {
 		__m256 zeros = ZeroVectorFloat();
 		switch (position) {
@@ -972,7 +1004,7 @@ namespace ECSEngine {
 	__m256i ECS_VECTORCALL Rotate32(__m256i vector, unsigned int count) {
 		unsigned int multiple_of_four = count & (~0x3);
 		if (multiple_of_four > 0) {
-			vector = Rotate32MultipleOf4(even_count);
+			vector = Rotate32MultipleOf4<right>(vector, multiple_of_four);
 		}
 
 		unsigned int remainder = count & 0x3;

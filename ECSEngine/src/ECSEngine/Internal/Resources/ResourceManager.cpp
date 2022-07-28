@@ -41,15 +41,15 @@ namespace ECSEngine {
 
 		auto register_resource = [=](void* data) {
 			// Account for the L'\0'
-			void* allocation = function::Copy(resource_manager->m_memory, identifier.ptr, identifier.size + 2);
+			void* allocation = function::Copy(resource_manager->Allocator(), identifier.ptr, identifier.size + 2);
 
 			ResourceManagerEntry entry;
 			entry.data_pointer.SetPointer(data);
 			entry.data_pointer.SetData(USHORT_MAX);
 			entry.time_stamp = OS::GetFileLastWrite(path);
 
-			bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(entry, {allocation, identifier.size});
-			ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+			ResourceIdentifier new_identifier(allocation, identifier.size);
+			InsertIntoDynamicTable(resource_manager->m_resource_types[type_int], resource_manager->m_memory, entry, new_identifier);
 		};
 
 		if constexpr (!reference_counted) {
@@ -81,7 +81,7 @@ namespace ECSEngine {
 				return data;
 			}
 
-			ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].table.GetValuePtrFromIndex(table_index);
+			ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].GetValuePtrFromIndex(table_index);
 			unsigned short count = entry->data_pointer.IncrementData(increment_count);
 			if (count == USHORT_MAX) {
 				entry->data_pointer.SetData(USHORT_MAX - 1);
@@ -115,7 +115,7 @@ namespace ECSEngine {
 			ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
 			memcpy(allocation, identifier.ptr, identifier.size + sizeof(wchar_t));
 
-			allocation = (void*)function::align_pointer((uintptr_t)allocation + identifier.size + sizeof(wchar_t), 8);
+			allocation = (void*)function::AlignPointer((uintptr_t)allocation + identifier.size + sizeof(wchar_t), 8);
 
 			memset(allocation, 0, allocation_size);
 			void* data = handler(allocation);
@@ -126,8 +126,8 @@ namespace ECSEngine {
 				entry.data_pointer.SetData(initial_increment);
 				entry.time_stamp = OS::GetFileLastWrite(path);
 
-				bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(entry, {allocation, identifier.size});
-				ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
+				ResourceIdentifier new_identifier(allocation, identifier.size);
+				InsertIntoDynamicTable(resource_manager->m_resource_types[type_int], resource_manager->m_memory, entry, new_identifier);
 
 				if (load_descriptor.reference_counted_is_loaded != nullptr) {
 					*load_descriptor.reference_counted_is_loaded = true;
@@ -154,38 +154,11 @@ namespace ECSEngine {
 			bool exists = resource_manager->Exists(identifier, type, table_index);
 
 			if (!exists) {
-				//// plus 7 bytes for padding
-				//void* allocation = resource_manager->Allocate(allocation_size + identifier.size + 7);
-				//ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
-				//memcpy(allocation, identifier.ptr, identifier.size);
-				//identifier.ptr = allocation;
-
-				//allocation = (void*)function::align_pointer((uintptr_t)allocation + identifier.size, 8);
-
-				//memset(allocation, 0, allocation_size);
-				//void* data = handler(allocation);
-
-				//if (data != nullptr) {
-				//	DataPointer data_pointer(data);
-				//	data_pointer.SetData(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
-
-				//	bool is_table_full = resource_manager->m_resource_types[type_int].table.Insert(data_pointer, identifier);
-				//	ECS_ASSERT(!is_table_full, "Table is too full or too many collisions!");
-
-				//	if (load_descriptor.reference_counted_is_loaded != nullptr) {
-				//		*load_descriptor.reference_counted_is_loaded = true;
-				//	}
-				//}
-				//// The load failed, release the allocation
-				//else {
-				//	resource_manager->Deallocate(allocation);
-				//}
-				//return data;
 				return register_resource(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
 			}
 
 			unsigned short increment_count = load_descriptor.load_flags & ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT;
-			ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].table.GetValuePtrFromIndex(table_index);
+			ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].GetValuePtrFromIndex(table_index);
 			unsigned short count = entry->data_pointer.IncrementData(increment_count);
 			if (count == USHORT_MAX) {
 				entry->data_pointer.SetData(USHORT_MAX - 1);
@@ -208,17 +181,17 @@ namespace ECSEngine {
 	void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
-		ResourceManagerEntry entry = resource_manager->m_resource_types[type_int].table.GetValueFromIndex(index);
+		ResourceManagerEntry entry = resource_manager->m_resource_types[type_int].GetValueFromIndex(index);
 
 		void (*handler)(void*, ResourceManager*) = UNLOAD_FUNCTIONS[type_int];
 
 		auto delete_resource = [=]() {
-			const ResourceIdentifier* identifiers = resource_manager->m_resource_types[type_int].table.GetIdentifiers();
+			const ResourceIdentifier* identifiers = resource_manager->m_resource_types[type_int].GetIdentifiers();
 
 			void* data = entry.data_pointer.GetPointer();
 			handler(data, resource_manager);
 			resource_manager->Deallocate(identifiers[index].ptr);
-			resource_manager->m_resource_types[type_int].table.EraseFromIndex(index);
+			resource_manager->m_resource_types[type_int].EraseFromIndex(index);
 		};
 		if constexpr (!reference_counted) {
 			delete_resource();
@@ -238,7 +211,7 @@ namespace ECSEngine {
 	void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
-		int hashed_position = resource_manager->m_resource_types[type_int].table.Find<true>(identifier);
+		int hashed_position = resource_manager->m_resource_types[type_int].Find<true>(identifier);
 		ECS_ASSERT(hashed_position != -1, "Trying to delete a resource that has not yet been loaded!");
 
 		DeleteResource<reference_counted>(resource_manager, hashed_position, type, flags);
@@ -443,10 +416,10 @@ namespace ECSEngine {
 		// accessed it will cause a crash
 		memset(m_resource_types.buffer, 0, m_resource_types.MemoryOf(m_resource_types.size));
 
-		m_shader_directory.Initialize(m_memory, 0, 256);
+		m_shader_directory.Initialize(GetAllocatorPolymorphic(m_memory), 0);
 
 		// Set the initial shader directory
-		SetShaderDirectory(ToStream(ECS_SHADER_DIRECTORY));
+		AddShaderDirectory(ToStream(ECS_SHADER_DIRECTORY));
 
 //		// initializing WIC loader
 //#if (_WIN32_WINNT >= 0x0A00 /*_WIN32_WINNT_WIN10*/)
@@ -483,39 +456,34 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::AddResourceType(ResourceType resource_type, unsigned int resource_count)
-	{
-		InternalResourceType type;
-		size_t name_length = strnlen_s(ECS_RESOURCE_TYPE_NAMES[(unsigned int)resource_type], ECS_RESOURCE_MANAGER_PATH_STRING_CHARACTERS);
-		char* name_allocation = (char*)Allocate(name_length);
-		type.name = name_allocation;
-		memcpy(name_allocation, ECS_RESOURCE_TYPE_NAMES[(unsigned int)resource_type], sizeof(char) * name_length);
-		
-		size_t table_size = type.table.MemoryOf(resource_count);
-		void* allocation = Allocate(table_size);
-		memset(allocation, 0, table_size);
-		type.table.InitializeFromBuffer(allocation, resource_count);
-
-		m_resource_types[(unsigned int)resource_type] = type;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
 	// TODO: Implement invariance allocations - some resources need when unloaded to have deallocated some buffers and those might not come
 	// from the resource manager
-	void ResourceManager::AddResource(const wchar_t* path, ResourceType resource_type, void* resource, size_t time_stamp, unsigned short reference_count)
+	void ResourceManager::AddResource(ResourceIdentifier identifier, ResourceType resource_type, void* resource, size_t time_stamp, unsigned short reference_count)
 	{
 		ResourceManagerEntry entry;
 		entry.data_pointer.SetPointer(resource);
 		entry.data_pointer.SetData(reference_count);
 		entry.time_stamp = time_stamp;
 
-		ResourceIdentifier identifier(path);
-
 		// The identifier needs to be allocated, account for the L'\0'
 		void* allocation = m_memory->Allocate(identifier.size + sizeof(wchar_t), 2);
 		memcpy(allocation, identifier.ptr, identifier.size + sizeof(wchar_t));
-		ECS_ASSERT(!m_resource_types[(unsigned int)resource_type].table.Insert(entry, {allocation, identifier.size}));
+		identifier.ptr = allocation;
+
+		unsigned int resource_type_int = (unsigned int)resource_type;
+		// If it is not yet allocated, then allocate with a small capacity at first
+		if (m_resource_types[resource_type_int].GetCapacity() == 0) {
+			m_resource_types[resource_type_int].Initialize(m_memory, 16);
+		}
+
+		InsertIntoDynamicTable(m_resource_types[resource_type_int], m_memory, entry, identifier);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::AddShaderDirectory(Stream<wchar_t> directory)
+	{
+		m_shader_directory.Add(function::StringCopy(Allocator(), directory));
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -534,9 +502,16 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	AllocatorPolymorphic ResourceManager::Allocator()
+	AllocatorPolymorphic ResourceManager::Allocator() const
 	{
 		return GetAllocatorPolymorphic(m_memory);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	AllocatorPolymorphic ResourceManager::AllocatorTs() const
+	{
+		return GetAllocatorPolymorphic(m_memory, ECS_ALLOCATION_MULTI);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -559,11 +534,11 @@ namespace ECSEngine {
 	void ResourceManager::DecrementReferenceCount(ResourceType type, unsigned int amount)
 	{
 		unsigned int type_int = (unsigned int)type;
-		auto value_stream = m_resource_types[type_int].table.GetValueStream();
-		const ResourceIdentifier* identifiers = m_resource_types[type_int].table.GetIdentifiers();
+		auto value_stream = m_resource_types[type_int].GetValueStream();
+		const ResourceIdentifier* identifiers = m_resource_types[type_int].GetIdentifiers();
 
 		for (size_t index = 0; index < value_stream.size; index++) {
-			if (m_resource_types[type_int].table.IsItemAt(index)) {
+			if (m_resource_types[type_int].IsItemAt(index)) {
 				ResourceManagerEntry* ptr = value_stream.buffer + index;
 				unsigned short value = ptr->data_pointer.GetData();
 
@@ -594,15 +569,52 @@ namespace ECSEngine {
 
 	bool ResourceManager::Exists(ResourceIdentifier identifier, ResourceType type) const
 	{
-		int hashed_position = m_resource_types[(unsigned int)type].table.Find<true>(identifier);
+		if (m_resource_types[(unsigned int)type].GetCapacity() == 0) {
+			return false;
+		}
+		int hashed_position = m_resource_types[(unsigned int)type].Find<true>(identifier);
 		return hashed_position != -1;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	bool ResourceManager::Exists(ResourceIdentifier identifier, ResourceType type, unsigned int& table_index) const {
-		table_index = m_resource_types[(unsigned int)type].table.Find<true>(identifier);
+		if (m_resource_types[(unsigned int)type].GetCapacity() == 0) {
+			return false;
+		}
+
+		table_index = m_resource_types[(unsigned int)type].Find<true>(identifier);
 		return table_index != -1;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::EvictResource(ResourceIdentifier identifier, ResourceType type)
+	{
+		unsigned int type_int = (unsigned int)type;
+		const ResourceIdentifier* identifiers = m_resource_types[type_int].GetIdentifiers();
+
+		unsigned int table_index = m_resource_types[type_int].Find(identifier);
+		ECS_ASSERT(table_index != -1, "Trying to evict a resource from ResourceManager that doesn't exist.");
+
+		ResourceManagerEntry entry = m_resource_types[type_int].GetValueFromIndex(table_index);
+
+		void* data = entry.data_pointer.GetPointer();
+		Deallocate(identifiers[table_index].ptr);
+		m_resource_types[type_int].EraseFromIndex(table_index);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::EvictResourcesFrom(const ResourceManager* other)
+	{
+		for (size_t index = 0; index < (size_t)ResourceType::TypeCount; index++) {
+			auto& other_table = other->m_resource_types[index];
+			
+			other_table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+				EvictResource(identifier, (ResourceType)index);
+			});
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -610,15 +622,15 @@ namespace ECSEngine {
 	void ResourceManager::EvictOutdatedResources(ResourceType type)
 	{
 		unsigned int int_type = (unsigned int)type;
-		const ResourceIdentifier* identifiers = m_resource_types[int_type].table.GetIdentifiers();
-		int table_capacity = m_resource_types[int_type].table.GetExtendedCapacity();
+		const ResourceIdentifier* identifiers = m_resource_types[int_type].GetIdentifiers();
+		int table_capacity = m_resource_types[int_type].GetExtendedCapacity();
 
 		// Iterate through all resources and check their new stamps
 		for (int index = 0; index < table_capacity; index++) {
-			if (m_resource_types[int_type].table.IsItemAt(index)) {
+			if (m_resource_types[int_type].IsItemAt(index)) {
 				// Get the new stamp
 				size_t new_stamp = OS::GetFileLastWrite((const wchar_t*)identifiers[index].ptr);
-				if (new_stamp > m_resource_types[int_type].table.GetValueFromIndex(index).time_stamp) {
+				if (new_stamp > m_resource_types[int_type].GetValueFromIndex(index).time_stamp) {
 					// Kick this resource
 					DELETE_FUNCTIONS[int_type](this, index, 1);
 					// Decrement the index because other resources can move into this place
@@ -632,7 +644,7 @@ namespace ECSEngine {
 
 	int ResourceManager::GetResourceIndex(ResourceIdentifier identifier, ResourceType type) const
 	{
-		int index = m_resource_types[(unsigned int)type].table.Find<true>(identifier);
+		int index = m_resource_types[(unsigned int)type].Find<true>(identifier);
 
 		ECS_ASSERT(index != -1, "The resource was not found");
 		return index;
@@ -642,9 +654,9 @@ namespace ECSEngine {
 
 	void* ResourceManager::GetResource(ResourceIdentifier identifier, ResourceType type)
 	{
-		int hashed_position = m_resource_types[(unsigned int)type].table.Find<true>(identifier);
+		int hashed_position = m_resource_types[(unsigned int)type].Find<true>(identifier);
 		if (hashed_position != -1) {
-			return m_resource_types[(unsigned int)type].table.GetValueFromIndex(hashed_position).data_pointer.GetPointer();
+			return m_resource_types[(unsigned int)type].GetValueFromIndex(hashed_position).data_pointer.GetPointer();
 		}
 		ECS_ASSERT(false, "The resource was not found");
 		return nullptr;
@@ -686,7 +698,7 @@ namespace ECSEngine {
 	size_t ResourceManager::GetTimeStamp(ResourceIdentifier identifier, ResourceType type) const
 	{
 		ResourceManagerEntry entry;
-		if (m_resource_types[(unsigned int)type].table.TryGetValue(identifier, entry)) {
+		if (m_resource_types[(unsigned int)type].TryGetValue(identifier, entry)) {
 			return entry.time_stamp;
 		}
 		return -1;
@@ -697,7 +709,7 @@ namespace ECSEngine {
 	ResourceManagerEntry ResourceManager::GetEntry(ResourceIdentifier identifier, ResourceType type) const
 	{
 		ResourceManagerEntry entry;
-		if (m_resource_types[(unsigned int)type].table.TryGetValue(identifier, entry)) {
+		if (m_resource_types[(unsigned int)type].TryGetValue(identifier, entry)) {
 			return entry;
 		}
 		return { DataPointer(nullptr), (size_t)-1 };
@@ -708,7 +720,7 @@ namespace ECSEngine {
 	ResourceManagerEntry* ResourceManager::GetEntryPtr(ResourceIdentifier identifier, ResourceType type)
 	{
 		ResourceManagerEntry* entry;
-		if (m_resource_types[(unsigned int)type].table.TryGetValuePtr(identifier, entry)) {
+		if (m_resource_types[(unsigned int)type].TryGetValuePtr(identifier, entry)) {
 			return entry;
 		}
 		return nullptr;
@@ -728,24 +740,83 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::InitializeDefaultTypes() {
-		for (size_t index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
-			AddResourceType((ResourceType)index, ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT);
+	void ResourceManager::IncrementReferenceCount(ResourceType type, unsigned int amount)
+	{
+		unsigned int type_int = (unsigned int)type;
+		auto value_stream = m_resource_types[type_int].GetValueStream();
+		for (size_t index = 0; index < value_stream.size; index++) {
+			if (m_resource_types[type_int].IsItemAt(index)) {
+				ResourceManagerEntry* ptr = value_stream.buffer + index;
+				unsigned short count = ptr->data_pointer.IncrementData(amount);
+				if (count == USHORT_MAX) {
+					ptr->data_pointer.SetData(USHORT_MAX - 1);
+				}
+			}
 		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::IncrementReferenceCount(ResourceType type, unsigned int amount)
+	void ResourceManager::InheritResources(const ResourceManager* other)
 	{
-		unsigned int type_int = (unsigned int)type;
-		auto value_stream = m_resource_types[type_int].table.GetValueStream();
-		for (size_t index = 0; index < value_stream.size; index++) {
-			if (m_resource_types[type_int].table.IsItemAt(index)) {
-				ResourceManagerEntry* ptr = value_stream.buffer + index;
-				unsigned short count = ptr->data_pointer.IncrementData(amount);
-				if (count == USHORT_MAX) {
-					ptr->data_pointer.SetData(USHORT_MAX - 1);
+		for (size_t index = 0; index < (unsigned int)ResourceType::TypeCount; index++) {
+			auto& table = other->m_resource_types[index];
+
+			unsigned int other_capacity = table.GetCapacity();
+			if (other_capacity > 0) {
+				// Now insert all the resources
+				if (other->m_graphics == m_graphics) {
+					// Can just reference the resource
+					table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+						AddResource(identifier, (ResourceType)index, entry.data_pointer.GetPointer(), entry.time_stamp, entry.data_pointer.GetData());
+					});
+				}
+				else {
+					switch ((ResourceType)index) {
+					case ResourceType::ComputeShader:
+					case ResourceType::DomainShader:
+					case ResourceType::GeometryShader:
+					case ResourceType::HullShader:
+					case ResourceType::PixelShader:
+					case ResourceType::TextFile:
+					case ResourceType::VertexShader:
+					case ResourceType::Material:
+						// Can just reference the resource for these types
+						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+							AddResource(identifier, (ResourceType)index, entry.data_pointer.GetPointer(), entry.time_stamp, entry.data_pointer.GetData());
+						});
+						break;
+					case ResourceType::CoallescedMesh:
+						// Need to copy the mesh buffers
+						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+							CoallescedMesh* mesh = (CoallescedMesh*)entry.data_pointer.GetPointer();
+							CoallescedMesh new_mesh = m_graphics->TransferCoallescedMesh(mesh);
+							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, entry.data_pointer.GetData());
+						});
+						break;
+					case ResourceType::Mesh:
+						// Need to copy the mesh buffers
+						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+							Mesh* mesh = (Mesh*)entry.data_pointer.GetPointer();
+							Mesh new_mesh = m_graphics->TransferMesh(mesh);
+							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, entry.data_pointer.GetData());
+						});
+						break;
+					case ResourceType::PBRMesh:
+						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+							PBRMesh* pbr_mesh = (PBRMesh*)entry.data_pointer.GetPointer();
+							PBRMesh new_mesh = m_graphics->TransferPBRMesh(pbr_mesh);
+							AddResource(identifier, (ResourceType)index, &new_mesh, entry.time_stamp, entry.data_pointer.GetData());
+						});
+						break;
+					case ResourceType::Texture:
+						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
+							ResourceView view = (ID3D11ShaderResourceView*)entry.data_pointer.GetPointer();
+							ResourceView new_view = TransferGPUView(view, m_graphics->GetDevice());
+							AddResource(identifier, (ResourceType)index, new_view.view, entry.time_stamp, entry.data_pointer.GetData());
+						});
+						break;
+					}
 				}
 			}
 		}
@@ -1299,7 +1370,7 @@ namespace ECSEngine {
 		bool is_byte_code = function::CompareStrings(path_extension, ToStream(L".cso"));
 
 		Stream<void> contents = { nullptr, 0 };
-		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(manager->m_memory, AllocationType::MultiThreaded);
+		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(manager->m_memory, ECS_ALLOCATION_TYPE::ECS_ALLOCATION_MULTI);
 
 		if (is_byte_code) {
 			contents = ReadWholeFileBinary(stream_filename.buffer, allocator_polymorphic);
@@ -1604,7 +1675,7 @@ namespace ECSEngine {
 		unsigned int int_type = (unsigned int)resource_type;
 
 		ResourceManagerEntry* entry;
-		bool success = m_resource_types[int_type].table.TryGetValuePtr(identifier, entry);
+		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
 		ECS_ASSERT(success, "Could not rebind resource");
 
 		UNLOAD_FUNCTIONS[int_type](entry->data_pointer.GetPointer(), this);
@@ -1620,7 +1691,7 @@ namespace ECSEngine {
 	{
 		unsigned int int_type = (unsigned int)resource_type;
 		ResourceManagerEntry* entry;
-		bool success = m_resource_types[int_type].table.TryGetValuePtr(identifier, entry);
+		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
 
 		ECS_ASSERT(success, "Could not rebind resource");
 		//if (success) {
@@ -1634,23 +1705,10 @@ namespace ECSEngine {
 	{
 		unsigned int type_index = (unsigned int)resource_type;
 		ResourceManagerEntry* entry;
-		bool success = m_resource_types[type_index].table.TryGetValuePtr(identifier, entry);
+		bool success = m_resource_types[type_index].TryGetValuePtr(identifier, entry);
 
 		ECS_ASSERT(success, "Could not remove reference count for resource");
 		entry->data_pointer.SetData(USHORT_MAX);
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	void ResourceManager::SetShaderDirectory(Stream<wchar_t> directory)
-	{
-		if (m_shader_directory.buffer != nullptr && m_shader_directory.size > 0) {
-			m_memory->Deallocate(m_shader_directory.buffer);
-		}
-
-		m_shader_directory.buffer = function::StringCopy(m_memory, directory).buffer;
-		m_shader_directory.size = directory.size;
-		m_shader_directory.AssertCapacity();
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -1928,19 +1986,17 @@ namespace ECSEngine {
 	{
 		for (size_t index = 0; index < m_resource_types.size; index++) {
 			// If the types exists, iterate through the table and unload those resources
-			if (m_resource_types[index].name != nullptr) {
-				unsigned int type_resource_count = m_resource_types[index].table.GetCount();
-				if (type_resource_count > 0) {
-					unsigned int table_capacity = m_resource_types[index].table.GetExtendedCapacity();
-					unsigned int unload_count = 0;
-					for (size_t subindex = 0; subindex < table_capacity && unload_count < type_resource_count; subindex++) {
-						if (m_resource_types[index].table.IsItemAt(subindex)) {
-							ResourceManagerEntry entry = m_resource_types[index].table.GetValueFromIndex(subindex);
-							UnloadResourceImplementation(entry.data_pointer.GetPointer(), (ResourceType)index);
+			unsigned int type_resource_count = m_resource_types[index].GetCount();
+			if (type_resource_count > 0) {
+				unsigned int table_capacity = m_resource_types[index].GetExtendedCapacity();
+				unsigned int unload_count = 0;
+				for (size_t subindex = 0; subindex < table_capacity && unload_count < type_resource_count; subindex++) {
+					if (m_resource_types[index].IsItemAt(subindex)) {
+						ResourceManagerEntry entry = m_resource_types[index].GetValueFromIndex(subindex);
+						UnloadResourceImplementation(entry.data_pointer.GetPointer(), (ResourceType)index);
 
-							// Helps to early exit if the resources are clumped together towards the beginning of the table
-							unload_count++;
-						}
+						// Helps to early exit if the resources are clumped together towards the beginning of the table
+						unload_count++;
 					}
 				}
 			}
@@ -1952,12 +2008,10 @@ namespace ECSEngine {
 	void ResourceManager::UnloadAll(ResourceType resource_type)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
-		unsigned int count = m_resource_types[int_type].table.GetExtendedCapacity();
-		for (unsigned int index = 0; index < count; index++) {
-			if (m_resource_types[int_type].table.IsItemAt(index)) {
-				UnloadResource(index, resource_type);
-			}
-		}
+		m_resource_types[int_type].ForEachIndex([&](unsigned int index) {
+			UnloadResource(index, resource_type);
+			return true;
+		});
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -2004,52 +2058,53 @@ namespace ECSEngine {
 
 		Mapping _mapping[ECS_PBR_MATERIAL_MAPPING_COUNT];
 		Stream<Mapping> mappings(_mapping, 0);
-		LinearAllocator temporary_allocator(memory, ECS_KB * 8);
+		LinearAllocator _temporary_allocator(memory, ECS_KB * 8);
+		AllocatorPolymorphic temporary_allocator = GetAllocatorPolymorphic(&_temporary_allocator);
 
 		if (pbr.color_texture.buffer != nullptr && pbr.color_texture.size > 0) {
 			shader_macros.Add({ "COLOR_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(&temporary_allocator, pbr.color_texture);
+			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.color_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_COLOR, TextureCompressionExplicit::ColorMap });
 		}
 
 		if (pbr.emissive_texture.buffer != nullptr && pbr.emissive_texture.size > 0) {
 			shader_macros.Add({ "EMISSIVE_TEXTURE", "" });
 			
-			Stream<wchar_t> texture = function::StringCopy(&temporary_allocator, pbr.emissive_texture);
+			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.emissive_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_EMISSIVE, TextureCompressionExplicit::ColorMap });
 		}
 
 		if (pbr.metallic_texture.buffer != nullptr && pbr.metallic_texture.size > 0) {
 			shader_macros.Add({ "METALLIC_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(&temporary_allocator, pbr.metallic_texture);
+			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.metallic_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_METALLIC, TextureCompressionExplicit::GrayscaleMap });
 		}
 
 		if (pbr.normal_texture.buffer != nullptr && pbr.normal_texture.size > 0) {
 			shader_macros.Add({ "NORMAL_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(&temporary_allocator, pbr.normal_texture);
+			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.normal_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_NORMAL, TextureCompressionExplicit::NormalMapLowQuality });
 		}
 
 		if (pbr.occlusion_texture.buffer != nullptr && pbr.occlusion_texture.size > 0) {
 			shader_macros.Add({ "OCCLUSION_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(&temporary_allocator, pbr.occlusion_texture);
+			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.occlusion_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_OCCLUSION, TextureCompressionExplicit::GrayscaleMap });
 		}
 
 		if (pbr.roughness_texture.buffer != nullptr && pbr.roughness_texture.size > 0) {
 			shader_macros.Add({ "ROUGHNESS_TEXTURE", "" });
 
-			Stream<wchar_t> texture = function::StringCopy(&temporary_allocator, pbr.roughness_texture);
+			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.roughness_texture);
 			mappings.Add({ texture, ECS_PBR_MATERIAL_ROUGHNESS, TextureCompressionExplicit::GrayscaleMap });
 		}
 
 		struct FunctorData {
-			LinearAllocator* allocator;
+			AllocatorPolymorphic allocator;
 			Stream<Mapping>* mappings;
 		};
 
@@ -2073,7 +2128,7 @@ namespace ECSEngine {
 		};
 
 		size_t texture_count = mappings.size;
-		FunctorData functor_data = { &temporary_allocator, &mappings };
+		FunctorData functor_data = { temporary_allocator, &mappings };
 		ForEachFileInDirectoryRecursiveWithExtension(folder_to_search, { texture_extensions, std::size(texture_extensions) }, &functor_data, search_functor);
 		ECS_ASSERT(mappings.size == 0);
 		if (mappings.size != 0) {
@@ -2123,7 +2178,7 @@ namespace ECSEngine {
 		result.pixel_textures[7] = nullptr;
 		result.pixel_texture_count = 8;
 
-		result.name = function::StringCopyTs(resource_manager->m_memory, pbr.name).buffer;
+		result.name = function::StringCopy(resource_manager->AllocatorTs(), pbr.name).buffer;
 
 		return result;
 	}

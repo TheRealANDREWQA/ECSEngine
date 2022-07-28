@@ -7,10 +7,82 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
+		struct Pairing {
+			const char* string;
+			ReflectionBasicFieldType type;
+		};
+
+#define FIELD_TYPE_STRING(string, reflection)  { STRING(string), ReflectionBasicFieldType::reflection }
+
+		Pairing ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[] = {
+			FIELD_TYPE_STRING(char, Int8),
+			FIELD_TYPE_STRING(int8_t, Int8),
+			FIELD_TYPE_STRING(unsigned char, UInt8),
+			FIELD_TYPE_STRING(uint8_t, UInt8),
+			FIELD_TYPE_STRING(short, Int16),
+			FIELD_TYPE_STRING(int16_t, Int16),
+			FIELD_TYPE_STRING(unsigned short, UInt16),
+			FIELD_TYPE_STRING(uint16_t, UInt16),
+			FIELD_TYPE_STRING(int, Int32),
+			FIELD_TYPE_STRING(int32_t, Int32),
+			FIELD_TYPE_STRING(unsigned int, UInt32),
+			FIELD_TYPE_STRING(uint32_t, UInt32),
+			FIELD_TYPE_STRING(long long, Int64),
+			FIELD_TYPE_STRING(int64_t, Int64),
+			FIELD_TYPE_STRING(unsigned long long, UInt64),
+			FIELD_TYPE_STRING(uint64_t, UInt64),
+
+			FIELD_TYPE_STRING(char2, Char2),
+			FIELD_TYPE_STRING(uchar2, UChar2),
+			FIELD_TYPE_STRING(short2, Short2),
+			FIELD_TYPE_STRING(ushort2, UShort2),
+			FIELD_TYPE_STRING(int2, Int2),
+			FIELD_TYPE_STRING(uint2, UInt2),
+			FIELD_TYPE_STRING(long2, Long2),
+			FIELD_TYPE_STRING(ulong2, ULong2),
+
+			FIELD_TYPE_STRING(char3, Char3),
+			FIELD_TYPE_STRING(uchar3, UChar3),
+			FIELD_TYPE_STRING(short3, Short3),
+			FIELD_TYPE_STRING(ushort3, UShort3),
+			FIELD_TYPE_STRING(int3, Int3),
+			FIELD_TYPE_STRING(uint3, UInt3),
+			FIELD_TYPE_STRING(long3, Long3),
+			FIELD_TYPE_STRING(ulong3, ULong3),
+
+			FIELD_TYPE_STRING(char4, Char4),
+			FIELD_TYPE_STRING(uchar4, UChar4),
+			FIELD_TYPE_STRING(short4, Short4),
+			FIELD_TYPE_STRING(ushort4, UShort4),
+			FIELD_TYPE_STRING(int4, Int4),
+			FIELD_TYPE_STRING(uint4, UInt4),
+			FIELD_TYPE_STRING(long4, Long4),
+			FIELD_TYPE_STRING(ulong4, ULong4),
+
+			FIELD_TYPE_STRING(float, Float),
+			FIELD_TYPE_STRING(float2, Float2),
+			FIELD_TYPE_STRING(float3, Float3),
+			FIELD_TYPE_STRING(float4, Float4),
+
+			FIELD_TYPE_STRING(double, Double),
+			FIELD_TYPE_STRING(double2, Double2),
+			FIELD_TYPE_STRING(double3, Double3),
+			FIELD_TYPE_STRING(double4, Double4),
+
+			FIELD_TYPE_STRING(bool, Bool),
+			FIELD_TYPE_STRING(bool2, Bool2),
+			FIELD_TYPE_STRING(bool3, Bool3),
+			FIELD_TYPE_STRING(bool4, Bool4),
+
+			FIELD_TYPE_STRING(wchar_t, Wchar_t)
+		};
+
+#undef FIELD_TYPE_STRING
+
 #define FIELD_TYPE_STRING(string) ToStream(STRING(string))
 
 		// Jump table
-		Stream<char> ECS_REFLECTION_BASIC_FIELD_TYPE_STRINGS[] = {
+		Stream<char> ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS[] = {
 			FIELD_TYPE_STRING(Int8),
 			FIELD_TYPE_STRING(UInt8),
 			FIELD_TYPE_STRING(Int16),
@@ -62,7 +134,7 @@ namespace ECSEngine {
 			FIELD_TYPE_STRING(Unknown)
 		};
 
-		static_assert(std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_STRINGS) == (unsigned int)ReflectionBasicFieldType::COUNT);
+		static_assert(std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
 		// Jump table
 		Stream<char> ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[] = {
@@ -517,14 +589,14 @@ namespace ECSEngine {
 
 		size_t GetReflectionBasicFieldTypeStringSize(ReflectionBasicFieldType type)
 		{
-			return ECS_REFLECTION_BASIC_FIELD_TYPE_STRINGS[(unsigned int)type].size;
+			return ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS[(unsigned int)type].size;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		void GetReflectionBasicFieldTypeString(ReflectionBasicFieldType type, CapacityStream<char>* string)
 		{
-			string->AddStreamSafe(ECS_REFLECTION_BASIC_FIELD_TYPE_STRINGS[(unsigned int)type]);
+			string->AddStreamSafe(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS[(unsigned int)type]);
 			string->buffer[string->size] = '\0';
 		}
 
@@ -544,8 +616,72 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string) {
-			unsigned int index = function::FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_STRINGS, std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_STRINGS)));
+		ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string)
+		{
+			for (size_t index = 0; index < std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS); index++) {
+				if (function::CompareStrings(string, ToStream(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].string))) {
+					return ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].type;
+				}
+			}
+
+			return ReflectionBasicFieldType::Unknown;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ConvertStringToPrimitiveType(Stream<char> string, ReflectionBasicFieldType& basic_type, ReflectionStreamFieldType& stream_type)
+		{
+			char previous_char = string[string.size];
+			string[string.size] = '\0';
+
+			basic_type = ReflectionBasicFieldType::UserDefined;
+			stream_type = ReflectionStreamFieldType::Basic;
+
+			const char* opened_bracket = strchr(string.buffer, '<');
+			const char* closed_bracket = strchr(string.buffer, '>');
+
+			if (opened_bracket != nullptr) {
+				opened_bracket = function::SkipWhitespace(opened_bracket + 1);
+				closed_bracket = function::SkipWhitespace(closed_bracket - 1, -1);
+
+				basic_type = ConvertStringToBasicFieldType({ opened_bracket, function::PointerDifference(closed_bracket, opened_bracket) - 1 });
+
+				const char* asterisk = strchr(opened_bracket, '*');
+				if (asterisk == nullptr) {
+					if (memcmp(string.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
+						stream_type = ReflectionStreamFieldType::Stream;
+					}
+					else if (memcmp(string.buffer, "CapacityStream<", sizeof("CapacityStream<") - 1) == 0) {
+						stream_type = ReflectionStreamFieldType::CapacityStream;
+					}
+					else if (memcmp(string.buffer, "ResizableStream<", sizeof("ResizableStream<") - 1) == 0) {
+						stream_type = ReflectionStreamFieldType::ResizableStream;
+					}
+				}
+				else {
+					basic_type = ReflectionBasicFieldType::Unknown;
+				}
+			}
+			else {
+				const char* asterisk = strchr(string.buffer, '*');
+				if (asterisk == nullptr) {
+					basic_type = ConvertStringToBasicFieldType(string);
+				}
+				else {
+					stream_type = ReflectionStreamFieldType::Pointer;
+
+					asterisk = function::SkipWhitespace(asterisk - 1, -1);
+					basic_type = ConvertStringToBasicFieldType({ string.buffer, function::PointerDifference(asterisk, string.buffer) });
+				}
+			}
+
+			string[string.size] = previous_char;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionBasicFieldType ConvertStringAliasToBasicFieldType(Stream<char> string) {
+			unsigned int index = function::FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)));
 			if (index != -1) {
 				return (ReflectionBasicFieldType)index;
 			}
@@ -555,10 +691,14 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionStreamFieldType ConvertStringToStreamFieldType(Stream<char> string) {
-			unsigned int index = function::FindString(string, Stream<Stream<char>>(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS, std::size(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS)));
-			if (index != -1) {
-				return (ReflectionStreamFieldType)index;
+			for (size_t index = 0; index < std::size(ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS); index++) {
+				if (ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[index].size < string.size) {
+					if (memcmp(string.buffer, ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[index].buffer, ECS_REFLECTION_STREAM_FIELD_TYPE_STRINGS[index].size) == 0) {
+						return (ReflectionStreamFieldType)index;
+					}
+				}
 			}
+
 			return ReflectionStreamFieldType::Unknown;
 		}
 
@@ -757,6 +897,47 @@ namespace ECSEngine {
 
 			// If an error managed to get to here return unknown
 			return ReflectionBasicFieldType::Unknown;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> GetUserDefinedTypeFromStreamUserDefined(const char* definition, ReflectionStreamFieldType stream_type)
+		{
+			Stream<char> stream_definition = ToStream(definition);
+			switch (stream_type)
+			{
+			case ReflectionStreamFieldType::Basic:
+				return stream_definition;
+				break;
+			case ReflectionStreamFieldType::Pointer:
+			{
+				const char* asterisk = strchr(definition, '*');
+				asterisk = function::SkipWhitespace(asterisk, -1);
+				return { definition, function::PointerDifference(asterisk, definition) + 1 };
+			}
+				break;
+			case ReflectionStreamFieldType::BasicTypeArray:
+			{
+				return stream_definition;
+			}
+				break;
+			case ReflectionStreamFieldType::Stream:
+			case ReflectionStreamFieldType::CapacityStream:
+			case ReflectionStreamFieldType::ResizableStream:
+			{
+				const char* opened_bracket = strchr(definition, '<');
+				const char* closed_bracket = strchr(definition, '>');
+				opened_bracket = function::SkipWhitespace(opened_bracket);
+				closed_bracket = function::SkipWhitespace(closed_bracket, -1);
+
+				return { opened_bracket, function::PointerDifference(closed_bracket, opened_bracket) + 1 };
+			}
+				break;
+			default:
+				break;
+			}
+
+			return { nullptr, 0 };
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

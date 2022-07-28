@@ -6,9 +6,8 @@
 namespace ECSEngine {
 
 	/* One instance should be created for each "World" */
-	class ECSENGINE_API GlobalMemoryManager
+	struct ECSENGINE_API GlobalMemoryManager
 	{
-	public:
 		// size is the initial size that will be allocated
 		GlobalMemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size);
 
@@ -26,6 +25,8 @@ namespace ECSEngine {
 
 		void ReleaseResources();
 
+		bool Belongs(const void* buffer) const;
+
 		// ----------------------------------------------------- Thread safe ---------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
@@ -33,7 +34,6 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 	
-	private:
 		SpinLock m_spin_lock;
 		MultipoolAllocator* m_allocators;
 		size_t m_allocator_count;
@@ -47,7 +47,6 @@ namespace ECSEngine {
 	*/
 	struct ECSENGINE_API MemoryManager
 	{
-	public:
 		MemoryManager();
 		MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, GlobalMemoryManager* backup);
 		
@@ -59,7 +58,11 @@ namespace ECSEngine {
 		void Deallocate(const void* block);
 
 		void CreateAllocator(size_t size, size_t maximum_pool_count);
-		// deallocates its buffers
+
+		// Deallocates all the extra buffers, keeps only the first one and resets the allocations such that there are none
+		void Clear();
+
+		// Deallocates all of its buffers
 		void Free();
 
 		// Locks the SpinLock
@@ -71,6 +74,8 @@ namespace ECSEngine {
 		// Removes the last allocators if they have currently no allocations active
 		void Trim();
 
+		bool Belongs(const void* buffer) const;
+
 		// ---------------------------------------------------- Thread safe --------------------------------------------------
 
 		void* Allocate_ts(size_t size, size_t alignment = 8);
@@ -78,7 +83,6 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate_ts(const void* block);
 	
-	//private:
 		SpinLock m_spin_lock;
 		MultipoolAllocator* m_allocators;
 		size_t m_allocator_count;

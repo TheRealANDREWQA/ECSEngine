@@ -195,17 +195,11 @@ string_name.AssertCapacity();
 
 		ECSENGINE_API Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
 
-		template<typename Allocator>
-		ECSENGINE_API void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8);
+		// If data size is 0, it will return the data back
+		ECSENGINE_API void* CopyNonZero(AllocatorPolymorphic allocator, void* data, size_t data_size, size_t alignment = 8);
 
-		template<typename Allocator>
-		ECSENGINE_API void* CopyTs(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8);
-
-		template<typename Allocator>
-		ECSENGINE_API Stream<void> Copy(Allocator* allocator, Stream<void> data, size_t alignment = 8);
-
-		template<typename Allocator>
-		ECSENGINE_API Stream<void> CopyTs(Allocator* allocator, Stream<void> data, size_t alignment = 8);
+		// If data size is 0, it will return the data back
+		ECSENGINE_API Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
 
 		// It will copy the null termination character
 		ECSENGINE_API Stream<char> StringCopy(AllocatorPolymorphic allocator, const char* string);
@@ -213,41 +207,9 @@ string_name.AssertCapacity();
 		// It will copy the null termination character
 		ECSENGINE_API Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string);
 
-		// It will copy the null termination character
-		template<typename Allocator>
-		ECSENGINE_API Stream<char> StringCopy(Allocator* allocator, const char* string);
-
-		// It will copy the null termination character
-		template<typename Allocator>
-		ECSENGINE_API Stream<char> StringCopy(Allocator* allocator, Stream<char> string);
-
-		// It will copy the null termination characters
-		template<typename Allocator>
-		ECSENGINE_API Stream<char> StringCopyTs(Allocator* allocator, const char* string);
-
-		// It will copy the null termination characters
-		template<typename Allocator>
-		ECSENGINE_API Stream<char> StringCopyTs(Allocator* allocator, Stream<char> string);
-
 		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, const wchar_t* string);
 
 		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string);
-
-		// It will copy the null termination character
-		template<typename Allocator>
-		ECSENGINE_API Stream<wchar_t> StringCopy(Allocator* allocator, const wchar_t* string);
-
-		// It will copy the null termination characters
-		template<typename Allocator>
-		ECSENGINE_API Stream<wchar_t> StringCopyTs(Allocator* allocator, const wchar_t* string);
-
-		// It will copy the null termination character
-		template<typename Allocator>
-		ECSENGINE_API Stream<wchar_t> StringCopy(Allocator* allocator, Stream<wchar_t> string);
-
-		// It will copy the null termination characters
-		template<typename Allocator>
-		ECSENGINE_API Stream<wchar_t> StringCopyTs(Allocator* allocator, Stream<wchar_t> string);
 
 		template<typename Stream>
 		ECSENGINE_API void MakeSequence(Stream stream);
@@ -677,7 +639,8 @@ string_name.AssertCapacity();
 					}
 				}
 				else if constexpr (std::is_same_v<Parameter, CapacityStream<wchar_t>> || std::is_same_v<Parameter, Stream<wchar_t>>) {
-					function::ConvertWideCharsToASCII(parameter, CapacityStream<char>(temp_stream.buffer, temp_stream.size, temp_stream.size + parameter.size + 1));
+					CapacityStream<char> placeholder_stream(temp_stream.buffer, temp_stream.size, temp_stream.size + parameter.size + 1);
+					function::ConvertWideCharsToASCII(parameter, placeholder_stream);
 					temp_stream.size += parameter.size;
 					temp_stream[temp_stream.size] = '\0';
 				}
@@ -977,6 +940,11 @@ string_name.AssertCapacity();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------
+
+		// Uses a fast SIMD compare, in this way you don't need to rely on the
+		// compiler to generate for you the SIMD search. Returns -1 if it doesn't
+		// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
+		ECSENGINE_API size_t SearchBytes(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
 
 	}
 

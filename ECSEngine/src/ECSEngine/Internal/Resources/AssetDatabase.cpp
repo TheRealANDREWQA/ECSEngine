@@ -2,924 +2,771 @@
 #include "AssetDatabase.h"
 #include "../../Utilities/File.h"
 #include "../../Utilities/FunctionInterfaces.h"
+#include "../../Utilities/Serialization/Binary/Serialization.h"
+#include "../../Utilities/Reflection/Reflection.h"
+#include "../../Utilities/Path.h"
+#include "../../Allocators/ResizableLinearAllocator.h"
 
 #define SERIALIZE_VERSION 1
+
+#define MESH_FOLDER L"Mesh"
+#define TEXTURE_FOLDER L"Texture"
+#define GPU_BUFFER_FOLDER L"GPUBuffer"
+#define GPU_SAMPLER_FOLDER L"GPUSampler"
+#define SHADER_FOLDER L"Shader"
+#define MATERIAL_FOLDER L"Material"
+#define MISC_FOLDER L"Misc"
 
 namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	AssetDatabase::AssetDatabase(AllocatorPolymorphic allocator) : mesh_asset(allocator, 0), texture_asset(allocator, 0), gpu_buffer_asset(allocator, 0),
-	gpu_sampler_asset(allocator, 0), shader_asset(allocator, 0), material_asset(allocator, 0) {}
+	AssetDatabase::AssetDatabase(Stream<wchar_t> _file_location, AllocatorPolymorphic allocator, Reflection::ReflectionManager* _reflection_manager)
+		: reflection_manager(_reflection_manager) 
+	{
+		SetAllocator(allocator);
+		SetFileLocation(_file_location);
+	}
 	
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::AddMesh(MeshMetadata metadata, Stream<wchar_t> path, Stream<char> name)
-	{
-		// The path and the name must be allocated
-		function::CoallesceStreams(mesh_asset.allocator, name, path);
-		mesh_asset.Add({ metadata, path, name });
-	}
+	template<typename AssetType, typename AssetSet>
+	unsigned int AddAssetDefault(AssetDatabase* database, AssetSet& set, Stream<char> name, const char* serialize_string, ECS_ASSET_TYPE type) {
+		unsigned int handle = database->FindAsset(name, type);
 
-	// --------------------------------------------------------------------------------------
+		if (handle == -1) {
+			AssetType metadata;
 
-	void AssetDatabase::AddTexture(TextureMetadata metadata, Stream<wchar_t> path, Stream<char> name)
-	{
-		// The path and the name must be allocated
-		function::CoallesceStreams(texture_asset.allocator, name, path);
-		texture_asset.Add({ metadata, path, name });
-	}
+			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
+			database->FileLocationAsset(path, type);
 
-	// --------------------------------------------------------------------------------------
-
-	void AssetDatabase::AddGPUBuffer(GPUBufferMetadata metadata, Stream<wchar_t> path, Stream<char> name)
-	{
-		// The path and the name must be allocated
-		function::CoallesceStreams(gpu_buffer_asset.allocator, name, path);
-		gpu_buffer_asset.Add({ metadata, path, name });
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	void AssetDatabase::AddGPUSampler(GPUSamplerMetadata metadata, Stream<wchar_t> path, Stream<char> name)
-	{
-		// The path and the name must be allocated
-		function::CoallesceStreams(gpu_sampler_asset.allocator, name, path);
-		gpu_sampler_asset.Add({ metadata, path, name });
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	void AssetDatabase::AddShader(ShaderMetadata metadata, Stream<wchar_t> path, Stream<char> name)
-	{
-		// The path and the name must be allocated
-		function::CoallesceStreams(shader_asset.allocator, name, path);
-
-		// Each string gets a separate allocation - easier to modify
-		for (unsigned int index = 0; index < metadata.macros.size; index++) {
-			metadata.macros[index].name = function::StringCopy(shader_asset.allocator, metadata.macros[index].name).buffer;
-			metadata.macros[index].definition = function::StringCopy(shader_asset.allocator, metadata.macros[index].definition).buffer;
-		}
-
-		shader_asset.Add({ metadata, path, name });
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	void AssetDatabase::AddMaterial(MaterialAsset material, Stream<char> name)
-	{
-		// The streams must be copied here
-		size_t allocation_size = name.size * sizeof(char);
-		allocation_size += material.CopySize();
-
-		void* allocation = Allocate(material_asset.allocator, allocation_size);
-		name.CopyTo(allocation);
-		name.buffer = (char*)allocation;
-
-		allocation = function::OffsetPointer(allocation, sizeof(char) * name.size);
-		material = material.Copy(allocation);
-		material_asset.Add({ material, name });
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	void AssetDatabase::AddMisc(Stream<wchar_t> path)
-	{
-		misc_asset.Add(function::StringCopy(misc_asset.allocator, path));
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	unsigned int AssetDatabase::FindMesh(Stream<char> name) const
-	{
-		for (unsigned int index = 0; index < mesh_asset.size; index++) {
-			if (function::CompareStrings(mesh_asset[index].name, name)) {
-				return index;
+			DeserializeOptions options;
+			options.field_allocator = set.allocator;
+			ECS_DESERIALIZE_CODE code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(serialize_string), &metadata, path, &options);
+			if (code == ECS_DESERIALIZE_OK) {
+				return set.Add({ metadata, 1 });
+			}
+			else {
+				return -1;
 			}
 		}
+		else {
+			set[handle].reference_count++;
+			return handle;
+		}
+	}
 
-		return -1;
+	unsigned int AssetDatabase::AddMesh(Stream<char> name)
+	{
+		return AddAssetDefault<MeshMetadata>(this, mesh_metadata, name, STRING(MeshMetadata), ECS_ASSET_MESH);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	unsigned int AssetDatabase::FindTexture(Stream<char> name) const
+	unsigned int AssetDatabase::AddTexture(Stream<char> name)
 	{
-		for (unsigned int index = 0; index < texture_asset.size; index++) {
-			if (function::CompareStrings(texture_asset[index].name, name)) {
-				return index;
+		return AddAssetDefault<TextureMetadata>(this, texture_metadata, name, STRING(TextureMetadata), ECS_ASSET_TEXTURE);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddGPUBuffer(Stream<char> name)
+	{
+		return AddAssetDefault<GPUBufferMetadata>(this, gpu_buffer_metadata, name, STRING(GPUBufferMetadata), ECS_ASSET_GPU_BUFFER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddGPUSampler(Stream<char> name)
+	{
+		return AddAssetDefault<GPUSamplerMetadata>(this, gpu_sampler_metadata, name, STRING(GPUSamplerMetadata), ECS_ASSET_GPU_SAMPLER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddShader(Stream<char> name)
+	{
+		return AddAssetDefault<ShaderMetadata>(this, shader_metadata, name, STRING(ShaderMetadata), ECS_ASSET_SHADER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddMaterial(Stream<char> name)
+	{
+		unsigned int handle = FindMaterial(name);
+
+		if (handle == -1) {
+			MaterialAsset asset;
+
+			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
+			FileLocationMaterial(path);
+
+			const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 4;
+			void* stack_allocation = ECS_STACK_ALLOC(STACK_ALLOCATION_CAPACITY);
+			LinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY);
+
+			DeserializeOptions options;
+			options.backup_allocator = GetAllocatorPolymorphic(&linear_allocator);
+			options.file_allocator = options.backup_allocator;
+			ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, reflection_manager->GetType(STRING(MaterialAsset)), &asset, path, &options);
+			if (code == ECS_DESERIALIZE_OK) {
+				void* allocation = Allocate(material_asset.allocator, asset.CopySize());
+				MaterialAsset allocated_asset = asset.Copy(allocation);
+
+				// The file allocation doesn't need to be deallocated since its allocated from the stack
+				return material_asset.Add({ allocated_asset, 1 });
+			}
+			else {
+				return -1;
 			}
 		}
-
-		return -1;
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	unsigned int AssetDatabase::FindGPUBuffer(Stream<char> name) const
-	{
-		for (unsigned int index = 0; index < gpu_buffer_asset.size; index++) {
-			if (function::CompareStrings(gpu_buffer_asset[index].name, name)) {
-				return index;
-			}
+		else {
+			material_asset[handle].reference_count++;
+			return handle;
 		}
-
-		return -1;
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	unsigned int AssetDatabase::FindGPUSampler(Stream<char> name) const
+	unsigned int AssetDatabase::AddMisc(Stream<wchar_t> path)
 	{
-		for (unsigned int index = 0; index < gpu_sampler_asset.size; index++) {
-			if (function::CompareStrings(gpu_sampler_asset[index].name, name)) {
-				return index;
-			}
+		return AddAssetDefault<MiscAsset>(this, misc_asset, Stream<char>(path.buffer, path.size), STRING(MiscAsset), ECS_ASSET_MISC);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef unsigned int (AssetDatabase::* AddAssetFunction)(Stream<char> name);
+
+	AddAssetFunction ADD_ASSET_FUNCTION[] = {
+		&AssetDatabase::AddMesh,
+		&AssetDatabase::AddTexture,
+		&AssetDatabase::AddGPUBuffer,
+		&AssetDatabase::AddGPUSampler,
+		&AssetDatabase::AddShader,
+		&AssetDatabase::AddMaterial
+	};
+
+	unsigned int AssetDatabase::AddAsset(Stream<char> name, ECS_ASSET_TYPE type)
+	{
+		if (type == ECS_ASSET_MISC) {
+			return AddMisc(Stream<wchar_t>(name.buffer, name.size));
 		}
-
-		return -1;
+		return (this->*ADD_ASSET_FUNCTION[type])(name);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	unsigned int AssetDatabase::FindShader(Stream<char> name) const
+	void AssetDatabase::AddAsset(unsigned int handle, ECS_ASSET_TYPE type)
 	{
-		for (unsigned int index = 0; index < shader_asset.size; index++) {
-			if (function::CompareStrings(shader_asset[index].name, name)) {
-				return index;
-			}
+		switch (type) {
+		case ECS_ASSET_MESH:
+			mesh_metadata[handle].reference_count++;
+			break;
+		case ECS_ASSET_TEXTURE:
+			texture_metadata[handle].reference_count++;
+			break;
+		case ECS_ASSET_GPU_BUFFER:
+			gpu_buffer_metadata[handle].reference_count++;
+			break;
+		case ECS_ASSET_GPU_SAMPLER:
+			gpu_sampler_metadata[handle].reference_count++;
+			break;
+		case ECS_ASSET_SHADER:
+			shader_metadata[handle].reference_count++;
+			break;
+		case ECS_ASSET_MATERIAL:
+			material_asset[handle].reference_count++;
+		case ECS_ASSET_MISC:
+			misc_asset[handle].reference_count++;
+			break;
 		}
-
-		return -1;
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	unsigned int AssetDatabase::FindMaterial(Stream<char> name) const
-	{
-		for (unsigned int index = 0; index < material_asset.size; index++) {
-			if (function::CompareStrings(material_asset[index].name, name)) {
-				return index;
-			}
-		}
-
-		return -1;
-	}
-
-	unsigned int AssetDatabase::FindMisc(Stream<wchar_t> path) const
-	{
-		Stream<Stream<wchar_t>> misc_paths(misc_asset.buffer, misc_asset.size);
-		return function::FindString(path, misc_paths);
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	ShaderMetadata* AssetDatabase::GetShader(Stream<char> name)
-	{
-		unsigned int index = FindShader(name);
-		return index == -1 ? nullptr : &shader_asset[index].metadata;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	AllocatorPolymorphic AssetDatabase::Allocator() const
 	{
-		return mesh_asset.allocator;
+		return mesh_metadata.allocator;
 	}
 
 	// --------------------------------------------------------------------------------------
+
+	template<typename AssetType>
+	bool CreateAssetFileImpl(const AssetDatabase* database, const AssetType* asset, const char* asset_string, ECS_ASSET_TYPE asset_type) {
+		ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
+		database->FileLocationAsset(path, asset_type);
+
+		ECS_SERIALIZE_CODE serialize_code = Serialize(database->reflection_manager, database->reflection_manager->GetType(asset_string), asset, path);
+		if (serialize_code == ECS_SERIALIZE_OK) {
+			return true;
+		}
+		return false;
+	}
+
+	bool AssetDatabase::CreateMeshFile(const MeshMetadata* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(MeshMetadata), ECS_ASSET_MESH);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::CreateTextureFile(const TextureMetadata* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(TextureMetadata), ECS_ASSET_TEXTURE);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::CreateGPUBufferFile(const GPUBufferMetadata* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(GPUBufferMetadata), ECS_ASSET_GPU_BUFFER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::CreateGPUSamplerFile(const GPUSamplerMetadata* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(GPUSampler), ECS_ASSET_GPU_SAMPLER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::CreateShaderFile(const ShaderMetadata* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(ShaderMetadata), ECS_ASSET_SHADER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::CreateMaterialFile(const MaterialAsset* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(MaterialAsset), ECS_ASSET_MATERIAL);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::CreateMiscFile(const MiscAsset* metadata) const
+	{
+		return CreateAssetFileImpl(this, metadata, STRING(MiscAsset), ECS_ASSET_MISC);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef bool (AssetDatabase::* CreateAssetFileFunction)(const void* metadata) const;
+
+	CreateAssetFileFunction CREATE_ASSET_FILE[] = {
+		(CreateAssetFileFunction)&AssetDatabase::CreateMeshFile,
+		(CreateAssetFileFunction)&AssetDatabase::CreateTextureFile,
+		(CreateAssetFileFunction)&AssetDatabase::CreateGPUBufferFile,
+		(CreateAssetFileFunction)&AssetDatabase::CreateGPUSamplerFile,
+		(CreateAssetFileFunction)&AssetDatabase::CreateShaderFile,
+		(CreateAssetFileFunction)&AssetDatabase::CreateMaterialFile,
+		(CreateAssetFileFunction)&AssetDatabase::CreateMiscFile
+	};
+
+	bool AssetDatabase::CreateAssetFile(const void* asset, ECS_ASSET_TYPE type) const
+	{
+		return (this->*CREATE_ASSET_FILE[type])(asset);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindMesh(Stream<char> name) const
+	{
+		return mesh_metadata.FindFunctor([&](const ReferenceCountedAsset<MeshMetadata>& compare) {
+			return function::CompareStrings(compare.asset.name, name);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindTexture(Stream<char> name) const
+	{
+		return texture_metadata.FindFunctor([&](const ReferenceCountedAsset<TextureMetadata>& compare) {
+			return function::CompareStrings(compare.asset.name, name);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindGPUBuffer(Stream<char> name) const
+	{
+		return gpu_buffer_metadata.FindFunctor([&](const ReferenceCountedAsset<GPUBufferMetadata>& compare) {
+			return function::CompareStrings(compare.asset.name, name);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindGPUSampler(Stream<char> name) const
+	{
+		return gpu_sampler_metadata.FindFunctor([&](const ReferenceCountedAsset<GPUSamplerMetadata>& compare) {
+			return function::CompareStrings(compare.asset.name, name);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindShader(Stream<char> name) const
+	{
+		return shader_metadata.FindFunctor([&](const ReferenceCountedAsset<ShaderMetadata>& compare) {
+			return function::CompareStrings(compare.asset.name, name);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindMaterial(Stream<char> name) const
+	{
+		return material_asset.FindFunctor([&](const ReferenceCountedAsset<MaterialAsset>& compare) {
+			return function::CompareStrings(compare.asset.name, name);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::FindMisc(Stream<wchar_t> path) const
+	{
+		return misc_asset.FindFunctor([&](const ReferenceCountedAsset<MiscAsset>& compare) {
+			return function::CompareStrings(compare.asset.path, path);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef unsigned int (AssetDatabase::* FindAssetFunction)(Stream<char>) const;
+
+	FindAssetFunction FIND_FUNCTIONS[] = {
+		&AssetDatabase::FindMesh,
+		&AssetDatabase::FindTexture,
+		&AssetDatabase::FindGPUBuffer,
+		&AssetDatabase::FindGPUSampler,
+		&AssetDatabase::FindShader,
+		&AssetDatabase::FindMaterial
+	};
+
+	unsigned int AssetDatabase::FindAsset(Stream<char> name, ECS_ASSET_TYPE type) const
+	{
+		if (type == ECS_ASSET_MISC) {
+			return FindMisc(Stream<wchar_t>(name.buffer, name.size));
+		}
+		return (this->*FIND_FUNCTIONS[type])(name);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationMesh(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(MESH_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationTexture(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(TEXTURE_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationGPUBuffer(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(GPU_BUFFER_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationGPUSampler(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(GPU_SAMPLER_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationShader(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(SHADER_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationMaterial(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(MATERIAL_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::FileLocationMisc(CapacityStream<wchar_t>& path) const
+	{
+		path.Copy(file_location);
+		path.AddStreamSafe(ToStream(MISC_FOLDER));
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef void (AssetDatabase::* FileLocationFunction)(CapacityStream<wchar_t>&) const;
+
+	FileLocationFunction FILE_LOCATIONS_FUNCTIONS[] = {
+		&AssetDatabase::FileLocationMesh,
+		&AssetDatabase::FileLocationTexture,
+		&AssetDatabase::FileLocationGPUBuffer,
+		&AssetDatabase::FileLocationGPUSampler,
+		&AssetDatabase::FileLocationShader,
+		&AssetDatabase::FileLocationMaterial,
+		&AssetDatabase::FileLocationMisc
+	};
+
+	void AssetDatabase::FileLocationAsset(CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type) const
+	{
+		(this->*FILE_LOCATIONS_FUNCTIONS[type])(path);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	MeshMetadata* AssetDatabase::GetMesh(unsigned int handle)
+	{
+		return &mesh_metadata[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	TextureMetadata* AssetDatabase::GetTexture(unsigned int handle)
+	{
+		return &texture_metadata[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	GPUBufferMetadata* AssetDatabase::GetGPUBuffer(unsigned int handle)
+	{
+		return &gpu_buffer_metadata[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	GPUSamplerMetadata* AssetDatabase::GetGPUSampler(unsigned int handle)
+	{
+		return &gpu_sampler_metadata[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	ShaderMetadata* AssetDatabase::GetShader(unsigned int handle)
+	{
+		return &shader_metadata[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	MaterialAsset* AssetDatabase::GetMaterial(unsigned int handle)
+	{
+		return &material_asset[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	MiscAsset* AssetDatabase::GetMisc(unsigned int handle)
+	{
+		return &misc_asset[handle].asset;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef void* (AssetDatabase::* GetAssetFunction)(unsigned int handle);
+
+	GetAssetFunction GET_FUNCTIONS[] = {
+		(GetAssetFunction)&AssetDatabase::GetMesh,
+		(GetAssetFunction)&AssetDatabase::GetTexture,
+		(GetAssetFunction)&AssetDatabase::GetGPUBuffer,
+		(GetAssetFunction)&AssetDatabase::GetGPUSampler,
+		(GetAssetFunction)&AssetDatabase::GetShader,
+		(GetAssetFunction)&AssetDatabase::GetMaterial,
+		(GetAssetFunction)&AssetDatabase::GetMisc
+	};
+
+	void* AssetDatabase::GetAsset(unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		return (this->*GET_FUNCTIONS[type])(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	template<typename AssetType>
+	bool RemoveAssetImpl(AssetType& type, unsigned int handle) {
+		auto& metadata = type[handle];
+		metadata.reference_count--;
+
+		if (metadata.reference_count == 0) {
+			// Deallocate the memory
+			metadata.asset.DeallocateMemory(type.allocator);
+			type.RemoveSwapBack(handle);
+			return true;
+		}
+		return false;
+	}
 
 	bool AssetDatabase::RemoveMesh(Stream<char> name)
 	{
-		unsigned int index = FindMesh(name);
-		if (index == -1) {
+		unsigned int handle = FindMesh(name);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveMeshIndex(index);
-		return true;
+		return RemoveMesh(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveMeshIndex(unsigned int index)
+	bool AssetDatabase::RemoveMesh(unsigned int handle)
 	{
-		// Deallocate the memory
-		Deallocate(mesh_asset.allocator, mesh_asset[index].name.buffer);
-		mesh_asset.RemoveSwapBack(index);
+		return RemoveAssetImpl(mesh_metadata, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::RemoveTexture(Stream<char> name)
 	{
-		unsigned int index = FindTexture(name);
-		if (index == -1) {
+		unsigned int handle = FindTexture(name);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveTextureIndex(index);
-		return true;
+		return RemoveTexture(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveTextureIndex(unsigned int index)
+	bool AssetDatabase::RemoveTexture(unsigned int handle)
 	{
-		// Deallocate the memory
-		Deallocate(texture_asset.allocator, texture_asset[index].name.buffer);
-
-		texture_asset.RemoveSwapBack(index);
-		// Fix any material reference to the last element
-		if (index != texture_asset.size) {
-			unsigned int replaced_index = index;
-			for (index = 0; index < material_asset.size; index++) {
-				for (unsigned int subindex = 0; subindex < material_asset[index].asset.textures.size; subindex++) {
-					// Can exit from this inner loop. But some other materials might reference this exact texture
-					// Can't exit from the outer loop
-					if (material_asset[index].asset.textures[subindex].metadata_index == texture_asset.size) {
-						material_asset[index].asset.textures[subindex].metadata_index = replaced_index;
-						break;
-					}
-				}
-			}
-		}
+		return RemoveAssetImpl(texture_metadata, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::RemoveGPUBuffer(Stream<char> name)
 	{
-		unsigned int index = FindGPUBuffer(name);
-		if (index == -1) {
+		unsigned int handle = FindGPUBuffer(name);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveGPUBUfferIndex(index);
-		return true;
+		return RemoveGPUBuffer(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveGPUBUfferIndex(unsigned int index)
+	bool AssetDatabase::RemoveGPUBuffer(unsigned int handle)
 	{
-		// Deallocate the memory
-		Deallocate(gpu_buffer_asset.allocator, gpu_buffer_asset[index].name.buffer);
-
-		gpu_buffer_asset.RemoveSwapBack(index);
-		// Fix any material reference to the last element
-		if (index != gpu_buffer_asset.size) {
-			unsigned int replaced_index = index;
-			for (index = 0; index < material_asset.size; index++) {
-				for (unsigned int subindex = 0; subindex < material_asset[index].asset.buffers.size; subindex++) {
-					// Can exit from this inner loop. But some other materials might reference this exact texture
-					// Can't exit from the outer loop
-					if (material_asset[index].asset.buffers[subindex].metadata_index == gpu_buffer_asset.size) {
-						material_asset[index].asset.buffers[subindex].metadata_index = replaced_index;
-						break;
-					}
-				}
-			}
-		}
+		return RemoveAssetImpl(gpu_buffer_metadata, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::RemoveGPUSampler(Stream<char> name)
 	{
-		unsigned int index = FindGPUSampler(name);
-		if (index == -1) {
+		unsigned int handle = FindGPUSampler(name);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveGPUSamplerIndex(index);
-		return true;
+		return RemoveGPUSampler(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveGPUSamplerIndex(unsigned int index)
+	bool AssetDatabase::RemoveGPUSampler(unsigned int handle)
 	{
-		// Deallocate the memory
-		Deallocate(gpu_sampler_asset.allocator, gpu_sampler_asset[index].name.buffer);
-
-		gpu_sampler_asset.RemoveSwapBack(index);
-		// Fix any material reference to the last element
-		if (index != gpu_sampler_asset.size) {
-			unsigned int replaced_index = index;
-			for (index = 0; index < material_asset.size; index++) {
-				for (unsigned int subindex = 0; subindex < material_asset[index].asset.samplers.size; subindex++) {
-					// Can exit from this inner loop. But some other materials might reference this exact texture
-					// Can't exit from the outer loop
-					if (material_asset[index].asset.samplers[subindex].metadata_index == gpu_sampler_asset.size) {
-						material_asset[index].asset.samplers[subindex].metadata_index = replaced_index;
-						break;
-					}
-				}
-			}
-		}
+		return RemoveAssetImpl(gpu_sampler_metadata, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::RemoveShader(Stream<char> name)
 	{
-		unsigned int index = FindShader(name);
-		if (index == -1) {
+		unsigned int handle = FindShader(name);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveShaderIndex(index);
-		return true;
+		return RemoveShader(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveShaderIndex(unsigned int index)
+	bool AssetDatabase::RemoveShader(unsigned int handle)
 	{
-		// Deallocate the memory
-		Deallocate(shader_asset.allocator, shader_asset[index].name.buffer);
-
-		shader_asset.RemoveSwapBack(index);
-		// Fix any material reference to the last element
-		if (index != shader_asset.size) {
-			unsigned int replaced_index = index;
-			for (index = 0; index < material_asset.size; index++) {
-				for (unsigned int subindex = 0; subindex < ECS_SHADER_TYPE_COUNT - 1; subindex++) {
-					// Can exit from this inner loop. But some other materials might reference this exact texture
-					// Can't exit from the outer loop
-					if (material_asset[index].asset.shaders[subindex] == shader_asset.size) {
-						material_asset[index].asset.shaders[subindex] = replaced_index;
-						break;
-					}
-				}
-			}
-		}
+		return RemoveAssetImpl(shader_metadata, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::RemoveMaterial(Stream<char> name)
 	{
-		unsigned int index = FindMaterial(name);
-		if (index == -1) {
+		unsigned int handle = FindMaterial(name);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveMaterialIndex(index);
-		return true;
+		return RemoveMaterial(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveMaterialIndex(unsigned int index)
+	bool AssetDatabase::RemoveMaterial(unsigned int handle)
 	{
-		// Deallocate the memory
-		Deallocate(material_asset.allocator, material_asset[index].name.buffer);
-
-		material_asset.RemoveSwapBack(index);
+		return RemoveAssetImpl(material_asset, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::RemoveMisc(Stream<wchar_t> path)
 	{
-		unsigned int index = FindMisc(path);
-		if (index == -1) {
+		unsigned int handle = FindMisc(path);
+		if (handle == -1) {
 			return false;
 		}
 
-		RemoveMiscIndex(index);
-		return true;
+		return RemoveMisc(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RemoveMiscIndex(unsigned int index)
+	bool AssetDatabase::RemoveMisc(unsigned int handle)
 	{
-		Deallocate(misc_asset.allocator, misc_asset[index].buffer);
-		misc_asset.RemoveSwapBack(index);
+		return RemoveAssetImpl(misc_asset, handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	bool SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file)
-	{
-		const size_t MAX_STACK_BUFFER_SIZE = ECS_KB * 256;
+	typedef bool (AssetDatabase::* RemoveFunctionName)(Stream<char> name);
 
-		ECS_FILE_HANDLE file_handle = 0;
-		ECS_FILE_STATUS_FLAGS status = FileCreate(file, &file_handle, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE);
-		if (status != ECS_FILE_STATUS_OK) {
-			return false;
+	RemoveFunctionName REMOVE_FUNCTIONS_NAME[] = {
+		&AssetDatabase::RemoveMesh,
+		&AssetDatabase::RemoveTexture,
+		&AssetDatabase::RemoveGPUBuffer,
+		&AssetDatabase::RemoveGPUSampler,
+		&AssetDatabase::RemoveShader,
+		&AssetDatabase::RemoveMaterial,
+	};
+
+	typedef bool (AssetDatabase::* RemoveFunctionHandle)(unsigned int handle);
+
+	RemoveFunctionHandle REMOVE_FUNCTIONS_HANDLE[] = {
+		&AssetDatabase::RemoveMesh,
+		&AssetDatabase::RemoveTexture,
+		&AssetDatabase::RemoveGPUBuffer,
+		&AssetDatabase::RemoveGPUSampler,
+		&AssetDatabase::RemoveShader,
+		&AssetDatabase::RemoveMaterial,
+	};
+
+	bool AssetDatabase::RemoveAsset(Stream<char> name, ECS_ASSET_TYPE type)
+	{
+		if (ECS_ASSET_MISC == type) {
+			return RemoveMisc(Stream<wchar_t>(name.buffer, name.size));
+		}
+		return (this->*REMOVE_FUNCTIONS_NAME[type])(name);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	bool AssetDatabase::RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		return (this->*REMOVE_FUNCTIONS_HANDLE[type])(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::SetAllocator(AllocatorPolymorphic allocator)
+	{
+		mesh_metadata.allocator = allocator;
+		texture_metadata.allocator = allocator;
+		gpu_buffer_metadata.allocator = allocator;
+		gpu_sampler_metadata.allocator = allocator;
+		shader_metadata.allocator = allocator;
+		material_asset.allocator = allocator;
+		misc_asset.allocator = allocator;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::SetFileLocation(Stream<wchar_t> _file_location)
+	{
+		if (file_location.buffer != nullptr) {
+			Deallocate(mesh_metadata.allocator, file_location.buffer);
 		}
 
-		size_t buffer_size = SerializeAssetDatabaseSize(database);
-		void* buffer = nullptr;
-		if (buffer_size < MAX_STACK_BUFFER_SIZE) {
-			buffer = ECS_STACK_ALLOC(buffer_size);
+		size_t size_to_allocate = sizeof(wchar_t) * (_file_location.size + 2);
+		void* allocation = Allocate(mesh_metadata.allocator, size_to_allocate);
+		memcpy(allocation, _file_location.buffer, _file_location.size * sizeof(wchar_t));
+		file_location.buffer = (wchar_t*)allocation;
+		file_location.size = _file_location.size + 1;
+
+		if (function::PathIsAbsolute(_file_location)) {
+			if (file_location[file_location.size - 1] != ECS_OS_PATH_SEPARATOR) {
+				file_location[file_location.size - 1] = ECS_OS_PATH_SEPARATOR;
+			}
 		}
 		else {
-			buffer = malloc(buffer_size);
+			if (file_location[file_location.size - 1] != ECS_OS_PATH_SEPARATOR_REL) {
+				file_location[file_location.size - 1] = ECS_OS_PATH_SEPARATOR_REL;
+			}
 		}
 
-		uintptr_t ptr = (uintptr_t)buffer;
-		SerializeAssetDatabase(database, ptr);
-		bool success = WriteFile(file_handle, { buffer, buffer_size });
-
-		if (buffer_size >= MAX_STACK_BUFFER_SIZE) {
-			free(buffer);
-		}
-		CloseFile(file_handle);
-		return success;
+		file_location[file_location.size] = L'\0';
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	void SerializeAssetDatabase(const AssetDatabase* database, uintptr_t& buffer)
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file)
 	{
-		unsigned char* version = (unsigned char*)buffer;
-		*version = SERIALIZE_VERSION;
+		const size_t STACK_CAPACITY = ECS_KB * 128;
+		void* stack_allocation = ECS_STACK_ALLOC(STACK_CAPACITY);
 
-		buffer += sizeof(unsigned char);
+		ResizableLinearAllocator _allocator(stack_allocation, STACK_CAPACITY, ECS_MB, { nullptr });
+		AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_allocator);
 
-		// Write the sizes of the database at the beginning followed by the sizes of the paths
-		unsigned int* stream_sizes = (unsigned int*)buffer;
-		stream_sizes[ECS_ASSET_MESH] = database->mesh_asset.size;
-		stream_sizes[ECS_ASSET_TEXTURE] = database->texture_asset.size;
-		stream_sizes[ECS_ASSET_GPU_BUFFER] = database->gpu_buffer_asset.size;
-		stream_sizes[ECS_ASSET_GPU_SAMPLER] = database->gpu_sampler_asset.size;
-		stream_sizes[ECS_ASSET_SHADER] = database->shader_asset.size;
-		stream_sizes[ECS_ASSET_MATERIAL] = database->material_asset.size;
-		stream_sizes[ECS_ASSET_MISC] = database->misc_asset.size;
+		DeserializeOptions options;
+		options.backup_allocator = allocator;
+		options.file_allocator = allocator;
+		options.field_allocator = allocator;
 
-		buffer += sizeof(unsigned int) * ECS_ASSET_TYPE_COUNT;
-
-#pragma region Names sizes
-
-		// The sizes of the paths can be written as unsigned shorts
-		unsigned short* name_sizes = (unsigned short*)buffer;
-		for (unsigned int index = 0; index < database->mesh_asset.size; index++) {
-			*name_sizes = database->mesh_asset[index].name.size;
-			name_sizes++;
-			buffer += sizeof(unsigned short);
+		ECS_DESERIALIZE_CODE code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, &options);
+		// If it failed, just exit
+		if (code != ECS_DESERIALIZE_OK) {
+			_allocator.ClearBackup();
+			return code;
 		}
 
-		for (unsigned int index = 0; index < database->texture_asset.size; index++) {
-			*name_sizes = database->texture_asset[index].name.size;
-			name_sizes++;
-			buffer += sizeof(unsigned short);
-		}
+		// Allocate all the fields now
+		// Make the reference count 0 for all asset types. The database references will update the reference count
 
-		for (unsigned int index = 0; index < database->gpu_buffer_asset.size; index++) {
-			*name_sizes = database->gpu_buffer_asset[index].name.size;
-			name_sizes++;
-			buffer += sizeof(unsigned short);
-		}
+		AllocatorPolymorphic database_allocator = database->Allocator();
 
-		for (unsigned int index = 0; index < database->gpu_sampler_asset.size; index++) {
-			*name_sizes = database->gpu_sampler_asset[index].name.size;
-			name_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->shader_asset.size; index++) {
-			*name_sizes = database->shader_asset[index].name.size;
-			name_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->material_asset.size; index++) {
-			*name_sizes = database->material_asset[index].name.size;
-			name_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-#pragma endregion
-
-#pragma region Path sizes
-
-		// The sizes of the paths can be written as unsigned shorts
-		unsigned short* path_sizes = (unsigned short*)buffer;
-		for (unsigned int index = 0; index < database->mesh_asset.size; index++) {
-			*path_sizes = database->mesh_asset[index].path.size;
-			path_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->texture_asset.size; index++) {
-			*path_sizes = database->texture_asset[index].path.size;
-			path_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->gpu_buffer_asset.size; index++) {
-			*path_sizes = database->gpu_buffer_asset[index].path.size;
-			path_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->gpu_sampler_asset.size; index++) {
-			*path_sizes = database->gpu_sampler_asset[index].path.size;
-			path_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->shader_asset.size; index++) {
-			*path_sizes = database->shader_asset[index].path.size;
-			path_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-		for (unsigned int index = 0; index < database->misc_asset.size; index++) {
-			*path_sizes = database->misc_asset[index].size;
-			path_sizes++;
-			buffer += sizeof(unsigned short);
-		}
-
-#pragma endregion
-
-#pragma region Metadatas and assets
-
-		// Now write the metadatas
-		for (unsigned int index = 0; index < database->mesh_asset.size; index++) {
-			SerializeMeshMetadata(database->mesh_asset[index].metadata, buffer);
-		}
-
-		for (unsigned int index = 0; index < database->texture_asset.size; index++) {
-			SerializeTextureMetadata(database->texture_asset[index].metadata, buffer);
-		}
-
-		for (unsigned int index = 0; index < database->gpu_buffer_asset.size; index++) {
-			SerializeGPUBufferMetadata(database->gpu_buffer_asset[index].metadata, buffer);
-		}
-
-		for (unsigned int index = 0; index < database->gpu_sampler_asset.size; index++) {
-			SerializeGPUSamplerMetadata(database->gpu_sampler_asset[index].metadata, buffer);
-		}
-
-		for (unsigned int index = 0; index < database->shader_asset.size; index++) {
-			SerializeShaderMetadata(database->shader_asset[index].metadata, buffer);
-		}
-
-		for (unsigned int index = 0; index < database->material_asset.size; index++) {
-			SerializeMaterialAsset(database->material_asset[index].asset, buffer);
-		}
-
-#pragma endregion
-
-#pragma region Name and path strings
-
-		// Now the name strings
-		for (unsigned int index = 0; index < database->mesh_asset.size; index++) {
-			database->mesh_asset[index].name.CopyTo(buffer);
-			database->mesh_asset[index].path.CopyTo(buffer);
-		}
-
-		for (unsigned int index = 0; index < database->texture_asset.size; index++) {
-			database->texture_asset[index].name.CopyTo(buffer);
-			database->texture_asset[index].path.CopyTo(buffer);
-		}
-
-		for (unsigned int index = 0; index < database->gpu_buffer_asset.size; index++) {
-			database->gpu_buffer_asset[index].name.CopyTo(buffer);
-			database->gpu_buffer_asset[index].path.CopyTo(buffer);
-		}
-
-		for (unsigned int index = 0; index < database->gpu_sampler_asset.size; index++) {
-			database->gpu_sampler_asset[index].name.CopyTo(buffer);
-			database->gpu_sampler_asset[index].path.CopyTo(buffer);
-		}
-
-		for (unsigned int index = 0; index < database->shader_asset.size; index++) {
-			database->shader_asset[index].name.CopyTo(buffer);
-			database->shader_asset[index].path.CopyTo(buffer);
-		}
-
-		for (unsigned int index = 0; index < database->material_asset.size; index++) {
-			database->material_asset[index].name.CopyTo(buffer);
-		}
-
-		for (unsigned int index = 0; index < database->misc_asset.size; index++) {
-			database->misc_asset[index].CopyTo(buffer);
-		}
-
-#pragma endregion
-
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	size_t SerializeAssetDatabaseSize(const AssetDatabase* database)
-	{
-		// Version + the sizes of the stream
-		size_t size = sizeof(unsigned char) + sizeof(unsigned int) * ECS_ASSET_TYPE_COUNT;
-		
-		size += (sizeof(unsigned short) * 2 + SerializeMeshMetadataSize()) * database->mesh_asset.size;
-		for (unsigned int index = 0; index < database->mesh_asset.size; index++) {
-			size += database->mesh_asset[index].path.size * sizeof(wchar_t);
-			size += database->mesh_asset[index].name.size * sizeof(char);
-		}
-
-		size += (sizeof(unsigned short) * 2 + SerializeTextureMetadataSize()) * database->texture_asset.size;
-		for (unsigned int index = 0; index < database->texture_asset.size; index++) {
-			size += database->texture_asset[index].path.size * sizeof(wchar_t);
-			size += database->texture_asset[index].name.size * sizeof(char);
-		}
-
-		size += (sizeof(unsigned short) * 2 + SerializeGPUBufferMetadataSize()) * database->gpu_buffer_asset.size;
-		for (unsigned int index = 0; index < database->gpu_buffer_asset.size; index++) {
-			size += database->gpu_buffer_asset[index].path.size * sizeof(wchar_t);
-			size += database->gpu_buffer_asset[index].name.size * sizeof(char);
-		}
-
-		size += (sizeof(unsigned short) * 2 + SerializeGPUSamplerMetadataSize()) * database->gpu_sampler_asset.size;
-		for (unsigned int index = 0; index < database->gpu_sampler_asset.size; index++) {
-			size += database->gpu_sampler_asset[index].path.size * sizeof(wchar_t);
-			size += database->gpu_sampler_asset[index].name.size * sizeof(char);
-		}
-
-		size += sizeof(unsigned short) * 2 * database->shader_asset.size;
-		for (unsigned int index = 0; index < database->shader_asset.size; index++) {
-			size += database->shader_asset[index].path.size * sizeof(wchar_t);
-			size += database->shader_asset[index].name.size * sizeof(char);
-			size += SerializeShaderMetadataSize(database->shader_asset[index].metadata);
-		}
-
-		size += sizeof(unsigned short) * database->material_asset.size;
-		for (unsigned int index = 0; index < database->material_asset.size; index++) {
-			size += database->material_asset[index].name.size * sizeof(char);
-			size += SerializeMaterialAssetSize(database->material_asset[index].asset);
-		}
-
-		size += sizeof(unsigned short) * database->misc_asset.size;
-		for (unsigned int index = 0; index < database->misc_asset.size; index++) {
-			size += database->misc_asset[index].size * sizeof(wchar_t);
-		}
-
-		return size;
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	bool DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file)
-	{
-		// Read the whole file into a memory buffer and then commit into the database
-		Stream<void> content = ReadWholeFileBinary(file);
-		if (content.buffer != nullptr) {
-			uintptr_t buffer = (uintptr_t)content.buffer;
-			bool success = DeserializeAssetDatabase(database, buffer);
-			free(content.buffer);
-			return success;
-		}
-
-		return false;
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	bool DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& buffer)
-	{
-		unsigned char* version = (unsigned char*)buffer;
-		if (*version != SERIALIZE_VERSION) {
-			return false;
-		}
-
-		buffer += sizeof(unsigned char);
-		unsigned int* stream_sizes = (unsigned int*)buffer;
-		unsigned int total_stream_size = 0;
-
-		buffer += sizeof(unsigned int) * ECS_ASSET_TYPE_COUNT;
-
-		// For the moment assert that the size is smaller than an unsigned short
-		for (unsigned int index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			if (stream_sizes[index] > USHORT_MAX) {
-				return -1;
-			}
-			total_stream_size += stream_sizes[index];
-		}
-
-		unsigned short* name_sizes = (unsigned short*)buffer;
-		// For the moment assert that the path is smaller than a unsigned char
-		for (unsigned int index = 0; index < total_stream_size - stream_sizes[ECS_ASSET_MISC]; index++) {
-			if (name_sizes[index] > UCHAR_MAX) {
-				return -1;
-			}
-		}
-		// The misc resource don't have a path
-		buffer += sizeof(unsigned short) * (total_stream_size - stream_sizes[ECS_ASSET_MISC]);
-
-		unsigned short* path_sizes = (unsigned short*)buffer;
-		// For the moment assert that the path size is smaller than a unsigned char
-		for (unsigned int index = 0; index < total_stream_size - stream_sizes[ECS_ASSET_MATERIAL]; index++) {
-			if (path_sizes[index] > UCHAR_MAX) {
-				return -1;
-			}
-		}
-		// The material doesn't have a path
-		buffer += sizeof(unsigned short) * (total_stream_size - stream_sizes[ECS_ASSET_MATERIAL]);
-
-		// Now the metadata comes
-		// Leave the size of the streams equal to 0 when deserializing the metadata
-		// When deserializing the name or the path, we can use the add function in order to 
-		// avoid creating a dependency here
-
-		// The meshes
-		database->mesh_asset.FreeBuffer();
-		database->mesh_asset.ReserveNewElements(stream_sizes[ECS_ASSET_MESH]);
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_MESH]; index++) {
-			ECS_ASSET_METADATA_CODE code = DeserializeMeshMetadata(&database->mesh_asset[index].metadata, buffer);
-			if (code != ECS_ASSET_METADATA_OK) {
-				return false;
-			}
-		}
-
-		// The textures
-		database->texture_asset.FreeBuffer();
-		database->texture_asset.ReserveNewElements(stream_sizes[ECS_ASSET_TEXTURE]);
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_TEXTURE]; index++) {
-			ECS_ASSET_METADATA_CODE code = DeserializeTextureMetadata(&database->texture_asset[index].metadata, buffer);
-			if (code != ECS_ASSET_METADATA_OK) {
-				return false;
-			}
-		}
-
-		// The gpu buffers
-		database->gpu_buffer_asset.FreeBuffer();
-		database->gpu_buffer_asset.ReserveNewElements(stream_sizes[ECS_ASSET_GPU_BUFFER]);
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_GPU_BUFFER]; index++) {
-			ECS_ASSET_METADATA_CODE code = DeserializeGPUBufferMetadata(&database->gpu_buffer_asset[index].metadata, buffer);
-			if (code != ECS_ASSET_METADATA_OK) {
-				return false;
-			}
-		}
-
-		// The gpu samplers
-		database->gpu_sampler_asset.FreeBuffer();
-		database->gpu_sampler_asset.ReserveNewElements(stream_sizes[ECS_ASSET_GPU_SAMPLER]);
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_GPU_SAMPLER]; index++) {
-			ECS_ASSET_METADATA_CODE code = DeserializeGPUSamplerMetadata(&database->gpu_sampler_asset[index].metadata, buffer);
-			if (code != ECS_ASSET_METADATA_OK) {
-				return false;
-			}
-		}
-
-		// The shaders
-		database->shader_asset.FreeBuffer();
-		database->shader_asset.ReserveNewElements(stream_sizes[ECS_ASSET_SHADER]);
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_SHADER]; index++) {
-			ECS_ASSET_METADATA_CODE code = DeserializeShaderMetadata(&database->shader_asset[index].metadata, buffer, database->shader_asset.allocator);
-			if (code != ECS_ASSET_METADATA_OK) {
-				return false;
-			}
-		}
-
-		// The materials
-		database->material_asset.FreeBuffer();
-		database->material_asset.ReserveNewElements(stream_sizes[ECS_ASSET_MATERIAL]);
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_MATERIAL]; index++) {
-			ECS_ASSET_METADATA_CODE code = DeserializeMaterialAsset(&database->material_asset[index].asset, buffer, database->material_asset.allocator);
-			if (code != ECS_ASSET_METADATA_OK) {
-				return false;
-			}
-		}
-
-		// The misc resources will be read at the end of the path read
-		database->misc_asset.FreeBuffer();
-		database->misc_asset.ReserveNewElements(stream_sizes[ECS_ASSET_MATERIAL]);
-
-		// Now the paths and the names need to be read
-
-		// The names
-		unsigned int name_path_size_counter = 0;
-
-		auto load_name_path = [&](unsigned int loop_count, auto add_function) {
-			for (unsigned int index = 0; index < loop_count; index++) {
-				char* name = (char*)buffer;
-				wchar_t* path = (wchar_t*)(buffer + name_sizes[name_path_size_counter] * sizeof(char));
-
-				Stream<wchar_t> stream_path = { path, path_sizes[name_path_size_counter] };
-				Stream<char> stream_name = { name, name_sizes[name_path_size_counter] };
-				add_function(index, stream_path, stream_name);
-				buffer += name_sizes[name_path_size_counter] * sizeof(char) + path_sizes[name_path_size_counter] * sizeof(wchar_t);
-
-				name_path_size_counter++;
+		auto update_asset_type = [database_allocator](auto stream_type) {
+			for (size_t index = 0; index < stream_type.size; index++) {
+				stream_type[index].reference_count = 0;
+				stream_type[index].asset = stream_type[index].asset.Copy(database_allocator);
 			}
 		};
 
-		load_name_path(stream_sizes[ECS_ASSET_MESH], [database](unsigned int index, Stream<wchar_t> path, Stream<char> name) {
-			database->AddMesh(database->mesh_asset[index].metadata, path, name);
-		});
+		update_asset_type(database->mesh_metadata.ToStream());
+		update_asset_type(database->texture_metadata.ToStream());
+		update_asset_type(database->gpu_buffer_metadata.ToStream());
+		update_asset_type(database->gpu_sampler_metadata.ToStream());
+		update_asset_type(database->shader_metadata.ToStream());
+		update_asset_type(database->material_asset.ToStream());
+		update_asset_type(database->misc_asset.ToStream());
 
-		load_name_path(stream_sizes[ECS_ASSET_TEXTURE], [database](unsigned int index, Stream<wchar_t> path, Stream<char> name) {
-			database->AddTexture(database->texture_asset[index].metadata, path, name);
-		});
-
-		load_name_path(stream_sizes[ECS_ASSET_GPU_BUFFER], [database](unsigned int index, Stream<wchar_t> path, Stream<char> name) {
-			database->AddGPUBuffer(database->gpu_buffer_asset[index].metadata, path, name);
-		});
-
-		load_name_path(stream_sizes[ECS_ASSET_GPU_SAMPLER], [database](unsigned int index, Stream<wchar_t> path, Stream<char> name) {
-			database->AddGPUSampler(database->gpu_sampler_asset[index].metadata, path, name);
-		});
-
-		load_name_path(stream_sizes[ECS_ASSET_SHADER], [database](unsigned int index, Stream<wchar_t> path, Stream<char> name) {
-			database->AddShader(database->shader_asset[index].metadata, path, name);
-		});
-		
-		unsigned int path_size_counter_before_material = name_path_size_counter;
-		// The materials only have a name
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_MATERIAL]; index++) {
-			char* name = (char*)buffer;
-
-			Stream<char> stream_name = { name, name_sizes[name_path_size_counter] };
-			database->AddMaterial(database->material_asset[index].asset, stream_name);
-			buffer += name_sizes[name_path_size_counter] * sizeof(char);
-			name_path_size_counter++;
-		}
-		
-		// The misc resources only have a path
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_MISC]; index++) {
-			database->AddMisc({ (wchar_t*)buffer, path_sizes[path_size_counter_before_material] });
-			buffer += name_sizes[path_size_counter_before_material] * sizeof(wchar_t);
-			path_size_counter_before_material++;
-		}
-
-		return true;
-	}
-
-	// --------------------------------------------------------------------------------------
-
-	size_t DeserializeAssetDatabaseSize(uintptr_t buffer)
-	{
-		uintptr_t initial_buffer = buffer;
-		unsigned char* version = (unsigned char*)buffer;
-		if (*version != SERIALIZE_VERSION) {
-			return -1;
-		}
-
-		buffer += sizeof(unsigned char);
-		unsigned int* stream_sizes = (unsigned int*)buffer;
-		unsigned int total_stream_size = 0;
-		// For the moment assert that the size is smaller than an unsigned short
-		for (unsigned int index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			if (stream_sizes[index] > USHORT_MAX) {
-				return -1;
-			}
-			total_stream_size += stream_sizes[index];
-		}
-
-		buffer += sizeof(unsigned int) * ECS_ASSET_TYPE_COUNT;
-		
-		unsigned short* name_sizes = (unsigned short*)buffer;
-		unsigned int total_name_size = 0;
-		// For the moment assert that the path size is smaller than a unsigned char
-		for (unsigned int index = 0; index < total_stream_size - stream_sizes[ECS_ASSET_MISC]; index++) {
-			if (name_sizes[index] > UCHAR_MAX) {
-				return -1;
-			}
-			total_name_size += name_sizes[index];
-		}
-
-		buffer += sizeof(unsigned short) * (total_stream_size - stream_sizes[ECS_ASSET_MISC]);
-
-		unsigned short* path_sizes = (unsigned short*)buffer;
-		unsigned int total_path_size = 0;
-		// For the moment assert that the path size is smaller than a unsigned char
-		// Skip the materials - they don't have any path
-		for (unsigned int index = 0; index < total_stream_size - stream_sizes[ECS_ASSET_MATERIAL]; index++) {
-			if (path_sizes[index] > UCHAR_MAX) {
-				return -1;
-			}
-			total_path_size += path_sizes[index];
-		}
-
-		// Skip the materials - they don't have any path
-		buffer += sizeof(unsigned short) * (total_stream_size - stream_sizes[ECS_ASSET_MATERIAL]);
-		
-		// Now the metadata comes
-		buffer += SerializeMeshMetadataSize() * stream_sizes[ECS_ASSET_MESH];
-		buffer += SerializeTextureMetadataSize() * stream_sizes[ECS_ASSET_TEXTURE];
-		buffer += SerializeGPUBufferMetadataSize() * stream_sizes[ECS_ASSET_GPU_BUFFER];
-		buffer += SerializeGPUSamplerMetadataSize() * stream_sizes[ECS_ASSET_GPU_SAMPLER];
-
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_SHADER]; index++) {
-			size_t current_size = DeserializeShaderMetadataSize(buffer);
-			if (current_size == -1) {
-				return -1;
-			}
-			buffer += current_size;
-		}
-
-		for (unsigned int index = 0; index < stream_sizes[ECS_ASSET_MATERIAL]; index++) {
-			size_t current_size = DeserializeMaterialAssetSize(buffer);
-			if (current_size == -1) {
-				return -1;
-			}
-			buffer += current_size;
-		}
-
-		// Now the actual strings follow - but we don't care about their data
-		return buffer - initial_buffer + total_path_size * sizeof(wchar_t) + total_name_size * sizeof(char);
+		_allocator.ClearBackup();
+		return code;
 	}
 
 	// --------------------------------------------------------------------------------------

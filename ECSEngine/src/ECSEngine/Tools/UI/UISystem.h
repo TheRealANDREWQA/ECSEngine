@@ -29,7 +29,7 @@ namespace ECSEngine {
 	namespace Tools {
 
 		// Bool acts as a placeholder, only interested to see if the resource existed previously
-		using UISystemAddDynamicWindowElementTable = HashTable<bool, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
+		using UISystemAddDynamicWindowElementTable = HashTableDefault<bool>;
 
 		ECSENGINE_API UIToolsAllocator DefaultUISystemAllocator(GlobalMemoryManager* global_manager);
 
@@ -69,7 +69,7 @@ namespace ECSEngine {
 				float2 scale,
 				const T* data,
 				Action action,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			) {
 				AddActionHandler(
 					allocator,
@@ -114,7 +114,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			) {
 				AddHoverableToDockspaceRegion(
 					thread_id,
@@ -176,7 +176,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			) {
 				AddClickableToDockspaceRegion(
 					thread_id,
@@ -233,7 +233,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			) {
 				AddGeneralActionToDockspaceRegion(
 					thread_id,
@@ -260,7 +260,7 @@ namespace ECSEngine {
 				const size_t* data_size,
 				const void** data,
 				const Action* action,
-				const UIDrawPhase* phase,
+				const ECS_UI_DRAW_PHASE* phase,
 				size_t count,
 				Function&& function
 			) {
@@ -320,6 +320,8 @@ namespace ECSEngine {
 				UIDockspace* dockspace,
 				unsigned char border_index
 			);
+
+			float AlignMiddleTextY(float position_y, float scale_y, float font_size_y, float padding = 0.0f);
 
 			void* AllocateHandlerMemory(unsigned int thread_id, size_t size, size_t alignment, const void* memory_to_copy);
 
@@ -394,6 +396,8 @@ namespace ECSEngine {
 
 			void AddWindowMemoryResourceToTable(void* resource, ResourceIdentifier identifier, unsigned int window_index);
 
+			AllocatorPolymorphic Allocator() const;
+
 			void AppendDockspaceResize(
 				unsigned char dockspace_index,
 				CapacityStream<UIDockspace>* dockspace,
@@ -438,6 +442,10 @@ namespace ECSEngine {
 				float offset_mask,
 				float2* sizes
 			) const;
+
+			// Changes the name with the current index appended to the base name into the new index
+			// E.g. Inspector 0 -> Inspector 1
+			void ChangeWindowNameFromIndex(Stream<char> base_name, unsigned int current_index, unsigned int new_index);
 
 			// it will automatically set the event if a border is hovered
 			bool CheckDockspaceInnerBorders(
@@ -488,68 +496,57 @@ namespace ECSEngine {
 			void ConfigureToolTipBase(UITooltipBaseData* data) const;
 
 			// it will convert the characters into a row of text sprites; position represents the x and y of the
-			template<bool horizontal = true, bool invert_order = false>
 			void ConvertCharactersToTextSprites(
-				const char* characters,
+				Stream<char> characters,
 				float2 position,
 				UISpriteVertex* vertex_buffer,
-				unsigned int character_count,
 				Color color = Color((unsigned char)255, 255, 255, 255),
 				unsigned int buffer_offset = 0,
 				float font_size = 0.01f,
-				float character_spacing = 0.001f
+				float character_spacing = 0.001f,
+				bool horizontal = true,
+				bool invert_order = false
 			) {
-				ConvertCharactersToTextSprites<horizontal, invert_order>(
+				ConvertCharactersToTextSprites(
 					characters,
 					position,
 					vertex_buffer,
-					character_count,
 					color,
 					buffer_offset,
 					{font_size * ECS_TOOLS_UI_FONT_X_FACTOR, font_size},
-					character_spacing
+					character_spacing,
+					horizontal,
+					invert_order
 				);
 			}
 
 			// it will convert the characters into a row of text sprites; position represents the x and y of the 
-			template<bool horizontal = true, bool invert_order = false>
-			ECSENGINE_API void ConvertCharactersToTextSprites(
-				const char* characters,
+			void ConvertCharactersToTextSprites(
+				Stream<char> characters,
 				float2 position,
 				UISpriteVertex* vertex_buffer,
-				unsigned int character_count,
 				Color color,
 				unsigned int buffer_offset,
 				float2 font_size,
-				float character_spacing
+				float character_spacing,
+				bool horizontal = true,
+				bool invert_order = false
 			);
 
-			template<bool horizontal = true, bool invert_order = false>
 			void ConvertFloatToTextSprites(
 				UISpriteVertex* vertices,
-				size_t& count, 
+				size_t& count,
 				float value,
 				float2 position,
 				size_t precision = 2,
 				Color color = ECS_TOOLS_UI_TEXT_COLOR,
 				float font_size = ECS_TOOLS_UI_FONT_SIZE,
-				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING
-			) {
-				ConvertFloatToTextSprites<horizontal, invert_order>(
-					vertices,
-					count,
-					value,
-					position,
-					font_size * ECS_TOOLS_UI_FONT_X_FACTOR,
-					font_size,
-					precision,
-					color,
-					character_spacing
-				);
-			}
+				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
+				bool horizontal = true,
+				bool invert_order = false
+			);
 
-			template<bool horizontal = true, bool invert_order = false>
-			ECSENGINE_API void ConvertFloatToTextSprites(
+			void ConvertFloatToTextSprites(
 				UISpriteVertex* vertices,
 				size_t& count,
 				float value,
@@ -558,10 +555,11 @@ namespace ECSEngine {
 				float font_size_y,
 				size_t precision = 2,
 				Color color = ECS_TOOLS_UI_TEXT_COLOR,
-				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING
+				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
+				bool horizontal = true,
+				bool invert_order = false
 			);
 
-			template<bool horizontal = true, bool invert_order = false>
 			void ConvertDoubleToTextSprites(
 				UISpriteVertex* vertices,
 				size_t& count,
@@ -570,23 +568,12 @@ namespace ECSEngine {
 				size_t precision = 2,
 				Color color = ECS_TOOLS_UI_TEXT_COLOR,
 				float font_size = ECS_TOOLS_UI_FONT_SIZE,
-				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING
-			) {
-				ConvertDoubleToTextSprites<horizontal, invert_order>(
-					vertices,
-					count,
-					value,
-					position,
-					font_size * ECS_TOOLS_UI_FONT_X_FACTOR,
-					font_size,
-					precision,
-					color,
-					character_spacing
-					);
-			}
+				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
+				bool horizontal = true,
+				bool invert_order = false
+			);
 
-			template<bool horizontal = true, bool invert_order = false>
-			ECSENGINE_API void ConvertDoubleToTextSprites(
+			void ConvertDoubleToTextSprites(
 				UISpriteVertex* vertices,
 				size_t& count,
 				double value,
@@ -595,7 +582,9 @@ namespace ECSEngine {
 				float font_size_y,
 				size_t precision = 2,
 				Color color = ECS_TOOLS_UI_TEXT_COLOR,
-				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING
+				float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING,
+				bool horizontal = true,
+				bool invert_order = false
 			);
 
 			void CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_view);
@@ -739,7 +728,6 @@ namespace ECSEngine {
 				float dockspace_mask,
 				DockspaceType type,
 				float2 mouse_position,
-				unsigned int thread_id,
 				unsigned int offset
 			); 
 
@@ -778,7 +766,7 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float mask,
 				bool is_open,
-				UIDrawPhase phase = UIDrawPhase::Late
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE
 			);
 
 			void DrawDockingGizmo(
@@ -808,7 +796,7 @@ namespace ECSEngine {
 			);
 
 			// this cannot handle render region
-			template<UIDrawPhase phase>
+			template<ECS_UI_DRAW_PHASE phase>
 			ECSENGINE_API void DrawPass(
 				UIDrawResources& resources,
 				const size_t* counts,
@@ -1021,10 +1009,10 @@ namespace ECSEngine {
 			void GetVisibleDockspaceRegions(Stream<UIVisibleDockspaceRegion>& windows, bool from_lowest_layer_to_highest);
 
 			// returns the expanded position
-			float2 GetOuterDockspaceBorderPosition(const UIDockspace* dockspace, BorderType type) const;
+			float2 GetOuterDockspaceBorderPosition(const UIDockspace* dockspace, ECS_UI_BORDER_TYPE type) const;
 
 			// returns the expanded scale
-			float2 GetOuterDockspaceBorderScale(const UIDockspace* dockspace, BorderType type) const;
+			float2 GetOuterDockspaceBorderScale(const UIDockspace* dockspace, ECS_UI_BORDER_TYPE type) const;
 
 			float2 GetInnerDockspaceBorderPosition(
 				const UIDockspace* dockspace,
@@ -1117,7 +1105,8 @@ namespace ECSEngine {
 			float2 GetDockspaceRegionVerticalRenderSliderPosition(
 				float2 region_position,
 				float2 region_scale, 
-				bool draw_region_header
+				const UIDockspace* dockspace,
+				unsigned int border_index
 			) const;
 
 			float2 GetDockspaceRegionVerticalRenderSliderScale(
@@ -1128,8 +1117,9 @@ namespace ECSEngine {
 
 			float2 GetDockspaceRegionVerticalRenderSliderScale(
 				float2 region_scale, 
-				bool draw_region_header,
-				bool horizontal_slider
+				const UIDockspace* dockspace,
+				unsigned int border_index,
+				unsigned int window_index
 			) const;
 
 			UIDockspace* GetDockspace(unsigned int dockspace_index, DockspaceType type);
@@ -1192,7 +1182,7 @@ namespace ECSEngine {
 			float4 GetUVForCharacter(char character) const;
 
 			// Advances the next sprite texture
-			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type);
+			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id);
 
@@ -1203,15 +1193,13 @@ namespace ECSEngine {
 			void HandleFocusedWindowCleanupGeneral(
 				float2 mouse_position, 
 				unsigned int thread_id,
-				void* additional_data = nullptr,
-				ActionAdditionalData additional_data_type = ActionAdditionalData::None
+				void* additional_data = nullptr
 			);
 
 			void HandleFocusedWindowCleanupHoverable(
 				float2 mouse_position,
 				unsigned int thread_id,
-				void* additional_data = nullptr,
-				ActionAdditionalData additional_data_type = ActionAdditionalData::None
+				void* additional_data = nullptr
 			);
 
 			void HandleDockingGizmoTransparentHover(
@@ -1326,7 +1314,7 @@ namespace ECSEngine {
 				Action action, 
 				const void* data, 
 				size_t data_size,
-				UIDrawPhase phase
+				ECS_UI_DRAW_PHASE phase
 			);
 
 			void RegisterVertexShaderAndLayout(wchar_t* filename);
@@ -1371,20 +1359,20 @@ namespace ECSEngine {
 			void RemoveFrameHandler(unsigned int index);
 			
 			// removes the last sprite texture written
-			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, UIDrawPhase phase, UISpriteType type = UISpriteType::Normal);
+			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL);
 
 			// returns whether or not the parent can continue resizing
 			bool ResizeDockspace(
 				unsigned int dockspace_index,
 				float delta_scale,
-				BorderType border,
+				ECS_UI_BORDER_TYPE border,
 				DockspaceType dockspace_type
 			);
 
 			void ResizeDockspaceUnguarded(
 				unsigned int dockspace_index,
 				float delta_scale,
-				BorderType border,
+				ECS_UI_BORDER_TYPE border,
 				DockspaceType dockspace_type
 			);
 
@@ -1480,7 +1468,7 @@ namespace ECSEngine {
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = float2(0.0f, 0.0f),
 				float2 bottom_right_uv = float2(1.0f, 1.0f),
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			// capable of handling rotated sprites
@@ -1495,7 +1483,7 @@ namespace ECSEngine {
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = {0.0f, 0.0f},
 				float2 bottom_right_uv = {1.0f, 1.0f},
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			// capable of handling rotated sprites
@@ -1510,7 +1498,7 @@ namespace ECSEngine {
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			// capable of handling rotated sprites
@@ -1525,7 +1513,7 @@ namespace ECSEngine {
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			// it multiplies by 6 the count
@@ -1534,15 +1522,15 @@ namespace ECSEngine {
 				unsigned int border_index,
 				const wchar_t* texture,
 				unsigned int count,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			void SetSpriteTextureToDraw(
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				const wchar_t* texture,
-				UISpriteType type = UISpriteType::Normal,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL,
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			// This method is used for sprites that are being loaded outside of the UISystem
@@ -1550,8 +1538,8 @@ namespace ECSEngine {
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				UISpriteTexture texture,
-				UISpriteType type = UISpriteType::Normal,
-				UIDrawPhase phase = UIDrawPhase::Normal
+				ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL,
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
 			);
 
 			void SetPopUpWindowPosition(unsigned int window_index, float2 new_position);
@@ -1587,7 +1575,7 @@ namespace ECSEngine {
 
 			void SetWindowName(unsigned int window_index, const char* name);
 
-			void SetWindowName(unsigned int window_index, const char* name, size_t name_size);
+			void SetWindowName(unsigned int window_index, Stream<char> name);
 
 			void SetWindowMaxZoom(unsigned int window_index, float max_zoom);
 
@@ -1641,11 +1629,11 @@ namespace ECSEngine {
 				dockspace->transform.position = position;
 				if (type == DockspaceType::FloatingHorizontal) {
 					dockspace->transform.scale.y = scale.y;
-					ResizeDockspace(dockspace_index, scale.x - dockspace->transform.scale.x, BorderType::Right, type);
+					ResizeDockspace(dockspace_index, scale.x - dockspace->transform.scale.x, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT, type);
 				}
 				else {
 					dockspace->transform.scale.x = scale.x;
-					ResizeDockspace(dockspace_index, scale.y - dockspace->transform.scale.y, BorderType::Bottom, type);
+					ResizeDockspace(dockspace_index, scale.y - dockspace->transform.scale.y, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM, type);
 				}
 
 				if constexpr (~flags & UI_TRIM_POP_UP_WINDOW_NO_HORIZONTAL_LEFT) {
@@ -1654,7 +1642,7 @@ namespace ECSEngine {
 						dockspace->transform.position.x = parent_position.x;
 						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
-							ResizeDockspace(dockspace_index, -difference, BorderType::Right, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT, type);
 						}
 						else {
 							dockspace->transform.scale.x -= difference;
@@ -1672,7 +1660,7 @@ namespace ECSEngine {
 						float difference = position.x + scale.x - right_border;
 						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
-							ResizeDockspace(dockspace_index, -difference, BorderType::Right, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT, type);
 						}
 						else {
 							dockspace->transform.scale.x -= difference;
@@ -1694,7 +1682,7 @@ namespace ECSEngine {
 							dockspace->transform.scale.y -= difference;
 						}
 						else {
-							ResizeDockspace(dockspace_index, -difference, BorderType::Bottom, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM, type);
 						}
 					}
 				}
@@ -1712,7 +1700,7 @@ namespace ECSEngine {
 							dockspace->transform.scale.y -= difference;
 						}
 						else {
-							ResizeDockspace(dockspace_index, -difference, BorderType::Bottom, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM, type);
 						}
 					}
 				}

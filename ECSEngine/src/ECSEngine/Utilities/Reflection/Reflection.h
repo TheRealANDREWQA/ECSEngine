@@ -15,13 +15,54 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
-		using ReflectionHash = HashFunctionMultiplyString;
-		using ReflectionFieldTable = HashTable<ReflectionFieldInfo, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
-		using ReflectionTypeTable = HashTable<ReflectionType, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
-		using ReflectionEnumTable = HashTable<ReflectionEnum, ResourceIdentifier, HashFunctionPowerOfTwo, ReflectionHash>;
+		using ReflectionFieldTable = HashTableDefault<ReflectionFieldInfo>;
+		using ReflectionTypeTable = HashTableDefault<ReflectionType>;
+		using ReflectionEnumTable = HashTableDefault<ReflectionEnum>;
 
-		constexpr size_t ECS_REFLECTION_MAX_TYPE_COUNT = 128;
-		constexpr size_t ECS_REFLECTION_MAX_ENUM_COUNT = 32;
+#define ECS_REFLECTION_MAX_TYPE_COUNT (128)
+#define ECS_REFLECTION_MAX_ENUM_COUNT (32)
+
+#pragma region Reflection Container Type functions
+
+		extern ReflectionContainerType ECS_REFLECTION_CONTAINER_TYPES[];
+
+		ECSENGINE_API void ReflectionContainerTypeDependentTypes_SingleTemplate(ReflectionContainerTypeDependentTypesData* data);
+
+		// E.g. for Template<Type> string should be Template
+		ECSENGINE_API bool ReflectionContainerTypeMatchTemplate(ReflectionContainerTypeMatchData* data, const char* string);
+
+		ECSENGINE_API Stream<char> ReflectionContainerTypeGetTemplateArgument(Stream<char> definition);
+
+#define ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(name) ECSENGINE_API bool ReflectionContainerTypeMatch_##name(Reflection::ReflectionContainerTypeMatchData* data); \
+															ECSENGINE_API ulong2 ReflectionContainerTypeByteSize_##name(Reflection::ReflectionContainerTypeByteSizeData* data); \
+															ECSENGINE_API void ReflectionContainerTypeDependentTypes_##name(Reflection::ReflectionContainerTypeDependentTypesData* data);
+
+#define ECS_REFLECTION_CONTAINER_TYPE_STRUCT(name) { ReflectionContainerTypeMatch_##name, ReflectionContainerTypeDependentTypes_##name, ReflectionContainerTypeByteSize_##name }
+
+		// ---------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(Streams);
+
+		// ---------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(SparseSet);
+
+		// ---------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(Color);
+
+		// ---------------------------------------------------------------------------------------------------------------------
+		
+		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(ColorFloat);
+
+		// ---------------------------------------------------------------------------------------------------------------------
+		
+		// Returns -1 if it is not matched
+		ECSENGINE_API unsigned int FindReflectionContainerType(Stream<char> definition);
+
+		// ---------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
 
 		struct ReflectionManagerParseStructuresThreadTaskData;
 
@@ -74,8 +115,15 @@ namespace ECSEngine {
 			const char* GetTypeTag(unsigned int type_index) const;
 			const char* GetTypeTag(const char* name) const;
 
-			bool IsTypeTag(unsigned int type_index, const char* tag) const;
-			bool IsTypeTag(const char* name, const char* tag) const;
+			bool HasTypeTag(unsigned int type_index, const char* tag) const;
+			bool HasTypeTag(const char* name, const char* tag) const;
+
+			// Verifies if the type has all of its user defined types reflected aswell
+			// For serialization, use the other function
+			bool HasValidDependencies(const char* type_name) const;
+			// Verifies if the type has all of its user defined types reflected aswell
+			// For serialization, use the other function
+			bool HasValidDependencies(ReflectionType type) const;
 
 			// Fills in the type indices with the types that correspond to the tag
 			void GetAllFromTypeTag(const char* tag, CapacityStream<unsigned int>& type_indices) const;
@@ -121,20 +169,20 @@ namespace ECSEngine {
 			// keeps reference intact
 			bool UpdateFolderHierarchy(const wchar_t* root, TaskManager* task_manager, CapacityStream<char>* error_message = nullptr);
 
+			// It will memset to 0 initially then will set the other fields
+			// It will set the fields of the data according to the defaults
+			void SetInstanceDefaultData(const char* name, void* data) const;
+
+			// It will memset to 0 initially then will set the other fields
+			// It will set the fields of the data according to the defaults
+			void SetInstanceDefaultData(unsigned int index, void* data) const;
+
 			ResizableStream<TypeTag> type_tags;
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
 			ReflectionFieldTable field_table;
 			ResizableStream<FolderHierarchy> folders;
 		};
-
-		ECSENGINE_API size_t GetTypeByteSize(ReflectionType type);
-
-		ECSENGINE_API size_t GetTypeAlignment(ReflectionType type);
-
-		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
-
-		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
 
 		ECSENGINE_API bool IsTypeCharacter(char character);
 
@@ -155,7 +203,7 @@ namespace ECSEngine {
 		);
 
 		// returns whether or not the field read succeded
-		ECSENGINE_API bool AddFieldType(
+		ECSENGINE_API bool AddTypeField(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
@@ -178,15 +226,6 @@ namespace ECSEngine {
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
-			const char* new_line_character
-		);
-
-		// It will check macro tokens in order to check if it is explicitely given the type
-		ECSENGINE_API bool DeduceFieldTypeFromMacros(
-			ReflectionManagerParseStructuresThreadTaskData* data,
-			ReflectionType& type,
-			unsigned short& pointer_offset,
-			const char* field_name,
 			const char* new_line_character
 		);
 
@@ -228,6 +267,13 @@ namespace ECSEngine {
 
 		ECSENGINE_API bool HasReflectStructures(const wchar_t* path);
 
+		ECSENGINE_API size_t GetReflectionTypeByteSize(const ReflectionManager* reflection_manager, ReflectionType type);
+
+		ECSENGINE_API size_t GetReflectionTypeAlignment(const ReflectionManager* reflection_manager, ReflectionType type);
+
+		// Works for user defined types aswell
+		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, ReflectionField field);
+
 		// Checks for single, double, triple and quadruple component integers
 		ECSENGINE_API bool IsIntegral(ReflectionBasicFieldType type);
 
@@ -237,20 +283,27 @@ namespace ECSEngine {
 
 		ECSENGINE_API unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type);
 
-		ECSENGINE_API void* GetReflectionFieldStreamBuffer(ReflectionFieldInfo info, const void* data);
+		ECSENGINE_API size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info);
 
-		ECSENGINE_API size_t GetReflectionFieldStreamSize(ReflectionFieldInfo info, const void* data);
+		ECSENGINE_API void* GetReflectionFieldStreamBuffer(const ReflectionFieldInfo& info, const void* data);
+
+		ECSENGINE_API size_t GetReflectionFieldStreamSize(const ReflectionFieldInfo& info, const void* data);
 
 		// The size of the void stream is that of the elements, not that of the byte size of the elements
-		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoid(ReflectionFieldInfo info, const void* data);
+		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoid(const ReflectionFieldInfo& info, const void* data);
 
-		ECSENGINE_API size_t GetReflectionFieldStreamElementByteSize(ReflectionFieldInfo info);
+		ECSENGINE_API size_t GetReflectionFieldStreamElementByteSize(const ReflectionFieldInfo& info);
 
-		ECSENGINE_API unsigned char GetReflectionFieldPointerIndirection(ReflectionFieldInfo info);
+		ECSENGINE_API unsigned char GetReflectionFieldPointerIndirection(const ReflectionFieldInfo& info);
+
+		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
+
+		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;
+		}
 
 		inline bool IsBoolBasicType(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Bool || type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 
-				|| type == ReflectionBasicFieldType::Bool4;
+			return type == ReflectionBasicFieldType::Bool || IsBoolBasicTypeMultiComponent(type);
 		}
 
 		// Checks for float2, float3, float4

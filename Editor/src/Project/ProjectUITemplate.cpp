@@ -105,6 +105,7 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 		return false;
 	}
 	else {
+		// The inspector is handled separately - because multiple instances can be instanced
 		Stream<char> _window_names[] = {
 			ToStream(editor_state->inject_window_name),
 			ToStream(TOOLBAR_WINDOW_NAME),
@@ -115,13 +116,13 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			ToStream(FILE_EXPLORER_WINDOW_NAME),
 			ToStream(GAME_WINDOW_NAME),
 			ToStream(MODULE_EXPLORER_WINDOW_NAME),
-			ToStream(INSPECTOR_WINDOW_NAME),
 			ToStream(SETTINGS_WINDOW_NAME),
 			ToStream(BACKUPS_WINDOW_NAME)
 		};
 		using SetDescriptorFunction = void (*)(UIWindowDescriptor&, EditorState*, void*);
 
 		Stream<Stream<char>> window_names(_window_names, std::size(_window_names));
+		// The inspector is handled separately - because multiple instances can be instanced
 		SetDescriptorFunction set_functions[] = {
 			InjectWindowSetDescriptor,
 			ToolbarSetDescriptor,
@@ -132,11 +133,11 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			FileExplorerSetDescriptor,
 			GameSetDecriptor,
 			ModuleExplorerSetDescriptor,
-			InspectorSetDescriptor,
 			SettingsWindowSetDescriptor,
 			BackupsWindowSetDescriptor
 		};
 
+		const size_t MAX_INSPECTOR_INDEX = 10;
 		for (size_t index = 0; index < file_window_names.size; index++) {
 			UIWindowDescriptor descriptor;
 			unsigned int in_index = function::FindString(file_window_names[index], window_names);
@@ -148,6 +149,29 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 
 				set_functions[in_index] = set_functions[window_names.size - 1];
 				window_names.RemoveSwapBack(in_index);
+			}
+			// Check for the inspector
+			else {
+				ECS_STACK_CAPACITY_STREAM(char, inspector_name, 256);
+				GetInspectorName(0, inspector_name);
+
+				if (memcmp(inspector_name.buffer, INSPECTOR_WINDOW_NAME, sizeof(char) * strlen(INSPECTOR_WINDOW_NAME)) == 0) {
+					// At the moment check for at max 
+					for (unsigned int subindex = 0; subindex < MAX_INSPECTOR_INDEX; subindex++) {
+						inspector_name.size = 0;
+						GetInspectorName(subindex, inspector_name);
+						if (function::CompareStrings(inspector_name, file_window_names[index])) {
+							while (editor_state->inspector_manager.data.size <= subindex) {
+								CreateInspectorInstance(editor_state);
+							}
+
+							unsigned int* inspector_index = (unsigned int*)stack_memory;
+							*inspector_index = subindex;
+							InspectorSetDescriptor(descriptor, editor_state, stack_memory);
+							ui_system->RestoreWindow(inspector_name, descriptor);
+						}
+					}
+				}
 			}
 		}
 		ui_system->RemoveUnrestoredWindows();

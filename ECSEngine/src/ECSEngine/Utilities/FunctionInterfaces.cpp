@@ -1,9 +1,8 @@
 #include "ecspch.h"
-//#include "FunctionTemplates.h"
 #include "FunctionInterfaces.h"
-#include "../../Includes/ECSEngineAllocators.h"
 #include "Function.h"
 #include "Assert.h"
+#include "../Math/VCLExtensions.h"
 
 namespace ECSEngine {
 
@@ -614,127 +613,21 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Allocator>
-		void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment) {
-			void* allocation = allocator->Allocate(data_size, alignment);
-			memcpy(allocation, data, data_size);
-			return allocation;
+		void* CopyNonZero(AllocatorPolymorphic allocator, void* data, size_t data_size, size_t alignment)
+		{
+			if (data_size > 0) {
+				return Copy(allocator, data, data_size, alignment);
+			}
+			return data;
 		}
 
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void*, Copy, const void*, size_t, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		void* CopyTs(Allocator* allocator, const void* data, size_t data_size, size_t alignment) {
-			void* allocation = allocator->Allocate_ts(data_size, alignment);
-			memcpy(allocation, data, data_size);
-			return allocation;
+		Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment)
+		{
+			if (data.size > 0) {
+				return Copy(allocator, data, alignment);
+			}
+			return data;
 		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(void*, CopyTs, const void*, size_t, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<void> Copy(Allocator* allocator, Stream<void> data, size_t alignment) {
-			void* allocation = allocator->Allocate(data.size, alignment);
-			memcpy(allocation, data.buffer, data.size);
-			return { allocation, data.size };
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<void>, Copy, Stream<void>, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<void> CopyTs(Allocator* allocator, Stream<void> data, size_t alignment) {
-			void* allocation = allocator->Allocate_ts(data.size, alignment);
-			memcpy(allocation, data.buffer, data.size);
-			return { allocation, data.size };
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<void>, CopyTs, Stream<void>, size_t);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<char> StringCopy(Allocator* allocator, const char* string) {
-			return StringCopy(allocator, ToStream(string));
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopy, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<char> StringCopy(Allocator* allocator, Stream<char> string) {
-			Stream<char> result = Stream<char>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
-			result[result.size] = '\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopy, Stream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<char> StringCopyTs(Allocator* allocator, const char* string) {
-			return StringCopyTs(allocator, ToStream(string));
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopyTs, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<char> StringCopyTs(Allocator* allocator, Stream<char> string) {
-			Stream<char> result = Stream<char>(CopyTs(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
-			result[result.size] = '\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<char>, StringCopyTs, Stream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<wchar_t> StringCopy(Allocator* allocator, const wchar_t* string) {
-			return StringCopy(allocator, ToStream(string));
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopy, const wchar_t*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<wchar_t> StringCopy(Allocator* allocator, Stream<wchar_t> string) {
-			Stream<wchar_t> result = Stream<wchar_t>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(wchar_t), alignof(wchar_t)), string.size);
-			result[string.size] = L'\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopy, Stream<wchar_t>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<wchar_t> StringCopyTs(Allocator* allocator, const wchar_t* string) {
-			return StringCopyTs(allocator, ToStream(string));
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopyTs, const wchar_t*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Allocator>
-		Stream<wchar_t> StringCopyTs(Allocator* allocator, Stream<wchar_t> string) {
-			Stream<wchar_t> result = Stream<wchar_t>(CopyTs(allocator, string.buffer, (string.size + 1) * sizeof(wchar_t), alignof(wchar_t)), string.size);
-			result[string.size] = L'\0';
-			return result;
-		}
-
-		ECS_TEMPLATE_FUNCTION_ALLOCATOR_API(Stream<wchar_t>, StringCopyTs, Stream<wchar_t>);
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -826,6 +719,7 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>);
+		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, CapacityStream<unsigned char>, CapacityStream<unsigned short>, CapacityStream<unsigned int>, CapacityStream<size_t>);
 		
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -837,6 +731,7 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>);
+		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, CapacityStream<unsigned char>, CapacityStream<unsigned short>, CapacityStream<unsigned int>, CapacityStream<size_t>);
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -868,6 +763,65 @@ namespace ECSEngine {
 		ECS_TEMPLATE_FUNCTION_4_AFTER(bool, CopyStreamWithMask, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, ECS_FILE_HANDLE, Stream<void>);
 
 		// ----------------------------------------------------------------------------------------------------------
+
+		size_t SearchBytes(const void* data, size_t element_count, const void* value_to_search, size_t byte_size)
+		{
+			auto loop = [=](auto values, auto simd_value_to_search, auto constant_byte_size) {
+				constexpr size_t byte_size = constant_byte_size();
+
+				size_t simd_count = GetSimdCount(element_count, simd_value_to_search.size());
+				for (size_t index = 0; index < simd_count; index += simd_value_to_search.size()) {
+					values.load(function::OffsetPointer(data, byte_size * index));
+					auto compare = values == simd_value_to_search;
+					int first = HorizontalFindFirst(compare);
+					if (first != -1) {
+						// We have a match
+						return index + first;
+					}
+				}
+
+				// For the last elements use a partial load
+				values.load_partial(element_count - simd_count, function::OffsetPointer(data, byte_size * simd_count));
+				auto compare = values == simd_value_to_search;
+				int first = HorizontalFindFirst(compare);
+				if (first != -1) {
+					return simd_count + first;
+				}
+				return (size_t)-1;
+			};
+
+			if (byte_size == 1) {
+				// Use a Vec32uc
+				Vec32uc values;
+				Vec32uc simd_value_to_search(*(unsigned char*)value_to_search);
+
+				return loop(values, simd_value_to_search, std::integral_constant<size_t, 1>());
+			}
+			else if (byte_size == 2) {
+				// Use a Vec16us
+				Vec16us values;
+				Vec16us simd_value_to_search(*(unsigned short*)value_to_search);
+
+				return loop(values, simd_value_to_search, std::integral_constant<size_t, 2>());
+			}
+			else if (byte_size == 4) {
+				Vec8ui values;
+				Vec8ui simd_value_to_search(*(unsigned int*)value_to_search);
+
+				return loop(values, simd_value_to_search, std::integral_constant<size_t, 4>());
+			}
+			else if (byte_size == 8) {
+				Vec4ui values;
+				Vec4ui simd_value_to_search(*(size_t*)value_to_search);
+
+				return loop(values, simd_value_to_search, std::integral_constant<size_t, 8>());
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			return -1;
+		}
 
 		// ----------------------------------------------------------------------------------------------------------
 
