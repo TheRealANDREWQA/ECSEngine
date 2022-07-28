@@ -6,9 +6,8 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API LinearAllocator
 	{
-	public:
 		LinearAllocator() : m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0) {}
-		LinearAllocator(void* buffer, size_t capacity) : m_buffer((unsigned char*)buffer), m_capacity(capacity), m_top(0), 
+		LinearAllocator(void* buffer, size_t capacity) : m_buffer(buffer), m_capacity(capacity), m_top(0), 
 			m_marker(0), m_spin_lock() {}
 		
 		void* Allocate(size_t size, size_t alignment = 8);
@@ -23,6 +22,9 @@ namespace ECSEngine {
 
 		void ReturnToMarker(size_t marker);
 
+		// Returns true if the pointer was allocated from this allocator
+		bool Belongs(const void* buffer) const;
+
 		// ---------------------- Thread safe variants -----------------------------
 		
 		void* Allocate_ts(size_t size, size_t alignment = 8);
@@ -31,7 +33,6 @@ namespace ECSEngine {
 
 		void SetMarker_ts();
 
-	//private:
 		SpinLock m_spin_lock;
 		void* m_buffer;
 		size_t m_capacity;

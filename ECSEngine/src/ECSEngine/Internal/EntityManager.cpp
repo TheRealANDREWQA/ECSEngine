@@ -3,6 +3,7 @@
 #include "../Utilities/Function.h"
 #include "../Utilities/FunctionInterfaces.h"
 #include "../Utilities/Crash.h"
+#include "ArchetypeQueryCache.h"
 
 #define ENTITY_MANAGER_DEFAULT_UNIQUE_COMPONENTS (1 << 10)
 #define ENTITY_MANAGER_DEFAULT_SHARED_COMPONENTS (1 << 8)
@@ -19,6 +20,22 @@
 namespace ECSEngine {
 
 	using DeferredCallbackFunctor = void (*)(EntityManager*, void*, void*);
+
+	// This is done per entity basis. Might be slow due to the fact that it will
+	// bounce around the RAM. The buffers should be like this
+	// AAAAA BBBBBB CCCCCCC (a buffer per component)
+	struct DeferredWriteComponent {
+		Stream<Entity> entities;
+		ComponentSignature write_signature;
+		const void** buffers;
+	};
+
+	// This is efficient because it will directly memcpy into a buffer
+	struct DeferredWriteArchetypes {
+		Stream<ushort2> archetypes;
+		ComponentSignature write_signature;
+		Stream<void**> buffers;
+	};
 
 	struct DeferredCreateEntities {
 		unsigned int count;
@@ -153,6 +170,8 @@ namespace ECSEngine {
 	};
 	
 	enum DeferredActionType : unsigned char {
+		DEFERRED_ENTITY_WRITE_COMPONENT,
+		DEFERRED_ENTITY_WRITE_ARCHETYPE,
 		DEFERRED_ENTITY_ADD_COMPONENT,
 		DEFERRED_ENTITY_ADD_COMPONENT_SPLATTED,
 		DEFERRED_ENTITY_ADD_COMPONENT_SCATTERED,
@@ -294,7 +313,7 @@ namespace ECSEngine {
 
 				uintptr_t buffer_after_pointers = buffer;
 				for (size_t component_index = 0; component_index < components.count; component_index) {
-					buffer = function::align_pointer(buffer, 8);
+					buffer = function::AlignPointer(buffer, 8);
 					data[component_index] = (void*)buffer;
 					buffer += component_sizes[component_index] * entity_count;
 				}
@@ -303,7 +322,7 @@ namespace ECSEngine {
 				if (type == by_entities_type) {
 					// Pack the data into a contiguous stream for each component type
 					for (size_t component_index = 0; component_index < components.count; component_index++) {
-						buffer = function::align_pointer(buffer, 8);
+						buffer = function::AlignPointer(buffer, 8);
 						for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
 							memcpy((void*)buffer, component_data[entity_index * components.count + component_index], component_sizes[component_index]);
 							buffer += component_sizes[component_index];
@@ -336,7 +355,7 @@ namespace ECSEngine {
 				else if (type == scattered_type) {
 					// Pack the data into a contiguous stream for each component type
 					for (size_t component_index = 0; component_index < components.count; component_index++) {
-						buffer = function::align_pointer(buffer, 8);
+						buffer = function::AlignPointer(buffer, 8);
 						for (size_t entity_index = 0; entity_index < entity_count; entity_index++) {
 							memcpy((void*)buffer, component_data[component_index * entity_count + entity_index], component_sizes[component_index]);
 							buffer += component_sizes[component_index];
@@ -346,7 +365,7 @@ namespace ECSEngine {
 				// COMPONENTS_SPLATTED
 				else {
 					for (size_t component_index = 0; component_index < components.count; component_index++) {
-						buffer = function::align_pointer(buffer, 8);
+						buffer = function::AlignPointer(buffer, 8);
 						memcpy((void*)buffer, component_data[component_index], component_sizes[component_index]);
 						buffer += component_sizes[component_index];
 					}
@@ -378,6 +397,147 @@ namespace ECSEngine {
 			entity_info->stream_index = copy_position + entity_index;
 		}
 	}
+
+#pragma region Write Component
+
+	void CommitWriteComponent(EntityManager* manager, void* _data, void* _additional_data) {
+		DeferredWriteComponent* data = (DeferredWriteComponent*)_data;
+		ECS_STACK_CAPACITY_STREAM(unsigned short, component_sizes, ECS_ARCHETYPE_MAX_COMPONENTS);
+		GetComponentSizes(component_sizes.buffer, data->write_signature, manager->m_unique_components.buffer);
+
+		for (size_t index = 0; index < data->entities.size; index++) {
+			for (unsigned char component_index = 0; component_index < data->write_signature.count; component_index++) {
+				void* component = manager->GetComponent(data->entities[index], data->write_signature.indices[component_index]);
+				memcpy(component, function::OffsetPointer(data->buffers[component_index], component_sizes[component_index] * index), component_sizes[component_index]);
+			}
+		}
+	}
+
+	void RegisterWriteComponent(
+		EntityManager* manager, 
+		Stream<Entity> entities, 
+		ComponentSignature component_signature, 
+		void** buffers,
+		DeferredActionParameters parameters,
+		DebugInfo debug_info
+	) {
+		ECS_STACK_CAPACITY_STREAM(unsigned short, component_sizes, ECS_ARCHETYPE_MAX_COMPONENTS);
+		GetComponentSizes(component_sizes.buffer, component_signature, manager->m_unique_components.buffer);
+
+		size_t allocation_size = sizeof(DeferredWriteComponent) + sizeof(Component) * component_signature.count;
+		if (!parameters.entities_are_stable) {
+			allocation_size += entities.MemoryOf(entities.size);
+		}
+		if (!parameters.data_is_stable) {
+			for (unsigned char index = 0; index < component_signature.count; index++) {
+				allocation_size += entities.size * component_sizes[index];
+			}
+			allocation_size += sizeof(void*) * component_signature.count;
+		}
+
+		void* allocation = manager->AllocateTemporaryBuffer(allocation_size);
+		uintptr_t ptr = (uintptr_t)allocation;
+		DeferredWriteComponent* data = (DeferredWriteComponent*)ptr;
+		ptr += sizeof(*data);
+
+		data->entities = GetEntitiesFromActionParameters(entities, parameters, ptr);
+		data->write_signature = component_signature.Copy(ptr);
+		
+		if (!parameters.data_is_stable) {
+			data->buffers = (const void**)ptr;
+			ptr += sizeof(void*) * component_signature.count;
+
+			for (unsigned char component_index = 0; component_index < component_signature.count; component_index++) {
+				data->buffers[component_index] = (const void*)ptr;
+				memcpy((void*)ptr, buffers[component_index], component_sizes[component_index] * entities.size);
+				ptr += component_sizes[component_index] * entities.size;
+			}
+		}
+		else {
+			data->buffers = (const void**)buffers;
+		}
+		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_ENTITY_WRITE_COMPONENT), debug_info });
+	}
+
+#pragma endregion
+
+#pragma region Write Archetype
+
+	void CommitWriteArchetype(EntityManager* manager, void* _data, void* _additional_data) {
+		DeferredWriteArchetypes* data = (DeferredWriteArchetypes*)_data;
+		ECS_STACK_CAPACITY_STREAM(unsigned short, component_sizes, ECS_ARCHETYPE_MAX_COMPONENTS);
+		GetComponentSizes(component_sizes.buffer, data->write_signature, manager->m_unique_components.buffer);
+
+		for (size_t index = 0; index < data->archetypes.size; index++) {
+			ArchetypeBase* base_archetype = manager->GetBase(data->archetypes[index].x, data->archetypes[index].y);
+			ECS_STACK_CAPACITY_STREAM(void*, archetype_buffers, ECS_ARCHETYPE_MAX_COMPONENTS);
+			base_archetype->GetBuffers(archetype_buffers.buffer, data->write_signature);
+			unsigned int entity_count = base_archetype->m_size;
+
+			for (unsigned char component_index = 0; component_index < data->write_signature.count; component_index++) {
+				memcpy(archetype_buffers[component_index], data->buffers[index][component_index], component_sizes[component_index] * entity_count);
+			}
+		}
+	}
+
+	void RegisterWriteArchetype(
+		EntityManager* manager,
+		Stream<ushort2> archetypes,
+		ComponentSignature component_signature,
+		Stream<void**> buffers,
+		DeferredActionParameters parameters,
+		DebugInfo debug_info
+	) {
+		ECS_STACK_CAPACITY_STREAM(unsigned short, component_sizes, ECS_ARCHETYPE_MAX_COMPONENTS);
+		GetComponentSizes(component_sizes.buffer, component_signature, manager->m_unique_components.buffer);
+
+		size_t allocation_size = sizeof(DeferredWriteArchetypes) + sizeof(Component) * component_signature.count + sizeof(ushort2) * archetypes.size;
+		if (!parameters.data_is_stable) {
+			for (unsigned int index = 0; index < archetypes.size; index++) {
+				const ArchetypeBase* base = manager->GetBase(archetypes[index].x, archetypes[index].y);
+				unsigned int size = base->m_size;
+
+				for (unsigned char component_index = 0; component_index < component_signature.count; component_index++) {
+					allocation_size += size * component_sizes[component_index];
+				}
+			}
+			allocation_size += sizeof(void**) * archetypes.size + sizeof(void*) * archetypes.size * component_signature.count;
+		}
+
+		void* allocation = manager->AllocateTemporaryBuffer(allocation_size);
+		uintptr_t ptr = (uintptr_t)allocation;
+		DeferredWriteArchetypes* data = (DeferredWriteArchetypes*)ptr;
+		ptr += sizeof(*data);
+
+		data->write_signature = component_signature.Copy(ptr);
+
+		if (!parameters.data_is_stable) {
+			data->buffers.buffer = (void***)ptr;
+			data->buffers.size = archetypes.size;
+			ptr += sizeof(void**) * archetypes.size;
+
+			for (unsigned int index = 0; index < archetypes.size; index++) {
+				data->buffers[index] = (void**)ptr;
+				ptr += sizeof(void*) * component_signature.count;
+			}
+
+			for (unsigned int index = 0; index < archetypes.size; index++) {
+				ArchetypeBase* base = manager->GetBase(archetypes[index].x, archetypes[index].y);
+
+				for (unsigned char component_index = 0; component_index < component_signature.count; component_index++) {
+					data->buffers[index][component_index] = (void*)ptr;
+					memcpy((void*)ptr, buffers[component_index], component_sizes[component_index] * base->m_size);
+					ptr += component_sizes[component_index] * base->m_size;
+				}
+			}
+		}
+		else {
+			data->buffers = buffers;
+		}
+		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_ENTITY_WRITE_ARCHETYPE), debug_info });
+	}
+
+#pragma endregion
 
 #pragma region Add component
 
@@ -624,11 +784,7 @@ namespace ECSEngine {
 		DeferredRemoveComponentEntities* data = (DeferredRemoveComponentEntities*)allocation;
 		buffer += sizeof(DeferredRemoveComponentEntities);
 
-		data->components.indices = (Component*)buffer;
-		data->components.count = components.count;
-		memcpy(data->components.indices, components.indices, sizeof(Component) * components.count);
-		buffer += sizeof(Component) * components.count;
-
+		data->components = components.Copy(buffer);
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_ENTITY_REMOVE_COMPONENT), debug_info });
 	}
 
@@ -906,7 +1062,7 @@ namespace ECSEngine {
 		memcpy(data->components.instances, components.instances, sizeof(SharedInstance) * data->components.count);
 		buffer += sizeof(SharedInstance) * data->components.count;
 
-		buffer = function::align_pointer(buffer, alignof(Entity));
+		buffer = function::AlignPointer(buffer, alignof(Entity));
 		data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
 
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_ENTITY_ADD_SHARED_COMPONENT), debug_info });
@@ -985,7 +1141,7 @@ namespace ECSEngine {
 		memcpy(data->components.indices, components.indices, sizeof(Component) * data->components.count);
 		buffer += sizeof(Component) * data->components.count;
 
-		buffer = function::align_pointer(buffer, alignof(Entity));
+		buffer = function::AlignPointer(buffer, alignof(Entity));
 		data->entities = GetEntitiesFromActionParameters(entities, parameters, buffer);
 
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_ENTITY_REMOVE_SHARED_COMPONENT), debug_info });
@@ -1512,8 +1668,8 @@ namespace ECSEngine {
 		SharedInstance instance;
 		CommitCreateSharedInstance(manager, data, &instance);
 		// Allocate memory for the name
-		Stream<void> copied_identifier(function::Copy(&manager->m_small_memory_manager, data->identifier.ptr, data->identifier.size), data->identifier.size);
-		InsertToDynamicTable(manager->m_shared_components[data->component.value].named_instances, &manager->m_small_memory_manager, instance, copied_identifier);
+		Stream<void> copied_identifier(function::Copy(GetAllocatorPolymorphic(&manager->m_small_memory_manager), data->identifier.ptr, data->identifier.size), data->identifier.size);
+		InsertIntoDynamicTable(manager->m_shared_components[data->component.value].named_instances, &manager->m_small_memory_manager, instance, copied_identifier);
 	}
 
 	void CommitBindNamedSharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
@@ -1523,8 +1679,8 @@ namespace ECSEngine {
 			"Trying to bind a named shared instance to component {#} which doesn't exist.", data->component.value);
 		
 		// Allocate memory for the name
-		Stream<void> copied_identifier(function::Copy(&manager->m_small_memory_manager, data->identifier.ptr, data->identifier.size), data->identifier.size);
-		InsertToDynamicTable(manager->m_shared_components[data->component.value].named_instances, &manager->m_small_memory_manager, data->instance, copied_identifier);
+		Stream<void> copied_identifier(function::Copy(GetAllocatorPolymorphic(&manager->m_small_memory_manager), data->identifier.ptr, data->identifier.size), data->identifier.size);
+		InsertIntoDynamicTable(manager->m_shared_components[data->component.value].named_instances, &manager->m_small_memory_manager, data->instance, copied_identifier);
 	}
 
 	void RegisterCreateNamedSharedInstance(
@@ -1955,6 +2111,8 @@ namespace ECSEngine {
 
 	// The jump table for the deferred calls
 	DeferredCallbackFunctor DEFERRED_CALLBACKS[] = {
+		CommitWriteComponent,
+		CommitWriteArchetype,
 		CommitEntityAddComponent<false>,
 		CommitEntityAddComponentSplatted,
 		CommitEntityAddComponentScattered,
@@ -2025,13 +2183,19 @@ namespace ECSEngine {
 
 		m_hierarchies.buffer = nullptr;
 		m_hierarchies.size = 0;
+
+		// Allocate the query cache now
+		// Get a default allocator for it for the moment
+		AllocatorPolymorphic query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
+		m_query_cache = (ArchetypeQueryCache*)Allocate(query_cache_allocator, sizeof(ArchetypeQueryCache));
+		*m_query_cache = ArchetypeQueryCache(query_cache_allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void* EntityManager::AllocateTemporaryBuffer(size_t size, size_t alignment)
 	{
-		return m_temporary_allocator.Allocate(size, alignment);
+		return m_temporary_allocator.Allocate_ts(size, alignment);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2378,7 +2542,7 @@ namespace ECSEngine {
 					
 					// For every value allocate the data
 					for (size_t subindex = 0; subindex < m_shared_components[index].instances.size; subindex++) {
-						void* new_data = function::Copy(&m_small_memory_manager, entity_manager->m_shared_components[index].instances[subindex], component_size);
+						void* new_data = function::Copy(GetAllocatorPolymorphic(&m_small_memory_manager), entity_manager->m_shared_components[index].instances[subindex], component_size);
 						m_shared_components[index].instances[subindex] = new_data;
 					}
 				}
@@ -2392,7 +2556,7 @@ namespace ECSEngine {
 
 					for (unsigned int subindex = 0; subindex < extended_capacity; subindex++) {
 						if (entity_manager->m_shared_components[index].named_instances.IsItemAt(subindex)) {
-							Stream<void> identifier = function::Copy(&m_small_memory_manager, { identifiers[subindex].ptr, identifiers[subindex].size });
+							Stream<void> identifier = function::Copy(GetAllocatorPolymorphic(&m_small_memory_manager), { identifiers[subindex].ptr, identifiers[subindex].size });
 							m_shared_components[index].named_instances.m_identifiers[subindex] = identifier;
 						}
 					}
@@ -2447,7 +2611,7 @@ namespace ECSEngine {
 		// Now every hierarchy must be manually created according to the other one
 		for (size_t index = 0; index < m_hierarchies.size; index++) {
 			// The hierarchy exists
-			if (entity_manager->m_hierarchies[index].hierarchy.allocator != nullptr) {
+			if (ExistsHierarchy(index)) {
 				m_hierarchies[index].allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
 				m_hierarchies[index].hierarchy = EntityHierarchy(
 					&m_hierarchies[index].allocator,
@@ -2827,6 +2991,15 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::EndFrame()
+	{
+		m_temporary_allocator.Clear();
+		m_pending_command_streams.Reset();
+		m_deferred_actions.Reset();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	template<typename Query>
 	unsigned short ECS_VECTORCALL FindArchetypeImplementation(const EntityManager* manager, Query query) {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
@@ -2993,8 +3166,14 @@ namespace ECSEngine {
 			SetCrashHandlerCaller(m_deferred_actions[index].debug_info.file, m_deferred_actions[index].debug_info.function, m_deferred_actions[index].debug_info.line);
 			DEFERRED_CALLBACKS[m_deferred_actions[index].data_and_type.GetData()](this, m_deferred_actions[index].data_and_type.GetPointer(), nullptr);
 		}
-		m_deferred_actions.size.store(0, ECS_RELAXED);
+		m_deferred_actions.Reset();
 		ResetCrashHandlerCaller();
+
+		// Now go through the pending command streams aswell
+		unsigned int pending_command_stream_count = m_pending_command_streams.size.load(ECS_RELAXED);
+		for (unsigned int index = 0; index < pending_command_stream_count; index++) {
+			Flush(m_pending_command_streams[index]);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3417,6 +3596,22 @@ namespace ECSEngine {
 
 	void EntityManager::GetHierarchyChildrenCopy(unsigned int hierarchy_index, Entity parent, CapacityStream<Entity>& children) const
 	{
+		Stream<Entity> parent_children = GetHierarchyChildren(hierarchy_index, parent);
+		ECS_CRASH_RETURN(
+			children.capacity >= parent_children.size, 
+			"Not enough space to copy the children for entity {#} into the capacity stream. Current capacity {#}, size needed {#}.",
+			parent.value,
+			children.capacity,
+			parent_children.size
+		);
+		children.Copy(parent_children);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	Stream<unsigned short> EntityManager::GetQueryResults(unsigned int handle) const
+	{
+		return m_query_cache->GetResults(handle);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3610,6 +3805,27 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	unsigned int EntityManager::RegisterQuery(ArchetypeQuery query)
+	{
+		return m_query_cache->AddQuery(query);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityManager::RegisterQuery(ArchetypeQueryExclude query)
+	{
+		return m_query_cache->AddQuery(query);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::RegisterPendingCommandStream(EntityManagerCommandStream command_stream)
+	{
+		m_pending_command_streams.Add(command_stream);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::SetSharedComponentData(Component component, SharedInstance instance, const void* data)
 	{
 		ECS_CRASH_RETURN(component.value < m_shared_components.size, "Shared component {#} is out of bounds when trying to set shared instance {#}.", component.value, instance.value);
@@ -3653,69 +3869,31 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	EntityManager::TemporaryAllocator::TemporaryAllocator() {}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	EntityManager::TemporaryAllocator::TemporaryAllocator(GlobalMemoryManager* _backup) : backup(_backup) {
-		lock.unlock();
-		buffers.Initialize(backup, 1, ENTITY_MANAGER_TEMPORARY_ALLOCATOR_MAX_BACKUP);
-		backup_allocations.Initialize(backup, 0, ENTITY_MANAGER_TEMPORARY_ALLOCATOR_BACKUP_TRACK_CAPACITY);
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------
-
-	void* EntityManager::TemporaryAllocator::Allocate(size_t size, size_t alignment)
+	EntityManager CreateEntityManagerWithPool(
+		size_t allocator_size,
+		size_t allocator_pool_count,
+		size_t allocator_new_size,
+		unsigned int entity_pool_power_of_two,
+		GlobalMemoryManager* global_memory_manager
+	)
 	{
-		// If the allocation size is greater than the chunk size, allocate directly from the global memory manager
-		if (size > ENTITY_MANAGER_TEMPORARY_ALLOCATOR_CHUNK_SIZE) {
-			void* allocation = backup->Allocate_ts(size, alignment);
-			backup_allocations.AddSafe(allocation);
-			return allocation;
-		}
-		else {
-			lock.wait_locked();
+		size_t size_to_allocate = sizeof(MemoryManager) + sizeof(EntityPool);
+		void* allocation = global_memory_manager->Allocate(size_to_allocate);
 
-			Stream<char> allocation = { nullptr,0 };
-			while (true) {
-				allocation = buffers[buffers.size - 1].Request(size + alignment);
-				if (allocation.buffer + allocation.size >= buffers[buffers.size - 1].buffer + buffers[buffers.size - 1].capacity) {
-					// A new allocation must be performed
-					if (lock.try_lock()) {
-						// If we acquired the lock perform the new buffer allocation
-						void* new_allocation = backup->Allocate_ts(ENTITY_MANAGER_TEMPORARY_ALLOCATOR_CHUNK_SIZE);
-						//buffers.AddSafe(AtomicStream<char>(new_allocation, 0, ENTITY_MANAGER_TEMPORARY_ALLOCATOR_CHUNK_SIZE));
-						allocation = buffers[buffers.size - 1].Request(size);
+		// Share the allocator between the memory pool and the entity manager
+		// The entity pool will make few allocations
+		MemoryManager* entity_manager_allocator = (MemoryManager*)allocation;
+		*entity_manager_allocator = MemoryManager(allocator_size, allocator_pool_count, allocator_new_size, global_memory_manager);
 
-						lock.unlock();
-						// Can break out of the loop after this
-						break;
-					}
-					else {
-						// Spin wait until the resizing is performed
-						lock.wait_locked();
-					}
-				}
-				else {
-					// Break the loop
-					break;
-				}
-			}
-			return (void*)function::align_pointer((uintptr_t)allocation.buffer, alignment);
-		}
-	}
+		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+		EntityPool* entity_pool = (EntityPool*)allocation;
+		*entity_pool = EntityPool(entity_manager_allocator, entity_pool_power_of_two);
 
-	// --------------------------------------------------------------------------------------------------------------------
+		EntityManagerDescriptor descriptor;
+		descriptor.entity_pool = entity_pool;
+		descriptor.memory_manager = entity_manager_allocator;
 
-	void EntityManager::TemporaryAllocator::Clear()
-	{
-		for (size_t index = 1; index < buffers.size; index++) {
-			backup->Deallocate(buffers[index].buffer);
-		}
-		for (size_t index = 0; index < backup_allocations.size; index++) {
-			backup->Deallocate(backup_allocations[index]);
-		}
-		backup_allocations.Reset();
+		return EntityManager(descriptor);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

@@ -20,38 +20,30 @@ namespace ECSEngine {
 	namespace Tools {
 
 		using UIToolsAllocator = ECSEngine::ResizableMemoryArena;
-		using UIHash = ECSEngine::HashFunctionMultiplyString;
 
 		template<typename T>
 		using UIDynamicStream = ResizableStream<T>;
 
-		enum class DockspaceType : unsigned char {
+		enum DockspaceType : unsigned char {
 			Horizontal,
 			Vertical,
 			FloatingHorizontal,
 			FloatingVertical
 		};
 
-		enum class UIDrawPhase : unsigned char {
-			Normal,
-			Late,
-			System
-		};
-
-		enum class ECSENGINE_API ActionAdditionalData : unsigned char {
-			None,
-			Previous,
-			Next,
-			ReturnToDefault
+		enum ECS_UI_DRAW_PHASE : unsigned char {
+			ECS_UI_DRAW_NORMAL,
+			ECS_UI_DRAW_LATE,
+			ECS_UI_DRAW_SYSTEM
 		};
 		
-		enum class ECSENGINE_API UISpriteType : unsigned char {
-			Normal,
-			Cluster
+		enum ECS_UI_SPRITE_TYPE : unsigned char {
+			ECS_UI_SPRITE_NORMAL,
+			ECS_UI_SPRITE_CLUSTER
 		};
 
 		// additional data is primarly intended for general actions which depend on previous information or next one
-		struct ECSENGINE_API ActionData {
+		struct ActionData {
 			void* system;
 			void* dockspace;
 			unsigned int border_index;
@@ -62,14 +54,12 @@ namespace ECSEngine {
 			float2 scale;
 			void* data;
 			void* additional_data;
-			ActionAdditionalData additional_data_type;
 			size_t* counts;
 			void** buffers;
 			const HID::MouseTracker* mouse_tracker;
 			const HID::KeyboardTracker* keyboard_tracker;
 			HID::Keyboard* keyboard;
 			HID::Mouse* mouse;
-			unsigned int thread_id;
 		};
 
 		using Action = void (*)(ActionData* action_data);
@@ -77,11 +67,11 @@ namespace ECSEngine {
 		using UIDrawerElementDraw = void (*)(void* element_data, void* drawer_ptr);
 
 		// data size 0 will be interpreted as take data as a pointer, with no data copy
-		struct ECSENGINE_API UIActionHandler {
+		struct UIActionHandler {
 			Action action;
 			void* data;
 			unsigned int data_size = 0;
-			UIDrawPhase phase = UIDrawPhase::Normal;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
 		};
 
 #pragma region Vertex types
@@ -170,7 +160,7 @@ namespace ECSEngine {
 			Color inactive_title;
 			Color borders;
 			Color hovered_borders;
-			Color default_text;
+			Color text;
 			Color unavailable_text;
 			Color collapse_triangle;
 			Color region_header_x;
@@ -274,12 +264,9 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API UIElementDescriptor {
-			float label_horizontal_padd;
-			float label_vertical_padd;
+			float2 label_padd;
 			float2 slider_shrink;
-			float2 slider_padding;
 			float2 slider_length;
-			float2 text_input_padding;
 			float color_input_padd;
 			float combo_box_padding;
 			float2 graph_padding;
@@ -297,18 +284,18 @@ namespace ECSEngine {
 		};
 
 
-		enum class UIWindowDrawerDescriptorIndex {
-			ColorTheme,
-			Layout,
-			Font,
-			Element,
-			Count
+		enum ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX {
+			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME,
+			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT,
+			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT,
+			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT,
+			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT
 		};
 
 		struct ECSENGINE_API UIWindowDrawerDescriptor {
 			void UpdateZoom(float2 before_zoom, float2 current_zoom);
 
-			bool configured[(unsigned int)UIWindowDrawerDescriptorIndex::Count];
+			bool configured[ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT];
 			UIColorThemeDescriptor color_theme;
 			UILayoutDescriptor layout;
 			UIFontDescriptor font;
@@ -352,7 +339,7 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIRenderThreadResources {
 			GraphicsContext* deferred_context;
 			LinearAllocator temp_allocator;
-			UIDrawPhase phase;
+			ECS_UI_DRAW_PHASE phase;
 		};
 
 		struct ECSENGINE_API UIRenderResources
@@ -482,11 +469,11 @@ namespace ECSEngine {
 			Semaphore* texture_semaphore;
 		};
 
-		enum class ECSENGINE_API BorderType {
-			Top,
-			Right,
-			Bottom,
-			Left
+		enum ECS_UI_BORDER_TYPE {
+			ECS_UI_BORDER_TOP,
+			ECS_UI_BORDER_RIGHT,
+			ECS_UI_BORDER_BOTTOM,
+			ECS_UI_BORDER_LEFT
 		};
 
 		// bottom mask: 0x01
@@ -494,7 +481,6 @@ namespace ECSEngine {
 		// left   mask: 0x04
 		// right  mask: 0x08
 		struct ECSENGINE_API BorderHover {
-
 			bool IsTop();
 			bool IsLeft();
 			bool IsRight();
@@ -508,7 +494,7 @@ namespace ECSEngine {
 			unsigned char value;
 		};
 
-		struct ECSENGINE_API UIDockspaceLayer {
+		struct UIDockspaceLayer {
 			unsigned int index;
 			DockspaceType type;
 		};
@@ -518,7 +504,7 @@ namespace ECSEngine {
 
 #pragma region Window
 
-		using WindowTable = HashTable<void*, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash>;
+		using WindowTable = HashTableDefault<void*>;
 
 		struct ECSENGINE_API UIDrawerElementDrawData {
 			UIDrawerElementDraw draw;
@@ -554,7 +540,7 @@ namespace ECSEngine {
 			Stream<UISpriteVertex> name_vertex_buffer;
 			UIDynamicStream<const char*> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
-			HashTable<UIWindowDynamicResource, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> dynamic_resources;
+			HashTableDefault<UIWindowDynamicResource> dynamic_resources;
 			WindowDraw draw;
 			UIActionHandler private_handler;
 			UIActionHandler default_handler;
@@ -602,16 +588,16 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIFocusedWindowData {
 
 			void ChangeHoverableHandler(float2 position, float2 scale, const UIActionHandler* handler);
-			void ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, UIDrawPhase phase);
-			void ChangeHoverableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, UIDrawPhase phase);
+			void ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
+			void ChangeHoverableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeHoverableHandler(const UIHandler* handler, unsigned int index, void* data);
 			void ChangeClickableHandler(float2 position, float2 scale, const UIActionHandler* handler);
-			void ChangeClickableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, UIDrawPhase phase);
-			void ChangeClickableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, UIDrawPhase phase);
+			void ChangeClickableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
+			void ChangeClickableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeClickableHandler(const UIHandler* handler, unsigned int index, void* data);
 			void ChangeGeneralHandler(float2 position, float2 scale, const UIActionHandler* handler);
-			void ChangeGeneralHandler(UIElementTransform transform, Action action, void* data, size_t data_size, UIDrawPhase phase);
-			void ChangeGeneralHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, UIDrawPhase phase);
+			void ChangeGeneralHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
+			void ChangeGeneralHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeGeneralHandler(const UIHandler* handler, unsigned int index, void* data);
 
 			bool ExecuteHoverableHandler(ActionData* action_data);
@@ -638,8 +624,6 @@ namespace ECSEngine {
 			size_t* counts;
 			void* additional_general_data;
 			void* additional_hoverable_data;
-			ActionAdditionalData additional_general_data_type;
-			ActionAdditionalData additional_hoverable_data_type;
 			UIActionHandler hoverable_handler;
 			UIElementTransform hoverable_transform;
 			UIActionHandler clickable_handler;
@@ -717,6 +701,7 @@ namespace ECSEngine {
 
 			UIActionHandler hoverable_handler;
 			UIActionHandler click_handler;
+			ECS_UI_DRAW_PHASE initial_clickable_phase;
 		};
 
 		// duration is interpreted as milliseconds
@@ -818,48 +803,50 @@ namespace ECSEngine {
 #pragma region Function Structs
 
 		struct ECSENGINE_API UISystemDefaultHoverableData {
+			unsigned int border_index;
 			unsigned int thread_id;
 			UIDockspace* dockspace;
-			unsigned int border_index;
 			float2 position;
 			float2 scale;
 			UIDefaultHoverableData data;
-			UIDrawPhase phase = UIDrawPhase::Normal;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 		};
 
 		struct ECSENGINE_API UISystemDefaultClickableData {
+			unsigned int border_index;
 			unsigned int thread_id;
 			UIDockspace* dockspace;
-			unsigned int border_index;
 			float2 position;
 			float2 scale;
 			UIActionHandler hoverable_handler;
 			UIActionHandler clickable_handler;
+			bool disable_system_phase_retarget = false;
 		};
 
 		struct ECSENGINE_API UISystemDefaultHoverableClickableData {
 			unsigned int thread_id;
-			UIDockspace* dockspace;
 			unsigned int border_index;
+			UIDockspace* dockspace;
 			float2 position;
 			float2 scale;
 			UIDefaultHoverableData hoverable_data;
 			UIActionHandler clickable_handler;
-			UIDrawPhase hoverable_phase = UIDrawPhase::Normal;
+			ECS_UI_DRAW_PHASE hoverable_phase = ECS_UI_DRAW_NORMAL;
+			bool disable_system_phase_retarget = false;
 		};
 
 #pragma endregion
 
-		enum class ECSENGINE_API HandlerCommandType {
-			TextAdd,
-			TextRemove,
-			TextReplace
+		enum ECS_UI_HANDLER_COMMAND_TYPE {
+			ECS_UI_HANDLER_COMMAND_TEXT_ADD,
+			ECS_UI_HANDLER_COMMAND_TEXT_REMOVE,
+			ECS_UI_HANDLER_COMMAND_TEXT_REPLACE
 		};
 
 		struct ECSENGINE_API HandlerCommand {
 			std::chrono::high_resolution_clock::time_point time;
 			UIActionHandler handler;
-			HandlerCommandType type;
+			ECS_UI_HANDLER_COMMAND_TYPE type;
 		};
 
 		struct ECSENGINE_API UIDefaultWindowHandler {
@@ -871,7 +858,7 @@ namespace ECSEngine {
 			bool PeekRevertCommand(HandlerCommand& command);
 			HandlerCommand* GetLastCommand();
 			void ChangeLastCommand(const HandlerCommand& command);
-			void ChangeCursor(CursorType cursor);
+			void ChangeCursor(ECS_CURSOR_TYPE cursor);
 
 			void* vertical_slider;
 			int scroll;
@@ -880,7 +867,7 @@ namespace ECSEngine {
 			bool is_this_parameter_window;
 			bool allow_zoom;
 			bool2 draggable_slide;
-			CursorType commit_cursor;
+			ECS_CURSOR_TYPE commit_cursor;
 			HandlerCommand last_command;
 			unsigned int max_size;
 			size_t last_frame;

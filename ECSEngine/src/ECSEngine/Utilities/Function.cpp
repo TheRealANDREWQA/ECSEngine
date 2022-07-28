@@ -3,6 +3,7 @@
 #include "Function.h"
 #include "FunctionInterfaces.h"
 #include "../Allocators/AllocatorPolymorphic.h"
+#include "../Math/VCLExtensions.h"
 
 namespace ECSEngine {
 
@@ -268,7 +269,144 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		const char* FindTokenReverse(const char* ECS_RESTRICT characters, const char* ECS_RESTRICT token)
+		Stream<char> FindFirstToken(Stream<char> characters, const char* token)
+		{
+			size_t token_size = strlen(token);
+
+			// If the token size is greater than 256 (i.e. 8 32 byte element SIMD registers)
+			// The check should be done manually with memcmp
+
+			Vec32c simd_token[8];
+			Vec32c first_char(token[0]);
+
+			if (characters.size < token_size) {
+				return { nullptr, 0 };
+			}
+
+			size_t simd_token_count = 0;
+			size_t iteration_count = characters.size - token_size + 1;
+			size_t simd_count = GetSimdCount(iteration_count, first_char.size());
+			size_t simd_remainder = 0;
+			if (token_size <= 256) {
+				while (token_size > first_char.size()) {
+					size_t offset = simd_token_count * first_char.size();
+					simd_token[simd_token_count++].load(token + offset);
+					token_size -= first_char.size();
+				}
+				if (token_size > 0) {
+					size_t offset = simd_token_count * first_char.size();
+					simd_token[simd_token_count].load_partial(token_size, token + offset);
+					simd_remainder = token_size;
+				}
+
+				for (size_t index = 0; index < simd_count; index += first_char.size()) {
+					Vec32c current_chars = Vec32c().load(characters.buffer + index);
+					auto match = current_chars == first_char;
+
+					unsigned int found_match = -1;
+					ForEachBit(match, [&](unsigned int bit_index) {
+						size_t subindex = 0;
+						const char* current_characters = characters.buffer + index + bit_index;
+						Vec32c simd_current_characters;
+
+						for (; subindex < simd_token_count; subindex++) {
+							simd_current_characters.load(current_characters + subindex * simd_current_characters.size());
+							if (horizontal_and(simd_token[subindex] == simd_current_characters)) {
+								// They are different quit
+								break;
+							}
+						}
+
+						// If they subindex is simd_token_count, they might be equal
+						if (subindex == simd_token_count) {
+							if (simd_remainder > 0) {
+								simd_current_characters.load_partial(simd_remainder, current_characters + simd_token_count * simd_current_characters.size());
+								if (horizontal_and(simd_token[simd_token_count] == simd_current_characters)) {
+									// Found a match
+									found_match = bit_index;
+									return true;
+								}
+							}
+							else {
+								// Found a match
+								found_match = bit_index;
+								return true;
+							}
+						}
+						
+						return false;
+					});
+
+					if (found_match != -1) {
+						const char* string = characters.buffer + index + found_match;
+						return { string, PointerDifference(characters.buffer + characters.size, string) };
+					}
+				}
+			}
+			else {
+				for (size_t index = 0; index < simd_count; index += first_char.size()) {
+					Vec32c current_chars = Vec32c().load(characters.buffer + index);
+					auto match = current_chars == first_char;
+
+					unsigned int found_match = -1;
+					ForEachBit(match, [&](unsigned int bit_index) {
+						if (memcmp(characters.buffer + index + bit_index, token, token_size * sizeof(char)) == 0) {
+							found_match = bit_index;
+							return true;
+						}
+						return false;
+					});
+
+					if (found_match != -1) {
+						const char* string = characters.buffer + index + found_match;
+						return { string, PointerDifference(characters.buffer + characters.size, string) };
+					}
+				}
+			}
+
+			// For the remaining slots, just call memcmp for each index
+			for (size_t index = simd_count; index < iteration_count; index++) {
+				if (memcmp(characters.buffer + index, token, sizeof(char) * token_size) == 0) {
+					const char* string = characters.buffer + index;
+					return { string, PointerDifference(characters.buffer + characters.size, string) };
+				}
+			}
+
+			return { nullptr, 0 };
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> FindFirstCharacter(Stream<char> characters, char token)
+		{
+			Vec32c simd_token(token);
+
+			size_t simd_count = GetSimdCount(characters.size, simd_token.size());
+			for (size_t index = 0; index < simd_count; index += simd_token.size()) {
+				Vec32c current_chars = Vec32c().load(characters.buffer + index);
+				auto match = current_chars == simd_token;
+				if (horizontal_or(match)) {
+					unsigned int mask = to_bits(match);
+					unsigned long bit_index = 0;
+					_BitScanForward(&bit_index, mask);
+
+					index += bit_index;
+					return { characters.buffer + index, characters.size - index };
+				}
+			}
+
+			for (size_t index = simd_count; index < characters.size; index++) {
+				if (characters[index] == token) {
+					return { characters.buffer + index, characters.size - index };
+				}
+			}
+
+			return { nullptr, 0 };
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		const char* FindTokenReverse(const char* characters, const char* token)
 		{
 			size_t character_size = strlen(characters);
 			size_t token_size = strlen(token);
@@ -288,11 +426,11 @@ namespace ECSEngine {
 						}
 						if (iteration == token_size_iteration) {
 							size_t last_index = 0;
-							while (last_index < 8 && characters[character_size - index - 8 + last_index] == token[token_size - 8 + last_index]) {
+							while (last_index < 8 && characters[character_size - index - token_size + last_index] == token[token_size - token_size + last_index]) {
 								last_index++;
 							}
 							if (last_index == remainder) {
-								return characters - token_size - index;
+								return characters + character_size - token_size - index;
 							}
 						}
 					}
@@ -300,11 +438,11 @@ namespace ECSEngine {
 				else {
 					for (size_t index = 0; index < character_size - token_size + 1; index++) {
 						size_t last_index = 0;
-						while (last_index < 8 && characters[character_size - index - 8 + last_index] == token[token_size - 8 + last_index]) {
+						while (last_index < 8 && characters[character_size - index - token_size + last_index] == token[token_size - token_size + last_index]) {
 							last_index++;
 						}
 						if (last_index == remainder) {
-							return characters - token_size - index;
+							return characters + character_size - token_size - index;
 						}
 					}
 				}
@@ -320,12 +458,56 @@ namespace ECSEngine {
 						iteration++;
 					}
 					if (iteration == token_size_iteration) {
-						return characters - token_size - index;
+						return characters + character_size - token_size - index;
 					}
 				}
 
 				return nullptr;
 			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		const char* FindCharacterReverse(const char* ending_character, const char* lower_bound, char character)
+		{
+			size_t difference = PointerDifference(ending_character, lower_bound);
+			size_t index = 0;
+			size_t simd_bound = difference >= 32 ? difference - 31 : 0;
+
+			if (simd_bound > 0) {
+				Vec32c simd_vector(character);
+
+				for (; index < simd_bound; index++) {
+					const char* data_to_load = ending_character - simd_vector.size() - index + 1;
+					Vec32c string_chars = Vec32c().load(data_to_load);
+					auto is_match = simd_vector == string_chars;
+
+					// At least one character was found
+					if (horizontal_or(is_match)) {
+						unsigned int bit_mask = to_bits(is_match);
+						unsigned long highest_bit = -1;
+						if (_BitScanReverse(&highest_bit, bit_mask)) {
+							return data_to_load + highest_bit;
+						}
+					}
+				}
+			}
+			
+			// Do a bytewise check
+			for (; index < difference; index++) {
+				if (ending_character[-index] == character) {
+					return ending_character - index;
+				}
+			}
+
+			return nullptr;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void* RemapPointer(const void* first_base, const void* second_base, const void* pointer)
+		{
+			return OffsetPointer(second_base, PointerDifference(pointer, first_base));
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -493,12 +675,12 @@ namespace ECSEngine {
 			auto flag = [&](size_t integer) {
 				CharacterType temp[256];
 				Stream<CharacterType> temp_stream = Stream<CharacterType>(temp, 0);
+				if (integer < 10) {
+					temp_stream.Add(Character<CharacterType>('0'));
+				}
 				function::ConvertIntToChars(temp_stream, integer);
 
 				characters.AddStream(temp_stream);
-				//for (size_t index = 0; index < temp_stream.size; index++) {
-				//	characters.Add(temp_stream[index]);
-				//}
 			};
 
 			CharacterType colon_or_dash = (format_flags & ECS_LOCAL_TIME_FORMAT_DASH_INSTEAD_OF_COLON) != 0 ? Character<CharacterType>('-') : Character<CharacterType>(':');

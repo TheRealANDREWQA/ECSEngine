@@ -12,19 +12,19 @@ namespace ECSEngine {
 
 	extern ECSENGINE_API const char* ECS_PLATFORM_STRINGS[];
 
-	enum class ECSENGINE_API CursorType : unsigned char {
-		Default,
-		IBeam,
-		AppStarting,
-		Cross,
-		Hand,
-		Help,
-		SizeAll,
-		SizeNESW,
-		SizeNS,
-		SizeEW,
-		SizeNWSE,
-		Wait
+	enum ECS_CURSOR_TYPE : unsigned char {
+		ECS_CURSOR_DEFAULT,
+		ECS_CURSOR_IBEAM,
+		ECS_CURSOR_APP_STARTING,
+		ECS_CURSOR_CROSS,
+		ECS_CURSOR_HAND,
+		ECS_CURSOR_HELP,
+		ECS_CURSOR_SIZE_ALL,
+		ECS_CURSOR_SIZE_NESW,
+		ECS_CURSOR_SIZE_NS,
+		ECS_CURSOR_SIZE_EW,
+		ECS_CURSOR_SIZE_NWSE,
+		ECS_CURSOR_WAIT
 	};
 
 	class ECSENGINE_API Application
@@ -38,9 +38,9 @@ namespace ECSEngine {
 		
 		virtual int Run();
 		
-		virtual void ChangeCursor(CursorType type);
+		virtual void ChangeCursor(ECS_CURSOR_TYPE type);
 		
-		virtual CursorType GetCurrentCursor() const;
+		virtual ECS_CURSOR_TYPE GetCurrentCursor() const;
 		
 		// null terminated
 		virtual void WriteTextToClipboard(const char* text);

@@ -2,25 +2,26 @@
 
 namespace ECSEngine {
 
-	enum class AllocatorType : unsigned char {
-		LinearAllocator,
-		StackAllocator,
-		MultipoolAllocator,
-		MemoryManager,
-		GlobalMemoryManager,
-		MemoryArena,
-		ResizableMemoryArena
+	enum ECS_ALLOCATOR_TYPE : unsigned char {
+		ECS_ALLOCATOR_LINEAR,
+		ECS_ALLOCATOR_STACK,
+		ECS_ALLOCATOR_MULTIPOOL,
+		ECS_ALLOCATOR_MANAGER,
+		ECS_ALLOCATOR_GLOBAL_MANAGER,
+		ECS_ALLOCATOR_ARENA,
+		ECS_ALLOCATOR_RESIZABLE_ARENA,
+		ECS_ALLOCATOR_RESIZABLE_LINEAR
 	};
 
-	enum class AllocationType : unsigned char {
-		SingleThreaded,
-		MultiThreaded
+	enum ECS_ALLOCATION_TYPE : unsigned char {
+		ECS_ALLOCATION_SINGLE,
+		ECS_ALLOCATION_MULTI
 	};
 
 	struct AllocatorPolymorphic {
 		void* allocator;
-		AllocatorType allocator_type;
-		AllocationType allocation_type;
+		ECS_ALLOCATOR_TYPE allocator_type;
+		ECS_ALLOCATION_TYPE allocation_type;
 	};
 
 }

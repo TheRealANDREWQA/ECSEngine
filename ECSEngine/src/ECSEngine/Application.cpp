@@ -18,13 +18,13 @@ namespace ECSEngine {
 		return 0;
 	}
 
-	void Application::ChangeCursor(CursorType type)
+	void Application::ChangeCursor(ECS_CURSOR_TYPE type)
 	{
 	}
 
-	CursorType Application::GetCurrentCursor() const
+	ECS_CURSOR_TYPE Application::GetCurrentCursor() const
 	{
-		return CursorType(0);
+		return ECS_CURSOR_TYPE(0);
 	}
 
 	void Application::WriteTextToClipboard(const char* text) {

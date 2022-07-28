@@ -415,7 +415,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddString(float3 position, float3 direction, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
-		Stream<char> text_copy = function::StringCopy(allocator, text);
+		Stream<char> text_copy = function::StringCopy(Allocator(), text);
 		strings.Add({ position, direction, size, text_copy, color, options });
 	}
 
@@ -423,7 +423,7 @@ namespace ECSEngine {
 
 	void DebugDrawer::AddStringRotation(float3 position, float3 rotation, float size, Stream<char> text, ColorFloat color, DebugDrawCallOptions options)
 	{
-		Stream<char> text_copy = function::StringCopy(allocator, text);
+		Stream<char> text_copy = function::StringCopy(Allocator(), text);
 		float3 direction = GetRightVector(rotation);
 		strings.Add({ position, direction, size, text_copy, color, options });
 	}
@@ -592,7 +592,7 @@ namespace ECSEngine {
 		if (thread_strings[thread_index].IsFull()) {
 			FlushString(thread_index);
 		}
-		Stream<char> string_copy = function::StringCopyTs(allocator, text);
+		Stream<char> string_copy = function::StringCopy(AllocatorTs(), text);
 		thread_strings[thread_index].Add({ position, direction, size, string_copy, color, options });
 	}
 
@@ -605,7 +605,7 @@ namespace ECSEngine {
 		if (thread_strings[thread_index].IsFull()) {
 			FlushString(thread_index);
 		}
-		Stream<char> string_copy = function::StringCopyTs(allocator, text);
+		Stream<char> string_copy = function::StringCopy(AllocatorTs(), text);
 		thread_strings[thread_index].Add({ position, GetRightVector(rotation), size, string_copy, color, options });
 	}
 
@@ -3155,6 +3155,20 @@ namespace ECSEngine {
 	}
 
 #pragma endregion
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	AllocatorPolymorphic DebugDrawer::Allocator() const
+	{
+		return GetAllocatorPolymorphic(allocator);
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	AllocatorPolymorphic DebugDrawer::AllocatorTs() const
+	{
+		return GetAllocatorPolymorphic(allocator, ECS_ALLOCATION_MULTI);
+	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

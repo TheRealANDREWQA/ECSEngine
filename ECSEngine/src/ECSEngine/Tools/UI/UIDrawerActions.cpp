@@ -5,6 +5,8 @@
 #include "../../Utilities/Mouse.h"
 #include "../../Utilities/Keyboard.h"
 #include "../../Utilities/FunctionInterfaces.h"
+#include "UIOSActions.h"
+#include "UIDrawerWindows.h"
 
 namespace ECSEngine {
 
@@ -26,7 +28,7 @@ namespace ECSEngine {
 			void* allocation = system->m_memory->Allocate(system->m_descriptors.misc.window_handler_revert_command_count * sizeof(HandlerCommand));
 			window_data->revert_commands = Stack<HandlerCommand>(allocation, system->m_descriptors.misc.window_handler_revert_command_count);
 			window_data->last_frame = system->GetFrameIndex();
-			window_data->commit_cursor = CursorType::Default;
+			window_data->commit_cursor = ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT;
 
 			const char* window_name = (const char*)_additional_data;
 
@@ -60,7 +62,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			HandlerCommandType command_type
+			ECS_UI_HANDLER_COMMAND_TYPE command_type
 		) {
 			auto handler_data = system->GetDefaultWindowHandlerData(window_index);
 
@@ -253,16 +255,8 @@ namespace ECSEngine {
 				data->slider->changed_value = true;
 			}
 
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-				if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
-					system->m_application->WriteTextToClipboard(data->slider->characters.buffer);
-				}
-				else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
-					data->slider->characters.size = system->m_application->CopyTextFromClipboard(data->slider->characters.buffer, data->slider->characters.capacity);
-					data->slider->character_value = true;
-					data->slider->changed_value = true;
-				}
-			}
+			action_data->data = data->slider;
+			SliderCopyPaste(action_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -270,13 +264,16 @@ namespace ECSEngine {
 		void SliderMouseDraggable(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerSlider** data = (UIDrawerSlider**)_data;
-			UIDrawerSlider* slider = *data;
+			SliderMouseDraggableData* data = (SliderMouseDraggableData*)_data;
+			UIDrawerSlider* slider = data->slider;
 
 			float initial_position = slider->slider_position;
 			float dimming_factor = 1.0f;
 			if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
-				dimming_factor = 0.1f;
+				dimming_factor = 0.2f;
+			}
+			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+				dimming_factor = 5.0f;
 			}
 
 			if (mouse_tracker->LeftButton() == MBPRESSED) {
@@ -286,14 +283,16 @@ namespace ECSEngine {
 				slider->interpolate_value = false;
 			}
 
-			if (slider->is_vertical) {
-				slider->slider_position += mouse_delta.y / slider->current_scale.y * dimming_factor;
+			float factor = slider->is_vertical ? mouse_delta.y : mouse_delta.x;
+			if (data->interpolate_bounds) {
+				slider->slider_position += factor / slider->current_scale.x * dimming_factor;
+
+				slider->slider_position = function::Select(slider->slider_position < 0.0f, 0.0f, slider->slider_position);
+				slider->slider_position = function::Select(slider->slider_position > 1.0f, 1.0f, slider->slider_position);
 			}
 			else {
-				slider->slider_position += mouse_delta.x / slider->current_scale.x * dimming_factor;
+				slider->slider_position += factor * dimming_factor * 150.0f;
 			}
-			slider->slider_position = function::Select(slider->slider_position < 0.0f, 0.0f, slider->slider_position);
-			slider->slider_position = function::Select(slider->slider_position > 1.0f, 1.0f, slider->slider_position);
 
 			slider->changed_value = initial_position != slider->slider_position;
 		}
@@ -576,7 +575,7 @@ namespace ECSEngine {
 			if (IsPointInRectangle(mouse_position, position, scale)) {
 				system->m_focused_window_data.always_hoverable = true;
 				UIDefaultWindowHandler* default_handler_data = system->GetDefaultWindowHandlerData(window_index);
-				default_handler_data->ChangeCursor(CursorType::IBeam);
+				default_handler_data->ChangeCursor(ECS_CURSOR_TYPE::ECS_CURSOR_IBEAM);
 
 				/*if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
 					if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
@@ -618,14 +617,16 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerColorInput* input = (UIDrawerColorInput*)_data;
-			unsigned char previous_alpha = input->hsv.alpha;
-			*input->rgb = HexToRGB(input->hex_characters);
-			input->hsv = RGBToHSV(*input->rgb);
-			input->hsv.alpha = previous_alpha;
-			input->rgb->alpha = previous_alpha;
-			Color back_to_rgb = HSVToRGB(input->hsv);
-			input->is_hex_input = true;
 
+			Color converted_color = HexToRGB(input->hex_characters);
+			converted_color.alpha = input->hsv.alpha;
+			if (converted_color != *input->rgb) {
+				*input->rgb = converted_color;
+				input->hsv = RGBToHSV(*input->rgb);
+			}
+
+			// For debug
+			Color back_to_rgb = HSVToRGB(input->hsv);
 			input->Callback(action_data);
 		}
 
@@ -639,7 +640,6 @@ namespace ECSEngine {
 				*data->rgb = data->default_color;
 				data->hsv = RGBToHSV(data->default_color);
 
-				action_data->additional_data_type = ActionAdditionalData::ReturnToDefault;
 				action_data->data = data->callback.data;
 				data->Callback(action_data);
 			}
@@ -655,7 +655,6 @@ namespace ECSEngine {
 			*data->rgb = data->color_picker_initial_color;
 
 			data->Callback(action_data);
-			//RGBToHex(data->hex_characters, *data->rgb);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -935,7 +934,7 @@ namespace ECSEngine {
 				*data->number += amount;
 				*data->number = function::Clamp(*data->number, data->min, data->max);
 
-				if (amount != 0 && data->number_data.input->callback != nullptr) {
+				if (amount != 0 && data->number_data.input->HasCallback()) {
 					// The text input must also be updated before it
 					char number_characters[64];
 					Stream<char> number_characters_stream(number_characters, 0);
@@ -943,8 +942,7 @@ namespace ECSEngine {
 					data->number_data.input->DeleteAllCharacters();
 					data->number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
-					action_data->data = data->number_data.input->callback_data;
-					data->number_data.input->callback(action_data);
+					//data->number_data.input->Callback(action_data);
 				}
 			}
 		}
@@ -963,7 +961,7 @@ namespace ECSEngine {
 				*data->number += amount;
 				*data->number = function::Clamp(*data->number, data->min, data->max);
 
-				if (amount != 0.0f && data->number_data.input->callback != nullptr) {
+				if (amount != 0.0f && data->number_data.input->HasCallback()) {
 					// The text input must also be updated before it
 					char number_characters[64];
 					Stream<char> number_characters_stream(number_characters, 0);
@@ -971,8 +969,7 @@ namespace ECSEngine {
 					data->number_data.input->DeleteAllCharacters();
 					data->number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
-					action_data->data = data->number_data.input->callback_data;
-					data->number_data.input->callback(action_data);
+					//data->number_data.input->Callback(action_data);
 				}
 			}
 		}
@@ -1030,7 +1027,7 @@ namespace ECSEngine {
 					*data->data.number = function::Clamp(*data->data.number, data->data.min, data->data.max);
 					data->last_position = mouse_position.x;
 
-					if (data->data.number_data.input->callback != nullptr) {
+					if (data->data.number_data.input->HasCallback()) {
 						// The text input must also be updated before it
 						char number_characters[64];
 						Stream<char> number_characters_stream(number_characters, 0);
@@ -1038,8 +1035,7 @@ namespace ECSEngine {
 						data->data.number_data.input->DeleteAllCharacters();
 						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
-						action_data->data = data->data.number_data.input->callback_data;
-						data->data.number_data.input->callback(action_data);
+						//data->data.number_data.input->Callback(action_data);
 					}
 				}
 			}
@@ -1173,15 +1169,12 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerIntegerInputCallbackData<Integer>* data = (UIDrawerIntegerInputCallbackData<Integer>*)_data;
-			if (data->number_data.input->text->size == 0) {
-				data->number_data.input->InsertCharacters("0", 1, 0, system);
-			}
 
 			auto revert_characters = [data, system]() {
 				data->number_data.input->DeleteAllCharacters();
 				char temp_characters[128];
 				Stream characters = Stream<char>(temp_characters, 0);
-				function::ConvertIntToCharsFormatted(characters, static_cast<int64_t>(*data->number));
+				function::ConvertIntToChars(characters, static_cast<int64_t>(*data->number));
 				data->number_data.input->InsertCharacters(temp_characters, characters.size, 0, system);
 			};
 
@@ -1231,10 +1224,9 @@ namespace ECSEngine {
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
 				// Call the input callback if any
-				if (data->data->number_data.input->callback != nullptr) {
-					action_data->data = data->data->number_data.input->callback_data;
-					data->data->number_data.input->callback(action_data);
-				}
+				/*if (data->data->number_data.input->HasCallback()) {
+					data->data->number_data.input->Callback(action_data);
+				}*/
 			}
 		}
 
@@ -1270,10 +1262,9 @@ namespace ECSEngine {
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
 				// Call the input callback if any
-				if (data->data->number_data.input->callback != nullptr) {
-					action_data->data = data->data->number_data.input->callback_data;
-					data->data->number_data.input->callback(action_data);
-				}
+				/*if (data->data->number_data.input->HasCallback()) {
+					data->data->number_data.input->Callback(action_data);
+				}*/
 			}
 		}
 
@@ -1310,10 +1301,9 @@ namespace ECSEngine {
 				data->data->number_data.input->InsertCharacters(temp_stream.buffer, temp_stream.size, 0, system);
 
 				// Call the input callback if any
-				if (data->data->number_data.input->callback != nullptr) {
-					action_data->data = data->data->number_data.input->callback_data;
-					data->data->number_data.input->callback(action_data);
-				}
+				/*if (data->data->number_data.input->HasCallback()) {
+					data->data->number_data.input->Callback(action_data);
+				}*/
 			}
 		}
 
@@ -1348,7 +1338,7 @@ namespace ECSEngine {
 
 			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
 			descriptor->color_theme.SetNewTheme(descriptor->color_theme.theme);
-			descriptor->configured[(unsigned int)UIWindowDrawerDescriptorIndex::ColorTheme] = true;
+			descriptor->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME] = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1357,7 +1347,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
-			descriptor->configured[(unsigned int)UIWindowDrawerDescriptorIndex::ColorTheme] = true;
+			descriptor->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME] = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1366,7 +1356,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
-			descriptor->configured[(unsigned int)UIWindowDrawerDescriptorIndex::Layout] = true;
+			descriptor->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT] = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1375,7 +1365,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIWindowDrawerDescriptor* descriptor = (UIWindowDrawerDescriptor*)_data;
-			descriptor->configured[(unsigned int)UIWindowDrawerDescriptorIndex::Element] = true;
+			descriptor->configured[(unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT] = true;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1640,8 +1630,9 @@ namespace ECSEngine {
 					}
 					else {
 						if (input->current_sprite_position > 0) {
-							if (input->current_sprite_position == input->sprite_render_offset + 1 && input->sprite_render_offset > 0)
+							if (input->current_sprite_position == input->sprite_render_offset && input->sprite_render_offset > 0) {
 								input->sprite_render_offset--;
+							}
 							input->current_sprite_position--;
 						}
 						else {
@@ -1745,7 +1736,7 @@ namespace ECSEngine {
 						HandlerCommand last_command;
 						system->GetLastRevertCommand(last_command, window_index);
 
-						if (last_command.type == HandlerCommandType::TextReplace) {
+						if (last_command.type == ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REPLACE) {
 							UIDrawerTextInputReplaceCommandInfo* command = (UIDrawerTextInputReplaceCommandInfo*)last_command.handler.data;
 							command->text_count -= push_count;
 						}
@@ -1789,7 +1780,7 @@ namespace ECSEngine {
 							memcpy(info_text, backspace_text, *backspace_text_count);
 							info_text[*backspace_text_count] = '\0';
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, HandlerCommandType::TextRemove);
+							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 						}
 
 						size_t text_size = input->text->size;
@@ -1801,74 +1792,9 @@ namespace ECSEngine {
 							revert_info->text_count = character_count;
 							revert_info->text_position = input->current_sprite_position;
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertAddText, revert_info, sizeof(UIDrawerTextInputAddCommandInfo), HandlerCommandType::TextAdd);
+							AddWindowHandleCommand(system, window_index, TextInputRevertAddText, revert_info, sizeof(UIDrawerTextInputAddCommandInfo), ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_ADD);
 
-							for (int64_t index = text_size - 1; index >= input->current_sprite_position; index--) {
-								size_t sprite_index = index * 6;
-								size_t new_sprite_index = sprite_index + character_count * 6;
-								input->vertices[new_sprite_index] = input->vertices[sprite_index];
-								input->vertices[new_sprite_index + 1] = input->vertices[sprite_index + 1];
-								input->vertices[new_sprite_index + 2] = input->vertices[sprite_index + 2];
-								input->vertices[new_sprite_index + 3] = input->vertices[sprite_index + 3];
-								input->vertices[new_sprite_index + 4] = input->vertices[sprite_index + 4];
-								input->vertices[new_sprite_index + 5] = input->vertices[sprite_index + 5];
-								input->text->buffer[index + character_count] = input->text->buffer[index];
-							}
-
-							bool is_last_position = input->text->size == input->current_sprite_position;
-							strncpy((char*)input->text->buffer + input->current_sprite_position, (const char*)characters, character_count);
-							input->text->size += character_count;
-
-							float2 position;
-
-							float character_spacing = input->character_spacing;
-							float2 padding = { input->padding.x, input->padding.y };
-							if (input->current_sprite_position != 0) {
-								const float2* current_position = &input->vertices[(input->current_sprite_position - 1) * 6 + 1].position;
-								position = { current_position->x + character_spacing, -current_position->y };
-							}
-							else {
-								position = { input->position.x + padding.x, input->position.y + padding.y };
-							}
-							system->ConvertCharactersToTextSprites(
-								(const char*)characters,
-								position,
-								input->vertices.buffer,
-								character_count,
-								input->text_color,
-								input->current_sprite_position * 6,
-								input->font_size,
-								character_spacing
-							);
-							float2 text_span = GetTextSpan(Stream<UISpriteVertex>(input->vertices.buffer + input->current_sprite_position * 6, character_count * 6));
-
-							size_t index = 0;
-							for (; index < character_count; index++) {
-								size_t sprite_index = (index + input->current_sprite_position) * 6;
-								if (input->vertices[sprite_index + 1].position.x > input->bound) {
-									break;
-								}
-							}
-							input->sprite_render_offset += character_count - index;
-							input->current_sprite_position += character_count;
-
-							if (is_last_position) {
-								unsigned int visible_sprites = input->GetVisibleSpriteCount(input->bound);
-								while (input->sprite_render_offset + visible_sprites < input->current_sprite_position) {
-									input->sprite_render_offset++;
-									visible_sprites = input->GetVisibleSpriteCount(input->bound);
-								}
-							}
-
-							text_span.x += character_spacing;
-							for (size_t index = input->current_sprite_position; index < input->text->size; index++) {
-								size_t sprite_index = index * 6;
-								for (size_t subindex = sprite_index; subindex < sprite_index + 6; subindex++) {
-									input->vertices[subindex].position.x += text_span.x;
-								}
-							}
-							input->vertices.size = input->text->size * 6;
-
+							input->InsertCharacters(characters, character_count, input->current_sprite_position, system);
 						}
 
 						input->current_selection = input->current_sprite_position;
@@ -1895,7 +1821,7 @@ namespace ECSEngine {
 						memcpy((void*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo)), backspace_text, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
-						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, HandlerCommandType::TextRemove);
+						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 					}
 				}
 
@@ -1938,7 +1864,7 @@ namespace ECSEngine {
 						memcpy(info_text, backspace_text, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
-						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, HandlerCommandType::TextRemove);
+						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 					}
 					else if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
 						input->CopyCharacters(system);
@@ -1967,7 +1893,7 @@ namespace ECSEngine {
 							memcpy(info_text, deleted_characters, deleted_character_count);
 							info_text[deleted_character_count] = '\0';
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, HandlerCommandType::TextReplace);
+							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REPLACE);
 						}
 					}
 					else if (keyboard_tracker->IsKeyPressed(HID::Key::A)) {
@@ -1992,13 +1918,12 @@ namespace ECSEngine {
 				input->current_selection = input->current_sprite_position;
 				input->is_currently_selected = false;
 
-				if (input->callback != nullptr) {
-					action_data->data = input->callback_data;
-					input->callback(action_data);
-				}
+				/*if (input->HasCallback()) {
+					input->Callback(action_data);
+				}*/
 
 				system->DeallocateGeneralHandler();
-				system->m_focused_window_data.ChangeGeneralHandler({ 0.0f, 0.0f }, { 0.0f, 0.0f }, nullptr, nullptr, 0, UIDrawPhase::Normal);
+				system->m_focused_window_data.ChangeGeneralHandler({ 0.0f, 0.0f }, { 0.0f, 0.0f }, nullptr, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL);
 			}
 			else if (!UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 				keyboard->DoNotCaptureCharacters();
@@ -2006,10 +1931,9 @@ namespace ECSEngine {
 				input->current_selection = input->current_sprite_position;
 				input->is_currently_selected = false;
 
-				if (input->callback != nullptr) {
-					action_data->data = input->callback_data;
-					input->callback(action_data);
-				}
+				/*if (input->HasCallback()) {
+					input->Callback(action_data);
+				}*/
 			}
 		}
 
@@ -2031,6 +1955,7 @@ namespace ECSEngine {
 					action_data->data = &input_data;
 					TextInputAction(action_data);
 					slider->text_input_counter = 0;
+					slider->character_value = true;
 					system->m_keyboard->DoNotCaptureCharacters();
 					return true;
 				}
@@ -2131,9 +2056,9 @@ namespace ECSEngine {
 		void ColorInputWindowDraw(void* window_data, void* drawer_descriptor, bool initializer) {
 			UI_PREPARE_DRAWER(initializer);
 
-			const size_t RECTANGLE_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_CLICKABLE_ACTION;
+			const size_t RECTANGLE_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
 			const size_t CIRCLE_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE;
-			const size_t TRIANGLE_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_CLICKABLE_ACTION | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE;
+			const size_t TRIANGLE_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE;
 			const float RECTANGLE_Y_SCALE = 0.55f;
 			const float HUE_ALPHA_X_SCALE = 0.065f;
 
@@ -2165,7 +2090,7 @@ namespace ECSEngine {
 			drawer.DisablePaddingForRenderSliders();
 			drawer.DisablePaddingForRenderRegion();
 			drawer.DisableZoom();
-			drawer.SetDrawMode(UIDrawerMode::Indent);
+			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_INDENT);
 
 			UIDrawerColorInputWindowData* data = (UIDrawerColorInputWindowData*)window_data;
 			UIDrawerColorInput* main_input = data->input;
@@ -2174,15 +2099,52 @@ namespace ECSEngine {
 
 			if (!initializer) {
 				input = (UIDrawerColorInput*)drawer.GetResource("ColorInput");
+
 				input->color_picker_initial_color = main_input->color_picker_initial_color;
 				input->callback = main_input->callback;
-				input->a_slider->changed_value_callback = main_input->callback;
-				input->b_slider->changed_value_callback = main_input->callback;
-				input->g_slider->changed_value_callback = main_input->callback;
-				input->r_slider->changed_value_callback = main_input->callback;
-				input->h_slider->changed_value_callback = main_input->callback;
-				input->s_slider->changed_value_callback = main_input->callback;
-				input->v_slider->changed_value_callback = main_input->callback;
+				/*if (main_input->callback.action != nullptr) {
+					if (input->a_slider->changed_value_callback.action == nullptr) {
+						input->a_slider->changed_value_callback = main_input->callback;
+						input->b_slider->changed_value_callback = main_input->callback;
+						input->g_slider->changed_value_callback = main_input->callback;
+						input->r_slider->changed_value_callback = main_input->callback;
+						input->h_slider->changed_value_callback = main_input->callback;
+						input->s_slider->changed_value_callback = main_input->callback;
+						input->v_slider->changed_value_callback = main_input->callback;
+					}
+					else {
+						struct WrapperData {
+							UIActionHandler first;
+							UIActionHandler second;
+						};
+						auto wrapper = [](ActionData* action_data) {
+							UI_UNPACK_ACTION_DATA;
+
+							WrapperData* data = (WrapperData*)_data;
+							action_data->data = data->first.data;
+							data->first.action(action_data);
+
+							action_data->data = data->second.data;
+							data->second.action(action_data);
+						};
+
+						if (input->a_slider->changed_value_callback.action != wrapper) {
+							UIActionHandler wrapper_callback = { wrapper, drawer.GetMainAllocatorBuffer(sizeof(WrapperData)), sizeof(WrapperData), main_input->callback.phase };
+							WrapperData* wrapper_data = (WrapperData*)wrapper_callback.data;
+							wrapper_data->first = input->a_slider->changed_value_callback;
+							wrapper_data->second = main_input->callback;
+
+							input->a_slider->changed_value_callback = wrapper_callback;
+							input->b_slider->changed_value_callback = wrapper_callback;
+							input->g_slider->changed_value_callback = wrapper_callback;
+							input->r_slider->changed_value_callback = wrapper_callback;
+							input->h_slider->changed_value_callback = wrapper_callback;
+							input->s_slider->changed_value_callback = wrapper_callback;
+							input->v_slider->changed_value_callback = wrapper_callback;
+						}
+					}
+				}*/
+
 				main_input->hsv = input->hsv;
 				input->rgb = main_input->rgb;
 			}
@@ -2199,7 +2161,7 @@ namespace ECSEngine {
 			UIDrawConfig sv_config;
 
 			UIConfigWindowDependentSize sv_size;
-			sv_size.type = WindowSizeTransformType::Both;
+			sv_size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH;
 			sv_size.scale_factor = { RECTANGLE_Y_SCALE, RECTANGLE_Y_SCALE };
 
 			ColorInputHSVGradientInfo h_info;
@@ -2219,7 +2181,7 @@ namespace ECSEngine {
 
 			drawer.SetCurrentX(drawer.GetNextRowXPosition());
 			float2 sv_position = drawer.GetCurrentPositionNonOffset();
-			float2 sv_scale = drawer.GetWindowSizeScaleElement(WindowSizeTransformType::Both, { RECTANGLE_Y_SCALE, RECTANGLE_Y_SCALE });
+			float2 sv_scale = drawer.GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH, { RECTANGLE_Y_SCALE, RECTANGLE_Y_SCALE });
 			drawer.Gradient(RECTANGLE_CONFIGURATION, sv_config, sv_colors, 15, 15);
 
 			UIDrawConfig circle_config;
@@ -2244,11 +2206,11 @@ namespace ECSEngine {
 #pragma region Hue Rectangle
 			UIDrawConfig h_config;
 			UIConfigWindowDependentSize h_size;
-			h_size.type = WindowSizeTransformType::Both;
+			h_size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH;
 			h_size.scale_factor = { HUE_ALPHA_X_SCALE, RECTANGLE_Y_SCALE };
 
 			float2 h_gradient_position = drawer.GetCurrentPositionNonOffset();
-			float2 gradient_scale = drawer.GetWindowSizeScaleElement(WindowSizeTransformType::Both, { HUE_ALPHA_X_SCALE, RECTANGLE_Y_SCALE });
+			float2 gradient_scale = drawer.GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH, { HUE_ALPHA_X_SCALE, RECTANGLE_Y_SCALE });
 
 			h_info.gradient_position = h_gradient_position;
 			h_info.gradient_scale = gradient_scale;
@@ -2269,7 +2231,7 @@ namespace ECSEngine {
 			UIDrawConfig a1_config;
 			UIDrawConfig a2_config;
 			UIConfigWindowDependentSize a_size;
-			a_size.type = WindowSizeTransformType::Both;
+			a_size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH;
 			a_size.scale_factor = { HUE_ALPHA_X_SCALE, RECTANGLE_Y_SCALE };
 
 			float2 a_gradient_position = drawer.GetCurrentPositionNonOffset();
@@ -2330,13 +2292,13 @@ namespace ECSEngine {
 			current_position.y += text_span.y + text_offset;
 
 			UIConfigWindowDependentSize solid_color_transform;
-			solid_color_transform.type = WindowSizeTransformType::Both;
+			solid_color_transform.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH;
 			solid_color_transform.scale_factor = { current_color_scale, solid_color_y_scale };
 
-			float2 rectangle_scale = drawer.GetWindowSizeScaleElement(WindowSizeTransformType::Both, { current_color_scale, solid_color_y_scale });
+			float2 rectangle_scale = drawer.GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH, { current_color_scale, solid_color_y_scale });
 			current_config.AddFlag(solid_color_transform);
 
-			filled_circle_color.alpha = hsv_color.alpha;
+			filled_circle_color.alpha = input->rgb->alpha;
 			drawer.AlphaColorRectangle(TEXT_CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE, current_config, filled_circle_color);
 			drawer.OffsetY(rectangle_scale.y + text_offset);
 			current_position.y += rectangle_scale.y + text_offset;
@@ -2357,24 +2319,33 @@ namespace ECSEngine {
 
 			previous_config.AddFlags(solid_color_transform, previous_action);
 
-			drawer.AlphaColorRectangle(TEXT_CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_CLICKABLE_ACTION, previous_config, input->color_picker_initial_color);
+			drawer.AlphaColorRectangle(
+				TEXT_CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION, 
+				previous_config, 
+				input->color_picker_initial_color
+			);
 			drawer.NextRow();
 #pragma endregion
 
 #pragma region Sliders
+
 			const size_t COLOR_INPUT_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER | UI_CONFIG_COLOR_INPUT_RGB_SLIDERS
 				| UI_CONFIG_COLOR_INPUT_HSV_SLIDERS | UI_CONFIG_COLOR_INPUT_NO_NAME | UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR
 				| UI_CONFIG_COLOR_INPUT_HEX_INPUT | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_ENTER_VALUES;
 
 			UIDrawConfig color_input_config;
 			UIConfigWindowDependentSize color_input_transform;
-			color_input_transform.type = WindowSizeTransformType::Horizontal;
+			color_input_transform.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 			color_input_transform.scale_factor = { 0.34f, 1.0f };
 
-			color_input_config.AddFlag(color_input_transform);
-			drawer.ColorInput(COLOR_INPUT_CONFIGURATION, color_input_config, "ColorInput", main_input->rgb);
-#pragma endregion
+			UIConfigSliderMouseDraggable mouse_draggable;
+			mouse_draggable.interpolate_bounds = true;
 
+			color_input_config.AddFlag(color_input_transform);
+			color_input_config.AddFlag(mouse_draggable);
+			drawer.ColorInput(COLOR_INPUT_CONFIGURATION, color_input_config, "ColorInput", main_input->rgb);
+
+#pragma endregion
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -2522,7 +2493,7 @@ namespace ECSEngine {
 
 				drawer.DisablePaddingForRenderRegion();
 				drawer.DisablePaddingForRenderSliders();
-				drawer.SetDrawMode(UIDrawerMode::NextRow);
+				drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NEXT_ROW);
 
 #pragma endregion
 
@@ -2533,7 +2504,7 @@ namespace ECSEngine {
 				float2 default_element_scale = drawer.GetElementDefaultScale();
 
 				UIConfigRelativeTransform transform;
-				transform.scale.x = region_scale.x / default_element_scale.x;
+				transform.scale.x = drawer.GetRelativeTransformFactors({ region_scale.x, 0.0f }).x;
 				config.AddFlag(transform);
 
 				// Must be replicated inside lambdas
@@ -2544,14 +2515,14 @@ namespace ECSEngine {
 				UIDrawerSubmenuHoverable hover_data;
 				hover_data.state = data->state;
 				hover_data.menu = data->menu;
-				hoverable.handler = { MenuSubmenuHoverable, &hover_data, sizeof(hover_data), UIDrawPhase::System };
+				hoverable.handler = { MenuSubmenuHoverable, &hover_data, sizeof(hover_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 
 				UIConfigGeneralAction general;
 				UIDrawerMenuGeneralData general_data;
 				general_data.menu = data->menu;
 				general_data.destroy_state = data->state;
 				general_data.destroy_scale = { region_scale.x, default_element_scale.y };
-				general.handler = { MenuGeneral, &general_data, sizeof(general_data), UIDrawPhase::System };
+				general.handler = { MenuGeneral, &general_data, sizeof(general_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 				config.AddFlag(general);
 
 #pragma endregion
@@ -2582,8 +2553,8 @@ namespace ECSEngine {
 #pragma region Left characters and >
 
 				UIConfigTextAlignment alignment;
-				alignment.horizontal = TextAlignment::Left;
-				alignment.vertical = TextAlignment::Middle;
+				alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_LEFT;
+				alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
 				config.AddFlag(alignment);
 
 				struct ClickableWrapperData {
@@ -2620,7 +2591,7 @@ namespace ECSEngine {
 					hover_data.row_index = index;
 					auto system = drawer.GetSystem();
 					Color arrow_color = system->m_descriptors.misc.menu_arrow_color;
-					size_t RECTANGLE_CONFIGURATION = UI_CONFIG_HOVERABLE_ACTION | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_GENERAL_ACTION;
+					size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RECTANGLE_HOVERABLE_ACTION | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_GENERAL_ACTION;
 					config.AddFlag(hoverable);
 					
 					if (data->state->unavailables == nullptr || (data->state->unavailables != nullptr && !data->state->unavailables[index])) {
@@ -2638,7 +2609,7 @@ namespace ECSEngine {
 						LABEL_CONFIGURATION = function::ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);
 						draw_label(index, data->state->left_row_substreams, data->state->left_characters);
 
-						drawer.Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_CLICKABLE_ACTION, config);
+						drawer.Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_RECTANGLE_CLICKABLE_ACTION, config);
 						config.flag_count -= 2;
 					}
 					else {
@@ -2656,10 +2627,9 @@ namespace ECSEngine {
 						auto counts = drawer.GetCounts();
 						float2 sign_scale = system->GetTextSpan(">", 1, system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size, system->m_descriptors.font.character_spacing);
 						system->ConvertCharactersToTextSprites(
-							">",
+							{ ">", 1 },
 							{ current_position.x + region_scale.x - sign_scale.x * 2.0f, AlignMiddle(current_position.y, default_element_scale.y, sign_scale.y) },
 							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
-							1,
 							arrow_color,
 							counts[ECS_TOOLS_UI_TEXT_SPRITE],
 							{ system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size },
@@ -2691,7 +2661,7 @@ namespace ECSEngine {
 				if (data->state->right_characters != nullptr) {
 					// for text alignment
 					config.flag_count--;
-					alignment.horizontal = TextAlignment::Right;
+					alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_RIGHT;
 					config.AddFlag(alignment);
 
 					drawer.SetCurrentY(drawer.region_position.y);
@@ -2769,10 +2739,10 @@ namespace ECSEngine {
 						}
 
 						window_size.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + base.next_row_offset;
-						window_size.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_horizontal_padd - system->m_descriptors.misc.menu_x_padd;
+						window_size.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_padd.x - system->m_descriptors.misc.menu_x_padd;
 
 						float arrow_span = system->GetTextSpan(">", 1, system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
-						window_size.x += (data->state->row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_horizontal_padd);
+						window_size.x += (data->state->row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
 						UIWindowDescriptor submenu_descriptor;
 						submenu_descriptor.draw = MenuDraw;
@@ -2808,7 +2778,7 @@ namespace ECSEngine {
 					float2 font_size = { system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size };
 
 					float2 text_position = {
-						position.x + system->m_descriptors.element_descriptor.label_horizontal_padd,
+						position.x + system->m_descriptors.element_descriptor.label_padd.x,
 						AlignMiddle(position.y, scale.y, y_text_size)
 					};
 
@@ -2817,11 +2787,10 @@ namespace ECSEngine {
 						first_character = data->state->left_row_substreams[data->row_index - 1] + 1;
 					}
 					system->ConvertCharactersToTextSprites(
-						data->state->left_characters + first_character,
+						{ data->state->left_characters + first_character, data->state->left_row_substreams[data->row_index] - first_character },
 						text_position,
 						(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
-						data->state->left_row_substreams[data->row_index] - first_character,
-						system->m_descriptors.color_theme.default_text,
+						system->m_descriptors.color_theme.text,
 						counts[ECS_TOOLS_UI_TEXT_SPRITE],
 						font_size,
 						system->m_descriptors.font.character_spacing
@@ -2842,15 +2811,14 @@ namespace ECSEngine {
 						).x;
 
 						float2 right_text_position = {
-							position.x + scale.x - system->m_descriptors.element_descriptor.label_horizontal_padd - x_span,
+							position.x + scale.x - system->m_descriptors.element_descriptor.label_padd.x - x_span,
 							text_position.y
 						};
 						system->ConvertCharactersToTextSprites(
-							data->state->right_characters + first_character,
+							{ data->state->right_characters + first_character, data->state->right_row_substreams[data->row_index] - first_character },
 							right_text_position,
 							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
-							data->state->right_row_substreams[data->row_index] - first_character,
-							system->m_descriptors.color_theme.default_text,
+							system->m_descriptors.color_theme.text,
 							counts[ECS_TOOLS_UI_TEXT_SPRITE],
 							font_size,
 							system->m_descriptors.font.character_spacing
@@ -2866,10 +2834,9 @@ namespace ECSEngine {
 						float2 arrow_position = { position.x + scale.x - arrow_size.x * 2.0f, AlignMiddle(position.y, system->m_descriptors.window_layout.default_element_y, arrow_size.y) };
 
 						system->ConvertCharactersToTextSprites(
-							">",
+							{ ">", 1 },
 							arrow_position,
 							(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
-							1,
 							ECS_TOOLS_UI_MENU_HOVERED_ARROW_COLOR,
 							counts[ECS_TOOLS_UI_TEXT_SPRITE],
 							font_size,
@@ -2999,10 +2966,10 @@ namespace ECSEngine {
 					}
 					// The viewport offset must be also substracted
 					window_dimensions.y -= 2.0f * system->m_descriptors.misc.tool_tip_padding.y + tool_tip_data.next_row_offset + system->m_descriptors.dockspaces.viewport_padding_y;
-					window_dimensions.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_horizontal_padd - system->m_descriptors.misc.menu_x_padd;
+					window_dimensions.x -= 2.0f * system->m_descriptors.misc.tool_tip_padding.x - 2.0f * system->m_descriptors.element_descriptor.label_padd.x - system->m_descriptors.misc.menu_x_padd;
 
 					float arrow_span = system->GetTextSpan(">", 1, system->NormalizeHorizontalToWindowDimensions(system->m_descriptors.font.size), system->m_descriptors.font.size, system->m_descriptors.font.character_spacing).x;
-					window_dimensions.x += (menu->state.row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_horizontal_padd);
+					window_dimensions.x += (menu->state.row_has_submenu != nullptr) * (arrow_span + system->m_descriptors.element_descriptor.label_padd.x);
 
 					UIWindowDescriptor window_descriptor;
 					window_descriptor.draw = MenuDraw;
@@ -3065,7 +3032,7 @@ namespace ECSEngine {
 				if (system->GetWindowFromName(data->state.left_characters) != -1) {
 					// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
 					// window and avoid destroy the windows
-					system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, thread_id);
+					system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
 					system->DeallocateGeneralHandler();
 					system->m_focused_window_data.ResetGeneralHandler();
 					// The window destruction handler and the release handlers are somewhere here
@@ -3093,9 +3060,9 @@ namespace ECSEngine {
 				system->SetNewFocusedDockspace(dockspace, dockspace_type);
 
 				// call the general handler if it wants to have destruction
-				system->HandleFocusedWindowCleanupGeneral(mouse_position, thread_id);
+				system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
 
-				UIActionHandler handler = { MenuGeneral, general_data, sizeof(*general_data), UIDrawPhase::System };
+				UIActionHandler handler = { MenuGeneral, general_data, sizeof(*general_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 				system->DeallocateGeneralHandler();
 				system->m_focused_window_data.ChangeGeneralHandler(position, scale, &handler);
 
@@ -3155,7 +3122,400 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void PathInputFilesystemDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+			UI_PREPARE_DRAWER(initialize);
+
+			UIDrawerPathInputFolderWindowData* data = (UIDrawerPathInputFolderWindowData*)window_data;
+			// Look to see if the original window still exists
+			unsigned int parent_window_index = drawer.system->GetWindowFromName(data->window_bind);
+			if (parent_window_index == -1) {
+				// It was deleted, delete this one aswell by pushing a frame handler
+				drawer.system->PushDestroyWindowHandler(drawer.window_index);
+			}
+			else {
+				UIConfigPathInputCustomFilesystemDrawData draw_data;
+				draw_data.drawer = &drawer;
+				draw_data.input = data->input;
+				draw_data.path = data->path;
+				draw_data.should_destroy = false;
+
+				ActionData action_data = drawer.GetDummyActionData();
+				action_data.additional_data = &draw_data;
+				action_data.data = data->draw_handler.data;
+				data->draw_handler.action(&action_data);
+
+				if (draw_data.should_destroy) {
+					drawer.system->PushDestroyWindowHandler(drawer.window_index);
+				}
+			}
+		}
+
 		// --------------------------------------------------------------------------------------------------------------
+
+		void PathInputFolderLaunchCustomFilesystem(ActionData* action_data) {
+			const float2 WINDOW_SIZE = { 0.6f, 0.6f };
+
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
+
+			size_t window_data_bytes[256];
+			UIDrawerPathInputFolderWindowData* window_data = (UIDrawerPathInputFolderWindowData*)window_data_bytes;
+			char* child_window_name = (char*)function::OffsetPointer(window_data, sizeof(UIDrawerPathInputFolderWindowData));
+			*window_data = { data->input, data->path, data->custom_handler, child_window_name };
+
+			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+			const char* window_name = system->GetWindowName(window_index);
+			size_t name_size = strlen(window_name);
+			memcpy(child_window_name, window_name, (name_size + 1) * sizeof(char));
+
+			UIWindowDescriptor window_descriptor;
+
+			window_descriptor.window_name = "Select a path";
+			window_descriptor.draw = PathInputFilesystemDraw;
+			window_descriptor.window_data = &window_data;
+			window_descriptor.window_data_size = sizeof(*window_data) + name_size + 1;
+
+			window_descriptor.initial_size_x = WINDOW_SIZE.x;
+			window_descriptor.initial_size_y = WINDOW_SIZE.y;
+
+			system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE 
+				| UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER | UI_DOCKSPACE_NO_DOCKING);
+		}
+
+		void PathInputFolderAction(ActionData* action_data, Action default_action)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
+
+			if (data->custom_handler.action != nullptr) {
+				PathInputFolderLaunchCustomFilesystem(action_data);
+			}
+			else {
+				// Call the OS file explorer
+				default_action(action_data);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void FileInputFolderAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
+			OSFileExplorerGetFileData get_data;
+
+			const unsigned int FOLDER_PATH_MAX_SIZE = 512;
+			wchar_t folder_path[FOLDER_PATH_MAX_SIZE];
+
+			const unsigned int ERROR_MESSAGE_SIZE = 128;
+			char error_message[ERROR_MESSAGE_SIZE];
+			get_data.path = *data->path;
+			get_data.error_message.InitializeFromBuffer(error_message, 0, ERROR_MESSAGE_SIZE);
+			get_data.extensions = data->extensions;
+
+			if (!FileExplorerGetFile(&get_data)) {
+				CreateErrorMessageWindow(system, get_data.error_message);
+			}
+			else {
+				bool is_valid = true;
+				if (data->roots.size > 0) {
+					// Check to see if it belongs to a root
+					size_t index = 0;
+					for (; index < data->roots.size; index++) {
+						if (data->roots[index].size < get_data.path.size && memcmp(get_data.path.buffer, data->roots[index].buffer, sizeof(wchar_t) * data->roots[index].size) == 0) {
+							// Exit the loop and signal that a match was found
+							index = -2;
+						}
+					}
+					is_valid = index == -1;
+				}
+
+				if (is_valid) {
+					// Update the input
+					data->input->DeleteAllCharacters();
+					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, FOLDER_PATH_MAX_SIZE);
+					function::ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
+					data->input->InsertCharacters(temp_conversion_characters.buffer, temp_conversion_characters.size, 0, system);
+					data->path->size = get_data.path.size;
+					if (data->path->size < data->path->capacity) {
+						data->path->buffer[data->path->size] = L'\0';
+					}
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void DirectoryInputFolderAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
+			OSFileExplorerGetDirectoryData get_data;
+
+			const unsigned int FOLDER_PATH_MAX_SIZE = 512;
+			wchar_t folder_path[FOLDER_PATH_MAX_SIZE];
+			
+			const unsigned int ERROR_MESSAGE_SIZE = 128;
+			char error_message[ERROR_MESSAGE_SIZE];
+			get_data.path = *data->path;
+			get_data.path.size = 0;
+			get_data.error_message.InitializeFromBuffer(error_message, 0, ERROR_MESSAGE_SIZE);
+
+			if (!FileExplorerGetDirectory(&get_data)) {
+				CreateErrorMessageWindow(system, get_data.error_message);
+			}
+			else {
+				bool is_valid = true;
+				if (data->roots.size > 0) {
+					// Check to see if it belongs to a root
+					size_t index = 0;
+					for (; index < data->roots.size; index++) {
+						if (data->roots[index].size < get_data.path.size && memcmp(get_data.path.buffer, data->roots[index].buffer, sizeof(wchar_t) * data->roots[index].size) == 0) {
+							// Exit the loop and signal that a match was found
+							index = -2;
+						}
+					}
+					is_valid = index == -1;
+				}
+				
+				if (is_valid) {
+					// Update the input and copy the characters
+					data->input->DeleteAllCharacters();
+					ECS_STACK_CAPACITY_STREAM(char, temp_conversion_characters, FOLDER_PATH_MAX_SIZE);
+					function::ConvertWideCharsToASCII(get_data.path, temp_conversion_characters);
+					data->input->InsertCharacters(temp_conversion_characters.buffer, temp_conversion_characters.size, 0, system);
+					data->path->size = get_data.path.size;
+					if (data->path->size < data->path->capacity && data->path->buffer != nullptr) {
+						data->path->buffer[data->path->size] = L'\0';
+					}
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		struct PathInputFolderWithInputsWindowDrawData {
+			Stream<Stream<wchar_t>> files;
+			UIDrawerTextInput* input;
+			CapacityStream<wchar_t>* path;
+		};
+
+		void PathInputFolderWithInputsWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+			const char* FILTER_STRING_NAME = "Filter string";
+			const size_t FILTER_STRING_CAPACITY = 256;
+
+			UI_PREPARE_DRAWER(initialize);
+
+			PathInputFolderWithInputsWindowDrawData* data = (PathInputFolderWithInputsWindowDrawData*)window_data;
+
+			// Have a small text input for fast filtering
+			CapacityStream<char>* filter_string = nullptr;
+			unsigned int* active_index = nullptr;
+			if (initialize) {
+				size_t total_size = sizeof(CapacityStream<char>) + sizeof(char) * FILTER_STRING_CAPACITY + sizeof(unsigned int);
+				void* allocation = drawer.GetMainAllocatorBufferAndStoreAsResource(FILTER_STRING_NAME, total_size);
+				
+				filter_string = (CapacityStream<char>*)allocation;
+				filter_string->buffer = (char*)function::OffsetPointer(allocation, sizeof(CapacityStream<char>) + sizeof(unsigned int));
+				filter_string->size = 0;
+				filter_string->capacity = FILTER_STRING_CAPACITY;
+
+				active_index = (unsigned int*)function::OffsetPointer(allocation, sizeof(CapacityStream<char>));
+			}
+			else {
+				filter_string = (CapacityStream<char>*)drawer.GetResource(FILTER_STRING_NAME);
+				active_index = (unsigned int*)function::OffsetPointer(filter_string, sizeof(CapacityStream<char>));
+			}
+
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, filtered_files, data->files.size);
+			// If the filter string is not empty, filter the files
+			if (filter_string->size > 0) {
+				ECS_STACK_CAPACITY_STREAM(wchar_t, null_terminated_path, 512);
+				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_filter_string, FILTER_STRING_CAPACITY);
+				function::ConvertASCIIToWide(wide_filter_string, *filter_string);
+				wide_filter_string.Add(L'\0');
+
+				for (unsigned int index = 0; index < data->files.size; index++) {
+					// Use wcsstr, check to see if the files is null terminated
+					const wchar_t* search_string = data->files[index].buffer;
+					if (data->files[index][data->files[index].size] != L'\0') {
+						null_terminated_path.Copy(data->files[index]);
+						null_terminated_path.Add(L'\0');
+						search_string = null_terminated_path.buffer;
+					}
+
+					if (wcsstr(search_string, wide_filter_string.buffer) != nullptr) {
+						filtered_files.Add(index);
+					}
+				}
+			}
+			else {
+				// Fill in the filtered_files with the whole indices
+				filtered_files.size = data->files.size;
+				function::MakeSequence(filtered_files);
+			}
+
+			// Display the filter bar
+			UIDrawConfig config;
+			UIConfigWindowDependentSize dependent_size;
+			config.AddFlag(dependent_size);
+			
+			drawer.TextInput(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Filter String", filter_string);
+			drawer.NextRow();
+
+			struct SelectLabelActionData {
+				unsigned int* active_index;
+				unsigned int current_index;
+			};
+
+			auto select_label_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				SelectLabelActionData* data = (SelectLabelActionData*)_data;
+				*data->active_index = data->current_index;
+			};
+
+			// Draw each path
+			ECS_STACK_CAPACITY_STREAM(char, converted_path, 512);
+			for (unsigned int index = 0; index < filtered_files.size; index++) {
+				bool is_active = *active_index == filtered_files[index];
+				size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+				configuration |= is_active ? 0 : UI_CONFIG_LABEL_TRANSPARENT;
+
+				converted_path.size = 0;
+				function::ConvertWideCharsToASCII(data->files[filtered_files[index]], converted_path);
+				converted_path.AddSafe('\0');
+
+				SelectLabelActionData action_data;
+				action_data.active_index = active_index;
+				action_data.current_index = filtered_files[index];
+				drawer.Button(configuration, config, converted_path.buffer, { select_label_action, &action_data, sizeof(action_data) });
+				drawer.NextRow();
+			}
+
+			// The ok and cancel buttons
+			struct OKButtonData {
+				PathInputFolderWithInputsWindowDrawData* draw_data;
+				unsigned int* active_index;
+			};
+			auto ok_button_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				OKButtonData* data = (OKButtonData*)_data;
+				if (*data->active_index != -1 && *data->active_index < data->draw_data->files.size) {
+					data->draw_data->input->DeleteAllCharacters();
+
+					ECS_STACK_CAPACITY_STREAM(char, converted_stream, 512);
+					function::ConvertWideCharsToASCII(data->draw_data->files[*data->active_index], converted_stream);
+					data->draw_data->input->InsertCharacters(converted_stream.buffer, converted_stream.size, 0, system);
+					data->draw_data->path->Copy(data->draw_data->files[*data->active_index]);
+					if (data->draw_data->path->size < data->draw_data->path->capacity) {
+						data->draw_data->path->buffer[data->draw_data->path->size] = L'\0';
+					}
+				}
+				CloseXBorderClickableAction(action_data);
+			};
+
+			auto cancel_button_action = [](ActionData* action_data) {
+				CloseXBorderClickableAction(action_data);
+			};
+
+			const char* OK_STRING = "OK";
+			UIDrawConfig ok_cancel_config;
+			UIConfigAbsoluteTransform absolute_transform;
+			absolute_transform.scale = drawer.GetLabelScale(OK_STRING);
+			absolute_transform.position = drawer.GetAlignedToBottom(absolute_transform.scale.y);
+			ok_cancel_config.AddFlag(absolute_transform);
+
+			OKButtonData ok_data = { data, active_index };
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, ok_cancel_config, OK_STRING, { ok_button_action, &ok_data, sizeof(ok_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+			ok_cancel_config.flag_count--;
+
+			const char* CANCEL_STRING = "Cancel";
+			absolute_transform.scale = drawer.GetLabelScale(CANCEL_STRING);
+			absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
+
+			ok_cancel_config.AddFlag(absolute_transform);
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, ok_cancel_config, CANCEL_STRING, { cancel_button_action, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void PathInputFolderWithInputsAction(ActionData* action_data)
+		{
+			const float2 WINDOW_SIZE = { 0.6f, 0.6f };
+
+			UI_UNPACK_ACTION_DATA;
+			UIDrawerPathInputWithInputsActionData* data = (UIDrawerPathInputWithInputsActionData*)_data;
+
+			size_t memory_usage = 0;
+			Stream<Stream<wchar_t>> path_stream = { nullptr, 0 };
+
+			const size_t LINEAR_ALLOCATOR_CAPACITY = sizeof(wchar_t) * ECS_KB * 128;
+			void* stack_buffer = ECS_STACK_ALLOC(LINEAR_ALLOCATOR_CAPACITY);
+			LinearAllocator allocator(stack_buffer, LINEAR_ALLOCATOR_CAPACITY);
+
+			if (data->is_callback) {
+				// Call the callback - it should take as parameter a resizable stream ResizbleStream<Stream<wchar_t>> and 
+				// allocate the strings from it such that they are visible in this scope
+				ResizableStream<Stream<wchar_t>> resizable_path_stream(GetAllocatorPolymorphic(&allocator), 0);
+
+				action_data->data = data->callback_handler.data;
+				action_data->additional_data = &resizable_path_stream;
+				data->callback_handler.action(action_data);
+
+				memory_usage = allocator.m_top;
+				path_stream = { resizable_path_stream.buffer, resizable_path_stream.size };
+			}
+			else {
+				memory_usage = sizeof(Stream<wchar_t>) * data->files.size;
+				for (size_t index = 0; index < data->files.size; index++) {
+					memory_usage += data->files[index].size * sizeof(wchar_t);
+				}
+
+				path_stream = data->files;
+			}
+
+
+			PathInputFolderWithInputsWindowDrawData* window_data;
+			// At first just give dummy data. The reference will be restored afterwards
+			PathInputFolderWithInputsWindowDrawData dummy_window_data;
+			dummy_window_data.input = data->input;
+			dummy_window_data.path = data->path;
+
+			UIWindowDescriptor descriptor;
+			descriptor.draw = PathInputFolderWithInputsWindowDraw;
+
+			descriptor.window_data = &dummy_window_data;
+			descriptor.window_data_size = sizeof(dummy_window_data);
+
+			descriptor.initial_size_x = WINDOW_SIZE.x;
+			descriptor.initial_size_y = WINDOW_SIZE.y;
+
+			descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.x);
+			descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, WINDOW_SIZE.y);
+
+			descriptor.window_name = "Select a path";
+			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
+			// Get the window data
+			window_data = (PathInputFolderWithInputsWindowDrawData*)system->GetWindowData(window_index);
+
+			// Coallesce the memory into a single block
+			void* persistent_buffer = system->m_memory->Allocate(memory_usage);
+			Stream<wchar_t>* paths = (Stream<wchar_t>*)persistent_buffer;
+
+			uintptr_t ptr = (uintptr_t)function::OffsetPointer(persistent_buffer, sizeof(Stream<wchar_t>) * path_stream.size);
+			for (size_t index = 0; index < path_stream.size; index++) {
+				paths[index].InitializeAndCopy(ptr, path_stream[index]);
+			}
+			ECS_ASSERT(ptr - (uintptr_t)paths <= memory_usage);
+			window_data->files = { paths, path_stream.size };
+
+			// Add the allocation to the window allocation list
+			system->AddWindowMemoryResource(persistent_buffer, window_index);
+		}
 
 		// --------------------------------------------------------------------------------------------------------------
 

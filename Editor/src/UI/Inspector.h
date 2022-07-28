@@ -4,7 +4,7 @@
 using namespace ECSEngine;
 ECS_TOOLS;
 
-constexpr const char* INSPECTOR_WINDOW_NAME = "Inspector";
+constexpr const char* INSPECTOR_WINDOW_NAME = "Inspector ";
 
 struct EditorState;
 
@@ -12,24 +12,36 @@ void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 
 void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
-unsigned int CreateInspectorWindow(EditorState* editor_state);
+// Only creates the UI window, not the dockspace. Returns the window index
+unsigned int CreateInspectorWindow(EditorState* editor_state, unsigned int inspector_index);
 
-void CreateInspector(EditorState* editor_state);
+// Creates the dockspace and the window. Returns the window index
+unsigned int CreateInspectorDockspace(EditorState* editor_state, unsigned int inspector_index);
 
 void CreateInspectorAction(ActionData* action_data);
 
-void ChangeInspectorToNothing(EditorState* editor_state);
+// Inspector index means default behaviour - first round robin inspector
+void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_index = -1);
 
-void ChangeInspectorToFolder(EditorState* editor_state, Stream<wchar_t> path);
+void ChangeInspectorToFolder(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index = -1);
 
-void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path);
+void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index = -1);
 
-void ChangeInspectorToModule(EditorState* editor_state, unsigned int index);
+void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index = -1);
 
-void ChangeInspectorToGraphicsModule(EditorState* editor_state);
+void ChangeInspectorToGraphicsModule(EditorState* editor_state, unsigned int inspector_index = -1);
 
-void ChangeInspectorToModuleConfigurationGroup(EditorState* editor_state, unsigned int index);
+// Returns the index of the sandbox that is being referenced by the inspector
+unsigned int GetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index);
 
-void LockInspector(EditorState* editor_state);
+// Recreates the UI instances for the inspectors that target the settings
+// of the given module
+void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
 
-void UnlockInspector(EditorState* editor_state);
+// If the index is already known, can be used to directly index into the array
+void LockInspector(EditorState* editor_state, unsigned int inspector_index);
+
+// If the index is already known, can be used to directly index into the array
+void UnlockInspector(EditorState* editor_state, unsigned int inspector_index);
+
+bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_index);

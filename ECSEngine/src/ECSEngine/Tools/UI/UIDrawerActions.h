@@ -21,7 +21,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			HandlerCommandType command_type
+			ECS_UI_HANDLER_COMMAND_TYPE command_type
 		);
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -310,6 +310,23 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void FilterMenuSinglePointerDraw(void* window_data, void* drawer_descriptor, bool initialize);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void PathInputFilesystemDraw(void* window_data, void* drawer_descriptor, bool initialize);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void FileInputFolderAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void DirectoryInputFolderAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		// This corresponds to the UI_CONFIG_PATH_INPUT_GIVE_FILES flag
+		ECSENGINE_API void PathInputFolderWithInputsAction(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 

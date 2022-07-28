@@ -331,9 +331,9 @@ namespace ECSEngine {
 		memcpy(m_entities, (void*)ptr_to_copy, sizeof(Entity) * m_size);
 
 		ptr += sizeof(Entity) * count;
-		ptr = function::align_pointer(ptr, ECS_CACHE_LINE_SIZE);
+		ptr = function::AlignPointer(ptr, ECS_CACHE_LINE_SIZE);
 		ptr_to_copy += sizeof(Entity) * m_capacity;
-		ptr_to_copy = function::align_pointer(ptr_to_copy, ECS_CACHE_LINE_SIZE);
+		ptr_to_copy = function::AlignPointer(ptr_to_copy, ECS_CACHE_LINE_SIZE);
 
 		// Now copy the components
 		for (size_t component_index = 0; component_index < m_components.count; component_index++) {
@@ -341,8 +341,8 @@ namespace ECSEngine {
 			m_buffers[component_index] = (void*)ptr;
 			memcpy(m_buffers[component_index], (void*)ptr_to_copy, component_size * m_size);
 
-			ptr = function::align_pointer(ptr + component_size * count, ECS_CACHE_LINE_SIZE);
-			ptr_to_copy = function::align_pointer(ptr_to_copy + component_size * m_capacity, ECS_CACHE_LINE_SIZE);
+			ptr = function::AlignPointer(ptr + component_size * count, ECS_CACHE_LINE_SIZE);
+			ptr_to_copy = function::AlignPointer(ptr_to_copy + component_size * m_capacity, ECS_CACHE_LINE_SIZE);
 		}
 
 		// Now set the new capacity

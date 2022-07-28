@@ -5,12 +5,10 @@
 #include "ECSEngineApplicationUtilities.h"
 #include "EditorParameters.h"
 #include "EditorEvent.h"
-#include "../Modules/ModuleConfigurationGroup.h"
 #include "../Modules/Module.h"
 #include "../Metafiles/Metafiles.h"
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
-#include "EditorWorld.h"
 
 using namespace ECSEngine;
 
@@ -22,30 +20,30 @@ bool DISPLAY_LOCKED_FILES_SIZE = false;
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleError(Stream<char> error_message) {
+void EditorSetConsoleError(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
 	Console* console = GetConsole();
-	console->Error(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+	console->Error(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleWarn(Stream<char> error_message) {
+void EditorSetConsoleWarn(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
 	Console* console = GetConsole();
-	console->Warn(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+	console->Warn(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleInfo(Stream<char> error_message) {
+void EditorSetConsoleInfo(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
 	Console* console = GetConsole();
-	console->Info(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+	console->Info(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorSetConsoleTrace(Stream<char> error_message) {
+void EditorSetConsoleTrace(Stream<char> error_message, ECS_CONSOLE_VERBOSITY verbosity) {
 	Console* console = GetConsole();
-	console->Trace(error_message, EDITOR_CONSOLE_SYSTEM_NAME);
+	console->Trace(error_message, EDITOR_CONSOLE_SYSTEM_NAME, verbosity);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -74,9 +72,28 @@ void TickGraphicsModuleStatus(EditorState* editor_state) {
 
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS, LAZY_EVALUATION_GRAPHICS_MODULE_STATUS) 
 		&& HasGraphicsModule(editor_state)) {
-		UpdateProjectModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX);
-		if (UpdateProjectModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
-			LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX);
+		if (UpdateModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
+			ReflectModule(editor_state, GRAPHICS_MODULE_INDEX);
+		}
+
+		bool success = false;
+		
+		// Try going from distribution down to debug
+		EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_DISTRIBUTION;
+		if (UpdateModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX, configuration)) {
+			success = LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX, configuration);
+		}
+		else if (!success) {
+			configuration = EDITOR_MODULE_CONFIGURATION_RELEASE;
+			if (UpdateModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX, configuration)) {
+				success = LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX, configuration);
+			}
+			else if (!success) {
+				configuration = EDITOR_MODULE_CONFIGURATION_DEBUG;
+				if (UpdateModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX, configuration)) {
+					success = LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX, configuration);
+				}
+			}
 		}
 	}
 }
@@ -89,16 +106,26 @@ void TickModuleStatus(EditorState* editor_state) {
 
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS, LAZY_EVALUATION_MODULE_STATUS)) {
 		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
-			if (UpdateProjectModuleLibraryLastWrite(editor_state, index)) {
-				bool success = false;
-				if (project_modules->buffer[index].library_last_write_time != 0) {
-					success = HasModuleFunction(editor_state, index);
-				}
-				SetModuleLoadStatus(project_modules->buffer + index, success);
+			bool is_solution_updated = UpdateModuleSolutionLastWrite(editor_state, index);
+			if (is_solution_updated) {
+				ReflectModule(editor_state, index);
 			}
-			bool is_updated = UpdateProjectModuleSolutionLastWrite(editor_state, index);
-			if (is_updated && project_modules->buffer[index].load_status == EditorModuleLoadStatus::Good) {
-				project_modules->buffer[index].load_status = EditorModuleLoadStatus::OutOfDate;
+
+			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+				EDITOR_MODULE_CONFIGURATION configuration = (EDITOR_MODULE_CONFIGURATION)configuration_index;
+				EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
+
+				if (UpdateModuleLibraryLastWrite(editor_state, index, configuration)) {
+					bool success = false;
+
+					if (info->library_last_write_time != 0) {
+						success = HasModuleFunction(editor_state, index, configuration);
+					}
+					SetModuleLoadStatus(project_modules->buffer + index, success, configuration);
+				}
+				if (is_solution_updated && info->load_status == EDITOR_MODULE_LOAD_GOOD) {
+					info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
+				}
 			}
 		}
 
@@ -234,7 +261,7 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 	}
 	else {
 		EDITOR_STATE(editor_state);
-		task.data = task.data_size > 0 ? function::CopyTs(multithreaded_editor_allocator, task.data, task.data_size) : task.data;
+		task.data = task.data_size > 0 ? function::Copy(GetAllocatorPolymorphic(multithreaded_editor_allocator, ECS_ALLOCATION_MULTI), task.data, task.data_size) : task.data;
 		editor_state->pending_background_tasks.Push(task);
 	}
 }
@@ -244,7 +271,7 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task)
 {
 	EDITOR_STATE(editor_state);
-	task.data = task.data_size > 0 ? function::CopyTs(multithreaded_editor_allocator, task.data, task.data_size) : task.data;
+	task.data = task.data_size > 0 ? function::Copy(GetAllocatorPolymorphic(multithreaded_editor_allocator, ECS_ALLOCATION_MULTI), task.data, task.data_size) : task.data;
 	editor_state->gpu_tasks.Push(task);
 }
 
@@ -273,26 +300,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	MemoryManager* multithreaded_editor_allocator = new MemoryManager(50'000'000, 4096, 50'000'000, global_memory_manager);
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
-	//GraphicsTexture2DDescriptor viewport_texture_descriptor;
-	//viewport_texture_descriptor.size = graphics->m_window_size;
-	//viewport_texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS);
-	//viewport_texture_descriptor.mip_levels = 1u;
-	////viewport_texture_descriptor.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-
-	//Texture2D viewport_texture = graphics->CreateTexture(&viewport_texture_descriptor);
-	//ResourceView viewport_view = graphics->CreateTextureShaderViewResource(viewport_texture);
-	//RenderTargetView viewport_render_view = graphics->CreateRenderTargetView(viewport_texture);
-
-	//editor_state->viewport_texture = viewport_view;
-	//editor_state->viewport_render_target = viewport_render_view;
-
-	//viewport_texture_descriptor.bind_flag = D3D11_BIND_DEPTH_STENCIL;
-	//viewport_texture_descriptor.format = DXGI_FORMAT_D32_FLOAT;
-	//Texture2D viewport_depth_texture = graphics->CreateTexture(&viewport_texture_descriptor);
-	//DepthStencilView viewport_depth_view = graphics->CreateDepthStencilView(viewport_depth_texture);
-
-	//editor_state->viewport_texture_depth = viewport_depth_view;
-
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
 	*editor_task_manager = TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1000, 100'000);
 	editor_state->task_manager = editor_task_manager;
@@ -314,7 +321,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*resource_manager = ResourceManager(resource_manager_allocator, graphics, thread_count);
 	editor_state->resource_manager = resource_manager;
 
-	editor_task_manager->ChangeDynamicWrapperMode(TaskManagerWrapper::CountTasks);
+	ThreadWrapperCountTasksData wrapper_data;
+	wrapper_data.count.store(0, ECS_RELAXED);
+	editor_task_manager->ChangeDynamicWrapperMode(ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data));
 	editor_task_manager->ReserveTasks(1);
 
 	auto sleep_task = [](unsigned int thread_index, World* world, void* data) {
@@ -326,9 +335,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ThreadTask wait_task = { sleep_task, editor_task_manager, 0 };
 	editor_task_manager->SetTask(wait_task, 0);
 	editor_task_manager->CreateThreads();
-
-	resource_manager->InitializeDefaultTypes();
-	ui_resource_manager->AddResourceType(ResourceType::Texture, 256);
 
 	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));
 	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);
@@ -358,7 +364,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 	ECS_TEMP_ASCII_STRING(error_message, 256);
 	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
+	ECS_ASSERT(success);
+
 	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
+	ECS_ASSERT(success);
 
 	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
@@ -400,33 +409,20 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ProjectModules* project_modules = (ProjectModules*)malloc(sizeof(ProjectModules));
 	*project_modules = ProjectModules(polymorphic_editor_allocator, 1);
 	editor_state->project_modules = project_modules;
-	editor_state->module_configuration_groups.Initialize(polymorphic_editor_allocator, 0);
-	editor_state->launched_module_compilation.Initialize(polymorphic_editor_allocator, 4);
+
+	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
+		editor_state->launched_module_compilation[index].Initialize(polymorphic_editor_allocator, 4);
+	}
 	editor_state->launched_module_compilation_lock.unlock();
 
-	/*TaskDependencies* task_dependencies = (TaskDependencies*)calloc(1, sizeof(TaskDependencies));
-	*task_dependencies = TaskDependencies(editor_allocator);
-	editor_state->task_dependencies = task_dependencies;*/
-
-	InspectorData* inspector_data = (InspectorData*)calloc(1, sizeof(InspectorData));
-	editor_state->inspector_data = inspector_data;
-
-	//EditorState::EditorWorld* scene_worlds = (EditorState::EditorWorld*)calloc(EDITOR_SCENE_BUFFERING_COUNT, sizeof(EditorState::EditorWorld));
-	//editor_state->active_world = 0;
-	//editor_state->scene_world = 0;
-	//editor_state->copy_world_count.store(0, ECS_RELAXED);
-	//editor_state->worlds.InitializeFromBuffer(scene_worlds, EDITOR_SCENE_BUFFERING_COUNT, EDITOR_SCENE_BUFFERING_COUNT);
-	//// The is_emtpy flag must be set, not cleared
-	//for (size_t index = 0; index < EDITOR_SCENE_BUFFERING_COUNT; index++) {
-	//	editor_state->worlds[index].is_empty = true;
-	//}
+	InitializeInspectorManager(editor_state);
 	
 	// Allocate the lazy evaluation counters
 	editor_state->lazy_evaluation_counters = (unsigned short*)malloc(EDITOR_LAZY_EVALUATION_COUNTERS_COUNT * sizeof(unsigned short));
 	// Make all counters USHORT_MAX to trigger the lazy evaluation at first
 	memset(editor_state->lazy_evaluation_counters, 0xFF, sizeof(unsigned short) * EDITOR_LAZY_EVALUATION_COUNTERS_COUNT);
 
-	ResetProjectGraphicsModule(editor_state);
+	ResetGraphicsModule(editor_state);
 	editor_state->lazy_evalution_timer.SetNewStart();
 }
 

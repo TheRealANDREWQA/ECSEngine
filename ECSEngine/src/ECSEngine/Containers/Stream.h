@@ -92,12 +92,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size--;
 		}
 
-		ECS_INLINE void RemoveSwapBack(unsigned int index) {
+		ECS_INLINE void RemoveSwapBack(size_t index) {
 			size--;
 			buffer[index] = buffer[size];
 		}
 
-		ECS_INLINE void Swap(unsigned int first, unsigned int second) {
+		ECS_INLINE void Swap(size_t first, size_t second) {
 			T copy = buffer[first];
 			buffer[first] = buffer[second];
 			buffer[second] = copy;
@@ -118,6 +118,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			return -1;
 		}
+
+		/*template<typename Functor>
+		size_t SearchFunctor(Functor&& functor) const {
+			for (size_t index = 0; index < size; index++) {
+				if (functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}*/
 
 		ECS_INLINE T& operator [](size_t index) {
 			return buffer[index];
@@ -148,6 +158,11 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		void InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
 			InitializeFromBuffer(buffer, other.size);
+			Copy(other);
+		}
+
+		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other) {
+			Initialize(allocator, other.size);
 			Copy(other);
 		}
 
@@ -332,6 +347,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return -1;
 		}
 
+		/*template<typename Functor>
+		unsigned int SearchFunctor(Functor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}*/
+
 		ECS_INLINE T& operator [](unsigned int index) {
 			return buffer[index];
 		}
@@ -362,8 +387,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// Helpful for temp memory copy and initialization
-		void InitializeAndCopy(uintptr_t& buffer, CapacityStream<T> other) {
-			InitializeFromBuffer(buffer, other.size);
+		void InitializeAndCopy(uintptr_t& buffer, Stream<T> other) {
+			InitializeFromBuffer(buffer, other.size, other.size);
+			Copy(other);
+		}
+
+		// It will make a copy with the capacity the same as the stream's size
+		void InitializeAndCopy(AllocatorPolymorphic allocator, Stream<T> other) {
+			Initialize(allocator, other.size, other.size);
 			Copy(other);
 		}
 
@@ -385,127 +416,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		unsigned int capacity;
 	};
 
-	template <>
-	struct ECSENGINE_API Stream<void>
-	{
-		ECS_INLINE Stream() : buffer(nullptr), size(0) {}
-		ECS_INLINE Stream(const void* _buffer, size_t _size) : buffer((void*)_buffer), size(_size) {}
-
-		template<typename T>
-		Stream(Stream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
-
-		template<typename T>
-		Stream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
-
-		Stream(const Stream& other) = default;
-		Stream<void>& operator = (const Stream<void>& other) = default;
-
-		ECS_INLINE void Add(Stream<void> other) {
-			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-			size += other.size;
-		}
-
-		// it will set the size
-		ECS_INLINE void Copy(const void* memory, unsigned long long memory_size) {
-			memcpy(buffer, memory, memory_size);
-			size = memory_size;
-		}
-
-		// it will not set the size
-		ECS_INLINE void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
-			memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
-		}
-
-		ECS_INLINE void CopyTo(void* memory) const {
-			memcpy(memory, buffer, size);
-		}
-
-		template<typename Allocator>
-		void Initialize(Allocator* allocator, size_t _size) {
-			buffer = allocator->Allocate(_size);
-			size = _size;
-		}
-
-		void Initialize(AllocatorPolymorphic allocator, size_t _size) {
-			buffer = Allocate(allocator, size);
-			size = _size;
-		}
-
-		void InitializeFromBuffer(uintptr_t& _buffer, size_t _size) {
-			buffer = (void*)_buffer;
-			size = _size;
-			_buffer += size;
-		}
-
-		void* buffer;
-		size_t size;
-	};
-
-	template<>
-	struct ECSENGINE_API CapacityStream<void>
-	{
-		ECS_INLINE CapacityStream() : buffer(nullptr), size(0), capacity(0) {}
-		ECS_INLINE CapacityStream(const void* _buffer, unsigned int _size, unsigned int _capacity) : buffer((void*)_buffer), size(_size), capacity(_capacity) {}
-
-		template<typename T>
-		CapacityStream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)), capacity(other.capacity * sizeof(T)) {}
-
-		CapacityStream(const CapacityStream& other) = default;
-		CapacityStream<void>& operator = (const CapacityStream<void>& other) = default;
-
-		ECS_INLINE void Add(Stream<void> other) {
-			ECS_ASSERT(size + other.size < capacity);
-			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-			size += other.size;
-		}
-
-		ECS_INLINE void Add(CapacityStream<void> other) {
-			ECS_ASSERT(size + other.size < capacity);
-			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
-			size += other.size;
-		}
-
-		// it will set the size
-		ECS_INLINE void Copy(const void* memory, unsigned long long memory_size) {
-			ECS_ASSERT(memory_size <= capacity);
-			memcpy(buffer, memory, memory_size);
-			size = memory_size;
-		}
-
-		// it will not set the size
-		ECS_INLINE void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
-			memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
-		}
-
-		ECS_INLINE void CopyTo(void* memory) const {
-			memcpy(memory, buffer, size);
-		}
-
-		template<typename Allocator>
-		void Initialize(Allocator* allocator, unsigned int _capacity) {
-			buffer = allocator->Allocate(_capacity);
-			size = 0;
-			capacity = _capacity;
-		}
-
-		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
-			buffer = Allocate(allocator, _capacity);
-			size = 0;
-			capacity = _capacity;
-		}
-
-		void InitializeFromBuffer(uintptr_t& _buffer, unsigned int _size, unsigned int _capacity) {
-			buffer = (void*)_buffer;
-			size = _size;
-			capacity = _capacity;
-		}
-
-		void* buffer;
-		unsigned int size;
-		unsigned int capacity;
-	};
-
-
 	template<typename T>
 	struct ResizableStream {
 		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({nullptr}), capacity(0), size(0) {}
@@ -520,6 +430,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		ResizableStream(const ResizableStream& other) = default;
 		ResizableStream<T>& operator = (const ResizableStream<T>& other) = default;
+
+		operator Stream<T>() const {
+			return { buffer, size };
+		}
 
 		ECS_INLINE unsigned int Add(T element) {
 			if (size == capacity) {
@@ -556,7 +470,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		}
 
 		// it will set the size
-		ECS_INLINE void Copy(const void* memory, size_t count) {
+		ECS_INLINE void Copy(const void* memory, unsigned int count) {
 			ResizeNoCopy(count);
 			memcpy(buffer, memory, sizeof(T) * count);
 			size = count;
@@ -688,6 +602,16 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return -1;
 		}
 
+		/*template<typename Functor>
+		unsigned int SearchFunctor(Functor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if (functor(buffer[index])) {
+					return index;
+				}
+			}
+			return -1;
+		}*/
+
 		void Trim() {
 			T* allocation = (T*)Allocate(allocator, sizeof(T) * size, alignof(T));
 			ECS_ASSERT(allocation != nullptr);
@@ -752,6 +676,244 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		AllocatorPolymorphic allocator;
 	};
 
+	template <>
+	struct ECSENGINE_API Stream<void>
+	{
+		ECS_INLINE Stream() : buffer(nullptr), size(0) {}
+		ECS_INLINE Stream(const void* _buffer, size_t _size) : buffer((void*)_buffer), size(_size) {}
+
+		template<typename T>
+		Stream(Stream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
+
+		template<typename T>
+		Stream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)) {}
+
+		Stream(const Stream& other) = default;
+		Stream<void>& operator = (const Stream<void>& other) = default;
+
+		ECS_INLINE void Add(Stream<void> other) {
+			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
+			size += other.size;
+		}
+
+		// it will set the size
+		ECS_INLINE void Copy(const void* memory, unsigned long long memory_size) {
+			memcpy(buffer, memory, memory_size);
+			size = memory_size;
+		}
+
+		// it will not set the size
+		ECS_INLINE void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
+			memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
+		}
+
+		ECS_INLINE void CopyTo(void* memory) const {
+			memcpy(memory, buffer, size);
+		}
+
+		template<typename Allocator>
+		void Initialize(Allocator* allocator, size_t _size) {
+			buffer = allocator->Allocate(_size);
+			size = _size;
+		}
+
+		void Initialize(AllocatorPolymorphic allocator, size_t _size) {
+			buffer = Allocate(allocator, size);
+			size = _size;
+		}
+
+		void InitializeFromBuffer(uintptr_t& _buffer, size_t _size) {
+			buffer = (void*)_buffer;
+			size = _size;
+			_buffer += size;
+		}
+
+		void* buffer;
+		size_t size;
+	};
+
+	template<>
+	struct ECSENGINE_API CapacityStream<void>
+	{
+		ECS_INLINE CapacityStream() : buffer(nullptr), size(0), capacity(0) {}
+		ECS_INLINE CapacityStream(const void* _buffer, unsigned int _size, unsigned int _capacity) : buffer((void*)_buffer), size(_size), capacity(_capacity) {}
+
+		template<typename T>
+		CapacityStream(CapacityStream<T> other) : buffer(other.buffer), size(other.size * sizeof(T)), capacity(other.capacity * sizeof(T)) {}
+
+		CapacityStream(const CapacityStream& other) = default;
+		CapacityStream<void>& operator = (const CapacityStream<void>& other) = default;
+
+		ECS_INLINE void Add(Stream<void> other) {
+			ECS_ASSERT(size + other.size < capacity);
+			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
+			size += other.size;
+		}
+
+		ECS_INLINE void Add(CapacityStream<void> other) {
+			ECS_ASSERT(size + other.size < capacity);
+			memcpy((void*)((uintptr_t)buffer + size), other.buffer, other.size);
+			size += other.size;
+		}
+
+		// it will set the size
+		ECS_INLINE void Copy(const void* memory, unsigned long long memory_size) {
+			ECS_ASSERT(memory_size <= capacity);
+			memcpy(buffer, memory, memory_size);
+			size = memory_size;
+		}
+
+		// it will not set the size
+		ECS_INLINE void CopySlice(size_t offset, const void* memory, unsigned long long memory_size) {
+			memcpy((void*)((unsigned long long)buffer + offset), memory, memory_size);
+		}
+
+		ECS_INLINE void CopyTo(void* memory) const {
+			memcpy(memory, buffer, size);
+		}
+
+		template<typename Allocator>
+		void Initialize(Allocator* allocator, unsigned int _capacity) {
+			buffer = allocator->Allocate(_capacity);
+			size = 0;
+			capacity = _capacity;
+		}
+
+		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
+			buffer = Allocate(allocator, _capacity);
+			size = 0;
+			capacity = _capacity;
+		}
+
+		void InitializeFromBuffer(uintptr_t& _buffer, unsigned int _size, unsigned int _capacity) {
+			buffer = (void*)_buffer;
+			size = _size;
+			capacity = _capacity;
+		}
+
+		void* buffer;
+		unsigned int size;
+		unsigned int capacity;
+	};
+
+	template<>
+	struct ResizableStream<void> {
+		ECS_INLINE ResizableStream() : buffer(nullptr), allocator({ nullptr }), capacity(0), size(0) {}
+		ResizableStream(AllocatorPolymorphic _allocator, unsigned int _capacity) : allocator(_allocator), capacity(_capacity), size(0) {
+			if (_capacity != 0) {
+				buffer = Allocate(allocator, _capacity);
+			}
+			else {
+				buffer = nullptr;
+			}
+		}
+
+		ResizableStream(const ResizableStream& other) = default;
+		ResizableStream<void>& operator = (const ResizableStream<void>& other) = default;
+
+		unsigned int Add(Stream<void> data) {
+			if (size + data.size >= capacity) {
+				
+			}
+			memcpy((void*)((uintptr_t)buffer + size), data.buffer, data.size);
+			unsigned int offset = size;
+			size += data.size;
+			return offset;
+		}
+
+		// it will set the size
+		ECS_INLINE void Copy(const void* memory, unsigned int count) {
+			ResizeNoCopy(count);
+			memcpy(buffer, memory, count);
+			size = count;
+		}
+
+		// it will set the size
+		ECS_INLINE void Copy(Stream<void> other) {
+			Copy(other.buffer, other.size);
+		}
+
+		// it will set the size
+		ECS_INLINE void Copy(CapacityStream<void> other) {
+			Copy(other.buffer, other.size);
+		}
+
+		ECS_INLINE void CopyTo(void* memory) const {
+			memcpy(memory, buffer, size);
+		}
+
+		ECS_INLINE void CopyTo(uintptr_t& memory) const {
+			memcpy((void*)memory, buffer, size);
+			memory += size;
+		}
+
+		void FreeBuffer() {
+			if (buffer != nullptr) {
+				Deallocate(allocator, buffer);
+				buffer = nullptr;
+				size = 0;
+				capacity = 0;
+			}
+		}
+
+		ECS_INLINE void Reset() {
+			size = 0;
+		}
+
+		// makes sure there is enough space for extra count elements
+		void Reserve(unsigned int byte_count) {
+			unsigned int new_size = size + byte_count;
+			if (new_size > capacity) {
+				unsigned int resize_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 1;
+				if (resize_capacity < new_size) {
+					resize_capacity = new_size * ECS_RESIZABLE_STREAM_FACTOR;
+				}
+				Resize(resize_capacity);
+			}
+		}
+
+		void Resize(unsigned int new_capacity) {
+			void* new_buffer = Allocate(allocator, new_capacity);
+			ECS_ASSERT(new_buffer != nullptr);
+
+			memcpy(new_buffer, buffer, size < new_capacity ? size : new_capacity);
+
+			if (buffer != nullptr)
+				Deallocate(allocator, buffer);
+
+			buffer = new_buffer;
+			capacity = new_capacity;
+		}
+
+		void ResizeNoCopy(unsigned int new_capacity) {
+			void* new_buffer = Allocate(allocator, new_capacity);
+			ECS_ASSERT(new_buffer != nullptr);
+
+			if (buffer != nullptr)
+				Deallocate(allocator, buffer);
+
+			buffer = new_buffer;
+			capacity = new_capacity;
+		}
+
+		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity) {
+			allocator = _allocator;
+			if (_capacity > 0) {
+				ResizeNoCopy(_capacity);
+			}
+			else {
+				buffer = nullptr;
+				capacity = 0;
+			}
+			size = 0;
+		}
+
+		void* buffer;
+		unsigned int size;
+		unsigned int capacity;
+		AllocatorPolymorphic allocator;
+	};
+
 	ECS_INLINE Stream<char> ToStream(const char* string) {
 		return Stream<char>(string, strlen(string));
 	}
@@ -760,5 +922,68 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		return Stream<wchar_t>(string, wcslen(string));
 	}
 
-}
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
+	// void Copy(uintptr_t& ptr);
+	// If copy size returns 0, it assumes it needs no buffers and does not call
+	// the copy function.
+	template<typename Stream>
+	Stream StreamDeepCopy(Stream input, AllocatorPolymorphic allocator) {
+		Stream new_stream;
+		
+		ECS_STACK_CAPACITY_STREAM(size_t, copy_sizes, 1024);
+		size_t total_size = input.MemoryOf(input.size);
 
+		if (input.size < 1024) {
+			for (size_t index = 0; index < input.size; index++) {
+				size_t copy_size = input[index].CopySize();
+				total_size += copy_size;
+
+				copy_sizes[index] = copy_size;
+			}
+		}
+		else {
+			for (size_t index = 0; index < input.size; index++) {
+				total_size += input[index].CopySize();
+			}
+		}
+
+		void* allocation = AllocateEx(allocator, total_size);
+		uintptr_t ptr = (uintptr_t)allocation;
+		new_stream.InitializeAndCopy(ptr, input);
+
+		if (input.size < 1024) {
+			for (size_t index = 0; index < input.size; index++) {
+				if (copy_sizes[index] > 0) {
+					new_stream[index] = input[index].Copy(ptr);
+				}
+			}
+		}
+		else {
+			for (size_t index = 0; index < input.size; index++) {
+				size_t copy_size = input[index].CopySize();
+				if (copy_size > 0) {
+					new_stream[index] = input[index].Copy(ptr);
+				}
+			}
+		}
+
+		return new_stream;
+	}
+
+	template<typename Stream>
+	Stream StreamDeepCopy(Stream input, uintptr_t& ptr) {
+		Stream new_stream;
+		new_stream.InitializeAndCopy(ptr, input);
+
+		for (size_t index = 0; index < input.size; index++) {
+			size_t copy_size = input[index].CopySize();
+			if (copy_size > 0) {
+				new_stream[index] = input[index].Copy(ptr);
+			}
+		}
+
+		return new_stream;
+	}
+
+}

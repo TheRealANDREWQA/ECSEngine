@@ -34,7 +34,7 @@ namespace ECSEngine {
 		size_t previous_top = top.fetch_add(size + alignment);
 		uintptr_t ptr = (uintptr_t)buffer;
 		ptr += previous_top;
-		ptr = function::align_pointer(ptr, alignment);
+		ptr = function::AlignPointer(ptr, alignment);
 		return (void*)ptr;
 	}
 

@@ -38,11 +38,9 @@ namespace ECSEngine {
 		DXGI_FORMAT formats[ECS_SHADER_REFLECTION_INTEGER_TABLE_COUNT];
 	};
 
-	using ShaderReflectionIdentifierHash = ECSEngine::HashFunctionMultiplyString;
-
-	using ShaderReflectionFormatTable = HashTable<DXGI_FORMAT, ResourceIdentifier, HashFunctionPowerOfTwo, ShaderReflectionIdentifierHash>;
-	using ShaderReflectionFloatFormatTable = HashTable<ShaderReflectionFloatExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo, ShaderReflectionIdentifierHash>;
-	using ShaderReflectionIntegerFormatTable = HashTable<ShaderReflectionIntegerExtendedFormat, ResourceIdentifier, HashFunctionPowerOfTwo, ShaderReflectionIdentifierHash>;
+	using ShaderReflectionFormatTable = HashTableDefault<DXGI_FORMAT>;;
+	using ShaderReflectionFloatFormatTable = HashTableDefault<ShaderReflectionFloatExtendedFormat>;
+	using ShaderReflectionIntegerFormatTable = HashTableDefault<ShaderReflectionIntegerExtendedFormat>;
 
 	enum class ShaderBufferType {
 		Constant,

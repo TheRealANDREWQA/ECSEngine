@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include <stdint.h>
+#include <malloc.h>
 
 namespace ECSEngine {
 

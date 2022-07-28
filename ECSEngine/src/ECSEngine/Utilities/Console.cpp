@@ -110,7 +110,7 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------
 
 	Console::Console(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* _dump_path) : allocator(allocator),
-		pause_on_error(false), verbosity_level(CONSOLE_VERBOSITY_DETAILED), dump_type(ConsoleDumpType::CountMessages),
+		pause_on_error(false), verbosity_level(ECS_CONSOLE_VERBOSITY_DETAILED), dump_type(ECS_CONSOLE_DUMP_TYPE::ECS_CONSOLE_DUMP_COUNT),
 		task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
 		format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
 		messages = ResizableStream<ConsoleMessage>(GetAllocatorPolymorphic(allocator), 0);
@@ -259,7 +259,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 	
-	void Console::Message(Stream<char> message, ConsoleMessageType type, const char* system, unsigned char verbosity) {
+	void Console::Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
 		ConsoleMessage console_message;
 		console_message.verbosity = verbosity;
 		console_message.type = type;
@@ -283,7 +283,7 @@ namespace ECSEngine {
 		lock.lock();
 		messages.Add(console_message);
 		lock.unlock();
-		if (dump_type == ConsoleDumpType::CountMessages) {
+		if (dump_type == ECS_CONSOLE_DUMP_TYPE::ECS_CONSOLE_DUMP_COUNT) {
 			if (messages.size > last_dumped_message) {
 				if (messages.size - last_dumped_message >= dump_count_for_commit) {
 					ConsoleDumpData dump_data;
@@ -307,20 +307,20 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Info(Stream<char> message, const char* system, unsigned char verbosity) {
-		Message(message, ConsoleMessageType::Info, system, verbosity);
+	void Console::Info(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_INFO, system, verbosity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Warn(Stream<char> message, const char* system, unsigned char verbosity) {
-		Message(message, ConsoleMessageType::Warn, system, verbosity);
+	void Console::Warn(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_WARN, system, verbosity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Error(Stream<char> message, const char* system, unsigned char verbosity) {
-		Message(message, ConsoleMessageType::Error, system, verbosity);
+	void Console::Error(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR, system, verbosity);
 		if (pause_on_error) {
 			__debugbreak();
 		}
@@ -328,8 +328,8 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Trace(Stream<char> message, const char* system, unsigned char verbosity) {
-		Message(message, ConsoleMessageType::Trace, system, verbosity);
+	void Console::Trace(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_TRACE, system, verbosity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -346,7 +346,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::SetDumpType(ConsoleDumpType type, unsigned int count)
+	void Console::SetDumpType(ECS_CONSOLE_DUMP_TYPE type, unsigned int count)
 	{
 		dump_type = type;
 		dump_count_for_commit = count;

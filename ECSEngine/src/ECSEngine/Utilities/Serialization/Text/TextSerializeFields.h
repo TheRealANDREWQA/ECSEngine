@@ -1,6 +1,5 @@
 #pragma once
 #include "../../../Core.h"
-#include "../DeserializeTable.h"
 #include "../../Reflection/ReflectionTypes.h"
 
 namespace ECSEngine {

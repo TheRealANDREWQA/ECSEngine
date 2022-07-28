@@ -1,435 +1,433 @@
 #include "editorpch.h"
 #include "ModuleSettings.h"
 #include "Editor\EditorState.h"
-#include "..\Project\ProjectFolders.h"
 #include "Module.h"
 #include "ModuleFile.h"
+#include "../Project/ProjectFolders.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Reflection;
 
-const size_t STREAM_TYPE_ALLOCATION = 10;
+#define MODULE_SETTINGS_REFLECT_TAG "SETTINGS"
 
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void CreateModuleSettings(EditorState* editor_state, unsigned int module_index)
-{
-	//unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-
-	//unsigned int instance_count = editor_state->module_reflection->CreateTypesAndInstancesForHierarchy(hierarchy_index, true);
-	//ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, instance_indices, instance_count);
-	//editor_state->module_reflection->GetHierarchyInstances(hierarchy_index, instance_indices);
-
-	//if (instance_indices.size > 0) {
-	//	// For each instance, create a corresponding void* data buffer
-	//	ReflectionManager* reflection_manager = editor_state->module_reflection->reflection;
-
-	//	// Allocate a buffer for the instance pointers
-	//	EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
-	//	editor_module->reflected_settings.Initialize(editor_state->editor_allocator, editor_module->reflected_settings.NextCapacity(instance_indices.size));
-
-	//	for (size_t index = 0; index < instance_indices.size; index++) {
-	//		const char* type_name = editor_state->module_reflection->GetInstance(instance_indices[index]).type_name;
-	//		ReflectionType type = reflection_manager->GetType(type_name);
-	//		size_t type_size = GetTypeByteSize(type);
-
-	//		// Allocate the memory for an instance of the type
-	//		void* instance_memory = editor_state->editor_allocator->Allocate(type_size);
-	//		// Set the memory to 0
-	//		memset(instance_memory, 0, type_size);
-
-	//		// This will alias the name of the UI reflection type and that's fine
-	//		editor_state->project_modules->buffer[module_index].reflected_settings.Insert(instance_memory, type_name);
-
-	//		// If it has default values, make sure to initialize them
-	//		for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-	//			if (type.fields[field_index].info.has_default_value) {
-	//				memcpy(
-	//					function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset),
-	//					&type.fields[field_index].info.default_bool,
-	//					type.fields[field_index].info.byte_size
-	//				);
-	//			}
-
-	//			ReflectionStreamFieldType stream_type = type.fields[field_index].info.stream_type;
-	//			if (stream_type == ReflectionStreamFieldType::Stream) {
-	//				void* memory_allocation = editor_state->editor_allocator->Allocate(type.fields[field_index].info.stream_byte_size * STREAM_TYPE_ALLOCATION);
-	//				// Copy the pointer into that location
-	//				memcpy(function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset), &memory_allocation, sizeof(void*));
-	//				// Set the size to 0
-	//				memset(function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset + 8), 0, sizeof(size_t));
-	//			}
-	//			else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
-	//				// It works for both the capacity stream and the resizable stream
-
-	//				void* memory_allocation = editor_state->editor_allocator->Allocate(type.fields[field_index].info.stream_byte_size * STREAM_TYPE_ALLOCATION);
-	//				// Copy the pointer into that location
-	//				memcpy(function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset), &memory_allocation, sizeof(void*));
-	//				// Set the size to 0
-	//				memset(function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset + 8), 0, sizeof(unsigned int));
-
-	//				unsigned int capacity = STREAM_TYPE_ALLOCATION;
-	//				// Set the capacity
-	//				memcpy(function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset + 12), &capacity, sizeof(capacity));
-	//			}
-	//		}
-
-	//		UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(instance_indices[index]);
-	//		editor_state->module_reflection->BindInstancePtrs(instance, instance_memory);
-
-	//		// Must rebind capacity for stream types - except the capacity stream
-	//		for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-	//			ReflectionStreamFieldType stream_type = type.fields[index].info.stream_type;
-	//			if (stream_type == ReflectionStreamFieldType::Stream) {
-	//				UIReflectionBindStreamCapacity bind_capacity;
-	//				bind_capacity.field_name = type.fields[index].name;
-	//				bind_capacity.capacity = STREAM_TYPE_ALLOCATION;
-	//				editor_state->module_reflection->BindInstanceStreamCapacity(instance, { &bind_capacity, 1 });
-	//			}
-	//		}
-	//	}
-	//}
+size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, const char* name) {
+	for (size_t index = 0; index < settings.size; index++) {
+		const char* current_name = settings[index].name;
+		if (current_name == name || function::CompareStrings(name, current_name)) {
+			return index;
+		}
+	}
+	return -1;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DestroyModuleSettings(EditorState* editor_state, unsigned int module_index)
+void AllocateModuleSettings(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	CapacityStream<EditorModuleReflectedSetting>& settings, 
+	AllocatorPolymorphic allocator
+)
 {
-	//EDITOR_STATE(editor_state);
+	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
-	//EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
-	//unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	//ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, type_indices, editor_state->module_reflection->GetTypeCount());
-	//editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, type_indices);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 64);
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
+	
+	UIReflectionDrawerSearchOptions options;
+	options.indices = &type_indices;
+	options.include_tags = { &settings_tag, 1 };
+	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
 
-	//if (type_indices.size > 0) {
-	//	// Must deallocate every instance
-	//	for (size_t index = 0; index < type_indices.size; index++) {
-	//		ReflectionType type = editor_state->module_reflection->reflection->GetType(editor_state->module_reflection->GetType(type_indices[index]).name);
-	//		const void* instance_memory = editor_module->reflected_settings.GetValue(type.name);
+	if (type_indices.size > 0) {
+		settings.Initialize(allocator, 0, type_indices.size);
 
-	//		for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-	//			ReflectionStreamFieldType stream_type = type.fields[field_index].info.stream_type;
-	//			void* data_to_deallocate = *(void**)function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset);
+		// For each instance, create a corresponding void* data buffer
+		ReflectionManager* reflection_manager = editor_state->module_reflection->reflection;
 
-	//			// Deallocate the streams of data, if any
-	//			if (stream_type == ReflectionStreamFieldType::Stream || stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
-	//				editor_allocator->Deallocate(data_to_deallocate);
-	//			}
-	//		}
+		// Allocate a buffer for the instance pointers
+		EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
 
-	//		editor_allocator->Deallocate(instance_memory);
-	//	}
+		for (size_t index = 0; index < type_indices.size; index++) {
+			UIReflectionType* ui_type = editor_state->module_reflection->GetTypePtr(type_indices[index]);
 
-	//	if (editor_module->reflected_settings.GetAllocatedBuffer() != nullptr) {
-	//		// Deallocate the buffer for the reflected settings
-	//		editor_allocator->Deallocate(editor_module->reflected_settings.GetAllocatedBuffer());
-	//		editor_module->reflected_settings = HashTableDefault<void*>();
-	//	}
+			const char* type_name = ui_type->name;
+			ReflectionType type = reflection_manager->GetType(type_name);
+			size_t type_size = GetReflectionTypeByteSize(reflection_manager, type);
 
-	//	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	//	// Destroy all instances and types
-	//	editor_state->module_reflection->DestroyAllFromFolderHierarchy(hierarchy_index);
-	//}
+			// The name needs to be allocated aswell - because the UI reflection types
+			// can be destroyed by the reflection underneath us
+			//type_name = function::StringCopy(allocator, type_name).buffer;
+
+			// Allocate the memory for an instance of the type
+			void* instance_memory = Allocate(allocator, type_size);
+			// Set the memory to 0
+			memset(instance_memory, 0, type_size);
+			// This will alias the name of the UI reflection type and that's fine
+			settings.Add({ instance_memory, type_name });
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool LoadModuleSettings(EditorState* editor_state, unsigned int module_index)
+void CreateModuleSettings(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	CapacityStream<EditorModuleReflectedSetting>& settings,
+	AllocatorPolymorphic allocator,
+	unsigned int settings_id
+)
 {
-	//// Use text deserialization
-	//// Cannot use the deserialization directly from file - must manually walk through all types and check that it exists
-	//unsigned int type_count = editor_state->module_reflection->GetTypeCount();
-	//ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, type_count);
+	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
-	//unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	//editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, indices);
+	ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 256);
+	suffix_stream.AddStreamSafe(ToStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
+	function::ConvertIntToChars(suffix_stream, settings_id);
 
-	//if (indices.size > 0) {
-	//	ECS_STACK_CAPACITY_STREAM_DYNAMIC(Reflection::ReflectionType, module_types, indices.size);
-	//	ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, instance_indices, 64);
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
 
-	//	// Get the reflection types in order to serialize
-	//	Reflection::ReflectionManager* reflection = editor_state->module_reflection->reflection;
-	//	for (size_t index = 0; index < indices.size; index++) {
-	//		module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index]).name);
-	//		instance_memory[index] = editor_state->project_modules->buffer[module_index].reflected_settings.GetValue(module_types[index].name);
-	//	}
-	//	module_types.size = indices.size;
+	UIReflectionDrawerSearchOptions options;
+	options.indices = &instance_indices;
+	options.suffix = suffix_stream.buffer;
+	options.include_tags = { &settings_tag, 1 };
 
-	//	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_setting_path, 512);
-	//	GetModuleSettingsFilePath(editor_state, module_index, absolute_setting_path);
-	//	Stream<void> file_data = ReadWholeFileText(absolute_setting_path, GetAllocatorPolymorphic(editor_state->editor_allocator));
-	//	if (file_data.buffer == nullptr) {
-	//		return false;
-	//	}
+	// The tagged types are excluded since they do not get a reflection type in the first place
+	instance_indices.size = editor_state->module_reflection->CreateInstanceForHierarchy(hierarchy_index, options);
+	instance_indices.AssertCapacity();
 
-	//	// Walk through the file, ignore types that are not reflected
-	//	uintptr_t file_ptr = (uintptr_t)file_data.buffer;
-	//	const char* file_char = (const char*)file_ptr;
+	if (instance_indices.size > 0) {
+		// For each instance, create a corresponding void* data buffer
+		ReflectionManager* reflection_manager = editor_state->module_reflection->reflection;
 
-	//	auto get_type_index = [module_types](Stream<char> name) {
-	//		for (size_t index = 0; index < module_types.size; index++) {
-	//			if (function::CompareStrings(ToStream(module_types[index].name), name)) {
-	//				return index;
-	//			}
-	//		}
-	//		return (size_t)-1;
-	//	};
+		// Allocate a buffer for the instance pointers
+		EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
+		ECS_ASSERT(instance_indices.size < settings.capacity);
+		settings.size = 0;
 
-	//	char _pointer_data_stream[ECS_KB * 2];
-	//	CapacityStream<void> pointer_data_stream(_pointer_data_stream, 0, ECS_KB * 2);
+		for (size_t index = 0; index < instance_indices.size; index++) {
+			UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(instance_indices[index]);
 
-	//	while (file_ptr - (uintptr_t)file_data.buffer < file_data.size) {
-	//		file_char = (const char*)file_ptr;
-	//		const char* new_line = strchr(file_char, '\n');
-	//		if (new_line == nullptr) {
-	//			return false;
-	//		}
+			const char* type_name = instance->type_name;
+			ReflectionType type = reflection_manager->GetType(type_name);
+			size_t type_size = GetReflectionTypeByteSize(reflection_manager, type);
 
-	//		file_ptr = (uintptr_t)new_line + 1;
-	//		Stream<char> type_name(file_char, new_line - file_char);
+			// The name needs to be allocated aswell - because the UI reflection types
+			// can be destroyed by the reflection underneath us
+			//type_name = function::StringCopy(allocator, type_name).buffer;
 
-	//		size_t name_index = get_type_index(type_name);
-	//		if (name_index != -1) {
-	//			// Deallocate the streams for that instance
-	//			for (size_t field_index = 0; field_index < module_types[name_index].fields.size; field_index++) {
-	//				ReflectionStreamFieldType stream_type = module_types[name_index].fields[field_index].info.stream_type;
-	//				const void** field_memory = (const void**)function::OffsetPointer(instance_memory[name_index], module_types[name_index].fields[field_index].info.pointer_offset);
+			// Allocate the memory for an instance of the type
+			void* instance_memory = Allocate(allocator, type_size);
+			// Set the memory to 0
+			memset(instance_memory, 0, type_size);
+			// This will alias the name of the UI reflection type and that's fine
+			settings.Add({ instance_memory, type_name });
 
-	//				if (stream_type == ReflectionStreamFieldType::Stream || stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
-	//					editor_state->editor_allocator->Deallocate(*field_memory);
-	//				}
-	//			}
+			editor_state->module_reflection->BindInstancePtrs(instance, instance_memory);
+			editor_state->module_reflection->reflection->SetInstanceDefaultData(type.name, instance_memory);
 
-	//			// Deserialize the type
-	//			ECS_TEXT_DESERIALIZE_STATUS deserialize_status = TextDeserialize(module_types[name_index], instance_memory[name_index], pointer_data_stream, file_ptr);
+			editor_state->module_reflection->AssignInstanceResizableAllocator(instance, allocator);
+		}
+	}
+}
 
-	//			UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(module_types[name_index].name);
-	//			for (size_t field_index = 0; field_index < module_types[name_index].fields.size; field_index++) {
-	//				ReflectionStreamFieldType stream_type = module_types[name_index].fields[field_index].info.stream_type;
-	//				void** field_memory = (void**)function::OffsetPointer(instance_memory[name_index], module_types[name_index].fields[field_index].info.pointer_offset);
-	//				void* old_memory = *field_memory;
-	//				size_t stream_size = 0;
+// -----------------------------------------------------------------------------------------------------------------------------
 
-	//				if (stream_type == ReflectionStreamFieldType::Stream) {
-	//					stream_size = *(size_t*)function::OffsetPointer(field_memory, 8);
-	//					*field_memory = editor_state->editor_allocator->Allocate((stream_size + 10) * module_types[name_index].fields[field_index].info.stream_byte_size);
+bool CreateModuleSettingsFolder(const EditorState* editor_state, unsigned int module_index)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetModuleSettingsFolderPath(editor_state, module_index, absolute_path);
+	return CreateFolder(absolute_path);
+}
 
-	//					UIReflectionBindStreamCapacity bind_capacity;
-	//					bind_capacity.field_name = module_types[name_index].fields[field_index].name;
-	//					bind_capacity.capacity = stream_size + 10;
-	//					editor_state->module_reflection->BindInstanceStreamCapacity(instance, { &bind_capacity, 1 });
+// -----------------------------------------------------------------------------------------------------------------------------
 
-	//					bind_capacity.capacity = stream_size;
-	//					editor_state->module_reflection->BindInstanceStreamSize(instance, { &bind_capacity, 1 });
+bool CreateModuleSettingsFile(const EditorState* editor_state, unsigned int module_index, ECSEngine::Stream<wchar_t> name)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetModuleSettingsFilePath(editor_state, module_index, name, absolute_path);
 
-	//					UIReflectionBindStreamBuffer bind_buffer;
-	//					bind_buffer.field_name = module_types[name_index].fields[field_index].name;
-	//					bind_buffer.new_buffer = *field_memory;
-	//					editor_state->module_reflection->BindInstanceStreamBuffer(instance, { &bind_buffer, 1 });
-
-	//					memcpy(*field_memory, old_memory, stream_size * module_types[name_index].fields[field_index].info.stream_byte_size);
-	//				}
-	//				else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
-	//					stream_size = *(unsigned int*)function::OffsetPointer(field_memory, 8);
-	//					*field_memory = editor_state->editor_allocator->Allocate((stream_size + 10) * module_types[name_index].fields[field_index].info.stream_byte_size);
-
-	//					CapacityStream<void>* stream = (CapacityStream<void>*)field_memory;
-	//					stream->capacity = stream_size + 10;
-
-	//					memcpy(*field_memory, old_memory, stream_size * module_types[name_index].fields[field_index].info.stream_byte_size);
-	//				}
-	//			}
-	//		}
-
-	//		const char* end_serialize_string = strstr(new_line + 1, ECS_END_TEXT_SERIALIZE_STRING);
-	//		if (end_serialize_string == nullptr) {
-	//			break;
-	//		}
-	//		// Add one more than the string size so as to get to the next line
-	//		file_ptr = (uintptr_t)end_serialize_string + strlen(ECS_END_TEXT_SERIALIZE_STRING);
-	//	}
-
-	//	// Deallocate the file content
-	//	editor_state->editor_allocator->Deallocate(file_data.buffer);
-	//}
+	ECS_FILE_HANDLE file_handle = 0;
+	ECS_FILE_STATUS_FLAGS status = FileCreate(absolute_path, &file_handle);
+	if (status != ECS_FILE_STATUS_OK) {
+		return false;
+	}
+	
+	CloseFile(file_handle);
 	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool SaveModuleSettings(EditorState* editor_state, unsigned int module_index)
+void DestroyModuleSettings(
+	const EditorState* editor_state,
+	unsigned int module_index, 
+	Stream<EditorModuleReflectedSetting> settings,
+	unsigned int settings_id
+)
 {
-	//// Use text serialization
-	//// Cannot use the serialization directly into the file - must manually walk through all types and serialize it
-	//// into a memory buffer
-	//unsigned int type_count = editor_state->module_reflection->GetTypeCount();
-	//ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, type_count);
+	EDITOR_STATE(editor_state);
 
-	//unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	//editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, indices);
+	EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
+	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
-	//if (indices.size > 0) {
-	//	ECS_STACK_CAPACITY_STREAM_DYNAMIC(Reflection::ReflectionType, module_types, indices.size);
-	//	ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 64);
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
 
-	//	// Get the reflection types in order to serialize
-	//	Reflection::ReflectionManager* reflection = editor_state->module_reflection->reflection;
-	//	for (size_t index = 0; index < indices.size; index++) {
-	//		module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index]).name);
-	//		instance_memory[index] = editor_state->project_modules->buffer[module_index].reflected_settings.GetValue(module_types[index].name);
+	ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 256);
+	suffix_stream.AddStreamSafe(ToStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
+	function::ConvertIntToChars(suffix_stream, settings_id);
 
-	//		// Update the stream sizes for the stream types
-	//		for (size_t field_index = 0; field_index < module_types[index].fields.size; field_index++) {
-	//			ReflectionStreamFieldType stream_type = module_types[index].fields[field_index].info.stream_type;
-	//			void** stream_data = (void**)function::OffsetPointer(instance_memory[index], module_types[index].fields[field_index].info.pointer_offset);
+	UIReflectionDrawerSearchOptions options;
+	options.indices = &type_indices;
+	options.include_tags = { &settings_tag, 1 };
+	options.suffix = suffix_stream.buffer;
 
-	//			if (stream_type == ReflectionStreamFieldType::Stream) {
-	//				UIReflectionBindStreamCapacity size;
-	//				size.field_name = module_types[index].fields[field_index].name;
-	//				editor_state->module_reflection->GetInstanceStreamSizes(module_types[index].name, { &size, 1 });
-
-	//				Stream<void>* stream = (Stream<void>*)stream_data;
-	//				stream->size = size.capacity;
-	//			}
-	//		}
-	//	}
-
-	//	// Now determine how much memory is needed in order to allocate a single buffer and serialize into it
-	//	size_t buffer_size = 0;
-	//	for (size_t index = 0; index < indices.size; index++) {
-	//		// The name of the type will also be serialized
-	//		buffer_size += strlen(module_types[index].name) + 1;
-
-	//		// Determine which instance memory we have
-	//		buffer_size += TextSerializeSize(module_types[index], instance_memory[index]);
-	//	}
-
-	//	// Allocate a buffer of the corresponding size
-	//	void* buffer_allocation = editor_state->editor_allocator->Allocate(buffer_size);
-
-	//	// Write the data into the buffer
-	//	uintptr_t buffer = (uintptr_t)buffer_allocation;
-	//	for (size_t index = 0; index < indices.size; index++) {
-	//		// Write the name first
-	//		size_t name_size = strlen(module_types[index].name);
-	//		memcpy((void*)buffer, module_types[index].name, name_size * sizeof(char));
-	//		buffer += name_size;
-
-	//		char* new_line = (char*)buffer;
-	//		*new_line = '\n';
-	//		buffer += 1;
-
-	//		// Now write the type data
-	//		TextSerialize(module_types[index], instance_memory[index], buffer);
-	//	}
-
-	//	size_t difference = buffer - (uintptr_t)buffer_allocation;
-	//	ECS_ASSERT(difference <= buffer_size);
-
-	//	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_setting_path, 512);
-	//	GetModuleSettingsFilePath(editor_state, module_index, absolute_setting_path);
-
-	//	// Now write the buffer to the file
-	//	bool success = WriteBufferToFileText(absolute_setting_path, { buffer_allocation, difference }) == ECS_FILE_STATUS_OK;
-
-	//	// Deallocate the buffer
-	//	editor_state->editor_allocator->Deallocate(buffer_allocation);
-	//	return success;
-	//}
-
-	return true;
+	// Destroy all instances now
+	editor_state->module_reflection->DestroyAllInstancesFromFolderHierarchy(hierarchy_index, options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SetModuleDefaultSettings(EditorState* editor_state, unsigned int module_index)
+void GetModuleSettingsFilePath(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	Stream<wchar_t> filename, 
+	CapacityStream<wchar_t>& full_path
+)
 {
-	/*unsigned int type_count = editor_state->module_reflection->GetTypeCount();
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, type_count);
+	GetModuleSettingsFolderPath(editor_state, module_index, full_path);
+	full_path.Add(ECS_OS_PATH_SEPARATOR);
+	full_path.AddStream(filename);
+	full_path.AddStreamSafe(ToStream(MODULE_SETTINGS_EXTENSION));
+	full_path[full_path.size] = L'\0';
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleSettingsFolderPath(const EditorState* editor_state, unsigned int module_index, CapacityStream<wchar_t>& path)
+{
+	GetProjectConfigurationModuleFolder(editor_state, path);
+	path.Add(ECS_OS_PATH_SEPARATOR);
+
+	const EditorModule* module = editor_state->project_modules->buffer + module_index;
+	path.AddStreamSafe(module->library_name);
+	path[path.size] = L'\0';
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleSettingsUITypesIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& indices)
+{
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
+
+	UIReflectionDrawerSearchOptions options;
+	options.indices = &indices;
+	options.include_tags = { &settings_tag, 1 };
+	editor_state->module_reflection->GetHierarchyTypes(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleSettingsUIInstancesIndices(const EditorState* editor_state, unsigned int module_index, unsigned int settings_id, ECSEngine::CapacityStream<unsigned int>& indices)
+{
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
+
+	ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 512);
+	suffix_stream.AddStreamSafe(ToStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
+	function::ConvertIntToChars(suffix_stream, settings_id);
+
+	UIReflectionDrawerSearchOptions options;
+	options.indices = &indices;
+	options.include_tags = { &settings_tag, 1 };
+	options.suffix = suffix_stream.buffer;
+	editor_state->module_reflection->GetHierarchyInstances(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool LoadModuleSettings(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	Stream<wchar_t> path, 
+	Stream<EditorModuleReflectedSetting> settings,
+	AllocatorPolymorphic allocator
+)
+{
+	// Cannot use the deserialization directly from file - must manually walk through all types and check that it exists
+	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, 64);
+
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
+
+	UIReflectionDrawerSearchOptions options;
+	options.include_tags = { &settings_tag, 1 };
+	options.indices = &indices;
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	editor_state->module_reflection->GetHierarchyInstances(hierarchy_index, indices);
+	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
-		for (size_t index = 0; index < indices.size; index++) {
-			UIReflectionInstance* ui_instance = editor_state->module_reflection->GetInstancePtr(indices[index]);
-			ReflectionType type = editor_state->module_reflection->reflection->GetType(ui_instance->name);
-			void* instance_memory = editor_state->project_modules->buffer[module_index].reflected_settings.GetValue(ui_instance->name);
+		AllocatorPolymorphic editor_allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
 
-			for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
-				void* field_memory = function::OffsetPointer(instance_memory, type.fields[field_index].info.pointer_offset);
-				
-				ReflectionStreamFieldType stream_type = type.fields[field_index].info.stream_type;
-				if (stream_type == ReflectionStreamFieldType::Basic) {
-					if (type.fields[field_index].info.has_default_value) {
-						memcpy(field_memory, &type.fields[field_index].info.default_bool, type.fields[field_index].info.byte_size);
-					}
-					else {
-						memset(field_memory, 0, type.fields[field_index].info.byte_size);
-					}
-				}
-				else if (stream_type == ReflectionStreamFieldType::Stream) {
-					UIReflectionBindStreamCapacity stream_capacity;
-					stream_capacity.field_name = type.fields[field_index].name;
-					stream_capacity.capacity = 0;
-					editor_state->module_reflection->BindInstanceStreamSize(ui_instance, { &stream_capacity, 1 });
-				}
-				else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
-					unsigned int* size = (unsigned int*)function::OffsetPointer(field_memory, 8);
-					*size = 0;
+		Stream<void> file_data = ReadWholeFileBinary(path, editor_allocator);
+		if (file_data.buffer == nullptr) {
+			return false;
+		}
+
+		DeserializeOptions deserialize_options;
+		deserialize_options.backup_allocator = allocator;
+		deserialize_options.field_allocator = allocator;
+		
+		const Reflection::ReflectionManager* reflection = editor_state->module_reflection->reflection;
+		uintptr_t file_ptr = (uintptr_t)file_data.buffer;
+
+		// Need to continue deserializing while the file_ptr is smaller than the limit of the file
+		uintptr_t file_ptr_limit = file_ptr + file_data.size;
+		while (file_ptr < file_ptr_limit) {
+			// Need the deserialize table in order to determine the setting index
+			ECS_STACK_CAPACITY_STREAM(char, table_memory, ECS_KB * 8);
+
+			CapacityStream<void> void_memory = table_memory;
+			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, &void_memory);
+			// It failed
+			if (field_table.types.size == 0) {
+				editor_state->editor_allocator->Deallocate(file_data.buffer);
+				return false;
+			}
+
+			// Null terminate the name
+			char previous_char = field_table.types[0].name[field_table.types[0].name.size];
+			field_table.types[0].name[field_table.types[0].name.size] = '\0';
+			size_t settings_index = SearchSetting(settings, field_table.types[0].name.buffer);
+			field_table.types[0].name[field_table.types[0].name.size] = previous_char;
+
+			if (settings_index == -1) {
+				// The type no longer exists, just skip it
+				IgnoreDeserialize(file_ptr, field_table);
+			}
+			else {
+				deserialize_options.field_table = &field_table;
+				ECS_DESERIALIZE_CODE code = Deserialize(
+					reflection,
+					reflection->GetType(settings[settings_index].name),
+					settings[settings_index].data,
+					file_ptr,
+					&deserialize_options
+				);
+
+				// An error has occured - cannot recover the data from the file.
+				if (code != ECS_DESERIALIZE_OK) {
+					editor_state->editor_allocator->Deallocate(file_data.buffer);
+					return false;
 				}
 			}
 		}
-	}*/
+
+		// Deallocate the file content
+		editor_state->editor_allocator->Deallocate(file_data.buffer);
+	}
+	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeModuleSettings(EditorState* editor_state, Stream<wchar_t> new_path, unsigned int module_index)
+void RemoveModuleSettingsFileAndFolder(const EditorState* editor_state, unsigned int module_index)
 {
-	//// Deallocate the current one if not nullptr
-	//EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
-	//if (editor_module->current_settings_path.buffer != nullptr) {
-	//	editor_state->editor_allocator->Deallocate(editor_module->current_settings_path.buffer);
-	//}
-
-	//if (new_path.size > 0) {
-	//	editor_module->current_settings_path = function::StringCopy(editor_state->editor_allocator, new_path);
-
-	//	bool success = SaveModuleFile(editor_state);
-	//	if (!success) {
-	//		EditorSetConsoleWarn(ToStream("Could not save the project module file after changing module settings."));
-	//	}
-	//}
-	//else {
-	//	editor_module->current_settings_path.buffer = nullptr;
-	//	editor_module->current_settings_path.size = 0;
-	//}
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetModuleSettingsFolderPath(editor_state, module_index, absolute_path);
+	ECS_ASSERT(RemoveFolder(absolute_path));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SwitchModuleSettings(EditorState* editor_state, Stream<wchar_t> new_path, unsigned int module_index)
+bool SaveModuleSettings(const EditorState* editor_state, unsigned int module_index, Stream<wchar_t> path, Stream<EditorModuleReflectedSetting> settings)
 {
-	SaveModuleSettings(editor_state, module_index);
-	DestroyModuleSettings(editor_state, module_index);
-	ChangeModuleSettings(editor_state, new_path, module_index);
-	CreateModuleSettings(editor_state, module_index);
-	SaveModuleSettings(editor_state, module_index);
+	// Use text serialization
+	// Cannot use the serialization directly into the file - must manually walk through all types and serialize it
+	// into a memory buffer
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, 64);
+
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
+	UIReflectionDrawerSearchOptions options;
+	options.indices = &indices;
+	options.include_tags = { &settings_tag, 1 };
+
+	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
+	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
+
+	if (indices.size > 0) {
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(ReflectionType, module_types, indices.size);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
+
+		// Get the reflection types in order to serialize
+		ReflectionManager* reflection = editor_state->module_reflection->reflection;
+		for (size_t index = 0; index < indices.size; index++) {
+			module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index]).name);
+			size_t setting_index = SearchSetting(settings, module_types[index].name);
+			instance_memory[index] = settings[setting_index].data;
+		}
+
+		// Now determine how much memory is needed in order to allocate a single buffer and serialize into it
+		size_t buffer_size = 0;
+		for (size_t index = 0; index < indices.size; index++) {
+			size_t serialize_size = SerializeSize(reflection, module_types[index], instance_memory[index]);
+			ECS_ASSERT(serialize_size != -1);
+			buffer_size += serialize_size;
+		}
+
+		// Allocate a buffer of the corresponding size
+		void* buffer_allocation = editor_state->editor_allocator->Allocate(buffer_size);
+
+		// Write the data into the buffer
+		uintptr_t buffer = (uintptr_t)buffer_allocation;
+		for (size_t index = 0; index < indices.size; index++) {
+			// The check for the code can be omitted since it would fail at the SerializeSize pass
+			Serialize(reflection, module_types[index], instance_memory[index], buffer);
+		}
+
+		size_t difference = buffer - (uintptr_t)buffer_allocation;
+		ECS_ASSERT(difference <= buffer_size);
+
+		// Now write the buffer to the file
+		bool success = WriteBufferToFileBinary(path, { buffer_allocation, difference }) == ECS_FILE_STATUS_OK;
+
+		// Deallocate the buffer
+		editor_state->editor_allocator->Deallocate(buffer_allocation);
+		return success;
+	}
+
+	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetModuleSettingsFilePath(const EditorState* editor_state, unsigned int module_index, CapacityStream<wchar_t>& path)
+void SetModuleDefaultSettings(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	Stream<EditorModuleReflectedSetting> settings
+)
 {
-	/*GetProjectConfigurationModuleFolder(editor_state, path);
-	path.Add(ECS_OS_PATH_SEPARATOR);
-	path.AddStream(editor_state->project_modules->buffer[module_index].library_name);
-	path.Add(L'_');
-	path.AddStreamSafe(editor_state->project_modules->buffer[module_index].current_settings_path);
-	path[path.size] = L'\0';*/
+	unsigned int type_count = editor_state->module_reflection->GetTypeCount();
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, type_count);
+
+	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
+	UIReflectionDrawerSearchOptions options;
+	options.include_tags = { &settings_tag, 1 };
+	options.indices = &indices;
+
+	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
+	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
+
+	if (indices.size > 0) {
+		for (size_t index = 0; index < indices.size; index++) {
+			UIReflectionType* ui_type = editor_state->module_reflection->GetTypePtr(indices[index]);
+			ReflectionType type = editor_state->module_reflection->reflection->GetType(ui_type->name);
+			size_t setting_index = SearchSetting(settings, ui_type->name);
+			void* instance_memory = settings[setting_index].data;
+			editor_state->module_reflection->reflection->SetInstanceDefaultData(type.name, instance_memory);
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

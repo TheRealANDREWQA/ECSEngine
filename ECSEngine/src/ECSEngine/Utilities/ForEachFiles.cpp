@@ -4,6 +4,7 @@
 #include "Path.h"
 #include "FunctionInterfaces.h"
 #include "../Allocators/AllocatorPolymorphic.h"
+#include "../Allocators/MultipoolAllocator.h"
 #include "Function.h"
 
 #define ECS_FORWARD_STREAM_WIDE(stream, function, ...) if (stream[stream.size] == L'\0') {\
@@ -185,7 +186,7 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(MultipoolAllocator::MemoryOf(MAX_SIMULTANEOUS_DIRECTORIES, STACK_ALLOCATION));
 		MultipoolAllocator allocator((unsigned char*)allocation, STACK_ALLOCATION, MAX_SIMULTANEOUS_DIRECTORIES);
 
-		Stream<wchar_t> allocator_directory = function::StringCopy(&allocator, directory);
+		Stream<wchar_t> allocator_directory = function::StringCopy(GetAllocatorPolymorphic(&allocator), directory);
 		subdirectories.Add(allocator_directory.buffer);
 
 		ECS_TEMP_STRING(temp_string, 512);
@@ -219,7 +220,7 @@ namespace ECSEngine {
 					}
 
 					if (find_data.attrib & _A_SUBDIR) {
-						Stream<wchar_t> copied_string = function::StringCopy(&allocator, temp_string);
+						Stream<wchar_t> copied_string = function::StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
 						subdirectories.AddSafe(copied_string.buffer);
 					}
 				}
@@ -249,7 +250,7 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(MultipoolAllocator::MemoryOf(MAX_SIMULTANEOUS_DIRECTORIES, STACK_ALLOCATION));
 		MultipoolAllocator allocator((unsigned char*)allocation, STACK_ALLOCATION, MAX_SIMULTANEOUS_DIRECTORIES);
 
-		Stream<wchar_t> allocator_directory = function::StringCopy(&allocator, directory);
+		Stream<wchar_t> allocator_directory = function::StringCopy(GetAllocatorPolymorphic(&allocator), directory);
 		subdirectories.Add(allocator_directory.buffer);
 
 		ECS_TEMP_STRING(temp_string, 512);
@@ -298,7 +299,7 @@ namespace ECSEngine {
 				}
 
 				if (find_data.attrib & _A_SUBDIR) {
-					Stream<wchar_t> copied_string = function::StringCopy(&allocator, temp_string);
+					Stream<wchar_t> copied_string = function::StringCopy(GetAllocatorPolymorphic(&allocator), temp_string);
 					subdirectories.AddSafe(copied_string.buffer);
 				}
 			}
@@ -516,7 +517,7 @@ namespace ECSEngine {
 		Function&& function
 	) {
 		// Use the allocator to copy the paths - for the batched allocation only if the allocation type is single threaded
-		if (!batched_allocation || allocator.allocation_type == AllocationType::SingleThreaded) {
+		if (!batched_allocation || allocator.allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			struct ForData {
 				AllocatorPolymorphic allocator;
 				CapacityStream<const wchar_t*>* paths;
@@ -617,7 +618,7 @@ namespace ECSEngine {
 		Function&& function
 	) {
 		// Use the allocator to copy the paths - for the batched allocation only if the allocation type is single threaded
-		if (!batched_allocation || allocator.allocation_type == AllocationType::SingleThreaded) {
+		if (!batched_allocation || allocator.allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			struct ForData {
 				AllocatorPolymorphic allocator;
 				CapacityStream<const wchar_t*>* paths;

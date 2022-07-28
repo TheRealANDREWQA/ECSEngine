@@ -204,7 +204,7 @@ namespace ECSEngine {
 			return table;
 		}
 
-		if (!function::is_power_of_two(header.table_capacity)) {
+		if (!function::IsPowerOfTwo(header.table_capacity)) {
 			return table;
 		}
 

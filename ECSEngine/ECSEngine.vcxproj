@@ -106,6 +106,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ImportLibrary>..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Debug-windows-x86_64\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Debug-windows-x86_64\Editor &gt; nul)</Command>
@@ -148,6 +149,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <ImportLibrary>..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Release-windows-x86_64\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Release-windows-x86_64\Editor &gt; nul)</Command>
@@ -187,6 +189,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <ImportLibrary>..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>IF EXIST ..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Distribution-windows-x86_64\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Distribution-windows-x86_64\Editor &gt; nul)</Command>
@@ -199,20 +202,30 @@
   <ItemGroup>
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\ResizableLinearAllocator.h" />
     <ClInclude Include="src\ECSEngine\ApplicationUtilities.h" />
     <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
+    <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTable.h" />
+    <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTableSmall.h" />
     <ClInclude Include="src\ECSEngine\Containers\Deck.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Hashing.h" />
+    <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
     <ClInclude Include="src\ECSEngine\Containers\StableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
+    <ClInclude Include="src\ECSEngine\Internal\ArchetypeQueryCache.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityHierarchy.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\ForEach.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabase.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseSerializeFunctions.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetLoading.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadata.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
@@ -234,6 +247,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawConfig.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawConfigs.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIDrawer.h" />
@@ -259,7 +273,6 @@
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Serialization\DeserializeTable.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\InputSerialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.h" />
@@ -277,6 +290,7 @@
     <ClInclude Include="src\Includes\ECSEngineReflection.h" />
     <ClInclude Include="src\Includes\ECSEngineRendering.h" />
     <ClInclude Include="src\Includes\ECSEngineRenderingCompression.h" />
+    <ClInclude Include="src\Includes\ECSEngineResources.h" />
     <ClInclude Include="src\Includes\ECSEngineSerialization.h" />
     <ClInclude Include="src\Includes\ECSEngineStream.h" />
     <ClInclude Include="src\Includes\ECSEngineUI.h" />
@@ -284,7 +298,7 @@
     <ClInclude Include="src\ECSEngine\Containers\DataPointer.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.h" />
-    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskScheduler.h" />
     <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
@@ -301,7 +315,6 @@
     <ClInclude Include="src\ECSEngine\Rendering\ColorMacros.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Graphics.h" />
     <ClInclude Include="src\ECSEngine\Internal\InternalStructures.h" />
-    <ClInclude Include="src\ECSEngine\Containers\SequentialTable.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManager.h" />
     <ClInclude Include="src\ECSEngine\Allocators\MemoryManager.h" />
     <ClInclude Include="src\Includes\ECSEngine.h" />
@@ -331,13 +344,13 @@
     <ClInclude Include="src\ECSEngine\Containers\Stream.h" />
     <ClInclude Include="src\ECSEngine\Internal\World.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskManager.h" />
-    <ClInclude Include="src\ECSEngine\Containers\StaticSequentialTable.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\ResizableLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\ApplicationUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\DataPointer.cpp" />
-    <ClCompile Include="src\ECSEngine\Containers\HashTable.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">NotUsing</PrecompiledHeader>
@@ -346,13 +359,17 @@
     <ClCompile Include="src\ECSEngine\GLTF\GLTFLoader.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\GLTFThumbnail.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Archetype.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\ArchetypeQueryCache.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityHierarchy.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityManagerSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ForEach.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
-    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskDependencies.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskScheduler.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabase.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseSerializeFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetLoading.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadata.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\ResourceManager.cpp" />
@@ -406,7 +423,6 @@
     <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Graphics.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\InternalStructures.cpp" />
-    <ClCompile Include="src\ECSEngine\Containers\SequentialTable.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ArchetypeBase.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\MemoryManager.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />
@@ -423,8 +439,8 @@
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\Reflection.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Serialization\DeserializeTable.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\InputSerialization.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.cpp" />
@@ -436,7 +452,6 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskManager.cpp" />
-    <ClCompile Include="src\ECSEngine\Containers\StaticSequentialTable.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl">

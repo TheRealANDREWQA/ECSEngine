@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "../Allocators/MemoryManager.h"
 #include "../Allocators/LinearAllocator.h"
+#include "../Allocators/ResizableLinearAllocator.h"
 #include "Archetype.h"
 #include "../Containers/AtomicStream.h"
 #include "EntityHierarchy.h"
@@ -18,6 +19,7 @@
 namespace ECSEngine {
 
 	struct EntityManager;
+	struct ArchetypeQueryCache;
 
 	struct DeferredAction {
 		DataPointer data_and_type;
@@ -463,6 +465,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		void EndFrame();
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// Returns the index of the component inside the archetype component list
 		unsigned char FindArchetypeUniqueComponent(unsigned short archetype_index, Component component) const;
 
@@ -670,6 +676,9 @@ namespace ECSEngine {
 		// It will copy the children into the stream. If the parent does not exist, nothing will be copied
 		void GetHierarchyChildrenCopy(unsigned int hierarchy_index, Entity parent, CapacityStream<Entity>& children) const;
 
+		// Returns the indices of the archetypes that match the given query
+		Stream<unsigned short> GetQueryResults(unsigned int handle) const;
+
 		// Tag should only be the bit index, not the actual value
 		bool HasEntityTag(Entity entity, unsigned char tag) const;
 
@@ -761,6 +770,19 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Returns a handle to be used to access the query results.
+		unsigned int RegisterQuery(ArchetypeQuery query);
+
+		// Returns a handle to be used to access the query results.
+		unsigned int RegisterQuery(ArchetypeQueryExclude query);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Atomically adds it to the pending commands stream
+		void RegisterPendingCommandStream(EntityManagerCommandStream command_stream);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// If the component or the instance doesn't exist, it will assert
 		void SetSharedComponentData(Component component, SharedInstance instance, const void* data);
 
@@ -777,20 +799,6 @@ namespace ECSEngine {
 		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
 	//private:
-
-		struct ECSENGINE_API TemporaryAllocator {
-			TemporaryAllocator();
-			TemporaryAllocator(GlobalMemoryManager* backup);
-
-			void* Allocate(size_t size, size_t alignment = 8);
-			void Clear();
-
-			SpinLock lock;
-			GlobalMemoryManager* backup;
-			CapacityStream<AtomicStream<char>> buffers;
-			// Keep track of allocations that went straight to the global allocator
-			CapacityStream<void*> backup_allocations;
-		};
 
 		struct InternalEntityHierarchy {
 			MemoryManager allocator;
@@ -810,13 +818,25 @@ namespace ECSEngine {
 		Stream<SharedComponentInfo> m_shared_components;
 
 		AtomicStream<DeferredAction> m_deferred_actions;
+		AtomicStream<EntityManagerCommandStream> m_pending_command_streams;
+		ArchetypeQueryCache* m_query_cache;
 
 		Stream<InternalEntityHierarchy> m_hierarchies;
 
 		MemoryManager* m_memory_manager;
 		EntityPool* m_entity_pool;
-		TemporaryAllocator m_temporary_allocator;
+		ResizableLinearAllocator m_temporary_allocator;
 	};
+
+	// Creates the allocator for the entity pool, the entity pool itself, the entity manager allocator,
+	// and the entity manager itself
+	ECSENGINE_API EntityManager CreateEntityManagerWithPool(
+		size_t allocator_size, 
+		size_t allocator_pool_count,
+		size_t allocator_new_size, 
+		unsigned int entity_pool_power_of_two,
+		GlobalMemoryManager* global_memory_manager
+	);
 
 }
 

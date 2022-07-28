@@ -8,28 +8,16 @@ namespace ECSEngine {
 
 	struct World;
 
-	enum ECS_THREAD_TASK_GROUP {
-		ECS_THREAD_TASK_INITIALIZE_EARLY,
-		ECS_THREAD_TASK_INITIALIZE_LATE,
-		ECS_THREAD_TASK_SIMULATE_EARLY,
-		ECS_THREAD_TASK_SIMULATE_LATE,
-		ECS_THREAD_TASK_FINALIZE_EARLY,
-		ECS_THREAD_TASK_FINALIZE_LATE,
-		ECS_THREAD_TASK_GROUP_COUNT
-	};
+	typedef void (*ThreadFunction)(unsigned int thread_id, World* world, void* _data);
+	typedef void (*ThreadFunctionWrapper)(unsigned int thread_id, World* world, ThreadFunction function, void* data, void* wrapper_data);
 
-	using ThreadFunction = void (*)(unsigned int thread_id, World* world, void* _data);
-	using ThreadFunctionWrapper = void (*)(unsigned int thread_id, World* ECS_RESTRICT world, ThreadFunction function, void* ECS_RESTRICT data, void* ECS_RESTRICT wrapper_data);
-
-#define ECS_THREAD_TASK(name) void name(unsigned int thread_id, World* world, void* _data)
-#define ECS_THREAD_WRAPPER_TASK(name) void name(unsigned int thread_id, World* ECS_RESTRICT world, ThreadFunction function, void* ECS_RESTRICT _data, void* ECS_RESTRICT _wrapper_data)
+#define ECS_THREAD_TASK(name) void name(unsigned int thread_id, ECSEngine::World* world, void* _data)
+#define ECS_THREAD_WRAPPER_TASK(name) void name(unsigned int thread_id, ECSEngine::World* world, ECSEngine::ThreadFunction function, void* _data, void* _wrapper_data)
 
 	struct ECSENGINE_API ThreadTask
 	{
-		ThreadTask() : function(), data(nullptr), name(nullptr)
-		{}
-		ThreadTask(ThreadFunction _function, void* _data, size_t _data_size) : function(_function), data(_data), data_size(_data_size), name(nullptr)	
-		{}
+		ThreadTask() : function(), data(nullptr), name(nullptr) {}
+		ThreadTask(ThreadFunction _function, void* _data, size_t _data_size) : function(_function), data(_data), data_size(_data_size), name(nullptr) {}
 		ThreadTask(ThreadFunction _function, void* _data, size_t _data_size, const char* _name) : function(_function), data(_data), data_size(_data_size), name(_name) {}
 
 		ThreadTask(const ThreadTask& other) = default;

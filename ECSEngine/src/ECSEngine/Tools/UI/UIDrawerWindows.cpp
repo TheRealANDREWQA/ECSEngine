@@ -19,15 +19,15 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData* data = (UIParameterWindowReturnToDefaultButtonData*)_data;
 			if (data->is_system_theme) {
 				memcpy(data->system_descriptor, data->default_descriptor, data->descriptor_size);
-				if ((unsigned int)data->descriptor_index < (unsigned int)UIWindowDrawerDescriptorIndex::Count) {
+				if ((unsigned int)data->descriptor_index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT) {
 					switch (data->descriptor_index) {
-					case UIWindowDrawerDescriptorIndex::ColorTheme:
+					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME:
 						system->FinalizeColorTheme();
 						break;
-					case UIWindowDrawerDescriptorIndex::Layout:
+					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT:
 						system->FinalizeLayout();
 						break;
-					case UIWindowDrawerDescriptorIndex::Element:
+					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT:
 						system->FinalizeElementDescriptor();
 						break;
 					}
@@ -57,7 +57,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.color_theme;
 			button_data.descriptor_size = sizeof(UIColorThemeDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::ColorTheme;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME;
 			button_data.is_system_theme = false;
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -65,7 +65,7 @@ namespace ECSEngine {
 			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme);
 
 			color_input_callback.callback = { WindowParameterColorInputCallback, descriptor, 0 };
-			drawer.ColorInput(input_configuration, config, "Text", &theme->default_text);
+			drawer.ColorInput(input_configuration, config, "Text", &theme->text);
 			drawer.ColorInput(input_configuration, config, "Graph hover line", &theme->graph_hover_line);
 			drawer.ColorInput(input_configuration, config, "Graph line", &theme->graph_line);
 			drawer.ColorInput(input_configuration, config, "Graph sample circle", &theme->graph_sample_circle);
@@ -89,7 +89,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.window_layout;
 			button_data.descriptor_size = sizeof(UILayoutDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::Layout;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT;
 			button_data.is_system_theme = false;
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##1", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -119,7 +119,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.element_descriptor;
 			button_data.descriptor_size = sizeof(UIElementDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::Element;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT;
 			button_data.is_system_theme = false;
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##2", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -239,8 +239,8 @@ namespace ECSEngine {
 				4
 			);
 
-			float2_values[0] = &elements->label_horizontal_padd;
-			float2_values[1] = &elements->label_vertical_padd;
+			float2_values[0] = &elements->label_padd.x;
+			float2_values[1] = &elements->label_padd.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.2f;
 			float2_sliders("Label padding", 4);
@@ -251,21 +251,9 @@ namespace ECSEngine {
 			float2_upper_bounds[0] = 0.1f;
 			float2_sliders("Slider length", 5);
 
-			float2_values[0] = &elements->slider_padding.x;
-			float2_values[1] = &elements->slider_padding.y;
-			float2_lower_bounds[0] = 0.0f;
-			float2_upper_bounds[0] = 0.05f;
-			float2_sliders("Slider padding", 6);
-
 			float2_values[0] = &elements->slider_shrink.x;
 			float2_values[1] = &elements->slider_shrink.y;
 			float2_sliders("Slider shrink", 7);
-
-			float2_values[0] = &elements->text_input_padding.x;
-			float2_values[1] = &elements->text_input_padding.y;
-			float2_upper_bounds[0] = 0.1f;
-			float2_sliders("Text input padding", 8);
-
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -274,7 +262,7 @@ namespace ECSEngine {
 			UI_PREPARE_DRAWER(initialize);
 
 			UIWindowDrawerDescriptor* descriptors = (UIWindowDrawerDescriptor*)window_data;
-			drawer.SetDrawMode(UIDrawerMode::NextRow);
+			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NEXT_ROW);
 			auto color_theme_lambda = [&]() {
 				WindowParameterColorTheme(descriptors, drawer);
 			};
@@ -358,7 +346,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.color_theme;
 			button_data.descriptor_size = sizeof(UIColorThemeDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::ColorTheme;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = theme;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -367,7 +355,7 @@ namespace ECSEngine {
 			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme);
 
 			color_input_callback.callback = { SystemParameterColorThemeCallback, nullptr, 0 };
-			drawer.ColorInput(input_configuration, config, "Text", &theme->default_text);
+			drawer.ColorInput(input_configuration, config, "Text", &theme->text);
 			drawer.ColorInput(input_configuration, config, "Graph hover line", &theme->graph_hover_line);
 			drawer.ColorInput(input_configuration, config, "Graph line", &theme->graph_line);
 			drawer.ColorInput(input_configuration, config, "Graph sample circle", &theme->graph_sample_circle);
@@ -413,7 +401,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.window_layout;
 			button_data.descriptor_size = sizeof(UILayoutDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::Layout;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = layout;
 			drawer.Button("Default values##1", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -443,7 +431,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.element_descriptor;
 			button_data.descriptor_size = sizeof(UIElementDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::Element;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = elements;
 			drawer.Button("Default values##20", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -452,12 +440,16 @@ namespace ECSEngine {
 			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Color input padd", &elements->color_input_padd, 0.0f, 0.01f, 3);
 			drawer.FloatSlider(SLIDER_CONFIGURATION, config, "Combo box padd", &elements->combo_box_padding, 0.0f, 0.02f, 3);
 			float* float2_values[2];
+			// Uniform bounds
 			float float2_lower_bounds[1];
+			// Uniform bounds
 			float float2_upper_bounds[1];
 			const char* float2_names[2];
 
-			auto float2_sliders = [&](const char* group_name, size_t index) {
-				drawer.PushIdentifierStackRandom(index);
+			float2_lower_bounds[0] = 0.0f;
+			float2_upper_bounds[0] = 0.01f;
+
+			auto float2_sliders = [&](const char* group_name) {
 				drawer.FloatSliderGroup(
 					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
 					config,
@@ -468,26 +460,23 @@ namespace ECSEngine {
 					float2_lower_bounds,
 					float2_upper_bounds
 				);
-				drawer.PopIdentifierStack();
 			};
 
 			float2_values[0] = &elements->graph_axis_bump.x;
 			float2_values[1] = &elements->graph_axis_bump.y;
-			float2_lower_bounds[0] = 0.0f;
-			float2_upper_bounds[0] = 0.01f;
 			float2_names[0] = "x:";
 			float2_names[1] = "y:";
-			float2_sliders("Graph axis bump", 0);
+			float2_sliders("Graph axis bump");
 
 			float2_values[0] = &elements->graph_axis_value_line_size.x;
 			float2_values[1] = &elements->graph_axis_value_line_size.y;
 			float2_upper_bounds[0] = 0.02f;
-			float2_sliders("Graph axis value line size", 1);
+			float2_sliders("Graph axis value line size");
 
 			float2_values[0] = &elements->graph_padding.x;
 			float2_values[1] = &elements->graph_padding.y;
 			float2_upper_bounds[0] = 0.02f;
-			float2_sliders("Graph padding", 2);
+			float2_sliders("Graph padding");
 
 			drawer.FloatSlider(
 				SLIDER_CONFIGURATION,
@@ -539,7 +528,7 @@ namespace ECSEngine {
 			float2_values[1] = &elements->histogram_padding.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_sliders("Histogram padding", 3);
+			float2_sliders("Histogram padding");
 
 			drawer.FloatSlider(
 				SLIDER_CONFIGURATION,
@@ -560,32 +549,23 @@ namespace ECSEngine {
 				4
 			);
 
-			float2_values[0] = &elements->label_horizontal_padd;
-			float2_values[1] = &elements->label_vertical_padd;
+			float2_values[0] = &elements->label_padd.x;
+			float2_values[1] = &elements->label_padd.y;
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.2f;
-			float2_sliders("Label padding", 4);
+			float2_sliders("Label padding");
 
 			float2_values[0] = &elements->slider_length.x;
 			float2_values[1] = &elements->slider_length.y;
 			float2_lower_bounds[0] = 0.01f;
 			float2_upper_bounds[0] = 0.1f;
-			float2_sliders("Slider length", 5);
+			float2_sliders("Slider length");
 
-			float2_values[0] = &elements->slider_padding.x;
-			float2_values[1] = &elements->slider_padding.y;
-			float2_lower_bounds[0] = 0.0f;
-			float2_upper_bounds[0] = 0.05f;
-			float2_sliders("Slider padding", 6);
-
+			float2_lower_bounds[0] = 0.0005f;
+			float2_upper_bounds[0] = 0.005f;
 			float2_values[0] = &elements->slider_shrink.x;
 			float2_values[1] = &elements->slider_shrink.y;
-			float2_sliders("Slider shrink", 7);
-
-			float2_values[0] = &elements->text_input_padding.x;
-			float2_values[1] = &elements->text_input_padding.y;
-			float2_upper_bounds[0] = 0.1f;
-			float2_sliders("Text input padding", 8);
+			float2_sliders("Slider shrink");
 
 			drawer.PopIdentifierStack();
 		}
@@ -604,7 +584,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.font;
 			button_data.descriptor_size = sizeof(UIFontDescriptor);
-			button_data.descriptor_index = UIWindowDrawerDescriptorIndex::Font;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_FONT;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = font;
 			drawer.Button("Default values##32", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -626,7 +606,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.dockspaces;
 			button_data.descriptor_size = sizeof(UIDockspaceDescriptor);
-			button_data.descriptor_index = (UIWindowDrawerDescriptorIndex)10;
+			button_data.descriptor_index = (ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX)10;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = dockspace;
 			drawer.Button("Default values##41", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -660,7 +640,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.materials;
 			button_data.descriptor_size = sizeof(UIMaterialDescriptor);
-			button_data.descriptor_index = (UIWindowDrawerDescriptorIndex)10;
+			button_data.descriptor_index = (ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX)10;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = material;
 			drawer.Button("Default values##53", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -706,7 +686,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.misc;
 			button_data.descriptor_size = sizeof(UIMiscellaneousDescriptor);
-			button_data.descriptor_index = (UIWindowDrawerDescriptorIndex)10;
+			button_data.descriptor_index = (ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX)10;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = misc;
 			drawer.Button("Default values##100", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -810,7 +790,7 @@ namespace ECSEngine {
 			UI_PREPARE_DRAWER(initialize);
 
 			UISystemDescriptors* descriptors = &drawer.GetSystem()->m_descriptors;
-			drawer.SetDrawMode(UIDrawerMode::NextRow);
+			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NEXT_ROW);
 
 			auto color_theme_lambda = [&]() {
 				SystemParametersColorTheme(drawer);
@@ -1018,7 +998,7 @@ namespace ECSEngine {
 			if (IsPointInRectangle(mouse_position, position, scale) && !system->m_execute_events) {
 				system->m_application->ChangeCursor(data->commit_cursor);
 			}
-			data->commit_cursor = CursorType::Default;
+			data->commit_cursor = ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -1046,7 +1026,7 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -1124,13 +1104,13 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { ConfirmWindowOKAction, data, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { ConfirmWindowOKAction, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 			config.flag_count = 0;
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 			// If enter is pressed, confirm the action
 			if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
@@ -1165,7 +1145,7 @@ namespace ECSEngine {
 			
 			void* handler_memory = nullptr;
 			if (handler.data_size > 0) {
-				handler_memory = function::Copy(system->m_memory, handler.data, handler.data_size);
+				handler_memory = function::Copy(system->Allocator(), handler.data, handler.data_size);
 				data.handler.data = handler_memory;
 			}
 
@@ -1292,14 +1272,14 @@ namespace ECSEngine {
 				ChooseOptionActionData index_data;
 				index_data.data = data;
 				index_data.index = index;
-				drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, data->button_names[index], { ChooseOptionAction, &index_data, sizeof(index_data), UIDrawPhase::System });
+				drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, data->button_names[index], { ChooseOptionAction, &index_data, sizeof(index_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 				config.flag_count = 0;
 			}
 
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1352,14 +1332,14 @@ namespace ECSEngine {
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { TextInputWizardConfirmAction, window_data, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { TextInputWizardConfirmAction, window_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 			absolute_transform.scale = drawer.GetLabelScale("Cancel");
 			absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, UIDrawPhase::System });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 		}
 
 		// Additional data is the window data that is TextInputWizardData*
@@ -1544,7 +1524,7 @@ namespace ECSEngine {
 			UI_PREPARE_DRAWER(initialize);
 
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
-			drawer.SetDrawMode(UIDrawerMode::FitSpace);
+			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_FIT_SPACE);
 			drawer.layout.next_row_padding = 0.005f;
 
 			if (initialize) {
@@ -1699,12 +1679,12 @@ namespace ECSEngine {
 			auto draw_sentence = [&](const ConsoleMessage& console_message, unsigned int index) {
 				drawer.NextRow();
 
-				if (console_message.type == ConsoleMessageType::None) {
+				if (console_message.type == ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_MESSAGE_COUNT) {
 					drawer.OffsetX(icon_scale.x + drawer.layout.element_indentation);
 				}
 				else {
-					if (console_message.type == ConsoleMessageType::Error) {
-						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ConsoleMessageType::Error]);
+					if (console_message.type == ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR) {
+						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR]);
 					}
 					else {
 						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.type], CONSOLE_COLORS[(unsigned int)console_message.type]);
@@ -1735,6 +1715,7 @@ namespace ECSEngine {
 				return do_draw;
 			};
 
+			drawer.NextRow(0.25f);
 			if (data->collapse) {
 				// Draw only unique message alongside their counter
 				Stream<UniqueConsoleMessage> unique_counters = data->unique_messages.GetValueStream();
@@ -1808,21 +1789,21 @@ namespace ECSEngine {
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
-				transform.position.x -= label_scale.x - drawer.element_descriptor.label_horizontal_padd;
+				transform.position.x -= label_scale.x - drawer.element_descriptor.label_padd.x;
 
-				transform.position.y += drawer.element_descriptor.label_vertical_padd;
+				transform.position.y += drawer.element_descriptor.label_padd.y;
 				config.AddFlag(transform);
 				drawer.Text(configuration | UI_CONFIG_DO_NOT_CACHE, config, temp_characters);
-				transform.position.y -= drawer.element_descriptor.label_vertical_padd;
+				transform.position.y -= drawer.element_descriptor.label_padd.y;
 				config.flag_count--;
 
-				transform.position.x -= drawer.element_descriptor.label_horizontal_padd + sprite_scale.x;
+				transform.position.x -= drawer.element_descriptor.label_padd.x + sprite_scale.x;
 				transform.scale = sprite_scale;
 				config.AddFlag(transform);
 				drawer.SpriteRectangle(configuration, config, texture, color);
 				config.flag_count--;
 
-				transform.position.x -= drawer.element_descriptor.label_horizontal_padd;
+				transform.position.x -= drawer.element_descriptor.label_padd.x;
 				transform.scale.x = { initial_x_position - transform.position.x };
 				config.AddFlag(transform);
 
@@ -1835,7 +1816,7 @@ namespace ECSEngine {
 				drawer.AddDefaultClickableHoverable(
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y }, 
 					transform.scale, 
-					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), UIDrawPhase::Late },
+					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE },
 					drawer.color_theme.theme
 				);
 				transform.position.x -= border_thickness.x;
@@ -1854,20 +1835,20 @@ namespace ECSEngine {
 				float2 label_scale = drawer.GetLabelScale(temp_characters);
 
 				float initial_x_position = transform.position.x;
-				transform.position.x += drawer.element_descriptor.label_horizontal_padd;
+				transform.position.x += drawer.element_descriptor.label_padd.x;
 				transform.scale = sprite_scale;
 				config.AddFlag(transform);
 				drawer.SpriteRectangle(configuration, config, texture, color);
 				config.flag_count--;
 
-				transform.position.x += sprite_scale.x + drawer.element_descriptor.label_horizontal_padd;
-				transform.position.y += drawer.element_descriptor.label_vertical_padd;
+				transform.position.x += sprite_scale.x + drawer.element_descriptor.label_padd.x;
+				transform.position.y += drawer.element_descriptor.label_padd.y;
 				config.AddFlag(transform);
 				drawer.Text(configuration | UI_CONFIG_DO_NOT_CACHE, config, temp_characters);
-				transform.position.y -= drawer.element_descriptor.label_vertical_padd;
+				transform.position.y -= drawer.element_descriptor.label_padd.y;
 				config.flag_count--;
 
-				transform.position.x += label_scale.x - drawer.element_descriptor.label_horizontal_padd;
+				transform.position.x += label_scale.x - drawer.element_descriptor.label_padd.x;
 				transform.scale.x = { transform.position.x - initial_x_position };
 				transform.position.x = initial_x_position;
 				config.AddFlag(transform);
@@ -1881,7 +1862,7 @@ namespace ECSEngine {
 				drawer.AddDefaultClickableHoverable(
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y },
 					transform.scale,
-					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), UIDrawPhase::Late },
+					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE },
 					drawer.color_theme.theme
 				);
 				transform.position.x += border_thickness.x + transform.scale.x;
@@ -2129,20 +2110,71 @@ namespace ECSEngine {
 						type.fields[0].info.has_default_value = false;
 
 						UIReflectionType* ui_type = data->ui_reflection->CreateType(type);
+						data->ui_reflection->ConvertTypeStreamsToResizable(ui_type);
 						UIReflectionInstance* instance = data->ui_reflection->CreateInstance(type.name, ui_type);
-						data->ui_reflection->BindInstancePtrs(instance, data->sections[index].elements[subindex].data, type);
+
+						// When binding the pointer data, the resizable stream will mirror the nullptr buffer
+						// Record the value to be populated later
+						void* pointer_data = data->sections[index].elements[subindex].data;
+						void* bind_instance_ptr = pointer_data;
+						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
+							bind_instance_ptr = &data->sections[index].elements[subindex].data;
+						}
+						data->ui_reflection->BindInstancePtrs(instance, bind_instance_ptr, type);
 
 						// Bind the stream capacity - if different from capacity stream
 						if (data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::CapacityStream && 
 							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Basic &&
-							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
-							UIReflectionBindStreamCapacity capacity;
-							capacity.capacity = data->sections[index].elements[subindex].stream_capacity;
-							capacity.field_name = data->sections[index].elements[subindex].name;
-							data->ui_reflection->BindInstanceStreamCapacity(instance, { &capacity, 1 });
+							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Unknown
+						) {
+							bool is_text_input = memcmp(data->sections[index].elements[subindex].basic_type_string, STRING(char), strlen(STRING(char))) == 0;
+							bool is_path_input = memcmp(data->sections[index].elements[subindex].basic_type_string, STRING(wchar_t), strlen(STRING(wchar_t))) == 0;
+							if (!is_text_input && !is_path_input)
+							{
+								UIReflectionBindResizableStreamAllocator bind;
+								bind.allocator = GetAllocatorPolymorphic(data->ui_reflection->allocator);
+								bind.field_name = data->sections[index].elements[subindex].name;
+								data->ui_reflection->BindInstanceResizableStreamAllocator(instance, { &bind, 1 });
 
-							capacity.capacity = data->sections[index].elements[subindex].stream_size;
-							data->ui_reflection->BindInstanceStreamSize(instance, { &capacity, 1 });
+								if (data->sections[index].elements[subindex].stream_size > 0) {
+									UIReflectionBindResizableStreamData resize_data;
+									resize_data.field_name = data->sections[index].elements[subindex].name;
+									resize_data.data = { pointer_data, data->sections[index].elements[subindex].stream_size };
+									data->ui_reflection->BindInstanceResizableStreamData(instance, { &resize_data, 1 });
+								}
+							}
+							else {
+								if (is_text_input) {
+									void* allocation = malloc(sizeof(CapacityStream<char>) + sizeof(char) * 128);
+									UIReflectionBindTextInput bind;
+									bind.field_name = data->sections[index].elements[subindex].name;
+									bind.stream = (CapacityStream<char>*)allocation;
+									bind.stream->buffer = (char*)function::OffsetPointer(allocation, sizeof(CapacityStream<char>));
+									bind.stream->size = 0;
+									bind.stream->capacity = 128;
+
+									if (data->sections[index].elements[subindex].stream_size > 0) {
+										memcpy(bind.stream->buffer, pointer_data, sizeof(char)* data->sections[index].elements[subindex].stream_size);
+										bind.stream->size = data->sections[index].elements[subindex].stream_size;
+									}
+									data->ui_reflection->BindInstanceTextInput(instance, { &bind, 1 });
+								}
+								else {
+									void* allocation = malloc(sizeof(CapacityStream<wchar_t>) + sizeof(wchar_t) * 256);
+									UIReflectionBindDirectoryInput bind;
+									bind.field_name = data->sections[index].elements[subindex].name;
+									bind.stream = (CapacityStream<wchar_t>*)allocation;
+									bind.stream->buffer = (wchar_t*)function::OffsetPointer(allocation, sizeof(CapacityStream<wchar_t>));
+									bind.stream->size = 0;
+									bind.stream->capacity = 256;
+
+									if (data->sections[index].elements[subindex].stream_size > 0) {
+										memcpy(bind.stream->buffer, pointer_data, sizeof(wchar_t) * data->sections[index].elements[subindex].stream_size);
+										bind.stream->size = data->sections[index].elements[subindex].stream_size;
+									}
+									data->ui_reflection->BindInstanceDirectoryInput(instance, { &bind, 1 });
+								}
+							}
 						}
 					}
 				}

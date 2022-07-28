@@ -149,7 +149,7 @@ namespace ECSEngine {
 			ptr += sizeof(float) * count;
 			scale_y = (float*)ptr;
 
-			ptr = function::align_pointer(ptr, alignof(UIActionHandler));
+			ptr = function::AlignPointer(ptr, alignof(UIActionHandler));
 			action = (UIActionHandler*)ptr;
 		}
 
@@ -176,7 +176,6 @@ namespace ECSEngine {
 				action_data->position = hoverable_transform.position;
 				action_data->scale = hoverable_transform.scale;
 				action_data->additional_data = additional_hoverable_data;
-				action_data->additional_data_type = additional_hoverable_data_type;
 				hoverable_handler.action(action_data);
 				return true;
 			}
@@ -202,7 +201,6 @@ namespace ECSEngine {
 				action_data->position = general_transform.position;
 				action_data->scale = general_transform.scale;
 				action_data->additional_data = additional_general_data;
-				action_data->additional_data_type = additional_general_data_type;
 				general_handler.action(action_data);
 				return true;
 			}
@@ -214,7 +212,7 @@ namespace ECSEngine {
 			hoverable_handler.action = nullptr;
 			hoverable_handler.data = nullptr;
 			hoverable_handler.data_size = 0;
-			hoverable_handler.phase = UIDrawPhase::Normal;
+			hoverable_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 			clean_up_call_hoverable = false;
 			always_hoverable = false;
 		}
@@ -224,7 +222,7 @@ namespace ECSEngine {
 			clickable_handler.action = nullptr;
 			clickable_handler.data = nullptr;
 			clickable_handler.data_size = 0;
-			clickable_handler.phase = UIDrawPhase::Normal;
+			clickable_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 		}
 
 		void UIFocusedWindowData::ResetGeneralHandler()
@@ -232,7 +230,7 @@ namespace ECSEngine {
 			general_handler.action = nullptr;
 			general_handler.data = nullptr;
 			general_handler.data_size = 0;
-			general_handler.phase = UIDrawPhase::Normal;
+			general_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 			clean_up_call_general = false;
 		}
 
@@ -265,7 +263,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			UIDrawPhase phase
+			ECS_UI_DRAW_PHASE phase
 		)
 		{
 			clickable_handler.action = action;
@@ -278,7 +276,7 @@ namespace ECSEngine {
 			};
 		}
 
-		void UIFocusedWindowData::ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, UIDrawPhase phase)
+		void UIFocusedWindowData::ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase)
 		{
 			hoverable_handler.action = action;
 			hoverable_handler.data = data;
@@ -293,7 +291,7 @@ namespace ECSEngine {
 			Action action, 
 			void* data, 
 			size_t data_size,
-			UIDrawPhase phase
+			ECS_UI_DRAW_PHASE phase
 		) {
 			ChangeHoverableHandler({ position, scale }, action, data, data_size, phase);
 		}
@@ -318,7 +316,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			UIDrawPhase phase
+			ECS_UI_DRAW_PHASE phase
 		)
 		{
 			clickable_handler.action = action;
@@ -350,7 +348,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			UIDrawPhase phase
+			ECS_UI_DRAW_PHASE phase
 		)
 		{
 			general_handler.action = action;
@@ -368,7 +366,7 @@ namespace ECSEngine {
 			Action action,
 			void* data,
 			size_t data_size,
-			UIDrawPhase phase
+			ECS_UI_DRAW_PHASE phase
 		)
 		{
 			general_handler.action = action;
@@ -483,7 +481,7 @@ namespace ECSEngine {
 			last_command = command;
 		}
 
-		void UIDefaultWindowHandler::ChangeCursor(CursorType cursor)
+		void UIDefaultWindowHandler::ChangeCursor(ECS_CURSOR_TYPE cursor)
 		{
 			commit_cursor = cursor;
 		}
@@ -619,12 +617,9 @@ namespace ECSEngine {
 			element_descriptor.graph_x_axis_space *= factor.x;
 			element_descriptor.histogram_bar_spacing *= factor.x;
 			element_descriptor.histogram_padding *= factor;
-			element_descriptor.label_horizontal_padd *= factor.x;
-			element_descriptor.label_vertical_padd *= factor.y;
+			element_descriptor.label_padd *= factor;
 			element_descriptor.slider_length *= factor;
-			element_descriptor.slider_padding *= factor;
 			element_descriptor.slider_shrink *= factor;
-			element_descriptor.text_input_padding *= factor;
 		}
 
 		size_t UIWindow::Serialize(void* buffer) const
@@ -635,10 +630,10 @@ namespace ECSEngine {
 			*/
 
 			uintptr_t ptr = (uintptr_t)buffer;
-			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count);
+			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
 		
 			// configured descriptors
-			ptr += sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count;
+			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
@@ -654,7 +649,7 @@ namespace ECSEngine {
 			};
 
 			// descriptors
-			for (size_t index = 0; index < (unsigned int)UIWindowDrawerDescriptorIndex::Count; index++) {
+			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					memcpy((void*)ptr, descriptor_ptrs[index], descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];
@@ -677,7 +672,7 @@ namespace ECSEngine {
 			size_t size = 0;
 
 			// configured descriptors
-			size += sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count;
+			size += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			size_t descriptor_sizes[] = {
 				sizeof(UIColorThemeDescriptor),
@@ -687,7 +682,7 @@ namespace ECSEngine {
 			};
 
 			// descriptors
-			for (size_t index = 0; index < (unsigned int)UIWindowDrawerDescriptorIndex::Count; index++) {
+			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					size += descriptor_sizes[index];
 				}
@@ -706,7 +701,7 @@ namespace ECSEngine {
 			uintptr_t ptr = (uintptr_t)buffer;
 
 			// descriptor configurations
-			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count);
+			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
 			
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
@@ -721,10 +716,10 @@ namespace ECSEngine {
 				sizeof(UIElementDescriptor)
 			};
 
-			ptr += sizeof(bool) * (unsigned int)UIWindowDrawerDescriptorIndex::Count;
+			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			// configured descriptors
-			for (size_t index = 0; index < (unsigned int)UIWindowDrawerDescriptorIndex::Count; index++) {
+			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					memcpy(descriptor_ptrs[index], (const void*)ptr, descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];

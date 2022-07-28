@@ -9,31 +9,33 @@ namespace ECSEngine {
 
 #define CONSOLE_APPEREANCE_TABLE_COUNT 256
 
-#define CONSOLE_VERBOSITY_MINIMAL 0
-#define CONSOLE_VERBOSITY_MEDIUM 1
-#define CONSOLE_VERBOSITY_DETAILED 2
+	enum ECS_CONSOLE_VERBOSITY : unsigned char {
+		ECS_CONSOLE_VERBOSITY_MINIMAL,
+		ECS_CONSOLE_VERBOSITY_MEDIUM,
+		ECS_CONSOLE_VERBOSITY_DETAILED
+	};
 
 #define CONSOLE_SYSTEM_FILTER_ALL 0xFFFFFFFFFFFFFFFF
 
-	enum class ConsoleMessageType : unsigned char {
-		Info,
-		Warn,
-		Error,
-		Trace,
-		None
+	enum ECS_CONSOLE_MESSAGE_TYPE : unsigned char {
+		ECS_CONSOLE_INFO,
+		ECS_CONSOLE_WARN,
+		ECS_CONSOLE_ERROR,
+		ECS_CONSOLE_TRACE,
+		ECS_CONSOLE_MESSAGE_COUNT
 	};
 
-	enum class ConsoleDumpType : unsigned char {
-		CountMessages,
-		OnCall,
-		None
+	enum ECS_CONSOLE_DUMP_TYPE : unsigned char {
+		ECS_CONSOLE_DUMP_COUNT,
+		ECS_CONSOLE_DUMP_ON_CALL,
+		ECS_CONSOLE_DUMP_NONE
 	};
 
 	struct ConsoleMessage {
 		Stream<char> message;
 		unsigned char client_message_start;
-		ConsoleMessageType type = ConsoleMessageType::None;
-		unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL;
+		ECS_CONSOLE_MESSAGE_TYPE type = ECS_CONSOLE_MESSAGE_COUNT;
+		unsigned char verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL;
 		size_t system_filter;
 	};
 
@@ -64,19 +66,19 @@ namespace ECSEngine {
 		// Dumps from the start
 		void Dump();
 
-		void Message(Stream<char> message, ConsoleMessageType type, const char* system = nullptr, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
+		void Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, const char* system = nullptr, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-		void Info(Stream<char> message, const char* system = nullptr, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
+		void Info(Stream<char> message, const char* system = nullptr, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-		void Warn(Stream<char> message, const char* system = nullptr, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
+		void Warn(Stream<char> message, const char* system = nullptr, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-		void Error(Stream<char> message, const char* system = nullptr, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
+		void Error(Stream<char> message, const char* system = nullptr, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-		void Trace(Stream<char> message, const char* system = nullptr, unsigned char verbosity = CONSOLE_VERBOSITY_MINIMAL);
+		void Trace(Stream<char> message, const char* system = nullptr, ECS_CONSOLE_VERBOSITY verbosity = ECS_CONSOLE_VERBOSITY_MINIMAL);
 
 		void WriteFormatCharacters(Stream<char>& characters);
 
-		void SetDumpType(ConsoleDumpType type, unsigned int count = 1);
+		void SetDumpType(ECS_CONSOLE_DUMP_TYPE type, unsigned int count = 1);
 
 		void SetFormat(size_t format);
 		void SetVerbosity(unsigned char new_level);
@@ -89,7 +91,7 @@ namespace ECSEngine {
 		SpinLock lock;
 		bool pause_on_error;
 		unsigned char verbosity_level;
-		ConsoleDumpType dump_type;
+		ECS_CONSOLE_DUMP_TYPE dump_type;
 		unsigned int last_dumped_message;
 		unsigned int dump_count_for_commit;
 		const wchar_t* dump_path;

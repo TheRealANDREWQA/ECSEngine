@@ -17,34 +17,36 @@ namespace ECSEngine {
 
 		using UIDrawerTextInputFilter = bool (*)(char, CharacterType);
 
-		using UIDrawerSliderInterpolate = void (*)(const void* lower_bound, const void* upper_bound, void* value, float percentage);
-		using UIDrawerSliderPercentage = float (*)(const void* lower_bound, const void* upper_bound, const void* value);
-		using UIDrawerSliderToString = void (*)(CapacityStream<char>& characters, const void* data, void* extra_data);
-		using UIDrawerSliderConvertTextInput = void (*)(CapacityStream<char>& characters, void* data);
-		using UIDrawerSliderIsSmaller = bool (*)(const void* left, const void* right);
+		typedef void (*UIDrawerSliderInterpolate)(const void* lower_bound, const void* upper_bound, void* value, float percentage);
+		typedef void (*UIDrawerSliderFromFloat)(void* value, float factor);
+		typedef float (*UIDrawerSliderToFloat)(const void* value);
+		typedef float (*UIDrawerSliderPercentage)(const void* lower_bound, const void* upper_bound, const void* value);
+		typedef void (*UIDrawerSliderToString)(CapacityStream<char>& characters, const void* data, void* extra_data);
+		typedef void (*UIDrawerSliderConvertTextInput)(CapacityStream<char>& characters, void* data);
+		typedef bool (*UIDrawerSliderIsSmaller)(const void* left, const void* right);
 
-		enum class UIDrawerMode : unsigned char {
-			Indent,
-			NextRow,
-			NextRowCount,
-			FitSpace,
-			ColumnDraw,
-			ColumnDrawFitSpace,
-			Nothing
+		enum ECS_UI_DRAWER_MODE : unsigned char {
+			ECS_UI_DRAWER_INDENT,
+			ECS_UI_DRAWER_NEXT_ROW,
+			ECS_UI_DRAWER_NEXT_ROW_COUNT,
+			ECS_UI_DRAWER_FIT_SPACE,
+			ECS_UI_DRAWER_COLUMN_DRAW,
+			ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE,
+			ECS_UI_DRAWER_NOTHING
 		};
 
-		enum class TextAlignment : unsigned char {
-			Left,
-			Right,
-			Middle,
-			Top,
-			Bottom
+		enum ECS_UI_TEXT_ALIGN : unsigned char {
+			ECS_UI_TEXT_ALIGN_LEFT,
+			ECS_UI_TEXT_ALIGN_RIGHT,
+			ECS_UI_TEXT_ALIGN_MIDDLE,
+			ECS_UI_TEXT_ALIGN_TOP,
+			ECS_UI_TEXT_ALIGN_BOTTOM
 		};
 
-		enum class WindowSizeTransformType : unsigned char {
-			Horizontal,
-			Vertical,
-			Both
+		enum ECS_UI_WINDOW_DEPENDENT_SIZE : unsigned char {
+			ECS_UI_WINDOW_DEPENDENT_HORIZONTAL,
+			ECS_UI_WINDOW_DEPENDENT_VERTICAL,
+			ECS_UI_WINDOW_DEPENDENT_BOTH
 		};
 
 		struct ECSENGINE_API UIConfigAbsoluteTransform {
@@ -70,7 +72,7 @@ namespace ECSEngine {
 				return UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 			}
 
-			WindowSizeTransformType type = WindowSizeTransformType::Horizontal;
+			ECS_UI_WINDOW_DEPENDENT_SIZE type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 			float2 offset = { 0.0f, 0.0f };
 			float2 scale_factor = { 1.0f, 1.0f };
 		};
@@ -90,8 +92,8 @@ namespace ECSEngine {
 				return UI_CONFIG_TEXT_ALIGNMENT;
 			}
 
-			TextAlignment horizontal = TextAlignment::Middle;
-			TextAlignment vertical = TextAlignment::Middle;
+			ECS_UI_TEXT_ALIGN horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+			ECS_UI_TEXT_ALIGN vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
 		};
 
 		struct ECSENGINE_API UIConfigColor {
@@ -131,7 +133,7 @@ namespace ECSEngine {
 				return UI_CONFIG_SLIDER_PADDING;
 			}
 
-			float value = ECS_TOOLS_UI_SLIDER_PADDING_X;
+			float value = ECS_TOOLS_UI_LABEL_HORIZONTAL_PADD;
 		};
 
 		struct ECSENGINE_API UIConfigSliderLength {
@@ -181,6 +183,8 @@ namespace ECSEngine {
 
 		struct UIDrawerSliderFunctions {
 			UIDrawerSliderInterpolate interpolate;
+			UIDrawerSliderFromFloat from_float;
+			UIDrawerSliderToFloat to_float;
 			UIDrawerSliderPercentage percentage;
 			UIDrawerSliderToString to_string;
 			UIDrawerSliderConvertTextInput convert_text_input;
@@ -229,63 +233,36 @@ namespace ECSEngine {
 				function::ConvertIntToChars(characters, *(const Integer*)_value);
 			};
 
+			auto from_float = [](void* value, float float_percentage) {
+				Integer* integer_value = (Integer*)value;
+				Integer min, max;
+				function::IntegerRange<Integer>(min, max);
+				int64_t min_64 = min;
+				int64_t max_64 = max;
+
+				int64_t percentage_64 = (int64_t)float_percentage;
+				*integer_value = function::Clamp(percentage_64, min_64, max_64);
+			};
+
+			auto to_float = [](const void* value) {
+				return (float)(*(Integer*)value);
+			};
+
 			result.convert_text_input = convert_text_input;
 			result.to_string = to_string;
 			result.extra_data = nullptr;
 			result.interpolate = UIDrawerSliderInterpolateImplementation<Integer>;
 			result.is_smaller = UIDrawerSliderIsSmallerImplementation<Integer>;
 			result.percentage = UIDrawerSliderPercentageImplementation<Integer>;
+			result.from_float = from_float;
+			result.to_float = to_float;
 
 			return result;
 		}
 
-		inline UIDrawerSliderFunctions UIDrawerGetFloatSliderFunctions(unsigned int& precision) {
-			UIDrawerSliderFunctions result;
+		ECSENGINE_API UIDrawerSliderFunctions UIDrawerGetFloatSliderFunctions(unsigned int& precision);
 
-			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
-				float character_value = function::ConvertCharactersToFloat(characters);
-				float* value = (float*)_value;
-				*value = character_value;
-			};
-
-			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
-				characters.size = 0;
-				function::ConvertFloatToChars(characters, *(const float*)_value, *(unsigned int*)extra_data);
-			};
-
-			result.convert_text_input = convert_text_input;
-			result.to_string = to_string;
-			result.extra_data = &precision;
-			result.interpolate = UIDrawerSliderInterpolateImplementation<float>;
-			result.is_smaller = UIDrawerSliderIsSmallerImplementation<float>;
-			result.percentage = UIDrawerSliderPercentageImplementation<float>;
-
-			return result;
-		}
-
-		inline UIDrawerSliderFunctions UIDrawerGetDoubleSliderFunctions(unsigned int& precision) {
-			UIDrawerSliderFunctions result;
-
-			auto convert_text_input = [](CapacityStream<char>& characters, void* _value) {
-				double character_value = function::ConvertCharactersToDouble(characters);
-				double* value = (double*)_value;
-				*value = character_value;
-			};
-
-			auto to_string = [](CapacityStream<char>& characters, const void* _value, void* extra_data) {
-				characters.size = 0;
-				function::ConvertDoubleToChars(characters, *(const double*)_value, *(unsigned int*)extra_data);
-			};
-
-			result.convert_text_input = convert_text_input;
-			result.to_string = to_string;
-			result.extra_data = &precision;
-			result.interpolate = UIDrawerSliderInterpolateImplementation<double>;
-			result.is_smaller = UIDrawerSliderIsSmallerImplementation<double>;
-			result.percentage = UIDrawerSliderPercentageImplementation<double>;
-
-			return result;
-		}
+		ECSENGINE_API UIDrawerSliderFunctions UIDrawerGetDoubleSliderFunctions(unsigned int& precision);
 
 		struct ECSENGINE_API UIConfigTextInputHint {
 			static inline constexpr size_t GetAssociatedBit() {
@@ -313,7 +290,7 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIConfigHoverableAction {
 			static inline constexpr size_t GetAssociatedBit() {
-				return UI_CONFIG_HOVERABLE_ACTION;
+				return UI_CONFIG_RECTANGLE_HOVERABLE_ACTION;
 			}
 
 			UIActionHandler handler;
@@ -321,7 +298,7 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIConfigClickableAction {
 			static inline constexpr size_t GetAssociatedBit() {
-				return UI_CONFIG_CLICKABLE_ACTION;
+				return UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
 			}
 
 			UIActionHandler handler;
@@ -329,7 +306,7 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API UIConfigGeneralAction {
 			static inline constexpr size_t GetAssociatedBit() {
-				return UI_CONFIG_GENERAL_ACTION;
+				return UI_CONFIG_RECTANGLE_GENERAL_ACTION;
 			}
 
 			UIActionHandler handler;
@@ -793,14 +770,22 @@ namespace ECSEngine {
 			UIActionHandler callback;
 		};
 
-		enum class UIDrawerReturnToDefaultDescriptorType : unsigned char {
-			ColorTheme,
-			Layout,
-			Font,
-			ElementDescriptor,
-			Material,
-			Miscellaneous,
-			Dockspace
+		struct ECSENGINE_API UIConfigColorFloatCallback {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_COLOR_FLOAT_CALLBACK;
+			}
+
+			UIActionHandler callback;
+		};
+
+		enum ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_TYPE : unsigned char {
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_COLOR_THEME,
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_LAYOUT,
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_FONT,
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_ELEMENT,
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_MATERIAL,
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_MISC,
+			ECS_UI_DRAWER_RETURN_TO_DEFAULT_DESCRIPTOR_DOCKSPACE
 		};
 
 		struct UIParameterWindowReturnToDefaultButtonData {
@@ -808,13 +793,13 @@ namespace ECSEngine {
 			void* system_descriptor;
 			void* default_descriptor;
 			bool is_system_theme;
-			UIWindowDrawerDescriptorIndex descriptor_index;
+			ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX descriptor_index;
 			unsigned int descriptor_size;
 		};
 
 		struct ECSENGINE_API UIConfigToolTip {
 			inline static constexpr size_t GetAssociatedBit() {
-				return UI_CONFIG_TOOL_TIP;
+				return UI_CONFIG_RECTANGLE_TOOL_TIP;
 			}
 
 			const char* characters;
@@ -895,7 +880,7 @@ namespace ECSEngine {
 			Stream<char> active_label;
 			Stream<char> selected_label_temporary;
 			Stream<char> right_click_label_temporary;
-			HashTable<UIDrawerLabelHierarchyLabelData, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> label_states;
+			HashTableDefault<UIDrawerLabelHierarchyLabelData> label_states;
 			Action selectable_callback;
 			void* selectable_callback_data;
 			Action right_click_callback;
@@ -929,7 +914,7 @@ namespace ECSEngine {
 			Action callback;
 			void* callback_data;
 			unsigned int callback_data_size = 0;
-			UIDrawPhase phase = UIDrawPhase::Normal;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 			bool copy_on_initialization = false;
 		};
 
@@ -952,7 +937,7 @@ namespace ECSEngine {
 			Action callback;
 			void* data;
 			unsigned int data_size = 0;
-			UIDrawPhase phase = UIDrawPhase::Normal;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 			bool copy_on_initialization = false;
 		};
 
@@ -967,7 +952,7 @@ namespace ECSEngine {
 			Action* callback;
 			void** data;
 			unsigned int* data_size;
-			UIDrawPhase* phase;
+			ECS_UI_DRAW_PHASE* phase;
 			unsigned int count;
 		};
 
@@ -982,7 +967,7 @@ namespace ECSEngine {
 			Action* callback;
 			void** data;
 			unsigned int* data_size;
-			UIDrawPhase* phase;
+			ECS_UI_DRAW_PHASE* phase;
 			unsigned int count;
 		};
 
@@ -997,7 +982,7 @@ namespace ECSEngine {
 			Action* callback;
 			void** data;
 			unsigned int* data_size;
-			UIDrawPhase* phase;
+			ECS_UI_DRAW_PHASE* phase;
 			unsigned int count;
 		};
 
@@ -1187,7 +1172,23 @@ namespace ECSEngine {
 		struct UIDrawerInitializeTextInput {
 			UIDrawConfig* config;
 			const char* name;
-			CapacityStream<char>* text_to_fill;
+			union {
+				CapacityStream<char>* text_to_fill;
+				ResizableStream<char>* resizable_text_to_fill;
+			};
+		};
+
+		struct UIDrawerInitializePathInput {
+			UIDrawConfig* config;
+			const char* name;
+			union {
+				CapacityStream<wchar_t>* capacity_characters;
+				struct {
+					Stream<wchar_t>* stream_characters;
+					AllocatorPolymorphic allocator;
+				};
+			};
+			Stream<const wchar_t*> extensions;
 		};
 
 		struct UIDrawerLabelList {
@@ -1230,8 +1231,8 @@ namespace ECSEngine {
 		struct UIDrawerArrayData {
 			bool collapsing_header_state;
 			bool drag_is_released;
-			UIDrawPhase add_callback_phase;
-			UIDrawPhase remove_callback_phase;
+			ECS_UI_DRAW_PHASE add_callback_phase;
+			ECS_UI_DRAW_PHASE remove_callback_phase;
 			unsigned int drag_index;
 			float drag_current_position;
 			float row_y_scale;
@@ -1312,7 +1313,92 @@ namespace ECSEngine {
 			}
 		
 			UIActionHandler handler;
-			bool disable_value_to_modify = true;
+			bool disable_value_to_modify = false;
+		};
+
+		// With this config the path input can be restricted to only paths that start from the given roots
+		struct ECSENGINE_API UIConfigPathInputRoot {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_PATH_INPUT_ROOT;
+			}
+
+			Stream<Stream<wchar_t>> roots;
+		};
+
+		// Can choose between directly giving the files or giving a callback that will be called
+		// when the user presses the folder button
+		// The callback will receive as parameter in the additional_data a ResizableStream<Stream<wchar_t>>*
+		// in order to make visible to the external function the files. The strings must be allocated
+		// from that buffer such that they are visible to the outer scope
+		struct ECSENGINE_API UIConfigPathInputGiveFiles {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_PATH_INPUT_GIVE_FILES;
+			}
+
+			union {
+				Stream<Stream<wchar_t>> files;
+				UIActionHandler callback_handler;
+			};
+			bool is_callback = false;
+		};
+
+		struct UIDrawer;
+		struct UIDrawerTextInput;
+
+		// This is given through the additional_data field
+		// Must update both the input and the path
+		struct UIConfigPathInputCustomFilesystemDrawData {
+			UIDrawer* drawer;
+			UIDrawerTextInput* input;
+			CapacityStream<wchar_t>* path;
+			bool should_destroy;
+		};
+
+		// Provide an action which draws and receives the user input
+		// The action receives in the additional_data field an UIConfigPathInputCustomFilesystemDrawData*
+		// When finishing, it can either signal a flag or directly add a destroy window handler
+		// with the index from the UIDrawer. Change the input in order to reflect the modification
+		struct ECSENGINE_API UIConfigPathInputCustomFilesystem {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_PATH_INPUT_CUSTOM_FILESYSTEM;
+			}
+
+			UIActionHandler callback;
+		};
+
+		// Receives the path as CapacityStream<wchar_t>* to the additional_data parameter
+		struct ECSENGINE_API UIConfigPathInputCallback {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_PATH_INPUT_CALLBACK;
+			}
+
+			UIActionHandler callback;
+		};
+
+		struct ECSENGINE_API UIConfigPathInputSpriteTexture {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_PATH_INPUT_SPRITE_TEXTURE;
+			}
+
+			const wchar_t* texture;
+		};
+
+		struct ECSENGINE_API UIConfigNamePadding {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_NAME_PADDING;
+			}
+
+			ECS_UI_TEXT_ALIGN alignment = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_LEFT;
+			float total_length = -1.0f;
+			float offset_size = 0.0f;
+ 		};
+
+		struct ECSENGINE_API UIConfigSliderMouseDraggable {
+			inline static constexpr size_t GetAssociatedBit() {
+				return UI_CONFIG_SLIDER_MOUSE_DRAGGABLE;
+			}
+
+			bool interpolate_bounds = true;
 		};
 
 	}

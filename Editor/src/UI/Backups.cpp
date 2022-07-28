@@ -193,7 +193,7 @@ void BackupsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		float current_row_y_scale = data->drawer->current_row_y_scale;
 
 		restore_data.path = restore_path;
-		data->drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, *data->config, "Restore", { RestoreBackupAction, &restore_data, sizeof(restore_data) });
+		data->drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ALIGN_TO_ROW_Y, *data->config, "Restore", { RestoreBackupAction, &restore_data, sizeof(restore_data) });
 		data->config->flag_count--;
 		
 		// Draw the delete button to the left of the restore button
@@ -206,7 +206,7 @@ void BackupsDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		data->drawer->current_row_y_scale = current_row_y_scale;
 
 		data->config->AddFlag(*data->delete_transform);
-		data->drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, *data->config, "Delete", { DeleteBackupAction, &delete_data, sizeof(delete_data) });
+		data->drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ALIGN_TO_ROW_Y, *data->config, "Delete", { DeleteBackupAction, &delete_data, sizeof(delete_data) });
 		data->config->flag_count--;
 
 		data->drawer->NextRow();

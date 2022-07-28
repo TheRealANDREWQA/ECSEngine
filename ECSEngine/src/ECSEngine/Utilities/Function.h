@@ -33,20 +33,20 @@ namespace ECSEngine {
 			}
 		}
 
-		inline bool is_power_of_two(int x) {
+		inline bool IsPowerOfTwo(int x) {
 			return (x & (x - 1)) == 0;
 		}
 
-		inline uintptr_t align_pointer(uintptr_t pointer, size_t alignment) {
-			ECS_ASSERT(is_power_of_two(alignment));
+		inline uintptr_t AlignPointer(uintptr_t pointer, size_t alignment) {
+			ECS_ASSERT(IsPowerOfTwo(alignment));
 
 			size_t mask = alignment - 1;
 			return (pointer + mask) & ~mask;
 		}
 
 		/* Supports alignments up to 256 bytes */
-		inline uintptr_t align_pointer_stack(uintptr_t pointer, size_t alignment) {
-			uintptr_t first_aligned_pointer = align_pointer(pointer, alignment);
+		inline uintptr_t AlignPointerStack(uintptr_t pointer, size_t alignment) {
+			uintptr_t first_aligned_pointer = AlignPointer(pointer, alignment);
 			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
 		}
 
@@ -59,6 +59,14 @@ namespace ECSEngine {
 				count++;
 			}
 			return {value, count};
+		}
+
+		// Extends the 47th bit into the 48-63 range
+		inline void* SignExtendPointer(const void* pointer) {
+			intptr_t ptr = (intptr_t)pointer;
+			ptr <<= 16;
+			ptr >>= 16;
+			return (void*)ptr;
 		}
 
 		// pointers should be aligned preferably to 32 bytes at least
@@ -181,7 +189,23 @@ namespace ECSEngine {
 		// duration should be expressed as milliseconds
 		ECSENGINE_API void ConvertDurationToChars(size_t duration, char* characters);
 
-		const char* FindTokenReverse(const char* ECS_RESTRICT characters, const char* ECS_RESTRICT token);
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strstr, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
+		// until the end of the characters string
+		ECSENGINE_API Stream<char> FindFirstToken(Stream<char> characters, const char* token);
+
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strchr, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exit, else a string that starts with the token
+		// until the end of the character string
+		ECSENGINE_API Stream<char> FindFirstCharacter(Stream<char> characters, char token);
+
+		// It will search from the end of the characters string till its start
+		ECSENGINE_API const char* FindTokenReverse(const char* characters, const char* token);
+
+		// It will search the string from ending character until lower bound
+		ECSENGINE_API const char* FindCharacterReverse(const char* ending_character, const char* lower_bound, char character);
 
 		inline void Capitalize(char* character) {
 			if (*character >= 'a' && *character <= 'z') {
@@ -190,7 +214,7 @@ namespace ECSEngine {
 		}
 
 		// Used to copy data into a pointer passed by its address
-		struct ECSENGINE_API CopyPointer {
+		struct CopyPointer {
 			void** destination;
 			void* data;
 			size_t data_size;
@@ -256,6 +280,9 @@ namespace ECSEngine {
 			return CompareStrings(Stream<char>(string, string_size), Stream<char>(other, other_size));
 		}
 
+		// It will remap the pointer from the first base into the second base
+		ECSENGINE_API void* RemapPointer(const void* first_base, const void* second_base, const void* pointer);
+
 		ECSENGINE_API unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other);
 
 		ECSENGINE_API unsigned int FindString(Stream<char> string, Stream<Stream<char>> other);
@@ -264,8 +291,8 @@ namespace ECSEngine {
 
 		ECSENGINE_API unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other);
 
-		inline void* OffsetPointer(const void* pointer, size_t offset) {
-			return (void*)((uintptr_t)pointer + offset);
+		inline void* OffsetPointer(const void* pointer, int64_t offset) {
+			return (void*)((int64_t)pointer + offset);
 		}
 
 		inline void* OffsetPointer(Stream<void> pointer) {
@@ -274,6 +301,23 @@ namespace ECSEngine {
 
 		inline void* OffsetPointer(CapacityStream<void> pointer) {
 			return OffsetPointer(pointer.buffer, pointer.size);
+		}
+
+		// a - b
+		inline size_t PointerDifference(const void* a, const void* b) {
+			return (uintptr_t)a - (uintptr_t)b;
+		}
+
+		// Returns true if the pointer >= base && pointer < base + size
+		inline bool IsPointerRange(const void* base, size_t size, const void* pointer) {
+			return pointer >= base && PointerDifference(pointer, base) < size;
+		}
+
+		inline void* RemapPointerIfInRange(const void* base, size_t size, const void* new_base, const void* pointer) {
+			if (IsPointerRange(base, size, pointer)) {
+				return RemapPointer(base, new_base, pointer);
+			}
+			return (void*)pointer;
 		}
 
 		// If data size is zero, it will return data, else it will make a copy and return that instead

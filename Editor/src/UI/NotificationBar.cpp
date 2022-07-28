@@ -82,11 +82,11 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		const ConsoleMessage* message = console->messages.buffer + message_index;
 
 		UIConfigRelativeTransform relative_transform;
-		relative_transform.scale.y = TEXT_LABEL_Y_SIZE / drawer.layout.default_element_y;
+		relative_transform.scale.y = drawer.GetRelativeTransformFactors({ 0.0f, TEXT_LABEL_Y_SIZE }).y;
 		relative_transform.offset.y = (NOTIFICATION_BAR_WINDOW_SIZE - TEXT_LABEL_Y_SIZE) * 0.5f;
 		config.AddFlag(relative_transform);
 		Color sprite_color = ECS_COLOR_WHITE;
-		if (message->type != ConsoleMessageType::Error) {
+		if (message->type != ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR) {
 			sprite_color = CONSOLE_COLORS[(unsigned int)message->type];
 		}
 
@@ -103,7 +103,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		config.AddFlag(text_params);
 
 		UIConfigTextAlignment text_alignment;
-		text_alignment.horizontal = TextAlignment::Left;
+		text_alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_LEFT;
 		config.AddFlag(text_alignment);
 
 		char* new_line = strchr(message->message.buffer, '\n');
@@ -123,7 +123,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		float2 notification_size = drawer.GetLabelScale(message->message.buffer);
 		if (notification_size.x > NOTIFICATION_MESSAGE_SIZE) {			
 			drawer.Indent(-1.0f);
-			drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_HORIZONTAL_DOTS, drawer.color_theme.default_text);
+			drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_HORIZONTAL_DOTS, drawer.color_theme.text);
 		}
 
 	}

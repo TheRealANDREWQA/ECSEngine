@@ -10,7 +10,7 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
-	ShaderIncludeFiles::ShaderIncludeFiles(MemoryManager* _memory, Stream<wchar_t> _shader_directory) : memory(_memory), shader_directory(_shader_directory) {}
+	ShaderIncludeFiles::ShaderIncludeFiles(MemoryManager* _memory, Stream<Stream<wchar_t>> _shader_directory) : memory(_memory), shader_directory(_shader_directory) {}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
@@ -42,7 +42,7 @@ namespace ECSEngine {
 			Stream<wchar_t> current_filename = function::PathFilename(current_path);
 
 			if (function::CompareStrings(current_filename, data->include_filename)) {
-				Stream<char> file_data = ReadWholeFileText(current_path, GetAllocatorPolymorphic(data->manager, AllocationType::MultiThreaded));
+				Stream<char> file_data = ReadWholeFileText(current_path, GetAllocatorPolymorphic(data->manager, ECS_ALLOCATION_TYPE::ECS_ALLOCATION_MULTI));
 				if (file_data.buffer != nullptr) {
 					*data->byte_pointer = file_data.size;
 					*data->data_pointer = file_data.buffer;
@@ -54,7 +54,9 @@ namespace ECSEngine {
 
 		const wchar_t* extension[1] = { L".hlsli" };
 		*byte_pointer = 0;
-		ForEachFileInDirectoryRecursiveWithExtension(shader_directory, { &extension, std::size(extension) }, &search_data, search_file);
+		for (size_t index = 0; index < shader_directory.size && *byte_pointer == 0; index++) {
+			ForEachFileInDirectoryRecursiveWithExtension(shader_directory[index], { &extension, std::size(extension) }, &search_data, search_file);
+		}
 		if (*byte_pointer > 0) {
 			return S_OK;
 		}

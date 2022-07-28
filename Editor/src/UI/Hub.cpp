@@ -202,7 +202,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UIDrawConfig config;
 	UIConfigTextParameters ecs_text;
 	ecs_text.size *= {1.75f, 1.75f};
-	ecs_text.color = drawer.GetColorThemeDescriptor()->default_text;
+	ecs_text.color = drawer.GetColorThemeDescriptor()->text;
 	ecs_text.character_spacing *= 1.75f;
 
 	char ecs_characters[128];
@@ -219,8 +219,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	transform.position = drawer.GetAlignedToRight(transform.scale.x);
 
 	UIConfigTextAlignment alignment;
-	alignment.horizontal = TextAlignment::Right;
-	alignment.vertical = TextAlignment::Middle;
+	alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_RIGHT;
+	alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
 	config.AddFlag(transform);
 	config.AddFlag(alignment);
 
@@ -254,11 +254,11 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		save_project_error_message = (char*)drawer.GetResource("Save project error message");
 	}
 
-	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, UIDrawPhase::System });
-	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, UIDrawPhase::System });
-	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
+	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
 
-	drawer.Button(UI_CONFIG_LABEL_ALIGN_TO_ROW_Y_SIZE, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 #pragma endregion
 
@@ -280,15 +280,15 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	drawer.CrossLine(UI_CONFIG_LATE_DRAW, table_config);
 
 	UIConfigTextAlignment table_alignment;
-	table_alignment.horizontal = TextAlignment::Middle;
-	table_alignment.vertical = TextAlignment::Middle;
+	table_alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+	table_alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
 	table_transform.position = table_start_position;
 	table_transform.scale = { FIRST_COLUMN_SCALE, COLUMN_Y_SCALE };
 
 	UIConfigTextParameters table_text;
 	table_text.size *= {1.3f, 1.3f};
 	table_text.character_spacing *= 1.3f;
-	table_text.color = drawer.GetColorThemeDescriptor()->default_text;
+	table_text.color = drawer.GetColorThemeDescriptor()->text;
 
 	table_config.AddFlag(table_alignment);
 	table_config.AddFlag(table_text);
@@ -344,8 +344,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			config.AddFlag(transform);
 
 			UIConfigTextAlignment alignment;
-			alignment.horizontal = TextAlignment::Left;
-			alignment.vertical = TextAlignment::Top;
+			alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_LEFT;
+			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_TOP;
 			config.AddFlag(alignment);
 
 			char ascii_name[256];
@@ -353,7 +353,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			function::ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
 			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, ascii_name);
 
-			alignment.vertical = TextAlignment::Bottom;
+			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_BOTTOM;
 			config.flag_count--;
 			config.AddFlag(alignment);
 
@@ -363,8 +363,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		};
 
 		auto row_platform_and_version = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
-			alignment.vertical = TextAlignment::Middle;
-			alignment.horizontal = TextAlignment::Middle;
+			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+			alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
 			config.AddFlag(alignment);
 
 			transform.position.x += transform.scale.x;
@@ -451,8 +451,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 			row_project_name(config, transform, index);
 
-			alignment.vertical = TextAlignment::Middle;
-			alignment.horizontal = TextAlignment::Middle;
+			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+			alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
 			config.AddFlag(alignment);
 
 			transform.position.x += transform.scale.x;
@@ -488,7 +488,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		};
 
 		RemoveProjectData remove_data = { editor_state, data->projects[index].path };
-		drawer.SpriteButton(UI_CONFIG_ABSOLUTE_TRANSFORM, config, { remove_project_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X, drawer.color_theme.default_text);
+		drawer.SpriteButton(UI_CONFIG_ABSOLUTE_TRANSFORM, config, { remove_project_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X, drawer.color_theme.text);
 	};
 
 	for (size_t index = 0; index < data->projects.size; index++) {

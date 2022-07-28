@@ -1,39 +1,72 @@
 #pragma once
 #include "../../Core.h"
 #include "../../Internal/EntityManagerSerializeTypes.h"
-#include "../../Internal/Multithreading/TaskDependencies.h"
+#include "../../Internal/Multithreading/TaskSchedulerTypes.h"
 #include "../../Internal/Resources/AssetMetadata.h"
+#include "../../Tools/UI/UIStructures.h"
+#include "../../Internal/World.h"
 
 namespace ECSEngine {
 
-	struct World;
-	struct AssetDatabase;
 	namespace Tools {
 		struct UIDrawer;
-		struct UIWindowDescriptor;
+		struct UIReflectionDrawer;
 	}
+
+	struct AssetDatabase;
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleTaskFunctionData {
-		World* world;
-		CapacityStream<TaskDependencyElement>& tasks;
+		CapacityStream<TaskSchedulerElement>* tasks;
+		AllocatorPolymorphic allocator;
 	};
 
+	// The mandatory function of the module. These tasks are used so that the runtime knows what the module
+	// actually wants to run. If you want to send data to the tasks and that data needs to be allocated,
+	// use the allocator given for that.
 	typedef void (*ModuleTaskFunction)(ModuleTaskFunctionData* data);
-
-//#define ECS_MODULE_TASK_FUNCTION void ModuleTaskFunction(ECSEngine::World* world, ECSEngine::CapacityStream<ECSEngine::TaskDependencyElement>& tasks)
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleUIFunctionData {
-		World* world;
-		CapacityStream<Tools::UIWindowDescriptor>& window_descriptors;
+		CapacityStream<Tools::UIWindowDescriptor>* window_descriptors;
+		AllocatorPolymorphic allocator;
 	};
 
+	// The module can implement custom menus, debugging utilities and or visualization tools
+	// If data needs to be allocated (names or other types of data for the window) use the given allocator
 	typedef void (*ModuleUIFunction)(ModuleUIFunctionData* data);
 
-//#define ECS_MODULE_UI_FUNCTION void ModuleUIFunction(ECSEngine::World* world, ECSEngine::CapacityStream<ECSEngine::Tools::UIWindowDescriptor>& window_descriptors)
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	// The reflection drawer can be used to draw the component
+	struct ModuleUIComponentDrawData {
+		Tools::UIReflectionDrawer* reflection_drawer;
+		Tools::UIDrawer* drawer;
+		void* component;
+		bool* has_changed;
+		void* extra_data;
+	};
+
+	// When a value is changed, make sure to set the has_changed flag such that the editor can react accordingly
+	typedef void (*ModuleUIComponentDraw)(ModuleUIComponentDrawData* data);
+
+	struct ModuleUIComponentDrawFunctionsElement {
+		ModuleUIComponentDraw draw_function;
+		const char* component_name;
+		AssetDatabase* asset_database;
+		void* extra_data;
+		size_t extra_data_size = 0;
+	};
+
+	// Allocate the elements using the given allocator
+	struct ModuleUIComponentDrawFunctionsData {
+		CapacityStream<ModuleUIComponentDrawFunctionsElement>* elements;
+		AllocatorPolymorphic allocator;
+	};
+
+	typedef void (*ModuleUIComponentDrawFunctions)(ModuleUIComponentDrawFunctionsData* data);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -57,27 +90,31 @@ namespace ECSEngine {
 		Component component;
 	};
 
-	struct ModuleSerializeComponentFunctionData {
-		World* world;
-		CapacityStream<ModuleSerializeExtractComponent>& serialize_components;
-		CapacityStream<ModuleSerializeExtractSharedComponent>& serialize_shared_components;
-		CapacityStream<ModuleDeserializeExtractComponent>& deserialize_components;
-		CapacityStream<ModuleDeserializeExtractSharedComponent>& deserialize_shared_components;
-		CapacityStream<void>& extra_data;
+	struct ModuleSerializeComponentStreams {
+		inline const void* GetAllocatedBuffer() const {
+			return serialize_components.buffer;
+		}
+
+		Stream<ModuleSerializeExtractComponent> serialize_components;
+		Stream<ModuleSerializeExtractSharedComponent> serialize_shared_components;
+		Stream<ModuleDeserializeExtractComponent> deserialize_components;
+		Stream<ModuleDeserializeExtractSharedComponent> deserialize_shared_components;
+		Stream<void> extra_data;
 	};
 
+	struct ModuleSerializeComponentFunctionData {
+		CapacityStream<ModuleSerializeExtractComponent>* serialize_components;
+		CapacityStream<ModuleSerializeExtractSharedComponent>* serialize_shared_components;
+		CapacityStream<ModuleDeserializeExtractComponent>* deserialize_components;
+		CapacityStream<ModuleDeserializeExtractSharedComponent>* deserialize_shared_components;
+		AllocatorPolymorphic allocator;
+	};
+
+	// With this function the module can override the default serialization (bit blitting) of the components
+	// into a custom serialization.
 	typedef void (*ModuleSerializeComponentFunction)(
 		ModuleSerializeComponentFunctionData* data
 	);
-
-//#define ECS_MODULE_SERIALIZE_COMPONENT_FUNCTION void ModuleSerializeComponentFunction( \
-//		ECSEngine::World* world, \
-//		ECSEngine::CapacityStream<ECSEngine::ModuleSerializeExtractComponent>& serialize_components, \
-//		ECSEngine::CapacityStream<ECSEngine::ModuleSerializeExtractSharedComponent>& serialize_shared_components, \
-//		ECSEngine::CapacityStream<ECSEngine::ModuleDeserializeExtractComponent>& deserialize_components, \
-//		ECSEngine::CapacityStream<ECSEngine::ModuleDeserializeExtractSharedComponent>& deserialize_shared_components, \
-//		ECSEngine::CapacityStream<void>& extra_data \
-//	)
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
@@ -90,7 +127,6 @@ namespace ECSEngine {
 		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_MATERIAL,
 		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_FILE,
 		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_SETTING,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_MULTIPLE,
 		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_COUNT
 	};
 
@@ -98,14 +134,13 @@ namespace ECSEngine {
 	// Use the use_path flag to indicate which one to use
 	// If the path is used (for files this is always the case), then whenever that file changes, 
 	// the dependency will trigger
-	// If the name is used (for assets that support this, the material only this allows),
+	// If the name is used (for assets that support this - the material - and the setting),
 	// the dependecy will trigger when the metadata associated to that file or the file itself changes
 	struct ModuleBuildDependencyType {
 		ECS_MODULE_BUILD_COMMAND_DEPENDENCY dependency;
 		union {
 			Stream<char> name;
 			Stream<wchar_t> path;
-			Stream<ModuleBuildDependencyType> multiple;
 		};
 	};
 
@@ -123,13 +158,14 @@ namespace ECSEngine {
 		Material material;
 	};
 
-	struct ModuleBuildAssetFunctionData {
-		Stream<void> previous_dependency_data;
-		Stream<void> new_dependency_data;
-		ModuleBuildAssetDependencyMetadata previous_dependency_metadata;
-		ModuleBuildAssetDependencyMetadata new_dependency_metadata;
+	struct ModuleBuildAssetDependencyData {
+		Stream<void> data;
+		ModuleBuildAssetDependencyMetadata metadata;
+	};
 
-		ModuleBuildDependencyType dependency_type;
+	struct ModuleBuildAssetFunctionData {
+		Stream<ModuleBuildAssetDependencyMetadata> dependency_data;
+		
 		Stream<void> current_asset_data;
 		Stream<ModuleSettingName> settings;
 		AllocatorPolymorphic allocator;
@@ -143,6 +179,7 @@ namespace ECSEngine {
 		Stream<wchar_t> path;
 		Stream<ModuleSettingName> settings;
 		AllocatorPolymorphic allocator;
+		TaskManager* task_manager;
 	};
 
 	typedef Stream<void> (*ModuleLoadAssetFunction)(ModuleLoadAssetFunctionData* data);
@@ -152,16 +189,82 @@ namespace ECSEngine {
 	struct ModuleWriteAssetFunctionData {
 		Stream<void> current_asset_data;
 		Stream<wchar_t> path;
+		TaskManager* task_manager;
 	};
 
 	typedef bool (*ModuleWriteAssetFunction)(ModuleWriteAssetFunctionData* data);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	struct ModuleRegisterAssetDependenciesData {
+		Stream<void> data;
+		CapacityStream<ModuleBuildDependencyType>& dependencies;
+	};
+
+	typedef void (*ModuleRegisterAssetDependencies)(ModuleRegisterAssetDependenciesData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	struct ModuleBuildAssetType {
+		// This is the name when searching for the metadata name
+		// It can be nullptr if there is no metadata needed. Only the dependencies
+		const char* asset_metadata_name = nullptr;
+
+		// This is an optional field. If the type can be understood by the reflection system,
+		// then the serialization and deserialization can be done in automatic way. (using the
+		// binary version since for this type of assets speed is important)
+		const char* asset_type_name = nullptr;
+
+		// This is the name that will be displayed in the Editor
+		// If nullptr, the type name must be specified
+		const char* asset_editor_name = nullptr;
+
+		// This is the extension that will be used to identify this type of asset
+		const wchar_t* extension;
+		
+		// This function is mandatory
+		ModuleBuildAssetFunction build_function;
+		// If this function is nullptr, it means that it will look for all stream types of char/wchar_t in the type_name or metadata_name and
+		// use those in order to register the dependencies. The dependency types must be specified in this order
+		ModuleRegisterAssetDependencies register_function = nullptr;
+
+		// If this function is nullptr, the data will be blitted or if the type name is specified
+		// it will be loaded using the binary deserializer
+		ModuleLoadAssetFunction load_function = nullptr;
+		// Same as above, if the name is specified it will be written using the binary serializer
+		ModuleWriteAssetFunction write_function = nullptr;
+
+		// If this function is nullptr and the asset metadata name is specified, it will use the
+		// text deserialize function in order to write it.
+		ModuleLoadAssetFunction metadata_load_function = nullptr;
+		// Same as above.
+		ModuleWriteAssetFunction metadata_write_function = nullptr;
+
+		// The types of dependencies that this asset has
+		Stream<ECS_MODULE_BUILD_COMMAND_DEPENDENCY> dependencies;
+	};
+
+	struct ModuleBuildFunctionsData {
+		CapacityStream<ModuleBuildAssetType>* asset_types;
+		// This memory is used to transfer the asset names, extension and dependencies if those are not stable
+		AllocatorPolymorphic allocator;
+	};
+
+	// This function can be used to inform the editor build system about module's assets
+	typedef void (*ModuleBuildFunctions)(ModuleBuildFunctionsData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	union ModuleLinkComponentEntityArchetype {
+		ushort2 archetype_indices;
+		Entity entity;
+	};
+
 	struct ModuleLinkComponentFunctionData {
 		const void* link_component;
 		void* component;
-		Entity entity;
+		void* component_metadata;
+		ModuleLinkComponentEntityArchetype entity_archetype;
 		World* world;
 	};
 
@@ -169,20 +272,32 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	struct ModuleBuildAssetType {
-		const wchar_t* extension;
-		ModuleLoadAssetFunction load_function;
-		ModuleWriteAssetFunction write_function;
-		ModuleBuildAssetFunction build_function;
-
-		unsigned short load_function_tasks;
-		unsigned short write_function_tasks;
-		unsigned short build_function_tasks;
-
-		Stream<ModuleBuildDependencyType> dependency_types;
+	struct ModuleLinkComponentTarget {
+		ModuleLinkComponentFunction build_function;
+		// This is the name of the source code structure
+		// For linking a normal component (that is not being built from dependencies), this is the only
+		// name that is being considered
+		const char* component_name;
+		// This is the name of the metadata source code structure. If linking an editor component
+		// with a structure that is being built as an asset, this can be specified such that you can 
+		// modify the metadata instead of the actual asset
+		const char* component_metadata_name = nullptr;
 	};
 
-	typedef void (*ModuleBuildFunctions)(CapacityStream<ModuleBuildAssetType>& asset_types);
+	struct ModuleRegisterLinkComponentFunctionData {
+		CapacityStream<ModuleLinkComponentTarget>* functions;
+		// The name of the functions either have to be stable - i.e. hard coded - or allocated from this stream
+		AllocatorPolymorphic allocator;
+	};
+
+	// This function can be used to make link components - components that are front facing
+	// and are transformed into runtime components
+	typedef void (*ModuleRegisterLinkComponentFunction)(ModuleRegisterLinkComponentFunctionData* data);
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	// With this function the module is informed about which world it is currently working in
+	typedef void (*ModuleSetCurrentWorld)(World* world);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 

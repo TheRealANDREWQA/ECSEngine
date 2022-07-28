@@ -126,7 +126,7 @@ void DirectoryExplorerCreateFolder(ActionData* action_data) {
 		choose_data.callback.action = DirectoryExplorerCreateFolderCallback;
 		choose_data.callback.data = data;
 		choose_data.callback.data_size = 0;
-		choose_data.callback.phase = UIDrawPhase::Normal;
+		choose_data.callback.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 
 		CreateChooseDirectoryOrFileNameDockspace(system, choose_data);
 	}
@@ -206,7 +206,7 @@ void DirectoryExplorerRenameFolder(ActionData* action_data) {
 			choose_data.callback.action = DirectoryExplorerRenameFolderCallback;
 			choose_data.callback.data = data;
 			choose_data.callback.data_size = 0;
-			choose_data.callback.phase = UIDrawPhase::Normal;
+			choose_data.callback.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
 
 			CreateChooseDirectoryOrFileNameDockspace(system, choose_data);
 		}
@@ -267,9 +267,9 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		}
 
 		data->right_click_menu_handlers[0] = { DirectoryExplorerLaunchFileExplorer, data, 0 };
-		data->right_click_menu_handlers[1] = { DirectoryExplorerCreateFolder, data, 0, UIDrawPhase::System };
-		data->right_click_menu_handlers[2] = { DirectoryExplorerDeleteFolder, data, 0, UIDrawPhase::System };
-		data->right_click_menu_handlers[3] = { DirectoryExplorerRenameFolder, data, 0, UIDrawPhase::System };
+		data->right_click_menu_handlers[1] = { DirectoryExplorerCreateFolder, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->right_click_menu_handlers[2] = { DirectoryExplorerDeleteFolder, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->right_click_menu_handlers[3] = { DirectoryExplorerRenameFolder, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 		data->right_click_menu_handlers[4] = { DirectoryExplorerCopyPath, data, 0 };
 
 		data->right_click_menu_has_submenu = (bool*)right_click_ptr;
@@ -301,7 +301,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		right_click.callback = DirectoryExplorerRightClick;
 		right_click.data = data;
 		right_click.data_size = 0;
-		right_click.phase = UIDrawPhase::System;
+		right_click.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
 		config.AddFlag(right_click);
 
 		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<const char*>(nullptr, 0));
@@ -328,7 +328,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 	right_click.callback = DirectoryExplorerRightClick;
 	right_click.data = data;
 	right_click.data_size = 0;
-	right_click.phase = UIDrawPhase::System;
+	right_click.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
 	config.AddFlag(right_click);
 
 	if (!initialize) {

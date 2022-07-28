@@ -541,11 +541,11 @@ namespace ECSEngine {
 			TranslateText(x_position, y_position, stream[x_minimum_index].position.x, stream[y_minimum_index].position.y, stream);
 		}
 
-		template<bool horizontal = true, bool inverted_order = false, typename Stream>
-		float2 GetTextSpan(Stream texts) {
+		template<typename Stream>
+		float2 GetTextSpan(Stream texts, bool horizontal = true, bool invert_order = false) {
 			if (texts.size > 0) {
-				if constexpr (horizontal) {
-					if constexpr (!inverted_order) {
+				if (horizontal) {
+					if (!invert_order) {
 						return {
 							texts[texts.size - 2].position.x - texts[0].position.x,
 							texts[0].position.y - texts[texts.size - 2].position.y
@@ -565,7 +565,7 @@ namespace ECSEngine {
 						smallest = function::Select(smallest > texts[index].position.x, texts[index].position.x, smallest);
 						biggest = function::Select(biggest < texts[index + 1].position.x, texts[index + 1].position.x, biggest);
 					}
-					if constexpr (!inverted_order) {
+					if (!invert_order) {
 						return {
 							biggest - smallest,
 							texts[0].position.y - texts[texts.size - 2].position.y

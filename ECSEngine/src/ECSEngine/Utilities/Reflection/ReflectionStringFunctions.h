@@ -23,7 +23,14 @@ namespace ECSEngine {
 		// Uses a jump table
 		ECSENGINE_API void GetReflectionStreamFieldTypeString(ReflectionStreamFieldType type, CapacityStream<char>* string);
 
+		// This one parses things like float, uint8_t, char, etc
 		ECSENGINE_API ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string);
+
+		// This one parses primitive types, float, uint8_t, char, Stream<float>, float*
+		ECSENGINE_API void ConvertStringToPrimitiveType(Stream<char> string, ReflectionBasicFieldType& basic_type, ReflectionStreamFieldType& stream_type);
+
+		// This one parses the STRING() variant of the ReflectionBasicFieldType::
+		ECSENGINE_API ReflectionBasicFieldType ConvertStringAliasToBasicFieldType(Stream<char> string);
 
 		ECSENGINE_API ReflectionStreamFieldType ConvertStringToStreamFieldType(Stream<char> string);
 
@@ -48,6 +55,11 @@ namespace ECSEngine {
 		// Booleans will be reported as unsigned integers
 		// If a mismatch happens, it will return unknown
 		ECSENGINE_API ReflectionBasicFieldType DeduceTypeFromString(Stream<char> characters);
+
+		// Finds out which part of the definition is just the user defined type from the stream type
+		// E.g. Stream<MyType> -> MyType
+		// E.g. MyType* -> MyType
+		ECSENGINE_API Stream<char> GetUserDefinedTypeFromStreamUserDefined(const char* definition, ReflectionStreamFieldType stream_type);
 
 	}
 

@@ -2,7 +2,6 @@
 #include "ecspch.h"
 #include "../Core.h"
 #include "../Containers/Stream.h"
-#include "../Containers/SequentialTable.h"
 #include "InternalStructures.h"
 #include "../Utilities/BasicTypes.h"
 
@@ -27,7 +26,6 @@ namespace ECSEngine {
 		// Returns the stream index
 		unsigned int AddEntity(Entity entity);
 
-		// Returns the chunk index in the x component and the stream index in the y component
 		// Components and data must be synched
 		unsigned int AddEntity(Entity entity, ComponentSignature components, const void** data);
 

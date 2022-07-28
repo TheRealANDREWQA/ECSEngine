@@ -1,9 +1,11 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "../Math/Matrix.h"
 #include "../Allocators/AllocatorTypes.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 #define ECS_GRAPHICS_BUFFERS(function) /* Useful for macro expansion */ function(VertexBuffer); \
 function(IndexBuffer); \
@@ -53,7 +55,7 @@ namespace ECSEngine {
 		ECS_SHADER_TYPE_COUNT
 	};
 
-	struct ShaderMacro {
+	struct ECS_REFLECT ShaderMacro {
 		const char* name;
 		const char* definition;
 	};
@@ -186,14 +188,16 @@ namespace ECSEngine {
 		VertexBuffer(const VertexBuffer& other) = default;
 		VertexBuffer& operator = (const VertexBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -214,14 +218,16 @@ namespace ECSEngine {
 		IndexBuffer(const IndexBuffer& other) = default;
 		IndexBuffer& operator = (const IndexBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -245,14 +251,14 @@ namespace ECSEngine {
 		VertexShader(const VertexShader& other) = default;
 		VertexShader& operator = (const VertexShader& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11VertexShader* Interface() {
+		inline ID3D11VertexShader* Interface() const {
 			return shader;
 		}
 
@@ -272,14 +278,14 @@ namespace ECSEngine {
 		InputLayout(const InputLayout& other) = default;
 		InputLayout& operator = (const InputLayout& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			layout->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11InputLayout* Interface() {
+		inline ID3D11InputLayout* Interface() const {
 			return layout;
 		}
 
@@ -300,14 +306,14 @@ namespace ECSEngine {
 		PixelShader(const PixelShader& other) = default;
 		PixelShader& operator = (const PixelShader& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11PixelShader* Interface() {
+		inline ID3D11PixelShader* Interface() const {
 			return shader;
 		}
 
@@ -327,14 +333,14 @@ namespace ECSEngine {
 		GeometryShader(const GeometryShader& other) = default;
 		GeometryShader& operator = (const GeometryShader& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11GeometryShader* Interface() {
+		inline ID3D11GeometryShader* Interface() const {
 			return shader;
 		}
 
@@ -354,14 +360,14 @@ namespace ECSEngine {
 		DomainShader(const DomainShader& other) = default;
 		DomainShader& operator = (const DomainShader& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11DomainShader* Interface() {
+		inline ID3D11DomainShader* Interface() const {
 			return shader;
 		}
 
@@ -381,14 +387,14 @@ namespace ECSEngine {
 		HullShader(const HullShader& other) = default;
 		HullShader& operator = (const HullShader& other) = default;
 		
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 		
-		inline ID3D11HullShader* Interface() {
+		inline ID3D11HullShader* Interface() const {
 			return shader;
 		}
 
@@ -408,14 +414,14 @@ namespace ECSEngine {
 		ComputeShader(const ComputeShader& other) = default;
 		ComputeShader& operator = (const ComputeShader& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			shader->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11ComputeShader* Interface() {
+		inline ID3D11ComputeShader* Interface() const {
 			return shader;
 		}
 
@@ -438,87 +444,6 @@ namespace ECSEngine {
 		D3D11_PRIMITIVE_TOPOLOGY value;
 	};
 
-	struct ECSENGINE_API ConstantBuffer {
-		ConstantBuffer();
-		ConstantBuffer(ID3D11Buffer* buffer);
-
-		ConstantBuffer(const ConstantBuffer& other) = default;
-		ConstantBuffer& operator = (const ConstantBuffer& other) = default;
-
-		inline GraphicsDevice* GetDevice() {
-			GraphicsDevice* device;
-			buffer->GetDevice(&device);
-			device->Release();
-			return device;
-		}
-
-		inline ID3D11Buffer* Interface() {
-			return buffer;
-		}
-
-		inline unsigned int Release() {
-			return buffer->Release();
-		}
-
-		static ConstantBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
-
-		ID3D11Buffer* buffer;
-	};
-
-	struct ECSENGINE_API ResourceView {
-		ResourceView();
-		ResourceView(ID3D11ShaderResourceView* _view);
-
-		ResourceView(const ResourceView& other) = default;
-		ResourceView& operator = (const ResourceView& other) = default;
-
-		inline GraphicsDevice* GetDevice() {
-			GraphicsDevice* device;
-			view->GetDevice(&device);
-			device->Release();
-			return device;
-		}
-
-		inline ID3D11ShaderResourceView* Interface() {
-			return view;
-		}
-
-		inline unsigned int Release() {
-			return view->Release();
-		}
-
-		static ResourceView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor);
-
-		ID3D11ShaderResourceView* view;
-	};
-
-	struct ECSENGINE_API SamplerState {
-		SamplerState();
-		SamplerState(ID3D11SamplerState* _sampler);
-
-		SamplerState(const SamplerState& other) = default;
-		SamplerState& operator = (const SamplerState& other) = default;
-
-		inline GraphicsDevice* GetDevice() {
-			GraphicsDevice* device;
-			sampler->GetDevice(&device);
-			device->Release();
-			return device;
-		}
-
-		inline ID3D11SamplerState* Interface() {
-			return sampler;
-		}
-
-		inline unsigned int Release() {
-			return sampler->Release();
-		}
-
-		static SamplerState RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor);
-
-		ID3D11SamplerState* sampler;
-	};
-
 	struct ECSENGINE_API Texture1D {
 		using RawDescriptor = D3D11_TEXTURE1D_DESC;
 		using RawInterface = ID3D11Texture1D;
@@ -530,14 +455,16 @@ namespace ECSEngine {
 		Texture1D(const Texture1D& other) = default;
 		Texture1D& operator = (const Texture1D& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture1D* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Texture1D* Interface() const {
 			return tex;
 		}
 
@@ -561,14 +488,16 @@ namespace ECSEngine {
 		Texture2D(const Texture2D& other) = default;
 		Texture2D& operator = (const Texture2D& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture2D* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Texture2D* Interface() const {
 			return tex;
 		}
 
@@ -593,14 +522,16 @@ namespace ECSEngine {
 		Texture3D(const Texture3D& other) = default;
 		Texture3D& operator = (const Texture3D& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture3D* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Texture3D* Interface() const {
 			return tex;
 		}
 
@@ -624,14 +555,16 @@ namespace ECSEngine {
 		TextureCube(const TextureCube& other) = default;
 		TextureCube& operator = (const TextureCube& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			tex->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Texture2D* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Texture2D* Interface() const {
 			return tex;
 		}
 
@@ -653,31 +586,68 @@ namespace ECSEngine {
 		ECS_TEXTURE_CUBE_Z_NEG
 	};
 
-	struct ECSENGINE_API RenderTargetView {
-		RenderTargetView() : target(nullptr) {}
-		RenderTargetView(ID3D11RenderTargetView* _target) : target(_target) {}
+	struct ECSENGINE_API ResourceView {
+		ResourceView();
+		ResourceView(ID3D11ShaderResourceView* _view);
 
-		RenderTargetView(const RenderTargetView& other) = default;
-		RenderTargetView& operator = (const RenderTargetView& other) = default;
+		ResourceView(const ResourceView& other) = default;
+		ResourceView& operator = (const ResourceView& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
-			target->GetDevice(&device);
+			view->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11RenderTargetView* Interface() {
-			return target;
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11ShaderResourceView* Interface() const {
+			return view;
 		}
 
 		inline unsigned int Release() {
-			return target->Release();
+			return view->Release();
+		}
+
+		static ResourceView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_SHADER_RESOURCE_VIEW_DESC* descriptor);
+
+		// It will copy using the descriptor from the view
+		static ResourceView RawCopy(GraphicsDevice* device, ID3D11Resource* resource, ResourceView view);
+
+		ID3D11ShaderResourceView* view;
+	};
+
+	struct ECSENGINE_API RenderTargetView {
+		RenderTargetView() : view(nullptr) {}
+		RenderTargetView(ID3D11RenderTargetView* _target) : view(_target) {}
+
+		RenderTargetView(const RenderTargetView& other) = default;
+		RenderTargetView& operator = (const RenderTargetView& other) = default;
+
+		inline GraphicsDevice* GetDevice() const {
+			GraphicsDevice* device;
+			view->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11RenderTargetView* Interface() const {
+			return view;
+		}
+
+		inline unsigned int Release() {
+			return view->Release();
 		}
 
 		static RenderTargetView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_RENDER_TARGET_VIEW_DESC* descriptor);
 
-		ID3D11RenderTargetView* target;
+		// It will copy using the descriptor from the view
+		static RenderTargetView RawCopy(GraphicsDevice* device, ID3D11Resource* resource, RenderTargetView view);
+
+		ID3D11RenderTargetView* view;
 	};
 
 	struct ECSENGINE_API DepthStencilView {
@@ -687,14 +657,16 @@ namespace ECSEngine {
 		DepthStencilView(const DepthStencilView& other) = default;
 		DepthStencilView& operator = (const DepthStencilView& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			view->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11DepthStencilView* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11DepthStencilView* Interface() const {
 			return view;
 		}
 
@@ -704,7 +676,71 @@ namespace ECSEngine {
 
 		static DepthStencilView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_DEPTH_STENCIL_VIEW_DESC* descriptor);
 
+		// It will copy using the descriptor from the view
+		static DepthStencilView RawCopy(GraphicsDevice* device, ID3D11Resource* resource, DepthStencilView view);
+
 		ID3D11DepthStencilView* view;
+	};
+
+	struct ECSENGINE_API UAView {
+		UAView() : view(nullptr) {}
+		UAView(ID3D11UnorderedAccessView* _view) : view(_view) {}
+
+		UAView(const UAView& other) = default;
+		UAView& operator = (const UAView& other) = default;
+
+		inline GraphicsDevice* GetDevice() const {
+			GraphicsDevice* device;
+			view->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11UnorderedAccessView* Interface() const {
+			return view;
+		}
+
+		inline unsigned int Release() {
+			return view->Release();
+		}
+
+		static UAView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_UNORDERED_ACCESS_VIEW_DESC* descriptor);
+
+		// It will copy using the descriptor from the view
+		static UAView RawCopy(GraphicsDevice* device, ID3D11Resource* resource, UAView view);
+
+		ID3D11UnorderedAccessView* view;
+	};
+
+	struct ECSENGINE_API ConstantBuffer {
+		ConstantBuffer();
+		ConstantBuffer(ID3D11Buffer* buffer);
+
+		ConstantBuffer(const ConstantBuffer& other) = default;
+		ConstantBuffer& operator = (const ConstantBuffer& other) = default;
+
+		inline GraphicsDevice* GetDevice() const {
+			GraphicsDevice* device;
+			buffer->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
+			return buffer;
+		}
+
+		inline unsigned int Release() {
+			return buffer->Release();
+		}
+
+		static ConstantBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
+
+		ID3D11Buffer* buffer;
 	};
 
 	struct ECSENGINE_API StandardBuffer {
@@ -714,14 +750,16 @@ namespace ECSEngine {
 		StandardBuffer(const StandardBuffer& other) = default;
 		StandardBuffer& operator = (const StandardBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -742,14 +780,16 @@ namespace ECSEngine {
 		StructuredBuffer(const StructuredBuffer& other) = default;
 		StructuredBuffer& operator = (const StructuredBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -769,14 +809,16 @@ namespace ECSEngine {
 		IndirectBuffer(const IndirectBuffer& other) = default;
 		IndirectBuffer& operator = (const IndirectBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -796,14 +838,16 @@ namespace ECSEngine {
 		UABuffer(const UABuffer& other) = default;
 		UABuffer& operator = (const UABuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -824,14 +868,16 @@ namespace ECSEngine {
 		AppendStructuredBuffer(const AppendStructuredBuffer& other) = default;
 		AppendStructuredBuffer& operator = (const AppendStructuredBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -852,14 +898,16 @@ namespace ECSEngine {
 		ConsumeStructuredBuffer(const ConsumeStructuredBuffer& other) = default;
 		ConsumeStructuredBuffer& operator = (const ConsumeStructuredBuffer& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			buffer->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11Buffer* Interface() {
+		ID3D11Resource* GetResource() const;
+
+		inline ID3D11Buffer* Interface() const {
 			return buffer;
 		}
 
@@ -873,31 +921,31 @@ namespace ECSEngine {
 		ID3D11Buffer* buffer;
 	};
 
-	struct ECSENGINE_API UAView {
-		UAView() : view(nullptr) {}
-		UAView(ID3D11UnorderedAccessView* _view) : view(_view) {}
+	struct ECSENGINE_API SamplerState {
+		SamplerState();
+		SamplerState(ID3D11SamplerState* _sampler);
 
-		UAView(const UAView& other) = default;
-		UAView& operator = (const UAView& other) = default;
+		SamplerState(const SamplerState& other) = default;
+		SamplerState& operator = (const SamplerState& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
-			view->GetDevice(&device);
+			sampler->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11UnorderedAccessView* Interface() {
-			return view;
+		inline ID3D11SamplerState* Interface() const {
+			return sampler;
 		}
 
 		inline unsigned int Release() {
-			return view->Release();
+			return sampler->Release();
 		}
 
-		static UAView RawCreate(GraphicsDevice* device, ID3D11Resource* resource, const D3D11_UNORDERED_ACCESS_VIEW_DESC* descriptor);
+		static SamplerState RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor);
 
-		ID3D11UnorderedAccessView* view;
+		ID3D11SamplerState* sampler;
 	};
 
 	struct ECSENGINE_API BlendState {
@@ -907,14 +955,14 @@ namespace ECSEngine {
 		BlendState(const BlendState& other) = default;
 		BlendState& operator = (const BlendState& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			state->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11BlendState* Interface() {
+		inline ID3D11BlendState* Interface() const {
 			return state;
 		}
 
@@ -932,14 +980,14 @@ namespace ECSEngine {
 		RasterizerState(const RasterizerState& other) = default;
 		RasterizerState& operator = (const RasterizerState& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			state->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11RasterizerState* Interface() {
+		inline ID3D11RasterizerState* Interface() const {
 			return state;
 		}
 
@@ -957,14 +1005,14 @@ namespace ECSEngine {
 		DepthStencilState(const DepthStencilState& other) = default;
 		DepthStencilState& operator = (const DepthStencilState& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			state->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11DepthStencilState* Interface() {
+		inline ID3D11DepthStencilState* Interface() const {
 			return state;
 		}
 
@@ -982,14 +1030,14 @@ namespace ECSEngine {
 		CommandList(const CommandList& other) = default;
 		CommandList& operator = (const CommandList& other) = default;
 
-		inline GraphicsDevice* GetDevice() {
+		inline GraphicsDevice* GetDevice() const {
 			GraphicsDevice* device;
 			list->GetDevice(&device);
 			device->Release();
 			return device;
 		}
 
-		inline ID3D11CommandList* Interface() {
+		inline ID3D11CommandList* Interface() const {
 			return list;
 		}
 
@@ -1027,7 +1075,7 @@ namespace ECSEngine {
 
 		void SetOrthographicProjection(float width, float height, float near_z, float far_z);
 
-		Matrix GetProjectionViewMatrix() const;
+		Matrix GetViewProjectionMatrix() const;
 
 		Matrix projection;
 		float3 translation;

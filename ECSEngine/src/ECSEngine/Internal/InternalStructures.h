@@ -16,26 +16,6 @@
 
 namespace ECSEngine {
 
-	constexpr bool ConstexprMemcmp(const void* source, const void* destination, size_t size) {
-		const unsigned char* byte_source = (const unsigned char*)source;
-		const unsigned char* byte_destination = (const unsigned char*)destination;
-		for (size_t index = 0; index < size; index++) {
-			if (byte_source[index] != byte_destination[index]) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	constexpr unsigned short PhysicsSystemComponentIndex(const char* string) {
-		if (ConstexprMemcmp(string, "Yes", sizeof("Yes"))) {
-			return 0;
-		}
-		else {
-			return 1;
-		}
-	}
-
 #define ECS_ENTITY_MAX_COUNT (1 << 26)
 
 	struct ECSENGINE_API Entity {
@@ -81,6 +61,10 @@ namespace ECSEngine {
 	};
 
 	struct Component {
+		unsigned int Hash() const {
+			return value;
+		}
+
 		unsigned short value;
 	};
 
@@ -106,7 +90,6 @@ namespace ECSEngine {
 
 	// Sequences should not overlapp
 	struct ECSENGINE_API Sequence {
-
 		Sequence() : first(0), last(0), buffer_start(0), size(0) {}
 		Sequence(unsigned int _first, unsigned int _last, unsigned int _buffer_start, unsigned int _size)
 			: first(_first), last(_last), buffer_start(_buffer_start), size(_size) {}
@@ -131,71 +114,24 @@ namespace ECSEngine {
 	struct ECSENGINE_API SharedComponentInfo {
 		ComponentInfo info;
 		CapacityStream<void*> instances;
-		HashTable<SharedInstance, ResourceIdentifier, HashFunctionPowerOfTwo, HashFunctionMultiplyString> named_instances;
-	};
-
-	struct ECSENGINE_API Substream {
-		Substream() : size(0), offset(0) {}
-		Substream(unsigned int _size, unsigned int _offset) : size(_size), offset(_offset) {}
-
-		inline bool operator >= (const Substream& other) {
-			return offset >= other.offset;
-		}
-		
-		inline bool operator <= (const Substream& other) {
-			return offset <= other.offset;
-		}
-		
-		inline bool operator > (const Substream& other) {
-			return offset > other.offset;
-		}
-		
-		inline bool operator < (const Substream& other) {
-			return offset < other.offset;
-		}
-
-		unsigned int size;
-		unsigned int offset;
+		HashTableDefault<SharedInstance> named_instances;
 	};
 
 	struct ECSENGINE_API ComponentSignature {
 		ComponentSignature() : indices(nullptr), count(0) {}
 		ComponentSignature(Component* _indices, unsigned char _count) : indices(_indices), count(_count) {}
-		
+
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentSignature);
+
+		ComponentSignature Copy(uintptr_t& ptr);
 
 		Component* indices;
 		unsigned char count;
 	};
 
-	static bool HasComponents(ComponentSignature query, ComponentSignature archetype_component) {
-		for (size_t index = 0; index < query.count; index++) {
-			unsigned char subindex = 0;
-			for (; subindex < archetype_component.count; subindex++) {
-				if (archetype_component.indices[subindex] == query.indices[index]) {
-					// Exit the loop
-					subindex = -2;
-				}
-			}
-			if (subindex != 255) {
-				return false;
-			}
-		}
-		return true;
-	}
+	ECSENGINE_API bool HasComponents(ComponentSignature query, ComponentSignature archetype_component);
 
-	static bool ExcludesComponents(ComponentSignature query, ComponentSignature archetype_component) {
-		for (size_t index = 0; index < query.count; index++) {
-			unsigned char subindex = 0;
-			for (; subindex < archetype_component.count; subindex++) {
-				if (archetype_component.indices[subindex] == query.indices[index]) {
-					// Exit the loop
-					return false;
-				}
-			}
-		}
-		return true;
-	}
+	ECSENGINE_API bool ExcludesComponents(ComponentSignature query, ComponentSignature archetype_component);
 
 	struct ECSENGINE_API SharedComponentSignature {
 		SharedComponentSignature() : indices(nullptr), instances(nullptr), count(0) {}
@@ -209,7 +145,7 @@ namespace ECSEngine {
 	};
 
 	// Returns a memory manager that would suit an EntityPool with the given pool capacity
-	ECSENGINE_API MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory);
+	//ECSENGINE_API MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory);
 
 	struct ECSENGINE_API EntityPool {
 	public:

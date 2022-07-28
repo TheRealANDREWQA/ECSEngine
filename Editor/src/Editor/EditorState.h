@@ -1,7 +1,6 @@
 #pragma once
 #include "editorpch.h"
 #include "ECSEngineUI.h"
-#include "../Modules/ModuleConfigurationGroup.h"
 #include "../Project/ProjectFile.h"
 #include "../UI/InspectorData.h"
 #include "../UI/FileExplorerData.h"
@@ -38,8 +37,12 @@ struct EditorState {
 		editor_tick(this);
 	}
 
-	inline ECSEngine::Graphics* Graphics() {
+	inline ECSEngine::Graphics* UIGraphics() {
 		return ui_system->m_graphics;
+	}
+
+	inline ECSEngine::Graphics* CacheGraphics() {
+		return cache_graphics;
 	}
 
 	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
@@ -48,6 +51,22 @@ struct EditorState {
 
 	inline ECSEngine::Reflection::ReflectionManager* ReflectionManager() {
 		return ui_reflection->reflection;
+	}
+
+	inline ECSEngine::HID::Mouse* Mouse() {
+		return ui_system->m_mouse;
+	}
+
+	inline ECSEngine::HID::Keyboard* Keyboard() {
+		return ui_system->m_keyboard;
+	}
+
+	inline ECSEngine::AllocatorPolymorphic EditorAllocator() const {
+		return ECSEngine::GetAllocatorPolymorphic(editor_allocator);
+	}
+
+	inline ECSEngine::AllocatorPolymorphic MultithreadedEditorAllocator() const {
+		return ECSEngine::GetAllocatorPolymorphic(multithreaded_editor_allocator);
 	}
 
 	EditorStateTick editor_tick;
@@ -61,10 +80,11 @@ struct EditorState {
 	ECSEngine::MemoryManager* multithreaded_editor_allocator;
 	ECSEngine::TaskManager* task_manager;
 
+	ECSEngine::AssetDatabase asset_database;
 	ECSEngine::ResourceManager* cache_resource_manager;
 	ECSEngine::Graphics* cache_graphics;
 	
-	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation;
+	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation[EDITOR_MODULE_CONFIGURATION_COUNT];
 	// Needed to syncronize the threads when removing the launched module compilation
 	ECSEngine::SpinLock launched_module_compilation_lock;
 	
@@ -72,17 +92,15 @@ struct EditorState {
 	FileExplorerData* file_explorer_data;
 	HubData* hub_data;
 	ProjectFile* project_file;
-	InspectorData* inspector_data;
-	
+
+	InspectorManager inspector_manager;
+
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function
 	ECSEngine::ThreadSafeQueue<EditorEvent> event_queue;
 
 	ECSEngine::ResizableStream<EditorSandbox> sandboxes;
 	
-	ECSEngine::Stream<ECSEngine::Stream<char>> module_configuration_definitions;
-	ECSEngine::ResizableStream<ModuleConfigurationGroup> module_configuration_groups;
-
 	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> pending_background_tasks;
 
 	// A queue onto which GPU tasks can be placed in order to be consumed on the immediate context
@@ -97,13 +115,13 @@ struct EditorState {
 	bool inject_window_is_pop_up_window = false;
 };
 
-void EditorSetConsoleError(ECSEngine::Stream<char> error_message);
+void EditorSetConsoleError(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MEDIUM);
 
-void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message);
+void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message);
+void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message);
+void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
 
 #define EDITOR_STATE_DO_NOT_ADD_TASKS (1 << 0)
 #define EDITOR_STATE_IS_PLAYING (1 << 1)

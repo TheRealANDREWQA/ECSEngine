@@ -4,14 +4,8 @@
 namespace ECSEngine {
 
 	namespace Tools {
+
 		struct ActionData;
-	}
-
-}
-
-namespace ECSEngine {
-
-	namespace Tools {
 		
 		// ---------------------------------------------------------------------------------------------------
 
@@ -155,6 +149,45 @@ namespace ECSEngine {
 
 		// Data must be a Stream<wchar_t>*
 		ECSENGINE_API void OpenFileWithDefaultApplicationStreamAction(ActionData* action_data);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		struct UIDrawerTextInput;
+
+		// The path must be initialized
+		struct OSFileExplorerGetFileData {
+			CapacityStream<wchar_t> path;
+			CapacityStream<char> error_message = { nullptr, 0, 0 };
+			const wchar_t* initial_directory = nullptr;
+			Stream<const wchar_t*> extensions = { nullptr, 0 };
+			HWND hWnd = NULL;
+		};
+
+		// The path must be initialized
+		struct OSFileExplorerGetDirectoryData {
+			CapacityStream<wchar_t> path;
+			CapacityStream<char> error_message = { nullptr, 0, 0 };
+		};
+
+		struct OSFileExplorerGetFileActionData {
+			OSFileExplorerGetFileData get_file_data;
+			UIDrawerTextInput* input = nullptr;
+			CapacityStream<wchar_t>* update_stream = nullptr;
+		};
+
+		struct OSFileExplorerGetDirectoryActionData {
+			OSFileExplorerGetDirectoryData get_directory_data;
+			UIDrawerTextInput* input = nullptr;
+			CapacityStream<wchar_t>* update_stream = nullptr;
+		};
+
+		ECSENGINE_API bool FileExplorerGetFile(OSFileExplorerGetFileData* data);
+
+		ECSENGINE_API bool FileExplorerGetDirectory(OSFileExplorerGetDirectoryData* data);
+
+		ECSENGINE_API void FileExplorerGetFileAction(ActionData* action_data);
+
+		ECSENGINE_API void FileExplorerGetDirectoryAction(ActionData* action_data);
 
 		// ---------------------------------------------------------------------------------------------------
 

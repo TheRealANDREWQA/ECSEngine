@@ -12,9 +12,9 @@ namespace ECSEngine {
 
 	bool IsModule(Stream<wchar_t> path)
 	{
-		auto data = LoadModule(path);
-		if (data.code == ECS_GET_MODULE_OK) {
-			ReleaseModule(data);
+		auto module = LoadModule(path);
+		if (module.code == ECS_GET_MODULE_OK) {
+			ReleaseModule(&module);
 			return true;
 		}
 		return false;
@@ -24,123 +24,346 @@ namespace ECSEngine {
 
 	Module LoadModule(Stream<wchar_t> path)
 	{
-		Module data;
+		Module module;
+		memset(&module, 0, sizeof(module));
 
 		ECS_TEMP_STRING(library_path, 256);
-		library_path.Copy(path);
-		library_path[library_path.size] = L'\0';
+		if (path[path.size] != L'\0') {
+			library_path.Copy(path);
+			library_path[library_path.size] = L'\0';
+		}
+		else {
+			library_path = path;
+		}
 
 		HMODULE module_handle = LoadLibrary(library_path.buffer);
 
 		if (module_handle == nullptr) {
-			data.code = ECS_GET_MODULE_FAULTY_PATH;
-			data.function = nullptr;
-			data.os_module_handle = nullptr;
-
-			return data;
+			module.code = ECS_GET_MODULE_FAULTY_PATH;
+			return module;
 		}
 
-		data.function = (ModuleFunction)GetProcAddress(module_handle, ECS_MODULE_FUNCTION_NAME);
-		if (data.function == nullptr) {
+		module.task_function = (ModuleTaskFunction)GetProcAddress(module_handle, STRING(ModuleTaskFunction));
+		if (module.task_function == nullptr) {
 			FreeLibrary(module_handle);
-			data.code = ECS_GET_MODULE_FUNCTION_MISSING;
-			data.function = nullptr;
-			data.os_module_handle = nullptr;
-			return data;
+			module.code = ECS_GET_MODULE_FUNCTION_MISSING;
+			return module;
 		}
 
-		data.code = ECS_GET_MODULE_OK;
-		data.os_module_handle = module_handle;
-		data.tasks = { nullptr, 0 };
+		// Now the optional functions
+		module.build_functions = (ModuleBuildFunctions)GetProcAddress(module_handle, STRING(ModuleBuildFunctions));
+		module.ui_function = (ModuleUIFunction)GetProcAddress(module_handle, STRING(ModuleUIFunction));
+		module.link_components = (ModuleRegisterLinkComponentFunction)GetProcAddress(module_handle, STRING(ModuleRegisterLinkComponentFunction));
+		module.serialize_function = (ModuleSerializeComponentFunction)GetProcAddress(module_handle, STRING(ModuleSerializeComponentFunction));
+		module.set_world = (ModuleSetCurrentWorld)GetProcAddress(module_handle, STRING(ModuleSetCurrentWorld));
 
-		return data;
-	}
+		module.code = ECS_GET_MODULE_OK;
+		module.os_module_handle = module_handle;
 
-	// -----------------------------------------------------------------------------------------------------------
-
-	Module LoadModule(Stream<wchar_t> path, World* world, AllocatorPolymorphic allocator) {
-		Module module = LoadModule(path);
-		if (module.code == ECS_GET_MODULE_OK) {
-			LoadModuleTasks(world, module, allocator);
-		}
 		return module;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void LoadModuleTasks(World* world, Module* module, AllocatorPolymorphic allocator)
+	Stream<TaskSchedulerElement> LoadModuleTasks(const Module* module, AllocatorPolymorphic allocator)
 	{
-		module->tasks = LoadModuleTasks(world, *module, allocator);
+		const size_t STACK_MEMORY_CAPACITY = ECS_KB * 64;
+		void* stack_allocation = ECS_STACK_ALLOC(STACK_MEMORY_CAPACITY);
+		LinearAllocator temp_allocator(stack_allocation, STACK_MEMORY_CAPACITY);
+		AllocatorPolymorphic poly_allocator = GetAllocatorPolymorphic(&temp_allocator);
+
+		ECS_STACK_CAPACITY_STREAM(TaskSchedulerElement, schedule_tasks, 128);
+
+		ModuleTaskFunctionData task_data;
+		task_data.tasks = &schedule_tasks;
+		task_data.allocator = poly_allocator;
+
+		module->task_function(&task_data);
+		schedule_tasks.AssertCapacity();
+
+		return StreamDeepCopy(schedule_tasks, allocator);	
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	Stream<TaskDependencyElement> LoadModuleTasks(World* world, Module module, AllocatorPolymorphic allocator)
+	Stream<Tools::UIWindowDescriptor> LoadModuleUIDescriptors(const Module* module, AllocatorPolymorphic allocator)
 	{
-		constexpr size_t MAX_TASKS = 32;
-		constexpr size_t MAX_DEPENDENCIES_PER_TASK = 8;
-		Stream<TaskDependencyElement> stream;
-
-		void* temp_allocation = ECS_STACK_ALLOC(sizeof(TaskDependencyElement) * MAX_TASKS + sizeof(Stream<char>) * MAX_TASKS * MAX_DEPENDENCIES_PER_TASK);
-		stream.InitializeFromBuffer(temp_allocation, 0);
-		for (size_t index = 0; index < MAX_TASKS; index++) {
-			stream[index].task.name = nullptr;
+		if (!module->ui_function) {
+			return { nullptr, 0 };
 		}
 
-		module.function(world, stream);
+		const size_t MAX_DESCRIPTORS = 32;
+		ECS_STACK_CAPACITY_STREAM(Tools::UIWindowDescriptor, window_descriptors, MAX_DESCRIPTORS);
 
-		size_t total_size = sizeof(TaskDependencyElement) * stream.size;
-		for (size_t index = 0; index < stream.size; index++) {
-			if (stream[index].task.name != nullptr) {
-				total_size += sizeof(char) * (strlen(stream[index].task.name) + 1);
+		size_t LINEAR_ALLOCATOR_SIZE = ECS_KB * 64;
+		void* stack_allocation = ECS_STACK_ALLOC(LINEAR_ALLOCATOR_SIZE);
+		LinearAllocator stack_allocator(stack_allocation, LINEAR_ALLOCATOR_SIZE);
+
+		ModuleUIFunctionData function_data;
+		function_data.window_descriptors = &window_descriptors;
+		function_data.allocator = GetAllocatorPolymorphic(&stack_allocator);
+		module->ui_function(&function_data);
+		window_descriptors.AssertCapacity();
+
+		size_t total_memory = sizeof(Tools::UIWindowDescriptor) * window_descriptors.size;
+		total_memory += stack_allocator.m_top;
+
+		Tools::UIWindowDescriptor* descriptors = (Tools::UIWindowDescriptor*)AllocateEx(allocator, total_memory);
+		void* buffer = function::OffsetPointer(descriptors, sizeof(Tools::UIWindowDescriptor) * window_descriptors.size);
+		// Copy all the data allocated from the allocator
+		memcpy(buffer, stack_allocation, stack_allocator.m_top);
+
+		// The names must be remapped, alongside any window data
+		window_descriptors.CopyTo(descriptors);
+		for (size_t index = 0; index < window_descriptors.size; index++) {
+			// Change the name
+			descriptors[index].window_name = (char*)function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_name);
+
+			// Change the window data, if any
+			if (window_descriptors[index].window_data_size > 0) {
+				descriptors[index].window_data = function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_data);
 			}
 
-			total_size += (strlen(stream[index].task.name) + 1) * sizeof(char);
-			for (size_t subindex = 0; subindex < stream[index].dependencies.size; subindex++) {
-				total_size += (stream[index].dependencies[subindex].size + 1) * sizeof(char);
+			// Change the private window data, if any
+			if (window_descriptors[index].private_action_data_size > 0) {
+				descriptors[index].private_action_data = function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].private_action_data);
+			}
+
+			// Change the destroy window data, if any
+			if (window_descriptors[index].destroy_action_data_size > 0) {
+				descriptors[index].destroy_action_data = function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].destroy_action_data);
 			}
 		}
 
-		void* allocation = Allocate(allocator, total_size);
+		return { descriptors, window_descriptors.size };
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	Stream<ModuleBuildAssetType> LoadModuleBuildAssetTypes(const Module* module, AllocatorPolymorphic allocator)
+	{
+		if (!module->build_functions) {
+			return { nullptr, 0 };
+		}
+
+		const size_t MAX_TYPES = 32;
+		ECS_STACK_CAPACITY_STREAM(ModuleBuildAssetType, asset_types, MAX_TYPES);
+		// This memory is used by the function for the dependency types
+		const size_t EXTRA_MEMORY_SIZE = ECS_KB * 32;
+		char _extra_memory[EXTRA_MEMORY_SIZE];
+		LinearAllocator extra_memory(_extra_memory, EXTRA_MEMORY_SIZE);
+
+		ModuleBuildFunctionsData function_data;
+		function_data.asset_types = &asset_types;
+		function_data.allocator = GetAllocatorPolymorphic(&extra_memory);
+		module->build_functions(&function_data);
+		asset_types.AssertCapacity();
+
+		Stream<ModuleBuildAssetType> asset_type_stream(asset_types);
+		ValidateModuleBuildAssetTypes(asset_type_stream);
+
+		size_t total_memory = sizeof(ModuleBuildAssetType) * asset_types.size + extra_memory.m_top;
+
+		ModuleBuildAssetType* types = (ModuleBuildAssetType*)AllocateEx(allocator, total_memory);
+		asset_type_stream.CopyTo(types);
+		void* buffer = function::OffsetPointer(types, sizeof(ModuleBuildAssetType) * asset_type_stream.size);
+		// Memcpy all the data from the allocator
+		memcpy(buffer, _extra_memory, extra_memory.m_top);
+
+		// Remapp all the pointers into this space
+		for (size_t index = 0; index < asset_type_stream.size; index++) {
+			// The extension
+			types[index].extension = (wchar_t*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].extension);
+
+			// The dependencies
+			if (types[index].dependencies.size > 0) {
+				types[index].dependencies.buffer = (ECS_MODULE_BUILD_COMMAND_DEPENDENCY*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].dependencies.buffer);
+			}
+			else {
+				types[index].dependencies = { nullptr, 0 };
+			}
+
+			// The asset name
+			if (types[index].asset_type_name != nullptr) {
+				types[index].asset_type_name = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_type_name);
+			}
+
+			// The editor name
+			if (types[index].asset_editor_name != nullptr) {
+				types[index].asset_editor_name = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_editor_name);
+			}
+
+			// The metadata name
+			if (types[index].asset_metadata_name != nullptr) {
+				types[index].asset_metadata_name = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_metadata_name);
+			}
+		}
+
+		return { types, asset_type_stream.size };
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	ModuleSerializeComponentStreams LoadModuleSerializeComponentFunctors(const Module* module, AllocatorPolymorphic allocator)
+	{
+		if (!module->serialize_function) {
+			return {};
+		}
+
+		const size_t MAX_COMPONENTS = 32;
+		ECS_STACK_CAPACITY_STREAM(ModuleSerializeExtractComponent, serialize_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(ModuleDeserializeExtractComponent, deserialize_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(ModuleSerializeExtractSharedComponent, serialize_shared_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(ModuleDeserializeExtractSharedComponent, deserialize_shared_components, MAX_COMPONENTS);
+
+		const size_t TEMP_MEMORY_SIZE = ECS_KB * 8;
+		char _temp_memory[TEMP_MEMORY_SIZE];
+		LinearAllocator temp_memory(_temp_memory, TEMP_MEMORY_SIZE);
+
+		ModuleSerializeComponentFunctionData function_data;
+		function_data.serialize_components = &serialize_components;
+		function_data.deserialize_components = &deserialize_components;
+		function_data.serialize_shared_components = &serialize_shared_components;
+		function_data.deserialize_shared_components = &deserialize_shared_components;
+		function_data.allocator = GetAllocatorPolymorphic(&temp_memory);
+		module->serialize_function(&function_data);
+
+		serialize_components.AssertCapacity();
+		deserialize_components.AssertCapacity();
+		serialize_shared_components.AssertCapacity();
+		deserialize_shared_components.AssertCapacity();
+		ECS_ASSERT(serialize_components.size == deserialize_components.size);
+		ECS_ASSERT(serialize_shared_components.size == deserialize_shared_components.size);
+
+		// Make a single coallesced allocation
+		size_t total_memory = sizeof(ModuleSerializeExtractComponent) * serialize_components.size
+			+ sizeof(ModuleDeserializeExtractComponent) * deserialize_components.size
+			+ sizeof(ModuleSerializeExtractSharedComponent) * serialize_shared_components.size
+			+ sizeof(ModuleDeserializeExtractSharedComponent) * deserialize_shared_components.size
+			+ temp_memory.m_top;
+
+		ModuleSerializeComponentStreams streams;
+		void* allocation = AllocateEx(allocator, total_memory);
 		uintptr_t buffer = (uintptr_t)allocation;
+		streams.serialize_components.InitializeAndCopy(buffer, serialize_components);
+		streams.deserialize_components.InitializeAndCopy(buffer, deserialize_components);
+		streams.serialize_shared_components.InitializeAndCopy(buffer, serialize_shared_components);
+		streams.deserialize_shared_components.InitializeAndCopy(buffer, deserialize_shared_components);
+		streams.extra_data.InitializeFromBuffer(buffer, temp_memory.m_top);
+		memcpy(streams.extra_data.buffer, temp_memory.m_buffer, temp_memory.m_top);
 
-		Stream<TaskDependencyElement> temp_stream = stream;
-		stream.InitializeFromBuffer(buffer, temp_stream.size);
-		for (size_t index = 0; index < temp_stream.size; index++) {
-			stream[index].task = temp_stream[index].task;
-			strcpy((char*)stream[index].task.name, temp_stream[index].task.name);
-
-			if (temp_stream[index].task.name != nullptr) {
-				char* ptr = (char*)buffer;
-				size_t name_size = strlen(temp_stream[index].task.name) + 1;
-
-				memcpy(ptr, temp_stream[index].task.name, name_size * sizeof(char));
-				stream[index].task.name = ptr;
-
-				buffer += name_size;
-			}
-
-			for (size_t subindex = 0; subindex < temp_stream[index].dependencies.size; subindex++) {
-				stream[index].dependencies[subindex].InitializeAndCopy(buffer, temp_stream[index].dependencies[subindex]);
-				stream[index].dependencies[subindex].buffer[temp_stream[index].dependencies[subindex].size] = '\0';
-			}
+		if (streams.serialize_components.size == 0) {
+			streams.serialize_components.buffer = nullptr;
 		}
 
-		return stream;
+		if (streams.deserialize_components.size == 0) {
+			streams.deserialize_components.buffer = nullptr;
+		}
+
+		if (streams.serialize_shared_components.size == 0) {
+			streams.serialize_shared_components.buffer = nullptr;
+		}
+
+		if (streams.deserialize_shared_components.size == 0) {
+			streams.deserialize_shared_components.buffer = nullptr;
+		}
+
+		if (streams.extra_data.size == 0) {
+			streams.extra_data.buffer = temp_memory.m_buffer;
+		}
+
+		return streams;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ReleaseModule(Module module) {
-		BOOL success = FreeLibrary(module.os_module_handle);
+	Stream<ModuleLinkComponentTarget> LoadModuleLinkComponentTargets(const Module* module, AllocatorPolymorphic allocator)
+	{
+		if (!module->link_components) {
+			return { nullptr, 0 };
+		}
+
+		const size_t MAX_LINKS = 32;
+		ECS_STACK_CAPACITY_STREAM(ModuleLinkComponentTarget, link_components, MAX_LINKS);
+
+		const size_t MAX_COMPONENT_NAME_SIZE = ECS_KB;
+		ECS_STACK_CAPACITY_STREAM(char, link_component_names, MAX_COMPONENT_NAME_SIZE);
+		LinearAllocator temp_allocator(link_component_names.buffer, MAX_COMPONENT_NAME_SIZE);
+
+		ModuleRegisterLinkComponentFunctionData function_data;
+		function_data.functions = &link_components;
+		function_data.allocator = GetAllocatorPolymorphic(&temp_allocator);
+		module->link_components(&function_data);
+
+		link_components.AssertCapacity();
+		Stream<ModuleLinkComponentTarget> valid_links(link_components);
+		ValidateModuleLinkComponentTargets(valid_links);
+
+		// Calculate the total byte size
+		size_t total_memory = sizeof(ModuleLinkComponentTarget) * valid_links.size + temp_allocator.m_top;
+		ModuleLinkComponentTarget* targets = (ModuleLinkComponentTarget*)AllocateEx(allocator, total_memory);
+		valid_links.CopyTo(targets);
+		void* buffer = function::OffsetPointer(targets, sizeof(ModuleLinkComponentTarget) * valid_links.size);
+		memcpy(buffer, temp_allocator.m_buffer, temp_allocator.m_top);
+
+		for (size_t index = 0; index < valid_links.size; index++) {
+			targets[index].component_name = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name);
+			targets[index].component_metadata_name = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_metadata_name);
+		}
+
+		return { targets, valid_links.size };
 	}
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	void ReleaseModule(Module module, AllocatorPolymorphic allocator) {
-		ReleaseModule(module);
-		if (module.tasks.buffer != nullptr && module.tasks.size > 0) {
-			Deallocate(allocator, module.tasks.buffer);
+	void ReleaseModule(Module* module) {
+		BOOL success = FreeLibrary(module->os_module_handle);
+		module->code = ECS_MODULE_STATUS::ECS_GET_MODULE_FAULTY_PATH;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void ValidateModuleBuildAssetTypes(Stream<ModuleBuildAssetType>& build_types)
+	{
+		// Validate that the names are properly provided, aswell as the extension and the functions
+		for (int32_t index = 0; index < (int32_t)build_types.size; index++) {
+			if (build_types[index].extension == nullptr || wcslen(build_types[index].extension) == 0) {
+				build_types.Swap(index, build_types.size - 1);
+				index--;
+				continue;
+			}
+
+			if (build_types[index].asset_metadata_name == nullptr && build_types[index].asset_type_name == nullptr) {
+				build_types.Swap(index, build_types.size - 1);
+				index--;
+				continue;
+			}
+
+			if (build_types[index].build_function == nullptr) {
+				build_types.Swap(index, build_types.size - 1);
+				index--;
+				continue;
+			}
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void ValidateModuleLinkComponentTargets(Stream<ModuleLinkComponentTarget>& link_targets)
+	{
+		// Validate that the names are properly provided, aswell as the extension and the functions
+		for (int32_t index = 0; index < (int32_t)link_targets.size; index++) {
+			if (link_targets[index].component_name == nullptr) {
+				link_targets.Swap(index, link_targets.size - 1);
+				index--;
+				continue;
+			}
+
+			if (link_targets[index].build_function == nullptr) {
+				link_targets.Swap(index, link_targets.size - 1);
+				index--;
+				continue;
+			}
 		}
 	}
 

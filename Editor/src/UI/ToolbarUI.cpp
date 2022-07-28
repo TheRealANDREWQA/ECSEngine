@@ -94,15 +94,15 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 #pragma region Windows
 
 		// The action data is the inject data + the window name
-		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, GetConsole(), 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_SETTINGS] = { CreateSettingsWindowAction, editor_state, 0, UIDrawPhase::System };
-		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, UIDrawPhase::System };
+		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, GetConsole(), 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_SETTINGS] = { CreateSettingsWindowAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 
 #pragma endregion
 
@@ -157,7 +157,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		}
 
 		// default template
-		data->layout_actions[0] = { DefaultUITemplate, data->editor_state, 0, UIDrawPhase::System };
+		data->layout_actions[0] = { DefaultUITemplate, data->editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 
 		size_t layout_memory_size = sizeof(UIDrawerMenuState) * TOOLBAR_DATA_LAYOUT_ROW_COUNT + sizeof(UIActionHandler) * TOOLBAR_DATA_LAYOUT_ROW_COUNT * 2;
 		void* layout_submenu_allocation = drawer.GetMainAllocatorBuffer(layout_memory_size);
@@ -181,8 +181,8 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		};
 
 		for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_ROW_COUNT; index++) {
-			data->layout_submenu_handlers[index * 2] = { SavProjectUITemplateClickable, layout_save_data + index, 0, UIDrawPhase::System };
-			data->layout_submenu_handlers[index * 2 + 1] = { LoadProjectUITemplateClickable, layout_load_data + index, 0, UIDrawPhase::System };
+			data->layout_submenu_handlers[index * 2] = { SavProjectUITemplateClickable, layout_save_data + index, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->layout_submenu_handlers[index * 2 + 1] = { LoadProjectUITemplateClickable, layout_load_data + index, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
 		}
 
 		data->layout_has_submenu[0] = false;
@@ -227,7 +227,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	drawer.DisablePaddingForRenderRegion();
 	drawer.DisablePaddingForRenderSliders();
 	drawer.DisableZoom();
-	drawer.SetDrawMode(UIDrawerMode::Nothing);
+	drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NOTHING);
 
 	UILayoutDescriptor* layout = drawer.GetLayoutDescriptor();
 	drawer.SetCurrentX(drawer.GetNextRowXPosition());
@@ -236,7 +236,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 	UIDrawConfig config;
 	UIConfigWindowDependentSize transform;
-	transform.type = WindowSizeTransformType::Vertical;
+	transform.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_VERTICAL;
 	transform.scale_factor.y = 1.0f;
 
 	UIConfigBorder border;

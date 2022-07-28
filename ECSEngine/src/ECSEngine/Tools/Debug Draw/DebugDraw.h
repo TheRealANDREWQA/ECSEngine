@@ -539,6 +539,10 @@ namespace ECSEngine {
 
 #pragma endregion
 
+		AllocatorPolymorphic Allocator() const;
+
+		AllocatorPolymorphic AllocatorTs() const;
+
 		void BindShaders(unsigned int index);
 
 		// It also bumps forward the buffer offset

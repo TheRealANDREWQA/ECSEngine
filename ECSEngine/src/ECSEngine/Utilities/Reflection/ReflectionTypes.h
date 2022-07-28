@@ -134,14 +134,24 @@ namespace ECSEngine {
 			unsigned short pointer_offset;
 		};
 
-		struct ReflectionField {
+		struct ECSENGINE_API ReflectionField {
+			// If the string is not nullptr, then it returns true if the string appears in the tag
+			// If the string is nullptr, it returns true if the ECS_OMIT_FIELD_REFLECT is specified in the tag
+			// Else returns false in both cases
+			bool Skip(const char* string = nullptr) const;
+
 			const char* name;
 			const char* definition;
+			const char* tag;
 			ReflectionFieldInfo info;
 		};
 
-		struct ReflectionType {
+		struct ECSENGINE_API ReflectionType {
+			// If the tag is nullptr, it returns false. If it is set, it will check if the substring exists
+			bool HasTag(const char* string) const;
+
 			const char* name;
+			const char* tag;
 			Stream<ReflectionField> fields;
 			unsigned int folder_hierarchy_index;
 		};
@@ -151,6 +161,42 @@ namespace ECSEngine {
 			Stream<const char*> fields;
 			unsigned int folder_hierarchy_index;
 		};
+
+		struct ReflectionContainerTypeMatchData {
+			Stream<char> definition;
+		};
+
+		typedef bool (*ReflectionContainerTypeMatch)(ReflectionContainerTypeMatchData* data);
+
+		struct ReflectionManager;
+
+		struct ReflectionContainerTypeByteSizeData {
+			Stream<char> definition;
+			const Reflection::ReflectionManager* reflection_manager;
+		};
+
+		// Return 0 if you cannot determine right now the byte size (e.g. you are template<typename T> struct { T data; ... })
+		// The x component is the byte size, the y component is the alignment
+		typedef ulong2 (*ReflectionContainerTypeByteSize)(ReflectionContainerTypeByteSizeData* data);
+
+		// No need to allocate the strings, they can be referenced inside the definition since it is stable
+		struct ReflectionContainerTypeDependentTypesData {
+			Stream<char> definition;
+			CapacityStream<Stream<char>> dependent_types;
+		};
+
+		typedef void (*ReflectionContainerTypeDependentTypes)(ReflectionContainerTypeDependentTypesData* data);
+
+		struct ReflectionContainerType {
+			ReflectionContainerTypeMatch match;
+			ReflectionContainerTypeDependentTypes dependent_types;
+			ReflectionContainerTypeByteSize byte_size;
+		};
+
+		// Works only for non user-defined_types
+		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
+
+		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
 
 	}
 

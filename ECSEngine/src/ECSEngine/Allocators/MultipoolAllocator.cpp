@@ -21,7 +21,7 @@ namespace ECSEngine {
 		if (index == 0xFFFFFFFF)
 			return nullptr;
 
-		uintptr_t allocation = function::align_pointer_stack((uintptr_t)m_buffer + index, alignment);
+		uintptr_t allocation = function::AlignPointerStack((uintptr_t)m_buffer + index, alignment);
 		size_t offset = allocation - (uintptr_t)m_buffer;
 		m_buffer[offset - 1] = offset - index - 1;
 		ECS_ASSERT(offset - index - 1 < alignment);
@@ -57,6 +57,12 @@ namespace ECSEngine {
 	size_t MultipoolAllocator::GetSize() const
 	{
 		return m_size;
+	}
+
+	bool MultipoolAllocator::Belongs(const void* buffer) const
+	{
+		uintptr_t ptr = (uintptr_t)buffer;
+		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_size;
 	}
 
 	size_t MultipoolAllocator::MemoryOf(unsigned int pool_count, unsigned int size) {

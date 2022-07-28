@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../ECSEngine/Internal/EntityManager.h"
-#include "../ECSEngine/Internal/Resources/ResourceManager.h"
 #include "../ECSEngine/Internal/World.h"
+#include "../ECSEngine/Internal/ForEach.h"
+
+#include "ECSEngineResources.h"
 #include "ECSEngineMultithreading.h"

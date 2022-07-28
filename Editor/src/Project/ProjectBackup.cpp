@@ -2,7 +2,6 @@
 #include "ProjectBackup.h"
 #include "Editor\EditorState.h"
 #include "ProjectFolders.h"
-#include "..\Modules\ModuleConfigurationGroup.h"
 #include "..\Modules\ModuleFile.h"
 
 using namespace ECSEngine;
@@ -71,14 +70,6 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	success = FileCopy(file_or_folder_to_copy, path, true);
 	if (!success) {
 		error_lambda(ToStream("Could not copy the project file."));
-		return false;
-	}
-
-	file_or_folder_to_copy.size = 0;
-	GetProjectModuleConfigurationGroupFilePath(editor_state, file_or_folder_to_copy);
-	success = FileCopy(file_or_folder_to_copy, path, true);
-	if (!success) {
-		error_lambda(ToStream("Could not copy the module configuration group file."));
 		return false;
 	}
 
@@ -189,7 +180,6 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		L"temporary_ui",
 		L"temporary.ecsproj",
 		L"temporary.ecsmodules",
-		L"temporary.ecsmodulesgroup",
 		L"temporary_configuration"
 	};
 
@@ -199,13 +189,11 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		"UI folder",
 		"file",
 		"module file",
-		"module configuration groups",
 		"Configuration folder"
 	};
 
 	bool file_copy[PROJECT_BACKUP_COUNT] = {
 		false,
-		true,
 		true,
 		true,
 		false
@@ -220,7 +208,6 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		GetProjectUIFolder,
 		get_project_file_path,
 		GetProjectModuleFilePath,
-		GetProjectModuleConfigurationGroupFilePath,
 		GetProjectConfigurationFolder
 	};
 

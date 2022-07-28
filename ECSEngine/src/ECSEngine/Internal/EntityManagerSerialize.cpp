@@ -139,10 +139,10 @@ namespace ECSEngine {
 				for (unsigned int subindex = 0; subindex < named_instances_capacity; subindex++) {
 					if (entity_manager->m_shared_components[index].named_instances.IsItemAt(subindex)) {
 						SharedInstance instance = entity_manager->m_shared_components[index].named_instances.GetValueFromIndex(subindex);
-						Write(&shared_component_buffering_instances_ptr, &instance, sizeof(instance));
+						Write<true>(&shared_component_buffering_instances_ptr, &instance, sizeof(instance));
 						// It will make it easier to access them as a pair of unsigned shorts when deserializing
 						unsigned short short_size = (unsigned short)identifiers[subindex].size;
-						Write(&shared_component_buffering_instances_ptr, &short_size, sizeof(short_size));
+						Write<true>(&shared_component_buffering_instances_ptr, &short_size, sizeof(short_size));
 					}
 				}
 			}
@@ -157,7 +157,7 @@ namespace ECSEngine {
 				// Now the identifiers themselves
 				for (unsigned int subindex = 0; subindex < named_instances_capacity; subindex++) {
 					if (entity_manager->m_shared_components[index].named_instances.IsItemAt(subindex)) {
-						Write(&shared_component_buffering_instances_ptr, identifiers[subindex].ptr, identifiers[subindex].size);
+						Write<true>(&shared_component_buffering_instances_ptr, identifiers[subindex].ptr, identifiers[subindex].size);
 					}
 				}
 			}
@@ -173,7 +173,7 @@ namespace ECSEngine {
 					unsigned short component_size = entity_manager->m_shared_components[index].info.size;
 					for (unsigned int instance_index = 0; instance_index < entity_manager->m_shared_components[index].instances.size; instance_index++) {
 						// Write the instances blitted
-						Write(&shared_component_buffering_instances_ptr, entity_manager->m_shared_components[index].instances[instance_index], component_size);
+						Write<true>(&shared_component_buffering_instances_ptr, entity_manager->m_shared_components[index].instances[instance_index], component_size);
 					}
 				}
 			}
@@ -221,7 +221,7 @@ namespace ECSEngine {
 						unsigned short component_size = entity_manager->m_shared_components[index].info.size;
 						for (unsigned int instance_index = 0; instance_index < entity_manager->m_shared_components[index].instances.size; instance_index++) {
 							// Write the instaces blitted
-							Write(&shared_component_buffering_instances_ptr, entity_manager->m_shared_components[index].instances[instance_index], component_size);
+							Write<true>(&shared_component_buffering_instances_ptr, entity_manager->m_shared_components[index].instances[instance_index], component_size);
 						}
 						component_buffering_size = shared_component_buffering_instances_ptr - (uintptr_t)component_buffering;
 						ECS_ASSERT(component_buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
@@ -270,8 +270,8 @@ namespace ECSEngine {
 
 			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(component_buffering, component_buffering_size);
 
-			Write(&temp_ptr, unique.indices, sizeof(Component) * unique.count);
-			Write(&temp_ptr, shared.indices, sizeof(Component) * shared.count);
+			Write<true>(&temp_ptr, unique.indices, sizeof(Component) * unique.count);
+			Write<true>(&temp_ptr, shared.indices, sizeof(Component) * shared.count);
 
 			// Reset the size
 			component_buffering_size = temp_ptr - (uintptr_t)component_buffering;
@@ -288,7 +288,7 @@ namespace ECSEngine {
 
 			// Write the shared instances for each base archetype in a single stream
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
-				Write(&temp_ptr, archetype->GetBaseInstances(base_index), sizeof(SharedInstance) * shared.count);
+				Write<true>(&temp_ptr, archetype->GetBaseInstances(base_index), sizeof(SharedInstance) * shared.count);
 			}
 
 			// Reset the size
@@ -304,7 +304,7 @@ namespace ECSEngine {
 			// Write the size of each base archetype
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				const ArchetypeBase* base = archetype->GetBase(base_index);
-				Write(&temp_ptr, &base->m_size, sizeof(base->m_size));
+				Write<true>(&temp_ptr, &base->m_size, sizeof(base->m_size));
 			}
 
 			// Reset the size
@@ -867,14 +867,6 @@ namespace ECSEngine {
 		free(component_buffering);
 		CloseFile(file_handle);
 		return ECS_DESERIALIZE_ENTITY_MANAGER_OK;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------------------------
-
-	// It can simply fallthrough - the components are already unique
-	unsigned int EntityManagerHashComponent::Hash(Component component)
-	{
-		return component.value;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,13 +1,6 @@
 #pragma once
 #include "../Core.h"
 #include "AllocatorTypes.h"
-#include "LinearAllocator.h"
-#include "StackAllocator.h"
-#include "MemoryArena.h"
-#include "MemoryManager.h"
-#include "MultipoolAllocator.h"
-#include "PoolAllocator.h"
-#include "StackAllocator.h"
 
 namespace DirectX {
 	class ScratchImage;
@@ -15,155 +8,47 @@ namespace DirectX {
 
 namespace ECSEngine {
 
-	using AllocateFunction = void* (*)(void* allocator, size_t size, size_t alignment);
+	typedef void* (*AllocateFunction)(void* allocator, size_t size, size_t alignment);
 	// Some functions require that the interface does not expose the alignment
-	using AllocateSizeFunction = void* (*)(void* allocator, size_t size);
-	using DeallocateFunction = void (*)(void* allocator, const void* buffer);
+	typedef void* (*AllocateSizeFunction)(void* allocator, size_t size);
+
+	typedef void (*DeallocateFunction)(void* allocator, const void* buffer);
 	// Some functions require that the interface has the buffer as non const variable
-	using DeallocateMutableFunction = void (*)(void* allocator, void* buffer);
+	typedef void (*DeallocateMutableFunction)(void* allocator, void* buffer);
 
-	template<typename Allocator>
-	void* AllocateFunctionAllocator(void* _allocator, size_t size, size_t alignment) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate(size, alignment);
-	}
+	typedef bool (*BelongsToAllocatorFunction)(void* allocator, const void* buffer);
 
-	template<typename Allocator>
-	void* AllocateFunctionSizeAllocator(void* _allocator, size_t size) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate(size, 8);
-	}
+	ECSENGINE_API extern AllocateFunction ECS_ALLOCATE_FUNCTIONS[];
 
-	template<typename Allocator>
-	void* AllocateFunctionAllocatorTs(void* _allocator, size_t size, size_t alignment) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate_ts(size, alignment);
-	}
+	ECSENGINE_API extern AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[];
 
-	template<typename Allocator>
-	void* AllocateFunctionSizeAllocatorTs(void* _allocator, size_t size) {
-		Allocator* allocator = (Allocator*)_allocator;
-		return allocator->Allocate_ts(size, 8);
-	}
+	ECSENGINE_API extern AllocateFunction ECS_ALLOCATE_TS_FUNCTIONS[];
 
-	template<typename Allocator>
-	void DeallocateFunctionAllocator(void* ECS_RESTRICT _allocator, const void* ECS_RESTRICT buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate(buffer);
-	}
+	ECSENGINE_API extern AllocateSizeFunction ECS_ALLOCATE_SIZE_TS_FUNCTIONS[];
 
-	template<typename Allocator>
-	void DeallocateMutableFunctionAllocator(void* ECS_RESTRICT _allocator, void* ECS_RESTRICT buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate(buffer);
-	}
+	ECSENGINE_API extern DeallocateFunction ECS_DEALLOCATE_FUNCTIONS[];
 
-	template<typename Allocator>
-	void DeallocateFunctionAllocatorTs(void* ECS_RESTRICT _allocator, const void* ECS_RESTRICT buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate_ts(buffer);
-	}
+	ECSENGINE_API extern DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_FUNCTIONS[];
 
-	template<typename Allocator>
-	void DeallocateMutableFunctionAllocatorTs(void* ECS_RESTRICT _allocator, void* ECS_RESTRICT buffer) {
-		Allocator* allocator = (Allocator*)_allocator;
-		allocator->Deallocate_ts(buffer);
-	}
+	ECSENGINE_API extern DeallocateFunction ECS_DEALLOCATE_TS_FUNCTIONS[];
 
+	ECSENGINE_API extern DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_TS_FUNCTIONS[];
 
-	constexpr AllocateFunction ECS_ALLOCATE_FUNCTIONS[] = {
-		AllocateFunctionAllocator<LinearAllocator>,
-		AllocateFunctionAllocator<StackAllocator>,
-		AllocateFunctionAllocator<MultipoolAllocator>,
-		AllocateFunctionAllocator<MemoryManager>,
-		AllocateFunctionAllocator<GlobalMemoryManager>,
-		AllocateFunctionAllocator<MemoryArena>,
-		AllocateFunctionAllocator<ResizableMemoryArena>
-	};
-
-	constexpr AllocateSizeFunction ECS_ALLOCATE_SIZE_FUNCTIONS[] = {
-		AllocateFunctionSizeAllocator<LinearAllocator>,
-		AllocateFunctionSizeAllocator<StackAllocator>,
-		AllocateFunctionSizeAllocator<MultipoolAllocator>,
-		AllocateFunctionSizeAllocator<MemoryManager>,
-		AllocateFunctionSizeAllocator<GlobalMemoryManager>,
-		AllocateFunctionSizeAllocator<MemoryArena>,
-		AllocateFunctionSizeAllocator<ResizableMemoryArena>
-	};
-
-	constexpr AllocateFunction ECS_ALLOCATE_TS_FUNCTIONS[] = {
-		AllocateFunctionAllocatorTs<LinearAllocator>,
-		AllocateFunctionAllocatorTs<StackAllocator>,
-		AllocateFunctionAllocatorTs<MultipoolAllocator>,
-		AllocateFunctionAllocatorTs<MemoryManager>,
-		AllocateFunctionAllocatorTs<GlobalMemoryManager>,
-		AllocateFunctionAllocatorTs<MemoryArena>,
-		AllocateFunctionAllocatorTs<ResizableMemoryArena>
-	};
-
-	constexpr AllocateSizeFunction ECS_ALLOCATE_SIZE_TS_FUNCTIONS[] = {
-		AllocateFunctionSizeAllocatorTs<LinearAllocator>,
-		AllocateFunctionSizeAllocatorTs<StackAllocator>,
-		AllocateFunctionSizeAllocatorTs<MultipoolAllocator>,
-		AllocateFunctionSizeAllocatorTs<MemoryManager>,
-		AllocateFunctionSizeAllocatorTs<GlobalMemoryManager>,
-		AllocateFunctionSizeAllocatorTs<MemoryArena>,
-		AllocateFunctionSizeAllocatorTs<ResizableMemoryArena>
-	};
-
-	constexpr DeallocateFunction ECS_DEALLOCATE_FUNCTIONS[] = {
-		DeallocateFunctionAllocator<LinearAllocator>,
-		DeallocateFunctionAllocator<StackAllocator>,
-		DeallocateFunctionAllocator<MultipoolAllocator>,
-		DeallocateFunctionAllocator<MemoryManager>,
-		DeallocateFunctionAllocator<GlobalMemoryManager>,
-		DeallocateFunctionAllocator<MemoryArena>,
-		DeallocateFunctionAllocator<ResizableMemoryArena>
-	};
-
-	constexpr DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_FUNCTIONS[] = {
-		DeallocateMutableFunctionAllocator<LinearAllocator>,
-		DeallocateMutableFunctionAllocator<StackAllocator>,
-		DeallocateMutableFunctionAllocator<MultipoolAllocator>,
-		DeallocateMutableFunctionAllocator<MemoryManager>,
-		DeallocateMutableFunctionAllocator<GlobalMemoryManager>,
-		DeallocateMutableFunctionAllocator<MemoryArena>,
-		DeallocateMutableFunctionAllocator<ResizableMemoryArena>
-	};
-
-	constexpr DeallocateFunction ECS_DEALLOCATE_TS_FUNCTIONS[] = {
-		DeallocateFunctionAllocatorTs<LinearAllocator>,
-		DeallocateFunctionAllocatorTs<StackAllocator>,
-		DeallocateFunctionAllocatorTs<MultipoolAllocator>,
-		DeallocateFunctionAllocatorTs<MemoryManager>,
-		DeallocateFunctionAllocatorTs<GlobalMemoryManager>,
-		DeallocateFunctionAllocatorTs<MemoryArena>,
-		DeallocateFunctionAllocatorTs<ResizableMemoryArena>
-	};
-
-	constexpr DeallocateMutableFunction ECS_DEALLOCATE_MUTABLE_TS_FUNCTIONS[] = {
-		DeallocateMutableFunctionAllocatorTs<LinearAllocator>,
-		DeallocateMutableFunctionAllocatorTs<StackAllocator>,
-		DeallocateMutableFunctionAllocatorTs<MultipoolAllocator>,
-		DeallocateMutableFunctionAllocatorTs<MemoryManager>,
-		DeallocateMutableFunctionAllocatorTs<GlobalMemoryManager>,
-		DeallocateMutableFunctionAllocatorTs<MemoryArena>,
-		DeallocateMutableFunctionAllocatorTs<ResizableMemoryArena>
-	};
+	ECSENGINE_API extern BelongsToAllocatorFunction ECS_BELONGS_TO_ALLOCATOR_FUNCTIONS[];
 
 	// Single threaded
-	inline void* Allocate(void* allocator, AllocatorType type, size_t size, size_t alignment = 8) {
+	inline void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE type, size_t size, size_t alignment = 8) {
 		return ECS_ALLOCATE_FUNCTIONS[(unsigned int)type](allocator, size, alignment);
 	}
 
 	// Thread safe
-	inline void* AllocateTs(void* allocator, AllocatorType type, size_t size, size_t alignment = 8) {
+	inline void* AllocateTs(void* allocator, ECS_ALLOCATOR_TYPE type, size_t size, size_t alignment = 8) {
 		return ECS_ALLOCATE_TS_FUNCTIONS[(unsigned int)type](allocator, size, alignment);
 	}
 
 	// Dynamic allocation type
-	inline void* Allocate(void* allocator, AllocatorType allocator_type, AllocationType allocation_type, size_t size, size_t alignment = 8) {
-		if (allocation_type == AllocationType::SingleThreaded) {
+	inline void* Allocate(void* allocator, ECS_ALLOCATOR_TYPE allocator_type, ECS_ALLOCATION_TYPE allocation_type, size_t size, size_t alignment = 8) {
+		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			return Allocate(allocator, allocator_type, size, alignment);
 		}
 		else {
@@ -186,8 +71,8 @@ namespace ECSEngine {
 		}
 	}
 
-	inline AllocateFunction GetAllocateFunction(AllocatorType type, AllocationType allocation_type = AllocationType::SingleThreaded) {
-		if (allocation_type == AllocationType::SingleThreaded) {
+	inline AllocateFunction GetAllocateFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			return ECS_ALLOCATE_FUNCTIONS[(unsigned int)type];
 		}
 		else {
@@ -199,8 +84,8 @@ namespace ECSEngine {
 		return GetAllocateFunction(allocator.allocator_type, allocator.allocation_type);
 	}
 
-	inline AllocateSizeFunction GetAllocateSizeFunction(AllocatorType type, AllocationType allocation_type = AllocationType::SingleThreaded) {
-		if (allocation_type == AllocationType::SingleThreaded) {
+	inline AllocateSizeFunction GetAllocateSizeFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			return ECS_ALLOCATE_SIZE_FUNCTIONS[(unsigned int)type];
 		}
 		else {
@@ -213,18 +98,18 @@ namespace ECSEngine {
 	}
 
 	// Single threaded
-	inline void Deallocate(void* ECS_RESTRICT allocator, AllocatorType type, const void* ECS_RESTRICT buffer) {
+	inline void Deallocate(void* ECS_RESTRICT allocator, ECS_ALLOCATOR_TYPE type, const void* ECS_RESTRICT buffer) {
 		ECS_DEALLOCATE_FUNCTIONS[(unsigned int)type](allocator, buffer);
 	}
 
 	// Thread safe
-	inline void DeallocateTs(void* ECS_RESTRICT allocator, AllocatorType type, const void* ECS_RESTRICT buffer) {
+	inline void DeallocateTs(void* ECS_RESTRICT allocator, ECS_ALLOCATOR_TYPE type, const void* ECS_RESTRICT buffer) {
 		ECS_DEALLOCATE_TS_FUNCTIONS[(unsigned int)type](allocator, buffer);
 	}
 
 	// Dynamic allocation type
-	inline void Deallocate(void* ECS_RESTRICT allocator, AllocatorType allocator_type, const void* ECS_RESTRICT buffer, AllocationType allocation_type) {
-		if (allocation_type == AllocationType::SingleThreaded) {
+	inline void Deallocate(void* ECS_RESTRICT allocator, ECS_ALLOCATOR_TYPE allocator_type, const void* ECS_RESTRICT buffer, ECS_ALLOCATION_TYPE allocation_type) {
+		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			Deallocate(allocator, allocator_type, buffer);
 		}
 		else {
@@ -247,8 +132,8 @@ namespace ECSEngine {
 		}
 	}
 
-	inline DeallocateFunction GetDeallocateFunction(AllocatorType type, AllocationType allocation_type = AllocationType::SingleThreaded) {
-		if (allocation_type == AllocationType::SingleThreaded) {
+	inline DeallocateFunction GetDeallocateFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			return ECS_DEALLOCATE_FUNCTIONS[(unsigned int)type];
 		}
 		else {
@@ -260,8 +145,8 @@ namespace ECSEngine {
 		return GetDeallocateFunction(allocator.allocator_type, allocator.allocation_type);
 	}
 
-	inline DeallocateMutableFunction GetDeallocateMutableFunction(AllocatorType type, AllocationType allocation_type = AllocationType::SingleThreaded) {
-		if (allocation_type == AllocationType::SingleThreaded) {
+	inline DeallocateMutableFunction GetDeallocateMutableFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			return ECS_DEALLOCATE_MUTABLE_FUNCTIONS[(unsigned int)type];
 		}
 		else {
@@ -273,33 +158,25 @@ namespace ECSEngine {
 		return GetDeallocateMutableFunction(allocator.allocator_type, allocator.allocation_type);
 	}
 
-	template<typename Allocator>
-	AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, AllocationType allocation_type = AllocationType::SingleThreaded) {
-		AllocatorType allocator_type = AllocatorType::LinearAllocator;
-		if constexpr (std::is_same_v<Allocator, LinearAllocator>) {
-			allocator_type = AllocatorType::LinearAllocator;
-		}
-		else if constexpr (std::is_same_v<Allocator, StackAllocator>) {
-			allocator_type = AllocatorType::StackAllocator;
-		}
-		else if constexpr (std::is_same_v<Allocator, MultipoolAllocator>) {
-			allocator_type = AllocatorType::MultipoolAllocator;
-		}
-		else if constexpr (std::is_same_v<Allocator, MemoryManager>) {
-			allocator_type = AllocatorType::MemoryManager;
-		}
-		else if constexpr (std::is_same_v<Allocator, GlobalMemoryManager>) {
-			allocator_type = AllocatorType::GlobalMemoryManager;
-		}
-		else if constexpr (std::is_same_v<Allocator, MemoryArena>) {
-			allocator_type = AllocatorType::MemoryArena;
-		}
-		else if constexpr (std::is_same_v<Allocator, ResizableMemoryArena>) {
-			allocator_type = AllocatorType::ResizableMemoryArena;
-		}
-
-		return { allocator, allocator_type, allocation_type };
+	inline BelongsToAllocatorFunction GetBelongsToAllocatorFunction(ECS_ALLOCATOR_TYPE type) {
+		return ECS_BELONGS_TO_ALLOCATOR_FUNCTIONS[(unsigned int)type];
 	}
+
+	inline bool BelongsToAllocator(AllocatorPolymorphic allocator, const void* buffer) {
+		return ECS_BELONGS_TO_ALLOCATOR_FUNCTIONS[(unsigned int)allocator.allocator_type](allocator.allocator, buffer);
+	}
+
+	// Returns true if the block was deallocated, else false
+	inline bool DeallocateIfBelongs(AllocatorPolymorphic allocator, const void* buffer) {
+		if (BelongsToAllocator(allocator, buffer)) {
+			Deallocate(allocator, buffer);
+			return true;
+		}
+		return false;
+	}
+
+	template<typename Allocator>
+	ECSENGINE_API AllocatorPolymorphic GetAllocatorPolymorphic(Allocator* allocator, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE);
 
 	ECSENGINE_API void SetInternalImageAllocator(DirectX::ScratchImage* image, AllocatorPolymorphic allocator);
 

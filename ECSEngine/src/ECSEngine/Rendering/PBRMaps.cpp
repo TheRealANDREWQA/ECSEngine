@@ -105,7 +105,7 @@ namespace ECSEngine {
 		// The roughness buffer
 		ConstantBuffer roughness_buffer = graphics->CreateConstantBuffer(sizeof(float), true);
 
-		Texture2D environment_tex = GetResource(environment);
+		Texture2D environment_tex = environment.GetResource();
 		D3D11_TEXTURE2D_DESC environment_descriptor;
 		environment_tex.tex->GetDesc(&environment_descriptor);
 

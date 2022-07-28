@@ -49,6 +49,17 @@ namespace ECSEngine {
 		free(m_allocators);
 	}
 
+	bool GlobalMemoryManager::Belongs(const void* buffer) const
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (m_allocators[index].Belongs(buffer)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	void* GlobalMemoryManager::Allocate(size_t size, size_t alignment) {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			void* allocation = m_allocators[index].Allocate(size, alignment);
@@ -127,6 +138,15 @@ namespace ECSEngine {
 		CreateAllocator(size, maximum_pool_count);
 	}
 
+	void MemoryManager::Clear()
+	{
+		for (size_t index = 1; index < m_allocator_count; index++) {
+			m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
+		}
+		m_allocators[0].Clear();
+		m_allocator_count = 1;
+	}
+
 	void MemoryManager::Free() {
 		for (size_t index = 0; index < m_allocator_count; index++) {
 			m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
@@ -194,6 +214,17 @@ namespace ECSEngine {
 				index--;
 			}
 		}
+	}
+
+	bool MemoryManager::Belongs(const void* buffer) const
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			if (m_allocators[index].Belongs(buffer)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	// ---------------------- Thread safe variants -----------------------------

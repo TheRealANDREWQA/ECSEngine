@@ -50,7 +50,7 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor, bool 
 	transform.scale = button_scale;
 	config.AddFlag(transform);
 
-	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_TOOL_TIP;
+	const size_t configuration = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_BORDER | UI_CONFIG_RECTANGLE_TOOL_TIP;
 	const float triangle_scale_factor = 0.8f;
 	const float stop_scale_factor = 0.45f;
 
@@ -160,12 +160,12 @@ void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initi
 
 	UIDrawConfig config;
 	UIConfigWindowDependentSize size;
-	size.type = WindowSizeTransformType::Horizontal;
+	size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 	size.scale_factor.x = 1.0f;
 
 	config.AddFlag(size);
 
-	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Save", { save_layout, window_data, 0, UIDrawPhase::System });
+	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Save", { save_layout, window_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 	drawer.NextRow();
 	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Exit", { exit, window_data, 0 });
 }
@@ -264,7 +264,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		action_data[TOOLBAR_WINDOW_MENU_SETTINGS] = { data->editor_state, SETTINGS_WINDOW_NAME, {0.4f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
 
-#define SET_HANDLER(string) data->handlers[string] = {CreatePlaceholderDockspaceAction, action_data + string, 0, UIDrawPhase::System}
+#define SET_HANDLER(string) data->handlers[string] = {CreatePlaceholderDockspaceAction, action_data + string, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM}
 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INJECT_WINDOW);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_CONSOLE);
@@ -289,7 +289,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 	state.submenu_index = 0;
 	
 	UIConfigWindowDependentSize size;
-	size.type = WindowSizeTransformType::Horizontal;
+	size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 
 	UIDrawConfig config;
 	config.AddFlag(size);

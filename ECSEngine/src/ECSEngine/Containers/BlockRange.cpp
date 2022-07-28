@@ -53,7 +53,7 @@ namespace ECSEngine {
 		for (i = 0; flag == -1 && i < m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + i));
 			match = section == temp;
-			PrecullHorizontalFindFirst(match, flag);
+			flag = HorizontalFindFirst(match);
 		}
 
 		size_t next_block_index = i + flag - temp.size();
@@ -64,7 +64,7 @@ namespace ECSEngine {
 		for (i = 0; flag2 == -1 && i < m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + m_capacity + i));
 			match = section == temp;
-			PrecullHorizontalFindFirst(match, flag2);
+			flag2 = HorizontalFindFirst(match);
 		}
 
 		// previous block 

@@ -265,14 +265,11 @@
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorSandbox.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
-    <ClInclude Include="src\Editor\EditorWorld.h" />
     <ClInclude Include="src\Metafiles\Metafiles.h" />
     <ClInclude Include="src\Modules\Module.h" />
-    <ClInclude Include="src\Modules\ModuleConfigurationGroup.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />
     <ClInclude Include="src\Modules\ModuleSettings.h" />
-    <ClInclude Include="src\OSFunctions.h" />
     <ClInclude Include="src\Project\ProjectBackup.h" />
     <ClInclude Include="src\Project\ProjectFile.h" />
     <ClInclude Include="src\Project\ProjectFolders.h" />
@@ -309,13 +306,10 @@
     </ClCompile>
     <ClCompile Include="src\Editor\EditorSandbox.cpp" />
     <ClCompile Include="src\Editor\EditorState.cpp" />
-    <ClCompile Include="src\Editor\EditorWorld.cpp" />
     <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Modules\Module.cpp" />
-    <ClCompile Include="src\Modules\ModuleConfigurationGroup.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\Modules\ModuleSettings.cpp" />
-    <ClCompile Include="src\OSFunctions.cpp" />
     <ClCompile Include="src\Project\ProjectBackup.cpp" />
     <ClCompile Include="src\Project\ProjectFolders.cpp" />
     <ClCompile Include="src\Project\ProjectOperations.cpp" />

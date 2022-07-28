@@ -21,7 +21,6 @@
 
 namespace ECSEngine {
 
-	using ResourceManagerHash = HashFunctionMultiplyString;
 	using ResourceManagerAllocator = MemoryManager;
 	
 	// The time stamp can be used to compare against a new stamp and check to see if the resource is out of date
@@ -31,7 +30,7 @@ namespace ECSEngine {
 	};
 
 	// Embedd the reference count inside the pointer
-	using ResourceManagerTable = HashTable<ResourceManagerEntry, ResourceIdentifier, HashFunctionPowerOfTwo, ResourceManagerHash>;
+	using ResourceManagerTable = HashTableDefault<ResourceManagerEntry>;
 
 	constexpr size_t ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT = USHORT_MAX;
 
@@ -57,11 +56,6 @@ namespace ECSEngine {
 	// Defining ECS_RESOURCE_MANAGER_CHECK_RESOURCE will make AddResource check if the resource exists already 
 	struct ECSENGINE_API ResourceManager
 	{
-		struct InternalResourceType {
-			const char* name;
-			ResourceManagerTable table;
-		};
-
 		struct ThreadResource {
 			CapacityStream<wchar_t> characters;
 			CapacityStream<unsigned int> offsets;
@@ -83,24 +77,25 @@ namespace ECSEngine {
 		// Each thread has its own resource path
 		void AddResourcePath(const wchar_t* subpath, unsigned int thread_index = 0);
 
-		// Create a new resource type - must be power of two size
-		void AddResourceType(ResourceType type, unsigned int resource_count);
-
 		// Inserts the resource into the table without loading - it might allocate in order to maintain resource invariation
 		// Reference count USHORT_MAX means no reference counting. The time stamp is optional (0 if the stamp is not needed)
 		void AddResource(
-			const wchar_t* path, 
+			ResourceIdentifier identifier, 
 			ResourceType resource_type,
 			void* resource, 
 			size_t time_stamp = 0, 
 			unsigned short reference_count = USHORT_MAX
 		);
 
+		void AddShaderDirectory(Stream<wchar_t> directory);
+
 		void* Allocate(size_t size);
 
 		void* AllocateTs(size_t size);
 
-		AllocatorPolymorphic Allocator();
+		AllocatorPolymorphic Allocator() const;
+
+		AllocatorPolymorphic AllocatorTs() const;
 
 		void Deallocate(const void* data);
 
@@ -117,6 +112,12 @@ namespace ECSEngine {
 
 		// Checks to see if the resource exists and returns its position as index inside the hash table
 		bool Exists(ResourceIdentifier identifier, ResourceType type, unsigned int& table_index) const;
+
+		// Removes a resource from the table - it does not unload it.
+		void EvictResource(ResourceIdentifier identifier, ResourceType type);
+
+		// Removes all resources from the tables without unloading them that appear in the other resource manager
+		void EvictResourcesFrom(const ResourceManager* other);
 
 		// Walks through the table and removes all resources which are outdated - implies that all resource identifiers have as their
 		// ptr the path to the resource
@@ -150,10 +151,13 @@ namespace ECSEngine {
 		// it returns false
 		bool IsResourceOutdated(ResourceIdentifier identifier, ResourceType type, size_t new_stamp);
 
-		// It will create all resource types with default resource count
-		void InitializeDefaultTypes();
-
 		void IncrementReferenceCount(ResourceType type, unsigned int amount);
+
+		// It will insert the resources already loaded from the other resource manager into the instance's
+		// tables. The timestamps will be 0, and will have no reference count. If the graphics object
+		// differs between the 2 resource managers, then it will create another shared instance for the
+		// GPU resources which require this
+		void InheritResources(const ResourceManager* other);
 
 		// resource folder path different from -1 will use the folder in the specified thread position
 		template<bool reference_counted = false>
@@ -387,8 +391,6 @@ namespace ECSEngine {
 
 		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type);
 
-		void SetShaderDirectory(Stream<wchar_t> directory);
-
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
@@ -532,9 +534,9 @@ namespace ECSEngine {
 	//private:
 		Graphics* m_graphics;
 		ResourceManagerAllocator* m_memory;
-		Stream<InternalResourceType> m_resource_types;
+		Stream<ResourceManagerTable> m_resource_types;
 		CapacityStream<ThreadResource> m_thread_resources;
-		CapacityStream<wchar_t> m_shader_directory;
+		ResizableStream<Stream<wchar_t>> m_shader_directory;
 	};
 
 #pragma region Free functions

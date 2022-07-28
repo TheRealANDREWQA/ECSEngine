@@ -2,7 +2,6 @@
 
 #define UI_UNPACK_ACTION_DATA	ECSEngine::Tools::UIDockspace* dockspace = (ECSEngine::Tools::UIDockspace*)action_data->dockspace; \
 								unsigned int border_index = action_data->border_index; \
-								unsigned int thread_id = action_data->thread_id; \
 								ECSEngine::Tools::UISystem* system = (ECSEngine::Tools::UISystem*)action_data->system; \
 								float dockspace_mask = action_data->dockspace_mask; \
 								ECSEngine::Tools::DockspaceType dockspace_type = action_data->type; \
@@ -11,7 +10,6 @@
 								ECSEngine::float2 scale = action_data->scale; \
 								void* _data = action_data->data; \
 								void* _additional_data = action_data->additional_data; \
-								ECSEngine::Tools::ActionAdditionalData additional_data_type = action_data->additional_data_type; \
 								void** buffers = action_data->buffers; \
 								size_t* counts = action_data->counts; \
 								const ECSEngine::HID::MouseTracker* mouse_tracker = action_data->mouse_tracker; \
@@ -99,11 +97,11 @@
 #define ECS_TOOLS_UI_DOCKSPACE_CLOSE_X_SCALE_Y 0.03f
 #define ECS_TOOLS_UI_DOCKSPACE_CLOSE_X_TOTAL_X_PADDING 0.02f
 
-#define ECS_TOOLS_UI_FONT_SIZE 0.00085f
-#define ECS_TOOLS_UI_FONT_CHARACTER_SPACING 0.0011f
+#define ECS_TOOLS_UI_FONT_SIZE 0.00078f
+#define ECS_TOOLS_UI_FONT_CHARACTER_SPACING 0.00105f
 #define ECS_TOOLS_UI_FONT_SYMBOL_COUNT 105
 #define ECS_TOOLS_UI_FONT_TEXTURE_DIMENSIONS 201
-#define ECS_TOOLS_UI_FONT_X_FACTOR 0.58f
+#define ECS_TOOLS_UI_FONT_X_FACTOR 0.52f
 #define ECS_TOOLS_UI_FONT 0
 
 #define ECS_TOOLS_UI_ATLAS_VERTEX_BUFFER 1000
@@ -154,11 +152,11 @@
 #define ECS_TOOLS_UI_ANISOTROPIC_SAMPLER 0
 
 #define ECS_TOOLS_UI_WINDOW_LAYOUT_ELEMENT_INDENTATION 0.01f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW 0.03f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW_PADDING 0.025f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW 0.02f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW_PADDING 0.017f
 #define ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_X 0.1f
 #define ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_Y 0.04f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_NODE_INDENTATION 0.025f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_NODE_INDENTATION 0.017f
 
 #define ECS_TOOLS_UI_REVERT_HANDLER_COMMAND_COUNT 256
 
@@ -166,14 +164,10 @@
 #define ECS_TOOLS_UI_TEXT_INPUT_REPEAT_COUNT 60
 #define ECS_TOOLS_UI_TEXT_INPUT_REPEAT_START_TIME 400
 #define ECS_TOOLS_UI_TEXT_INPUT_DEFAULT_COUNT 32
-#define ECS_TOOLS_UI_TEXT_INPUT_PADDING_X 0.006f
-#define ECS_TOOLS_UI_TEXT_INPUT_PADDING_Y 0.008f
 #define ECS_TOOLS_UI_TEXT_INPUT_COPY_CLIPBOARD_ALLOCATION 1024
 
 #define ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_X 0.0032f
 #define ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_Y 0.0055f
-#define ECS_TOOLS_UI_SLIDER_PADDING_X 0.004f
-#define ECS_TOOLS_UI_SLIDER_PADDING_Y 0.0065f
 #define ECS_TOOLS_UI_SLIDER_LENGTH_X 0.024f
 #define ECS_TOOLS_UI_SLIDER_LENGTH_Y 0.042f
 #define ECS_TOOLS_UI_SLIDER_BRING_BACK_START 200

@@ -1,5 +1,4 @@
 #pragma once
-#include "UIDrawer.h"
 #include "../../Internal/Multithreading/ConcurrentPrimitives.h"
 #include "UIReflection.h"
 #include "UIResourcePaths.h"
@@ -16,6 +15,8 @@ namespace ECSEngine {
 	struct TaskManager;
 
 	namespace Tools {
+
+		struct UIDrawer;
 
 		constexpr const wchar_t* CONSOLE_TEXTURE_ICONS[] = {
 			ECS_TOOLS_UI_TEXTURE_INFO_ICON,
@@ -185,8 +186,6 @@ namespace ECSEngine {
 
 		constexpr const char* CONSOLE_WINDOW_NAME = "Console";	
 
-		using ConsoleUIHashFunction = HashFunctionMultiplyString;
-
 		struct ECSENGINE_API UniqueConsoleMessage {
 			ConsoleMessage message;
 			unsigned int counter;
@@ -215,7 +214,7 @@ namespace ECSEngine {
 			unsigned int error_count;
 			unsigned int trace_count;
 			ResizableStream<unsigned int> filtered_message_indices;
-			HashTable<UniqueConsoleMessage, ResourceIdentifier, HashFunctionPowerOfTwo, UIHash> unique_messages;
+			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;
 		};
 
@@ -238,8 +237,6 @@ namespace ECSEngine {
 			const char* name;
 			const char* basic_type_string;
 			Reflection::ReflectionStreamFieldType stream_type = Reflection::ReflectionStreamFieldType::Basic;
-			// It is used to express the capacity of the stream for stream types other than capacity stream
-			unsigned int stream_capacity = 0;
 			// It is used to express the initial capacity of non capacity streams
 			unsigned int stream_size = 0;
 		};
