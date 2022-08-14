@@ -112,9 +112,9 @@ namespace ECSEngine {
 		TaskComponentQuery Copy(AllocatorPolymorphic allocator) const;
 
 		// It the case copy size returns more than 0
-		TaskComponentQuery Copy(void* allocation) const;
+		TaskComponentQuery CopyTo(void* allocation) const;
 
-		TaskComponentQuery Copy(uintptr_t& buffer) const;
+		TaskComponentQuery CopyTo(uintptr_t& buffer) const;
 
 		// In case everything is embedded
 		TaskComponentQuery BitwiseCopy() const;
@@ -163,9 +163,9 @@ namespace ECSEngine {
 
 		TaskSchedulerElement Copy(AllocatorPolymorphic allocator) const;
 
-		TaskSchedulerElement Copy(void* allocation) const;
+		TaskSchedulerElement CopyTo(void* allocation) const;
 
-		TaskSchedulerElement Copy(uintptr_t& buffer) const;
+		TaskSchedulerElement CopyTo(uintptr_t& buffer) const;
 
 		void* GetAllocatedBuffer() const;
 

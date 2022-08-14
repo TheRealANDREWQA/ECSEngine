@@ -145,16 +145,6 @@ namespace ECSEngine {
 		}
 
 		inline void ConvertWideCharsToASCII(
-			CapacityStream<wchar_t> wide_chars,
-			CapacityStream<char>& ascii_chars
-		) {
-			size_t written_chars = 0;
-			errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
-			ECS_ASSERT(status == 0);
-			ascii_chars.size += written_chars - 1;
-		}
-
-		inline void ConvertWideCharsToASCII(
 			Stream<wchar_t> wide_chars,
 			CapacityStream<char>& ascii_chars
 		) {
@@ -165,7 +155,7 @@ namespace ECSEngine {
 		}
 
 		// it searches for spaces and next line characters
-		ECSENGINE_API size_t ParseWordsFromSentence(const char* sentence, char separator_token = ' ');
+		ECSENGINE_API size_t ParseWordsFromSentence(Stream<char> sentence, char separator_token = ' ');
 
 		// positions will be filled with the 4 corners of the rectangle
 		ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
@@ -189,11 +179,27 @@ namespace ECSEngine {
 		// duration should be expressed as milliseconds
 		ECSENGINE_API void ConvertDurationToChars(size_t duration, char* characters);
 
+		// finds the tokens that appear in the current string
+		ECSENGINE_API void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens);
+
+		// finds the tokens that appear in the current string
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens);
+
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, CapacityStream<unsigned int>& tokens);
+
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens);
+
 		// It will return the first appereance of the token inside the character stream
-		// It will not call strstr, this function being well suited if searching a large string
+		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
 		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
 		// until the end of the characters string
-		ECSENGINE_API Stream<char> FindFirstToken(Stream<char> characters, const char* token);
+		ECSENGINE_API Stream<char> FindFirstToken(Stream<char> characters, Stream<char> token);
+
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
+		// until the end of the characters string
+		ECSENGINE_API Stream<wchar_t> FindFirstToken(Stream<wchar_t> characters, Stream<wchar_t> token);
 
 		// It will return the first appereance of the token inside the character stream
 		// It will not call strchr, this function being well suited if searching a large string
@@ -202,10 +208,15 @@ namespace ECSEngine {
 		ECSENGINE_API Stream<char> FindFirstCharacter(Stream<char> characters, char token);
 
 		// It will search from the end of the characters string till its start
-		ECSENGINE_API const char* FindTokenReverse(const char* characters, const char* token);
+		// It uses SIMD to speed up the find
+		ECSENGINE_API Stream<char> FindTokenReverse(Stream<char> characters, Stream<char> token);
+
+		// It will search from the end of the characters string till its start
+		// It uses SIMD to speed up the find
+		ECSENGINE_API Stream<wchar_t> FindTokenReverse(Stream<wchar_t> characters, Stream<wchar_t> token);
 
 		// It will search the string from ending character until lower bound
-		ECSENGINE_API const char* FindCharacterReverse(const char* ending_character, const char* lower_bound, char character);
+		ECSENGINE_API Stream<char> FindCharacterReverse(Stream<char> characters, char character);
 
 		inline void Capitalize(char* character) {
 			if (*character >= 'a' && *character <= 'z') {
@@ -236,24 +247,75 @@ namespace ECSEngine {
 			}
 		}
 
-		constexpr bool HasFlag(size_t configuration, size_t flag) {
+		inline bool HasFlag(size_t configuration, size_t flag) {
 			return (configuration & flag) != 0;
+		}
+
+		// We're not using any macros or variadic templates. Just write up to 5 args
+		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1) {
+			return HasFlag(HasFlag(configuration, flag0), flag1);
+		}
+
+		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
+			return HasFlag(HasFlag(configuration, flag0), flag1, flag2);
+		}
+
+		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
+			return HasFlag(HasFlag(configuration, flag0), flag1, flag2, flag3);
+		}
+
+		inline size_t HasFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
+			return HasFlag(HasFlag(configuration, flag0), flag1, flag2, flag3, flag4);
 		}
 
 		inline bool HasFlagAtomic(const std::atomic<size_t>& configuration, size_t flag) {
 			return (configuration.load(std::memory_order_relaxed) & flag) != 0;
 		}
 
-		constexpr size_t ClearFlag(size_t configuration, size_t flag) {
+		inline size_t ClearFlag(size_t configuration, size_t flag) {
 			return configuration & (~flag);
+		}
+
+		// We're not using any macros or variadic templates. Just write up to 5 args
+		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1) {
+			return ClearFlag(ClearFlag(configuration, flag0), flag1);
+		}
+
+		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
+			return ClearFlag(ClearFlag(configuration, flag0), flag1, flag2);
+		}
+
+		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
+			return ClearFlag(ClearFlag(configuration, flag0), flag1, flag2, flag3);
+		}
+
+		inline size_t ClearFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
+			return ClearFlag(ClearFlag(configuration, flag0), flag1, flag2, flag3, flag4);
 		}
 
 		inline void ClearFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
 			configuration.fetch_and(~flag, std::memory_order_relaxed);
 		}
 
-		constexpr size_t SetFlag(size_t configuration, size_t flag) {
+		inline size_t SetFlag(size_t configuration, size_t flag) {
 			return configuration | flag;
+		}
+
+		// We're not using any macros or variadic templates. Just write up to 5 args
+		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1) {
+			return SetFlag(SetFlag(configuration, flag0), flag1);
+		}
+
+		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2) {
+			return SetFlag(SetFlag(configuration, flag0), flag1, flag2);
+		}
+
+		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3) {
+			return SetFlag(SetFlag(configuration, flag0), flag1, flag2, flag3);
+		}
+
+		inline size_t SetFlag(size_t configuration, size_t flag0, size_t flag1, size_t flag2, size_t flag3, size_t flag4) {
+			return SetFlag(SetFlag(configuration, flag0), flag1, flag2, flag3, flag4);
 		}
 
 		inline void SetFlagAtomic(std::atomic<size_t>& configuration, size_t flag) {
@@ -320,17 +382,6 @@ namespace ECSEngine {
 			return (void*)pointer;
 		}
 
-		// If data size is zero, it will return data, else it will make a copy and return that instead
-		template<typename Allocator>
-		void* AllocateMemory(Allocator* allocator, void* data, size_t data_size, size_t alignment = 8) {
-			if (data_size > 0) {
-				void* allocation = allocator->Allocate(data_size, alignment);
-				memcpy(allocation, data, data_size);
-				return allocation;
-			}
-			return data;
-		}
-
 		// If allocating a stream alongside its data, this function sets it up
 		ECSENGINE_API void* CoallesceStreamWithData(void* allocation, size_t size);
 
@@ -365,6 +416,11 @@ namespace ECSEngine {
 			return pointer;
 		}
 
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |value   | ->
+		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
+		ECSENGINE_API Stream<char> SkipSpaceStream(Stream<char> characters, int increment = 1);
+
 		// Tabs and spaces
 		// Can use the increment to go backwards by setting it to -1
 		inline const char* SkipWhitespace(const char* pointer, int increment = 1) {
@@ -382,6 +438,11 @@ namespace ECSEngine {
 			return pointer;
 		}
 		
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |value  \n | ->
+		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
+		ECSENGINE_API Stream<char> SkipWhitespace(Stream<char> characters, int increment = 1);
+
 		// Can use the increment to go backwards by setting it to -1
 		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
@@ -389,6 +450,11 @@ namespace ECSEngine {
 			}
 			return pointer;
 		}
+
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |hey   value| ->
+		// will be returned as |hey   | -> stream.buffer = 'h', stream.buffer + stream.size = ' '
+		ECSENGINE_API Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment = 1);
 
 		// Shifts the pointer 3 positions to the right in order to provide significant digits for hashing functions
 		// like power of two that use the lower bits in order to hash the element inside the table.
@@ -441,11 +507,13 @@ namespace ECSEngine {
 			return ClampMax(ClampMin(value, min), max);
 		}
 
+		// The value will not be less than min
 		template<typename Value>
 		Value ClampMin(Value value, Value min) {
 			return value < min ? min : value;
 		}
 
+		// The value will not be greater than max
 		template<typename Value>
 		Value ClampMax(Value value, Value max) {
 			return value > max ? max : value;
@@ -482,6 +550,96 @@ namespace ECSEngine {
 
 		// If the pointer is null, it will commit the message
 		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, const char* message);
+
+		template<typename CharacterType>
+		struct ReplaceOccurence {
+			Stream<CharacterType> string;
+			Stream<CharacterType> replacement;
+		};
+
+		// If the output_string is nullptr, it will do the replacement in-place
+		// Else it will use the output string
+		ECSENGINE_API void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurence<char>> occurences, CapacityStream<char>* output_string = nullptr);
+
+		// If the output_string is nullptr, it will do the replacement in-place
+		// Else it will use the output string
+		ECSENGINE_API void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string = nullptr);
+
+		enum ECS_EVALUATE_EXPRESSION_OPERATORS : unsigned char {
+			ECS_EVALUATE_EXPRESSION_ADD,
+			ECS_EVALUATE_EXPRESSION_MINUS,
+			ECS_EVALUATE_EXPRESSION_MULTIPLY,
+			ECS_EVALUATE_EXPRESSION_DIVIDE,
+			ECS_EVALUATE_EXPRESSION_MODULO,
+			ECS_EVALUATE_EXPRESSION_NOT,
+			ECS_EVALUATE_EXPRESSION_AND,
+			ECS_EVALUATE_EXPRESSION_OR,
+			ECS_EVALUATE_EXPRESSION_XOR,
+			ECS_EVALUATE_EXPRESSION_SHIFT_LEFT,
+			ECS_EVALUATE_EXPRESSION_SHIFT_RIGHT,
+			ECS_EVALUATE_EXPRESSION_LOGICAL_AND,
+			ECS_EVALUATE_EXPRESSION_LOGICAL_OR,
+			ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY,
+			ECS_EVALUATE_EXPRESSION_LOGICAL_INEQUALITY,
+			ECS_EVALUATE_EXPRESSION_LOGICAL_NOT,
+			ECS_EVALUATE_EXPRESSION_LESS,
+			ECS_EVALUATE_EXPRESSION_LESS_EQUAL,
+			ECS_EVALUATE_EXPRESSION_GREATER,
+			ECS_EVALUATE_EXPRESSION_GREATER_EQUAL,
+			ECS_EVALUATE_EXPRESSION_OPERATOR_COUNT
+		};
+
+		struct EvaluateExpressionOperator {
+			ECS_EVALUATE_EXPRESSION_OPERATORS operator_index;
+			unsigned int index;
+		};
+
+		struct EvaluateExpressionNumber {
+			double value;
+			unsigned int index;
+		};
+
+		// logical operators except not it returns only the operator as single
+		ECSENGINE_API ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(char character);
+
+		// logical operators except not it returns only the operator as single
+		ECSENGINE_API ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(wchar_t character);
+
+		// It reports correctly the logical operators. It increments the index if a double operator is found
+		ECSENGINE_API ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(char character, char next_character, unsigned int& index);
+
+		// It reports correctly the logical operators. It increments the index if a double operator is found
+		ECSENGINE_API ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(wchar_t character, wchar_t next_character, unsigned int& index);
+
+		// Fills in the operators and their indices. For double operators (like logical + shifts) it reporst the second character
+		ECSENGINE_API void GetEvaluateExpressionOperators(Stream<char> characters, CapacityStream<EvaluateExpressionOperator>& operators);
+
+		// Fills in the operators and their indices. For double operators (like logical + shifts) it reporst the second character
+		ECSENGINE_API void GetEvaluateExpressionOperators(Stream<wchar_t> characters, CapacityStream<EvaluateExpressionOperator>& operators);
+
+		// Fills in a buffer with the order in which the operators must be evaluated
+		ECSENGINE_API void GetEvaluateExpressionOperatorOrder(Stream<EvaluateExpressionOperator> operators, CapacityStream<unsigned int>& order);
+
+		// If the character at the offset is not a value character, it incremenets the offset and returns DBL_MAX
+		// Else it parses the value and incremenets the offset right after the value has ended
+		ECSENGINE_API double EvaluateExpressionValue(Stream<char> characters, unsigned int& offset);
+
+		// If the character at the offset is not a value character, it incremenets the offset and returns DBL_MAX
+		// Else it parses the value and incremenets the offset right after the value has ended
+		ECSENGINE_API double EvaluateExpressionValue(Stream<wchar_t> characters, unsigned int& offset);
+
+		ECSENGINE_API void GetEvaluateExpressionNumbers(Stream<char> characters, CapacityStream<EvaluateExpressionNumber>& numbers);
+
+		ECSENGINE_API void GetEvaluateExpressionNumbers(Stream<wchar_t> characters, CapacityStream<EvaluateExpressionNumber>& numbers);
+
+		// For single operators, the right needs to be specified, the left can be missing
+		ECSENGINE_API double EvaluateOperator(ECS_EVALUATE_EXPRESSION_OPERATORS operator_, double left, double right);
+
+		// Returns the value of the constant expression
+		ECSENGINE_API double EvaluateExpression(Stream<char> characters);
+
+		// Returns the value of the constant expression
+		ECSENGINE_API double EvaluateExpression(Stream<wchar_t> characters);
 
 	}
 

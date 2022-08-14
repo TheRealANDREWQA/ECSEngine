@@ -28,6 +28,12 @@ namespace ECSEngine {
 		// It asserts that the handle is valid
 		Stream<unsigned short> GetResults(unsigned int handle) const;
 
+		// Returns the components stored for that handle
+		ArchetypeQuery ECS_VECTORCALL GetComponents(unsigned int handle) const;
+
+		// TODO: Investigate if the assembly generated involves many copies and not passing things by registers
+		void GetResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const;
+
 		// Resizes the non exclude results to the new capacity (the SoA structure)
 		void Resize(unsigned int new_capacity);
 

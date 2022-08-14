@@ -26,10 +26,9 @@ namespace ECSEngine {
 		Reflection::ReflectionType type;
 		if (data->reflection_manager->TryGetType(template_type.buffer, type)) {
 			// It is with 8 bytes bigger
-			size_t byte_size = Reflection::GetReflectionTypeByteSize(data->reflection_manager, type) + 8;
+			size_t byte_size = Reflection::GetReflectionTypeByteSize(&type) + 8;
 			template_type[template_type.size] = previous_char;
 			
-			// 
 			return { byte_size, alignof(Stream<char>) };
 		}
 		
@@ -58,7 +57,7 @@ namespace ECSEngine {
 		char previous_char = template_type[template_type.size];
 		template_type[template_type.size] = '\0';
 
-		Reflection::ReflectionType reflection_type = data->reflection_manager->GetType(template_type.buffer);
+		const Reflection::ReflectionType* reflection_type = data->reflection_manager->GetType(template_type.buffer);
 		template_type[template_type.size] = previous_char;
 
 		if (data->write_data) {
@@ -88,7 +87,7 @@ namespace ECSEngine {
 		char previous_char = template_type[template_type.size];
 		template_type[template_type.size] = '\0';
 
-		Reflection::ReflectionType reflection_type = data->reflection_manager->GetType(template_type.buffer);
+		const Reflection::ReflectionType* reflection_type = data->reflection_manager->GetType(template_type.buffer);
 		template_type[template_type.size] = previous_char;
 
 		if (data->read_data) {

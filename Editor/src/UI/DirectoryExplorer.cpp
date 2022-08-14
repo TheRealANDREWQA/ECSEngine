@@ -26,7 +26,7 @@ struct DirectoryExplorerData {
 	bool* right_click_menu_has_submenu;
 	UIDrawerMenuState* right_click_submenu_states;
 	UIDrawerLabelHierarchy* drawer_hierarchy;
-	CapacityStream<const char*> directories_ptrs;
+	CapacityStream<Stream<char>> directories_ptrs;
 	bool is_right_click_window_opened;
 };
 
@@ -43,7 +43,7 @@ bool IsProtectedFolderSelected(DirectoryExplorerData* data) {
 	
 	for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
 		folder.size = folder_base_size;
-		folder.AddStreamSafe(ToStream(PROTECTED_FOLDERS[index]));
+		folder.AddStreamSafe(PROTECTED_FOLDERS[index]);
 
 		bool is_the_same = function::CompareStrings(folder, *data->current_path);
 		if (is_the_same) {
@@ -243,7 +243,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 	DirectoryExplorerData* data = (DirectoryExplorerData*)window_data;
 
 	const size_t HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK
-		| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
+		| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK | UI_CONFIG_DO_CACHE;
 
 	if (initialize) {
 		drawer.layout.next_row_y_offset *= 0.5f;
@@ -301,10 +301,10 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		right_click.callback = DirectoryExplorerRightClick;
 		right_click.data = data;
 		right_click.data_size = 0;
-		right_click.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
+		right_click.phase = ECS_UI_DRAW_SYSTEM;
 		config.AddFlag(right_click);
 
-		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<const char*>(nullptr, 0));
+		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<Stream<char>>(nullptr, 0));
 		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER);
 	}
 
@@ -328,7 +328,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 	right_click.callback = DirectoryExplorerRightClick;
 	right_click.data = data;
 	right_click.data_size = 0;
-	right_click.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
+	right_click.phase = ECS_UI_DRAW_SYSTEM;
 	config.AddFlag(right_click);
 
 	if (!initialize) {
@@ -406,7 +406,7 @@ void DirectoryExplorerTick(EditorState* editor_state)
 
 			for (size_t index = 0; index < std::size(PROTECTED_FOLDERS); index++) {
 				folder_path_wide_stream.size = folder_path_wide_size_return;
-				folder_path_wide_stream.AddStream(ToStream(PROTECTED_FOLDERS[index]));
+				folder_path_wide_stream.AddStream(PROTECTED_FOLDERS[index]);
 				folder_path_wide_stream[folder_path_wide_stream.size] = L'\0';
 
 				Stream<char> folder_path_stream(data->allocator.Allocate(256 * sizeof(char), alignof(char)), folder_path_wide_stream.size);
@@ -423,12 +423,12 @@ void DirectoryExplorerTick(EditorState* editor_state)
 				for_each_data.data = data;
 				for_each_data.project_file = project_file;
 
-				ForEachDirectoryRecursive(folder_path_wide_stream, &for_each_data, [](const wchar_t* path, void* _data) {
+				ForEachDirectoryRecursive(folder_path_wide_stream, &for_each_data, [](Stream<wchar_t> path, void* _data) {
 					ForEachData* for_each_data = (ForEachData*)_data;
 
-					size_t current_path_size = wcslen(path) + 1;
+					size_t current_path_size = path.size + 1;
 					char* ascii_current_path = (char*)for_each_data->data->allocator.Allocate(sizeof(char) * current_path_size, alignof(char));
-					function::ConvertWideCharsToASCII(path, ascii_current_path, current_path_size, current_path_size);
+					function::ConvertWideCharsToASCII(path.buffer, ascii_current_path, current_path_size, current_path_size);
 					for_each_data->data->directories_ptrs.AddSafe(ascii_current_path + for_each_data->project_file->path.size + 1);
 
 					return true;

@@ -2,8 +2,16 @@
 #include "AllocatorTypes.h"
 #include "../Core.h"
 #include "../Internal/Multithreading/ConcurrentPrimitives.h"
+#include "../Utilities/StackScope.h"
 
 namespace ECSEngine {
+
+	// Allocates from the stack a buffer and then uses malloc to allocate bigger buffers
+	// It also creates a stack scope to release any heap allocations made 
+#define ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(name, stack_capacity, heap_capacity)	void* allocation##name = ECS_STACK_ALLOC(stack_capacity); \
+																					ResizableLinearAllocator name(allocation##name, stack_capacity, heap_capacity, {nullptr}); \
+																					StackScope<ResizableLinearAllocatorScopeDeallocator> scope##name({ &name });
+																					
 
 	struct ECSENGINE_API ResizableLinearAllocator
 	{
@@ -54,6 +62,13 @@ namespace ECSEngine {
 		size_t m_marker;
 		size_t m_backup_size;
 		AllocatorPolymorphic m_backup;
+	};
+
+	struct ResizableLinearAllocatorScopeDeallocator {
+		void operator() () {
+			allocator->ClearBackup();
+		}
+		ResizableLinearAllocator* allocator;
 	};
 
 }

@@ -98,12 +98,12 @@ namespace ECSEngine {
 
 	ResizableMemoryArena::ResizableMemoryArena(
 		GlobalMemoryManager* backup,
-		unsigned int initial_arena_capacity,
-		unsigned int initial_allocator_count,
-		unsigned int initial_blocks_per_allocator,
-		unsigned int arena_capacity = 0,
-		unsigned int allocator_count = 0,
-		unsigned int blocks_per_allocator = 0
+		size_t initial_arena_capacity,
+		size_t initial_allocator_count,
+		size_t initial_blocks_per_allocator,
+		size_t arena_capacity = 0,
+		size_t allocator_count = 0,
+		size_t blocks_per_allocator = 0
 	) : m_backup(backup), m_new_allocator_count(allocator_count), m_new_arena_capacity(arena_capacity),
 		m_new_blocks_per_allocator(blocks_per_allocator) 
 	{
@@ -169,12 +169,12 @@ namespace ECSEngine {
 		CreateArena(m_new_arena_capacity, m_new_allocator_count, m_new_blocks_per_allocator);
 	}
 
-	void ResizableMemoryArena::CreateArena(unsigned int arena_capacity, unsigned int allocator_count, unsigned int blocks_per_allocator) {
+	void ResizableMemoryArena::CreateArena(size_t arena_capacity, size_t allocator_count, size_t blocks_per_allocator) {
 		void* arena_allocation = m_backup->Allocate(MemoryArena::MemoryOf(arena_capacity, allocator_count, blocks_per_allocator));
 
 		ECS_ASSERT(arena_allocation != nullptr);
 		if (m_arena_size == m_arena_capacity) {
-			unsigned int new_capacity = (unsigned int)((float)m_arena_capacity * 1.5f + 1);
+			size_t new_capacity = (size_t)((float)m_arena_capacity * 1.5f + 1);
 			MemoryArena* new_arenas = (MemoryArena*)m_backup->Allocate(sizeof(MemoryArena) * new_capacity);
 			memcpy(new_arenas, m_arenas, sizeof(MemoryArena) * m_arena_capacity);
 			m_arena_capacity = new_capacity;

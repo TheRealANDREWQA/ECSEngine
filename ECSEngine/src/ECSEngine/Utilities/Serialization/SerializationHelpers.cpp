@@ -58,7 +58,7 @@ namespace ECSEngine {
 	size_t SerializeCustomTypeBasicTypeHelper(
 		Stream<char>& template_type,
 		const ReflectionManager* reflection_manager,
-		ReflectionType& type,
+		ReflectionType* type,
 		unsigned int& custom_serializer_index,
 		ReflectionBasicFieldType& basic_type,
 		ReflectionStreamFieldType& stream_type
@@ -103,16 +103,13 @@ namespace ECSEngine {
 		template_type = { template_type.buffer + string_offset, template_type.size - string_offset - (string_offset > 0) };
 		basic_type = ConvertStringToBasicFieldType(template_type);
 
-		type.name = nullptr;
+		type->name = { nullptr, 0 };
 		custom_serializer_index = -1;
 
 		// It is not a trivial type - try with a reflected type or with a type from the custom serializers
 		if (basic_type == ReflectionBasicFieldType::Unknown) {
-			char last_character = template_type[template_type.size];
-			template_type[template_type.size] = '\0';
-
 			// It is not a reflected type
-			if (!reflection_manager->TryGetType(template_type.buffer, type)) {
+			if (!reflection_manager->TryGetType(template_type, *type)) {
 				// Custom serializer
 				custom_serializer_index = FindSerializeCustomType(template_type);
 
@@ -122,10 +119,8 @@ namespace ECSEngine {
 			}
 			else {
 				basic_type = ReflectionBasicFieldType::UserDefined;
-				current_type_byte_size = GetReflectionTypeByteSize(reflection_manager, type);
+				current_type_byte_size = GetReflectionTypeByteSize(type);
 			}
-
-			template_type[template_type.size] = last_character;
 		}
 		else {
 			current_type_byte_size = GetReflectionBasicFieldTypeByteSize(basic_type);
@@ -137,7 +132,7 @@ namespace ECSEngine {
 	size_t SerializeCustomWriteHelper(
 		ReflectionBasicFieldType basic_type,
 		ReflectionStreamFieldType stream_type,
-		ReflectionType reflection_type,
+		const ReflectionType* reflection_type,
 		unsigned int custom_serializer_index,
 		SerializeCustomTypeWriteFunctionData* write_data,
 		Stream<void> data_to_write,
@@ -148,7 +143,7 @@ namespace ECSEngine {
 
 		size_t element_count = indices.buffer == nullptr ? data_to_write.size : indices.size;
 
-		if (reflection_type.name != nullptr) {
+		if (reflection_type->name.size > 0) {
 			// It is a reflected type
 			SerializeOptions options;
 			options.write_type_table = false;
@@ -284,7 +279,7 @@ namespace ECSEngine {
 	size_t DeserializeCustomReadHelper(
 		ReflectionBasicFieldType basic_type,
 		ReflectionStreamFieldType stream_type,
-		ReflectionType reflection_type,
+		const ReflectionType* reflection_type,
 		unsigned int custom_serializer_index,
 		SerializeCustomTypeReadFunctionData* read_data,
 		size_t element_count,
@@ -311,7 +306,7 @@ namespace ECSEngine {
 			*allocated_buffer = nullptr;
 		};
 
-		if (reflection_type.name != nullptr) {
+		if (reflection_type->name.size > 0) {
 			bool has_options = read_data->options != nullptr;
 
 			DeserializeOptions options;
@@ -431,7 +426,8 @@ namespace ECSEngine {
 								}
 							}
 
-							ReadOrReferenceFundamentalType<true, true>(field_info, element, *read_data->stream, allocator);
+							// The zero is for basic type arrays. Should not really happen
+							ReadOrReferenceFundamentalType<true, true>(field_info, element, *read_data->stream, 0, allocator);
 						}
 					}
 					else {
@@ -443,14 +439,17 @@ namespace ECSEngine {
 								}
 							}
 
-							ReadOrReferenceFundamentalType<true, true>(field_info, element, *read_data->stream, allocator);
+							// The zero is for basic type arrays. Should not really happen
+							ReadOrReferenceFundamentalType<true, true>(field_info, element, *read_data->stream, 0, allocator);
 						}
 					}
 				}
 				else {
 					for (size_t index = 0; index < element_count; index++) {
 						void* element = function::OffsetPointer(*allocated_buffer, index * stream_size);
-						deserialize_size += ReadOrReferenceFundamentalType<false>(field_info, element, *read_data->stream, allocator);
+
+						// The zero is for basic type arrays. Should not really happen
+						deserialize_size += ReadOrReferenceFundamentalType<false>(field_info, element, *read_data->stream, 0, allocator);
 					}
 				}
 			}
@@ -519,13 +518,13 @@ namespace ECSEngine {
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
 		ReflectionType reflection_type;
-		reflection_type.name = nullptr;
+		reflection_type.name = { nullptr, 0 };
 		unsigned int custom_serializer_index = 0;
 
-		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, reflection_type, custom_serializer_index, basic_type, stream_type);
+		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
 		data->definition = template_type;
 
-		total_serialize_size = SerializeCustomWriteHelper(basic_type, stream_type, reflection_type, custom_serializer_index, data, { buffer, buffer_count }, template_type_byte_size);
+		total_serialize_size = SerializeCustomWriteHelper(basic_type, stream_type, &reflection_type, custom_serializer_index, data, { buffer, buffer_count }, template_type_byte_size);
 		return total_serialize_size;
 	}
 
@@ -566,17 +565,17 @@ namespace ECSEngine {
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
 		ReflectionType reflection_type;
-		reflection_type.name = nullptr;
+		reflection_type.name = { nullptr, 0 };
 		unsigned int custom_serializer_index = 0;
 
-		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, reflection_type, custom_serializer_index, basic_type, stream_type);
+		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
 		data->definition = template_type;
 
 		// It will correctly handle the failure case
 		size_t total_deserialize_size = DeserializeCustomReadHelper(
 			basic_type,
 			stream_type,
-			reflection_type,
+			&reflection_type,
 			custom_serializer_index,
 			data,
 			buffer_count,
@@ -631,14 +630,14 @@ namespace ECSEngine {
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
 		ReflectionType reflection_type;
-		reflection_type.name = nullptr;
+		reflection_type.name = { nullptr, 0 };
 		unsigned int custom_serializer_index = 0;
 
-		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, reflection_type, custom_serializer_index, basic_type, stream_type);
+		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
 		data->definition = template_type;
 
 		// Now write the user defined data first - or basic data if it is
-		total_serialize_size += SerializeCustomWriteHelper(basic_type, stream_type, reflection_type, custom_serializer_index, data, { buffer, buffer_count }, template_type_byte_size);
+		total_serialize_size += SerializeCustomWriteHelper(basic_type, stream_type, &reflection_type, custom_serializer_index, data, { buffer, buffer_count }, template_type_byte_size);
 		
 		// Write the indirection buffer after it because when reading the data the helper will allocate the data
 		// such that the indirection buffer can be read directly into the allocation without temporaries
@@ -688,10 +687,10 @@ namespace ECSEngine {
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = { data->definition.buffer + string_offset, data->definition.size - string_offset - 1 };
 		ReflectionType reflection_type;
-		reflection_type.name = nullptr;
+		reflection_type.name = { nullptr, 0 };
 		unsigned int custom_serializer_index = 0;
 
-		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, reflection_type, custom_serializer_index, basic_type, stream_type);
+		size_t template_type_byte_size = SerializeCustomTypeBasicTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
 		data->definition = template_type;
 
 		size_t allocation_size = set->MemoryOf(buffer_capacity);
@@ -703,7 +702,7 @@ namespace ECSEngine {
 		size_t user_defined_size = DeserializeCustomReadHelper(
 			basic_type,
 			stream_type,
-			reflection_type,
+			&reflection_type,
 			custom_serializer_index,
 			data,
 			buffer_count,
@@ -764,6 +763,9 @@ namespace ECSEngine {
 		if (data->read_data) {
 			Read<true>(data->stream, data->data, sizeof(char) * 4);
 		}
+		else {
+			Read<false>(data->stream, data->data, sizeof(char) * 4);
+		}
 		return 0;
 	}
 
@@ -797,6 +799,9 @@ namespace ECSEngine {
 
 		if (data->read_data) {
 			Read<true>(data->stream, data->data, sizeof(float) * 4);
+		}
+		else {
+			Read<false>(data->stream, data->data, sizeof(float) * 4);
 		}
 		return 0;
 	}

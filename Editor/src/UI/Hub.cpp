@@ -7,6 +7,8 @@
 #include "..\Editor\EditorFile.h"
 #include "..\Editor\EditorEvent.h"
 
+#include "..\UI\Backups.h"
+
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
@@ -14,7 +16,7 @@ constexpr float INCREASE_FONT_SIZE_FACTOR = 1.3f;
 
 void AddHubProject(EditorState* editor_state, const wchar_t* path)
 {
-	AddHubProject(editor_state, ToStream(path));
+	AddHubProject(editor_state, path);
 }
 
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
@@ -24,14 +26,11 @@ void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	ECS_ASSERT(hub->projects.size < hub->projects.capacity);
 
 	hub->projects[hub->projects.size].error_message = nullptr;
-	hub->projects[hub->projects.size].path = (wchar_t*)editor_allocator->Allocate(sizeof(wchar_t) * (path.size + 1), alignof(wchar_t));
-	memcpy((void*)hub->projects[hub->projects.size].path, path.buffer, sizeof(wchar_t) * path.size);
-	wchar_t* mutable_ptr = (wchar_t*)hub->projects[hub->projects.size].path;
-	mutable_ptr[path.size] = L'\0';
+	hub->projects[hub->projects.size].path = function::StringCopy(editor_state->EditorAllocator(), path);
 	hub->projects.size++;
 
 	if (!SaveEditorFile(editor_state)) {
-		EditorSetConsoleError(ToStream("Error when saving editor file after project addition"));
+		EditorSetConsoleError("Error when saving editor file after project addition");
 	}
 }
 
@@ -61,6 +60,10 @@ void AddExistingProjectAction(ActionData* action_data) {
 	OSFileExplorerGetFileData get_data;
 	get_data.error_message = error_message;
 	get_data.path = path;
+	Stream<wchar_t> extensions[] = {
+		L".ecsproj"
+	};
+	get_data.extensions = { &extensions, std::size(extensions) };
 	FileExplorerGetFile(&get_data);
 
 	if (get_data.error_message.size > 0) {
@@ -79,8 +82,8 @@ void LoadHubProjects(EditorState* editor_state) {
 	HubData* hub_data = editor_state->hub_data;
 
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
-		hub_data->projects[index].data.path = function::PathParent(ToStream(hub_data->projects[index].path));
-		hub_data->projects[index].data.project_name = function::PathStem(ToStream(hub_data->projects[index].path));
+		hub_data->projects[index].data.path = function::PathParent(hub_data->projects[index].path);
+		hub_data->projects[index].data.project_name = function::PathStem(hub_data->projects[index].path);
 
 		ProjectOperationData open_data;
 		char error_message[256];
@@ -122,7 +125,7 @@ void ResetHubData(EditorState* editor_state) {
 
 void RemoveHubProject(EditorState* editor_state, const wchar_t* path)
 {
-	RemoveHubProject(editor_state, ToStream(path));
+	RemoveHubProject(editor_state, path);
 }
 
 void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
@@ -131,8 +134,8 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 
 	HubData* hub_data = editor_state->hub_data;
 	for (size_t index = 0; index < hub_data->projects.size; index++) {
-		if (function::CompareStrings(path, ToStream(hub_data->projects[index].path))) {
-			editor_allocator->Deallocate(hub_data->projects[index].path);
+		if (function::CompareStrings(path, hub_data->projects[index].path)) {
+			editor_allocator->Deallocate(hub_data->projects[index].path.buffer);
 			if (hub_data->projects[index].error_message != nullptr) {
 				editor_allocator->Deallocate(hub_data->projects[index].error_message);
 			}
@@ -140,6 +143,172 @@ void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)
 			task_manager->AddDynamicTaskAndWake(ECS_THREAD_TASK_NAME(SaveEditorFileThreadTask, editor_state, 0));
 			return;
 		}
+	}
+}
+
+// The path is the parent directory
+// Creates an error message window if it fails
+bool RestoreHubProject(EditorState* editor_state, Stream<wchar_t> path, Stream<wchar_t> name) {
+	ECS_STACK_CAPACITY_STREAM(wchar_t, project_file_path, 512);
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+
+	ProjectFile project_file = GetProjectFileDefaultConfiguration();
+	project_file.path = path;
+	project_file.project_name = name;
+
+	GetProjectFilePath(&project_file, project_file_path);
+	ProjectOperationData operation_data;
+	operation_data.editor_state = editor_state;
+	operation_data.file_data = &project_file;
+	operation_data.error_message = error_message;
+
+	if (!SaveProjectFile(operation_data)) {
+		CreateErrorMessageWindow(editor_state->ui_system, operation_data.error_message);
+		return false;
+	}
+
+	return true;
+}
+
+struct RestoreHubProjectWizardData {
+	inline Stream<wchar_t> Path() const {
+		return { (wchar_t*)function::OffsetPointer(this, sizeof(RestoreHubProjectWizardData)), path_size };
+	}
+
+	EditorState* editor_state;
+	size_t path_size;
+	CapacityStream<char> name;
+	bool name_deduced;
+};
+
+void RestoreHubProjectWizardDraw(void* window_data, void* drawer_descriptor, bool initialize) {
+	UI_PREPARE_DRAWER(initialize);
+
+	RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)window_data;
+	if (initialize) {
+		// Allocate space for the name
+		const size_t MAX_NAME_SIZE = 128;
+		data->name.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * MAX_NAME_SIZE, alignof(char)), 0, MAX_NAME_SIZE);
+		data->name_deduced = false;
+
+		// Determine if the name can be deduced. It can be deduced from the modules or sandbox files
+		Stream<wchar_t> extensions[] = {
+			PROJECT_MODULES_FILE_EXTENSION,
+			PROJECT_SANDBOX_FILE_EXTENSION
+		};
+
+		struct FunctorData {
+			RestoreHubProjectWizardData* data;
+		};
+
+		FunctorData functor_data;
+		functor_data.data = data;
+		ForEachFileInDirectoryWithExtension(data->Path(), { extensions, std::size(extensions) }, &functor_data, [](Stream<wchar_t> path, void* _data) {
+			FunctorData* data = (FunctorData*)_data;
+			
+			// We got a match. Get the name from the path and save it
+			Stream<wchar_t> project_name = function::PathStem(path);
+			function::ConvertWideCharsToASCII(project_name, data->data->name);
+			data->data->name_deduced = true;
+
+			return false;
+		});
+	}
+
+	// Print the current project folder
+	drawer.Text("Project To Be Restored: ");
+	drawer.TextWide(data->Path());
+	drawer.NextRow(2.0f);
+
+	if (data->name_deduced) {
+		drawer.Text("Project's name is (deduced): ");
+		drawer.Text(data->name);
+	}
+	else {
+		UIConfigRelativeTransform transform;
+		UIDrawConfig config;
+
+		transform.scale.x = 5.0f;
+		drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM, config, "Project Name", &data->name);
+	}
+	drawer.NextRow(2.0f);
+
+	drawer.CrossLine();
+
+	drawer.NextRow(2.0f);
+
+	auto confirm_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)_data;
+		ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 256);
+		function::ConvertASCIIToWide(wide_name, data->name);
+
+		RestoreHubProject(data->editor_state, data->Path(), wide_name);
+		CloseXBorderClickableAction(action_data);
+	};
+
+	UIDrawConfig config;
+
+	UIConfigAbsoluteTransform transform;
+	transform.scale = drawer.GetLabelScale("Confirm");
+	transform.position = drawer.GetAlignedToBottom(transform.scale.y);
+	config.AddFlag(transform);
+
+	UIConfigActiveState active_state;
+	active_state.state = data->name.size > 0;
+	config.AddFlag(active_state);
+
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ACTIVE_STATE, config, "Confirm", { confirm_action, data, 0, ECS_UI_DRAW_SYSTEM });
+	config.flag_count = 0;
+
+	transform.scale = drawer.GetLabelScale("Cancel");
+	transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
+	config.AddFlag(transform);
+
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+}
+
+void CreateRestoreHubProjectWizard(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	EditorState* editor_state = (EditorState*)_data;
+	
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 512);
+
+	// Get the folder
+	OSFileExplorerGetDirectoryData get_directory;
+	get_directory.path = path;
+	get_directory.error_message = error_message;
+
+	if (FileExplorerGetDirectory(&get_directory)) {
+		UIWindowDescriptor wizard_descriptor;
+		
+		size_t STACK_MEMORY[512];
+		RestoreHubProjectWizardData* data = (RestoreHubProjectWizardData*)STACK_MEMORY;
+		data->editor_state = editor_state;
+
+		wchar_t* path_buffer = (wchar_t*)function::OffsetPointer(data, sizeof(RestoreHubProjectWizardData));
+		get_directory.path.CopyTo(path_buffer);
+		data->path_size = get_directory.path.size;
+		data->name = { nullptr, 0 };
+
+		wizard_descriptor.window_name = "Restore Project";
+		wizard_descriptor.window_data = data;
+		wizard_descriptor.window_data_size = sizeof(RestoreHubProjectWizardData) + get_directory.path.size * sizeof(wchar_t);
+
+		wizard_descriptor.draw = RestoreHubProjectWizardDraw;
+
+		wizard_descriptor.destroy_action = ReleaseLockedWindow;
+
+		wizard_descriptor.initial_size_x = 0.7f;
+		wizard_descriptor.initial_position_y = 1.0f;
+
+		system->CreateWindowAndDockspace(wizard_descriptor, UI_POP_UP_WINDOW_ALL);
+	}
+	else {
+		CreateErrorMessageWindow(system, "Could not get project parent folder.");
 	}
 }
 
@@ -212,15 +381,15 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	ecs_characters[19 + version_size] = '\0';
 	config.AddFlag(ecs_text);
 
-	drawer.Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS, config, ecs_characters);
+	drawer.Text(UI_CONFIG_TEXT_PARAMETERS, config, ecs_characters);
 
 	UIConfigAbsoluteTransform transform;
 	transform.scale = { drawer.region_limit.x - drawer.current_x, drawer.current_row_y_scale };
 	transform.position = drawer.GetAlignedToRight(transform.scale.x);
 
 	UIConfigTextAlignment alignment;
-	alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_RIGHT;
-	alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+	alignment.horizontal = ECS_UI_ALIGN_RIGHT;
+	alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 	config.AddFlag(transform);
 	config.AddFlag(alignment);
 
@@ -229,12 +398,12 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	size_t user_size = strlen(USER);
 	memcpy(user_characters + 6, USER, user_size);
 	user_characters[6 + user_size] = '\0';
-	drawer.TextLabel(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_ABSOLUTE_TRANSFORM
+	drawer.TextLabel(UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_ABSOLUTE_TRANSFORM
 		| UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS, config, user_characters);
 
 	drawer.NextRow();
 	drawer.CrossLine();
-	drawer.Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS, config, "Projects");
+	drawer.Text(UI_CONFIG_TEXT_PARAMETERS, config, "Projects");
 
 	CreateProjectWizardData* wizard_data;
 	char* save_project_error_message = nullptr;
@@ -254,11 +423,14 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		save_project_error_message = (char*)drawer.GetResource("Save project error message");
 	}
 
-	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
-	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
-	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
+	const size_t BUTTON_CONFIGURATION = UI_CONFIG_ALIGN_TO_ROW_Y;
 
-	drawer.Button(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(BUTTON_CONFIGURATION, config, "Create Project", { CreateProjectWizardAction, wizard_data, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(BUTTON_CONFIGURATION, config, "Add existing Project", { AddExistingProjectAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(BUTTON_CONFIGURATION, config, "Restore existing Project", { CreateRestoreHubProjectWizard, editor_state, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(BUTTON_CONFIGURATION, config, "Reload Projects", { ReloadHubProjectsAction, editor_state, 0 });
+
+	drawer.Button(BUTTON_CONFIGURATION, config, "Default Project UI", { CreateProjectUITemplatePreviewAction, editor_state, 0, ECS_UI_DRAW_SYSTEM });
 
 #pragma endregion
 
@@ -280,8 +452,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	drawer.CrossLine(UI_CONFIG_LATE_DRAW, table_config);
 
 	UIConfigTextAlignment table_alignment;
-	table_alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
-	table_alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+	table_alignment.horizontal = ECS_UI_ALIGN_MIDDLE;
+	table_alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 	table_transform.position = table_start_position;
 	table_transform.scale = { FIRST_COLUMN_SCALE, COLUMN_Y_SCALE };
 
@@ -294,7 +466,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	table_config.AddFlag(table_text);
 	table_config.AddFlag(table_transform);
 
-	const size_t COLUMN_HEADER_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS
+	const size_t COLUMN_HEADER_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_TEXT_PARAMETERS
 		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 	drawer.TextLabel(COLUMN_HEADER_CONFIGURATION, table_config, "Project Name");
 
@@ -327,7 +499,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	font->size /= INCREASE_FONT_SIZE_FACTOR;
 	font->character_spacing /= INCREASE_FONT_SIZE_FACTOR;
 
-	const size_t ROW_LABEL_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ABSOLUTE_TRANSFORM
+	const size_t ROW_LABEL_CONFIGURATION = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_ABSOLUTE_TRANSFORM
 		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 
 	unsigned int invalid_indices_buffer[128];
@@ -336,24 +508,24 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		float2 row_start_position = { table_start_position.x, drawer.GetCurrentPositionNonOffset().y };
 
 		auto row_project_name = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
-			char temp_characters[256];
-			function::ConvertWideCharsToASCII(data->projects[index].path, temp_characters, wcsnlen(data->projects[index].path, 256), 256);
+			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 256);
+			function::ConvertWideCharsToASCII(data->projects[index].path, temp_characters);
 
 			transform.position = row_start_position;
 			transform.scale = { FIRST_COLUMN_SCALE, COLUMN_Y_SCALE };
 			config.AddFlag(transform);
 
 			UIConfigTextAlignment alignment;
-			alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_LEFT;
-			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_TOP;
+			alignment.horizontal = ECS_UI_ALIGN_LEFT;
+			alignment.vertical = ECS_UI_ALIGN_TOP;
 			config.AddFlag(alignment);
 
 			char ascii_name[256];
-			Stream<wchar_t> path_stem = function::PathStem(ToStream(data->projects[index].path));
+			Stream<wchar_t> path_stem = function::PathStem(data->projects[index].path);
 			function::ConvertWideCharsToASCII(path_stem.buffer, ascii_name, path_stem.size, 256);
 			drawer.TextLabel(ROW_LABEL_CONFIGURATION, config, ascii_name);
 
-			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_BOTTOM;
+			alignment.vertical = ECS_UI_ALIGN_BOTTOM;
 			config.flag_count--;
 			config.AddFlag(alignment);
 
@@ -363,8 +535,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		};
 
 		auto row_platform_and_version = [&](UIDrawConfig& config, UIConfigAbsoluteTransform& transform, size_t index) {
-			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
-			alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+			alignment.vertical = ECS_UI_ALIGN_MIDDLE;
+			alignment.horizontal = ECS_UI_ALIGN_MIDDLE;
 			config.AddFlag(alignment);
 
 			transform.position.x += transform.scale.x;
@@ -442,8 +614,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			open_data.error_message.buffer = nullptr;
 			open_data.file_data = &data->projects[index].data;
 			open_data.editor_state = editor_state;
-			drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
-				| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, "", { OpenProjectAction, &open_data, sizeof(open_data) });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y, config, "", { OpenProjectAction, &open_data, sizeof(open_data) });
 		}
 		else {
 			UIDrawConfig config;
@@ -451,8 +622,8 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 			row_project_name(config, transform, index);
 
-			alignment.vertical = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
-			alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_MIDDLE;
+			alignment.vertical = ECS_UI_ALIGN_MIDDLE;
+			alignment.horizontal = ECS_UI_ALIGN_MIDDLE;
 			config.AddFlag(alignment);
 
 			transform.position.x += transform.scale.x;
@@ -477,7 +648,7 @@ void HubDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 		struct RemoveProjectData {
 			EditorState* editor_state;
-			const wchar_t* project_file;
+			Stream<wchar_t> project_file;
 		};
 
 		auto remove_project_action = [](ActionData* action_data) {

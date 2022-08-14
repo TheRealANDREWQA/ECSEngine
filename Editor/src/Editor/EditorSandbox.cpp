@@ -5,6 +5,11 @@
 #include "../Project/ProjectFolders.h"
 #include "../Modules/ModuleSettings.h"
 
+#include "ECSEngineSerializationHelpers.h"
+
+// The UI needs to be included because we need to notify it when we destroy a sandbox
+#include "../UI/Sandbox.h"
+
 using namespace ECSEngine;
 
 #define MODULE_FILE_SETTING_EXTENSION L".config"
@@ -14,8 +19,42 @@ using namespace ECSEngine;
 #define MODULE_ALLOCATOR_POOL_COUNT 1024
 #define MODULE_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
 
+#define RUNTIME_SETTINGS_STRING_CAPACITY (128)
+
+#define SANDBOX_FILE_HEADER_VERSION (0)
+#define SANDBOX_FILE_MAX_SANDBOXES (16)
+
+struct SandboxFileHeader {
+	size_t version;
+	size_t count;
+};
+
 EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	return editor_state->sandboxes.buffer + sandbox_index;
+}
+
+const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index) {
+	return editor_state->sandboxes.buffer + sandbox_index;
+}
+
+bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
+	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ActivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+{
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	ECS_ASSERT(in_stream_index != -1);
+	ActivateSandboxModuleInStream(editor_state, sandbox_index, module_index);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ActivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+{
+	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].is_deactivated = false;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -29,6 +68,7 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + sandbox_module_index;
 	sandbox_module->module_index = module_index;
 	sandbox_module->module_configuration = module_configuration;
+	sandbox_module->is_deactivated = false;
 
 	sandbox_module->settings_name.buffer = nullptr;
 	sandbox_module->settings_name.size = 0;
@@ -44,12 +84,28 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-		if (UpdateModuleLastWrite(editor_state, sandbox->modules_in_use[index].module_index)) {
+		if (!sandbox->modules_in_use[index].is_deactivated && UpdateModuleLastWrite(editor_state, sandbox->modules_in_use[index].module_index)) {
 			return false;
 		}
 	}
 
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void AddSandboxAssetReference(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE asset_type)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->database.AddAsset(handle, asset_type);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void AddSandboxAssetReference(EditorState* editor_state, unsigned int sandbox_index, Stream<char> asset_name_or_path, ECS_ASSET_TYPE asset_type)
+{
+	unsigned int handle = editor_state->asset_database.AddAsset(asset_name_or_path, asset_type);
+	AddSandboxAssetReference(editor_state, sandbox_index, handle, asset_type);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -64,12 +120,55 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_settings_path, 512);
 
-	if (sandbox_module->settings_name.buffer != nullptr) {
+	if (sandbox_module->settings_name.size > 0) {
 		sandbox_module->settings_allocator.Deallocate(sandbox_module->settings_name.buffer);
 	}
 	
 	// Change the path
-	sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_name);
+	if (settings_name.size > 0) {
+		sandbox_module->settings_name = function::StringCopy(sandbox_module->Allocator(), settings_name);
+	}
+	else {
+		sandbox_module->settings_name = { nullptr, 0 };
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> settings_name)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ECS_ASSERT(sandbox->runtime_settings.capacity >= settings_name.size);
+
+	if (settings_name.size > 0) {
+		// Try to load the world descriptor for that file
+		WorldDescriptor file_descriptor;
+		ECS_STACK_CAPACITY_STREAM(wchar_t, file_path, 512);
+		GetSandboxRuntimeSettingsPath(editor_state, settings_name, file_path);
+
+		const Reflection::ReflectionManager* reflection = editor_state->ReflectionManager();
+		ECS_DESERIALIZE_CODE code = Deserialize(reflection, reflection->GetType(STRING(WorldDescriptor)), &file_descriptor, file_path);
+		if (code != ECS_DESERIALIZE_OK) {
+			return false;
+		}
+
+		// No need to deallocate and reallocate since the buffer is fixed from the creation
+		sandbox->runtime_settings.Copy(settings_name);
+		sandbox->runtime_settings[settings_name.size] = L'\0';
+
+		// This will also reinitialize the runtime
+		SetSandboxRuntimeSettings(editor_state, sandbox_index, file_descriptor);
+
+		// Get the last write
+		UpdateSandboxRuntimeSettings(editor_state, sandbox_index);
+	}
+	else {
+		sandbox->runtime_settings.size = 0;
+		SetSandboxRuntimeSettings(editor_state, sandbox_index, GetDefaultWorldDescriptor());
+		sandbox->runtime_settings_last_write = 0;
+	}
+
+	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -143,66 +242,66 @@ bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	/*unsigned int module_count = sandbox->modules_in_use.size;
+	unsigned int module_count = sandbox->modules_in_use.size;
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(EDITOR_MODULE_CONFIGURATION, compile_configurations, module_count);
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned char, compile_)*/
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, compile_indices, module_count);
 
-	return true;
+	// Only compile the modules which are not deactivated
+	module_count = 0;
+
+	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (!sandbox->modules_in_use[index].is_deactivated) {
+			compile_indices[module_count] = sandbox->modules_in_use[index].module_index;
+			compile_configurations[module_count++] = sandbox->modules_in_use[index].module_configuration;
+		}
+	}
+
+	compile_indices.size = module_count;
+	return BuildModulesAndLoad(editor_state, compile_indices, compile_configurations.buffer);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void CreateSandbox(EditorState* editor_state) {
+void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	unsigned int sandbox_index = editor_state->sandboxes.ReserveNewElement();
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 	editor_state->sandboxes.size++;
 
-	sandbox->world_descriptor = GetDefaultWorldDescriptor();
-	sandbox->world_descriptor.mouse = editor_state->Mouse();
-	sandbox->world_descriptor.keyboard = editor_state->Keyboard();
+	// Initialize the runtime settings string
+	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
+	sandbox->runtime_descriptor.mouse = editor_state->Mouse();
+	sandbox->runtime_descriptor.keyboard = editor_state->Keyboard();
 
-	// Create a sandbox allocator - a global one - such that it can accomodate the default
-	// entity manager requirements
-	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
-	*allocator = GlobalMemoryManager(
-		sandbox->world_descriptor.entity_manager_memory_size + ECS_MB * 10,
-		1024,
-		sandbox->world_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 2
-	);
+	sandbox->runtime_settings.Initialize(editor_state->EditorAllocator(), 0, RUNTIME_SETTINGS_STRING_CAPACITY);
+	sandbox->runtime_settings_last_write = 0;
 
-	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(allocator);
+	if (initialize_runtime) {
+		PreinitializeSandboxRuntime(editor_state, sandbox_index);
+	}
+	else {
+		sandbox->runtime_descriptor.graphics = nullptr;
+		sandbox->runtime_descriptor.task_manager = nullptr;
+		sandbox->runtime_descriptor.task_scheduler = nullptr;
+	}
 
-	// Initialize the textures to nullptr - wait for the UI window to tell the sandbox what area it covers
-	sandbox->viewport_render_target.view = nullptr;
-	sandbox->viewport_texture.view = nullptr;
-	sandbox->viewport_texture_depth.view = nullptr;
-	sandbox->task_dependencies.elements.Initialize(sandbox_allocator, 0);
-
-	sandbox->modules_in_use.Initialize(sandbox_allocator, 0);
-	sandbox->database = AssetDatabaseReference(&editor_state->asset_database, sandbox_allocator);
-
-	// Create a graphics object that will inherit all the resources
-	Graphics* sandbox_graphics = (Graphics*)allocator->Allocate(sizeof(Graphics));
-	MemoryManager* sandbox_graphics_allocator = (MemoryManager*)allocator->Allocate(sizeof(MemoryManager));
-	*sandbox_graphics_allocator = DefaultGraphicsAllocator(allocator);
-	*sandbox_graphics = Graphics(editor_state->CacheGraphics(), nullptr, nullptr, sandbox_graphics_allocator);
-	sandbox->world_descriptor.graphics = sandbox_graphics;
-
-	// Create the scene entity manager
-	sandbox->scene_entities = CreateEntityManagerWithPool(
-		sandbox->world_descriptor.entity_manager_memory_size,
-		sandbox->world_descriptor.entity_manager_memory_pool_count,
-		sandbox->world_descriptor.entity_manager_memory_new_allocation_size,
-		sandbox->world_descriptor.entity_pool_power_of_two,
-		allocator
-	);
-
-	// Create the sandbox world
-	sandbox->sandbox_world = World(sandbox->world_descriptor);
 	sandbox->copy_world_status.unlock();
+	RegisterInspectorSandbox(editor_state);
+}
 
-	// Copy all the resources from the cache resource manager into the newly created resource manager
-	CopyCachedResourcesIntoSandbox(editor_state, sandbox_index);
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DeactivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+{
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	ECS_ASSERT(in_stream_index != -1);
+	DeactivateSandboxModuleInStream(editor_state, sandbox_index, module_index);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+{
+	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].is_deactivated = true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -211,13 +310,10 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 {
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 
-	// Evict all cached resources from the resource manager
-	sandbox->sandbox_world.resource_manager->EvictResourcesFrom(editor_state->cache_resource_manager);
-
-	// Can safely now destroy the runtime world
-	DestroyWorld(&sandbox->sandbox_world);
-
-	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
+	if (IsSandboxRuntimePreinitialized(editor_state, sandbox_index)) {
+		// Can safely now destroy the runtime world
+		DestroyWorld(&sandbox->sandbox_world);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -240,6 +336,20 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
 
 	// Free the global sandbox allocator
 	sandbox->GlobalMemoryManager()->ReleaseResources();
+
+	// Release the runtime settings path as well - it was allocated from the editor allocator
+	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
+
+	unsigned int previous_count = editor_state->sandboxes.size;
+	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
+
+	// Notify the UI and the inspector
+	if (editor_state->sandboxes.size > 0) {
+		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
+		UpdateSandboxUIWindowIndex(editor_state, previous_count, sandbox_index);
+	}
+
+	RegisterInspectorSandbox(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -275,27 +385,139 @@ void GetSandboxModuleSettingsPathByIndex(const EditorState* editor_state, unsign
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void GetSandboxRuntimeSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	GetSandboxRuntimeSettingsPath(editor_state, sandbox->runtime_settings, path);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxRuntimeSettingsPath(const EditorState* editor_state, Stream<wchar_t> filename, CapacityStream<wchar_t>& path)
+{
+	GetProjectConfigurationRuntimeFolder(editor_state, path);
+	path.Add(ECS_OS_PATH_SEPARATOR);
+	path.AddStream(filename);
+	path.AddStream(PROJECT_RUNTIME_SETTINGS_FILE_EXTENSION);
+	path[path.size] = L'\0';
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxAvailableRuntimeSettings(
+	const EditorState* editor_state, 
+	CapacityStream<Stream<wchar_t>>& paths,
+	AllocatorPolymorphic allocator
+)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, runtime_settings_folder, 512);
+	GetProjectConfigurationRuntimeFolder(editor_state, runtime_settings_folder);
+
+	struct FunctorData {
+		CapacityStream<Stream<wchar_t>>* paths;
+		AllocatorPolymorphic allocator;
+	};
+
+	FunctorData functor_data = { &paths, allocator };
+	ForEachFileInDirectory(runtime_settings_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
+		Stream<wchar_t> stem = function::PathStem(path);
+		data->paths->AddSafe(function::StringCopy(data->allocator, stem));
+		return true;
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index)
+{
+	return &GetSandbox(editor_state, sandbox_index)->runtime_descriptor;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& indices)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const ProjectModules* modules = editor_state->project_modules;
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (modules->buffer[sandbox->modules_in_use[index].module_index].is_graphics_module) {
+			indices.Add(index);
+		}
+	}
+
+	indices.AssertCapacity();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+{
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	ECS_ASSERT(in_stream_index != -1);
+	return IsSandboxModuleDeactivatedInStream(editor_state, sandbox_index, in_stream_index);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index].is_deactivated;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void InitializeSandboxes(EditorState* editor_state)
+{
+	const size_t GRAPHICS_ALLOCATOR_CAPACITY = ECS_KB * 50;
+	const size_t GRAPHICS_ALLOCATOR_BLOCK_COUNT = 1024;
+
+	// Set the allocator for the resizable strema
+	editor_state->sandboxes.Initialize(editor_state->EditorAllocator(), 0);
+
+	// Use separate allocator for them. Coallesce all the types into a single allocation
+	MemoryManager* cache_graphics_allocator = (MemoryManager*)editor_state->editor_allocator->Allocate(sizeof(MemoryManager) * 2 + sizeof(Graphics) + sizeof(ResourceManager));
+	MemoryManager* cache_resource_manager_allocator = (MemoryManager*)function::OffsetPointer(cache_graphics_allocator, sizeof(MemoryManager));
+
+	*cache_graphics_allocator = MemoryManager(GRAPHICS_ALLOCATOR_CAPACITY, GRAPHICS_ALLOCATOR_BLOCK_COUNT, GRAPHICS_ALLOCATOR_CAPACITY, editor_state->GlobalMemoryManager());
+	*cache_resource_manager_allocator = DefaultResourceManagerAllocator(editor_state->GlobalMemoryManager());
+
+	// Create the cache graphics
+	// We can just create a separate allocator for it and copy the UI graphics
+	editor_state->cache_graphics = (Graphics*)function::OffsetPointer(cache_resource_manager_allocator, sizeof(MemoryManager));
+	*editor_state->cache_graphics = Graphics(editor_state->UIGraphics(), nullptr, nullptr, cache_graphics_allocator);
+
+	// Create the resource manager
+	editor_state->cache_resource_manager = (ResourceManager*)function::OffsetPointer(editor_state->cache_graphics, sizeof(Graphics));
+	*editor_state->cache_resource_manager = ResourceManager(cache_resource_manager_allocator, editor_state->CacheGraphics(), editor_state->task_manager->GetThreadCount());
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 
-	// The graphics object must be manually recreated
-	*sandbox->world_descriptor.graphics = Graphics(
-		editor_state->cache_graphics,
-		sandbox->viewport_render_target,
-		sandbox->viewport_texture_depth,
-		sandbox->world_descriptor.graphics->m_allocator
-	);
+	// Check to see if the sandbox was pre-initialized before
+	if (!IsSandboxRuntimePreinitialized(editor_state, sandbox_index)) {
+		// Need to preinitialize
+		PreinitializeSandboxRuntime(editor_state, sandbox_index);
+	}
+	else {
+		// The graphics object must be manually recreated
+		*sandbox->runtime_descriptor.graphics = Graphics(
+			editor_state->cache_graphics,
+			sandbox->viewport_render_target,
+			sandbox->viewport_texture_depth,
+			sandbox->runtime_descriptor.graphics->m_allocator
+		);
 
-	// Recreate the world
-	sandbox->sandbox_world = World(sandbox->world_descriptor);
+		// The task manager doesn't need to be recreated
 
-	// Place the cached resources into the resource manager
-	// It will also copy any GPU cached resources to the new GPU instance
-	CopyCachedResourcesIntoSandbox(editor_state, sandbox_index);
-
-	// Copy the entities
-	CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
+		// Recreate the world
+		sandbox->sandbox_world = World(sandbox->runtime_descriptor);
+		sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -334,6 +556,308 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool LoadSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	if (sandbox->runtime_settings.size > 0) {
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+		bool success = LoadRuntimeSettings(editor_state, sandbox->runtime_settings, &sandbox->runtime_descriptor, &error_message);
+
+		if (!success) {
+			// Display an error message
+			ECS_FORMAT_TEMP_STRING(
+				console_message,
+				"An error has occured when trying to load the runtime settings {#} for the sandbox {#}. Detailed error: {#}",
+				sandbox->runtime_settings,
+				sandbox_index,
+				error_message
+			);
+			EditorSetConsoleError(console_message);
+			return false;
+		}
+	}
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filename, WorldDescriptor* descriptor, CapacityStream<char>* error_message)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetSandboxRuntimeSettingsPath(editor_state, filename, absolute_path);
+
+	WorldDescriptor new_descriptor;
+	const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
+
+	DeserializeOptions options;
+	options.error_message = error_message;
+
+	bool success = Deserialize(reflection_manager, reflection_manager->GetType(STRING(WorldDescriptor)), &new_descriptor, absolute_path, &options) == ECS_DESERIALIZE_OK;
+
+	if (success) {
+		// Can copy into the descriptor now
+		memcpy(descriptor, &new_descriptor, sizeof(new_descriptor));
+		return true;
+	}
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool LoadEditorSandboxFile(EditorState* editor_state)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_file_path, 512);
+	GetProjectSandboxFile(editor_state, sandbox_file_path);
+
+	const Reflection::ReflectionManager* reflection_manager = editor_state->ReflectionManager();
+
+	const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 128;
+	const size_t BACKUP_CAPACITY = ECS_MB;
+	void* stack_allocation = ECS_STACK_ALLOC(STACK_ALLOCATION_CAPACITY);
+	
+	// Use malloc for extra large allocations
+	ResizableLinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY, BACKUP_CAPACITY, { nullptr });
+	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&linear_allocator);
+	Stream<void> contents = ReadWholeFileBinary(sandbox_file_path, allocator);
+
+	struct DeallocateAllocator {
+		void operator() () {
+			allocator->ClearBackup();
+		}
+
+		ResizableLinearAllocator* allocator;
+	};
+
+	StackScope<DeallocateAllocator> deallocate_scope({ &linear_allocator });
+
+	if (contents.buffer != nullptr) {
+		// Read the header
+		uintptr_t ptr = (uintptr_t)contents.buffer;
+		
+		SandboxFileHeader header;
+		Read<true>(&ptr, &header, sizeof(header));
+
+		if (header.version != SANDBOX_FILE_HEADER_VERSION) {
+			// Error invalid version
+			ECS_FORMAT_TEMP_STRING(console_error, "Failed to read sandbox file. Expected version {#} but the file has {#}.", SANDBOX_FILE_HEADER_VERSION, header.version);
+			EditorSetConsoleError(console_error);
+			return false;
+		}
+
+		if (header.count > SANDBOX_FILE_MAX_SANDBOXES) {
+			// Error, too many sandboxes
+			ECS_FORMAT_TEMP_STRING(console_error, "Sandbox file has been corrupted. Maximum supported count is {#}, but file says {#}.", SANDBOX_FILE_MAX_SANDBOXES, header.count);
+			EditorSetConsoleError(console_error);
+			return false;
+		}
+
+		// Deserialize the type table now
+		DeserializeFieldTable field_table = DeserializeFieldTableFromData(ptr, allocator);
+		if (field_table.types.size == 0) {
+			// Error
+			EditorSetConsoleError("The field table in the sandbox file is corrupted.");
+			return false;
+		}
+
+		EditorSandbox* sandboxes = (EditorSandbox*)ECS_STACK_ALLOC(sizeof(EditorSandbox) * header.count);
+		DeserializeOptions options;
+		options.field_table = &field_table;
+		options.field_allocator = allocator;
+		options.backup_allocator = allocator;
+		options.read_type_table = false;
+
+		const Reflection::ReflectionType* type = reflection_manager->GetType(STRING(EditorSandbox));
+		for (size_t index = 0; index < header.count; index++) {
+			ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type, sandboxes + index, ptr, &options);
+			if (code != ECS_DESERIALIZE_OK) {
+				ECS_STACK_CAPACITY_STREAM(char, console_error, 512);
+
+				if (code == ECS_DESERIALIZE_CORRUPTED_FILE) {
+					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. It is corrupted.", index);
+				}
+				else if (code == ECS_DESERIALIZE_MISSING_DEPENDENT_TYPES) {
+					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. It is missing its dependent types.", index);
+				}
+				else if (code == ECS_DESERIALIZE_FIELD_TYPE_MISMATCH) {
+					ECS_FORMAT_STRING(console_error, "Failed to deserialize sandbox {#}. There was a field type mismatch.", index);
+				}
+				else {
+					ECS_FORMAT_STRING(console_error, "Unknown error happened when deserializing sandbox {#}.", index);
+				}
+				EditorSetConsoleError(console_error);
+				return false;
+			}
+		}
+
+		// Deallocate all the current sandboxes if any
+		size_t initial_sandbox_count = editor_state->sandboxes.size;
+		for (size_t index = 0; index < initial_sandbox_count; index++) {
+			DestroySandbox(editor_state, 0);
+		}
+
+		// Now create the "real" sandboxes
+		for (size_t index = 0; index < header.count; index++) {
+			CreateSandbox(editor_state, false);
+
+			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			// Set the runtime settings path - this will also create the runtime
+			// If it fails, default initialize the runtime
+			if (!ChangeSandboxRuntimeSettings(editor_state, index, sandboxes[index].runtime_settings)) {
+				// Print an error message
+				ECS_FORMAT_TEMP_STRING(console_message, "The runtime settings {#} doesn't exist or is corrupted when trying to deserialize sandbox {#}."
+					"The sandbox will revert to default settings.", sandboxes[index].runtime_settings, index);
+				EditorSetConsoleWarn(console_message);
+
+				ChangeSandboxRuntimeSettings(editor_state, index, { nullptr, 0 });
+			}
+
+			sandbox->database = sandboxes[index].database.Copy(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
+			sandbox->database.database = &editor_state->asset_database;
+
+			// Now the modules
+			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {
+				unsigned int module_index = sandboxes[index].modules_in_use[subindex].module_index;
+				// Only if it is in bounds
+				if (module_index < editor_state->project_modules->size) {
+					AddSandboxModule(editor_state, index, module_index, sandboxes[index].modules_in_use[subindex].module_configuration);
+					ChangeSandboxModuleSettings(editor_state, index, module_index, sandboxes[index].modules_in_use[subindex].settings_name);
+
+					if (sandboxes[index].modules_in_use[subindex].is_deactivated) {
+						DeactivateSandboxModuleInStream(editor_state, index, subindex);
+					}
+				}
+			}
+		}
+
+		return true;
+	}
+	
+	ECS_FORMAT_TEMP_STRING(console_error, "Failed to read or open sandbox file. Path is {#}.", sandbox_file_path);
+	EditorSetConsoleError(console_error);
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	// Compile all modules in use by this sandbox
+	if (!AreSandboxModulesCompiled(editor_state, index)) {
+		// Compile the modules
+		if (!CompileSandboxModules(editor_state, index)) {
+			return false;
+		}
+	}
+
+	// Now initialize the task scheduler with the tasks retrieved
+	TaskScheduler* task_scheduler = sandbox->sandbox_world.task_scheduler;
+	task_scheduler->Reset();
+
+	// Push all the tasks into it
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);	
+		task_scheduler->Add(info->tasks);
+	}
+
+	ECS_STACK_CAPACITY_STREAM(char, solve_error_message, 2048);
+	solve_error_message.Copy("Could not solve task dependencies. ");
+
+	// Try to solve the scheduling order
+	bool success = task_scheduler->Solve(&solve_error_message);
+	if (!success) {
+		EditorSetConsoleError(solve_error_message);
+		return false;
+	}
+
+	// Now write the module settings into the system manager
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		EditorModule* editor_module = &editor_state->project_modules->buffer[sandbox->modules_in_use[index].module_index];
+		Stream<wchar_t> library_name = editor_module->library_name;
+		ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
+		function::ConvertWideCharsToASCII(library_name, ascii_name);
+
+		size_t reflected_settings_size = sandbox->modules_in_use[index].reflected_settings.size;
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, settings, reflected_settings_size);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, settings_name, reflected_settings_size);
+
+		for (size_t setting_index = 0; setting_index < reflected_settings_size; setting_index++) {
+			settings[index] = sandbox->modules_in_use[index].reflected_settings[setting_index].data;
+			settings_name[index] = sandbox->modules_in_use[index].reflected_settings[setting_index].name;
+		}
+
+		settings.size = reflected_settings_size;
+		sandbox->sandbox_world.system_manager->BindSystemSettings(ascii_name, settings, settings_name.buffer);
+	}
+
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	// Create a sandbox allocator - a global one - such that it can accomodate the default entity manager requirements
+	GlobalMemoryManager* allocator = (GlobalMemoryManager*)editor_state->editor_allocator->Allocate(sizeof(GlobalMemoryManager));
+	*allocator = GlobalMemoryManager(
+		sandbox->runtime_descriptor.entity_manager_memory_size + ECS_MB * 10,
+		1024,
+		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size + ECS_MB * 2
+	);
+
+	AllocatorPolymorphic sandbox_allocator = GetAllocatorPolymorphic(allocator);
+
+	// Initialize the textures to nullptr - wait for the UI window to tell the sandbox what area it covers
+	sandbox->viewport_render_target.view = nullptr;
+	sandbox->viewport_texture.view = nullptr;
+	sandbox->viewport_texture_depth.view = nullptr;
+	sandbox->task_dependencies.elements.Initialize(sandbox_allocator, 0);
+
+	sandbox->modules_in_use.Initialize(sandbox_allocator, 0);
+	sandbox->database = AssetDatabaseReference(&editor_state->asset_database, sandbox_allocator);
+
+	// Create a graphics object that will inherit all the resources
+	Graphics* sandbox_graphics = (Graphics*)allocator->Allocate(sizeof(Graphics));
+	MemoryManager* sandbox_graphics_allocator = (MemoryManager*)allocator->Allocate(sizeof(MemoryManager));
+	*sandbox_graphics_allocator = DefaultGraphicsAllocator(allocator);
+	*sandbox_graphics = Graphics(editor_state->CacheGraphics(), nullptr, nullptr, sandbox_graphics_allocator);
+	sandbox->runtime_descriptor.graphics = sandbox_graphics;
+
+	// Create the scene entity manager
+	sandbox->scene_entities = CreateEntityManagerWithPool(
+		sandbox->runtime_descriptor.entity_manager_memory_size,
+		sandbox->runtime_descriptor.entity_manager_memory_pool_count,
+		sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size,
+		sandbox->runtime_descriptor.entity_pool_power_of_two,
+		allocator
+	);
+
+	// Create the task manager that is going to be reused accros runtime plays
+	TaskManager* task_manager = (TaskManager*)allocator->Allocate(sizeof(TaskManager));
+	new (task_manager) TaskManager(
+		std::thread::hardware_concurrency(),
+		allocator,
+		sandbox->runtime_descriptor.per_thread_temporary_memory_size,
+		sandbox->runtime_descriptor.per_thread_temporary_memory_size
+	);
+	sandbox->runtime_descriptor.task_manager = task_manager;
+
+	TaskScheduler* task_scheduler = (TaskScheduler*)allocator->Allocate(sizeof(TaskScheduler) + sizeof(MemoryManager));
+	MemoryManager* task_scheduler_allocator = (MemoryManager*)function::OffsetPointer(task_scheduler, sizeof(TaskScheduler));
+	*task_scheduler_allocator = TaskScheduler::DefaultAllocator(allocator);
+
+	new (task_scheduler) TaskScheduler(task_scheduler_allocator);
+
+	// Create the sandbox world
+	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
+	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ReinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
 {
 	DestroySandboxRuntime(editor_state, sandbox_index);
@@ -342,13 +866,176 @@ void ReinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void ReloadSandboxRuntimeSettings(EditorState* editor_state)
+{
+	for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+		if (UpdateSandboxRuntimeSettings(editor_state, index)) {
+			LoadSandboxRuntimeSettings(editor_state, index);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index) {
 	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
 	ECS_ASSERT(in_stream_index != -1);
 
+	RemoveSandboxModuleInStream(editor_state, sandbox_index, in_stream_index);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+{
 	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
 	// Deallocate the reflected settings allocator
 	sandbox_module->settings_allocator.Free();
+
+	editor_state->sandboxes[sandbox_index].modules_in_use.RemoveSwapBack(in_stream_index);
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool SaveSandboxRuntimeSettings(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	bool success = SaveRuntimeSettings(editor_state, sandbox->runtime_settings, &sandbox->runtime_descriptor, &error_message);
+	if (!success) {
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to save sandbox {#} runtime settings ({#}). Detailed message: {#}.", sandbox_index, sandbox->runtime_settings, error_message);
+		EditorSetConsoleError(console_message);
+		return false;
+	}
+
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool SaveRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filename, const WorldDescriptor* descriptor, CapacityStream<char>* error_message)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetSandboxRuntimeSettingsPath(editor_state, filename, absolute_path);
+
+	SerializeOptions options;
+	options.error_message = error_message;
+
+	const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
+	ECS_SERIALIZE_CODE code = Serialize(reflection_manager, reflection_manager->GetType(STRING(WorldDescriptor)), descriptor, absolute_path, &options);
+	if (code != ECS_SERIALIZE_OK) {
+		return false;
+	}
+
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool SaveEditorSandboxFile(const EditorState* editor_state)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetProjectSandboxFile(editor_state, absolute_path);
+
+	// Allocate a buffer of ECS_KB * 128 and write into it
+	// Assert that the overall size is less
+	const size_t STACK_CAPACITY = ECS_KB * 128;
+	void* stack_buffer = ECS_STACK_ALLOC(STACK_CAPACITY);
+	uintptr_t ptr = (uintptr_t)stack_buffer;
+
+	SandboxFileHeader header;
+	header.count = editor_state->sandboxes.size;
+	header.version = SANDBOX_FILE_HEADER_VERSION;
+
+	// Write the header first
+	Write<true>(&ptr, &header, sizeof(header));
+
+	const Reflection::ReflectionManager* reflection_manager = editor_state->ui_reflection->reflection;
+
+	// Write the type table
+	const Reflection::ReflectionType* sandbox_type = reflection_manager->GetType(STRING(EditorSandbox));
+	SerializeFieldTable(reflection_manager, sandbox_type, ptr);
+
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	SerializeOptions options;
+	options.write_type_table = false;
+	options.error_message = &error_message;
+
+	for (size_t index = 0; index < editor_state->sandboxes.size; index++) {
+		ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, editor_state->sandboxes.buffer + index, ptr, &options);
+		if (code != ECS_SERIALIZE_OK) {
+			ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", index, error_message);
+			EditorSetConsoleError(console_message);
+			return false;
+		}
+	}
+
+	size_t bytes_written = ptr - (uintptr_t)stack_buffer;
+	ECS_ASSERT(bytes_written <= STACK_CAPACITY);
+	// Now commit to the file
+	ECS_FILE_STATUS_FLAGS status = WriteBufferToFileBinary(absolute_path, { stack_buffer, bytes_written });
+	if (status != ECS_FILE_STATUS_OK) {
+		ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Failed to write to path {#}.", absolute_path);
+		EditorSetConsoleError(console_message);
+
+		return false;
+	}
+
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, const WorldDescriptor& descriptor)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	WorldDescriptor old_descriptor = sandbox->runtime_descriptor;
+
+	// Remember the graphics, task manager and task scheduler
+	// Also the mouse and keyboard
+	Graphics* sandbox_graphics = sandbox->runtime_descriptor.graphics;
+	TaskManager* task_manager = sandbox->runtime_descriptor.task_manager;
+	TaskScheduler* task_scheduler = sandbox->runtime_descriptor.task_scheduler;
+	HID::Mouse* mouse = sandbox->runtime_descriptor.mouse;
+	HID::Keyboard* keyboard = sandbox->runtime_descriptor.keyboard;
+
+	memcpy(&sandbox->runtime_descriptor, &descriptor, sizeof(WorldDescriptor));
+
+	sandbox->runtime_descriptor.graphics = sandbox_graphics;
+	sandbox->runtime_descriptor.task_manager = task_manager;
+	sandbox->runtime_descriptor.task_scheduler = task_scheduler;
+	sandbox->runtime_descriptor.mouse = mouse;
+	sandbox->runtime_descriptor.keyboard = keyboard;
+
+	// Reinitialize the runtime
+	ReinitializeSandboxRuntime(editor_state, sandbox_index);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool UpdateSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return UpdateRuntimeSettings(editor_state, sandbox->runtime_settings, &sandbox->runtime_settings_last_write);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool UpdateRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filename, size_t* last_write)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetSandboxRuntimeSettingsPath(editor_state, filename, absolute_path);
+	size_t new_last_write = OS::GetFileLastWrite(absolute_path);
+	if (new_last_write > *last_write) {
+		*last_write = new_last_write;
+		return true;
+	}
+
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------------------------------------------------------

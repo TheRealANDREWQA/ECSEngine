@@ -106,6 +106,72 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
+	ArchetypeQuery ECS_VECTORCALL ArchetypeQueryCache::GetComponents(unsigned int handle) const
+	{
+		// This query is used by the crash functions to "return" a value.
+		ArchetypeQuery query;
+		ECS_CRASH_RETURN_VALUE(handle != -1, query, "Handle is empty for archetype query cache.");
+
+		if (handle >= EXCLUDE_HANDLE_OFFSET) {
+			// Check the exclude results
+			handle -= EXCLUDE_HANDLE_OFFSET;
+			ECS_CRASH_RETURN_VALUE(
+				handle > exclude_query_results.count,
+				query,
+				"Invalid handle for exclude query. Requested index {#} when count is {#}.",
+				handle,
+				exclude_query_results.count
+			);
+
+			return { exclude_query_results.components[handle].unique, exclude_query_results.components[handle].shared };
+		}
+		else {
+			ECS_CRASH_RETURN_VALUE(
+				handle > query_results.count,
+				query,
+				"Invalid handle for normal query. Requested index {#} when count is {#}.",
+				handle,
+				query_results.count
+			);
+
+			return query_results.components[handle];
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------
+
+	void ArchetypeQueryCache::GetResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const
+	{
+		ECS_CRASH_RETURN(handle != -1, "Handle is empty for archetype query cache.");
+
+		if (handle >= EXCLUDE_HANDLE_OFFSET) {
+			// Check the exclude results
+			handle -= EXCLUDE_HANDLE_OFFSET;
+			ECS_CRASH_RETURN(
+				handle > exclude_query_results.count,
+				"Invalid handle for exclude query. Requested index {#} when count is {#}.",
+				handle,
+				exclude_query_results.count
+			);
+
+			results = exclude_query_results.results[handle];
+			query = { exclude_query_results.components[handle].unique, exclude_query_results.components[handle].shared };
+		}
+		else {
+			ECS_CRASH_RETURN(
+				handle > query_results.count,
+				"Invalid handle for normal query. Requested index {#} when count is {#}.",
+				handle,
+				query_results.count
+			);
+
+			results = query_results.results[handle];
+			query = query_results.components[handle];
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------
+
 	AllocatorPolymorphic ArchetypeQueryCache::DefaultAllocator(GlobalMemoryManager* initial_allocator)
 	{
 		// Get an allocator for about 512 queries

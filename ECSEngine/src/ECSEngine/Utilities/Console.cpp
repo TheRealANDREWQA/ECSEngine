@@ -109,18 +109,15 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	Console::Console(MemoryManager* allocator, TaskManager* task_manager, const wchar_t* _dump_path) : allocator(allocator),
-		pause_on_error(false), verbosity_level(ECS_CONSOLE_VERBOSITY_DETAILED), dump_type(ECS_CONSOLE_DUMP_TYPE::ECS_CONSOLE_DUMP_COUNT),
+	Console::Console(MemoryManager* allocator, TaskManager* task_manager, Stream<wchar_t> _dump_path) : allocator(allocator),
+		pause_on_error(false), verbosity_level(ECS_CONSOLE_VERBOSITY_DETAILED), dump_type(ECS_CONSOLE_DUMP_COUNT),
 		task_manager(task_manager), last_dumped_message(0), dump_count_for_commit(1) {
 		format = ECS_LOCAL_TIME_FORMAT_HOUR | ECS_LOCAL_TIME_FORMAT_MINUTES | ECS_LOCAL_TIME_FORMAT_SECONDS;
-		messages = ResizableStream<ConsoleMessage>(GetAllocatorPolymorphic(allocator), 0);
-		system_filter_strings = ResizableStream<const char*>(GetAllocatorPolymorphic(allocator), 0);
+		messages.Initialize(GetAllocatorPolymorphic(allocator), 0);
+		system_filter_strings.Initialize(GetAllocatorPolymorphic(allocator), 0);
 
 		// Make a stable reference to the dump path
-		size_t dump_path_size = wcslen(_dump_path) + 1;
-		void* allocation = allocator->Allocate(sizeof(wchar_t) * dump_path_size, alignof(wchar_t));
-		memcpy(allocation, _dump_path, sizeof(wchar_t) * dump_path_size);
-		dump_path = (const wchar_t*)allocation;
+		dump_path = function::StringCopy(GetAllocatorPolymorphic(allocator), _dump_path);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -144,13 +141,6 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::AddSystemFilterString(const char* string)
-	{
-		AddSystemFilterString(Stream<char>(string, strlen(string)));
-	}
-
-	// -------------------------------------------------------------------------------------------------------
-
 	void Console::AddSystemFilterString(Stream<char> string) {
 		char* new_string = (char*)function::Copy(messages.allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char));
 		new_string[string.size] = '\0';
@@ -162,35 +152,16 @@ namespace ECSEngine {
 	size_t Console::GetFormatCharacterCount() const
 	{
 		size_t count = 0;
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS), 4, 0);
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS), 3, 0);
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES), 3, 0);
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR), 2, 0);
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY), 3, 0);
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH), 3, 0);
-		count += function::Select(function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR), 5, 0);
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MILLISECONDS) ? 4 : 0;
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_SECONDS) ? 3 : 0;
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MINUTES) ? 3 : 0;
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_HOUR) ? 2 : 0;
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_DAY) ? 3 : 0;
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_MONTH) ? 3 : 0;
+		count += function::HasFlag(format, ECS_LOCAL_TIME_FORMAT_YEAR) ? 5 : 0;
 
 		count += 3;
 		return count;
-	}
-
-	// -------------------------------------------------------------------------------------------------------
-
-	void Console::ConvertToMessage(const char* message, ConsoleMessage& console_message)
-	{
-		size_t size = strlen(message);
-		size_t format_character_count = GetFormatCharacterCount();
-
-		void* allocation = allocator->Allocate(sizeof(char) * (size + 1 + format_character_count), alignof(char));
-
-		Stream<char> stream = Stream<char>(allocation, 0);
-		WriteFormatCharacters(stream);
-		console_message.client_message_start = stream.size;
-
-		memcpy((void*)((uintptr_t)allocation + stream.size), message, sizeof(char) * size);
-		stream.size += size;
-		stream[stream.size] = '\0';
-		console_message.message = stream;
 	}
 
 	// -------------------------------------------------------------------------------------------------------
@@ -199,7 +170,7 @@ namespace ECSEngine {
 	{
 		size_t format_character_count = GetFormatCharacterCount();
 
-		void* allocation = allocator->Allocate(sizeof(char) * (message.size + 1 + format_character_count), alignof(char));
+		void* allocation = allocator->Allocate(sizeof(char) * (message.size + format_character_count), alignof(char));
 
 		Stream<char> stream = Stream<char>(allocation, 0);
 		WriteFormatCharacters(stream);
@@ -207,29 +178,15 @@ namespace ECSEngine {
 
 		memcpy((void*)((uintptr_t)allocation + stream.size), message.buffer, sizeof(char) * message.size);
 		stream.size += message.size;
-		stream[stream.size] = '\0';
 		console_message.message = stream;
-	}
-
-	// -------------------------------------------------------------------------------------------------------
-
-	void Console::ChangeDumpPath(const wchar_t* new_path)
-	{
-		ChangeDumpPath(ToStream(new_path));
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
 	void Console::ChangeDumpPath(Stream<wchar_t> new_path)
 	{
-		allocator->Deallocate(dump_path);
-		size_t new_path_size = new_path.size + 1;
-		void* allocation = allocator->Allocate(sizeof(wchar_t) * new_path_size, alignof(wchar_t));
-		new_path.CopyTo(allocation);
-		wchar_t* temp_char = (wchar_t*)allocation;
-		temp_char[new_path.size] = L'\0';
-		dump_path = (const wchar_t*)allocation;
-
+		allocator->Deallocate(dump_path.buffer);
+		dump_path = function::StringCopy(GetAllocatorPolymorphic(allocator), new_path);
 		Dump();
 	}
 
@@ -259,7 +216,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 	
-	void Console::Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
+	void Console::Message(Stream<char> message, ECS_CONSOLE_MESSAGE_TYPE type, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
 		ConsoleMessage console_message;
 		console_message.verbosity = verbosity;
 		console_message.type = type;
@@ -267,8 +224,8 @@ namespace ECSEngine {
 		ConvertToMessage(message, console_message);
 
 		// Get the system string index if the message is different from nullptr.
-		if (system != nullptr) {
-			unsigned int system_index = function::FindString(system, Stream<const char*>(system_filter_strings.buffer, system_filter_strings.size));
+		if (system.size > 0) {
+			unsigned int system_index = function::FindString(system, Stream<Stream<char>>(system_filter_strings.buffer, system_filter_strings.size));
 			if (system_index != -1) {
 				console_message.system_filter = 1 << system_index;
 			}
@@ -283,44 +240,34 @@ namespace ECSEngine {
 		lock.lock();
 		messages.Add(console_message);
 		lock.unlock();
-		if (dump_type == ECS_CONSOLE_DUMP_TYPE::ECS_CONSOLE_DUMP_COUNT) {
+		if (dump_type == ECS_CONSOLE_DUMP_COUNT) {
 			if (messages.size > last_dumped_message) {
 				if (messages.size - last_dumped_message >= dump_count_for_commit) {
-					ConsoleDumpData dump_data;
-					dump_data.console = this;
-					dump_data.starting_index = last_dumped_message;
-
-					ThreadTask task = ECS_THREAD_TASK_NAME(ConsoleAppendToDump, &dump_data, sizeof(dump_data));
-					task_manager->AddDynamicTaskAndWake(task);
+					AppendDump();
 				}
 			}
 			else {
-				ConsoleDumpData dump_data;
-				dump_data.console = this;
-				dump_data.starting_index = 0;
-
-				ThreadTask task = ECS_THREAD_TASK_NAME(ConsoleDump, &dump_data, sizeof(dump_data));
-				task_manager->AddDynamicTaskAndWake(task);
+				Dump();
 			}
 		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Info(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_INFO, system, verbosity);
+	void Console::Info(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_INFO, system, verbosity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Warn(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_WARN, system, verbosity);
+	void Console::Warn(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_WARN, system, verbosity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Error(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR, system, verbosity);
+	void Console::Error(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_ERROR, system, verbosity);
 		if (pause_on_error) {
 			__debugbreak();
 		}
@@ -328,8 +275,8 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------
 
-	void Console::Trace(Stream<char> message, const char* system, ECS_CONSOLE_VERBOSITY verbosity) {
-		Message(message, ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_TRACE, system, verbosity);
+	void Console::Trace(Stream<char> message, Stream<char> system, ECS_CONSOLE_VERBOSITY verbosity) {
+		Message(message, ECS_CONSOLE_TRACE, system, verbosity);
 	}
 
 	// -------------------------------------------------------------------------------------------------------

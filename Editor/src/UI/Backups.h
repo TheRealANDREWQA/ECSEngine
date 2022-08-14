@@ -15,3 +15,14 @@ void BackupsDraw(void* window_data, void* drawer_descriptor, bool initialize);
 void CreateBackupsWindow(EditorState* editor_state);
 
 void CreateBackupsWindowAction(ECSEngine::Tools::ActionData* action_data);
+
+// This is a dialog that ask which parts of the backup to be restored
+void CreateRestoreBackupWindow(EditorState* editor_state, ECSEngine::Stream<wchar_t> folder);
+
+struct CreateRestoreBackupWindowActionData {
+	EditorState* editor_state;
+	ECSEngine::Stream<wchar_t> folder;
+};
+
+// Must have as parameter a CreateRestoreBackupWindowActionData*
+void CreateRestoreBackupWindowAction(ECSEngine::Tools::ActionData* action_data);

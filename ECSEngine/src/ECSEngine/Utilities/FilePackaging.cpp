@@ -144,7 +144,7 @@ namespace ECSEngine {
 			// For the identifier - use it as a uint2 - the offset and the size of the string
 			unsigned int insert_position;
 			ECS_ASSERT(!lookup_table.Insert(offsets[index], { input[index].buffer, (unsigned int)input[index].size * sizeof(wchar_t) }, insert_position));
-			ResourceIdentifier* identifier = (ResourceIdentifier*)lookup_table.GetIdentifiers() + insert_position;
+			ResourceIdentifier* identifier = lookup_table.GetIdentifierPtrFromIndex(insert_position);
 			identifier->ptr = (void*)((uintptr_t)string_bytes_written);
 
 			string_bytes_written += sizeof(wchar_t) * input[index].size;
@@ -226,25 +226,23 @@ namespace ECSEngine {
 		table.SetBuffers(function::OffsetPointer(allocation, header.string_total_size), header.table_capacity);
 		// The identifiers must be patched to form an absolute value from the relative ones
 		// and then be decrypted
-		size_t extended_capacity = table.GetExtendedCapacity();
-		ResourceIdentifier* identifiers = (ResourceIdentifier*)table.GetIdentifiers();
-		for (size_t index = 0; index < extended_capacity; index++) {
-			if (table.IsItemAt(index)) {
-				// Patch the reference, and then decrypt
-				ResourceIdentifier* identifier = identifiers + index;
 
-				// Check to see if the identifier is still valid
-				if ((uintptr_t)identifier->ptr + identifier->size > header.string_total_size) {
-					memset(&table, 0, sizeof(table));
-					DeallocateEx(allocator, allocation);
-					return table;
-				}
-				identifier->ptr = function::OffsetPointer(allocation, (uintptr_t)identifier->ptr);
-				// Decrypt the buffer now
-				unsigned int decrypt_key = identifier->size;
-				DecryptBufferByte({ identifier->ptr, identifier->size }, decrypt_key);
+		table.ForEach<true>([&](auto value, ResourceIdentifier& identifier) {
+			// Patch the reference, and then decrypt
+			// Check to see if the identifier is still valid
+			if ((uintptr_t)identifier.ptr + identifier.size > header.string_total_size) {
+				memset(&table, 0, sizeof(table));
+				DeallocateEx(allocator, allocation);
+				// Fail
+				return true;
 			}
-		}
+			identifier.ptr = function::OffsetPointer(allocation, (uintptr_t)identifier.ptr);
+			// Decrypt the buffer now
+			unsigned int decrypt_key = identifier.size;
+			DecryptBufferByte({ identifier.ptr, identifier.size }, decrypt_key);
+
+			return false;
+		});
 
 		return table;
 	}

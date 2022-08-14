@@ -971,12 +971,10 @@ namespace ECSEngine {
 			Stream<Stream<const wchar_t*>> material_strings;
 		};
 
-		auto functor = [](const wchar_t* path, void* _data) {
-			Stream<wchar_t> stream_path = ToStream(path);
-
+		auto functor = [](Stream<wchar_t> path, void* _data) {
 			Data* data = (Data*)_data;
 			// find the base part first
-			const wchar_t* base_start = wcsstr(path, data->base_name.buffer);
+			const wchar_t* base_start = wcsstr(path.buffer, data->base_name.buffer);
 			if (base_start != nullptr) {
 				base_start += data->base_name.size;
 				while (*base_start == '_') {
@@ -998,9 +996,9 @@ namespace ECSEngine {
 
 				// The path is valid, a texture matches
 				if (found_index != -1) {
-					data->valid_textures->Add({ {data->temp_memory->buffer + data->temp_memory->size, stream_path.size}, data->texture_mask->buffer[found_index] });
+					data->valid_textures->Add({ {data->temp_memory->buffer + data->temp_memory->size, path.size}, data->texture_mask->buffer[found_index] });
 					data->texture_mask->RemoveSwapBack(found_index);
-					data->temp_memory->AddStreamSafe(stream_path);
+					data->temp_memory->AddStreamSafe(path);
 				}
 			}
 

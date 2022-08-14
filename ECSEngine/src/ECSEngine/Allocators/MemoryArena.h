@@ -55,12 +55,12 @@ namespace ECSEngine {
 		ResizableMemoryArena();
 		ResizableMemoryArena(
 			GlobalMemoryManager* backup, 
-			unsigned int initial_arena_capacity, 
-			unsigned int initial_allocator_count,
-			unsigned int initial_blocks_per_allocator,
-			unsigned int new_arena_capacity,
-			unsigned int new_allocator_count,
-			unsigned int new_blocks_per_allocator
+			size_t initial_arena_capacity, 
+			size_t initial_allocator_count,
+			size_t initial_blocks_per_allocator,
+			size_t new_arena_capacity,
+			size_t new_allocator_count,
+			size_t new_blocks_per_allocator
 		);
 
 		ResizableMemoryArena(const ResizableMemoryArena& other) = default;
@@ -74,7 +74,7 @@ namespace ECSEngine {
 		bool Belongs(const void* buffer) const;
 
 		void CreateArena();
-		void CreateArena(unsigned int arena_capacity, unsigned int allocator_count, unsigned int blocks_per_allocator);
+		void CreateArena(size_t arena_capacity, size_t allocator_count, size_t blocks_per_allocator);
 
 		// ------------------------------------------------- Thread safe ----------------------------------------------------
 
@@ -86,12 +86,12 @@ namespace ECSEngine {
 	//private:
 		GlobalMemoryManager* m_backup;
 		MemoryArena* m_arenas;
-		unsigned int m_arena_size;
-		unsigned int m_arena_capacity;
+		size_t m_arena_size;
+		size_t m_arena_capacity;
+		size_t m_new_arena_capacity;
+		size_t m_new_allocator_count;
+		size_t m_new_blocks_per_allocator;
 		SpinLock m_lock;
-		unsigned int m_new_arena_capacity;
-		unsigned int m_new_allocator_count;
-		unsigned int m_new_blocks_per_allocator;
 	};
 
 }

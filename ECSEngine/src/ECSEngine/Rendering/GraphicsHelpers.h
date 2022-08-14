@@ -186,7 +186,7 @@ namespace ECSEngine {
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
 	// decompressed data; Momentarly there are no flags. The filename is needed in for the texture extension
 	// If it fails it returns a { nullptr, 0 } 
-	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags = 0);
+	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, Stream<wchar_t> filename, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// It will invert the mesh on the Z axis
 	ECSENGINE_API void InvertMeshZAxis(Graphics* graphics, Mesh& mesh);
@@ -233,7 +233,7 @@ namespace ECSEngine {
 
 	// Returns the dimensions of a texture from a file
 	// Returns {0, 0} if it fails
-	ECSENGINE_API uint2 GetTextureDimensions(const wchar_t* filename);
+	ECSENGINE_API uint2 GetTextureDimensions(Stream<wchar_t> filename);
 
 	// Returns the dimensions of a texture from memory
 	// Returns {0, 0} if it fails

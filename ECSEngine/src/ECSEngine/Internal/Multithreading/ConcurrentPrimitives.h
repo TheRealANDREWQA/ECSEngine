@@ -38,7 +38,11 @@ namespace ECSEngine {
 
 		void wait_locked();
 
-		std::atomic<bool> value = { 0 };
+		// The thread will use a sleep behaviour if after many tries
+		// the lock doesn't get once locked
+		void wait_signaled();
+
+		std::atomic<unsigned char> value = { 0 };
 	};
 
 	ECSENGINE_API void BitLock(std::atomic<unsigned char>& byte, unsigned char bit_index);
@@ -97,6 +101,9 @@ namespace ECSEngine {
 
 		// Increments the signal_count by the given count and wakes up a single thread that is waiting
 		void Notify(int count = 1);
+
+		// Returns the number of threads waiting on this variable
+		unsigned int WaitingThreadCount();
 
 		std::atomic<int> signal_count;
 	};
@@ -174,7 +181,7 @@ namespace ECSEngine {
 	// "comparable" with a linux futex because we when the value is changed nobody will wake us up. 
 	// Instead, it uses SwitchToThread and Sleep to try to give the thread's quantum to other threads to reduce usage.
 	template<char WaitType, typename IntType>
-	void SpinWait(std::atomic<IntType>& variable, IntType value_to_compare) {
+	void SpinWait(const std::atomic<IntType>& variable, IntType value_to_compare) {
 #define SPIN_COUNT_UNTIL_WAIT (2'000)
 
 		auto loop = [](auto check_condition) {
@@ -219,7 +226,7 @@ namespace ECSEngine {
 	}
 
 	template<char WaitType, typename IntType>
-	void TickWait(size_t microseconds, std::atomic<IntType>& variable, IntType value_to_compare) {
+	void TickWait(size_t microseconds, const std::atomic<IntType>& variable, IntType value_to_compare) {
 		const size_t SPIN_COUNTER = 64;
 
 		auto loop = [=](auto condition) {

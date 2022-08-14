@@ -10,9 +10,10 @@
 #include "ECSEngineRendering.h"
 #include "../Modules/ModuleSettings.h"
 #include "../Project/ProjectFolders.h"
+#include "Sandbox.h"
 
-using namespace ECSEngine;
-ECS_TOOLS;
+//using namespace ECSEngine;
+//ECS_TOOLS;
 
 constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 
@@ -33,6 +34,8 @@ constexpr size_t INSPECTOR_FLAG_LOCKED = 1 << 0;
 #define DRAW_MODULE_SETTINGS_ALLOCATOR_CAPACITY ECS_KB * 128
 #define DRAW_MODULE_SETTINGS_ALLOCATOR_POOL_COUNT 1024
 #define DRAW_MODULE_SETTINGS_ALLOCATOR_BACKUP_SIZE ECS_KB * 512
+
+#define GRAPHICS_MODULE_TEXTURE ECS_TOOLS_UI_TEXTURE_LIGHT_BULB
 
 void InitializeInspectorTable(EditorState* editor_state);
 
@@ -85,7 +88,7 @@ bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunc
 // ----------------------------------------------------------------------------------------------------------------------------
 
 bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, const wchar_t* _identifier) {
-	return TryGetInspectorTableFunction(editor_state, function, ToStream(_identifier));
+	return TryGetInspectorTableFunction(editor_state, function, _identifier);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -103,7 +106,7 @@ void GetInspectorsForModule(const EditorState* editor_state, unsigned int target
 unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int target_sandbox) {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[target_sandbox] + index) % editor_state->inspector_manager.data.size;
-		if (editor_state->inspector_manager.data[current_inspector].target_sandbox == target_sandbox || !IsInspectorLocked(editor_state, current_inspector)) {
+		if (editor_state->inspector_manager.data[current_inspector].target_sandbox == target_sandbox && !IsInspectorLocked(editor_state, current_inspector)) {
 			editor_state->inspector_manager.round_robin_index[target_sandbox] = current_inspector + 1 == editor_state->inspector_manager.data.size ? 
 				0 : current_inspector + 1;
 			return current_inspector;
@@ -178,13 +181,13 @@ void InspectorIconNameAndPath(UIDrawer* drawer, Stream<wchar_t> path) {
 	Stream<wchar_t> folder_name = function::PathStem(path);
 	ECS_TEMP_ASCII_STRING(ascii_path, 256);
 	function::ConvertWideCharsToASCII(path.buffer, ascii_path.buffer, path.size + 1, 256);
-	drawer->TextLabel(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT, config, ascii_path.buffer + (folder_name.buffer - path.buffer));
+	drawer->TextLabel(UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_LABEL_TRANSPARENT, config, ascii_path.buffer + (folder_name.buffer - path.buffer));
 	drawer->NextRow();
 
 	UIDrawerSentenceFitSpaceToken fit_space_token;
 	fit_space_token.token = '\\';
 	config.AddFlag(fit_space_token);
-	drawer->Sentence(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN, config, ascii_path.buffer);
+	drawer->Sentence(UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_FIT_SPACE_TOKEN, config, ascii_path.buffer);
 	drawer->NextRow();
 	drawer->CrossLine();
 }
@@ -192,9 +195,7 @@ void InspectorIconNameAndPath(UIDrawer* drawer, Stream<wchar_t> path) {
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void InspectorShowButton(UIDrawer* drawer, Stream<wchar_t> path) {
-	UIDrawConfig config;
-
-	drawer->Button(UI_CONFIG_DO_NOT_CACHE, config, "Show", { LaunchFileExplorerStreamAction, &path, sizeof(path) });
+	drawer->Button("Show", { LaunchFileExplorerStreamAction, &path, sizeof(path) });
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -202,13 +203,13 @@ void InspectorShowButton(UIDrawer* drawer, Stream<wchar_t> path) {
 void InspectorOpenAndShowButton(UIDrawer* drawer, Stream<wchar_t> path) {
 	UIDrawConfig config;
 
-	drawer->Button(UI_CONFIG_DO_NOT_CACHE, config, "Open", { OpenFileWithDefaultApplicationStreamAction, &path, sizeof(path) });
+	drawer->Button("Open", { OpenFileWithDefaultApplicationStreamAction, &path, sizeof(path) });
 
 	UIConfigAbsoluteTransform transform;
 	transform.scale = drawer->GetLabelScale("Show");
 	transform.position = drawer->GetAlignedToRight(transform.scale.x);
 	config.AddFlag(transform);
-	drawer->Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, "Show", { LaunchFileExplorerStreamAction, &path, sizeof(path) });
+	drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, "Show", { LaunchFileExplorerStreamAction, &path, sizeof(path) });
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -217,21 +218,21 @@ void InspectorDrawFileTimesInternal(UIDrawer* drawer, const char* creation_time,
 	UIDrawConfig config;
 	// Display file times
 	if (success) {
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Creation time: ");
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, creation_time);
+		drawer->Text("Creation time: ");
+		drawer->Text(creation_time);
 		drawer->NextRow();
 
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Access time: ");
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, access_time);
+		drawer->Text("Access time: ");
+		drawer->Text(access_time);
 		drawer->NextRow();
 
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Last write time: ");
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, write_time);
+		drawer->Text("Last write time: ");
+		drawer->Text(write_time);
 		drawer->NextRow();
 	}
 	// Else error message
 	else {
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Could not retrieve directory times.");
+		drawer->Text("Could not retrieve directory times.");
 		drawer->NextRow();
 	}
 }
@@ -264,7 +265,7 @@ void InspectorCleanNothing(EditorState* editor_state, void* data) {}
 
 void InspectorDrawNothing(EditorState* editor_state, void* data, UIDrawer* drawer) {
 	UIDrawConfig config;
-	drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "Nothing is selected.");
+	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Nothing is selected.");
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -280,7 +281,7 @@ void InspectorDrawFolderInfo(EditorState* editor_state, void* data, UIDrawer* dr
 
 	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FOLDER);
 
-	Stream<wchar_t> stream_path = ToStream(path);
+	Stream<wchar_t> stream_path = path;
 	InspectorIconNameAndPath(drawer, stream_path);
 
 	InspectorDrawFileTimes(drawer, path);
@@ -294,7 +295,7 @@ void InspectorDrawFolderInfo(EditorState* editor_state, void* data, UIDrawer* dr
 		UI_UNPACK_ACTION_DATA;
 
 		OpenFolderData* data = (OpenFolderData*)_data;
-		Stream<wchar_t> path = ToStream(data->path);
+		Stream<wchar_t> path = data->path;
 		ChangeFileExplorerDirectory(data->state, path);
 	};
 
@@ -304,13 +305,13 @@ void InspectorDrawFolderInfo(EditorState* editor_state, void* data, UIDrawer* dr
 	OpenFolderData open_data;
 	open_data.path = path;
 	open_data.state = editor_state;
-	drawer->Button(UI_CONFIG_DO_NOT_CACHE, config, "Open", { OpenFileExplorerFolder, &open_data, sizeof(open_data) });
+	drawer->Button("Open", { OpenFileExplorerFolder, &open_data, sizeof(open_data) });
 
 	UIConfigAbsoluteTransform absolute_transform;
 	absolute_transform.scale = drawer->GetLabelScale("Show");
 	absolute_transform.position = drawer->GetAlignedToRight(absolute_transform.scale.x);
 	config.AddFlag(absolute_transform);
-	drawer->Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Show", { LaunchFileExplorerAction, (void*)path, 0 });
+	drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Show", { LaunchFileExplorerAction, (void*)path, 0 });
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -325,7 +326,7 @@ void InspectorDrawTexture(EditorState* editor_state, void* data, UIDrawer* drawe
 	}
 
 	InspectorIcon(drawer, path);
-	Stream<wchar_t> stream_path = ToStream(path);
+	Stream<wchar_t> stream_path = path;
 	InspectorIconNameAndPath(drawer, stream_path);
 
 	InspectorDrawFileTimes(drawer, path);
@@ -345,7 +346,7 @@ void InspectorDrawBlankFile(EditorState* editor_state, void* data, UIDrawer* dra
 	}
 
 	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, drawer->color_theme.text);
-	Stream<wchar_t> stream_path = ToStream(path);
+	Stream<wchar_t> stream_path = path;
 	InspectorIconNameAndPath(drawer, stream_path);
 
 	InspectorDrawFileTimes(drawer, path);
@@ -365,7 +366,7 @@ void InspectorDrawTextFileImplementation(EditorState* editor_state, void* data, 
 	}
 
 	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, icon_texture, drawer->color_theme.text, drawer->color_theme.theme);
-	Stream<wchar_t> stream_path = ToStream(path);
+	Stream<wchar_t> stream_path = path;
 	InspectorIconNameAndPath(drawer, stream_path);
 
 	InspectorDrawFileTimes(drawer, path);
@@ -664,8 +665,6 @@ bool SaveInspectorSettingsHelper(EditorState* editor_state, unsigned int module_
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-#pragma endregion
-
 struct CreateSettingsCallbackData {
 	EditorState* editor_state;
 	unsigned int module_index;
@@ -694,14 +693,24 @@ void CreateModuleSettingsCallback(ActionData* action_data) {
 	// Write to a file the current values
 	bool success = SaveInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
 	if (!success) {
-		EditorSetConsoleWarn(ToStream("Could not save the new settings file."));
+		EditorSetConsoleWarn("Could not save the new settings file.");
 	}
 }
+
+#pragma endregion
 
 void InspectorDrawModuleClean(EditorState* editor_state, void* _data) {
 	EDITOR_STATE(editor_state);
 	DrawModuleData* data = (DrawModuleData*)_data;
 	
+	// If there is currently a present reflection, release it
+	if (data->settings_name.size > 0) {
+		unsigned int module_index = GetModuleIndexFromName(editor_state, data->module_name);
+		if (module_index != -1) {
+			DeallocateInspectorSettingsHelper(editor_state, module_index, data->inspector_index);
+		}
+	}
+
 	if (data->linear_allocator != nullptr) {
 		ui_system->RemoveWindowMemoryResource(data->window_index, data->linear_allocator->m_buffer);
 		ui_system->RemoveWindowMemoryResource(data->window_index, data->linear_allocator);
@@ -764,55 +773,109 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, setting_absolute_path, 512);
 
-	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.text, drawer->color_theme.theme);
+	bool is_graphics_module = IsGraphicsModule(editor_state, module_index);
+	const wchar_t* display_icon = is_graphics_module ? GRAPHICS_MODULE_TEXTURE : ECS_TOOLS_UI_TEXTURE_MODULE;
+	InspectorIcon(drawer, display_icon, drawer->color_theme.theme);
 	
 	ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
 	function::ConvertWideCharsToASCII(data->module_name, ascii_name);
-	ascii_name.Add('\0');
-	drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ALIGN_TO_ROW_Y, config, ascii_name.buffer);
+	if (editor_state->project_modules->buffer[module_index].is_graphics_module) {
+		ascii_name.AddStream(" (Graphics Type)");
+	}
+	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, ascii_name);
 	drawer->NextRow();
 
-	drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Project Settings ");
+	// Get all the components and the shared components
+	ECS_STACK_CAPACITY_STREAM(unsigned int, reflected_components, 32);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, reflected_shared_components, 32);
 
-	// Display the current setting name - if it has one
-	if (data->settings_name.size > 0) {
-		GetProjectConfigurationModuleFolder(editor_state, setting_absolute_path);
-		setting_absolute_path.Add(ECS_OS_PATH_SEPARATOR);
-		setting_absolute_path.AddStreamSafe(data->settings_name);
-		setting_absolute_path[setting_absolute_path.size] = L'\0';
-
-		// Display the configuration's name
-		ECS_STACK_CAPACITY_STREAM(char, ascii_setting_name, 256);
-		function::ConvertWideCharsToASCII(data->settings_name, ascii_setting_name);
-
-		// Null terminate the string
-		ascii_setting_name.AddSafe('\0');
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ALIGN_TO_ROW_Y, config, ascii_setting_name.buffer);
+	GetModuleReflectionAllComponentIndices(editor_state, module_index, &reflected_components, &reflected_shared_components);
+	if (reflected_components.size == 0) {
+		drawer->Text("The module does not have any components.");
+		drawer->NextRow();
 	}
 	else {
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "No module settings path is selected.");
+		// Draw the components alongside their byte size and their ID
+		ECS_STACK_CAPACITY_STREAM(char, label_list_characters, 512);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, labels, reflected_components.size);
+
+		Stream<char> evaluation_name = "ID";
+
+		for (unsigned int index = 0; index < reflected_components.size; index++) {
+			labels[index].buffer = label_list_characters.buffer + label_list_characters.size;
+
+			const Reflection::ReflectionType* type = editor_state->ModuleReflectionManager()->GetType(reflected_components[index]);
+			size_t byte_size = Reflection::GetReflectionTypeByteSize(type);
+
+			// The component might be lacking an ID
+			double id_evaluation = type->HasEvaluation(evaluation_name);
+			if (id_evaluation == DBL_MAX) {
+				labels[index].size = function::FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
+			}
+			else {
+				labels[index].size = function::FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
+			}
+			label_list_characters.size += labels[index].size;
+		}
+
+		labels.size = reflected_components.size;
+		drawer->LabelList("Components:", labels);
 	}
-	drawer->NextRow();
+
+	drawer->CrossLine();
+
+	if (reflected_shared_components.size == 0) {
+		drawer->Text("The module does not have any shared components.");
+		drawer->NextRow();
+	}
+	else {
+		// Draw the components alongside their byte size and their ID
+		ECS_STACK_CAPACITY_STREAM(char, label_list_characters, 512);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, labels, reflected_shared_components.size);
+
+		Stream<char> evaluation_name = "ID";
+
+		for (unsigned int index = 0; index < reflected_shared_components.size; index++) {
+			labels[index].buffer = label_list_characters.buffer + label_list_characters.size;
+
+			const Reflection::ReflectionType* type = editor_state->ModuleReflectionManager()->GetType(reflected_shared_components[index]);
+			size_t byte_size = Reflection::GetReflectionTypeByteSize(type);
+
+			// The component might be lacking an ID
+			double id_evaluation = type->HasEvaluation(evaluation_name);
+			if (id_evaluation == DBL_MAX) {
+				labels[index].size = function::FormatString(labels[index].buffer, "{#} (ID is missing, {#} byte size)", type->name, byte_size);
+			}
+			else {
+				labels[index].size = function::FormatString(labels[index].buffer, "{#} ({#} ID, {#} byte size)", type->name, (unsigned short)id_evaluation, byte_size);
+			}
+			label_list_characters.size += labels[index].size;
+		}
+
+		labels.size = reflected_components.size;
+		drawer->LabelList("Shared Components:", labels);
+	}
+
+	drawer->CrossLine();
 
 	// Display the reflected types for this module
 	ECS_STACK_CAPACITY_STREAM(unsigned int, reflected_type_indices, 32);
 	GetModuleSettingsUITypesIndices(editor_state, module_index, reflected_type_indices);
 
-	drawer->CrossLine();
 	if (reflected_type_indices.size > 0) {
 		// Coallesce the string
-		ECS_STACK_CAPACITY_STREAM(const char*, type_names, 32);
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, type_names, 32);
 		for (size_t index = 0; index < reflected_type_indices.size; index++) {
 			UIReflectionType type = editor_state->module_reflection->GetType(reflected_type_indices[index]);
 			type_names[index] = type.name;
 		}
 		type_names.size = reflected_type_indices.size;
-		drawer->LabelList(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT, config, "Module settings types", type_names);
+		drawer->LabelList(UI_CONFIG_LABEL_TRANSPARENT, config, "Module settings types", type_names);
 		drawer->NextRow();
 	}
 	// No settings for this module
 	else {
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "The module does not have settings types.");
+		drawer->Text("The module does not have settings types.");
 		drawer->NextRow();
 	}
 	drawer->CrossLine();
@@ -841,9 +904,33 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 	config.AddFlag(dependent_size);
 	config.AddFlag(create_settings_active_state);
 
+	drawer->Text("Project Settings ");
+
+	// Display the current setting name - if it has one
+	if (data->settings_name.size > 0) {
+		GetProjectConfigurationModuleFolder(editor_state, setting_absolute_path);
+		setting_absolute_path.Add(ECS_OS_PATH_SEPARATOR);
+		setting_absolute_path.AddStreamSafe(data->settings_name);
+		setting_absolute_path[setting_absolute_path.size] = L'\0';
+
+		// Display the configuration's name
+		ECS_STACK_CAPACITY_STREAM(char, ascii_setting_name, 256);
+		function::ConvertWideCharsToASCII(data->settings_name, ascii_setting_name);
+
+		// Null terminate the string
+		ascii_setting_name.AddSafe('\0');
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, ascii_setting_name.buffer);
+	}
+	else {
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "No module settings path is selected.");
+	}
+	drawer->NextRow();
+
+	drawer->CrossLine();
+
 	CreateSettingsCallbackData create_data = { editor_state, module_index };
 	drawer->Button(
-		UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE,
+		UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ACTIVE_STATE,
 		config, 
 		"Create new setting",
 		{ create_new_setting, &create_data, sizeof(create_data) }
@@ -854,7 +941,7 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 	ECS_STACK_CAPACITY_STREAM(wchar_t, settings_folder, 512);
 	GetModuleSettingsFolderPath(editor_state, module_index, settings_folder);
 
-	const wchar_t* settings_extensions[] = { MODULE_SETTINGS_EXTENSION };
+	Stream<wchar_t> settings_extensions[] = { MODULE_SETTINGS_EXTENSION };
 
 	struct FunctorData {
 		UIDrawer* drawer;
@@ -867,16 +954,14 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 
 	FunctorData functor_data = { drawer, editor_state, linear_allocator, module_index, data->inspector_index, &data->settings_name };
 
-	drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Available settings ");
+	drawer->Text("Available settings ");
 	drawer->NextRow();
-	drawer->CrossLine();
 
 	ForEachFileInDirectoryWithExtension(settings_folder, { settings_extensions, std::size(settings_extensions) }, &functor_data,
-		[](const wchar_t* path, void* _data) {
+		[](Stream<wchar_t> path, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
 
-			Stream<wchar_t> stream_path = ToStream(path);
-			Stream<wchar_t> stem = function::PathStem(stream_path);
+			Stream<wchar_t> stem = function::PathStem(path);
 
 			bool is_active = data->active_settings != nullptr ? function::CompareStrings(stem, *data->active_settings) : false;
 			UIDrawConfig config;
@@ -905,9 +990,6 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 			stem.CopyTo(name_allocation);
 			name_allocation[stem.size] = L'\0';
 
-			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 64);
-			function::ConvertWideCharsToASCII(stem, ascii_name);
-
 			SetNewSettingData callback_data = { 
 				data->editor_state, 
 				{name_allocation, stem.size}, 
@@ -915,19 +997,20 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 				data->module_index,
 				data->inspector_index
 			};
-			callback.handler.action = set_new_setting;
-			callback.handler.data = &callback_data;
-			callback.handler.data_size = sizeof(callback_data);
-			callback.disable_value_to_modify = true;
-			config.AddFlag(callback);
 
-			data->drawer->CheckBox(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_CHECK_BOX_CALLBACK, config, ascii_name.buffer, &is_active);
+			float2 square_scale = data->drawer->GetSquareScale();
 
-			UIConfigAbsoluteTransform right_transform;
-			right_transform.scale = data->drawer->GetSquareScale(data->drawer->layout.default_element_y * 0.75f);
-			right_transform.position = data->drawer->GetAlignedToRight(right_transform.scale.x);
-			config.AddFlag(right_transform);
-			data->drawer->SpriteRectangle(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LATE_DRAW, config, ECS_TOOLS_UI_TEXTURE_X, data->drawer->color_theme.text);
+			UIConfigWindowDependentSize dependent_size;
+			float total_scale = data->drawer->GetWindowScaleUntilBorder();
+			float label_scale = total_scale - square_scale.x - data->drawer->layout.element_indentation;
+			size_t label_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_TRANSPARENT;
+			if (is_active) {
+				label_configuration = function::ClearFlag(label_configuration, UI_CONFIG_LABEL_TRANSPARENT);
+			}
+			dependent_size.scale_factor.x = data->drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { label_scale, 0.0f }).x;
+			config.AddFlag(dependent_size);
+
+			data->drawer->ButtonWide(label_configuration, config, stem, { set_new_setting, &callback_data, sizeof(callback_data) });
 
 			struct DeleteActionData {
 				const wchar_t* filename;
@@ -936,6 +1019,7 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 				unsigned int inspector_index;
 				CapacityStream<wchar_t>* active_settings;
 			};
+			DeleteActionData action_data = { (wchar_t*)name_allocation, data->editor_state, data->module_index, data->inspector_index, data->active_settings };
 
 			auto delete_action = [](ActionData* action_data) {
 				UI_UNPACK_ACTION_DATA;
@@ -943,7 +1027,7 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 				DeleteActionData* data = (DeleteActionData*)_data;
 
 				ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-				GetModuleSettingsFilePath(data->editor_state, data->module_index, ToStream(data->filename), absolute_path);
+				GetModuleSettingsFilePath(data->editor_state, data->module_index, data->filename, absolute_path);
 				bool success = RemoveFile(absolute_path);
 				if (!success) {
 					ECS_FORMAT_TEMP_STRING(error_message, "Could not delete module settings file {#}.", absolute_path);
@@ -951,20 +1035,15 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 				}
 				else {
 					// Check to see if that is the current setting
-					if (data->active_settings->size > 0 && function::CompareStrings(ToStream(data->filename), *data->active_settings)) {
+					if (data->active_settings->size > 0 && function::CompareStrings(data->filename, *data->active_settings)) {
 						DeallocateInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
 						data->editor_state->editor_allocator->Deallocate(data->active_settings->buffer);
 						*data->active_settings = { nullptr, 0, 0 };
 					}
 				}
 			};
-			DeleteActionData action_data = { (wchar_t*)name_allocation, data->editor_state, data->module_index, data->inspector_index, data->active_settings };
-			data->drawer->AddDefaultClickableHoverable(
-				{ right_transform.position - data->drawer->region_render_offset }, 
-				right_transform.scale,
-				{ delete_action, &action_data, sizeof(action_data) }
-			);
 
+			data->drawer->SpriteButton(UI_CONFIG_LATE_DRAW | UI_CONFIG_MAKE_SQUARE, config, { delete_action, &action_data, sizeof(action_data) }, ECS_TOOLS_UI_TEXTURE_X, data->drawer->color_theme.text);
 			data->drawer->NextRow();
 
 			return true;
@@ -975,7 +1054,7 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 	// Present the data now - if a path is selected
 
 	if (data->settings_name.size > 0) {
-		drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "Settings Variables");
+		drawer->Text("Settings Variables");
 		drawer->NextRow();
 
 		drawer->CrossLine();
@@ -998,10 +1077,27 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 			}
 		};
 
+		auto array_add_element_change = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerArrayAddRemoveData* data = (UIDrawerArrayAddRemoveData*)_additional_data;
+			// memset the elements to 0
+			unsigned int new_elements = data->capacity_data->size - data->new_size;
+			memset(function::OffsetPointer(data->capacity_data->buffer, data->element_byte_size * data->new_size), 0, data->element_byte_size * new_elements);
+
+			SaveFileAfterChangeData* save_data = (SaveFileAfterChangeData*)_data;
+			bool success = SaveInspectorSettingsHelper(save_data->editor_state, save_data->module_index, save_data->inspector_index);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(console_string, "An error occured when saving the module setting file for inspector {#} after value change. "
+					"The modification has not been commited.", save_data->inspector_index);
+				EditorSetConsoleError(console_string);
+			}
+		};
+
 		ECS_STACK_CAPACITY_STREAM(unsigned int, instance_indices, 64);
 		GetModuleSettingsUIInstancesIndices(editor_state, module_index, data->inspector_index, instance_indices);
 
-		SaveFileAfterChangeData save_file_data = { editor_state, module_index };
+		SaveFileAfterChangeData save_file_data = { editor_state, module_index, data->inspector_index };
 
 		if (instance_indices.size > 0) {
 			UIReflectionDrawConfig ui_reflection_configs[8];
@@ -1011,9 +1107,17 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 
 			UIConfigPathInputCallback path_input_callback;
 			path_input_callback.callback = { save_file_after_change, &save_file_data, sizeof(save_file_data) };
+	
+			UIConfigArrayAddCallback array_add_callback;
+			array_add_callback.handler = { array_add_element_change, &save_file_data, sizeof(save_file_data) };
+
+			UIConfigArrayRemoveCallback array_remove_callback;
+			array_remove_callback.handler = { save_file_after_change, &save_file_data, sizeof(save_file_data) };
 
 			ui_reflection_configs[0].configurations = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 			ui_reflection_configs[0].index[0] = UIReflectionIndex::Count;
+			UIReflectionDrawConfigAddConfig(ui_reflection_configs, &array_add_callback);
+			UIReflectionDrawConfigAddConfig(ui_reflection_configs, &array_remove_callback);
 
 			ui_reflection_configs[1].index[0] = UIReflectionIndex::IntegerInput;
 			ui_reflection_configs[1].index[1] = UIReflectionIndex::DoubleInput;
@@ -1053,33 +1157,28 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 
 			config.flag_count = 0;
 			// The window dependendent size must be adjusted to account for the indentation
-			dependent_size.scale_factor.x = drawer->GetWindowSizeFactors(	
-				ECS_UI_WINDOW_DEPENDENT_HORIZONTAL,
-				{ drawer->region_limit.x - drawer->region_fit_space_horizontal_offset - drawer->layout.node_indentation, 0.0f }
-			).x;
+			dependent_size.scale_factor.x = 1.0f;
 			config.AddFlag(dependent_size);
 			for (size_t index = 0; index < instance_indices.size; index++) {
 				// Display them as collapsing headers
-				UIConfigCollapsingHeaderDoNotCache collapsing_do_not_cache;
-				collapsing_do_not_cache.state = collapsing_headers_state + index;
-				UIDrawConfig header_config;
-				header_config.AddFlag(collapsing_do_not_cache);
-
 				UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(instance_indices[index]);
 				
-				// Must null terminate the suffix
-				char* separator = (char*)strchr(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR);
-				*separator = '\0';
+				Stream<char> separator = function::FindFirstCharacter(instance->name, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR);
+				Stream<char> name = { instance->name.buffer, instance->name.size - separator.size };
 
-				drawer->CollapsingHeader(UI_CONFIG_DO_NOT_CACHE, header_config, instance->name, [&]() {
+				drawer->CollapsingHeader(name, collapsing_headers_state + index, [&]() {
+					Stream<char> current_instance_name = instance->name;
+					instance->name = name;
 					editor_state->module_reflection->DrawInstance(
 						instance,
 						*drawer,
 						config,
+						0,
 						{ ui_reflection_configs, std::size(ui_reflection_configs) }
 					);
+					// Restore the name
+					instance->name = current_instance_name;
 				});
-				*separator = ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR;
 			}
 		}
 
@@ -1087,27 +1186,531 @@ void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawe
 			SaveFileAfterChangeData* data = (SaveFileAfterChangeData*)action_data->data;
 
 			DrawModuleData* draw_data = (DrawModuleData*)data->editor_state->inspector_manager.data[data->inspector_index].draw_data;
-			if (draw_data->settings_name.size > 0) {
-				DeallocateInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
-			}
+			if (draw_data->reflected_settings.size > 0) {
+				SetModuleDefaultSettings(data->editor_state, data->module_index, draw_data->reflected_settings);
+				ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+				GetModuleSettingsFilePath(data->editor_state, data->module_index, draw_data->settings_name, absolute_path);
 
-			AllocateInspectorSettingsHelper(data->editor_state, data->module_index, data->inspector_index);
-			SetModuleDefaultSettings(data->editor_state, data->module_index, draw_data->reflected_settings);
-			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-			GetModuleSettingsFilePath(data->editor_state, data->module_index, draw_data->settings_name, absolute_path);
-
-			bool success = SaveModuleSettings(data->editor_state, data->module_index, absolute_path, draw_data->reflected_settings);
-			if (!success) {
-				EditorSetConsoleError(ToStream("An error has occured when trying to save default values for module settings file. The modification has not been commited."));
+				bool success = SaveModuleSettings(data->editor_state, data->module_index, absolute_path, draw_data->reflected_settings);
+				if (!success) {
+					EditorSetConsoleError("An error has occured when trying to save default values for module settings file. The modification has not been commited.");
+				}
 			}
 		};
 		
-		drawer->Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Default Values", { set_default_values, &save_file_data, sizeof(save_file_data) });
+		drawer->Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Default Values", { set_default_values, &save_file_data, sizeof(save_file_data) });
 		config.flag_count = 0;
 		drawer->NextRow();
 
 		drawer->CrossLine();
 	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+struct DrawSandboxSettingsData {
+	EditorState* editor_state;
+	Stream<char> ui_reflection_instance_name;
+	WorldDescriptor ui_descriptor;
+	LinearAllocator runtime_settings_allocator;
+	size_t last_write_descriptor;
+
+	bool collapsing_module_state;
+	bool collapsing_runtime_state;
+};
+
+void InspectorDrawSandboxSettingsClean(EditorState* editor_state, void* _data) {
+	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
+	// Destroy the UI reflection
+	editor_state->ui_reflection->DestroyInstance(data->ui_reflection_instance_name.buffer);
+
+	// Deallocate the name
+	editor_state->editor_allocator->Deallocate(data->ui_reflection_instance_name.buffer);
+
+	// Deallocate the linear allocator
+	editor_state->editor_allocator->Deallocate(data->runtime_settings_allocator.m_buffer);
+}
+
+struct DrawSandboxSelectionWindowData {
+	EditorState* editor_state;
+	unsigned int selection;
+	unsigned int sandbox_index;
+
+	EDITOR_MODULE_CONFIGURATION configuration;
+};
+
+void DrawSandboxSelectionWindow(void* window_data, void* drawer_descriptor, bool initialize) {
+	UI_PREPARE_DRAWER(initialize);
+
+	DrawSandboxSelectionWindowData* data = (DrawSandboxSelectionWindowData*)window_data;
+	EditorState* editor_state = data->editor_state;
+
+	// Display the combo box for configuration selection
+	drawer.ComboBox("Module configuration", { MODULE_CONFIGURATIONS, EDITOR_MODULE_CONFIGURATION_COUNT }, EDITOR_MODULE_CONFIGURATION_COUNT, (unsigned char*)&data->configuration);
+	drawer.NextRow();
+
+	UIDrawConfig config;
+
+	float2 square_scale = drawer.GetSquareScale();
+	float scale_until_border = drawer.GetWindowScaleUntilBorder();
+
+	UIConfigWindowDependentSize dependent_size;
+	dependent_size.scale_factor.x = drawer.GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { scale_until_border - square_scale.x - drawer.layout.element_indentation, 0.0f }).x;
+	config.AddFlag(dependent_size);
+
+	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+	ProjectModules* project_modules = editor_state->project_modules;
+	// Display all the modules now
+	for (unsigned int index = 0; index < project_modules->size; index++) {
+		bool is_graphics = project_modules->buffer[index].is_graphics_module;
+
+		const wchar_t* texture_to_display = is_graphics ? GRAPHICS_MODULE_TEXTURE : ECS_TOOLS_UI_TEXTURE_MODULE;
+		drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, texture_to_display, drawer.color_theme.theme);
+
+		size_t configuration = UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_ACTIVE_STATE | UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+		// Look to see if it already belongs to the sandbox
+		unsigned int subindex = 0;
+
+		config.flag_count = 1;
+
+		UIConfigActiveState active_state;
+		active_state.state = true;
+		for (; subindex < sandbox->modules_in_use.size; subindex++) {
+			if (sandbox->modules_in_use[subindex].module_index == index) {
+				active_state.state = false;
+				UIConfigColor background_color;
+				background_color.color = ECS_COLOR_GREEN;
+				config.AddFlag(background_color);
+
+				configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+				configuration |= UI_CONFIG_COLOR;
+				break;
+			}
+		}
+
+		config.AddFlag(active_state);
+
+		struct SelectData {
+			DrawSandboxSelectionWindowData* data;
+			unsigned int index;
+		};
+
+		auto select_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			SelectData* data = (SelectData*)_data;
+			data->data->selection = data->index;
+		};
+
+		if (index == data->selection) {
+			configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+		}
+
+		SelectData select_data = { data, index };
+		drawer.ButtonWide(configuration, config, project_modules->buffer[index].library_name, { select_action, &select_data, sizeof(select_data) });
+		drawer.NextRow();
+	}
+
+	auto confirm_data = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		DrawSandboxSelectionWindowData* data = (DrawSandboxSelectionWindowData*)_data;
+		AddSandboxModule(data->editor_state, data->sandbox_index, data->selection, data->configuration);
+
+		// Write the sandbox file
+		SaveEditorSandboxFile(data->editor_state);
+		CloseXBorderClickableAction(action_data);
+	};
+
+	UIConfigActiveState active_state;
+	active_state.state = data->selection != -1;
+
+	// Now add and cancel buttons
+	config.flag_count = 0;
+	config.AddFlag(active_state);
+
+	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ACTIVE_STATE, config, "Confirm", { confirm_data, data, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ALIGN_ELEMENT_RIGHT, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+}
+
+struct CreateAddSandboxWindowData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+};
+
+void CreateAddSandboxWindow(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	CreateAddSandboxWindowData* data = (CreateAddSandboxWindowData*)_data;
+	UIWindowDescriptor descriptor;
+
+	DrawSandboxSelectionWindowData window_data;
+	window_data.editor_state = data->editor_state;
+	window_data.selection = -1;
+	window_data.sandbox_index = data->sandbox_index;
+	window_data.configuration = EDITOR_MODULE_CONFIGURATION_DEBUG;
+
+	descriptor.window_name = "Select a Module";
+
+	descriptor.draw = DrawSandboxSelectionWindow;
+	descriptor.window_data = &window_data;
+	descriptor.window_data_size = sizeof(window_data);
+
+	descriptor.destroy_action = ReleaseLockedWindow;
+
+	descriptor.initial_size_x = 0.7f;
+	descriptor.initial_size_y = 0.6f;
+
+	system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
+}
+
+void InspectorDrawSandboxSettings(EditorState* editor_state, void* _data, UIDrawer* drawer) {
+	EDITOR_STATE(editor_state);
+
+	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
+	unsigned int inspector_index = GetInspectorIndex(drawer->system->GetWindowName(drawer->window_index));
+
+	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
+
+	// Initialize the ui_reflection_instance if we haven't done so
+	if (data->ui_reflection_instance_name.size == 0) {
+		ECS_STACK_CAPACITY_STREAM(char, ui_reflection_name, 128);
+		UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
+
+		unsigned int current_index = 0;
+		GetSandboxUIWindowName(current_index, ui_reflection_name);
+		// Try the UI reflection instance indices until we get a free slot
+		UIReflectionInstance* instance = ui_drawer->GetInstancePtr(ui_reflection_name.buffer);
+		while (instance != nullptr) {
+			// Try again with the current_index
+			ui_reflection_name.size = 0;
+			GetSandboxUIWindowName(current_index, ui_reflection_name);
+
+			instance = ui_drawer->GetInstancePtr(ui_reflection_name.buffer);
+			current_index++;
+		}
+
+		// Increase the index by 1 such that we include the '\0'
+		ui_reflection_name.size++;
+		void* allocation = editor_state->editor_allocator->Allocate(sizeof(char) * ui_reflection_name.size);
+		ui_reflection_name.CopyTo(allocation);
+
+		data->ui_reflection_instance_name = { allocation, ui_reflection_name.size - 1 };
+		instance = ui_drawer->CreateInstance(data->ui_reflection_instance_name.buffer, STRING(WorldDescriptor));
+
+		WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(editor_state, sandbox_index);
+		memcpy(&data->ui_descriptor, sandbox_descriptor, sizeof(data->ui_descriptor));
+
+		// Bind the pointers
+		ui_drawer->BindInstancePtrs(instance, &data->ui_descriptor);
+
+		const size_t ALLOCATOR_SIZE = ECS_KB;
+		data->runtime_settings_allocator = LinearAllocator(editor_allocator->Allocate(ALLOCATOR_SIZE), ALLOCATOR_SIZE);
+
+		data->last_write_descriptor = 0;
+		data->collapsing_runtime_state = false;
+		data->collapsing_module_state = false;
+	}
+
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_CONFIG, drawer->color_theme.text, drawer->color_theme.theme);
+
+	UIDrawConfig config;
+
+	ECS_STACK_CAPACITY_STREAM(char, sandbox_window_name, 128);
+	GetSandboxUIWindowName(sandbox_index, sandbox_window_name);
+	sandbox_window_name.AddStream(" Settings");
+	sandbox_window_name[sandbox_window_name.size] = '\0';
+	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox_window_name.buffer);
+	drawer->NextRow();
+
+	// Display a warning if there is no graphics module or there are multiple
+	ECS_STACK_CAPACITY_STREAM(unsigned int, graphics_module_indices, 128);
+	GetSandboxGraphicsModules(editor_state, sandbox_index, graphics_module_indices);
+	if (graphics_module_indices.size == 0) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no graphics module assigned.");
+		drawer->NextRow();
+	}
+	else if (graphics_module_indices.size > 1) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There are multiple graphics modules assigned.");
+		drawer->NextRow();
+	}
+
+	drawer->CollapsingHeader("Modules", &data->collapsing_module_state, [&]() {
+		// Display the count of modules in use
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+		ECS_STACK_CAPACITY_STREAM(char, in_use_stream, 256);
+		in_use_stream.Copy("In use: ");
+		function::ConvertIntToChars(in_use_stream, sandbox->modules_in_use.size);
+		drawer->Text(in_use_stream);
+		drawer->NextRow();
+
+		UIDrawConfig module_config;
+		UIConfigComboBoxPrefix combo_prefix;
+		combo_prefix.prefix = "Configuration";
+		module_config.AddFlag(combo_prefix);
+
+		struct ComboBoxCallbackData {
+			EditorState* editor_state;
+		};
+
+		auto combo_callback_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			ComboBoxCallbackData* data = (ComboBoxCallbackData*)_data;
+			SaveEditorSandboxFile(data->editor_state);
+		};
+
+		ComboBoxCallbackData callback_data = { editor_state };
+		UIConfigComboBoxCallback combo_callback;
+		combo_callback.handler = { combo_callback_action, &callback_data, sizeof(callback_data) };
+		module_config.AddFlag(combo_callback);
+
+		// Push the pattern for unique combo names
+		drawer->PushIdentifierStackStringPattern();
+
+		struct RemoveModuleActionData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+			unsigned int in_module_index;
+		};
+
+		auto remove_module_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			RemoveModuleActionData* data = (RemoveModuleActionData*)_data;
+			RemoveSandboxModuleInStream(data->editor_state, data->sandbox_index, data->in_module_index);
+
+			// Save the sandbox file as well
+			SaveEditorSandboxFile(data->editor_state);
+		};
+
+		struct ActivateDeactivateData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+			unsigned int in_stream_index;
+		};
+
+		auto activate_deactivate_button = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			ActivateDeactivateData* data = (ActivateDeactivateData*)_data;
+			if (IsSandboxModuleDeactivatedInStream(data->editor_state, data->sandbox_index, data->in_stream_index)) {
+				ActivateSandboxModuleInStream(data->editor_state, data->sandbox_index, data->in_stream_index);
+			}
+			else {
+				DeactivateSandboxModuleInStream(data->editor_state, data->sandbox_index, data->in_stream_index);
+			}
+
+			SaveEditorSandboxFile(data->editor_state);
+		};
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, module_display_order, 64);
+		module_display_order.size = sandbox->modules_in_use.size;
+		function::MakeSequence(module_display_order);
+
+		for (unsigned int index = 0; index < graphics_module_indices.size; index++) {
+			for (unsigned int subindex = 0; subindex < module_display_order.size; subindex++) {
+				if (module_display_order[subindex] == graphics_module_indices[index]) {
+					module_display_order.Swap(index, subindex);
+				}
+			}
+		}
+
+		// Draw the modules in use, first the graphics modules	
+		for (unsigned int index = 0; index < module_display_order.size; index++) {
+			unsigned int in_stream_index = module_display_order[index];
+
+			// Draw the remove X button
+			RemoveModuleActionData remove_data;
+			remove_data.editor_state = editor_state;
+			remove_data.in_module_index = index;
+			remove_data.sandbox_index = sandbox_index;
+			drawer->SpriteButton(UI_CONFIG_MAKE_SQUARE, module_config, { remove_module_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X);
+
+			bool is_graphics_module = IsGraphicsModule(editor_state, sandbox->modules_in_use[in_stream_index].module_index);
+			const wchar_t* module_texture = is_graphics_module ? GRAPHICS_MODULE_TEXTURE : ECS_TOOLS_UI_TEXTURE_MODULE;
+
+			const size_t CONFIGURATION = UI_CONFIG_MAKE_SQUARE;
+			const wchar_t* status_texture = nullptr;
+			Color status_color;
+
+			const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[in_stream_index].module_index, sandbox->modules_in_use[in_stream_index].module_configuration);
+			switch (info->load_status) {
+			case EDITOR_MODULE_LOAD_GOOD:
+				status_texture = ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK;
+				status_color = ECS_COLOR_GREEN;
+				break;
+			case EDITOR_MODULE_LOAD_OUT_OF_DATE:
+				status_texture = ECS_TOOLS_UI_TEXTURE_CLOCK;
+				status_color = ECS_COLOR_YELLOW;
+				break;
+			case EDITOR_MODULE_LOAD_FAILED:
+				status_texture = ECS_TOOLS_UI_TEXTURE_MINUS;
+				status_color = ECS_COLOR_RED;
+				break;
+			default:
+				ECS_ASSERT(false, "Invalid load status for module");
+			}
+
+			status_color.alpha = IsSandboxModuleDeactivatedInStream(editor_state, sandbox_index, index) ? 100 : 255;
+
+			ActivateDeactivateData activate_deactivate_data = { editor_state, sandbox_index, index };
+			drawer->SpriteButton(CONFIGURATION, module_config, { activate_deactivate_button, &activate_deactivate_data, sizeof(activate_deactivate_data) }, module_texture, status_color);
+			drawer->SpriteRectangle(CONFIGURATION, module_config, status_texture, status_color);
+
+			Stream<wchar_t> module_library = editor_state->project_modules->buffer[sandbox->modules_in_use[in_stream_index].module_index].library_name;
+			drawer->TextLabelWide(UI_CONFIG_LABEL_TRANSPARENT, module_config, module_library);
+
+			float x_bound = drawer->GetCurrentPositionNonOffset().x;
+
+			drawer->PushIdentifierStackRandom(index);
+
+			drawer->ComboBox(
+				UI_CONFIG_ALIGN_ELEMENT_RIGHT | UI_CONFIG_COMBO_BOX_NO_NAME,
+				module_config,
+				"configuration", 
+				{ MODULE_CONFIGURATIONS, EDITOR_MODULE_CONFIGURATION_COUNT }, 
+				EDITOR_MODULE_CONFIGURATION_COUNT,
+				(unsigned char*)&sandbox->modules_in_use[in_stream_index].module_configuration
+			);
+
+			drawer->PopIdentifierStack();
+
+			drawer->NextRow();
+		}
+
+		drawer->PopIdentifierStack();
+
+		// The add button
+		CreateAddSandboxWindowData create_data;
+		create_data.editor_state = editor_state;
+		create_data.sandbox_index = sandbox_index;
+		drawer->Button("Add Module", { CreateAddSandboxWindow, &create_data, sizeof(create_data), ECS_UI_DRAW_SYSTEM });
+	});
+
+	drawer->CollapsingHeader("Runtime Settings", &data->collapsing_runtime_state, [&]() {
+		// Display all the available settings
+		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, available_settings, 128);
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+		// Reload the values if the lazy evaluation has finished
+		if (data->last_write_descriptor != sandbox->runtime_settings_last_write) {
+			memcpy(&data->ui_descriptor, GetSandboxWorldDescriptor(editor_state, sandbox_index), sizeof(data->ui_descriptor));
+			data->last_write_descriptor = sandbox->runtime_settings_last_write;
+		}
+
+		// Reset the linear allocator
+		data->runtime_settings_allocator.Clear();
+		GetSandboxAvailableRuntimeSettings(editor_state, available_settings, GetAllocatorPolymorphic(&data->runtime_settings_allocator));
+		if (available_settings.size == 0) {
+			drawer->Text("There are no available settings.");
+			drawer->NextRow();
+		}
+		else {
+			drawer->Text("Available runtime settings:");
+			drawer->NextRow();
+
+			struct SelectData {
+				DrawSandboxSettingsData* draw_data;
+				unsigned int sandbox_index;
+				Stream<wchar_t> path;
+			};
+
+			auto select_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				SelectData* data = (SelectData*)_data;
+				if (ChangeSandboxRuntimeSettings(data->draw_data->editor_state, data->sandbox_index, data->path)) {
+					const WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(data->draw_data->editor_state, data->sandbox_index);
+					memcpy(&data->draw_data->ui_descriptor, sandbox_descriptor, sizeof(*sandbox_descriptor));
+
+					// Save the sandbox file as well
+					SaveEditorSandboxFile(data->draw_data->editor_state);
+				}
+			};
+
+			UIDrawConfig config;
+			UIConfigWindowDependentSize dependent_size;
+			config.AddFlag(dependent_size);
+
+			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+			for (unsigned int index = 0; index < available_settings.size; index++) {
+				SelectData select_data = { data, sandbox_index, available_settings[index] };
+
+				size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_TRANSPARENT;
+				if (function::CompareStrings(available_settings[index], sandbox->runtime_settings)) {
+					configuration = function::ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
+				}
+
+				drawer->ButtonWide(configuration, config, available_settings[index], { select_action, &select_data, sizeof(select_data) });
+				drawer->NextRow();
+			}
+		}
+
+		drawer->CrossLine();
+
+		drawer->Text("Current Settings: ");
+		if (sandbox->runtime_settings.size > 0) {
+			drawer->TextWide(sandbox->runtime_settings);
+		}
+		else {
+			drawer->Text("No settings selected (default values)");
+		}
+
+		drawer->NextRow();
+
+		UIConfigWindowDependentSize dependent_size;
+		config.AddFlag(dependent_size);
+
+		editor_state->ui_reflection->DrawInstance(data->ui_reflection_instance_name.buffer, *drawer, config, UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+
+		struct SaveCallbackData {
+			DrawSandboxSettingsData* data;
+			unsigned int sandbox_index;
+		};
+
+		auto save_callback = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			SaveCallbackData* data = (SaveCallbackData*)_data;
+			if (ValidateWorldDescriptor(&data->data->ui_descriptor)) {
+				SetSandboxRuntimeSettings(data->data->editor_state, data->sandbox_index, data->data->ui_descriptor);
+				// If it errors it will report to the user.
+				SaveSandboxRuntimeSettings(data->data->editor_state, data->sandbox_index);
+			}
+			else {
+				EditorSetConsoleError("The current runtime setting values are not valid. Increase the global allocator size.");
+				// Copy the old values
+				memcpy(&data->data->ui_descriptor, GetSandboxWorldDescriptor(data->data->editor_state, data->sandbox_index), sizeof(data->data->ui_descriptor));
+			}
+		};
+
+		SaveCallbackData save_data;
+		save_data.data = data;
+		save_data.sandbox_index = sandbox_index;
+		drawer->Button("Save", { save_callback, &save_data, sizeof(save_data) });
+
+		UIConfigAbsoluteTransform default_transform;
+		default_transform.scale = drawer->GetLabelScale("Default");
+		default_transform.position = drawer->GetAlignedToRight(default_transform.scale.x);
+
+		auto default_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
+			data->ui_descriptor = GetDefaultWorldDescriptor();
+		};
+
+		config.flag_count = 0;
+		config.AddFlag(default_transform);
+		drawer->Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Default", { default_action, data, 0 });
+
+		drawer->NextRow();
+		drawer->CrossLine();
+	});
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -1123,7 +1726,7 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 	EditorState* editor_state = (EditorState*)window_data;
 
 	// Determine the index from the name
-	const char* window_name = drawer.system->GetWindowName(drawer.window_index);
+	Stream<char> window_name = drawer.system->GetWindowName(drawer.window_index);
 	unsigned int inspector_index = GetInspectorIndex(window_name);
 
 	InspectorData* data = editor_state->inspector_manager.data.buffer + inspector_index;
@@ -1157,10 +1760,135 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 		);
 		drawer.current_row_y_scale = zoomed_icon_size;
 
-		if (data->draw_function != nullptr) {
-			data->draw_function(editor_state, data->draw_data, &drawer);
+		const char* COMBO_PREFIX = "Sandbox: ";
+
+		unsigned int sandbox_count = editor_state->sandboxes.size;
+
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_labels, sandbox_count);
+		// We need only to convert the sandbox indices. We will use a prefix to indicate that it is the sandbox index
+		ECS_STACK_CAPACITY_STREAM(char, converted_labels, 128);
+		for (unsigned int index = 0; index < sandbox_count; index++) {
+			combo_labels[index].buffer = converted_labels.buffer + converted_labels.size;
+			combo_labels[index].size = function::ConvertIntToChars(converted_labels, index);
+			// The last character was a '\0' but it is not included in the size
+			converted_labels.size++;
+		}
+		combo_labels.size = sandbox_count;
+
+		// The final positions will be set inside the if
+		UIConfigAbsoluteTransform combo_transform;
+		combo_transform.position.y = drawer.GetCurrentPositionNonOffset().y;
+
+		float square_scale = drawer.GetSquareScale(drawer.layout.default_element_y).x;
+		UIConfigAbsoluteTransform cog_transform;
+
+		if (sandbox_count > 0) {
+			float combo_size = drawer.ComboBoxDefaultSize(combo_labels, { nullptr, 0 }, COMBO_PREFIX);
+
+			combo_transform.position.x = drawer.GetAlignedToRight(combo_size).x;
+			combo_transform.scale = { combo_size, drawer.GetElementDefaultScale().y };
+
+			cog_transform.position.x = combo_transform.position.x - square_scale - drawer.layout.element_indentation;
+			cog_transform.position.y = combo_transform.position.y;
+			cog_transform.scale = { square_scale, drawer.layout.default_element_y };
 		}
 
+		if (data->draw_function == nullptr) {
+			ChangeInspectorToNothing(editor_state, inspector_index);
+		}
+
+		data->draw_function(editor_state, data->draw_data, &drawer);
+
+		// Draw now the combo for the sandbox
+		// We draw later on rather then at that moment because it will interfere with what's on the first row
+		if (sandbox_count > 0) {
+			drawer.current_row_y_scale = zoomed_icon_size;
+
+			// In order to detect the offset for the combo draw, look into the text stream and see when the text span on the first row
+			UISpriteVertex* text_sprites = drawer.HandleTextSpriteBuffer(0);
+			size_t text_sprite_count = *drawer.HandleTextSpriteCount(0);
+			size_t last_index = 0;
+			float row_y = text_sprites[0].position.y;
+			float initial_text_position = text_sprites[0].position.x;
+
+			while (last_index < text_sprite_count && text_sprites[last_index].position.y == row_y) {
+				last_index += 6;
+			}
+			last_index -= 6;
+			float2 span = GetTextSpan(Stream<UISpriteVertex>(text_sprites, last_index));
+
+			float cog_limit = initial_text_position + span.x + drawer.layout.element_indentation;
+			float offset = cog_limit - cog_transform.position.x;
+			if (offset > 0.0f) {
+				offset += drawer.region_render_offset.x;
+				cog_transform.position.x += offset;
+				combo_transform.position.x += offset;
+			}
+
+			// To the rightmost border draw the bound sandbox index
+			config.flag_count = 0;
+			config.AddFlag(combo_transform);
+
+			UIConfigComboBoxPrefix combo_prefix;
+			combo_prefix.prefix = COMBO_PREFIX;
+			config.AddFlag(combo_prefix);
+
+			// We need to notify with a callback that the target sandbox has changed such that the inspector is reset
+			struct ComboCallbackData {
+				EditorState* editor_state;
+				unsigned int inspector_index;
+			};
+
+			auto combo_callback_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				ComboCallbackData* data = (ComboCallbackData*)_data;
+				unsigned char new_sandbox = GetInspectorTargetSandbox(data->editor_state, data->inspector_index);
+				SetInspectorTargetSandbox(data->editor_state, data->inspector_index, new_sandbox);
+			};
+
+			ComboCallbackData combo_callback_data = { editor_state, inspector_index };
+			UIConfigComboBoxCallback combo_callback;
+			combo_callback.handler = { combo_callback_action, &combo_callback_data, sizeof(combo_callback_data) };
+
+			config.AddFlag(combo_callback);
+
+			// Draw the checkbox
+			// For the moment, cast the pointer to unsigned char even tho it is an unsigned int
+			// It behaves correctly since if the value stays lower than UCHAR_MAX
+			drawer.ComboBox(
+				UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y | UI_CONFIG_COMBO_BOX_CALLBACK,
+				config,
+				"Sandbox combo",
+				combo_labels,
+				sandbox_count,
+				(unsigned char*)&editor_state->inspector_manager.data[inspector_index].target_sandbox
+			);
+
+			config.flag_count = 0;
+			config.AddFlag(cog_transform);
+
+			struct OpenSandboxSettings {
+				EditorState* editor_state;
+				unsigned int inspector_index;
+			};
+
+			auto open_sandbox_settings = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+				
+				OpenSandboxSettings* data = (OpenSandboxSettings*)_data;
+				ChangeInspectorToSandboxSettings(data->editor_state, data->inspector_index);
+			};
+
+			OpenSandboxSettings open_data;
+			open_data = { editor_state, inspector_index };
+			drawer.SpriteButton(
+				UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_ALIGN_TO_ROW_Y,
+				config, 
+				{ open_sandbox_settings, &open_data, sizeof(open_data) },
+				ECS_TOOLS_UI_TEXTURE_COG
+			);
+		}
 	}
 }
 
@@ -1243,7 +1971,7 @@ unsigned int ChangeInspectorDrawFunction(
 		if (inspector_data->data_size > 0) {
 			editor_allocator->Deallocate(inspector_data->draw_data);
 		}
-		inspector_data->draw_data = function::AllocateMemory(editor_allocator, data, data_size);
+		inspector_data->draw_data = function::CopyNonZero(editor_allocator, data, data_size);
 		inspector_data->draw_function = functions.draw_function;
 		inspector_data->clean_function = functions.clean_function;
 		inspector_data->data_size = data_size;
@@ -1358,26 +2086,37 @@ void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsi
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToGraphicsModule(EditorState* editor_state, unsigned int inspector_index) {
-	ChangeInspectorToModule(editor_state, GRAPHICS_MODULE_INDEX);
-	
-	/*DrawModuleData draw_data;
-	draw_data.linear_allocator = nullptr;
-	draw_data.module_name = editor_state->project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name;
-	draw_data.window_index = 0;
-	
-	ChangeInspectorDrawFunction(
+void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+{
+	DrawSandboxSettingsData data;
+	data.editor_state = editor_state;
+	data.ui_reflection_instance_name = { nullptr, 0 };
+	unsigned int matched_inspector_index = ChangeInspectorDrawFunction(
 		editor_state,
 		inspector_index,
-		{ InspectorDrawModule, InspectorDrawModuleClean },
-		&draw_data,
-		sizeof(draw_data)
-	);*/
+		{ InspectorDrawSandboxSettings, InspectorDrawSandboxSettingsClean },
+		&data,
+		sizeof(data),
+		sandbox_index
+	);
+
+	if (matched_inspector_index == -1 && sandbox_index != -1) {
+		// Create a new inspector instance and set it to the sandbox with the draw on the settings
+		matched_inspector_index = CreateInspectorInstance(editor_state);
+		CreateInspectorDockspace(editor_state, matched_inspector_index);
+		SetInspectorTargetSandbox(editor_state, matched_inspector_index, sandbox_index);
+		ChangeInspectorToSandboxSettings(editor_state, matched_inspector_index);
+	}
+
+	// Set the new active window to be this inspector
+	ECS_STACK_CAPACITY_STREAM(char, inspector_window_name, 128);
+	GetInspectorName(matched_inspector_index, inspector_window_name);
+	editor_state->ui_system->SetActiveWindow(inspector_window_name);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index)
+unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index)
 {
 	return editor_state->inspector_manager.data[inspector_index].target_sandbox;
 }
@@ -1403,6 +2142,17 @@ void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int mod
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+{
+	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
+	// Reset the draw to nothing - some windows are dependent on the sandbox and changing it without anouncing
+	// them can result in inconsistent results
+
+	ChangeInspectorToNothing(editor_state, inspector_index);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_index)
 {
 	CleanInspectorData(editor_state, inspector_index);
@@ -1417,7 +2167,7 @@ void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_
 		editor_state->inspector_manager.data.RemoveSwapBack(inspector_index);
 		// Update the window name for the swapped inspector
 		unsigned int swapped_inspector = editor_state->inspector_manager.data.size;
-		editor_state->ui_system->ChangeWindowNameFromIndex(ToStream(INSPECTOR_WINDOW_NAME), swapped_inspector, inspector_index);
+		editor_state->ui_system->ChangeWindowNameFromIndex(INSPECTOR_WINDOW_NAME, swapped_inspector, inspector_index);
 	}
 	else if (editor_state->inspector_manager.data.size > 0) {
 		editor_state->inspector_manager.data.size--;
@@ -1426,9 +2176,8 @@ void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetInspectorIndex(const char* window_name) {
-	size_t name_size = strlen(window_name);
-	size_t current_index = name_size - 1;
+unsigned int GetInspectorIndex(Stream<char> window_name) {
+	size_t current_index = window_name.size - 1;
 
 	unsigned int number = 0;
 	while (function::IsNumberCharacter(window_name[current_index])) {
@@ -1444,7 +2193,7 @@ unsigned int GetInspectorIndex(const char* window_name) {
 
 void GetInspectorName(unsigned int inspector_index, CapacityStream<char>& inspector_name)
 {
-	inspector_name.AddStreamSafe(ToStream(INSPECTOR_WINDOW_NAME));
+	inspector_name.AddStreamSafe(INSPECTOR_WINDOW_NAME);
 	function::ConvertIntToChars(inspector_name, inspector_index);
 }
 
@@ -1520,6 +2269,14 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 			editor_state->inspector_manager.data[index].target_sandbox = new_sandbox_index;
 		}
 	}
+
+	// If there is a window with the old sandbox index, change it to the new sandbox index
+	unsigned int old_sandbox_window = GetSandboxUIWindowIndex(editor_state, old_sandbox_index);
+	if (old_sandbox_window != -1) {
+		ECS_STACK_CAPACITY_STREAM(char, new_window_name, 128);
+		GetSandboxUIWindowName(new_sandbox_index, new_window_name);
+		editor_state->ui_system->SetWindowName(old_sandbox_index, new_window_name);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -1537,8 +2294,7 @@ void RegisterInspectorSandbox(EditorState* editor_state) {
 		editor_state->editor_allocator->Deallocate(old_stream.buffer);
 	}
 	else if (sandbox_count < editor_state->inspector_manager.round_robin_index.size) {
-		// A removal was done - allocate a new buffer and reroute inspectors on the 
-		// sandboxes removed
+		// A removal was done - allocate a new buffer and reroute inspectors on the sandboxes removed
 		Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
 		editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
 		// The count for actions independent of sandbox must be moved separately
@@ -1546,10 +2302,6 @@ void RegisterInspectorSandbox(EditorState* editor_state) {
 
 		editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
 		editor_state->editor_allocator->Deallocate(old_stream.buffer);
-
-		for (unsigned int index = sandbox_count; index < old_stream.size; index++) {
-			FixInspectorSandboxReference(editor_state, index, 0);
-		}
 		
 		// Fix any invalid round robin index
 		for (unsigned int index = 0; index < sandbox_count; index++) {
@@ -1558,9 +2310,20 @@ void RegisterInspectorSandbox(EditorState* editor_state) {
 				target_inspectors_for_module += editor_state->inspector_manager.data[subindex].target_sandbox == index;
 			}
 
-			editor_state->inspector_manager.round_robin_index[index] = editor_state->inspector_manager.round_robin_index[index] % target_inspectors_for_module;
+			if (target_inspectors_for_module > 0) {
+				editor_state->inspector_manager.round_robin_index[index] = editor_state->inspector_manager.round_robin_index[index] % target_inspectors_for_module;
+			}
+			else {
+				editor_state->inspector_manager.round_robin_index[index] = 0;
+			}
 		}
-		editor_state->inspector_manager.round_robin_index[sandbox_count] = editor_state->inspector_manager.round_robin_index[sandbox_count] % sandbox_count;
+
+		if (sandbox_count > 0) {
+			editor_state->inspector_manager.round_robin_index[sandbox_count] = editor_state->inspector_manager.round_robin_index[sandbox_count] % sandbox_count;
+		}
+		else {
+			editor_state->inspector_manager.round_robin_index[sandbox_count] = 0;
+		}
 	}
 }
 

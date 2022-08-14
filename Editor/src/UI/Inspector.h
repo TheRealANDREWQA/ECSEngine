@@ -8,6 +8,9 @@ constexpr const char* INSPECTOR_WINDOW_NAME = "Inspector ";
 
 struct EditorState;
 
+enum EDITOR_MODULE_LOAD_STATUS : unsigned char;
+
+// In the stack memory the first 4 bytes should be the inspector index
 void InspectorSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
 void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
@@ -29,19 +32,17 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 
 void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index = -1);
 
-void ChangeInspectorToGraphicsModule(EditorState* editor_state, unsigned int inspector_index = -1);
+// If inspector index is different from -1, it will change that inspector into the settings for the bound sandbox
+// If sandbox index is different from -1, it will find an inspector suitable or create one if it doesn't exist
+void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int inspector_index = -1, unsigned int sandbox_index = -1);
 
 // Returns the index of the sandbox that is being referenced by the inspector
-unsigned int GetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index);
+unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index);
 
-// Recreates the UI instances for the inspectors that target the settings
-// of the given module
-void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
+bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_index);
 
 // If the index is already known, can be used to directly index into the array
 void LockInspector(EditorState* editor_state, unsigned int inspector_index);
 
 // If the index is already known, can be used to directly index into the array
 void UnlockInspector(EditorState* editor_state, unsigned int inspector_index);
-
-bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_index);

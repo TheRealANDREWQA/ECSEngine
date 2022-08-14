@@ -10,7 +10,7 @@ ECS_TOOLS;
 void AllocateMemory(EditorState* editor_state, EditorEvent& editor_event, void* data, size_t data_size) {
 	EDITOR_STATE(editor_state);
 
-	editor_event.data = function::AllocateMemory(editor_allocator, data, data_size);
+	editor_event.data = function::CopyNonZero(editor_allocator, data, data_size);
 	editor_event.data_size = data_size;
 }
 

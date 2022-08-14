@@ -135,31 +135,57 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionField {
-			// If the string is not nullptr, then it returns true if the string appears in the tag
-			// If the string is nullptr, it returns true if the ECS_OMIT_FIELD_REFLECT is specified in the tag
-			// Else returns false in both cases
-			bool Skip(const char* string = nullptr) const;
+			// It returns true if the string appears in the tag, else returns false in both cases
+			bool Skip(Stream<char> string) const;
 
-			const char* name;
-			const char* definition;
-			const char* tag;
+			bool Is(Stream<char> string) const;
+
+			Stream<char> name;
+			Stream<char> definition;
+			Stream<char> tag;
 			ReflectionFieldInfo info;
+		};
+
+		struct ECSENGINE_API ReflectionEvaluation {
+			Stream<char> name;
+			double value;
 		};
 
 		struct ECSENGINE_API ReflectionType {
 			// If the tag is nullptr, it returns false. If it is set, it will check if the substring exists
-			bool HasTag(const char* string) const;
+			bool HasTag(Stream<char> string) const;
 
-			const char* name;
-			const char* tag;
+			// Does a CompareStrings, not a FindFirstToken
+			bool IsTag(Stream<char> string) const;
+
+			// Returns DBL_MAX if it doesn't exist
+			double HasEvaluation(Stream<char> name) const;
+
+			// Copies everything that needs to be copied into this buffer
+			ReflectionType Copy(uintptr_t& ptr) const;
+
+			Stream<char> name;
+			Stream<char> tag;
 			Stream<ReflectionField> fields;
+			Stream<ReflectionEvaluation> evaluations;
 			unsigned int folder_hierarchy_index;
+			unsigned int byte_size;
+			unsigned int alignment;
 		};
 
 		struct ReflectionEnum {
-			const char* name;
-			Stream<const char*> fields;
+			// Copies everything that needs to be copied into this buffer
+			ReflectionEnum Copy(uintptr_t& ptr) const;
+
+			Stream<char> name;
+			Stream<Stream<char>> fields;
 			unsigned int folder_hierarchy_index;
+		};
+
+		struct ReflectionConstant {
+			Stream<char> name;
+			double value;
+			unsigned int folder_hierarchy;
 		};
 
 		struct ReflectionContainerTypeMatchData {

@@ -30,11 +30,8 @@ namespace ECSEngine {
 			}
 
 			// Write the name of the field and then the actual type
+			fields[index].name.CopyTo(stream);
 			char* character_stream = (char*)stream;
-			size_t name_size = strlen(fields[index].name);
-			memcpy(character_stream, fields[index].name, name_size * sizeof(char));
-			character_stream += name_size;
-			stream += name_size;
 
 			// The type string follows
 			character_stream[0] = ' ';
@@ -115,7 +112,7 @@ namespace ECSEngine {
 			basic_type = fields[index].character_stream ? ReflectionBasicFieldType::Enum : fields[index].basic_type;
 
 			// Write the name of the field
-			total_size += strlen(fields[index].name) * sizeof(char);
+			total_size += fields[index].name.size * sizeof(char);
 
 			// Next is the type enclosed in parantheses and 2 spaces - one before the type and another after it
 			total_size += GetReflectionBasicFieldTypeStringSize(basic_type) + 4 * sizeof(char);
@@ -248,7 +245,7 @@ namespace ECSEngine {
 				}
 
 				// If another new line is found, check to see that the end deserialize_string is here
-				if (!function::CompareStrings(Stream<char>(second_last_new_line + 1, last_new_line - second_last_new_line), ToStream(ECS_END_TEXT_SERIALIZE_STRING))) {
+				if (!function::CompareStrings(Stream<char>(second_last_new_line + 1, last_new_line - second_last_new_line), ECS_END_TEXT_SERIALIZE_STRING)) {
 					// If it's not, the file is corrupted
 					return ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS;
 				}

@@ -15,6 +15,10 @@ namespace ECSEngine {
 
 	ResourceIdentifier::ResourceIdentifier(Stream<void> identifier) : ptr(identifier.buffer), size(identifier.size) {}
 
+	ResourceIdentifier::ResourceIdentifier(Stream<char> identifier) : ptr(identifier.buffer), size(identifier.size) {}
+
+	ResourceIdentifier::ResourceIdentifier(Stream<wchar_t> identifier) : ptr(identifier.buffer), size(identifier.size * sizeof(wchar_t)) {}
+
 	// ------------------------------------------------------------------------------------------------------------
 
 	bool ResourceIdentifier::operator == (const ResourceIdentifier& other) const {
@@ -52,6 +56,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < size; index++) {
 			sum += string[index] * index;
 		}
+
 		return sum * (unsigned int)size;
 	}
 

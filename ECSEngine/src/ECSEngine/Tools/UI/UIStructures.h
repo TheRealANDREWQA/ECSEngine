@@ -534,11 +534,11 @@ namespace ECSEngine {
 			UIElementTransform transform;
 			WindowTable table;
 			UIWindowDrawerDescriptor* descriptors;
-			char* name;
+			Stream<char> name;
 			void* window_data;
 			size_t window_data_size;
 			Stream<UISpriteVertex> name_vertex_buffer;
-			UIDynamicStream<const char*> draw_element_names;
+			UIDynamicStream<Stream<char>> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
 			HashTableDefault<UIWindowDynamicResource> dynamic_resources;
 			WindowDraw draw;
@@ -569,7 +569,7 @@ namespace ECSEngine {
 			float initial_position_y;
 			float initial_size_x;
 			float initial_size_y;
-			const char* window_name;
+			Stream<char> window_name;
 			void* window_data = nullptr;
 			size_t window_data_size = 0;
 			WindowDraw draw = nullptr;
@@ -657,7 +657,7 @@ namespace ECSEngine {
 			bool destroy_at_release = false;
 			bool reset_when_window_is_destroyed = false;
 			bool deallocate_name = false;
-			const char* name;
+			Stream<char> name;
 			bool* flag_destruction = nullptr;
 		};
 
@@ -679,7 +679,7 @@ namespace ECSEngine {
 			Color text_color = ECS_TOOLS_UI_TEXT_COLOR;
 			float2 font_size = { ECS_TOOLS_UI_FONT_SIZE * ECS_TOOLS_UI_FONT_X_FACTOR, ECS_TOOLS_UI_FONT_SIZE };
 			float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING;
-			const char* text = nullptr;
+			Stream<char> text = { nullptr, 0 };
 			bool vertical_text = false;
 			bool horizontal_cull = false;
 			bool vertical_cull = false;
@@ -734,14 +734,14 @@ namespace ECSEngine {
 			bool default_background = true;
 			bool default_border = true;
 			bool default_font = true;
-			bool2 offset_scale = {false, false};
-			Color background_color;
-			Color border_color;
-			float2 border_size;
-			Color font_color;
-			Color unavailable_font_color;
-			float2 font_size;
-			float character_spacing;
+			bool2 offset_scale = {false, false}; // With this you can offset with the scale of the hoverable region
+			Color background_color = Color(0, 0, 0); // Uses default
+			Color border_color = Color(0, 0, 0); // Uses default
+			float2 border_size = { 0.0f, 0.0f }; // Uses default
+			Color font_color = Color(0, 0, 0); // Uses default
+			Color unavailable_font_color = Color(0, 0, 0); // Uses default
+			float2 font_size = { 0.0f, 0.0f }; // Uses default
+			float character_spacing = 0.0f; // Uses default
 			float next_row_offset = 0.0f;
 			float2 offset = { 0.0f, 0.0f };
 			bool* unavailable_rows = nullptr;
@@ -750,8 +750,8 @@ namespace ECSEngine {
 			unsigned int* previous_hoverable = nullptr;
 		};
 
-		struct ECSENGINE_API UITextTooltipHoverableData {
-			const char* characters;
+		struct UITextTooltipHoverableData {
+			Stream<char> characters;
 			UITooltipBaseData base;
 		};
 

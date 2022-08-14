@@ -6,6 +6,15 @@
 
 using namespace ECSEngine;
 
+Stream<char> PROJECT_BACKUP_FILES_NAMES[] = {
+	"UI File",
+	"Project File",
+	"Modules File",
+	"Module Settings Files",
+	"Runtime Settings Files",
+	"Sandbox File"
+};
+
 // Every 20 minutes save a backup of the project
 #define BACKUP_PROJECT_LAZY_COUNTER (1000 * 60 * 20)
 
@@ -46,7 +55,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 
 	auto error_lambda = [&](Stream<char> reason) {
 		ECS_STACK_CAPACITY_STREAM(char, message, 1024);
-		message.Copy(ToStream("An error has occured when trying to save a project backup. Reason: "));
+		message.Copy("An error has occured when trying to save a project backup. Reason: ");
 		message.AddStreamSafe(reason);
 
 		EditorSetConsoleError(message);
@@ -60,24 +69,24 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	// Create the folder
 	bool success = CreateFolder(path);
 	if (!success) {
-		EditorSetConsoleError(ToStream("An error has occured when a project backup was saved. The folder could not be created."));
+		EditorSetConsoleError("An error has occured when a project backup was saved. The folder could not be created.");
 		return false;
 	}
 
 	// Copy the .ecsproj file
 	ECS_STACK_CAPACITY_STREAM(wchar_t, file_or_folder_to_copy, 512);
-	GetProjectFilePath(file_or_folder_to_copy, editor_state->project_file);
+	GetProjectFilePath(editor_state->project_file, file_or_folder_to_copy);
 	success = FileCopy(file_or_folder_to_copy, path, true);
 	if (!success) {
-		error_lambda(ToStream("Could not copy the project file."));
+		error_lambda("Could not copy the project file.");
 		return false;
 	}
 
 	file_or_folder_to_copy.size = 0;
-	GetProjectModuleFilePath(editor_state, file_or_folder_to_copy);
+	GetProjectModulesFilePath(editor_state, file_or_folder_to_copy);
 	success = FileCopy(file_or_folder_to_copy, path, true);
 	if (!success) {
-		error_lambda(ToStream("Could not copy the module file."));
+		error_lambda("Could not copy the module file.");
 		return false;
 	}
 
@@ -86,7 +95,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	GetProjectUIFolder(editor_state, file_or_folder_to_copy);
 	success = FolderCopy(file_or_folder_to_copy, path);
 	if (!success) {
-		error_lambda(ToStream("An error has occured when a project backup was saved. The project's UI folder could not be copied."));
+		error_lambda("An error has occured when a project backup was saved. The project's UI folder could not be copied.");
 		return false;
 	}
 
@@ -94,7 +103,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	GetProjectConfigurationFolder(editor_state, file_or_folder_to_copy);
 	success = FolderCopy(file_or_folder_to_copy, path);
 	if (!success) {
-		error_lambda(ToStream("An error has occured when a project backup was saved. The project's Configuration folder could not be copied."));
+		error_lambda("An error has occured when a project backup was saved. The project's Configuration folder could not be copied.");
 		return false;
 	}
 
@@ -125,8 +134,8 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, to_path, 512);
 
-	auto rename_file_or_folder_temporary = [](Stream<wchar_t> to_path, const wchar_t* temporary_name) {
-		bool rename_success = RenameFolderOrFile(to_path, ToStream(temporary_name));
+	auto rename_file_or_folder_temporary = [](Stream<wchar_t> to_path, Stream<wchar_t> temporary_name) {
+		bool rename_success = RenameFolderOrFile(to_path, temporary_name);
 		if (!rename_success) {
 			ECS_FORMAT_TEMP_STRING(error_message, "An error has occured when trying to rename a file/folder to temporary during backup. The file/folder {#} was not recovered from the backup.", to_path);
 			EditorSetConsoleWarn(error_message);
@@ -134,9 +143,10 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		return rename_success;
 	};
 
-	auto recover_file_or_folder_temporary = [](Stream<wchar_t> to_path, const wchar_t* temporary_name) {
-		Stream<wchar_t> temp_name = ToStream(temporary_name);
+	auto recover_file_or_folder_temporary = [](Stream<wchar_t> to_path, Stream<wchar_t> temporary_name) {
+		Stream<wchar_t> temp_name = temporary_name;
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_temp_path, 512);
+
 		Stream<wchar_t> parent_path = function::PathParent(to_path);
 		absolute_temp_path.Copy(parent_path);
 		absolute_temp_path.Add(ECS_OS_PATH_SEPARATOR);
@@ -152,9 +162,10 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 		}
 	};
 
-	auto delete_file_or_folder_temporary = [](Stream<wchar_t> to_path, const wchar_t* temporary_name) {
-		Stream<wchar_t> temp_name = ToStream(temporary_name);
+	auto delete_file_or_folder_temporary = [](Stream<wchar_t> to_path, Stream<wchar_t> temporary_name) {
+		Stream<wchar_t> temp_name = temporary_name;
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_temp_path, 512);
+
 		Stream<wchar_t> parent_path = function::PathParent(to_path);
 		absolute_temp_path.Copy(parent_path);
 		absolute_temp_path.Add(ECS_OS_PATH_SEPARATOR);
@@ -200,14 +211,14 @@ bool LoadProjectBackup(const EditorState* editor_state, Stream<wchar_t> folder, 
 	};
 
 	auto get_project_file_path = [](const EditorState* editor_state, CapacityStream<wchar_t>& path) {
-		GetProjectFilePath(path, editor_state->project_file);
+		GetProjectFilePath(editor_state->project_file, path);
 	};
 
 	typedef void (*GetPath)(const EditorState* editor_state, CapacityStream<wchar_t>& path);
 	GetPath get_paths[PROJECT_BACKUP_COUNT] = {
 		GetProjectUIFolder,
 		get_project_file_path,
-		GetProjectModuleFilePath,
+		GetProjectModulesFilePath,
 		GetProjectConfigurationFolder
 	};
 

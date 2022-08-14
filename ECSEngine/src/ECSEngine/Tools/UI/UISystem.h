@@ -421,8 +421,7 @@ namespace ECSEngine {
 				DockspaceType type
 			);
 
-			// It returns a list of streams that will be needed when finishing the drawer element
-			void AddWindowDrawerElement(unsigned int window_index, const char* name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
+			void AddWindowDrawerElement(unsigned int window_index, Stream<char> name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
 
 			void AddFrameHandler(UIActionHandler handler);
 
@@ -587,7 +586,7 @@ namespace ECSEngine {
 				bool invert_order = false
 			);
 
-			void CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_view);
+			void CreateSpriteTexture(Stream<wchar_t> filename, UISpriteTexture* sprite_view);
 
 			void CreateDockspaceBorder(
 				UIDockspace* dockspace, 
@@ -712,7 +711,7 @@ namespace ECSEngine {
 
 			// Returns whether or not the window was found
 			template<bool destroy_dockspace_if_fixed = true>
-			bool DestroyWindowIfFound(const char* name);
+			bool DestroyWindowIfFound(Stream<char> name);
 
 			void DestroyNonReferencedWindows();
 
@@ -766,7 +765,7 @@ namespace ECSEngine {
 				unsigned int border_index,
 				float mask,
 				bool is_open,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_LATE
 			);
 
 			void DrawDockingGizmo(
@@ -846,7 +845,7 @@ namespace ECSEngine {
 			// returns the size of the window
 			float2 DrawToolTipSentence(
 				ActionData* action_data,
-				const char* characters,
+				Stream<char> characters,
 				UITooltipBaseData* data
 			);
 
@@ -854,26 +853,24 @@ namespace ECSEngine {
 			// should have different rows separated by \n
 			float2 DrawToolTipSentenceWithTextToRight(
 				ActionData* action_data,
-				const char* aligned_to_left_text,
-				const char* aligned_to_right_text,
+				Stream<char> aligned_to_left_text,
+				Stream<char> aligned_to_right_text,
 				UITooltipBaseData* data
 			);
 
 			float2 DrawToolTipSentenceSize(
-				const char* characters,
+				Stream<char> characters,
 				UITooltipBaseData* data
 			);
 			
 			//aligned to left and right text characters pointers should have different rows separated by \n
 			float2 DrawToolTipSentenceWithTextToRightSize(
-				const char* aligned_to_left_text,
-				const char* aligned_to_right_text,
+				Stream<char> aligned_to_left_text,
+				Stream<char> aligned_to_right_text,
 				UITooltipBaseData* data
 			);
 
-			bool ExistsWindowResource(unsigned int window_index, const char* name) const;
-
-			bool ExistsWindowResource(unsigned int window_index, Stream<void> identifier) const;
+			bool ExistsWindowResource(unsigned int window_index, Stream<char> name) const;
 
 			void EvictOutdatedTextures();
 
@@ -897,6 +894,8 @@ namespace ECSEngine {
 
 			unsigned int FindCharacterType(char character, CharacterType& character_type) const;
 
+			void* FindWindowResource(unsigned int window_index, Stream<char> name) const;
+
 			void* FindWindowResource(unsigned int window_index, const void* identifier, unsigned int identifier_size) const;
 
 			void FixFixedDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer);
@@ -905,8 +904,7 @@ namespace ECSEngine {
 
 			template<bool horizontal = true>
 			ECSENGINE_API float2 GetTextSpan(
-				const char* characters,
-				unsigned int character_count,
+				Stream<char> characters,
 				float font_size_x,
 				float font_size_y,
 				float character_spacing
@@ -1139,7 +1137,7 @@ namespace ECSEngine {
 				unsigned int& count
 			) const;
 
-			const char* GetDrawElementName(unsigned int window_index, unsigned int index) const;
+			Stream<char> GetDrawElementName(unsigned int window_index, unsigned int index) const;
 
 			ActionData GetFilledActionData(unsigned int window_index);
 
@@ -1153,13 +1151,11 @@ namespace ECSEngine {
 
 			unsigned int GetWindowFromDockspace(float2 mouse_position, unsigned int dockspace_index, DockspaceType type) const;
 
-			unsigned int GetWindowFromName(const char* name) const;
-
 			unsigned int GetWindowFromName(Stream<char> name) const;
 
 			WindowTable* GetWindowTable(unsigned int window_index);
 
-			const char* GetWindowName(unsigned int window_index) const;
+			Stream<char> GetWindowName(unsigned int window_index) const;
 
 			UIWindow* GetWindowPointer(unsigned int window_index);
 
@@ -1183,6 +1179,11 @@ namespace ECSEngine {
 
 			// Advances the next sprite texture
 			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type);
+
+			// Returns the index of the dynamic element, -1 if it doesn't find it
+			unsigned int GetWindowDrawerElement(unsigned int window_index, Stream<char> identifier) const;
+
+			UIWindowDynamicResource* GetWindowDrawerElement(unsigned int window_index, unsigned int index);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id);
 
@@ -1228,11 +1229,7 @@ namespace ECSEngine {
 
 			void HandleFrameHandlers();
 
-			unsigned int HashString(const char* string) const;
-
-			unsigned int HashString(LPCWSTR string) const;
-
-			void IncrementWindowDynamicResource(unsigned int window_index, const char* name);
+			void IncrementWindowDynamicResource(unsigned int window_index, Stream<char> name);
 
 			void InitializeDefaultDescriptors();
 
@@ -1241,8 +1238,6 @@ namespace ECSEngine {
 			UIDrawerDescriptor InitializeDrawerDescriptorReferences(unsigned int window_index) const;
 
 			void InitializeWindowDraw(unsigned int index, WindowDraw initialize);
-
-			void InitializeWindowDraw(const char* window_name, WindowDraw initialize);
 
 			void InitializeWindowDraw(Stream<char> window_name, WindowDraw initialize);
 
@@ -1270,12 +1265,10 @@ namespace ECSEngine {
 			// Returns whether or not the window is currently drawing
 			bool IsWindowDrawing(unsigned int window_index);
 			
-			bool LoadUIFile(const wchar_t* filename, Stream<const char*>& window_names);
-
 			bool LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names);
 
 			// returns whether or not a valid file was found
-			bool LoadDescriptorFile(const wchar_t* filename);
+			bool LoadDescriptorFile(Stream<wchar_t> filename);
 
 			void MoveDockspaceBorder(UIDockspaceBorder* border, unsigned int border_index, float delta_x, float delta_y);
 
@@ -1293,7 +1286,7 @@ namespace ECSEngine {
 
 			void PopFrameHandler();
 
-			void PopUpFrameHandler(const char* name, bool is_fixed, bool destroy_at_first_click = false, bool is_initialized = true, bool destroy_when_released = false);
+			void PopUpFrameHandler(Stream<char> name, bool is_fixed, bool destroy_at_first_click = false, bool is_initialized = true, bool destroy_when_released = false);
 
 			// Move the background dockspaces behind all other dockspaces
 			void PushBackgroundDockspace();
@@ -1306,7 +1299,7 @@ namespace ECSEngine {
 
 			void PushDestroyCallbackWindowHandler(unsigned int window_index, UIActionHandler handler);
 
-			void ReadFontDescriptionFile(const wchar_t* filename);
+			void ReadFontDescriptionFile(Stream<wchar_t> filename);
 
 			void RegisterFocusedWindowClickableAction(
 				float2 position, 
@@ -1339,9 +1332,19 @@ namespace ECSEngine {
 
 			void RemoveWindowMemoryResource(unsigned int window_index, unsigned int buffer_index);
 
-			void RemoveWindowDynamicResource(unsigned int window_index, const char* buffer);
+			void RemoveWindowDynamicResource(unsigned int window_index, Stream<char> buffer);
 
 			void RemoveWindowDynamicResource(unsigned int window_index, unsigned int index);
+
+			// Returns true if it found it, else false
+			bool RemoveWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* buffer);
+
+			// Return true if it found it, else false
+			bool RemoveWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier);
+
+			void ReplaceWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* old_buffer, void* new_buffer);
+
+			void ReplaceWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier old_identifier, ResourceIdentifier new_identifier);
 
 			void RemoveUnrestoredWindows();
 
@@ -1375,9 +1378,6 @@ namespace ECSEngine {
 				ECS_UI_BORDER_TYPE border,
 				DockspaceType dockspace_type
 			);
-
-			// This function is used to restore window actions and data after UI file load
-			void RestoreWindow(const char* window_name, const UIWindowDescriptor& descriptor);
 
 			// This function is used to restore window actions and data after UI file load
 			void RestoreWindow(Stream<char> window_name, const UIWindowDescriptor& descriptor);
@@ -1414,8 +1414,6 @@ namespace ECSEngine {
 			);
 
 			void SetActiveWindow(unsigned int index);
-
-			void SetActiveWindow(const char* name);
 
 			void SetActiveWindow(Stream<char> name);
 
@@ -1468,14 +1466,14 @@ namespace ECSEngine {
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = float2(0.0f, 0.0f),
 				float2 bottom_right_uv = float2(1.0f, 1.0f),
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// capable of handling rotated sprites
 			void SetSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
@@ -1483,14 +1481,14 @@ namespace ECSEngine {
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = {0.0f, 0.0f},
 				float2 bottom_right_uv = {1.0f, 1.0f},
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// capable of handling rotated sprites
 			void SetVertexColorSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
@@ -1498,14 +1496,14 @@ namespace ECSEngine {
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// capable of handling rotated sprites
 			void SetVertexColorSprite(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				float2 position,
 				float2 scale,
 				void** buffers,
@@ -1513,24 +1511,24 @@ namespace ECSEngine {
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// it multiplies by 6 the count
 			void SetSpriteCluster(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				unsigned int count,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			void SetSpriteTextureToDraw(
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// This method is used for sprites that are being loaded outside of the UISystem
@@ -1557,23 +1555,15 @@ namespace ECSEngine {
 
 			void SetWindowActions(unsigned int index, const UIWindowDescriptor& descriptor);
 
-			void SetWindowActions(const char* name, const UIWindowDescriptor& descriptor);
-
 			void SetWindowActions(Stream<char> name, const UIWindowDescriptor& descriptor);
 
 			void SetWindowDestroyAction(unsigned int index, UIActionHandler handler);
-
-			void SetWindowDestroyAction(const char* name, UIActionHandler handler);
 
 			void SetWindowDestroyAction(Stream<char> name, UIActionHandler handler);
 
 			void SetWindowPrivateAction(unsigned int index, UIActionHandler handler);
 
-			void SetWindowPrivateAction(const char* name, UIActionHandler handler);
-
 			void SetWindowPrivateAction(Stream<char> name, UIActionHandler handler);
-
-			void SetWindowName(unsigned int window_index, const char* name);
 
 			void SetWindowName(unsigned int window_index, Stream<char> name);
 
@@ -1700,7 +1690,7 @@ namespace ECSEngine {
 							dockspace->transform.scale.y -= difference;
 						}
 						else {
-							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_BOTTOM, type);
 						}
 					}
 				}
@@ -1710,9 +1700,9 @@ namespace ECSEngine {
 
 			void UpdateDockspace(unsigned int dockspace_index, DockspaceType dockspace_type);
 
-			bool WriteDescriptorsFile(const wchar_t* filename) const;
+			bool WriteDescriptorsFile(Stream<wchar_t> filename) const;
 
-			bool WriteUIFile(const wchar_t* filename, CapacityStream<char>& error_message) const;
+			bool WriteUIFile(Stream<wchar_t> filename, CapacityStream<char>& error_message) const;
 
 			//private:
 			Application* m_application;
@@ -1803,7 +1793,7 @@ namespace ECSEngine {
 
 		ECSENGINE_API void TooltipHoverable(ActionData* action_data);
 
-		ECSENGINE_API void TextTooltipAlignTextToRight(Stream<char>& current_text, const char* new_text, size_t total_characters);
+		ECSENGINE_API void TextTooltipAlignTextToRight(Stream<char>& current_text, Stream<char> new_text, size_t total_characters);
 
 		ECSENGINE_API void ReleaseLockedWindow(ActionData* action_data);
 

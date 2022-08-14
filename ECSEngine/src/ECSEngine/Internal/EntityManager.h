@@ -21,11 +21,6 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct ArchetypeQueryCache;
 
-	struct DeferredAction {
-		DataPointer data_and_type;
-		DebugInfo debug_info;
-	};
-
 	/*typedef void (*EntityManagerEventCallback)(EntityManager*, void*);
 
 	struct ECSENGINE_API EntityManagerEvent {
@@ -44,8 +39,6 @@ namespace ECSEngine {
 		EntityPool* entity_pool;
 		unsigned int deferred_action_capacity = ECS_ENTITY_MANAGER_DEFERRED_ACTION_CAPACITY;
 	};
-
-	using EntityManagerCommandStream = CapacityStream<DeferredAction>;
 
 	enum EntityManagerCopyEntityDataType {
 		// Splats the same value of the component to all entities
@@ -402,6 +395,9 @@ namespace ECSEngine {
 			unsigned int starting_parent_table_capacity = -1
 		);
 
+		// Returns the byte size of a component
+		unsigned short ComponentSize(Component component) const;
+
 		// ---------------------------------------------------------------------------------------------------
 
 		void DeleteEntityCommit(Entity entity);
@@ -678,6 +674,12 @@ namespace ECSEngine {
 
 		// Returns the indices of the archetypes that match the given query
 		Stream<unsigned short> GetQueryResults(unsigned int handle) const;
+
+		// It will return the components of that query
+		ArchetypeQuery ECS_VECTORCALL GetQueryComponents(unsigned int handle) const;
+
+		// It does both at the same time to avoid some checks
+		void GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const;
 
 		// Tag should only be the bit index, not the actual value
 		bool HasEntityTag(Entity entity, unsigned char tag) const;

@@ -52,7 +52,7 @@ namespace ECSEngine {
 
 		bool Pop(T& element) {
 			if (m_stack.size > 0) {
-				m_last_item = function::Select(m_last_item == 0, m_stack.capacity - 1, m_last_item - 1);
+				m_last_item = m_last_item == 0 ? m_stack.capacity - 1 : m_last_item - 1;
 				element = m_stack[m_last_item];
 				m_stack.size--;
 				return true;
@@ -64,11 +64,11 @@ namespace ECSEngine {
 			if (m_stack.size == m_stack.capacity) {
 				m_stack[m_first_item] = element;
 				m_last_item = m_first_item;
-				m_first_item = function::Select<unsigned int>(m_first_item == m_stack.capacity - 1, 0, m_first_item + 1);
+				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
 			}
 			else {
 				m_stack[m_last_item] = element;
-				m_last_item = function::Select<unsigned int>(m_first_item == m_stack.capacity - 1, 0, m_last_item + 1);
+				m_last_item = m_first_item == m_stack.capacity - 1 ? 0 : m_last_item + 1;
 				m_stack.size++;
 			}
 		}
@@ -77,11 +77,11 @@ namespace ECSEngine {
 			if (m_stack.size == m_stack.capacity) {
 				m_stack[m_first_item] = *element;
 				m_last_item = m_first_item;
-				m_first_item = function::Select<unsigned int>(m_first_item == m_stack.capacity - 1, 0, m_first_item + 1);
+				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
 			}
 			else {
 				m_stack[m_last_item] = *element;
-				m_last_item = function::Select<unsigned int>(m_first_item == m_stack.capacity - 1, 0, m_last_item + 1);
+				m_last_item = m_first_item == m_stack.capacity - 1 ? 0 : m_last_item + 1;
 				m_stack.size++;
 			}
 		}

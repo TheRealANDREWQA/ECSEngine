@@ -25,6 +25,7 @@ namespace ECSEngine {
 #define ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR 1.5f
 
 	struct GraphicsDescriptor {
+		HWND hWnd;
 		uint2 window_size;
 		MemoryManager* allocator;
 		DXGI_USAGE target_usage = 0;
@@ -321,11 +322,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API MemoryManager DefaultGraphicsAllocator(GlobalMemoryManager* manager);
 
+	// Returns how much memory it allocates in its initial allocation
+	ECSENGINE_API size_t DefaultGraphicsAllocatorSize();
+
 	/* It has an immediate and a deferred context. The deferred context can be used to generate CommandLists */
 	struct ECSENGINE_API Graphics
 	{
 	public:
-		Graphics(HWND hWnd, const GraphicsDescriptor* descriptor);
+		Graphics(const GraphicsDescriptor* descriptor);
 		// If the render target and the depth view are nullptr, it will not create any target or depth view. If the new allocator
 		// is nullptr, it will use the one from the graphics_to_copy
 		Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target = { nullptr }, DepthStencilView new_depth_view = { nullptr }, MemoryManager* new_allocator = nullptr);
@@ -902,7 +906,6 @@ namespace ECSEngine {
 				// The first one to acquire the lock - do the resizing or the flush of removals
 				if (do_resizing) {
 					// Spin wait while there are still readers
-					unsigned int read_count = m_internal_resources_reader_count.load(ECS_RELAXED);
 					SpinWait<'>'>(m_internal_resources_reader_count, (unsigned int)0);
 
 					// Commit the removals
@@ -926,8 +929,15 @@ namespace ECSEngine {
 					m_internal_resources_lock.wait_locked();
 					// Rerequest the position
 					write_index = m_internal_resources.RequestInt(1);
-					m_internal_resources[write_index] = internal_res;
-					m_internal_resources.FinishRequest(1);
+					if (write_index >= m_internal_resources.capacity) {
+						// Retry again
+						AddInternalResource(resource, debug_info);
+						return;
+					}
+					else {
+						m_internal_resources[write_index] = internal_res;
+						m_internal_resources.FinishRequest(1);
+					}
 				}
 			}
 			// Write into the internal resources

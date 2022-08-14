@@ -29,6 +29,9 @@ namespace ECSEngine {
 
 		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
 
+		// Copies the current contents into a new database using the allocator given
+		AssetDatabaseReference Copy(AllocatorPolymorphic allocator) const;
+
 		MeshMetadata* GetMesh(unsigned int index);
 
 		TextureMetadata* GetTexture(unsigned int index);
@@ -76,6 +79,8 @@ namespace ECSEngine {
 		// Increases the reference count of all assets by one
 		void IncrementReferenceCounts();
 
+		ECS_FIELDS_START_REFLECT;
+
 		ResizableStream<unsigned int> mesh_metadata;
 		ResizableStream<unsigned int> texture_metadata;
 		ResizableStream<unsigned int> gpu_buffer_metadata;
@@ -83,7 +88,10 @@ namespace ECSEngine {
 		ResizableStream<unsigned int> shader_metadata;
 		ResizableStream<unsigned int> material_asset;
 		ResizableStream<unsigned int> misc_asset;
-		AssetDatabase* database; ECS_OMIT_FIELD_REFLECT
+
+		AssetDatabase* database; ECS_SKIP_REFLECTION(static_assert(sizeof(AssetDatabase*) == 8))
+
+		ECS_FIELDS_END_REFLECT;
 	};
 
 }

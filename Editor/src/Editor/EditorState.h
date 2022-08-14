@@ -29,7 +29,9 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS {
 	EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_CREATE_DEFAULT_METAFILES,
-	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT
+	EDITOR_LAZY_EVALUATION_RESET_TASK_MANAGER,
+	EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS,
+	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT,
 };
 
 struct EditorState {
@@ -51,6 +53,10 @@ struct EditorState {
 
 	inline ECSEngine::Reflection::ReflectionManager* ReflectionManager() {
 		return ui_reflection->reflection;
+	}
+
+	inline ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() {
+		return module_reflection->reflection;
 	}
 
 	inline ECSEngine::HID::Mouse* Mouse() {

@@ -42,7 +42,7 @@ void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_
 void InitializeInspectorManager(EditorState* editor_state);
 
 // Determines the index of the inspector from its name
-unsigned int GetInspectorIndex(const char* window_name);
+unsigned int GetInspectorIndex(ECSEngine::Stream<char> window_name);
 
 // Returns the inspector name according to an index
 void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<char>& inspector_name);
@@ -53,4 +53,11 @@ void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<ch
 void RegisterInspectorSandbox(EditorState* editor_state);
 
 // All inspectors that point to old_sandbox_index will be rerouted to new_sandbox_index
+// It will also change the name of the sandbox window if there is one with that index
 void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_index, unsigned int new_sandbox_index);
+
+// Recreates the UI instances for the inspectors that target the settings
+// of the given module
+void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
+
+void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);

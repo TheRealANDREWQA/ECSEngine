@@ -22,7 +22,7 @@ namespace ECSEngine {
 
 		ECS_TEMP_STRING(current_path, 512);
 		ECS_TEMP_STRING(include_filename, 128);
-		Stream<char> include_filename_ascii = function::PathFilename(ToStream(filename), ECS_OS_PATH_SEPARATOR_ASCII_REL);
+		Stream<char> include_filename_ascii = function::PathFilename(filename, ECS_OS_PATH_SEPARATOR_ASCII_REL);
 		function::ConvertASCIIToWide(include_filename, include_filename_ascii);
 
 		struct SearchData {
@@ -35,14 +35,13 @@ namespace ECSEngine {
 		SearchData search_data = { data_pointer, byte_pointer, memory, include_filename };
 
 		// Search every directory for that file
-		auto search_file = [](const wchar_t* path, void* _data) {
+		auto search_file = [](Stream<wchar_t> path, void* _data) {
 			SearchData* data = (SearchData*)_data;
 
-			Stream<wchar_t> current_path = ToStream(path);
-			Stream<wchar_t> current_filename = function::PathFilename(current_path);
+			Stream<wchar_t> current_filename = function::PathFilename(path);
 
 			if (function::CompareStrings(current_filename, data->include_filename)) {
-				Stream<char> file_data = ReadWholeFileText(current_path, GetAllocatorPolymorphic(data->manager, ECS_ALLOCATION_TYPE::ECS_ALLOCATION_MULTI));
+				Stream<char> file_data = ReadWholeFileText(path, GetAllocatorPolymorphic(data->manager, ECS_ALLOCATION_MULTI));
 				if (file_data.buffer != nullptr) {
 					*data->byte_pointer = file_data.size;
 					*data->data_pointer = file_data.buffer;
@@ -52,7 +51,7 @@ namespace ECSEngine {
 			return true;
 		};
 
-		const wchar_t* extension[1] = { L".hlsli" };
+		Stream<wchar_t> extension[1] = { L".hlsli" };
 		*byte_pointer = 0;
 		for (size_t index = 0; index < shader_directory.size && *byte_pointer == 0; index++) {
 			ForEachFileInDirectoryRecursiveWithExtension(shader_directory[index], { &extension, std::size(extension) }, &search_data, search_file);

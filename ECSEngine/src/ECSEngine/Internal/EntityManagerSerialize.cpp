@@ -132,19 +132,12 @@ namespace ECSEngine {
 				// Write the pairs as shared instance, identifier size and at the end the buffers
 				// This is done like this in order to avoid on deserialization to read small chunks
 				// In this way all the pairs can be read at a time and then the identifiers
-				unsigned int named_instances_capacity = entity_manager->m_shared_components[index].named_instances.GetExtendedCapacity();
-				const ResourceIdentifier* identifiers = entity_manager->m_shared_components[index].named_instances.GetIdentifiers();
-
-				// The pairs of instance and sizes
-				for (unsigned int subindex = 0; subindex < named_instances_capacity; subindex++) {
-					if (entity_manager->m_shared_components[index].named_instances.IsItemAt(subindex)) {
-						SharedInstance instance = entity_manager->m_shared_components[index].named_instances.GetValueFromIndex(subindex);
-						Write<true>(&shared_component_buffering_instances_ptr, &instance, sizeof(instance));
-						// It will make it easier to access them as a pair of unsigned shorts when deserializing
-						unsigned short short_size = (unsigned short)identifiers[subindex].size;
-						Write<true>(&shared_component_buffering_instances_ptr, &short_size, sizeof(short_size));
-					}
-				}
+				entity_manager->m_shared_components[index].named_instances.ForEachConst([&](SharedInstance instance, ResourceIdentifier identifier) {
+					Write<true>(&shared_component_buffering_instances_ptr, &instance, sizeof(instance));
+					// It will make it easier to access them as a pair of unsigned shorts when deserializing
+					unsigned short short_size = (unsigned short)identifier.size;
+					Write<true>(&shared_component_buffering_instances_ptr, &short_size, sizeof(short_size));
+				});
 			}
 		}
 
@@ -152,14 +145,9 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
 			Component current_component = { (unsigned short)index };
 			if (entity_manager->ExistsSharedComponent(current_component)) {
-				unsigned int named_instances_capacity = entity_manager->m_shared_components[index].named_instances.GetExtendedCapacity();
-				const ResourceIdentifier* identifiers = entity_manager->m_shared_components[index].named_instances.GetIdentifiers();
-				// Now the identifiers themselves
-				for (unsigned int subindex = 0; subindex < named_instances_capacity; subindex++) {
-					if (entity_manager->m_shared_components[index].named_instances.IsItemAt(subindex)) {
-						Write<true>(&shared_component_buffering_instances_ptr, identifiers[subindex].ptr, identifiers[subindex].size);
-					}
-				}
+				entity_manager->m_shared_components[index].named_instances.ForEachConst([&](SharedInstance instance, ResourceIdentifier identifier) {
+					Write<true>(&shared_component_buffering_instances_ptr, identifier.ptr, identifier.size);
+				});
 			}
 		}
 		component_buffering_size = shared_component_buffering_instances_ptr - (uintptr_t)component_buffering;

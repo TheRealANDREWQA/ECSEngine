@@ -270,24 +270,27 @@ namespace ECSEngine {
 		}
 
 		// -------------------------------------------------------------------------------------------------------------------------------
+		
 		Stream<char> GetMaterialName(const cgltf_primitive* primitives, unsigned int primitive_index) {
 			const cgltf_material* gltf_material = primitives[primitive_index].material;
 
-			return ToStream(gltf_material->name);
+			return gltf_material->name;
 		}
 
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	GLTFData LoadGLTFFile(const char* path, CapacityStream<char>* error_message)
+	GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message)
 	{
+		NULL_TERMINATE(path);
+
 		GLTFData data;
 		data.mesh_count = 0;
 
 		cgltf_options options;
 		memset(&options, 0, sizeof(cgltf_options));
-		cgltf_result result = cgltf_parse_file(&options, path, &data.data);
+		cgltf_result result = cgltf_parse_file(&options, path.buffer, &data.data);
 
 		if (result != cgltf_result_success) {
 			if (error_message != nullptr) {
@@ -296,7 +299,7 @@ namespace ECSEngine {
 			data.data = nullptr;
 			return data;
 		}
-		result = cgltf_load_buffers(&options, data.data, path);
+		result = cgltf_load_buffers(&options, data.data, path.buffer);
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
 			if (error_message != nullptr) {
@@ -316,25 +319,8 @@ namespace ECSEngine {
 		}
 
 		data.mesh_count = GLTFMeshCount(data.data);
-		
+
 		return data;
-	}
-
-	// -------------------------------------------------------------------------------------------------------------------------------
-
-	GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message)
-	{
-		ECS_TEMP_ASCII_STRING(temp_path, 512);
-		temp_path.Copy(path);
-		temp_path[path.size] = '\0';
-		return LoadGLTFFile(temp_path.buffer, error_message);
-	}
-
-	// -------------------------------------------------------------------------------------------------------------------------------
-
-	GLTFData LoadGLTFFile(const wchar_t* path, CapacityStream<char>* error_message) 
-	{
-		return LoadGLTFFile(ToStream(path), error_message);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -344,7 +330,7 @@ namespace ECSEngine {
 		ECS_TEMP_ASCII_STRING(temp_path, 512);
 		function::ConvertWideCharsToASCII(path, temp_path);
 		temp_path[temp_path.size] = '\0';
-		return LoadGLTFFile(temp_path.buffer, error_message);
+		return LoadGLTFFile(temp_path, error_message);
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -431,7 +417,7 @@ namespace ECSEngine {
 
 			if (gltf_material != nullptr) {
 				// material name
-				Stream<char> material_name = ToStream(gltf_material->name);
+				Stream<char> material_name = gltf_material->name;
 
 				ECS_TEMP_STRING(temp_texture_names, 1024);
 
@@ -439,7 +425,7 @@ namespace ECSEngine {
 				size_t mapping_count = 0;
 
 				auto add_mapping = [&](const char* name, PBRMaterialTextureIndex mapping) {
-					Stream<char> texture_name = ToStream(name);
+					Stream<char> texture_name = name;
 					unsigned int old_texture_size = temp_texture_names.size;
 					function::ConvertASCIIToWide(temp_texture_names, texture_name);
 					mappings[mapping_count].texture = { temp_texture_names.buffer + old_texture_size, texture_name.size };
@@ -677,7 +663,7 @@ namespace ECSEngine {
 		// If it already exists - do no reload it
 		bool exists = false;
 		for (size_t subindex = 0; subindex < materials.size && !exists; subindex++) {
-			if (function::CompareStrings(material_name, ToStream(materials[subindex].name))) {
+			if (function::CompareStrings(material_name, materials[subindex].name)) {
 				submesh_material_index.Add(subindex);
 				exists = true;
 			}

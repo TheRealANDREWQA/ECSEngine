@@ -10,15 +10,34 @@ using namespace ECSEngine::Reflection;
 
 #define MODULE_SETTINGS_REFLECT_TAG "SETTINGS"
 
-size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, const char* name) {
+size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, Stream<char> name) {
 	for (size_t index = 0; index < settings.size; index++) {
-		const char* current_name = settings[index].name;
-		if (current_name == name || function::CompareStrings(name, current_name)) {
+		Stream<char> current_name = settings[index].name;
+		if (current_name.buffer == name.buffer || function::CompareStrings(name, current_name)) {
 			return index;
 		}
 	}
 	return -1;
 }
+
+#define SEARCH_OPTIONS(settings_id, options_name, indices_name) ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 256); \
+																ECS_STACK_CAPACITY_STREAM(unsigned int, indices_name, 64); \
+																Stream<char> settings_tag = MODULE_SETTINGS_REFLECT_TAG; \
+																\
+																suffix_stream.AddStreamSafe(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT); \
+																function::ConvertIntToChars(suffix_stream, settings_id); \
+\
+																UIReflectionDrawerSearchOptions options_name; \
+																options_name.indices = &indices_name; \
+																options_name.suffix = suffix_stream; \
+																options_name.include_tags = { &settings_tag, 1 };
+
+#define SEARCH_OPTIONS_NO_SETTINGS(options_name, indices_name)  ECS_STACK_CAPACITY_STREAM(unsigned int, indices_name, 64); \
+																Stream<char> settings_tag = MODULE_SETTINGS_REFLECT_TAG; \
+																\
+																UIReflectionDrawerSearchOptions options_name; \
+																options_name.indices = &indices_name; \
+																options_name.include_tags = { &settings_tag, 1 };
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
@@ -31,12 +50,7 @@ void AllocateModuleSettings(
 {
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
-	ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 64);
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-	
-	UIReflectionDrawerSearchOptions options;
-	options.indices = &type_indices;
-	options.include_tags = { &settings_tag, 1 };
+	SEARCH_OPTIONS_NO_SETTINGS(options, type_indices);
 	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (type_indices.size > 0) {
@@ -51,9 +65,9 @@ void AllocateModuleSettings(
 		for (size_t index = 0; index < type_indices.size; index++) {
 			UIReflectionType* ui_type = editor_state->module_reflection->GetTypePtr(type_indices[index]);
 
-			const char* type_name = ui_type->name;
-			ReflectionType type = reflection_manager->GetType(type_name);
-			size_t type_size = GetReflectionTypeByteSize(reflection_manager, type);
+			Stream<char> type_name = ui_type->name;
+			const ReflectionType* type = reflection_manager->GetType(type_name);
+			size_t type_size = GetReflectionTypeByteSize(type);
 
 			// The name needs to be allocated aswell - because the UI reflection types
 			// can be destroyed by the reflection underneath us
@@ -81,17 +95,7 @@ void CreateModuleSettings(
 {
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
-	ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 256);
-	suffix_stream.AddStreamSafe(ToStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
-	function::ConvertIntToChars(suffix_stream, settings_id);
-
-	ECS_STACK_CAPACITY_STREAM(unsigned int, instance_indices, 64);
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-
-	UIReflectionDrawerSearchOptions options;
-	options.indices = &instance_indices;
-	options.suffix = suffix_stream.buffer;
-	options.include_tags = { &settings_tag, 1 };
+	SEARCH_OPTIONS(settings_id, options, instance_indices);
 
 	// The tagged types are excluded since they do not get a reflection type in the first place
 	instance_indices.size = editor_state->module_reflection->CreateInstanceForHierarchy(hierarchy_index, options);
@@ -109,9 +113,9 @@ void CreateModuleSettings(
 		for (size_t index = 0; index < instance_indices.size; index++) {
 			UIReflectionInstance* instance = editor_state->module_reflection->GetInstancePtr(instance_indices[index]);
 
-			const char* type_name = instance->type_name;
-			ReflectionType type = reflection_manager->GetType(type_name);
-			size_t type_size = GetReflectionTypeByteSize(reflection_manager, type);
+			Stream<char> type_name = instance->type_name;
+			const ReflectionType* type = reflection_manager->GetType(type_name);
+			size_t type_size = GetReflectionTypeByteSize(type);
 
 			// The name needs to be allocated aswell - because the UI reflection types
 			// can be destroyed by the reflection underneath us
@@ -125,7 +129,7 @@ void CreateModuleSettings(
 			settings.Add({ instance_memory, type_name });
 
 			editor_state->module_reflection->BindInstancePtrs(instance, instance_memory);
-			editor_state->module_reflection->reflection->SetInstanceDefaultData(type.name, instance_memory);
+			editor_state->module_reflection->reflection->SetInstanceDefaultData(type->name, instance_memory);
 
 			editor_state->module_reflection->AssignInstanceResizableAllocator(instance, allocator);
 		}
@@ -172,17 +176,7 @@ void DestroyModuleSettings(
 	EditorModule* editor_module = editor_state->project_modules->buffer + module_index;
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 
-	ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 64);
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-
-	ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 256);
-	suffix_stream.AddStreamSafe(ToStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
-	function::ConvertIntToChars(suffix_stream, settings_id);
-
-	UIReflectionDrawerSearchOptions options;
-	options.indices = &type_indices;
-	options.include_tags = { &settings_tag, 1 };
-	options.suffix = suffix_stream.buffer;
+	SEARCH_OPTIONS(settings_id, options, type_indices);
 
 	// Destroy all instances now
 	editor_state->module_reflection->DestroyAllInstancesFromFolderHierarchy(hierarchy_index, options);
@@ -200,7 +194,7 @@ void GetModuleSettingsFilePath(
 	GetModuleSettingsFolderPath(editor_state, module_index, full_path);
 	full_path.Add(ECS_OS_PATH_SEPARATOR);
 	full_path.AddStream(filename);
-	full_path.AddStreamSafe(ToStream(MODULE_SETTINGS_EXTENSION));
+	full_path.AddStreamSafe(MODULE_SETTINGS_EXTENSION);
 	full_path[full_path.size] = L'\0';
 }
 
@@ -218,13 +212,31 @@ void GetModuleSettingsFolderPath(const EditorState* editor_state, unsigned int m
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void GetModuleAvailableSettings(const EditorState* editor_state, unsigned int module_index, CapacityStream<Stream<wchar_t>>& paths, AllocatorPolymorphic allocator)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_folder, 512);
+	GetModuleSettingsFolderPath(editor_state, module_index, module_folder);
+
+	struct FunctorData {
+		CapacityStream<Stream<wchar_t>>* paths;
+		AllocatorPolymorphic allocator;
+	};
+
+	FunctorData functor_data = { &paths, allocator };
+	ForEachFileInDirectory(module_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
+		Stream<wchar_t> stem = function::PathStem(path);
+		data->paths->AddSafe(function::StringCopy(data->allocator, stem));
+		return true;
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void GetModuleSettingsUITypesIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& indices)
 {
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-
-	UIReflectionDrawerSearchOptions options;
+	SEARCH_OPTIONS_NO_SETTINGS(options, dummy_indices);
 	options.indices = &indices;
-	options.include_tags = { &settings_tag, 1 };
 	editor_state->module_reflection->GetHierarchyTypes(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
 }
 
@@ -232,16 +244,8 @@ void GetModuleSettingsUITypesIndices(const EditorState* editor_state, unsigned i
 
 void GetModuleSettingsUIInstancesIndices(const EditorState* editor_state, unsigned int module_index, unsigned int settings_id, ECSEngine::CapacityStream<unsigned int>& indices)
 {
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-
-	ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 512);
-	suffix_stream.AddStreamSafe(ToStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT));
-	function::ConvertIntToChars(suffix_stream, settings_id);
-
-	UIReflectionDrawerSearchOptions options;
+	SEARCH_OPTIONS(settings_id, options, dummy_indices);
 	options.indices = &indices;
-	options.include_tags = { &settings_tag, 1 };
-	options.suffix = suffix_stream.buffer;
 	editor_state->module_reflection->GetHierarchyInstances(GetModuleReflectionHierarchyIndex(editor_state, module_index), options);
 }
 
@@ -256,13 +260,7 @@ bool LoadModuleSettings(
 )
 {
 	// Cannot use the deserialization directly from file - must manually walk through all types and check that it exists
-	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, 64);
-
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-
-	UIReflectionDrawerSearchOptions options;
-	options.include_tags = { &settings_tag, 1 };
-	options.indices = &indices;
+	SEARCH_OPTIONS_NO_SETTINGS(options, indices);
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
@@ -287,9 +285,10 @@ bool LoadModuleSettings(
 		while (file_ptr < file_ptr_limit) {
 			// Need the deserialize table in order to determine the setting index
 			ECS_STACK_CAPACITY_STREAM(char, table_memory, ECS_KB * 8);
+			const size_t STACK_ALLOCATION = ECS_KB * 8;
+			LinearAllocator stack_allocator(ECS_STACK_ALLOC(STACK_ALLOCATION), STACK_ALLOCATION);
 
-			CapacityStream<void> void_memory = table_memory;
-			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, &void_memory);
+			DeserializeFieldTable field_table = DeserializeFieldTableFromData(file_ptr, GetAllocatorPolymorphic(&stack_allocator));
 			// It failed
 			if (field_table.types.size == 0) {
 				editor_state->editor_allocator->Deallocate(file_data.buffer);
@@ -343,28 +342,22 @@ void RemoveModuleSettingsFileAndFolder(const EditorState* editor_state, unsigned
 
 bool SaveModuleSettings(const EditorState* editor_state, unsigned int module_index, Stream<wchar_t> path, Stream<EditorModuleReflectedSetting> settings)
 {
-	// Use text serialization
 	// Cannot use the serialization directly into the file - must manually walk through all types and serialize it
 	// into a memory buffer
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, 64);
-
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-	UIReflectionDrawerSearchOptions options;
-	options.indices = &indices;
-	options.include_tags = { &settings_tag, 1 };
+	SEARCH_OPTIONS_NO_SETTINGS(options, indices);
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
 
 	if (indices.size > 0) {
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(ReflectionType, module_types, indices.size);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(const ReflectionType*, module_types, indices.size);
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, instance_memory, indices.size);
 
 		// Get the reflection types in order to serialize
 		ReflectionManager* reflection = editor_state->module_reflection->reflection;
 		for (size_t index = 0; index < indices.size; index++) {
 			module_types[index] = reflection->GetType(editor_state->module_reflection->GetType(indices[index]).name);
-			size_t setting_index = SearchSetting(settings, module_types[index].name);
+			size_t setting_index = SearchSetting(settings, module_types[index]->name);
 			instance_memory[index] = settings[setting_index].data;
 		}
 
@@ -404,17 +397,11 @@ bool SaveModuleSettings(const EditorState* editor_state, unsigned int module_ind
 
 void SetModuleDefaultSettings(
 	const EditorState* editor_state, 
-	unsigned int module_index, 
+	unsigned int module_index,
 	Stream<EditorModuleReflectedSetting> settings
 )
 {
-	unsigned int type_count = editor_state->module_reflection->GetTypeCount();
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, type_count);
-
-	const char* settings_tag = MODULE_SETTINGS_REFLECT_TAG;
-	UIReflectionDrawerSearchOptions options;
-	options.include_tags = { &settings_tag, 1 };
-	options.indices = &indices;
+	SEARCH_OPTIONS_NO_SETTINGS(options, indices);
 
 	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
 	editor_state->module_reflection->GetHierarchyTypes(hierarchy_index, options);
@@ -422,10 +409,11 @@ void SetModuleDefaultSettings(
 	if (indices.size > 0) {
 		for (size_t index = 0; index < indices.size; index++) {
 			UIReflectionType* ui_type = editor_state->module_reflection->GetTypePtr(indices[index]);
-			ReflectionType type = editor_state->module_reflection->reflection->GetType(ui_type->name);
+			const ReflectionType* type = editor_state->module_reflection->reflection->GetType(ui_type->name);
 			size_t setting_index = SearchSetting(settings, ui_type->name);
 			void* instance_memory = settings[setting_index].data;
-			editor_state->module_reflection->reflection->SetInstanceDefaultData(type.name, instance_memory);
+
+			editor_state->module_reflection->reflection->SetInstanceDefaultData(type->name, instance_memory);
 		}
 	}
 }

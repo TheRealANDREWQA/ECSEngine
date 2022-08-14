@@ -10,22 +10,90 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		float ConvertCharactersToFloat(Stream characters) {
-			return ConvertCharactersToFloatingPoint<float>(characters);
-		}
+		template<typename FloatingPoint, typename CharacterType>
+		FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream) {
+			FloatingPoint value = 0;
+			size_t starting_index = stream[0] == '-' || stream[0] == '+' ? 1 : 0;
 
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, ConvertCharactersToFloat, Stream<char>, CapacityStream<char>);
+			size_t dot_index = stream.size;
+			for (size_t index = 0; index < stream.size; index++) {
+				if (stream[index] == '.') {
+					dot_index = index;
+					break;
+				}
+			}
+			if (dot_index < stream.size) {
+				int64_t integral_part = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + starting_index, dot_index - starting_index));
+
+				size_t fractional_digit_count = 0;
+				int64_t fractional_part = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + dot_index + 1, stream.size - dot_index - 1), fractional_digit_count);
+
+				FloatingPoint integral_float = static_cast<FloatingPoint>(integral_part);
+				FloatingPoint fractional_float = static_cast<FloatingPoint>(fractional_part);
+
+				// reversed in order to speed up calculations
+				FloatingPoint fractional_power = 0.1;
+				for (size_t index = 1; index < fractional_digit_count; index++) {
+					fractional_power *= 0.1;
+				}
+				fractional_float *= fractional_power;
+				FloatingPoint value = integral_float + fractional_float;
+				if (stream[0] == '-') {
+					value = -value;
+				}
+				return value;
+			}
+			else {
+				if (stream.size > 0) {
+					int64_t integer = ConvertCharactersToInt(Stream<CharacterType>(stream.buffer + starting_index, stream.size - starting_index));
+					value = static_cast<FloatingPoint>(integer);
+					if (stream[0] == '-') {
+						value = -value;
+					}
+				}
+				return value;
+			}
+		}
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		double ConvertCharactersToDouble(Stream characters) {
+		float ConvertCharactersToFloat(Stream<char> characters) {
+			return ConvertCharactersToFloatingPoint<float>(characters);
+		}
+
+		float ConvertCharactersToFloat(Stream<wchar_t> characters) {
+			return ConvertCharactersToFloatingPoint<float>(characters);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		double ConvertCharactersToDouble(Stream<char> characters) {
 			return ConvertCharactersToFloatingPoint<double>(characters);
 		}
 
+		double ConvertCharactersToDouble(Stream<wchar_t> characters) {
+			return ConvertCharactersToFloatingPoint<double>(characters);
+		}
 
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(double, ConvertCharactersToDouble, Stream<char>, CapacityStream<char>);
+		// ----------------------------------------------------------------------------------------------------------
+
+		int64_t ConvertCharactersToInt(Stream<char> stream) {
+			return ConvertCharactersToIntImpl<int64_t, char>(stream);
+		}
+
+		int64_t ConvertCharactersToInt(Stream<wchar_t> stream) {
+			return ConvertCharactersToIntImpl<int64_t, wchar_t>(stream);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		int64_t ConvertCharactersToInt(Stream<char> stream, size_t& digit_count) {
+			return ConvertCharactersToIntImpl<int64_t, char>(stream, digit_count);
+		}
+
+		int64_t ConvertCharactersToInt(Stream<wchar_t> stream, size_t& digit_count) {
+			return ConvertCharactersToIntImpl<int64_t, wchar_t>(stream, digit_count);
+		}
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -71,7 +139,7 @@ namespace ECSEngine {
 					unsigned int copy_index = count - index - 1;
 					chars.Add(temp_characters[copy_index]);
 					if (copy_index % 3 == 0 && copy_index > 0) {
-						chars.Add('\'');
+						chars.Add(',');
 						apostrophe_count++;
 					}
 				}
@@ -208,32 +276,88 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		size_t FindWhitespaceCharactersCount(const char* string, char separator_token, CapacityStream<unsigned int>* stack_buffer)
+		size_t FindWhitespaceCharactersCount(Stream<char> string, char separator_token, CapacityStream<unsigned int>* stack_buffer)
 		{
-			char tokens[3];
-			tokens[0] = separator_token;
-			tokens[1] = '\n';
-			tokens[2] = '\0';
-
-			size_t size = strlen(string);
-			const char* character = strpbrk(string, tokens);
-
 			size_t count = 0;
+			
+			Stream<char> token_stream = function::FindFirstCharacter(string, separator_token);
+			Stream<char> new_line_stream = function::FindFirstCharacter(string, '\n');
 			if (stack_buffer == nullptr) {
-				while (character != nullptr) {
-					size_t position = (uintptr_t)character - (uintptr_t)string;
-					character = strpbrk(string + position + 1, tokens);
+				while (token_stream.buffer != nullptr && new_line_stream.buffer != nullptr) {
+					count += 2;
+
+					token_stream.buffer += 1;
+					token_stream.size -= 1;
+					
+					new_line_stream.buffer += 1;
+					new_line_stream.size -= 1;
+
+					token_stream = function::FindFirstCharacter(token_stream, separator_token);
+					new_line_stream = function::FindFirstCharacter(new_line_stream, '\n');
+				}
+
+				while (token_stream.buffer != nullptr) {
 					count++;
+					token_stream.buffer += 1;
+					token_stream.size -= 1;
+					token_stream = function::FindFirstCharacter(token_stream, separator_token);
+				}
+
+				while (new_line_stream.buffer != nullptr) {
+					count++;
+					new_line_stream.buffer += 1;
+					new_line_stream.size -= 1;
+					new_line_stream = function::FindFirstCharacter(new_line_stream, '\n');
 				}
 			}
 			else {
-				while (character != nullptr) {
-					size_t position = (uintptr_t)character - (uintptr_t)string;
-					if (stack_buffer->size < stack_buffer->capacity) {
-						stack_buffer->Add(position);
-					}
-					character = strpbrk(string + position + 1, tokens);
+				while (token_stream.buffer != nullptr && new_line_stream.buffer != nullptr) {
 					count++;
+					if (stack_buffer->size < stack_buffer->capacity) {
+						unsigned int token_difference = token_stream.buffer - string.buffer;
+						unsigned int new_line_difference = new_line_stream.buffer - string.buffer;
+
+						if (token_difference < new_line_difference) {
+							stack_buffer->Add(token_difference);
+
+							token_stream.buffer += 1;
+							token_stream.size -= 1;
+
+							token_stream = function::FindFirstCharacter(token_stream, separator_token);
+						}
+						else {
+							stack_buffer->Add(new_line_difference);
+
+							new_line_stream.buffer += 1;
+							new_line_stream.size -= 1;
+
+							new_line_stream = function::FindFirstCharacter(new_line_stream, '\n');
+						}
+					}
+				}
+
+				while (token_stream.buffer != nullptr) {
+					count++;
+
+					if (stack_buffer->size < stack_buffer->capacity) {
+						stack_buffer->Add(token_stream.buffer - string.buffer);
+					}
+
+					token_stream.buffer += 1;
+					token_stream.size -= 1;
+					token_stream = function::FindFirstCharacter(token_stream, separator_token);
+				}
+
+				while (new_line_stream.buffer != nullptr) {
+					count++;
+
+					if (stack_buffer->size < stack_buffer->capacity) {
+						stack_buffer->Add(new_line_stream.buffer - string.buffer);
+					}
+
+					new_line_stream.buffer += 1;
+					new_line_stream.size -= 1;
+					new_line_stream = function::FindFirstCharacter(new_line_stream, '\n');
 				}
 			}
 			return count;
@@ -242,112 +366,132 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 		// it searches for spaces and next line characters
-		template<typename Stream>
-		void FindWhitespaceCharacters(Stream& spaces, const char* string, char separator_token) {
-			size_t length = strlen(string);
+		template<typename WordStream>
+		void FindWhitespaceCharacters(WordStream& spaces, Stream<char> string, char separator_token) {
 			size_t position = 0;
 
-			char tokens[3];
-			tokens[0] = separator_token;
-			tokens[1] = '\n';
-			tokens[2] = '\0';
-			const char* character = strpbrk(string, tokens);
-			while (character != nullptr) {
-				position = (uintptr_t)character - (uintptr_t)string;
-				spaces.Add(position);
-				character = strpbrk(string + position + 1, tokens);
+			Stream<char> token_stream = function::FindFirstCharacter(string, separator_token);
+			Stream<char> new_line_stream = function::FindFirstCharacter(string, '\n');
+
+			while (token_stream.buffer != nullptr && new_line_stream.buffer != nullptr) {
+				unsigned int token_difference = token_stream.buffer - string.buffer;
+				unsigned int new_line_difference = new_line_stream.buffer - string.buffer;
+
+				if (token_difference < new_line_difference) {
+					spaces.Add(token_difference);
+
+					token_stream.buffer += 1;
+					token_stream.size -= 1;
+
+					token_stream = function::FindFirstCharacter(token_stream, separator_token);
+				}
+				else {
+					spaces.Add(new_line_difference);
+
+					new_line_stream.buffer += 1;
+					new_line_stream.size -= 1;
+
+					new_line_stream = function::FindFirstCharacter(new_line_stream, '\n');
+				}
+			}
+
+			while (token_stream.buffer != nullptr) {
+				spaces.Add(token_stream.buffer - string.buffer);
+
+				token_stream.buffer += 1;
+				token_stream.size -= 1;
+				token_stream = function::FindFirstCharacter(token_stream, separator_token);
+			}
+
+			while (new_line_stream.buffer != nullptr) {
+				spaces.Add(new_line_stream.buffer - string.buffer);
+
+				new_line_stream.buffer += 1;
+				new_line_stream.size -= 1;
+				new_line_stream = function::FindFirstCharacter(new_line_stream, '\n');
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, FindWhitespaceCharacters, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char*, char);
+		ECS_TEMPLATE_FUNCTION_2_BEFORE(void, FindWhitespaceCharacters, Stream<unsigned int>&, CapacityStream<unsigned int>&, Stream<char>, char);
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		// finds the tokens that appear in the current string
-		template<typename Stream>
-		void FindToken(const char* string, char token, Stream& tokens) {
-			size_t length = strlen(string);
-			size_t position = 0;
-
-			const char* character = strchr(string, token);
-			while (character != nullptr) {
-				position = (uintptr_t)character - (uintptr_t)string;
-				tokens.Add(position);
-				character = strchr(string + position + 1, token);
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_AFTER(void, FindToken, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char*, char);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		// finds the tokens that appear in the current string
-		template<typename Stream>
-		void FindToken(const char* ECS_RESTRICT string, const char* ECS_RESTRICT tokens, Stream& positions) {
-			size_t length = strlen(string);
-			size_t token_size = strlen(tokens);
-			size_t position = 0;
-
-			const char* _token = strstr(string, tokens);
-			while (_token != nullptr) {
-				position = (uintptr_t)_token - (uintptr_t)string;
-				positions.Add(position);
-				_token = strstr(string + position + token_size, tokens);
-			}
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_AFTER(void, FindToken, Stream<unsigned int>&, CapacityStream<unsigned int>&, const char* ECS_RESTRICT, const char* ECS_RESTRICT);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Stream>
-		void ParseWordsFromSentence(const char* sentence, Stream& words) {
+		template<typename WordStream>
+		void ParseWordsFromSentence(Stream<char> sentence, WordStream& words) {
 			ParseWordsFromSentence(sentence, " \n", words);
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, const char*);
+		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, Stream<char>);
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		void ParseWordsFromSentence(const char* ECS_RESTRICT sentence, const char* ECS_RESTRICT tokens, Stream& words) {
-			size_t length = strlen(sentence);
+		template<typename WordStream>
+		void ParseWordsFromSentence(Stream<char> sentence, Stream<char> tokens, WordStream& words) {
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, token_positions, tokens.size);
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, token_mapping, tokens.size);
 
-			size_t starting_position = 0;
-			size_t position = 0; 
-			const char* character = strpbrk(sentence, tokens);
-			while (character != nullptr) {
-				position = (uintptr_t)character - (uintptr_t)sentence;
-				if (position > starting_position + 1) {
-					words.Add({ static_cast<unsigned int>(starting_position), static_cast<unsigned int>(position - starting_position - 1) });
-					starting_position = position + 1;
+			for (size_t index = 0; index < tokens.size; index++) {
+				token_positions[index] = function::FindFirstCharacter(sentence, tokens[index]);
+				token_mapping[index] = tokens[index];
+			}
+
+			auto get_min_position = [&]() {
+				size_t offset = LONGLONG_MAX;
+				size_t index_of_min = -1;
+				for (size_t index = 0; index < token_positions.size; index++) {
+					size_t difference = token_positions[index].buffer - sentence.buffer;
+					if (offset > difference) {
+						offset = difference;
+						index_of_min = index;
+					}
 				}
-				character = strpbrk(sentence + position + 1, tokens);
+
+				// Look again for that character
+				token_positions[index_of_min].buffer += 1;
+				token_positions[index_of_min].size -= 1;
+				token_positions[index_of_min] = function::FindFirstCharacter(token_positions[index_of_min], token_mapping[index_of_min]);
+				if (token_positions[index_of_min].buffer == nullptr) {
+					// Replace it
+					token_positions.RemoveSwapBack(index_of_min);
+					token_mapping.RemoveSwapBack(index_of_min);
+				}
+
+				return offset;
+			};
+			
+			size_t starting_position = 0;
+			while (token_positions.size > 0) {
+				size_t minimum = get_min_position();
+				if (minimum > starting_position + 1) {
+					words.Add({ (unsigned int)starting_position, (unsigned int)(minimum - starting_position - 1) });
+				}
+				starting_position = minimum + 1;
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, const char* ECS_RESTRICT, const char* ECS_RESTRICT);
+		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, Stream<char>, Stream<char>);
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template<typename Stream>
-		void ParseWordsFromSentence(const char* sentence, char token, Stream& words) {
-			size_t length = strlen(sentence);
+		template<typename WordStream>
+		void ParseWordsFromSentence(Stream<char> sentence, char token, WordStream& words) {
+			Stream<char> token_stream = function::FindFirstCharacter(sentence, token);
 
 			size_t starting_position = 0;
-			size_t position = 0;
-			const char* character = strchr(sentence, token);
-			while (character != nullptr) {
-				position = (uintptr_t)character - (uintptr_t)sentence;
-				if (position > starting_position + 1) {
-					words.Add({ static_cast<unsigned int>(starting_position), static_cast<unsigned int>(position - starting_position - 1) });
-					starting_position = position + 1;
+			while (token_stream.buffer != nullptr) {
+				size_t current_position = token_stream.buffer - sentence.buffer;
+				if (current_position > starting_position + 1) {
+					words.Add(uint2((unsigned int)(token_stream.buffer - sentence.buffer), (unsigned int)(current_position - starting_position - 1)));
 				}
-				character = strchr(sentence + position + 1, token);
+				starting_position = current_position + 1;
+
+				token_stream.buffer += 1;
+				token_stream.size -= 1;
+				token_stream = function::FindFirstCharacter(token_stream, token);
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, const char*, char);
+		ECS_TEMPLATE_FUNCTION_2_AFTER(void, ParseWordsFromSentence, Stream<uint2>&, CapacityStream<uint2>&, Stream<char>, char);
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -361,7 +505,7 @@ namespace ECSEngine {
 				size_t initial_size = chars.size;
 				ConvertIntToChars(chars, integer);
 
-				size_t starting_swap_index = function::Select(integer < 0, 1, 0) + initial_size;
+				size_t starting_swap_index = integer < 0 ? 1 : 0 + initial_size;
 
 				if (precision > 0) {
 					if (chars.size - starting_swap_index <= precision) {
@@ -442,103 +586,40 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		//// non digit characters are discarded
-		//template<typename Integer, typename Stream>
-		//Integer ConvertCharactersToInt(Stream stream) {
-		//	Integer integer = Integer(0);
-		//	size_t starting_index = Select(stream[0] == '-', 1, 0);
-
-		//	for (size_t index = starting_index; index < stream.size; index++) {
-		//		if (stream[index] >= '0' && stream[index] <= '9') {
-		//			integer = integer * 10 + stream[index] - '0';
-		//		}
-		//	}
-		//	integer = Select<Integer>(starting_index == 1, -integer, integer);
-
-		//	return integer;
-		//}
-
-		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(Stream<char>);
-		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>);
-		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>);
-		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>);
-
-		//// ----------------------------------------------------------------------------------------------------------
-
-		//// non digit characters are discarded
-		//template<typename Integer, typename Stream>
-		//Integer ConvertCharactersToInt(Stream stream, size_t& digit_count) {
-		//	Integer integer = Integer(0);
-		//	size_t starting_index = Select(stream[0] == '-', 1, 0);
-		//	digit_count = 0;
-
-		//	for (size_t index = starting_index; index < stream.size; index++) {
-		//		if (stream[index] >= '0' && stream[index] <= '9') {
-		//			integer = integer * 10 + stream[index] - '0';
-		//			digit_count++;
-		//		}
-		//	}
-		//	integer = Select(starting_index == 1, -integer, integer);
-
-		//	return integer;
-		//}
-
-		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(Stream<char>, size_t&);
-		//template ECSENGINE_API int64_t ConvertCharactersToInt<int64_t>(CapacityStream<char>, size_t&);
-		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(Stream<char>, size_t&);
-		//template ECSENGINE_API size_t ConvertCharactersToInt<size_t>(CapacityStream<char>, size_t&);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename FloatingPoint, typename Stream>
-		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream) {
-			FloatingPoint value = 0;
-			size_t starting_index = Select(stream[0] == '-' || stream[0] == '+', 1, 0);
-
-			size_t dot_index = stream.size;
-			for (size_t index = 0; index < stream.size; index++) {
-				if (stream[index] == '.') {
-					dot_index = index;
-					break;
+		template<typename CharacterType>
+		char ConvertCharactersToBoolImpl(Stream<CharacterType> characters)
+		{
+			if constexpr (std::is_same_v<char, CharacterType>) {
+				if (memcmp(characters.buffer, "true", sizeof("true") - 1) == 0) {
+					return 1;
 				}
-			}
-			if (dot_index < stream.size) {
-				size_t integral_part = ConvertCharactersToInt<size_t>(Stream(stream.buffer + starting_index, dot_index - starting_index));
-
-				size_t fractional_digit_count = 0;
-				size_t fractional_part = ConvertCharactersToInt<size_t>(Stream(stream.buffer + dot_index + 1, stream.size - dot_index - 1), fractional_digit_count);
-
-				FloatingPoint integral_float = static_cast<FloatingPoint>(integral_part);
-				FloatingPoint fractional_float = static_cast<FloatingPoint>(fractional_part);
-
-				// reversed in order to speed up calculations
-				FloatingPoint fractional_power = 0.1;
-				for (size_t index = 1; index < fractional_digit_count; index++) {
-					fractional_power *= 0.1;
+				else if (memcmp(characters.buffer, "false", sizeof("false") - 1) == 0) {
+					return 0;
 				}
-				fractional_float *= fractional_power;
-				FloatingPoint value = integral_float + fractional_float;
-				if (stream[0] == '-') {
-					value = -value;
-				}
-				return value;
+				return -1;
 			}
 			else {
-				if (stream.size > 0) {
-					size_t integer = ConvertCharactersToInt<size_t>(Stream(stream.buffer + starting_index, stream.size - starting_index));
-					value = static_cast<FloatingPoint>(integer);
-					if (stream[0] == '-') {
-						value = -value;
-					}
+				if (memcmp(characters.buffer, L"true", sizeof(L"true") - 2) == 0) {
+					return 1;
 				}
-				return value;
+				else if (memcmp(characters.buffer, L"false", sizeof(L"false") - 2) == 0) {
+					return 0;
+				}
+				return -1;
 			}
 		}
 
-		template ECSENGINE_API float ConvertCharactersToFloatingPoint<float>(Stream<char>);
-		template ECSENGINE_API float ConvertCharactersToFloatingPoint<float>(CapacityStream<char>);
-		template ECSENGINE_API double ConvertCharactersToFloatingPoint<double>(Stream<char>);
-		template ECSENGINE_API double ConvertCharactersToFloatingPoint<double>(CapacityStream<char>);
+		// ----------------------------------------------------------------------------------------------------------
+
+		char ConvertCharactersToBool(Stream<char> characters) {
+			return ConvertCharactersToBoolImpl(characters);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		char ConvertCharactersToBool(Stream<wchar_t> characters) {
+			return ConvertCharactersToBoolImpl(characters);
+		}
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -613,12 +694,12 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		void* CopyNonZero(AllocatorPolymorphic allocator, void* data, size_t data_size, size_t alignment)
+		void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment)
 		{
 			if (data_size > 0) {
 				return Copy(allocator, data, data_size, alignment);
 			}
-			return data;
+			return (void*)data;
 		}
 
 		Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment)
@@ -630,11 +711,6 @@ namespace ECSEngine {
 		}
 
 		// ----------------------------------------------------------------------------------------------------------
-
-		Stream<char> StringCopy(AllocatorPolymorphic allocator, const char* string)
-		{
-			return StringCopy(allocator, ToStream(string));
-		}
 
 		Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
 			Stream<char> result = Stream<char>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
@@ -650,63 +726,6 @@ namespace ECSEngine {
 			result[string.size] = '\0';
 			return result;
 		}
-
-		Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, const wchar_t* string)
-		{
-			return StringCopy(allocator, ToStream(string));
-		}
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Stream>
-		unsigned int IsStringInStream(const char* string, Stream stream)
-		{
-			return IsStringInStream(ToStream(string), stream);
-		}
-
-		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<char>>, CapacityStream<Stream<char>>, Stream<CapacityStream<char>>, CapacityStream<CapacityStream<char>>, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename StreamType>
-		unsigned int IsStringInStream(Stream<char> string, StreamType stream) {
-			for (size_t index = 0; index < stream.size; index++) {
-				if (string.size == stream[index].size) {
-					if (memcmp(string.buffer, stream[index].buffer, string.size) == 0) {
-						return index;
-					}
-				}
-			}
-			return -1;
-		}
-
-		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<char>>, CapacityStream<Stream<char>>, Stream<CapacityStream<char>>, CapacityStream<CapacityStream<char>>, Stream<char>);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename Stream>
-		unsigned int IsStringInStream(const wchar_t* string, Stream stream) {
-			return IsStringInStream(ToStream(string), stream);
-		}
-
-		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<wchar_t>>, CapacityStream<Stream<wchar_t>>, Stream<CapacityStream<wchar_t>>, CapacityStream<CapacityStream<wchar_t>>, const wchar_t*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		template<typename StreamType>
-		unsigned int IsStringInStream(Stream<wchar_t> string, StreamType stream) {
-			size_t byte_size = string.size * sizeof(wchar_t);
-			for (size_t index = 0; index < stream.size; index++) {
-				if (string.size == stream[index].size) {
-					if (memcmp(string.buffer, stream[index].buffer, byte_size) == 0) {
-						return index;
-					}
-				}
-			}
-			return -1;
-		}
-
-		ECS_TEMPLATE_FUNCTION_4_AFTER(unsigned int, IsStringInStream, Stream<Stream<wchar_t>>, CapacityStream<Stream<wchar_t>>, Stream<CapacityStream<wchar_t>>, CapacityStream<CapacityStream<wchar_t>>, Stream<wchar_t>);
 
 		// ----------------------------------------------------------------------------------------------------------
 
@@ -764,6 +783,19 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
+		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double, const char*);
+
+		// ----------------------------------------------------------------------------------------------------------
+
 		size_t SearchBytes(const void* data, size_t element_count, const void* value_to_search, size_t byte_size)
 		{
 			auto loop = [=](auto values, auto simd_value_to_search, auto constant_byte_size) {
@@ -773,7 +805,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < simd_count; index += simd_value_to_search.size()) {
 					values.load(function::OffsetPointer(data, byte_size * index));
 					auto compare = values == simd_value_to_search;
-					int first = HorizontalFindFirst(compare);
+					int first = horizontal_find_first(compare);
 					if (first != -1) {
 						// We have a match
 						return index + first;
@@ -783,7 +815,7 @@ namespace ECSEngine {
 				// For the last elements use a partial load
 				values.load_partial(element_count - simd_count, function::OffsetPointer(data, byte_size * simd_count));
 				auto compare = values == simd_value_to_search;
-				int first = HorizontalFindFirst(compare);
+				int first = horizontal_find_first(compare);
 				if (first != -1) {
 					return simd_count + first;
 				}

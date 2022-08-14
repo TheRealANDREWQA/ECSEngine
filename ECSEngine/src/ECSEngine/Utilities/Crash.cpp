@@ -35,8 +35,8 @@ namespace ECSEngine {
 			const char* COPY_STRING = "\nCaller: {#}, File: {#}; Line: {#}.";
 
 			size_t string_size = strlen(error_string);
-			Stream<char> file_string = ECS_GLOBAL_DEFERRED_FILE != nullptr ? ToStream(ECS_GLOBAL_DEFERRED_FILE) : Stream<char>(nullptr, 0);
-			Stream<char> function_string = ECS_GLOBAL_DEFERRED_FILE != nullptr ? ToStream(ECS_GLOBAL_DEFERRED_FUNCTION) : Stream<char>(nullptr, 0);
+			Stream<char> file_string = ECS_GLOBAL_DEFERRED_FILE != nullptr ? ECS_GLOBAL_DEFERRED_FILE : Stream<char>(nullptr, 0);
+			Stream<char> function_string = ECS_GLOBAL_DEFERRED_FILE != nullptr ? ECS_GLOBAL_DEFERRED_FUNCTION : Stream<char>(nullptr, 0);
 			unsigned int line = ECS_GLOBAL_DEFERRED_LINE;
 
 			// Estimate how many characters will be needed

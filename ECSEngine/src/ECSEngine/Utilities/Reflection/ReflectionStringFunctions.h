@@ -59,7 +59,7 @@ namespace ECSEngine {
 		// Finds out which part of the definition is just the user defined type from the stream type
 		// E.g. Stream<MyType> -> MyType
 		// E.g. MyType* -> MyType
-		ECSENGINE_API Stream<char> GetUserDefinedTypeFromStreamUserDefined(const char* definition, ReflectionStreamFieldType stream_type);
+		ECSENGINE_API Stream<char> GetUserDefinedTypeFromStreamUserDefined(Stream<char> definition, ReflectionStreamFieldType stream_type);
 
 	}
 

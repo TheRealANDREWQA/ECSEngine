@@ -28,7 +28,7 @@ namespace ECSEngine {
 		bool ECS_VECTORCALL ExcludesComponents(VectorComponentSignature components) const;
 
 		// Find the indices of the components inside the current selection
-		// A value of -1 signals that the component is missing
+		// A value of -1 signals that the component is missing.
 		void ECS_VECTORCALL Find(VectorComponentSignature components, unsigned char* values);
 
 		// Returns how many components it contains

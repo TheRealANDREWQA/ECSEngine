@@ -117,7 +117,7 @@ namespace ECSEngine {
 		window_descriptors.CopyTo(descriptors);
 		for (size_t index = 0; index < window_descriptors.size; index++) {
 			// Change the name
-			descriptors[index].window_name = (char*)function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_name);
+			descriptors[index].window_name.buffer = (char*)function::RemapPointerIfInRange(stack_allocation, LINEAR_ALLOCATOR_SIZE, buffer, descriptors[index].window_name.buffer);
 
 			// Change the window data, if any
 			if (window_descriptors[index].window_data_size > 0) {

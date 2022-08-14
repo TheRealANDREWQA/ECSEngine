@@ -87,6 +87,8 @@ namespace ECSEngine {
 
 		void Deallocate();
 
+		unsigned int EntityCount() const;
+
 		unsigned char FindComponentIndex(Component component) const;
 
 		// It will replace the absolute indices with indices that correspond to the current components

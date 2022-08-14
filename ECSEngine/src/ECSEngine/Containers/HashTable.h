@@ -20,20 +20,31 @@ namespace ECSEngine {
 	* Identifier type must implement Compare function because it supports checking for equality with a user defined operation other
 	* than assignment operator e. g. for pointers, they might be equal if the data they point to is the same
 	* Identifier must be stable, this table only keeps the pointer, not the data pointed to.
+	* Optionally can specify SoA if you want the Identifier* and T* to be separated
 	*/
-	template<typename T, typename Identifier, typename TableHashFunction, typename ObjectHashFunction = ObjectHashFallthrough>
+	template<
+		typename T, 
+		typename Identifier,
+		typename TableHashFunction,
+		typename ObjectHashFunction = ObjectHashFallthrough,
+		bool SoA = false
+	>
 	struct HashTable {
-	public:
+		struct Pair {
+			T value;
+			Identifier identifier;
+		};
+
 #define ECS_HASH_TABLE_DISTANCE_MASK 0xF8
 #define ECS_HASH_TABLE_HASH_BITS_MASK 0x07
 
-		HashTable() : m_metadata(nullptr), m_values(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_function(TableHashFunction(0)) {}
+		HashTable() : m_metadata(nullptr), m_buffer(nullptr), m_identifiers(nullptr), m_capacity(0), m_count(0), m_function(TableHashFunction(0)) {}
 		HashTable(void* buffer, unsigned int capacity, size_t additional_info = 0) {
 			InitializeFromBuffer(buffer, capacity, additional_info);
 		}
 
 		HashTable(const HashTable& other) = default;
-		HashTable<T, Identifier, TableHashFunction, ObjectHashFunction>& operator = (const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction>& other) = default;
+		HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>& operator = (const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>& other) = default;
 
 		void Clear() {
 			memset(m_metadata, 0, sizeof(unsigned char) * (m_capacity + 31));
@@ -63,14 +74,16 @@ namespace ECSEngine {
 
 			unsigned int return_value = -1;
 			ForEachBit(match, [&](unsigned int bit_index) {
+				Identifier current_identifier = GetIdentifierFromIndex(index + bit_index);
+
 				if constexpr (!use_compare_function) {
-					if (m_identifiers[index + bit_index] == identifier) {
+					if (current_identifier == identifier) {
 						return_value = index + bit_index;
 						return true;
 					}
 				}
 				else {
-					if (m_identifiers[index + bit_index].Compare(identifier)) {
+					if (current_identifier.Compare(identifier)) {
 						return_value = index + bit_index;
 						return true;
 					}
@@ -82,45 +95,126 @@ namespace ECSEngine {
 		}
 
 		// It will be called with a single argument - the index of the element
-		// It must return true if the current element is being deleted. Else false
-		template<typename Functor>
+		// For the early exit it must return true when to exit, else false.
+		// For non early exit it must return true if the current element is being deleted, else false.
+		template<bool early_exit = false, typename Functor>
 		void ForEachIndex(Functor&& functor) {
 			unsigned int extended_capacity = GetExtendedCapacity();
 			for (int index = 0; index < (int)extended_capacity; index++) {
 				if (IsItemAt(index)) {
-					index -= functor(index);
+					if constexpr (early_exit) {
+						if (functor(index)) {
+							break;
+						}
+					}
+					else {
+						index -= functor(index);
+					}
 				}
 			}
 		}
 
-		template<typename Functor>
+		// For the early exit it must return true when to exit, else false.
+		// Else void return
+		template<bool early_exit = false, typename Functor>
 		void ForEachIndexConst(Functor&& functor) const {
 			unsigned int extended_capacity = GetExtendedCapacity();
 			for (unsigned int index = 0; index < extended_capacity; index++) {
 				if (IsItemAt(index)) {
-					functor(index);
+					if constexpr (early_exit) {
+						if (functor(index)) {
+							break;
+						}
+					}
+					else {
+						functor(index);
+					}
 				}
 			}
 		}
 
+		// For the early exit it must return true when to exit, else false.
+		// Else void return.
 		// First parameter - the value, the second one - the identifier
-		template<typename Functor>
+		template<bool early_exit = false, typename Functor>
 		void ForEach(Functor&& functor) {
 			unsigned int extended_capacity = GetExtendedCapacity();
+			Identifier* identifiers = nullptr;
+			T* values = nullptr;
+			Pair* pairs = nullptr;
+
+			if constexpr (SoA) {
+				identifiers = GetIdentifiers();
+				values = GetValues();
+			}
+			else {
+				pairs = GetPairs();
+			}
+
 			for (unsigned int index = 0; index < extended_capacity; index++) {
 				if (IsItemAt(index)) {
-					functor(m_values[index], m_identifiers[index]);
+					if constexpr (SoA) {
+						if constexpr (early_exit) {
+							if (functor(values[index], identifiers[index])) {
+								break;
+							}
+						}
+						else {
+							functor(values[index], identifiers[index]);
+						}
+					}
+					else {
+						if constexpr (early_exit) {
+							if (functor(pairs[index].value, pairs[index].identifier)) {
+								break;
+							}
+						}
+						else {
+							functor(pairs[index].value, pairs[index].identifier);
+						}
+					}
 				}
 			}
 		}
 
 		// Const variant
-		template<typename Functor>
+		template<bool early_exit = false, typename Functor>
 		void ForEachConst(Functor&& functor) const {
 			unsigned int extended_capacity = GetExtendedCapacity();
+			const Identifier* identifiers = nullptr;
+			const T* values = nullptr;
+			const Pair* pairs = nullptr;
+
+			if constexpr (SoA) {
+				identifiers = GetIdentifiers();
+				values = GetValues();
+			}
+			else {
+				pairs = GetPairs();
+			}
+
 			for (unsigned int index = 0; index < extended_capacity; index++) {
 				if (IsItemAt(index)) {
-					functor(m_values[index], m_identifiers[index]);
+					if constexpr (SoA) {
+						if constexpr (early_exit) {
+							if (functor(values[index], identifiers[index])) {
+								break;
+							}
+						}
+						else {
+							functor(values[index], identifiers[index]);
+						}
+					}
+					else {
+						if constexpr (early_exit) {
+							if (functor(pairs[index].value, pairs[index].identifier)) {
+								break;
+							}
+						}
+						else {
+							functor(pairs[index].value, pairs[index].identifier);
+						}
+					}
 				}
 			}
 		}
@@ -161,8 +255,7 @@ namespace ECSEngine {
 				if (element_distance == 0) {
 					hash_key_bits |= distance << 3;
 					m_metadata[index] = hash_key_bits;
-					m_values[index] = value;
-					m_identifiers[index] = identifier;
+					SetEntry(index, value, identifier);
 					m_count++;
 					position = position == -1 ? index : position;
 					break;
@@ -172,15 +265,16 @@ namespace ECSEngine {
 				// an empty slot for the richer slot
 				else {
 					unsigned char metadata_temp = m_metadata[index];
-					T value_temp = m_values[index];
-					Identifier identifier_temp = m_identifiers[index];
+					
+					T current_value = value;
+					Identifier current_identifier = identifier;
+					GetEntry(index, value, identifier);
+					SetEntry(index, current_value, current_identifier);
+
 					m_metadata[index] = hash_key_bits | (distance << 3);
-					m_values[index] = value;
-					m_identifiers[index] = identifier;
 					distance = (metadata_temp >> 3) + 1;
+					
 					hash_key_bits = metadata_temp & ECS_HASH_TABLE_HASH_BITS_MASK;
-					value = value_temp;
-					identifier = identifier_temp;
 					position = position == -1 ? index : position;
 					index++;
 				}
@@ -208,8 +302,12 @@ namespace ECSEngine {
 			while (distance > 1) {
 				distance--;
 				m_metadata[index - 1] = (distance << 3) | GetElementHash(index);
-				m_values[index - 1] = m_values[index];
-				m_identifiers[index - 1] = m_identifiers[index];
+				
+				T current_value;
+				Identifier current_identifier;
+				GetEntry(index, current_value, current_identifier);
+				SetEntry(index - 1, current_value, current_identifier);
+				
 				index++;
 				distance = GetElementDistance(index);
 			}
@@ -222,33 +320,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE const void* GetAllocatedBuffer() const {
-			return m_values;
-		}
-
-		template<bool use_compare_function = true> 
-		T GetValue(Identifier identifier) const {
-			int index = Find<use_compare_function>(identifier);
-			ECS_ASSERT(index != -1);
-			return m_values[index];
-		}
-
-		template<bool use_compare_function = true>
-		T* GetValuePtr(Identifier identifier) const {
-			int index = Find<use_compare_function>(identifier);
-			ECS_ASSERT(index != -1);
-			return m_values + index;
-		}
-
-		// The extended capacity is used to check bounds validity
-		ECS_INLINE T GetValueFromIndex(unsigned int index) const {
-			ECS_ASSERT(index <= GetExtendedCapacity());
-			return m_values[index];
-		}
-
-		// The extended capacity is used to check bounds validity
-		ECS_INLINE T* GetValuePtrFromIndex(unsigned int index) const {
-			ECS_ASSERT(index <= GetExtendedCapacity());
-			return m_values + index;
+			return m_buffer;
 		}
 
 		ECS_INLINE unsigned int GetCount() const {
@@ -281,20 +353,135 @@ namespace ECSEngine {
 			return m_metadata[index] & ECS_HASH_TABLE_HASH_BITS_MASK;
 		}
 
+		// Only valid in SoA type
+		template<typename = std::enable_if_t<SoA == true>>
 		ECS_INLINE T* GetValues() {
-			return m_values;
+			return (T*)m_buffer;
 		}
 
+		// Only valid in SoA type
+		template<typename = std::enable_if_t<SoA == true>>
 		ECS_INLINE const T* GetValues() const {
-			return m_values;
+			return (const T*)m_buffer;
 		}
 
+		// Only valid in SoA type
+		template<typename = std::enable_if_t<SoA == true>>
 		ECS_INLINE Stream<T> GetValueStream() {
-			return Stream<T>(m_values, m_capacity + 31);
+			return Stream<T>(GetValues(), GetExtendedCapacity());
 		}
 
+		// Only valid in SoA type
+		template<typename = std::enable_if_t<SoA == true>>
+		ECS_INLINE Identifier* GetIdentifiers() {
+			return m_identifiers;
+		}
+
+		// Only valid in SoA type
+		template<typename = std::enable_if_t<SoA == true>>
 		ECS_INLINE const Identifier* GetIdentifiers() const {
 			return m_identifiers;
+		}
+
+		// Only valid in AoS type
+		template<typename = std::enable_if_t<SoA == false>>
+		ECS_INLINE Pair* GetPairs() {
+			return (Pair*)m_buffer;
+		}
+
+		// Only valid in AoS type
+		template<typename = std::enable_if_t<SoA == false>>
+		ECS_INLINE const Pair* GetPairs() const {
+			return (const Pair*)m_buffer;
+		}
+
+		// The extended capacity is used to check bounds validity
+		ECS_INLINE T GetValueFromIndex(unsigned int index) const {
+			if constexpr (SoA) {
+				const T* values = GetValues();
+				return values[index];
+			}
+			else {
+				const Pair* pairs = GetPairs();
+				return pairs[index].value;
+			}
+		}
+
+		// The extended capacity is used to check bounds validity
+		ECS_INLINE T* GetValuePtrFromIndex(unsigned int index) {
+			if constexpr (SoA) {
+				T* values = GetValues();
+				return values + index;
+			}
+			else {
+				Pair* pairs = GetPairs();
+				return &pairs[index].value;
+			}
+		}
+
+		ECS_INLINE const T* GetValuePtrFromIndex(unsigned int index) const {
+			if constexpr (SoA) {
+				const T* values = GetValues();
+				return values + index;
+			}
+			else {
+				const Pair* pairs = GetPairs();
+				return &pairs[index].value;
+			}
+		}
+
+		ECS_INLINE Identifier GetIdentifierFromIndex(unsigned int index) const {
+			if constexpr (SoA) {
+				const Identifier* identifiers = GetIdentifiers();
+				return identifiers[index];
+			}
+			else {
+				const Pair* pairs = GetPairs();
+				return pairs[index].identifier;
+			}
+		}
+
+		ECS_INLINE Identifier* GetIdentifierPtrFromIndex(unsigned int index) {
+			if constexpr (SoA) {
+				Identifier* identifiers = GetIdentifiers();
+				return identifiers + index;
+			}
+			else {
+				Pair* pairs = GetPairs();
+				return &pairs[index].identifier;
+			}
+		}
+
+		ECS_INLINE const Identifier* GetIdentifierPtrFromIndex(unsigned int index) const {
+			if constexpr (SoA) {
+				const Identifier* identifiers = GetIdentifiers();
+				return identifiers + index;
+			}
+			else {
+				const Pair* pairs = GetPairs();
+				return &pairs[index].identifier;
+			}
+		}
+
+		template<bool use_compare_function = true>
+		T GetValue(Identifier identifier) const {
+			unsigned int index = Find<use_compare_function>(identifier);
+			ECS_ASSERT(index != -1);
+			return GetValueFromIndex(index);
+		}
+
+		template<bool use_compare_function = true>
+		T* GetValuePtr(Identifier identifier) {
+			unsigned int index = Find<use_compare_function>(identifier);
+			ECS_ASSERT(index != -1);
+			return GetValuePtrFromIndex(index);
+		}
+
+		template<bool use_compare_function = true>
+		const T* GetValuePtr(Identifier identifier) const {
+			unsigned int index = Find<use_compare_function>(identifier);
+			ECS_ASSERT(index != -1);
+			return GetValuePtrFromIndex(index);
 		}
 
 		void GetElementIndices(CapacityStream<unsigned int>& indices) const {
@@ -305,25 +492,55 @@ namespace ECSEngine {
 			}
 		}
 
+		// If you have a pointer to a value from the table and wants to get its index
+		// use this function
+		ECS_INLINE unsigned int ValuePtrIndex(const T* ptr) const {
+			if constexpr (SoA) {
+				return ptr - GetValues();
+			}
+			else {
+				const Pair* pairs = GetPairs();
+				return function::PointerDifference(ptr, pairs) / sizeof(Pair);
+			}
+		}
+
+		ECS_INLINE unsigned int IdentifierPtrIndex(const Identifier* identifier) const {
+			if constexpr (SoA) {
+				return identifier - GetIdentifiers();
+			}
+			else {
+				const Pair* pairs = GetPairs();
+				return function::PointerDifference(function::OffsetPointer(identifier, -sizeof(T)), pairs) / sizeof(Pair);
+			}
+		}
+
+		ECS_INLINE void GetEntry(unsigned int index, T& value, Identifier& identifier) const {
+			value = GetValueFromIndex(index);
+			identifier = GetIdentifierFromIndex(index);
+		}
+
+		ECS_INLINE void SetEntry(unsigned int index, T value, Identifier identifier) {
+			*GetValuePtrFromIndex(index) = value;
+			*GetIdentifierPtrFromIndex(index) = identifier;
+		}
+
 		template<bool use_compare_function = false>
 		void SetValue(T value, Identifier identifier) {
 			int index = Find<use_compare_function>(identifier);
 			ECS_ASSERT(index != -1);
-
-			m_values[index] = value;
+			SetValue(index, value);
 		}
 
 		// The extended capacity is used to check bounds validity
 		ECS_INLINE void SetValue(unsigned int index, T value) {
-			ECS_ASSERT(index <= GetExtendedCapacity());
-			m_values[index] = value;
+			*GetValuePtrFromIndex(index) = value;
 		}
 
 		template<bool use_compare_function = true>
 		bool TryGetValue(Identifier identifier, T& value) const {
-			int index = Find<use_compare_function>(identifier);
+			unsigned int index = Find<use_compare_function>(identifier);
 			if (index != -1) {
-				value = m_values[index];
+				value = GetValueFromIndex(index);
 				return true;
 			}
 			else {
@@ -332,10 +549,10 @@ namespace ECSEngine {
 		}
 
 		template<bool use_compare_function = true>
-		bool TryGetValuePtr(Identifier identifier, T*& pointer) const {
-			int index = Find<use_compare_function>(identifier);
+		bool TryGetValuePtr(Identifier identifier, T*& pointer) {
+			unsigned int index = Find<use_compare_function>(identifier);
 			if (index != -1) {
-				pointer = m_values + index;
+				pointer = GetValuePtrFromIndex(index);
 				return true;
 			}
 			else {
@@ -344,7 +561,12 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE static size_t MemoryOf(unsigned int number) {
-			return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + 31);
+			if constexpr (SoA) {
+				return (sizeof(unsigned char) + sizeof(T) + sizeof(Identifier)) * (number + 31);
+			}
+			else {
+				return (sizeof(unsigned char) + sizeof(Pair)) * (number + 31);
+			}
 		}
 
 		// Used by insert dynamic to determine which is the next suitable capacity 
@@ -354,7 +576,7 @@ namespace ECSEngine {
 		}
 
 		// Equivalent to memcpy'ing the data from the other table
-		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction>* table) {
+		void Copy(AllocatorPolymorphic allocator, const HashTable<T, Identifier, TableHashFunction, ObjectHashFunction, SoA>* table) {
 			size_t table_size = MemoryOf(table->GetCapacity());
 			void* allocation = AllocateEx(allocator, table_size);
 
@@ -370,11 +592,18 @@ namespace ECSEngine {
 		void SetBuffers(void* buffer, unsigned int capacity) {
 			unsigned int extended_capacity = capacity + 31;
 
-			m_values = (T*)buffer;
 			uintptr_t ptr = (uintptr_t)buffer;
-			ptr += sizeof(T) * extended_capacity;
-			m_identifiers = (Identifier*)ptr;
-			ptr += sizeof(Identifier) * extended_capacity;
+			m_buffer = buffer;
+			if constexpr (SoA) {
+				ptr += sizeof(T)* extended_capacity;
+				m_identifiers = (Identifier*)ptr;
+				ptr += sizeof(Identifier) * extended_capacity;
+			}
+			else {
+				ptr += sizeof(Pair) * extended_capacity;
+				m_identifiers = nullptr;
+			}
+
 			m_metadata = (unsigned char*)ptr;
 
 			m_capacity = capacity;
@@ -402,10 +631,16 @@ namespace ECSEngine {
 			InitializeFromBuffer(allocation, capacity, additional_info);
 		}
 
+		void Initialize(AllocatorPolymorphic allocator, unsigned int capacity, size_t additional_info = 0) {
+			size_t memory_size = MemoryOf(capacity);
+			void* allocation = Allocate(allocator, memory_size, 8);
+			InitializeFromBuffer(allocation, capacity, additional_info);
+		}
+
 		// The buffer given must be allocated with MemoryOf
 		const void* Grow(void* buffer, unsigned int new_capacity) {
 			const unsigned char* old_metadata = m_metadata;
-			const T* old_values = m_values;
+			const void* old_buffer = m_buffer;
 			const Identifier* old_identifiers = m_identifiers;
 			const TableHashFunction old_hash = m_function;
 			unsigned int old_capacity = m_capacity;
@@ -418,17 +653,23 @@ namespace ECSEngine {
 				for (unsigned int index = 0; index < extended_old_capacity; index++) {
 					bool is_item = old_metadata[index] != 0;
 					if (is_item) {
-						Insert(old_values[index], old_identifiers[index]);
+						if constexpr (SoA) {
+							const T* old_values = (T*)old_buffer;
+							Insert(old_values[index], old_identifiers[index]);
+						}
+						else {
+							const Pair* old_pairs = (const Pair*)old_buffer;
+							Insert(old_pairs[index].value, old_pairs[index].identifier);
+						}
 					}
 				}
 			}
 
-			return old_values;
+			return old_buffer;
 		}
 
-	//private:
 		unsigned char* m_metadata;
-		T* m_values;
+		void* m_buffer;
 		Identifier* m_identifiers;
 		unsigned int m_capacity;
 		unsigned int m_count;
@@ -450,6 +691,27 @@ namespace ECSEngine {
 			const void* old_allocation = table.Grow(new_allocation, new_capacity);
 			if (old_capacity > 0) {
 				allocator->Deallocate(old_allocation);
+			}
+		};
+
+		if (table.GetCapacity() == 0) {
+			grow();
+		}
+		if (table.Insert(value, identifier)) {
+			grow();
+		}
+	}
+
+	template<typename Table, typename Value, typename Identifier>
+	void InsertIntoDynamicTable(Table& table, AllocatorPolymorphic allocator, Value value, Identifier identifier) {
+		auto grow = [&]() {
+			unsigned int old_capacity = table.GetCapacity();
+
+			unsigned int new_capacity = Table::NextCapacity(table.GetCapacity());
+			void* new_allocation = AllocateEx(allocator, table.MemoryOf(new_capacity));
+			const void* old_allocation = table.Grow(new_allocation, new_capacity);
+			if (old_capacity > 0) {
+				DeallocateEx(allocator, old_allocation);
 			}
 		};
 

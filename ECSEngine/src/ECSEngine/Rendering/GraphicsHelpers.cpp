@@ -559,14 +559,14 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	DecodedTexture DecodeTexture(Stream<void> data, const wchar_t* filename, AllocatorPolymorphic allocator, size_t flags)
+	DecodedTexture DecodeTexture(Stream<void> data, Stream<wchar_t> filename, AllocatorPolymorphic allocator, size_t flags)
 	{
-		Path extension = function::PathExtensionBoth(ToStream(filename));
+		Path extension = function::PathExtensionBoth(filename);
 
-		if (function::CompareStrings(extension, ToStream(L".hdr"))) {
+		if (function::CompareStrings(extension, L".hdr")) {
 			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_HDR, allocator, flags);
 		}
-		if (function::CompareStrings(extension, ToStream(L".tga"))) {
+		if (function::CompareStrings(extension, L".tga")) {
 			return DecodeTexture(data, ECS_TEXTURE_EXTENSION_TGA, allocator, flags);
 		}
 
@@ -881,12 +881,13 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	uint2 GetTextureDimensions(const wchar_t* filename)
+	uint2 GetTextureDimensions(Stream<wchar_t> filename)
 	{
+		NULL_TERMINATE_WIDE(filename);
+
 		uint2 dimensions = { 0,0 };
 
-		Stream<wchar_t> path = ToStream(filename);
-		Path extension = function::PathExtensionBoth(path);
+		Path extension = function::PathExtensionBoth(filename);
 
 		if (extension.size == 0) {
 			return dimensions;
@@ -895,20 +896,20 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		bool is_tga = false;
 		bool is_hdr = false;
 
-		is_tga = function::CompareStrings(extension, ToStream(L".tga"));
-		is_hdr = function::CompareStrings(extension, ToStream(L".hdr"));
+		is_tga = function::CompareStrings(extension, L".tga");
+		is_hdr = function::CompareStrings(extension, L".hdr");
 
 		DirectX::TexMetadata metadata;
 		HRESULT result;
 
 		if (is_tga) {
-			result = DirectX::GetMetadataFromTGAFile(filename, metadata);
+			result = DirectX::GetMetadataFromTGAFile(filename.buffer, metadata);
 		}
 		else if (is_hdr) {
-			result = DirectX::GetMetadataFromHDRFile(filename, metadata);
+			result = DirectX::GetMetadataFromHDRFile(filename.buffer, metadata);
 		}
 		else {
-			result = DirectX::GetMetadataFromWICFile(filename, DirectX::WIC_FLAGS_NONE, metadata);
+			result = DirectX::GetMetadataFromWICFile(filename.buffer, DirectX::WIC_FLAGS_NONE, metadata);
 		}
 
 		if (FAILED(result)) {

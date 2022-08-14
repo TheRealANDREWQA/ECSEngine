@@ -1,19 +1,25 @@
 #include "ecspch.h"
 #include "ReflectionTypes.h"
+#include "../../Utilities/Function.h"
 
 namespace ECSEngine {
 
     namespace Reflection {
 
-        bool ReflectionField::Skip(const char* string) const
-        {
-			if (tag != nullptr) {
-				const char* string_to_search = string == nullptr ? STRING(ECS_OMIT_FIELD_REFLECT) : string;
+		// ----------------------------------------------------------------------------------------------------------------------------
 
-				return strstr(tag, string_to_search) != nullptr;
+        bool ReflectionField::Skip(Stream<char> string) const
+        {
+			if (tag.size > 0) {
+				return function::FindFirstToken(tag, string).buffer != nullptr;
 			}
 			return false;
         }
+
+		bool ReflectionField::Is(Stream<char> string) const
+		{
+			return function::CompareStrings(tag, string);
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -95,14 +101,104 @@ namespace ECSEngine {
 			return ECS_STREAM_FIELD_TYPE_ALIGNMENT[(unsigned int)stream_type];
 		}
 
-		bool ReflectionType::HasTag(const char* string) const
+		bool ReflectionType::HasTag(Stream<char> string) const
 		{
-			if (tag == nullptr) {
+			if (tag.size == 0) {
 				return false;
 			}
-			return strstr(tag, string);
+			return function::FindFirstToken(tag, string).buffer != nullptr;
 		}
 
-	}
+		bool ReflectionType::IsTag(Stream<char> string) const
+		{
+			return function::CompareStrings(string, tag);
+		}
+
+		double ReflectionType::HasEvaluation(Stream<char> name) const
+		{
+			for (size_t index = 0; index < evaluations.size; index++) {
+				if (function::CompareStrings(evaluations[index].name, name)) {
+					return evaluations[index].value;
+				}
+			}
+
+			return DBL_MAX;
+		}
+
+		ReflectionType ReflectionType::Copy(uintptr_t& ptr) const
+		{
+			ReflectionType copy;
+
+			copy.name.InitializeAndCopy(ptr, name);
+			copy.fields.InitializeFromBuffer(ptr, fields.size);
+			for (size_t index = 0; index < fields.size; index++) {
+				copy.fields[index].info = fields[index].info;
+				copy.fields[index].name.InitializeAndCopy(ptr, fields[index].name);
+
+				if (fields[index].tag.size > 0) {
+					copy.fields[index].tag.InitializeAndCopy(ptr, fields[index].tag);
+				}
+				else {
+					copy.fields[index].tag = { nullptr, 0 };
+				}
+
+				ReflectionStreamFieldType stream_type = fields[index].info.stream_type;
+				ReflectionBasicFieldType basic_type = fields[index].info.basic_type;
+				if (basic_type == ReflectionBasicFieldType::UserDefined || stream_type == ReflectionStreamFieldType::Stream ||
+					stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream ||
+					basic_type == ReflectionBasicFieldType::Enum) 
+				{
+					copy.fields[index].definition.InitializeAndCopy(ptr, fields[index].definition);
+				}
+				else {
+					copy.fields[index].definition = fields[index].definition;
+				}
+
+				// Verify field tag
+				Stream<char> tag = fields[index].tag;
+				if (tag.size > 0) {
+					copy.fields[index].tag.InitializeAndCopy(ptr, tag);
+				}
+				else {
+					copy.fields[index].tag = { nullptr, 0 };
+				}
+			}
+
+			if (tag.size > 0) {
+				copy.tag.InitializeAndCopy(ptr, tag);
+			}
+			else {
+				copy.tag = { nullptr, 0 };
+			}
+			copy.byte_size = byte_size;
+			copy.alignment = alignment;
+
+			if (evaluations.size > 0) {
+				copy.evaluations.InitializeFromBuffer(ptr, evaluations.size);
+				for (size_t index = 0; index < evaluations.size; index++) {
+					copy.evaluations[index].value = evaluations[index].value;
+					copy.evaluations[index].name.InitializeAndCopy(ptr, evaluations[index].name);
+				}
+			}
+			else {
+				copy.evaluations = { nullptr, 0 };
+			}
+			copy.folder_hierarchy_index = folder_hierarchy_index;
+
+			return copy;
+		}
+
+		ReflectionEnum ReflectionEnum::Copy(uintptr_t& ptr) const
+		{
+			ReflectionEnum copy;
+
+			copy.folder_hierarchy_index = folder_hierarchy_index;
+			copy.name.InitializeAndCopy(ptr, name);
+			copy.fields = StreamDeepCopy(fields, ptr);
+
+			return copy;
+		}
+
+}
 
 }

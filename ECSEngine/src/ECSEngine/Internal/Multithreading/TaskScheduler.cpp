@@ -11,9 +11,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	TaskScheduler::TaskScheduler(MemoryManager* allocator) : elements(GetAllocatorPolymorphic(allocator), 0), query_infos(nullptr, 0), thread_query_indices(nullptr, 0)
-	{
-	}
+	TaskScheduler::TaskScheduler(MemoryManager* allocator) : elements(GetAllocatorPolymorphic(allocator), 0), query_infos(nullptr, 0), query_index(0) {}
 
 	// ------------------------------------------------------------------------------------------------------------
 
@@ -85,19 +83,21 @@ namespace ECSEngine {
 			Deallocate(elements.allocator, elements[index].task.name);
 		}
 		elements.FreeBuffer();
-	}
 
-	// ------------------------------------------------------------------------------------------------------------
+		if (task_barriers.size > 0) {
+			Deallocate(elements.allocator, task_barriers.buffer);
+		}
 
-	void TaskScheduler::Remove(const char* name) {
-		Remove(ToStream(name));
+		if (query_infos.size > 0) {
+			Deallocate(elements.allocator, query_infos.buffer);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	void TaskScheduler::Remove(Stream<char> task_name) {
 		for (size_t index = 0; index < elements.size; index++) {
-			if (function::CompareStrings(ToStream(elements[index].task.name), task_name)) {
+			if (function::CompareStrings(elements[index].task.name, task_name)) {
 				// The task has a single coallesced block
 				DeallocateIfBelongs(elements.allocator, elements[index].task.name);
 				elements.Remove(index);
@@ -110,24 +110,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	unsigned int TaskScheduler::GetCurrentQueryIndex(unsigned int thread_index) const
+	unsigned int TaskScheduler::GetCurrentQueryIndex() const
 	{
-		return thread_query_indices[thread_index].load(ECS_ACQUIRE);
+		return query_index;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Stream<unsigned short> TaskScheduler::GetQueryArchetypes(unsigned int thread_index, World* world) const
+	const TaskSchedulerInfo* TaskScheduler::GetCurrentQueryInfo() const
 	{
-		unsigned int query_index = GetCurrentQueryIndex(thread_index);
-		return world->entity_manager->GetQueryResults(query_infos[query_index].query_handle);
+		return &query_infos[GetCurrentQueryIndex()];
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void TaskScheduler::IncrementQueryIndex(unsigned int thread_index)
+	void TaskScheduler::IncrementQueryIndex()
 	{
-		thread_query_indices[thread_index].fetch_add(1, ECS_RELEASE);
+		query_index++;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -157,13 +156,13 @@ namespace ECSEngine {
 	ECS_THREAD_WRAPPER_TASK(StaticTaskSchedulerWrapper) {
 		TaskScheduler* scheduler = world->task_scheduler;
 		
-		int task_index = world->task_manager->GetThreadTaskIndex(thread_id);
+		int task_index = world->task_manager->GetThreadTaskIndex();
 		if (scheduler->task_barriers[task_index] == ECS_TASK_SCHEDULER_BARRIER_PRESENT) {
-			world->task_manager->WaitAllThreads(task_index);
+			world->task_manager->WaitThreads();
 		}
 
 		// Can now call the thread function
-		function(thread_id, world, _data);
+		task.function(thread_id, world, task.data);
 	}
 	
 	struct DynamicTaskSchedulerWrapperData {
@@ -208,7 +207,8 @@ namespace ECSEngine {
 		TaskScheduler* scheduler, 
 		unsigned int* group_sizes,
 		unsigned int* group_limits, 
-		Stream<ECS_TASK_SCHEDULER_BARRIER_TYPE> waiting_barriers
+		Stream<ECS_TASK_SCHEDULER_BARRIER_TYPE> waiting_barriers,
+		CapacityStream<char>* error_message
 	) {
 		ResizableStream<TaskSchedulerElement>* elements = &scheduler->elements;
 
@@ -218,7 +218,6 @@ namespace ECSEngine {
 			dependency_counts.size = group_sizes[group_index];
 
 			unsigned int group_start = group_limits[group_index] - group_sizes[group_index];
-			unsigned int finished_tasks = 0;
 			// Record the number of dependencies for each element
 			// We will swap and reduce the count when one of the tasks has
 			// its dependency met
@@ -234,7 +233,7 @@ namespace ECSEngine {
 							if (
 								function::CompareStrings(
 									elements->buffer[index].task_dependencies[dependency_index].name, 
-									ToStream(elements->buffer[previous_index].task.name)
+									elements->buffer[previous_index].task.name
 								)
 							)
 							{
@@ -247,13 +246,14 @@ namespace ECSEngine {
 			}
 
 			size_t iteration = 0;
+			unsigned int finished_tasks = 0;
 			// At each step we should be able to solve at least a task. If we cannot,
 			// Then there is a cycle or wrong dependencies.
 			for (; iteration < group_sizes[group_index]; iteration++) {
 				for (unsigned int index = group_start; index < group_limits[group_index]; index++) {
 					// All of its dependencies are fulfilled
 					if (elements->buffer[index].task_dependencies.size == 0) {
-						Stream<char> task_name = ToStream(elements->buffer[index].task.name);
+						Stream<char> task_name = elements->buffer[index].task.name;
 
 						// Swap the element and its initial dependency count
 						elements->Swap(group_start + finished_tasks, index);
@@ -278,14 +278,49 @@ namespace ECSEngine {
 				}
 			}
 
-			if (iteration == elements->size) {
-				return false;
+			// Bring the dependency counts back to their original size - because these are not necessarly
+			// copied and instead referenced
+			for (unsigned int index = group_start; index < group_limits[group_index]; index++) {
+				elements->buffer[index].task_dependencies.size = dependency_counts[index];
 			}
-			else {
-				// Bring the dependency counts back to their original size - mostly for debug purposes
-				for (unsigned int index = group_start; index < group_limits[group_index]; index++) {
-					elements->buffer[index].task_dependencies.size = dependency_counts[index];
+
+			if (iteration == group_sizes[group_index]) {
+				// Go through the tasks and detect which one form a cycle
+				if (error_message != nullptr) {
+					error_message->AddStream("Conflicting pairs: ");
+					for (unsigned int index = group_start + finished_tasks; index < group_limits[group_index]; index++) {
+						Stream<char> task_name = elements->buffer[index].task.name;
+						for (unsigned int subindex = index + 1; subindex < group_limits[group_index]; subindex++) {
+							Stream<TaskDependency> subindex_dependencies = elements->buffer[subindex].task_dependencies;
+							for (unsigned int dependency_index = 0; dependency_index < subindex_dependencies.size; dependency_index++) {
+								if (function::CompareStrings(task_name, subindex_dependencies[dependency_index].name)) {
+									// Check to see if the subindex also has as dependency the index
+									Stream<char> subindex_name = elements->buffer[subindex].task.name;
+									Stream<TaskDependency> index_dependencies = elements->buffer[index].task_dependencies;
+									for (unsigned int second_dependency_index = 0; second_dependency_index < index_dependencies.size; second_dependency_index++) {
+										if (function::CompareStrings(index_dependencies[second_dependency_index].name, subindex_name)) {
+											// They are both dependencies, add to the dependency list
+											error_message->Add('(');
+											error_message->AddStream(task_name);
+											error_message->Add(',');
+											error_message->Add(' ');
+											error_message->AddStream(subindex_name);
+											error_message->Add(')');
+
+											// Exit also the previous loop
+											dependency_index = subindex_dependencies.size;
+											break;
+										}
+									}
+								}
+							}
+						}
+					}
+					error_message->AssertCapacity();
 				}
+
+
+				return false;
 			}
 		}
 
@@ -442,14 +477,14 @@ namespace ECSEngine {
 
 #pragma endregion
 
-	bool TaskScheduler::Solve() {
+	bool TaskScheduler::Solve(CapacityStream<char>* error_message) {
 		// For each group create an index mask for those tasks that are in the same group
 		unsigned int group_sizes[ECS_THREAD_TASK_GROUP_COUNT];
 		unsigned int group_limits[ECS_THREAD_TASK_GROUP_COUNT];
 		SolveGroupParsing(this, group_sizes, group_limits);
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(ECS_TASK_SCHEDULER_BARRIER_TYPE, waiting_barriers, elements.size);
-		bool success = SolveTaskDependencies(this, group_sizes, group_limits, waiting_barriers);
+		bool success = SolveTaskDependencies(this, group_sizes, group_limits, waiting_barriers, error_message);
 		waiting_barriers.AssertCapacity();
 
 		if (!success) {
@@ -468,10 +503,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void TaskScheduler::SetThreadCount(unsigned int thread_count)
+	void TaskScheduler::SetTaskManagerTasks(TaskManager* task_manager) const
 	{
-		thread_query_indices.Initialize(elements.allocator, thread_count);
-		memset(thread_query_indices.buffer, 0, sizeof(unsigned int) * thread_count);
+		for (size_t index = 0; index < elements.size; index++) {
+			task_manager->AddTask(elements[index].task);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -480,6 +516,13 @@ namespace ECSEngine {
 	{
 		task_manager->ChangeDynamicWrapperMode(DynamicTaskSchedulerWrapper);
 		task_manager->ChangeStaticWrapperMode(StaticTaskSchedulerWrapper);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	MemoryManager TaskScheduler::DefaultAllocator(GlobalMemoryManager* memory)
+	{
+		return MemoryManager(ECS_KB * 32, 1024, ECS_KB * 32, memory);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

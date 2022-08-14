@@ -114,13 +114,13 @@
     <TargetName>Editor</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
+    <LinkIncremental>true</LinkIncremental>
     <OutDir>..\bin\Release-windows-x86_64\Editor\</OutDir>
     <IntDir>..\bin-int\Release-windows-x86_64\Editor\</IntDir>
     <TargetName>Editor</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
-    <LinkIncremental>false</LinkIncremental>
+    <LinkIncremental>true</LinkIncremental>
     <OutDir>..\bin\Distribution-windows-x86_64\Editor\</OutDir>
     <IntDir>..\bin-int\Distribution-windows-x86_64\Editor\</IntDir>
     <TargetName>Editor</TargetName>
@@ -185,12 +185,14 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>editorpch.h</PrecompiledHeaderFile>
       <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <Profile>true</Profile>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -213,12 +215,15 @@
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <ExceptionHandling>false</ExceptionHandling>
       <Optimization>Disabled</Optimization>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <OptimizeReferences>false</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
@@ -241,12 +246,15 @@
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <Optimization>MaxSpeed</Optimization>
       <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <OptimizeReferences>false</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -274,26 +282,25 @@
     <ClInclude Include="src\Project\ProjectFile.h" />
     <ClInclude Include="src\Project\ProjectFolders.h" />
     <ClInclude Include="src\Project\ProjectOperations.h" />
-    <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\Project\ProjectUITemplate.h" />
     <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
-    <ClInclude Include="src\Test.h" />
+    <ClInclude Include="src\HelperWindows.h" />
     <ClInclude Include="src\UI\Backups.h" />
-    <ClInclude Include="src\UI\FileExplorerData.h" />
-    <ClInclude Include="src\UI\HubData.h" />
-    <ClInclude Include="src\UI\InspectorData.h" />
-    <ClInclude Include="src\UI\NotificationBar.h" />
     <ClInclude Include="src\UI\DirectoryExplorer.h" />
     <ClInclude Include="src\UI\FileExplorer.h" />
+    <ClInclude Include="src\UI\FileExplorerData.h" />
     <ClInclude Include="src\UI\Game.h" />
     <ClInclude Include="src\UI\Hub.h" />
+    <ClInclude Include="src\UI\HubData.h" />
     <ClInclude Include="src\UI\Inspector.h" />
+    <ClInclude Include="src\UI\InspectorData.h" />
     <ClInclude Include="src\UI\MiscellaneousBar.h" />
     <ClInclude Include="src\UI\ModuleExplorer.h" />
+    <ClInclude Include="src\UI\NotificationBar.h" />
+    <ClInclude Include="src\UI\Sandbox.h" />
+    <ClInclude Include="src\UI\SandboxExplorer.h" />
     <ClInclude Include="src\UI\Scene.h" />
-    <ClInclude Include="src\UI\Settings.h" />
     <ClInclude Include="src\UI\ToolbarUI.h" />
-    <ClInclude Include="src\HelperWindows.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -308,17 +315,16 @@
     <ClCompile Include="src\Editor\EditorState.cpp" />
     <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Modules\Module.cpp" />
+    <ClCompile Include="src\Modules\ModuleDefinition.cpp" />
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\Modules\ModuleSettings.cpp" />
     <ClCompile Include="src\Project\ProjectBackup.cpp" />
     <ClCompile Include="src\Project\ProjectFolders.cpp" />
     <ClCompile Include="src\Project\ProjectOperations.cpp" />
-    <ClCompile Include="src\Project\ProjectSettings.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />
-    <ClCompile Include="src\TestUI.cpp" />
+    <ClCompile Include="src\HelperWindows.cpp" />
     <ClCompile Include="src\UI\Backups.cpp" />
-    <ClCompile Include="src\UI\NotificationBar.cpp" />
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
     <ClCompile Include="src\UI\FileExplorer.cpp" />
     <ClCompile Include="src\UI\Game.cpp" />
@@ -326,10 +332,11 @@
     <ClCompile Include="src\UI\Inspector.cpp" />
     <ClCompile Include="src\UI\MiscellaneousBar.cpp" />
     <ClCompile Include="src\UI\ModuleExplorer.cpp" />
+    <ClCompile Include="src\UI\NotificationBar.cpp" />
+    <ClCompile Include="src\UI\Sandbox.cpp" />
+    <ClCompile Include="src\UI\SandboxExplorer.cpp" />
     <ClCompile Include="src\UI\Scene.cpp" />
-    <ClCompile Include="src\UI\Settings.cpp" />
     <ClCompile Include="src\UI\ToolbarUI.cpp" />
-    <ClCompile Include="src\HelperWindows.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

@@ -4,34 +4,36 @@
 struct EditorState;
 struct ProjectFile;
 
-constexpr const wchar_t* PROJECT_ASSETS_RELATIVE_PATH = L"Assets";
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH = L"Modules";
-constexpr const wchar_t* PROJECT_DEBUG_RELATIVE_PATH = L"Debug";
-constexpr const wchar_t* PROJECT_UI_RELATIVE_PATH = L"UI";
-constexpr const wchar_t* PROJECT_METAFILES_RELATIVE_PATH = L"Metafiles";
-constexpr const wchar_t* PROJECT_CONFIGURATION_RELATIVE_PATH = L"Configuration";
-constexpr const wchar_t* PROJECT_BACKUP_RELATIVE_PATH = L".backup";
+#define PROJECT_ASSETS_RELATIVE_PATH L"Assets"
+#define PROJECT_MODULES_RELATIVE_PATH L"Modules"
+#define PROJECT_DEBUG_RELATIVE_PATH L"Debug"
+#define PROJECT_UI_RELATIVE_PATH L"UI"
+#define PROJECT_METAFILES_RELATIVE_PATH L"Metafiles"
+#define PROJECT_CONFIGURATION_RELATIVE_PATH L"Configuration"
+#define PROJECT_BACKUP_RELATIVE_PATH L".backup"
 
-constexpr const wchar_t* PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH = L"Configuration\\Modules";
+#define PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH L"Configuration\\Modules"
+#define PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH L"Configuration\\Runtime"
 
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DEBUG = L"Modules\\Debug";
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_RELEASE = L"Modules\\Release";
-constexpr const wchar_t* PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION = L"Modules\\Distribution";
+#define PROJECT_MODULES_RELATIVE_PATH_DEBUG L"Modules\\Debug"
+#define PROJECT_MODULES_RELATIVE_PATH_RELEASE L"Modules\\Release"
+#define PROJECT_MODULES_RELATIVE_PATH_DISTRIBUTION L"Modules\\Distribution"
 
-constexpr const wchar_t PROJECT_EXTENSION[] = L".ecsproj";
-constexpr const wchar_t* PROJECT_DIRECTORIES[] = {
-	PROJECT_DEBUG_RELATIVE_PATH,
-	PROJECT_UI_RELATIVE_PATH,
-	PROJECT_ASSETS_RELATIVE_PATH,
-	PROJECT_MODULES_RELATIVE_PATH,
-	PROJECT_METAFILES_RELATIVE_PATH,
-	PROJECT_CONFIGURATION_RELATIVE_PATH,
-	PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH,
-	PROJECT_BACKUP_RELATIVE_PATH
-};
+#define PROJECT_EXTENSION L".ecsproj"
+#define PROJECT_RUNTIME_SETTINGS_FILE_EXTENSION L".config"
+#define PROJECT_SANDBOX_FILE_EXTENSION L".ecss"
+#define PROJECT_MODULES_FILE_EXTENSION L".ecsmodules"
+
+extern const wchar_t* PROJECT_DIRECTORIES[];
+
+size_t PROJECT_DIRECTORIES_SIZE();
 
 // It will make the concatenation between path and project name
-void GetProjectFilePath(ECSEngine::CapacityStream<wchar_t>& characters, const ProjectFile* project_file);
+void GetProjectFilePath(const ProjectFile* project_file, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectModulesFilePath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectSandboxFile(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectDebugFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
@@ -43,8 +45,8 @@ void GetProjectMetafilesFolder(const EditorState* editor_state, ECSEngine::Capac
 
 void GetProjectConfigurationFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
-void GetProjectSettingsPath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
-
 void GetProjectConfigurationModuleFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectBackupFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);

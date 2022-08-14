@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-constexpr size_t SLEEP_AMOUNT[] = { 14, 9, 7, 5, 0 };
+constexpr size_t SLEEP_AMOUNT[] = { 20, 15, 10, 5, 0 };
 constexpr size_t GLOBAL_MEMORY_COUNT = 200'000'000;
 constexpr size_t GLOBAL_MEMORY_RESERVE_COUNT = 75'000'000;
 

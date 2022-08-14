@@ -57,7 +57,7 @@ namespace ECSEngine {
 
 #define GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT 1024
 
-	Graphics::Graphics(HWND hWnd, const GraphicsDescriptor* descriptor) 
+	Graphics::Graphics(const GraphicsDescriptor* descriptor) 
 		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
 		m_bound_render_target_count(1), m_copied_graphics(false)
 	{
@@ -81,7 +81,7 @@ namespace ECSEngine {
 		swap_chain_descriptor.SampleDesc.Quality = 0;
 		swap_chain_descriptor.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | descriptor->target_usage;
 		swap_chain_descriptor.BufferCount = 2;
-		swap_chain_descriptor.OutputWindow = hWnd;
+		swap_chain_descriptor.OutputWindow = descriptor->hWnd;
 		swap_chain_descriptor.Windowed = TRUE;
 		swap_chain_descriptor.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		swap_chain_descriptor.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
@@ -119,7 +119,7 @@ namespace ECSEngine {
 		pDXGIAdapter->Release();
 
 		CapacityStream<char> device_name(DEVICE_NAME, 0, 128);
-		function::ConvertWideCharsToASCII(ToStream(adapter_desc.Description), device_name);
+		function::ConvertWideCharsToASCII(adapter_desc.Description, device_name);
 		device_name.Add('\0');
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Initializing device and swap chain failed!", true);
@@ -157,7 +157,7 @@ namespace ECSEngine {
 			return ReadWholeFileText(path, GetAllocatorPolymorphic(m_allocator));
 		};
 
-		Stream<wchar_t> include_directory = ToStream(ECS_SHADER_DIRECTORY);
+		Stream<wchar_t> include_directory = ECS_SHADER_DIRECTORY;
 		ShaderIncludeFiles include(m_allocator, { &include_directory, 1 });
 		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
 			Stream<char> vertex_source = load_source_code(SHADER_HELPERS_VERTEX[index]);
@@ -196,6 +196,7 @@ namespace ECSEngine {
 
 	Graphics::Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target, DepthStencilView new_depth_view, MemoryManager* new_allocator)
 	{
+		m_copied_graphics = true;
 		m_shader_helpers = graphics_to_copy->m_shader_helpers;
 		m_shader_reflection = graphics_to_copy->m_shader_reflection;
 
@@ -733,11 +734,11 @@ namespace ECSEngine {
 		const char* target = SHADER_COMPILE_TARGET[type * ECS_SHADER_TARGET_COUNT + options.target];
 
 		unsigned int compile_flags = 0;
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG), D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION, 0);
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST), D3DCOMPILE_OPTIMIZATION_LEVEL0, 0);
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW), D3DCOMPILE_OPTIMIZATION_LEVEL1, 0);
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH), D3DCOMPILE_OPTIMIZATION_LEVEL2, 0);
-		compile_flags |= function::Select(function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST), D3DCOMPILE_OPTIMIZATION_LEVEL3, 0);
+		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG) ? D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION : 0;
+		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST) ? D3DCOMPILE_OPTIMIZATION_LEVEL0 : 0;
+		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW) ? D3DCOMPILE_OPTIMIZATION_LEVEL1 : 0;
+		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH) ? D3DCOMPILE_OPTIMIZATION_LEVEL2 : 0;
+		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST) ? D3DCOMPILE_OPTIMIZATION_LEVEL3 : 0;
 
 		ID3DBlob* blob;
 		ID3DBlob* error_message_blob = nullptr;
@@ -1378,7 +1379,10 @@ namespace ECSEngine {
 		graphics->m_internal_resources_lock.wait_locked();
 		graphics->m_internal_resources_reader_count.fetch_add(1, ECS_RELAXED);
 
-		unsigned int resource_count = graphics->m_internal_resources.size.load(ECS_ACQUIRE);
+		// If the resource_count and the write count are different, then wait until they get equal
+		graphics->m_internal_resources.SpinWaitWrites();
+		unsigned int resource_count = graphics->m_internal_resources.size.load(ECS_RELAXED);
+
 		for (unsigned int index = 0; index < resource_count && resource != nullptr; index++) {
 			if (graphics->m_internal_resources[index].interface_pointer == resource) {
 				bool expected = false;
@@ -1581,7 +1585,7 @@ namespace ECSEngine {
 				subresource_data[index].SysMemPitch = ecs_descriptor->mip_data[index].size / height;
 				subresource_data[index].SysMemSlicePitch = 0;
 
-				height = function::Select<unsigned int>(height == 1, 1, height >> 1);
+				height = height == 1 ? 1 : height >> 1;
 			}
 			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
 		}
@@ -1623,8 +1627,8 @@ namespace ECSEngine {
 				subresource_data[index].SysMemPitch = ecs_descriptor->mip_data[index].size / (height * depth);
 				subresource_data[index].SysMemSlicePitch = ecs_descriptor->mip_data[index].size;
 
-				height = function::Select<unsigned int>(height == 1, 1, height >> 1);
-				depth = function::Select<unsigned int>(depth == 1, 1, depth >> 1);
+				height = height == 1 ? 1 : height >> 1;
+				depth = depth == 1 ? 1 : depth >> 1;
 			}
 			result = m_device->CreateTexture3D(&descriptor, subresource_data, &resource.tex);
 		}
@@ -2520,6 +2524,10 @@ namespace ECSEngine {
 	void Graphics::CommitInternalResourcesToBeFreed()
 	{
 		int32_t last_index = m_internal_resources.size.load(ECS_RELAXED);
+		if (last_index < m_internal_resources.capacity) {
+			m_internal_resources.SpinWaitWrites();
+		}
+
 		last_index = std::min(last_index, (int32_t)m_internal_resources.capacity);
 		for (int32_t index = 0; index < last_index; index++) {
 			if (m_internal_resources[index].is_deleted.load(ECS_RELAXED)) {
@@ -3015,6 +3023,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	size_t DefaultGraphicsAllocatorSize()
+	{
+		return 100'000;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void DestroyGraphics(Graphics* graphics)
 	{
 		// Walk through the list of resources that the graphic stores and free them
@@ -3122,8 +3137,8 @@ namespace ECSEngine {
 
 	void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context) {
 		DXGI_FORMAT format = DXGI_FORMAT_R32_UINT;
-		format = (DXGI_FORMAT)function::Select<unsigned int>(index_buffer.int_size == 1, DXGI_FORMAT_R8_UINT, format);
-		format = (DXGI_FORMAT)function::Select<unsigned int>(index_buffer.int_size == 2, DXGI_FORMAT_R16_UINT, format);
+		format = index_buffer.int_size == 1 ? DXGI_FORMAT_R8_UINT : format;
+		format = index_buffer.int_size == 2 ? DXGI_FORMAT_R16_UINT : format;
 
 		context->IASetIndexBuffer(index_buffer.buffer, format, 0);
 	}

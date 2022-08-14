@@ -11,9 +11,9 @@ using namespace ECSEngine::Tools;
 constexpr size_t GAME_CAMERA_COUNT = 5;
 constexpr const char* GAME_RESOURCE_STRING = "RESOURCE STRING";
 
-constexpr float2 GAME_ROTATE_SENSITIVITY = { 30.0f, 30.0f };
+constexpr ECSEngine::float2 GAME_ROTATE_SENSITIVITY = { 30.0f, 30.0f };
 constexpr float GAME_SCROLL_SENSITIVITY = 0.015f;
-constexpr float2 GAME_PAN_SENSITIVITY = { 10.0f, 10.0f };
+constexpr ECSEngine::float2 GAME_PAN_SENSITIVITY = { 10.0f, 10.0f };
 
 struct GameData {
 	EditorState* editor_state;

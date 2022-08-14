@@ -103,7 +103,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		config.AddFlag(text_params);
 
 		UIConfigTextAlignment text_alignment;
-		text_alignment.horizontal = ECS_UI_TEXT_ALIGN::ECS_UI_TEXT_ALIGN_LEFT;
+		text_alignment.horizontal = ECS_UI_ALIGN::ECS_UI_ALIGN_LEFT;
 		config.AddFlag(text_alignment);
 
 		char* new_line = strchr(message->message.buffer, '\n');
@@ -112,7 +112,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 			*new_line = '\0';
 		}
 		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_PARAMETERS
-			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_ALIGNMENT, config, message->message.buffer);
+			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT, config, message->message.buffer);
 		if (new_line != nullptr) {
 			*new_line = '\n';
 		}

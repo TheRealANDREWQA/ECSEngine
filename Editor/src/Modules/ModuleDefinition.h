@@ -1,35 +1,26 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineMultithreading.h"
 #include "ECSEngineModule.h"
+#include "ECSEngineReflectionMacros.h"
 
-constexpr const wchar_t* MODULE_ASSOCIATED_FILES[] = {
-	L".dll",
-	L".pdb",
-	L".lib",
-	L".exp"
-};
+extern ECSEngine::Stream<wchar_t> MODULE_ASSOCIATED_FILES[];
 
-constexpr const char* MODULE_CONFIGURATION_DEBUG = "Debug";
-constexpr const char* MODULE_CONFIGURATION_RELEASE = "Release";
-constexpr const char* MODULE_CONFIGURATION_DISTRIBUTION = "Distribution";
+size_t MODULE_ASSOCIATED_FILES_SIZE();
 
-constexpr const char* MODULE_CONFIGURATIONS[] = {
-	MODULE_CONFIGURATION_DEBUG,
-	MODULE_CONFIGURATION_RELEASE,
-	MODULE_CONFIGURATION_DISTRIBUTION
-};
+#define MODULE_CONFIGURATION_DEBUG "Debug"
+#define MODULE_CONFIGURATION_RELEASE "Release"
+#define MODULE_CONFIGURATION_DISTRIBUTION "Distribution"
 
-constexpr const wchar_t* MODULE_CONFIGURATION_DEBUG_WIDE = L"Debug";
-constexpr const wchar_t* MODULE_CONFIGURATION_RELEASE_WIDE = L"Release";
-constexpr const wchar_t* MODULE_CONFIGURATION_DISTRIBUTION_WIDE = L"Distribution";
+extern ECSEngine::Stream<char> MODULE_CONFIGURATIONS[];
 
-constexpr const wchar_t* MODULE_CONFIGURATIONS_WIDE[] = {
-	MODULE_CONFIGURATION_DEBUG_WIDE,
-	MODULE_CONFIGURATION_RELEASE_WIDE,
-	MODULE_CONFIGURATION_DISTRIBUTION_WIDE
-};
+#define MODULE_CONFIGURATION_DEBUG_WIDE L"Debug"
+#define MODULE_CONFIGURATION_RELEASE_WIDE L"Release"
+#define MODULE_CONFIGURATION_DISTRIBUTION_WIDE L"Distribution"
 
-enum EDITOR_MODULE_CONFIGURATION : unsigned char {
+extern ECSEngine::Stream<wchar_t> MODULE_CONFIGURATIONS_WIDE[];
+
+enum ECS_REFLECT EDITOR_MODULE_CONFIGURATION : unsigned char {
 	EDITOR_MODULE_CONFIGURATION_DEBUG,
 	EDITOR_MODULE_CONFIGURATION_RELEASE,
 	EDITOR_MODULE_CONFIGURATION_DISTRIBUTION,
@@ -53,23 +44,20 @@ struct EditorModuleInfo {
 	ECSEngine::Stream<ECSEngine::ModuleLinkComponentTarget> link_components;
 	ECSEngine::ModuleSerializeComponentStreams serialize_streams;
 
-	// The components of the module
-	ECSEngine::Stream<ECSEngine::Stream<char>> component_names;
-	ECSEngine::Stream<ECSEngine::Stream<char>> shared_component_names;
-
 	EDITOR_MODULE_LOAD_STATUS load_status;
 	size_t library_last_write_time;
 };
 
 struct EditorModuleReflectedSetting {
 	void* data;
-	const char* name;
+	ECSEngine::Stream<char> name;
 };
 
 struct EditorModule {
 	ECSEngine::Stream<wchar_t> solution_path;
 	ECSEngine::Stream<wchar_t> library_name;
 	size_t solution_last_write_time;
+	bool is_graphics_module;
 
 	EditorModuleInfo infos[EDITOR_MODULE_CONFIGURATION_COUNT];
 };

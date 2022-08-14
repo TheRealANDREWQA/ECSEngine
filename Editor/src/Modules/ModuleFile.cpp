@@ -11,20 +11,10 @@ ECS_TOOLS;
 
 constexpr const wchar_t* NO_GRAPHICS_MODULE = L"No graphics module";
 
-void GetProjectModuleFilePath(const EditorState* editor_state, CapacityStream<wchar_t>& path)
-{
-	const ProjectFile* project_file = (const ProjectFile*)editor_state->project_file;
-	path.Copy(project_file->path);
-	path.Add(ECS_OS_PATH_SEPARATOR);
-	path.AddStream(project_file->project_name);
-	path.AddStreamSafe(ToStream(PROJECT_MODULE_EXTENSION));
-	path[path.size] = L'\0';
-	path.AssertCapacity();
-}
-
 enum SERIALIZE_ORDER {
 	SERIALIZE_SOLUTION_PATH,
 	SERIALIZE_LIBRARY_NAME,
+	SERIALIZE_TYPE,
 	SERIALIZE_COUNT
 };
 
@@ -41,7 +31,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 	CapacityStream<void> memory_pool(_temp_memory, 0, sizeof(Stream<void>) * TEMP_STREAMS * SERIALIZE_COUNT);
 	
 	ECS_TEMP_STRING(module_path, 256);
-	GetProjectModuleFilePath(editor_state, module_path);
+	GetProjectModulesFilePath(editor_state, module_path);
 
 	Stream<void> file_contents = ReadWholeFileBinary(module_path, GetAllocatorPolymorphic(editor_allocator));
 
@@ -54,23 +44,16 @@ bool LoadModuleFile(EditorState* editor_state) {
 		success = DeserializeMultisection(serialize_data, memory_pool, file_ptr) != -1;
 		if (success) {
 			ResetModules(editor_state);
-			ResetGraphicsModule(editor_state);
 
 			unsigned int valid_projects = 0;
 			ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
 
-			Stream<wchar_t> solution_path(serialize_data[0].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[0].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
-			Stream<wchar_t> library_name(serialize_data[0].data[SERIALIZE_LIBRARY_NAME].buffer, serialize_data[0].data[SERIALIZE_LIBRARY_NAME].size / sizeof(wchar_t));
-
-			if (solution_path.buffer != nullptr && library_name.buffer != nullptr) {
-				SetGraphicsModule(editor_state, solution_path, library_name);
-			}
-
-			for (size_t index = 1; index < serialize_data.size; index++) {
+			for (size_t index = 0; index < serialize_data.size; index++) {
 				Stream<wchar_t> solution_path(serialize_data[index].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[index].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
 				Stream<wchar_t> library_name(serialize_data[index].data[SERIALIZE_LIBRARY_NAME].buffer, serialize_data[index].data[SERIALIZE_LIBRARY_NAME].size / sizeof(wchar_t));
+				bool* is_graphics_module = (bool*)serialize_data[index].data[SERIALIZE_TYPE].buffer;
 
-				if (AddModule(editor_state, solution_path, library_name)) {
+				if (AddModule(editor_state, solution_path, library_name, *is_graphics_module)) {
 					valid_projects++;
 
 					UpdateModuleLastWrite(editor_state, valid_projects);
@@ -92,9 +75,8 @@ bool LoadModuleFile(EditorState* editor_state) {
 				}
 			}
 			if (valid_projects < serialize_data.size - 1) {
-				auto error_message = ToStream("One or more modules failed to load. Their paths were corrupted or deleted from outside ECSEngine."
+				EditorSetConsoleError("One or more modules failed to load. Their paths were corrupted or deleted from outside ECSEngine."
 					" They were removed from the current project's module list.");
-				EditorSetConsoleError(error_message);
 				ThreadTask rewrite_module_file = ECS_THREAD_TASK_NAME(SaveProjectModuleFileThreadTask, editor_state, 0);
 				editor_state->task_manager->AddDynamicTaskAndWake(rewrite_module_file);
 			}
@@ -103,11 +85,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 	}
 	else {
 		success = false;
-		editor_state->project_modules->size = 0;
-		editor_state->project_modules->ReserveNewElement();	
-		editor_state->project_modules->size = 1;
-		editor_state->project_modules->buffer[GRAPHICS_MODULE_INDEX].library_name = { nullptr, 0 };
-		editor_state->project_modules->buffer[GRAPHICS_MODULE_INDEX].solution_path = { nullptr, 0 };
+		editor_state->project_modules->Reset();
 	}
 
 	// Delete the locked files
@@ -135,7 +113,8 @@ bool SaveModuleFile(EditorState* editor_state) {
 		serialize_data[index].data.size = SERIALIZE_COUNT;
 		serialize_data[index].data[SERIALIZE_SOLUTION_PATH] = editor_module->solution_path;
 		serialize_data[index].data[SERIALIZE_LIBRARY_NAME] = editor_module->library_name;
-		;
+		serialize_data[index].data[SERIALIZE_TYPE] = { &editor_module->is_graphics_module, sizeof(editor_module->is_graphics_module) };
+
 		serialize_data[index].name = nullptr;
 		current_void_stream += SERIALIZE_COUNT;
 	};	
@@ -151,7 +130,7 @@ bool SaveModuleFile(EditorState* editor_state) {
 	}
 
 	ECS_TEMP_STRING(module_path, 256);
-	GetProjectModuleFilePath(editor_state, module_path);
+	GetProjectModulesFilePath(editor_state, module_path);
 	return SerializeMultisection(serialize_data, module_path);
 }
 
@@ -159,6 +138,6 @@ void SaveProjectModuleFileThreadTask(unsigned int thread_id, World* world, void*
 	EditorState* editor_state = (EditorState*)data;
 	bool success = SaveModuleFile(editor_state);
 	if (!success) {
-		EditorSetConsoleError(ToStream("Saving project module file failed."));
+		EditorSetConsoleError("Saving project module file failed.");
 	}
 }
