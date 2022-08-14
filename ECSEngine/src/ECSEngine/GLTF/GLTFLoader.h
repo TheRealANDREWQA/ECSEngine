@@ -32,12 +32,7 @@ namespace ECSEngine {
 	};
 
 	// Cgltf uses const char* internally, so a conversion must be done
-	ECSENGINE_API GLTFData LoadGLTFFile(const wchar_t* path, CapacityStream<char>* error_message = nullptr);
-
-	// Cgltf uses const char* internally, so a conversion must be done
 	ECSENGINE_API GLTFData LoadGLTFFile(Stream<wchar_t> path, CapacityStream<char>* error_message = nullptr);
-
-	ECSENGINE_API GLTFData LoadGLTFFile(const char* path, CapacityStream<char>* error_message = nullptr);
 
 	ECSENGINE_API GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message = nullptr);
 

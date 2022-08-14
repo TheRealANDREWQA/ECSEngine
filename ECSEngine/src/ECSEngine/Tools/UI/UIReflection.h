@@ -45,7 +45,7 @@ namespace ECSEngine {
 		struct UIReflectionTypeField {
 			size_t configuration;
 			void* data;
-			const char* name;
+			Stream<char> name;
 			UIReflectionStreamType stream_type;
 			UIReflectionIndex reflection_index;
 			unsigned short byte_size;
@@ -292,7 +292,7 @@ namespace ECSEngine {
 		};
 
 		struct UIReflectionType {
-			const char* name;
+			Stream<char> name;
 			CapacityStream<UIReflectionTypeField> fields;
 		};
 
@@ -305,8 +305,8 @@ namespace ECSEngine {
 		};*/
 
 		struct UIReflectionInstance {
-			const char* type_name;
-			const char* name;
+			Stream<char> type_name;
+			Stream<char> name;
 			Stream<void*> data;
 		};
 
@@ -314,12 +314,12 @@ namespace ECSEngine {
 		using UIReflectionInstanceTable = HashTableDefault<UIReflectionInstance>;
 
 		struct UIReflectionBindDefaultValue {
-			const char* field_name;
+			Stream<char> field_name;
 			void* value;
 		};
 
 		struct UIReflectionBindRange {
-			const char* field_name;
+			Stream<char> field_name;
 			void* min;
 			void* max;
 		};
@@ -328,47 +328,47 @@ namespace ECSEngine {
 		using UIReflectionBindUpperBound = UIReflectionBindDefaultValue;
 		
 		struct UIReflectionBindPrecision {
-			const char* field_name;
+			Stream<char> field_name;
 			unsigned int precision;
 		};
 
 		struct UIReflectionBindTextInput {
-			const char* field_name;
+			Stream<char> field_name;
 			ECSEngine::CapacityStream<char>* stream;
 		};
 
 		struct UIReflectionBindDirectoryInput {
-			const char* field_name;
+			Stream<char> field_name;
 			ECSEngine::CapacityStream<wchar_t>* stream;
 		};
 
 		typedef UIReflectionBindDirectoryInput UIReflectionBindFileInput;
 
 		struct UIReflectionBindStreamCapacity {
-			const char* field_name;
+			Stream<char> field_name;
 			size_t capacity;
 		};
 
 		// If only the capacity is to be changed, leave the data pointer nullptr
 		// If the data pointer is not nullptr, then the data will be copied into the stream
 		struct UIReflectionBindResizableStreamData {
-			const char* field_name;
+			Stream<char> field_name;
 			Stream<void> data = { nullptr, 0 };
 		};
 
 		struct UIReflectionBindStreamBuffer {
-			const char* field_name;
+			Stream<char> field_name;
 			void* new_buffer;
 		};
 		
 		struct UIReflectionStreamCopy {
-			const char* field_name;
+			Stream<char> field_name;
 			void* destination;
 			size_t element_count;
 		};
 
 		struct UIReflectionBindResizableStreamAllocator {
-			const char* field_name;
+			Stream<char> field_name;
 			AllocatorPolymorphic allocator;
 		};
 
@@ -404,7 +404,7 @@ namespace ECSEngine {
 			UIDrawer& drawer,
 			UIDrawConfig& config,
 			void* field_data, 
-			const char* field_name,
+			Stream<char> field_name,
 			UIReflectionStreamType stream_type, 
 			void* extra_data
 		);
@@ -415,9 +415,9 @@ namespace ECSEngine {
 		};
 
 		struct UIReflectionDrawerSearchOptions {
-			Stream<const char*> include_tags = { nullptr, 0 };
-			Stream<const char*> exclude_tags = { nullptr, 0 };
-			const char* suffix = nullptr;
+			Stream<Stream<char>> include_tags = { nullptr, 0 };
+			Stream<Stream<char>> exclude_tags = { nullptr, 0 };
+			Stream<char> suffix = { nullptr, 0 };
 			CapacityStream<unsigned int>* indices = nullptr;
 		};
 
@@ -433,97 +433,97 @@ namespace ECSEngine {
 			UIReflectionDrawer(const UIReflectionDrawer& other) = default;
 			UIReflectionDrawer& operator = (const UIReflectionDrawer& other) = default;
 
-			void AddTypeConfiguration(const char* type_name, const char* field_name, size_t field_configuration);
-			void AddTypeConfiguration(UIReflectionType* type, const char* field_name, size_t field_configuration);
+			void AddTypeConfiguration(Stream<char> type_name, Stream<char> field_name, size_t field_configuration);
+			void AddTypeConfiguration(UIReflectionType* type, Stream<char> field_name, size_t field_configuration);
 
 			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
 			// for every text input, directory input or file input a default sized buffer (256 element long)
-			void AssignInstanceResizableAllocator(const char* instance_name, AllocatorPolymorphic allocator, bool allocate_inputs = true);
+			void AssignInstanceResizableAllocator(Stream<char> instance_name, AllocatorPolymorphic allocator, bool allocate_inputs = true);
 			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
 			// for every text input, directory input or file input a default sized buffer (256 element long)
 			void AssignInstanceResizableAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, bool allocate_inputs = true);
 
-			void BindInstanceData(const char* instance_name, const char* field_name, void* field_data);
-			void BindInstanceData(UIReflectionInstance* instance, const char* field_name, void* field_data);
+			void BindInstanceData(Stream<char> instance_name, Stream<char> field_name, void* field_data);
+			void BindInstanceData(UIReflectionInstance* instance, Stream<char> field_name, void* field_data);
 
-			void BindTypeData(const char* type_name, const char* field_name, void* field_data);
-			void BindTypeData(UIReflectionType* type, const char* field_name, void* field_data);
+			void BindTypeData(Stream<char> type_name, Stream<char> field_name, void* field_data);
+			void BindTypeData(UIReflectionType* type, Stream<char> field_name, void* field_data);
 
-			void BindTypeLowerBounds(const char* type_name, Stream<UIReflectionBindLowerBound> data);
+			void BindTypeLowerBounds(Stream<char> type_name, Stream<UIReflectionBindLowerBound> data);
 			void BindTypeLowerBounds(UIReflectionType* type, Stream<UIReflectionBindLowerBound> data);
 			// It will take the values directly from the type - only for those fields which allow
 			void BindTypeLowerBounds(UIReflectionType* type, const void* data);
 
-			void BindTypeUpperBounds(const char* type_name, Stream<UIReflectionBindUpperBound> data);
+			void BindTypeUpperBounds(Stream<char> type_name, Stream<UIReflectionBindUpperBound> data);
 			void BindTypeUpperBounds(UIReflectionType* type, Stream<UIReflectionBindUpperBound> data);
 			// It will take the values directly from the type - only for those fields which allow
 			void BindTypeUpperBounds(UIReflectionType* type, const void* data);
 
-			void BindTypeDefaultData(const char* type_name, Stream<UIReflectionBindDefaultValue> data);
+			void BindTypeDefaultData(Stream<char> type_name, Stream<UIReflectionBindDefaultValue> data);
 			void BindTypeDefaultData(UIReflectionType* type, Stream<UIReflectionBindDefaultValue> data);
 			// It will take the values directly from the type - only for those fields which allow
 			void BindTypeDefaultData(UIReflectionType* type, const void* data);
 
-			void BindTypeRange(const char* type_name, Stream<UIReflectionBindRange> data);
+			void BindTypeRange(Stream<char> type_name, Stream<UIReflectionBindRange> data);
 			void BindTypeRange(UIReflectionType* type, Stream<UIReflectionBindRange> data);
 
-			void BindTypePrecision(const char* type_name, Stream<UIReflectionBindPrecision> data);
+			void BindTypePrecision(Stream<char> type_name, Stream<UIReflectionBindPrecision> data);
 			void BindTypePrecision(UIReflectionType* type, Stream<UIReflectionBindPrecision> data);
 
 			// It requires access to a ReflectionType
-			void BindInstancePtrs(const char* instance_name, void* data);
+			void BindInstancePtrs(Stream<char> instance_name, void* data);
 			// It requires access to a ReflectionType
 			void BindInstancePtrs(UIReflectionInstance* instance, void* data);
 
 			// The ReflectionType if it is created outside
-			void BindInstancePtrs(UIReflectionInstance* instance, void* data, Reflection::ReflectionType type);
+			void BindInstancePtrs(UIReflectionInstance* instance, void* data, const Reflection::ReflectionType* type);
 
-			void BindInstanceTextInput(const char* instance_name, Stream<UIReflectionBindTextInput> data);
+			void BindInstanceTextInput(Stream<char> instance_name, Stream<UIReflectionBindTextInput> data);
 			void BindInstanceTextInput(UIReflectionInstance* instance, Stream<UIReflectionBindTextInput> data);
 
-			void BindInstanceDirectoryInput(const char* instance_name, Stream<UIReflectionBindDirectoryInput> data);
+			void BindInstanceDirectoryInput(Stream<char> instance_name, Stream<UIReflectionBindDirectoryInput> data);
 			void BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<UIReflectionBindDirectoryInput> data);
 
-			void BindInstanceFileInput(const char* instance_name, Stream<UIReflectionBindFileInput> data);
+			void BindInstanceFileInput(Stream<char> instance_name, Stream<UIReflectionBindFileInput> data);
 			void BindInstanceFileInput(UIReflectionInstance* instance, Stream<UIReflectionBindFileInput> data);
 
-			void BindInstanceStreamCapacity(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
+			void BindInstanceStreamCapacity(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			void BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
-			void BindInstanceStreamSize(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
+			void BindInstanceStreamSize(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			void BindInstanceStreamSize(UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
-			void BindInstanceStreamBuffer(const char* instance_name, Stream<UIReflectionBindStreamBuffer> data);
+			void BindInstanceStreamBuffer(Stream<char> instance_name, Stream<UIReflectionBindStreamBuffer> data);
 			void BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<UIReflectionBindStreamBuffer> data);
 
-			void BindInstanceResizableStreamAllocator(const char* instance_name, Stream<UIReflectionBindResizableStreamAllocator> data);
+			void BindInstanceResizableStreamAllocator(Stream<char> instance_name, Stream<UIReflectionBindResizableStreamAllocator> data);
 			void BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamAllocator> data);
 
-			void BindInstanceResizableStreamData(const char* instance_name, Stream<UIReflectionBindResizableStreamData> data);
+			void BindInstanceResizableStreamData(Stream<char> instance_name, Stream<UIReflectionBindResizableStreamData> data);
 			void BindInstanceResizableStreamData(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamData> data);
 
-			void ConvertTypeResizableStream(const char* type_name, Stream<const char*> field_names);
-			void ConvertTypeResizableStream(UIReflectionType* type, Stream<const char*> field_names);
+			void ConvertTypeResizableStream(Stream<char> type_name, Stream<Stream<char>> field_names);
+			void ConvertTypeResizableStream(UIReflectionType* type, Stream<Stream<char>> field_names);
 
-			void ConvertTypeStreamsToResizable(const char* type_name);
+			void ConvertTypeStreamsToResizable(Stream<char> type_name);
 			void ConvertTypeStreamsToResizable(UIReflectionType* type);
 
 			// It will fill in the count for each field
-			void CopyInstanceStreams(const char* instance_name, Stream<UIReflectionStreamCopy> data);
+			void CopyInstanceStreams(Stream<char> instance_name, Stream<UIReflectionStreamCopy> data);
 			// It will fill in the count for each field
 			void CopyInstanceStreams(UIReflectionInstance* instance, Stream<UIReflectionStreamCopy> data);
 
-			void ChangeInputToSlider(const char* type_name, const char* field_name);
-			void ChangeInputToSlider(UIReflectionType* type, const char* field_name);
+			void ChangeInputToSlider(Stream<char> type_name, Stream<char> field_name);
+			void ChangeInputToSlider(UIReflectionType* type, Stream<char> field_name);
 
-			void ChangeDirectoryToFile(const char* type_name, const char* field_name);
-			void ChangeDirectoryToFile(UIReflectionType* type, const char* field_name);
+			void ChangeDirectoryToFile(Stream<char> type_name, Stream<char> field_name);
+			void ChangeDirectoryToFile(UIReflectionType* type, Stream<char> field_name);
 
-			UIReflectionType* CreateType(const char* name);
-			UIReflectionType* CreateType(Reflection::ReflectionType type);
+			UIReflectionType* CreateType(Stream<char> name);
+			UIReflectionType* CreateType(const Reflection::ReflectionType* type);
 
-			UIReflectionInstance* CreateInstance(const char* name, const char* type_name);
-			UIReflectionInstance* CreateInstance(const char* name, const UIReflectionType* type);
+			UIReflectionInstance* CreateInstance(Stream<char> name, Stream<char> type_name);
+			UIReflectionInstance* CreateInstance(Stream<char> name, const UIReflectionType* type);
 
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
@@ -532,7 +532,7 @@ namespace ECSEngine {
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
 			// Options used: all except the suffix.
-			unsigned int CreateTypesForHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateTypesForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
 
 			// It will create an instance for each type with the given hierarchy.
 			// Returns how many instances were created
@@ -541,7 +541,7 @@ namespace ECSEngine {
 			// It will create an instance for each type with the given hierarchy.
 			// Returns how many instances were created
 			// Options used: all.
-			unsigned int CreateInstanceForHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateInstanceForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
 
 			// It will create a type and an instance for each reflected type from the given hierarchy.
 			// The name of the instance is identical to that of the type
@@ -553,12 +553,12 @@ namespace ECSEngine {
 			// The name of the instance is identical to that of the type
 			// Returns how many instances were created
 			// Options used: all except the suffix. The indices buffer will be populated with the instances' indices
-			unsigned int CreateTypesAndInstancesForHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
+			unsigned int CreateTypesAndInstancesForHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
 
 			void DestroyInstance(unsigned int index);
-			void DestroyInstance(const char* name);
+			void DestroyInstance(Stream<char> name);
 
-			void DestroyType(const char* name);
+			void DestroyType(Stream<char> name);
 
 			// The additional configuration will be applied to all fields
 			// It can be used to set size configs, text parameters, alignments
@@ -566,12 +566,13 @@ namespace ECSEngine {
 			// Or you can provide functors to override the drawing of certain field types
 			// use the other variant
 			void DrawInstance(
-				const char* instance_name,
+				Stream<char> instance_name,
 				UIDrawer& drawer, 
 				UIDrawConfig& config,
+				size_t global_configuration = 0,
 				Stream<UIReflectionDrawConfig> additional_configs = { nullptr, 0 },
 				const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr,
-				const char* default_value_button = nullptr
+				Stream<char> default_value_button = { nullptr, 0 }
 			);
 
 			// The additional configuration will be applied to all fields
@@ -581,16 +582,17 @@ namespace ECSEngine {
 				UIReflectionInstance* instance,
 				UIDrawer& drawer,
 				UIDrawConfig& config,
+				size_t global_configuration = 0,
 				Stream<UIReflectionDrawConfig> additional_configs = { nullptr, 0 },
 				const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr,
-				const char* default_value_button = nullptr
+				Stream<char> default_value_button = { nullptr, 0 }
 			);
 
 			// Destroys all instances and types that originate from the given hierarchy
 			void DestroyAllFromFolderHierarchy(unsigned int hierarchy_index);
 
 			// Destroys all instances and types that originate from the given hierarchy
-			void DestroyAllFromFolderHierarchy(const wchar_t* hierarchy);
+			void DestroyAllFromFolderHierarchy(Stream<wchar_t> hierarchy);
 
 			// Destroys all instances from the given hierarchy. If a suffix is provided, only those instances
 			// that match the name of the type with the suffix appended will be deleted.
@@ -600,48 +602,50 @@ namespace ECSEngine {
 			// Destroys all instances from the given hierarchy. If a suffix is provided, only those instances
 			// that match the name of the type with the suffix appended will be deleted.
 			// The include and exclude tags are used for the instance's parent type tags
-			void DestroyAllInstancesFromFolderHierarchy(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options = {});
+			void DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
 
 			// It will fill in the capacity field
-			void GetInstanceStreamSizes(const char* instance_name, Stream<UIReflectionBindStreamCapacity> data);
+			void GetInstanceStreamSizes(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(const UIReflectionInstance* instance, Stream<UIReflectionBindStreamCapacity> data);
 
 			void GetHierarchyTypes(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options);
-			void GetHierarchyTypes(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options);
+			void GetHierarchyTypes(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options);
 
 			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
 			void GetHierarchyInstances(unsigned int hierarchy_index, UIReflectionDrawerSearchOptions options);
 			// If a suffix is provided, only those instances which match a type name with the appended suffix will be provided
-			void GetHierarchyInstances(const wchar_t* hierarchy, UIReflectionDrawerSearchOptions options);
+			void GetHierarchyInstances(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options);
 
 			// It will assert that it exists
-			UIReflectionType GetType(const char* name) const;
+			UIReflectionType GetType(Stream<char> name) const;
 			// It will assert that it exists
 			UIReflectionType GetType(unsigned int index) const;
 
 			// Returns nullptr if it doesn't exist.
-			UIReflectionType* GetTypePtr(const char* name) const;
+			UIReflectionType* GetTypePtr(Stream<char> name);
 			// Returns nullptr if it doesn't exist
-			UIReflectionType* GetTypePtr(unsigned int index) const;
+			UIReflectionType* GetTypePtr(unsigned int index);
 
 			unsigned int GetTypeCount() const;
 			unsigned int GetInstanceCount() const;
 
-			UIReflectionInstance GetInstance(const char* name) const;
+			UIReflectionInstance GetInstance(Stream<char> name) const;
 			UIReflectionInstance GetInstance(unsigned int index) const;
 
-			UIReflectionInstance* GetInstancePtr(const char* name) const;
-			UIReflectionInstance* GetInstancePtr(unsigned int index) const;
+			// Returns nullptr if it doesn't exist
+			UIReflectionInstance* GetInstancePtr(Stream<char> name);
+			// Returns nullptr if it doesn't exist
+			UIReflectionInstance* GetInstancePtr(unsigned int index);
 			
-			unsigned int GetTypeFieldIndex(UIReflectionType type, const char* field_name) const;
-			unsigned int GetTypeFieldIndex(const char* type_name, const char* field_name);
+			unsigned int GetTypeFieldIndex(UIReflectionType type, Stream<char> field_name) const;
+			unsigned int GetTypeFieldIndex(Stream<char> type_name, Stream<char> field_name);
 
-			void OmitTypeField(const char* type_name, const char* field_name);
-			void OmitTypeField(UIReflectionType* type, const char* field_name);
+			void OmitTypeField(Stream<char> type_name, Stream<char> field_name);
+			void OmitTypeField(UIReflectionType* type, Stream<char> field_name);
 
-			void OmitTypeFields(const char* type_name, Stream<const char*> fields);
-			void OmitTypeFields(UIReflectionType* type, Stream<const char*> fields);
+			void OmitTypeFields(Stream<char> type_name, Stream<Stream<char>> fields);
+			void OmitTypeFields(UIReflectionType* type, Stream<Stream<char>> fields);
 
 			Reflection::ReflectionManager* reflection;
 			UIToolsAllocator* allocator;

@@ -348,8 +348,8 @@ namespace ECSEngine {
 
 			filter_characters_start = current_sprite_position;
 			filter_character_count = character_count;
-			text->PushDownElements(current_sprite_position, character_count);
-			vertices.PushDownElements(current_sprite_position * 6, character_count * 6);
+			text->DisplaceElements(current_sprite_position, character_count);
+			vertices.DisplaceElements(current_sprite_position * 6, character_count * 6);
 			memcpy(text->buffer + current_selection, characters, sizeof(unsigned char) * character_count);
 			system->ConvertCharactersToTextSprites(
 				{ characters, character_count },

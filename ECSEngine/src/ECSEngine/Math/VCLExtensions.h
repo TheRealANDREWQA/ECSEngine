@@ -269,27 +269,13 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region Horizontal Find First
-
-	// Use horizontal or to precull the find first search
-	// Horizontal find first uses some SIMD and scalar instructions
-	// while horizontal or is mostly a single SIMD instruction
-	// Returns -1 if it doesn't exist
-	template<typename VectorType>
-	int ECS_VECTORCALL HorizontalFindFirst(VectorType vector) {
-		if (horizontal_or(vector)) {
-			return horizontal_find_first(vector);
-		}
-		return -1;
-	}
-
-#pragma endregion
-
 #pragma region
 
 	// The functor can return true in order to early exit from the function
-	template<typename Functor>
-	void ECS_VECTORCALL ForEachBit(Vec32cb bit_mask, Functor&& functor) {
+	// Can toggle reverse search, which will start from the high positions of
+	// the bit vector
+	template<bool reverse_search = false, typename BitMaskVector, typename Functor>
+	void ECS_VECTORCALL ForEachBit(BitMaskVector bit_mask, Functor&& functor) {
 		if (horizontal_or(bit_mask)) {
 			unsigned int match_bits = to_bits(bit_mask);
 			unsigned long vector_index = 0;
@@ -297,18 +283,57 @@ namespace ECSEngine {
 
 			// Keep an offset because when a false positive is detected, that bit must be eliminated and in order to avoid
 			// using masks, shift to the right to make that bit 0
-			while (_BitScanForward(&vector_index, match_bits)) {
-				if (functor(offset + vector_index)) {
+			unsigned char result = 0;
+			if  constexpr (reverse_search) {
+				result = _BitScanReverse(&vector_index, match_bits);
+			}
+			else {
+				result = _BitScanForward(&vector_index, match_bits);
+			}
+			while (result) {
+				unsigned int bit_index = 0;
+				if constexpr (reverse_search) {
+					bit_index = vector_index - offset;
+				}
+				else {
+					bit_index = offset + vector_index;
+				}
+
+				if (functor(bit_index)) {
 					return;
 				}
-				bool is_shift_32 = vector_index + 1 == 32;
+
+				bool is_last = false;
+				if constexpr (reverse_search) {
+					is_last = vector_index == 0;
+				}
+				else {
+					is_last = vector_index + 1 == 32;
+				}
+
 				// Can't shift by 32, hardware does modulo % 32 shift amount and results in shifting 0 positions
 				// If it is the last bit, aka vector index == 31, then quit
-				if (is_shift_32) {
+				if (is_last) {
 					return;
 				}
-				match_bits >>= vector_index + 1;
-				offset += vector_index + 1;
+
+				if constexpr (reverse_search) {
+					// For reverse search shift to the left to eliminate the high bits
+					match_bits <<= (32 - vector_index);
+					offset += 32 - vector_index;
+				}
+				else {
+					// For normal search shift to the right in order to eliminate the lower bits
+					match_bits >>= vector_index + 1;
+					offset += vector_index + 1;
+				}
+
+				if constexpr (reverse_search) {
+					result = _BitScanReverse(&vector_index, match_bits);
+				}
+				else {
+					result = _BitScanForward(&vector_index, match_bits);
+				}
 			}
 		}
 	}

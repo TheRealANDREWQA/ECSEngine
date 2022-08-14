@@ -19,10 +19,6 @@ namespace ECSEngine {
 
 #pragma region Basic APIs
 
-		bool LaunchFileExplorer(const wchar_t* folder) {
-			return LaunchFileExplorer(Stream<wchar_t>(folder, wcslen(folder)));
-		}
-
 		// -----------------------------------------------------------------------------------------------------
 
 		bool LaunchFileExplorer(Stream<wchar_t> folder) {
@@ -50,19 +46,20 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimesInternal(const wchar_t* ECS_RESTRICT path, FILETIME* filetime_creation, FILETIME* filetime_last_access, FILETIME* filetime_last_write) {
+		bool GetFileTimesInternal(Stream<wchar_t> path, FILETIME* filetime_creation, FILETIME* filetime_last_access, FILETIME* filetime_last_write) {
+			NULL_TERMINATE_WIDE(path);
+			
 			// Determine whether or not it is a file or directory
-			Stream<wchar_t> stream_path = ToStream(path);
 			HANDLE handle = INVALID_HANDLE_VALUE;
-			if (function::PathExtensionSize(stream_path) == 0) {
+			if (function::PathExtensionSize(path) == 0) {
 				// Open a handle to a directory
-				handle = CreateFile(path, GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+				handle = CreateFile(path.buffer, GENERIC_READ, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 			}
 			else {
 				// Open a handle to the file
-				handle = CreateFile(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+				handle = CreateFile(path.buffer, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 			}
-			
+
 			DWORD error = GetLastError();
 			if (handle == INVALID_HANDLE_VALUE) {
 				return false;
@@ -70,7 +67,7 @@ namespace ECSEngine {
 			else {
 				// if getting the handle was succesful, get file times
 				BOOL success = GetFileTime(handle, filetime_creation, filetime_last_access, filetime_last_write);
-				
+
 				CloseHandle(handle);
 				if (!success) {
 					return false;
@@ -99,15 +96,11 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(
-			const wchar_t* ECS_RESTRICT path,
-			char* ECS_RESTRICT creation_time,
-			char* ECS_RESTRICT access_time,
-			char* ECS_RESTRICT last_write_time
-		) {
+		bool GetFileTimes(Stream<wchar_t> path, char* ECS_RESTRICT creation_time, char* ECS_RESTRICT access_time, char* ECS_RESTRICT last_write_time)
+		{
 			FILETIME os_creation_time, os_access_time, os_last_write_time;
 			bool success = GetFileTimesInternal(path, &os_creation_time, &os_access_time, &os_last_write_time);
-			
+
 			if (success) {
 				SYSTEMTIME sys_creation_time, sys_access_time, sys_last_write_time;
 				if (creation_time != nullptr) {
@@ -141,19 +134,17 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(
-			const wchar_t* ECS_RESTRICT path,
-			wchar_t* ECS_RESTRICT creation_time,
-			wchar_t* ECS_RESTRICT access_time,
-			wchar_t* ECS_RESTRICT last_write_time
-		) {
+		bool GetFileTimes(Stream<wchar_t> path, wchar_t* ECS_RESTRICT creation_time, wchar_t* ECS_RESTRICT access_time, wchar_t* ECS_RESTRICT last_write_time)
+		{
+			NULL_TERMINATE_WIDE(path);
+
 			char _creation_time[256];
 			char _access_time[256];
 			char _last_write_time[256];
 
-			char* ptr1 = (char*)function::Select<uintptr_t>(creation_time == nullptr, 0, (uintptr_t)_creation_time);
-			char* ptr2 = (char*)function::Select<uintptr_t>(access_time == nullptr, 0, (uintptr_t)_access_time);
-			char* ptr3 = (char*)function::Select<uintptr_t>(last_write_time == nullptr, 0, (uintptr_t)_last_write_time);
+			char* ptr1 = creation_time == nullptr ? nullptr : _creation_time;
+			char* ptr2 = access_time == nullptr ? nullptr : _access_time;
+			char* ptr3 = last_write_time == nullptr ? nullptr : _last_write_time;
 
 			bool success = GetFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
@@ -173,7 +164,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(const wchar_t* ECS_RESTRICT path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
+		bool GetFileTimes(Stream<wchar_t> path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
 		{
 			FILETIME os_creation_time, os_access_time, os_last_write_time;
 			bool success = GetFileTimesInternal(path, &os_creation_time, &os_access_time, &os_last_write_time);
@@ -217,29 +208,8 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(Stream<wchar_t> path, char* ECS_RESTRICT creation_time, char* ECS_RESTRICT access_time, char* ECS_RESTRICT last_write_time)
-		{
-			ECS_FORWARD_STREAM_WIDE(path, GetFileTimes, creation_time, access_time, last_write_time);
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		bool GetFileTimes(Stream<wchar_t> path, wchar_t* ECS_RESTRICT creation_time, wchar_t* ECS_RESTRICT access_time, wchar_t* ECS_RESTRICT last_write_time)
-		{
-			ECS_FORWARD_STREAM_WIDE(path, GetFileTimes, creation_time, access_time, last_write_time);
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		bool GetFileTimes(Stream<wchar_t> path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
-		{
-			ECS_FORWARD_STREAM_WIDE(path, GetFileTimes, creation_time, access_time, last_write_time);
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
 		bool GetRelativeFileTimes(
-			const wchar_t* ECS_RESTRICT path,
+			Stream<wchar_t> path,
 			size_t* ECS_RESTRICT creation_time,
 			size_t* ECS_RESTRICT access_time,
 			size_t* ECS_RESTRICT last_write_time
@@ -300,7 +270,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------
 
 		bool GetRelativeFileTimes(
-			const wchar_t* ECS_RESTRICT path,
+			Stream<wchar_t> path,
 			char* ECS_RESTRICT creation_time,
 			char* ECS_RESTRICT access_time,
 			char* ECS_RESTRICT last_write_time
@@ -311,9 +281,9 @@ namespace ECSEngine {
 			size_t* ptr2 = nullptr;
 			size_t* ptr3 = nullptr;
 
-			ptr1 = (size_t*)function::Select<uintptr_t>(creation_time != nullptr, (uintptr_t)&creation_time_int, (uintptr_t)nullptr);
-			ptr2 = (size_t*)function::Select<uintptr_t>(access_time != nullptr, (uintptr_t)&access_time_int, (uintptr_t)nullptr);
-			ptr3 = (size_t*)function::Select<uintptr_t>(last_write_time != nullptr, (uintptr_t)&last_write_time_int, (uintptr_t)nullptr);
+			ptr1 = creation_time != nullptr ? &creation_time_int : nullptr;
+			ptr2 = access_time != nullptr ? &access_time_int : nullptr;
+			ptr3 = last_write_time != nullptr ? &last_write_time_int : nullptr;
 
 			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
 			if (success) {
@@ -334,7 +304,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------
 
 		bool GetRelativeFileTimes(
-			const wchar_t* ECS_RESTRICT path,
+			Stream<wchar_t> path,
 			wchar_t* ECS_RESTRICT creation_time,
 			wchar_t* ECS_RESTRICT access_time,
 			wchar_t* ECS_RESTRICT last_write_time
@@ -344,9 +314,9 @@ namespace ECSEngine {
 			char temp_characters2[256];
 			char temp_characters3[256];
 
-			char* ptr1 = (char*)function::Select<uintptr_t>(creation_time != nullptr, (uintptr_t)temp_characters1, (uintptr_t)nullptr);
-			char* ptr2 = (char*)function::Select<uintptr_t>(access_time != nullptr, (uintptr_t)temp_characters2, (uintptr_t)nullptr);
-			char* ptr3 = (char*)function::Select<uintptr_t>(last_write_time != nullptr, (uintptr_t)temp_characters3, (uintptr_t)nullptr);
+			char* ptr1 = creation_time != nullptr ? temp_characters1 : nullptr;
+			char* ptr2 = access_time != nullptr ? temp_characters2 : nullptr;
+			char* ptr3 = last_write_time != nullptr ? temp_characters3 : nullptr;
 			bool success = GetRelativeFileTimes(path, ptr1, ptr2, ptr3);
 
 			if (success) {
@@ -366,30 +336,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetRelativeFileTimes(Stream<wchar_t> path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
-		{
-			ECS_FORWARD_STREAM_WIDE(path, GetRelativeFileTimes, creation_time, access_time, last_write_time);
-		}
+		bool OpenFileWithDefaultApplication(
+			Stream<wchar_t> path,
+			CapacityStream<char>* error_message
+		) {
+			NULL_TERMINATE_WIDE(path);
 
-		// -----------------------------------------------------------------------------------------------------
-
-		bool GetRelativeFileTimes(Stream<wchar_t> path, char* ECS_RESTRICT creation_time, char* ECS_RESTRICT access_time, char* ECS_RESTRICT last_write_time)
-		{
-			ECS_FORWARD_STREAM_WIDE(path, GetRelativeFileTimes, creation_time, access_time, last_write_time);
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		bool GetRelativeFileTimes(Stream<wchar_t> path, wchar_t* ECS_RESTRICT creation_time, wchar_t* ECS_RESTRICT access_time, wchar_t* ECS_RESTRICT last_write_time)
-		{
-			ECS_FORWARD_STREAM_WIDE(path, GetRelativeFileTimes, creation_time, access_time, last_write_time);
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		bool OpenFileWithDefaultApplication(const wchar_t* path, CapacityStream<char>* error_message)
-		{
-			HINSTANCE instance = ShellExecute(NULL, NULL, path, NULL, NULL, SW_SHOW);
+			HINSTANCE instance = ShellExecute(NULL, NULL, path.buffer, NULL, NULL, SW_SHOW);
 			size_t code = (size_t)instance;
 			if (code > 32) {
 				return true;
@@ -432,27 +385,9 @@ namespace ECSEngine {
 					error_code = "A sharing violation occurred.";
 					break;
 				}
-				error_message->AddStreamSafe(ToStream(error_code));
+				error_message->AddStreamSafe(error_code);
 			}
 			return false;
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		bool OpenFileWithDefaultApplication(
-			Stream<wchar_t> path,
-			CapacityStream<char>* error_message
-		) {
-			if (path.size > 512) {
-				if (error_message != nullptr) {
-					error_message->Copy(ToStream("Path is too big to copy to a stack buffer"));
-				}
-				return false;
-			}
-			wchar_t temp_path[512];
-			path.CopyTo(temp_path);
-			temp_path[path.size] = L'\0';
-			return OpenFileWithDefaultApplication(temp_path, error_message);
 		}
 
 		// -----------------------------------------------------------------------------------------------------
@@ -477,7 +412,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		size_t GetFileLastWrite(const wchar_t* path)
+		size_t GetFileLastWrite(Stream<wchar_t> path)
 		{
 			size_t last_write = 0;
 			GetFileTimes(path, nullptr, nullptr, &last_write);
@@ -486,27 +421,11 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		size_t GetFileLastWrite(Stream<wchar_t> path)
-		{
-			if (path[path.size] == L'\0') {
-				return GetFileLastWrite(path.buffer);
-			}
-			else {
-				ECS_ASSERT(path.size < 1024);
-				wchar_t* null_terminated_path = (wchar_t*)ECS_STACK_ALLOC(sizeof(wchar_t) * (path.size + 1));
-				path.CopyTo(null_terminated_path);
-				null_terminated_path[path.size] = L'\0';
-				return GetFileLastWrite(null_terminated_path);
-			}
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		void InitializeSymbolicLinksPaths(Stream<wchar_t*> module_paths)
+		void InitializeSymbolicLinksPaths(Stream<Stream<wchar_t>> module_paths)
 		{
 			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 8);
 			for (size_t index = 0; index < module_paths.size; index++) {
-				search_paths.AddStream(ToStream(module_paths[index]));
+				search_paths.AddStream(module_paths[index]);
 				search_paths.AddSafe(L':');
 			}
 			search_paths[search_paths.size - 1] = L'\0';
@@ -525,11 +444,11 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void SetSymbolicLinksPaths(Stream<wchar_t*> module_paths)
+		void SetSymbolicLinksPaths(Stream<Stream<wchar_t>> module_paths)
 		{
 			ECS_STACK_CAPACITY_STREAM(wchar_t, search_paths, ECS_KB * 16);
 			for (size_t index = 0; index < module_paths.size; index++) {
-				search_paths.AddStream(ToStream(module_paths[index]));
+				search_paths.AddStream(module_paths[index]);
 				search_paths.AddSafe(L':');
 			}
 			search_paths[search_paths.size - 1] = L'\0';
@@ -562,7 +481,7 @@ namespace ECSEngine {
 			HANDLE process_handle = GetCurrentProcess();
 
 			size_t displacement = 0;
-			string.AddStreamSafe(ToStream("Stack trace:\n"));
+			string.AddStreamSafe("Stack trace:\n");
 			while (StackWalk64(IMAGE_FILE_MACHINE_AMD64, process_handle, GetCurrentThread(), &stack_frame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
 				success = SymGetSymFromAddr64(process_handle, (size_t)stack_frame.AddrPC.Offset, &displacement, image_symbol);
 				DWORD characters_written = UnDecorateSymbolName(image_symbol->Name, string.buffer + string.size, string.capacity - string.size, UNDNAME_COMPLETE);

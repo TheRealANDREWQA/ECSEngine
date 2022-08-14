@@ -588,10 +588,10 @@ namespace ECSEngine {
 		void UITooltipDrawData::FinalizeRectangle(float2 position, float2 scale)
 		{
 			position.x += scale.x;
-			max_bounds.x = function::Select(position.x > max_bounds.x, position.x, max_bounds.x);
-			max_bounds.y = function::Select(position.y > max_bounds.y, position.y, max_bounds.y);
+			max_bounds.x = std::max(max_bounds.x, position.x);
+			max_bounds.y = std::max(max_bounds.y, position.y);
 			current_scale.x = 0.0f;
-			current_scale.y = function::Select(current_scale.y < scale.y, scale.y, current_scale.y);
+			current_scale.y = std::max(current_scale.y, scale.y);
 		}
 
 		void UIWindowDrawerDescriptor::UpdateZoom(float2 before_zoom, float2 current_zoom)
@@ -630,10 +630,10 @@ namespace ECSEngine {
 			*/
 
 			uintptr_t ptr = (uintptr_t)buffer;
-			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
+			memcpy((void*)ptr, descriptors, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
 		
 			// configured descriptors
-			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
+			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
@@ -649,7 +649,7 @@ namespace ECSEngine {
 			};
 
 			// descriptors
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					memcpy((void*)ptr, descriptor_ptrs[index], descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];
@@ -662,7 +662,7 @@ namespace ECSEngine {
 			*ptr_name_length = (unsigned short)name_length;
 			ptr += sizeof(unsigned short);
 
-			memcpy((void*)ptr, name, name_length);
+			memcpy((void*)ptr, name.buffer, name_length);
 			ptr += name_length;
 			return ptr - (uintptr_t)buffer;
 		}
@@ -672,7 +672,7 @@ namespace ECSEngine {
 			size_t size = 0;
 
 			// configured descriptors
-			size += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
+			size += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			size_t descriptor_sizes[] = {
 				sizeof(UIColorThemeDescriptor),
@@ -701,7 +701,7 @@ namespace ECSEngine {
 			uintptr_t ptr = (uintptr_t)buffer;
 
 			// descriptor configurations
-			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
+			memcpy(descriptors->configured, (const void*)ptr, sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT);
 			
 			void* descriptor_ptrs[] = {
 				&descriptors->color_theme,
@@ -716,10 +716,10 @@ namespace ECSEngine {
 				sizeof(UIElementDescriptor)
 			};
 
-			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
+			ptr += sizeof(bool) * (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT;
 
 			// configured descriptors
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				if (descriptors->configured[index]) {
 					memcpy(descriptor_ptrs[index], (const void*)ptr, descriptor_sizes[index]);
 					ptr += descriptor_sizes[index];

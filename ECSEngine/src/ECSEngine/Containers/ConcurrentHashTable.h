@@ -7,21 +7,20 @@
 namespace ECSEngine {
 
 	/*
-		This hash table is suited for typesand identifiers which are greater in size
+		This hash table is suited for types and identifiers which are greater in size
 		This offers the possibility of generating and element and identifier on the stack
 		and have it stored in a multithreaded fashion. The small table has the disadvantage
 		that if you want to store pointers to the elements when you actually wanted to store themselves
 		you get an extra indirection - can hurt performance - and also need to make sure that the
-		allocation of those objects is done threadsafe, possibly from the allocator which is not a huge
-		or from a thread local pool, which may or may not be a huge deal. This table doesn't suffer from those 
-		problems but it might be slower for the find, insert and delete operations. Testing must be done to see
-		which performs better.
+		allocation of those objects is done threadsafe, possibly from the allocator or from a thread local pool,
+		which may or may not be a huge deal. This table doesn't suffer from those problems but it might be slower for the find,
+		insert and delete operations. Testing must be done to see which performs better.
 
 		
 		The principle of this table: Robin Hood hashing. It is a vanilla implementation, without any SIMD or fancy stuff.
 		The hash bits are selected from the middle of the key such that it offers better culling for power of two hash tables at small sizes. 
 		It keeps a single read write lock for each element, and the elements are stored in an AoS style in order to minimize false
-		sharing between locks. There is no wraparound to avoid deadlocks and to simplify the code path. 
+		sharing between locks. There is no wrap around to avoid deadlocks and to simplify the code path. 
 		There are an extra of 32 elements stored at the end in order to allow the last elements shift there without wraparound.
 		It does not support resizing - it would add complexity that is not worth.
 	*/

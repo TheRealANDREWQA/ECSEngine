@@ -1,6 +1,6 @@
 // ECS_REFLECT
 #pragma once
-#include "ECSEngineInternal.h"
+#include "ECSEngineContainers.h"
 
 struct ECS_REFLECT ProjectFile {
 	char version_description[32];
@@ -8,6 +8,5 @@ struct ECS_REFLECT ProjectFile {
 	size_t version;
 	size_t platform;
 	ECSEngine::CapacityStream<wchar_t> project_name;
-	ECSEngine::CapacityStream<wchar_t> project_settings;
 	ECSEngine::CapacityStream<wchar_t> path;
 };

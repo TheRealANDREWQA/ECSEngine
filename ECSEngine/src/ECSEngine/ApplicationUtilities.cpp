@@ -38,7 +38,8 @@ namespace ECSEngine {
 		graphics_descriptor.window_size = { new_width, new_height };
 		graphics_descriptor.gamma_corrected = false;
 		graphics_descriptor.allocator = graphics_allocator;
-		new (graphics) Graphics(hWnd, &graphics_descriptor);
+		graphics_descriptor.hWnd = hWnd;
+		new (graphics) Graphics(&graphics_descriptor);
 	}
 
 }

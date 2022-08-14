@@ -9,8 +9,6 @@ namespace ECSEngine {
 #define ECS_HASHTABLE_DYNAMIC_GROW_FACTOR 1.5f
 #endif
 
-#define ECS_RESOURCE_IDENTIFIER(name) ResourceIdentifier identifier = ResourceIdentifier(name, strlen(name));
-
 	// filename can be used as a general purpose pointer if other identifier than the filename is used
 	// Compare function uses AVX2 32 byte SIMD char compare
 	struct ECSENGINE_API ResourceIdentifier {
@@ -20,6 +18,8 @@ namespace ECSEngine {
 		// if the identifier is something other than a LPCWSTR path
 		ResourceIdentifier(const void* id, unsigned int size);
 		ResourceIdentifier(Stream<void> identifier);
+		ResourceIdentifier(Stream<char> identifier);
+		ResourceIdentifier(Stream<wchar_t> identifier);
 
 		ResourceIdentifier(const ResourceIdentifier& other) = default;
 		ResourceIdentifier& operator = (const ResourceIdentifier& other) = default;

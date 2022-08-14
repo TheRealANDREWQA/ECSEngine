@@ -9,7 +9,7 @@ namespace ECSEngine {
 	// Data.size represents the element count for a stream type
 	struct TextSerializeField {
 		Stream<void> data;
-		const char* name;
+		Stream<char> name;
 		Reflection::ReflectionBasicFieldType basic_type;
 		bool is_stream = false;
 		bool character_stream = false;

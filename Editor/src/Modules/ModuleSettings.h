@@ -60,6 +60,16 @@ void GetModuleSettingsFolderPath(
 	ECSEngine::CapacityStream<wchar_t>& path
 );
 
+// It will eliminate all the decorations and the absolute parts and copy only the
+// part that would be assigned to an actual module. i.e. from 
+// C:\Users\MyName\Project\Configuration\Modules\MyModule\Default.config -> Default (Only the stem)
+void GetModuleAvailableSettings(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	ECSEngine::CapacityStream<ECSEngine::Stream<wchar_t>>& paths,
+	ECSEngine::AllocatorPolymorphic allocator
+);
+
 void GetModuleSettingsUITypesIndices(
 	const EditorState* editor_state,
 	unsigned int module_index,
@@ -97,6 +107,6 @@ bool SaveModuleSettings(
 // which will only be reset to size 0
 void SetModuleDefaultSettings(
 	const EditorState* editor_state, 
-	unsigned int module_index, 
+	unsigned int module_index,
 	ECSEngine::Stream<EditorModuleReflectedSetting> settings
 );

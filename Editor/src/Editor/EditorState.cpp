@@ -17,6 +17,25 @@ bool DISPLAY_LOCKED_FILES_SIZE = false;
 #define LAZY_EVALUATION_CREATE_DEFAULT_METAFILES_THRESHOLD 500
 #define LAZY_EVALUATION_MODULE_STATUS 500
 #define LAZY_EVALUATION_GRAPHICS_MODULE_STATUS 300
+#define LAZY_EVALUATION_TASK_ALLOCATOR_RESET 500
+#define LAZY_EVALUATION_RUNTIME_SETTINGS 500
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+// This will be used by the UI for the runtime settings. Initialize it once
+void CreateWorldDescriptorUIReflectionType(EditorState* editor_state)
+{
+	UIReflectionDrawer* ui_reflection = editor_state->ui_reflection;
+	UIReflectionType* type = ui_reflection->CreateType(STRING(WorldDescriptor));
+
+	WorldDescriptor min_bounds = GetWorldDescriptorMinBounds();
+	WorldDescriptor max_bounds = GetWorldDescriptorMaxBounds();
+	WorldDescriptor default_values = GetDefaultWorldDescriptor();
+
+	ui_reflection->BindTypeLowerBounds(type, &min_bounds);
+	ui_reflection->BindTypeUpperBounds(type, &max_bounds);
+	ui_reflection->BindTypeDefaultData(type, &default_values);
+}
 
 // -----------------------------------------------------------------------------------------------------------------
 
@@ -66,46 +85,12 @@ bool EditorStateHasFlag(EditorState* editor_state, size_t flag) {
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void TickGraphicsModuleStatus(EditorState* editor_state) {
-	// Build the graphics module only if no previous build failed for the same write time
-	const EditorModule* module = editor_state->project_modules->buffer + GRAPHICS_MODULE_INDEX;
-
-	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS, LAZY_EVALUATION_GRAPHICS_MODULE_STATUS) 
-		&& HasGraphicsModule(editor_state)) {
-		if (UpdateModuleSolutionLastWrite(editor_state, GRAPHICS_MODULE_INDEX)) {
-			ReflectModule(editor_state, GRAPHICS_MODULE_INDEX);
-		}
-
-		bool success = false;
-		
-		// Try going from distribution down to debug
-		EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_DISTRIBUTION;
-		if (UpdateModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX, configuration)) {
-			success = LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX, configuration);
-		}
-		else if (!success) {
-			configuration = EDITOR_MODULE_CONFIGURATION_RELEASE;
-			if (UpdateModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX, configuration)) {
-				success = LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX, configuration);
-			}
-			else if (!success) {
-				configuration = EDITOR_MODULE_CONFIGURATION_DEBUG;
-				if (UpdateModuleLibraryLastWrite(editor_state, GRAPHICS_MODULE_INDEX, configuration)) {
-					success = LoadEditorModule(editor_state, GRAPHICS_MODULE_INDEX, configuration);
-				}
-			}
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------
-
 void TickModuleStatus(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = editor_state->project_modules;
 
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS, LAZY_EVALUATION_MODULE_STATUS)) {
-		for (size_t index = GRAPHICS_MODULE_INDEX + 1; index < project_modules->size; index++) {
+		for (size_t index = 0; index < project_modules->size; index++) {
 			bool is_solution_updated = UpdateModuleSolutionLastWrite(editor_state, index);
 			if (is_solution_updated) {
 				ReflectModule(editor_state, index);
@@ -142,6 +127,14 @@ void TickModuleStatus(EditorState* editor_state) {
 		else {
 			DISPLAY_LOCKED_FILES_SIZE = false;
 		}
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void TickSandboxRuntimeSettings(EditorState* editor_state) {
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS, LAZY_EVALUATION_RUNTIME_SETTINGS)) {
+		ReloadSandboxRuntimeSettings(editor_state);
 	}
 }
 
@@ -233,8 +226,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 			}
 		}
 
-		TickGraphicsModuleStatus(editor_state);
 		TickModuleStatus(editor_state);
+		TickSandboxRuntimeSettings(editor_state);
 
 		DirectoryExplorerTick(editor_state);
 		FileExplorerTick(editor_state);
@@ -301,7 +294,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->multithreaded_editor_allocator = multithreaded_editor_allocator;
 
 	TaskManager* editor_task_manager = (TaskManager*)malloc(sizeof(TaskManager));
-	*editor_task_manager = TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1000, 100'000);
+	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1000, 100'000);
 	editor_state->task_manager = editor_task_manager;
 
 	// The task wrappers use the 
@@ -324,17 +317,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ThreadWrapperCountTasksData wrapper_data;
 	wrapper_data.count.store(0, ECS_RELAXED);
 	editor_task_manager->ChangeDynamicWrapperMode(ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data));
-	editor_task_manager->ReserveTasks(1);
-
-	auto sleep_task = [](unsigned int thread_index, World* world, void* data) {
-		TaskManager* task_manager = (TaskManager*)data;
-		task_manager->SleepThread(thread_index);
-		task_manager->DecrementThreadTaskIndex(thread_index);
-	};
-
-	ThreadTask wait_task = { sleep_task, editor_task_manager, 0 };
-	editor_task_manager->SetTask(wait_task, 0);
 	editor_task_manager->CreateThreads();
+
+	editor_task_manager->SetThreadPriorities(ECS_THREAD_PRIORITY_LOW);
 
 	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));
 	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);
@@ -387,7 +372,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->hub_data = hub_data;
 	
 	ProjectFile* project_file = (ProjectFile*)malloc(sizeof(ProjectFile));
-	project_file->project_settings.Initialize(resizable_arena, 0, 64);
 	project_file->project_name.Initialize(resizable_arena, 0, 64);
 	project_file->path.Initialize(resizable_arena, 0, 256);
 	editor_state->project_file = project_file;
@@ -422,8 +406,12 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Make all counters USHORT_MAX to trigger the lazy evaluation at first
 	memset(editor_state->lazy_evaluation_counters, 0xFF, sizeof(unsigned short) * EDITOR_LAZY_EVALUATION_COUNTERS_COUNT);
 
-	ResetGraphicsModule(editor_state);
 	editor_state->lazy_evalution_timer.SetNewStart();
+
+	// This needs to be called last
+	InitializeSandboxes(editor_state);
+
+	CreateWorldDescriptorUIReflectionType(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------

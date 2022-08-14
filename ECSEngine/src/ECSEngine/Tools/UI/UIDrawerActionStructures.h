@@ -335,8 +335,8 @@ namespace ECSEngine {
 			unsigned int biggest_label_x_index;
 			float label_y_scale;
 			UIDrawerTextElement name;
-			Stream<UIDrawerTextElement> labels;
-			const char* prefix;
+			Stream<Stream<char>> labels;
+			Stream<char> prefix;
 			float prefix_x_scale;
 			Action callback;
 			void* callback_data;
@@ -397,7 +397,7 @@ namespace ECSEngine {
 		// Action can be used to do additional stuff on right click; There can be
 		// 32 bytes of action data embedded into this structure
 		struct UIDrawerMenuRightClickData {
-			const char* name;
+			Stream<char> name;
 			unsigned int window_index;
 			UIDrawerMenuState state;
 			Action action = nullptr;
@@ -405,9 +405,9 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerRightClickMenuSystemHandlerData {
-			const char* menu_window_name;
-			const char* menu_resource_name;
-			const char* parent_window_name;
+			Stream<char> menu_window_name;
+			Stream<char> menu_resource_name;
+			Stream<char> parent_window_name;
 		};
 
 		struct UIDrawerColorInputSystemHandlerData {
@@ -422,7 +422,7 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerMenuCleanupSystemHandlerData {
-			const char* window_names[6];
+			Stream<char> window_names[6];
 			int64_t window_count;
 		};
 
@@ -562,7 +562,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* input;
 			CapacityStream<wchar_t>* path;
 			UIActionHandler custom_handler = { nullptr, nullptr, 0 };
-			Stream<const wchar_t*> extensions;
+			Stream<Stream<wchar_t>> extensions;
 			Stream<Stream<wchar_t>> roots;
 		};
 

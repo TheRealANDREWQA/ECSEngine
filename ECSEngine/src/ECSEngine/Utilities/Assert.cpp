@@ -18,7 +18,7 @@ namespace ECSEngine {
 				}
 				else {
 					ECS_FORMAT_TEMP_STRING(error_message_ex, "Assert crash from file {#} and file {#}.", filename, line);
-					error_message_ex.AddStreamSafe(ToStream(error_message));
+					error_message_ex.AddStreamSafe(error_message);
 					Crash(error_message_ex.buffer);
 				}
 			}
@@ -29,7 +29,7 @@ namespace ECSEngine {
 				if (!condition) {
 					ECS_FORMAT_TEMP_STRING(temp_string, "[File] {#}\n[Line] {#}\n", filename, line);
 					if (error_message != nullptr) {
-						temp_string.AddStream(ToStream(error_message));
+						temp_string.AddStream(error_message);
 					}
 					MessageBoxA(nullptr, temp_string.buffer, "ECS Assert", MB_OK | MB_ICONERROR);
 					__debugbreak();

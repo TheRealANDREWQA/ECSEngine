@@ -129,7 +129,7 @@ namespace ECSEngine {
 		TaskComponentQuery copy;
 		if (total_size > 0) {
 			void* allocation = Allocate(allocator, total_size);
-			copy = Copy(allocation);
+			copy = CopyTo(allocation);
 		}
 		else {
 			copy = BitwiseCopy();
@@ -140,15 +140,15 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	TaskComponentQuery TaskComponentQuery::Copy(void* allocation) const
+	TaskComponentQuery TaskComponentQuery::CopyTo(void* allocation) const
 	{
 		uintptr_t ptr = (uintptr_t)allocation;
-		return Copy(ptr);
+		return CopyTo(ptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	TaskComponentQuery TaskComponentQuery::Copy(uintptr_t& buffer) const
+	TaskComponentQuery TaskComponentQuery::CopyTo(uintptr_t& buffer) const
 	{
 		TaskComponentQuery copy;
 
@@ -291,20 +291,20 @@ namespace ECSEngine {
 	TaskSchedulerElement TaskSchedulerElement::Copy(AllocatorPolymorphic allocator) const
 	{
 		void* allocation = Allocate(allocator, CopySize());
-		return Copy(allocation);
+		return CopyTo(allocation);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	TaskSchedulerElement TaskSchedulerElement::Copy(void* allocation) const
+	TaskSchedulerElement TaskSchedulerElement::CopyTo(void* allocation) const
 	{
 		uintptr_t ptr = (uintptr_t)allocation;
-		return Copy(ptr);
+		return CopyTo(ptr);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	TaskSchedulerElement TaskSchedulerElement::Copy(uintptr_t& buffer) const
+	TaskSchedulerElement TaskSchedulerElement::CopyTo(uintptr_t& buffer) const
 	{
 		TaskSchedulerElement copy;
 
@@ -328,7 +328,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < component_queries.size; index++) {
 			size_t copy_size = component_queries[index].CopySize();
 			if (copy_size > 0) {
-				copy.component_queries[index] = component_queries[index].Copy((void*)buffer);
+				copy.component_queries[index] = component_queries[index].CopyTo((void*)buffer);
 				buffer += copy_size;
 			}
 		}
@@ -347,7 +347,7 @@ namespace ECSEngine {
 
 	bool TaskSchedulerElement::IsTaskDependency(const TaskSchedulerElement& other) const
 	{
-		Stream<char> current_name = ToStream(task.name);
+		Stream<char> current_name = task.name;
 		for (size_t index = 0; index < other.task_dependencies.size; index++) {
 			if (function::CompareStrings(current_name, other.task_dependencies[index].name)) {
 				return true;

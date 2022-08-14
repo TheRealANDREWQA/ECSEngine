@@ -80,6 +80,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	AssetDatabaseReference AssetDatabaseReference::Copy(AllocatorPolymorphic allocator) const
+	{
+		AssetDatabaseReference copy;
+		
+		copy.mesh_metadata.InitializeAndCopy(allocator, mesh_metadata);
+		copy.texture_metadata.InitializeAndCopy(allocator, texture_metadata);
+		copy.gpu_buffer_metadata.InitializeAndCopy(allocator, gpu_buffer_metadata);
+		copy.gpu_sampler_metadata.InitializeAndCopy(allocator, gpu_sampler_metadata);
+		copy.shader_metadata.InitializeAndCopy(allocator, shader_metadata);
+		copy.material_asset.InitializeAndCopy(allocator, material_asset);
+		copy.misc_asset.InitializeAndCopy(allocator, misc_asset);
+		copy.database = database;
+
+		return copy;
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	MeshMetadata* AssetDatabaseReference::GetMesh(unsigned int index)
 	{
 		return (MeshMetadata*)GetAsset(index, ECS_ASSET_MESH);

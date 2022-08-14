@@ -159,7 +159,7 @@ namespace ECSEngine {
 			CapacityStream<wchar_t> path;
 			CapacityStream<char> error_message = { nullptr, 0, 0 };
 			const wchar_t* initial_directory = nullptr;
-			Stream<const wchar_t*> extensions = { nullptr, 0 };
+			Stream<Stream<wchar_t>> extensions = { nullptr, 0 };
 			HWND hWnd = NULL;
 		};
 

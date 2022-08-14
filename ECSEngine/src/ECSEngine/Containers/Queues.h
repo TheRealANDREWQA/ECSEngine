@@ -9,7 +9,8 @@
 
 namespace ECSEngine {
 
-	// does not check to see if it goes out of boundaries
+	// Does not check to see if it goes out of boundaries
+	// It is already circular
 	template<typename T>
 	struct Queue {
 	public:
@@ -46,7 +47,7 @@ namespace ECSEngine {
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;
-				m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
+				m_first_item = m_first_item == m_queue.capacity - 1 ? 0 : m_first_item + 1;
 				m_queue.size--;
 				element = m_queue[element_index];
 				return true;
@@ -58,13 +59,13 @@ namespace ECSEngine {
 			if (m_queue.size == m_queue.capacity) {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
-				m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = element;
-				m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
+				m_queue[is_greater ? index - m_queue.capacity : index] = element;
+				m_first_item = m_first_item == m_queue.capacity - 1 ? 0 : m_first_item + 1;
 			}
 			else {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
-				m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = element;
+				m_queue[is_greater ? index - m_queue.capacity : index] = element;
 				m_queue.size++;
 			}
 		}
@@ -73,13 +74,13 @@ namespace ECSEngine {
 			if (m_queue.size == m_queue.capacity) {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
-				m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = *element;
-				m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity - 1, 0, m_first_item + 1);
+				m_queue[is_greater ? index - m_queue.capacity : index] = *element;
+				m_first_item = m_first_item == m_queue.capacity - 1 ? 0 : m_first_item + 1;
 			}
 			else {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
-				m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = *element;
+				m_queue[is_greater ? index - m_queue.capacity : index] = *element;
 				m_queue.size++;
 			}
 		}
@@ -147,7 +148,7 @@ namespace ECSEngine {
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;
-				m_first_item = function::Select<unsigned int>(m_first_item == m_queue.capacity, 0, m_first_item + 1);
+				m_first_item = m_first_item == m_queue.capacity ? 0 : m_first_item + 1;
 				m_queue.size--;
 				element = m_queue[element_index];
 				return true;
@@ -160,7 +161,7 @@ namespace ECSEngine {
 				unsigned int old_capacity = m_queue.capacity;
 				T* old_buffer = m_queue.buffer;
 				m_queue.FreeBuffer();
-				m_queue.ResizeNoCopy(static_cast<size_t>((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
+				m_queue.ResizeNoCopy((size_t)((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
 				memcpy(m_queue.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 				memcpy(m_queue.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
 				m_first_item = 0;
@@ -169,7 +170,7 @@ namespace ECSEngine {
 			else {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
-				m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = element;
+				m_queue[is_greater ? index - m_queue.capacity : index] = element;
 				m_queue.size++;
 			}
 		}
@@ -179,7 +180,7 @@ namespace ECSEngine {
 				unsigned int old_capacity = m_queue.capacity;
 				T* old_buffer = m_queue.buffer;
 				m_queue.FreeBuffer();
-				m_queue.ResizeNoCopy(static_cast<size_t>((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
+				m_queue.ResizeNoCopy((size_t)((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
 				memcpy(m_queue.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 				memcpy(m_queue.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
 				m_first_item = 0;
@@ -188,7 +189,7 @@ namespace ECSEngine {
 			else {
 				unsigned int index = m_first_item + m_queue.size;
 				bool is_greater = index >= m_queue.capacity;
-				m_queue[function::Select(is_greater, index - m_queue.capacity, index)] = *element;
+				m_queue[is_greater ? index - m_queue.capacity : index] = *element;
 				m_queue.size++;
 			}
 		}
@@ -278,6 +279,13 @@ namespace ECSEngine {
 
 		ECS_INLINE bool TryLock() {
 			return m_lock.try_lock();
+		}
+
+		// It has good sleep behaviour on many missed tries
+		ECS_INLINE void SpinWaitElements() {
+			if (m_queue.GetSize() == 0) {
+				m_lock.wait_signaled();
+			}
 		}
 
 		ECS_INLINE static size_t MemoryOf(size_t size) {

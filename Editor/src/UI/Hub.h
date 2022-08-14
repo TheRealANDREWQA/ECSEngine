@@ -7,8 +7,6 @@ using namespace ECSEngine::Tools;
 
 struct EditorState;
 
-void AddHubProject(EditorState* editor_state, const wchar_t* path);
-
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path);
 
 void DeallocateHubProjects(EditorState* editor_state);
@@ -20,8 +18,6 @@ void ReloadHubProjects(EditorState* editor_state);
 void ReloadHubProjectsAction(ActionData* action_data);
 
 void ResetHubData(EditorState* editor_state);
-
-void RemoveHubProject(EditorState* editor_state, const wchar_t* path);
 
 void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path);
 

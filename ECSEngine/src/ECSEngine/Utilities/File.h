@@ -3,7 +3,7 @@
 #include "ecspch.h"
 #include "../Containers/Stream.h"
 #include "../Allocators/AllocatorTypes.h"
-#include "../Utilities/BasicTypes.h"
+#include "../Utilities/StackScope.h"
 
 namespace ECSEngine {
 
@@ -77,31 +77,10 @@ namespace ECSEngine {
 	// The file handle can be optionally be specified for further operations
 	// If the error message is specified, a formatted error message will be set to describe the error
 	ECSENGINE_API ECS_FILE_STATUS_FLAGS FileCreate(
-		const wchar_t* path, 
-		ECS_FILE_HANDLE* file_handle,
-		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_WRITE_ONLY,
-		ECS_FILE_CREATE_FLAGS create_flags = ECS_FILE_CREATE_READ_WRITE,
-		CapacityStream<char>* error_message = nullptr
-	);
-
-	// At least one of ECS_FILE_CREATE_READ_ONLY, ECS_FILE_CREATE_WRITE_ONLY or ECS_FILE_CREATE_READ_WRITE must be specified
-	// The file handle can be optionally be specified for further operations
-	// If the error message is specified, a formatted error message will be set to describe the error
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS FileCreate(
 		Stream<wchar_t> path,
 		ECS_FILE_HANDLE* file_handle,
 		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_WRITE_ONLY,
 		ECS_FILE_CREATE_FLAGS create_flags = ECS_FILE_CREATE_READ_WRITE,
-		CapacityStream<char>* error_message = nullptr
-	);
-
-	// Opens a handle to a file using the specified modes
-	// The file handle can be optionally be specified for further operations
-	// If the error message is specified, a formatted error message will be set to describe the error
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS OpenFile(
-		const wchar_t* path, 
-		ECS_FILE_HANDLE* file_handle,
-		ECS_FILE_ACCESS_FLAGS access_flags = ECS_FILE_ACCESS_READ_ONLY, 
 		CapacityStream<char>* error_message = nullptr
 	);
 
@@ -174,170 +153,87 @@ namespace ECSEngine {
 	ECSENGINE_API bool FlushFileToDisk(ECS_FILE_HANDLE handle);
 
 	// If it fails, it returns 0
-	ECSENGINE_API size_t GetFileByteSize(const wchar_t* path);
-
-	// If it fails, it returns 0
 	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API size_t GetFileByteSize(Stream<wchar_t> path);
 
 	// If it fails, it returns 0
 	ECSENGINE_API size_t GetFileByteSize(ECS_FILE_HANDLE file_handle);
 
-	ECSENGINE_API bool HasSubdirectories(const wchar_t* directory);
-
-	// Might perform a copy to a stack buffer if cannot place a null terminated character
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool HasSubdirectories(Stream<wchar_t> directory);
 
-	ECSENGINE_API bool ClearFile(const wchar_t* path);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool ClearFile(Stream<wchar_t> path);
 
 	// Returns true if the file was removed, false if it doesn't exist
-	ECSENGINE_API bool RemoveFile(const wchar_t* file);
-
-	// Returns true if the file was removed, false if it doesn't exist
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool RemoveFile(Stream<wchar_t> file);
 
 	// Returns true if the folder was removed, false if it doesn't exist; it will destroy internal files and folders
-	ECSENGINE_API bool RemoveFolder(const wchar_t* file);
-
-	// Returns true if the folder was removed, false if it doesn't exist; it will destroy internal files and folders
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool RemoveFolder(Stream<wchar_t> file);
 
-	ECSENGINE_API bool CreateFolder(const wchar_t* path);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool CreateFolder(Stream<wchar_t> path);
 
-	ECSENGINE_API bool FileCopy(const wchar_t* from, const wchar_t* to, bool use_filename_from = true, bool overwrite_existent = false);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool FileCopy(Stream<wchar_t> from, Stream<wchar_t> to, bool use_filename_from = true, bool overwrite_existent = false);
 
 	// Equivalent to FileCopy and then deleting the old file
-	ECSENGINE_API bool FileCut(const wchar_t* from, const wchar_t* to, bool use_filename_from = true, bool overwrite_existent = false);
-
-	// Equivalent to FileCopy and then deleting the old file
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool FileCut(Stream<wchar_t> from, Stream<wchar_t> to, bool use_filename_from = true, bool overwrite_existent = false);
-
-	// From and to must be absolute paths
-	ECSENGINE_API bool FolderCopy(const wchar_t* from, const wchar_t* to);
 
 	// From and to must be absolute paths
 	ECSENGINE_API bool FolderCopy(Stream<wchar_t> from, Stream<wchar_t> to);
 
-	ECSENGINE_API bool FolderCut(const wchar_t* from, const wchar_t* to);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool FolderCut(Stream<wchar_t> from, Stream<wchar_t> to);
 
 	// New name must only be the directory name, not the fully qualified path
-	ECSENGINE_API bool RenameFolderOrFile(const wchar_t* path, const wchar_t* new_name);
-
-	// New name must only be the directory name, not the fully qualified path
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool RenameFolderOrFile(Stream<wchar_t> path, Stream<wchar_t> new_name);
 
-	ECSENGINE_API bool ResizeFile(const wchar_t* file, int size);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool ResizeFile(Stream<wchar_t> file, int size);
 
 	// The extension must start with a dot; operation applies to the OS file, not for the in memory paths
-	ECSENGINE_API bool ChangeFileExtension(const wchar_t* path, const wchar_t* new_extension);
-
-	// The extension must start with a dot; operation applies to the OS file, not for the in memory paths
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool ChangeFileExtension(Stream<wchar_t> path, Stream<wchar_t> new_extension);
 
-	ECSENGINE_API bool DeleteFolderContents(const wchar_t* path);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool DeleteFolderContents(Stream<wchar_t> path);
 
 	// The folder must exist before calling this function
-	ECSENGINE_API bool HideFolder(const wchar_t* path);
-
-	// The folder must exist before calling this function
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool HideFolder(Stream<wchar_t> path);
-
-	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
-	// or from malloc if the allocator is nullptr
-	// If the read or the opening fails, it will return { nullptr, 0 }
-	ECSENGINE_API Stream<void> ReadWholeFile(const wchar_t* path, bool binary, AllocatorPolymorphic allocator = { nullptr });
 
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
 	// or from malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
 	ECSENGINE_API Stream<void> ReadWholeFile(Stream<wchar_t> path, bool binary, AllocatorPolymorphic allocator = { nullptr });
 
-	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
-	// or from malloc if the allocator is nullptr
-	// If the read or the opening fails, it will return { nullptr, 0 }
-	ECSENGINE_API Stream<void> ReadWholeFileBinary(const wchar_t* path, AllocatorPolymorphic allocator = { nullptr });
-
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
 	// or from malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API Stream<void> ReadWholeFileBinary(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
 
-	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator 
-	// or from malloc if the allocator is nullptr
-	// If the read or the opening fails, it will return { nullptr, 0 }
-	ECSENGINE_API Stream<char> ReadWholeFileText(const wchar_t* path, AllocatorPolymorphic allocator = { nullptr });
-
 	// Reads the whole contents of a file and returns the data into a stream allocated from the given allocator
 	// or from malloc if the allocator is nullptr
 	// If the read or the opening fails, it will return { nullptr, 0 }
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API Stream<char> ReadWholeFileText(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr });
-
-	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(const wchar_t* path, Stream<void> buffer, bool append_data = false);
 
 	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
 	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileBinary(Stream<wchar_t> path, Stream<void> buffer, bool append_data = false);
 
 	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileText(const wchar_t* path, Stream<void> buffer, bool append_data = false);
-
-	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
 	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFileText(Stream<wchar_t> path, Stream<void> buffer, bool append_data = false);
-
-	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
-	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFile(const wchar_t* path, Stream<void> buffer, bool binary, bool append_data = false);
 
 	// Writes the buffer to that file. It will create the file if it doesn't exist. Can specify whether or not to append
 	ECSENGINE_API ECS_FILE_STATUS_FLAGS WriteBufferToFile(Stream<wchar_t> path, Stream<void> buffer, bool binary, bool append_data = false);
 	
-	ECSENGINE_API bool ExistsFileOrFolder(const wchar_t* path);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool ExistsFileOrFolder(Stream<wchar_t> path);
 
-	ECSENGINE_API bool IsFile(const wchar_t* path);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool IsFile(Stream<wchar_t> path);
 
-	ECSENGINE_API bool IsFolder(const wchar_t* path);
-
-	// It will be forwarded to const wchar_t* variant
 	ECSENGINE_API bool IsFolder(Stream<wchar_t> path);
 
-	inline void FileScopeDeleter(ECS_FILE_HANDLE handle) {
-		if (handle != 0) {
-			CloseFile(handle);
+	struct FileScopeDeleter {
+		void operator() () const {
+			if (handle != 0) {
+				CloseFile(handle);
+			}
 		}
-	}
 
-	using ScopedFile = StackScope<ECS_FILE_HANDLE, FileScopeDeleter>;
+		ECS_FILE_HANDLE handle;
+	};
+
+	using ScopedFile = StackScope<FileScopeDeleter>;
 
 }

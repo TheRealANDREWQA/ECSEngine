@@ -4,7 +4,7 @@
 
 
 struct HubProject {
-	const wchar_t* path;
+	ECSEngine::Stream<wchar_t> path;
 	ProjectFile data;
 	const char* error_message = nullptr;
 };

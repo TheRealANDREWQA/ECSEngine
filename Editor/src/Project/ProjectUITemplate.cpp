@@ -1,22 +1,25 @@
 #include "editorpch.h"
 #include "ProjectUITemplate.h"
-#include "..\Editor\EditorState.h"
+#include "../Editor/EditorState.h"
 #include "ProjectOperations.h"
 
-#include "..\UI\DirectoryExplorer.h"
-#include "..\UI\FileExplorer.h"
-#include "..\UI\DirectoryExplorer.h"
-#include "..\UI\ToolbarUI.h"
-#include "..\UI\MiscellaneousBar.h"
-#include "..\UI\Game.h"
-#include "..\UI\ModuleExplorer.h"
-#include "..\UI\Inspector.h"
-#include "..\UI\NotificationBar.h"
-#include "..\UI\Settings.h"
-#include "..\UI\Backups.h"
+#include "../UI/DirectoryExplorer.h"
+#include "../UI/FileExplorer.h"
+#include "../UI/DirectoryExplorer.h"
+#include "../UI/ToolbarUI.h"
+#include "../UI/MiscellaneousBar.h"
+#include "../UI/Game.h"
+#include "../UI/ModuleExplorer.h"
+#include "../UI/Inspector.h"
+#include "../UI/NotificationBar.h"
+#include "../UI/Backups.h"
+#include "../UI/SandboxExplorer.h"
+#include "../UI/Sandbox.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
+
+// -------------------------------------------------------------------------------------------------------
 
 void CreateProjectDefaultUI(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
@@ -33,6 +36,8 @@ void CreateProjectDefaultUI(EditorState* editor_state) {
 	CreateFileExplorer(editor_state);
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 UIDockspace* CreateProjectBackgroundDockspace(UISystem* system)
 {
 	float2 dockspace_position = { -1.0f, -1.0f + TOOLBAR_SIZE_Y + MISCELLANEOUS_BAR_SIZE_Y };
@@ -44,6 +49,8 @@ UIDockspace* CreateProjectBackgroundDockspace(UISystem* system)
 	return dockspace;
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 bool OpenProjectUI(ProjectOperationData data)
 {
 	EDITOR_STATE(data.editor_state);
@@ -53,10 +60,14 @@ bool OpenProjectUI(ProjectOperationData data)
 	return LoadProjectUITemplate(data.editor_state, { template_path }, data.error_message);
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 void OpenProjectUIAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 	OpenProjectUI(*(ProjectOperationData*)_data);
 }
+
+// -------------------------------------------------------------------------------------------------------
 
 bool SaveProjectUI(ProjectOperationData data)
 {
@@ -67,18 +78,25 @@ bool SaveProjectUI(ProjectOperationData data)
 	return SaveProjectUITemplate(ui_system, { template_path }, data.error_message);
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 void SaveProjectUIAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 	SaveProjectUI(*(ProjectOperationData*)_data);
 }
+// -------------------------------------------------------------------------------------------------------
 
 bool SaveCurrentProjectUI(EditorState* editor_state) {
 	return SaveCurrentProjectConverted(editor_state, SaveProjectUI);
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 void SaveCurrentProjectUIAction(ActionData* action_data) {
 	SaveCurrentProjectUI((EditorState*)action_data->data);
 }
+
+// -------------------------------------------------------------------------------------------------------
 
 void InjectWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
 	descriptor.draw = InjectValuesWindowDraw;
@@ -88,6 +106,43 @@ void InjectWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* edit
 	descriptor.window_data_size = sizeof(editor_state->inject_data);
 
 	descriptor.window_name = editor_state->inject_window_name;
+}
+
+// -------------------------------------------------------------------------------------------------------
+
+typedef void (*SetDescriptorFunction)(UIWindowDescriptor&, EditorState*, void*);
+
+// Returns the index that matched, or -1 if no index matched
+unsigned int VerifyIndexedWindow(
+	UIWindowDescriptor& descriptor,
+	EditorState* editor_state,
+	Stream<char> file_window_name, 
+	const char* base_name, 
+	unsigned int max_search,
+	void* stack_memory,
+	SetDescriptorFunction set_descriptor
+) {
+	ECS_STACK_CAPACITY_STREAM(char, window_name, 256);
+	Stream<char> base_name_stream = base_name;
+
+	if (memcmp(file_window_name.buffer, base_name, base_name_stream.size) == 0) {
+		// At the moment check for at max 
+		for (unsigned int index = 0; index < max_search; index++) {
+			window_name.size = 0;
+			window_name.Copy(base_name_stream);
+			function::ConvertIntToChars(window_name, index);
+
+			if (function::CompareStrings(window_name, file_window_name)) {
+				unsigned int* window_index = (unsigned int*)stack_memory;
+				*window_index = index;
+				set_descriptor(descriptor, editor_state, stack_memory);
+				editor_state->ui_system->RestoreWindow(window_name, descriptor);
+				return index;
+			}
+		}
+	}
+
+	return -1;
 }
 
 bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _template, CapacityStream<char>& error_message)
@@ -107,19 +162,19 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	else {
 		// The inspector is handled separately - because multiple instances can be instanced
 		Stream<char> _window_names[] = {
-			ToStream(editor_state->inject_window_name),
-			ToStream(TOOLBAR_WINDOW_NAME),
-			ToStream(MISCELLANEOUS_BAR_WINDOW_NAME),
-			ToStream(NOTIFICATION_BAR_WINDOW_NAME),
-			ToStream(CONSOLE_WINDOW_NAME),
-			ToStream(DIRECTORY_EXPLORER_WINDOW_NAME),
-			ToStream(FILE_EXPLORER_WINDOW_NAME),
-			ToStream(GAME_WINDOW_NAME),
-			ToStream(MODULE_EXPLORER_WINDOW_NAME),
-			ToStream(SETTINGS_WINDOW_NAME),
-			ToStream(BACKUPS_WINDOW_NAME)
+			editor_state->inject_window_name,
+			TOOLBAR_WINDOW_NAME,
+			MISCELLANEOUS_BAR_WINDOW_NAME,
+			NOTIFICATION_BAR_WINDOW_NAME,
+			CONSOLE_WINDOW_NAME,
+			DIRECTORY_EXPLORER_WINDOW_NAME,
+			FILE_EXPLORER_WINDOW_NAME,
+			GAME_WINDOW_NAME,
+			MODULE_EXPLORER_WINDOW_NAME,
+			SANDBOX_EXPLORER_WINDOW_NAME,
+			SANDBOX_UI_WINDOW_NAME,
+			BACKUPS_WINDOW_NAME
 		};
-		using SetDescriptorFunction = void (*)(UIWindowDescriptor&, EditorState*, void*);
 
 		Stream<Stream<char>> window_names(_window_names, std::size(_window_names));
 		// The inspector is handled separately - because multiple instances can be instanced
@@ -133,11 +188,13 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			FileExplorerSetDescriptor,
 			GameSetDecriptor,
 			ModuleExplorerSetDescriptor,
-			SettingsWindowSetDescriptor,
+			SandboxExplorerSetDescriptor,
+			SandboxUISetDescriptor,
 			BackupsWindowSetDescriptor
 		};
 
-		const size_t MAX_INSPECTOR_INDEX = 10;
+		const size_t MAX_INSPECTOR_INDEX = 20;
+		const size_t MAX_SANDBOX_INDEX = 20;
 		for (size_t index = 0; index < file_window_names.size; index++) {
 			UIWindowDescriptor descriptor;
 			unsigned int in_index = function::FindString(file_window_names[index], window_names);
@@ -150,27 +207,19 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				set_functions[in_index] = set_functions[window_names.size - 1];
 				window_names.RemoveSwapBack(in_index);
 			}
-			// Check for the inspector
 			else {
-				ECS_STACK_CAPACITY_STREAM(char, inspector_name, 256);
-				GetInspectorName(0, inspector_name);
+				// Check for the indexed windows
 
-				if (memcmp(inspector_name.buffer, INSPECTOR_WINDOW_NAME, sizeof(char) * strlen(INSPECTOR_WINDOW_NAME)) == 0) {
-					// At the moment check for at max 
-					for (unsigned int subindex = 0; subindex < MAX_INSPECTOR_INDEX; subindex++) {
-						inspector_name.size = 0;
-						GetInspectorName(subindex, inspector_name);
-						if (function::CompareStrings(inspector_name, file_window_names[index])) {
-							while (editor_state->inspector_manager.data.size <= subindex) {
-								CreateInspectorInstance(editor_state);
-							}
-
-							unsigned int* inspector_index = (unsigned int*)stack_memory;
-							*inspector_index = subindex;
-							InspectorSetDescriptor(descriptor, editor_state, stack_memory);
-							ui_system->RestoreWindow(inspector_name, descriptor);
-						}
+				// Start with the inspector
+				unsigned int matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], INSPECTOR_WINDOW_NAME, MAX_INSPECTOR_INDEX, stack_memory, InspectorSetDescriptor);
+				if (matched_index != -1) {
+					while (editor_state->inspector_manager.data.size <= matched_index) {
+						CreateInspectorInstance(editor_state);
 					}
+				}
+				else {
+					// Now the sandboxes
+					matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], SANDBOX_UI_WINDOW_NAME, MAX_SANDBOX_INDEX, stack_memory, SandboxUISetDescriptor);
 				}
 			}
 		}
@@ -184,6 +233,8 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	return true;
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 void LoadProjectUITemplateSystemHandler(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -195,6 +246,8 @@ void LoadProjectUITemplateSystemHandler(ActionData* action_data) {
 		CreateErrorMessageWindow(system, error_message);
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------
 
 void LoadProjectUITemplateAction(ActionData* action_data)
 {
@@ -210,6 +263,8 @@ void LoadProjectUITemplateAction(ActionData* action_data)
 	memcpy(handler_data->ui_template.ui_file.buffer, data->ui_template.ui_file.buffer, sizeof(wchar_t) * data->ui_template.ui_file.size);
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 bool SaveProjectUITemplate(UISystem* system, ProjectUITemplate _template, CapacityStream<char>& error_message) {
 	if (_template.ui_file.size < _template.ui_file.capacity) {
 		_template.ui_file[_template.ui_file.size] = L'\0';
@@ -224,6 +279,8 @@ bool SaveProjectUITemplate(UISystem* system, ProjectUITemplate _template, Capaci
 	return system->WriteUIFile(_template.ui_file.buffer, error_message);
 }
 
+// -------------------------------------------------------------------------------------------------------
+
 void SaveProjectUITemplateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -235,3 +292,5 @@ void SaveProjectUITemplateAction(ActionData* action_data) {
 		CreateErrorMessageWindow(system, error_message);
 	}
 }
+
+// -------------------------------------------------------------------------------------------------------

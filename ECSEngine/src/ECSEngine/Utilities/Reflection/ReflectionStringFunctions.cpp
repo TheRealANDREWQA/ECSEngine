@@ -79,7 +79,7 @@ namespace ECSEngine {
 
 #undef FIELD_TYPE_STRING
 
-#define FIELD_TYPE_STRING(string) ToStream(STRING(string))
+#define FIELD_TYPE_STRING(string) STRING(string)
 
 		// Jump table
 		Stream<char> ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS[] = {
@@ -316,7 +316,7 @@ namespace ECSEngine {
 			Stream<char> trimmed_characters = TrimWhitespaces(characters);
 			bool is_integer = function::IsIntegerNumber(trimmed_characters);
 			if (is_integer) {
-				Integer integer = function::ConvertCharactersToInt<Integer>(trimmed_characters);
+				Integer integer = function::ConvertCharactersToIntImpl<Integer, char>(trimmed_characters);
 				*ptr = integer;
 				return true;
 			}
@@ -619,7 +619,7 @@ namespace ECSEngine {
 		ReflectionBasicFieldType ConvertStringToBasicFieldType(Stream<char> string)
 		{
 			for (size_t index = 0; index < std::size(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS); index++) {
-				if (function::CompareStrings(string, ToStream(ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].string))) {
+				if (function::CompareStrings(string, ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].string)) {
 					return ECS_REFLECTION_BASIC_FIELD_TYPE_PAIRINGS[index].type;
 				}
 			}
@@ -901,32 +901,31 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		Stream<char> GetUserDefinedTypeFromStreamUserDefined(const char* definition, ReflectionStreamFieldType stream_type)
+		Stream<char> GetUserDefinedTypeFromStreamUserDefined(Stream<char> definition, ReflectionStreamFieldType stream_type)
 		{
-			Stream<char> stream_definition = ToStream(definition);
 			switch (stream_type)
 			{
 			case ReflectionStreamFieldType::Basic:
-				return stream_definition;
+				return definition;
 				break;
 			case ReflectionStreamFieldType::Pointer:
 			{
-				const char* asterisk = strchr(definition, '*');
-				asterisk = function::SkipWhitespace(asterisk, -1);
-				return { definition, function::PointerDifference(asterisk, definition) + 1 };
+				Stream<char> asterisk = function::FindFirstCharacter(definition, '*');
+				asterisk.buffer = (char*)function::SkipWhitespace(asterisk.buffer, -1);
+				return { definition.buffer, function::PointerDifference(asterisk.buffer, definition.buffer) + 1 };
 			}
 				break;
 			case ReflectionStreamFieldType::BasicTypeArray:
 			{
-				return stream_definition;
+				return definition;
 			}
 				break;
 			case ReflectionStreamFieldType::Stream:
 			case ReflectionStreamFieldType::CapacityStream:
 			case ReflectionStreamFieldType::ResizableStream:
 			{
-				const char* opened_bracket = strchr(definition, '<');
-				const char* closed_bracket = strchr(definition, '>');
+				const char* opened_bracket = function::FindFirstCharacter(definition, '<').buffer;
+				const char* closed_bracket = function::FindCharacterReverse(definition, '>').buffer;
 				opened_bracket = function::SkipWhitespace(opened_bracket);
 				closed_bracket = function::SkipWhitespace(closed_bracket, -1);
 

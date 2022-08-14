@@ -53,13 +53,12 @@ namespace ECSEngine {
 
 		void Copy(Stream<TaskSchedulerElement> stream, bool copy_data = false);
 
-		unsigned int GetCurrentQueryIndex(unsigned int thread_index) const;
+		unsigned int GetCurrentQueryIndex() const;
 
-		// Returns the indices of the archetypes that match the thread's current query
-		Stream<unsigned short> GetQueryArchetypes(unsigned int thread_index, World* world) const;
+		const TaskSchedulerInfo* GetCurrentQueryInfo() const;
 
 		// Advances the thread's query index to the next one
-		void IncrementQueryIndex(unsigned int thread_index);
+		void IncrementQueryIndex();
 
 		// Needs to be called before starting the first frame
 		// It records the static queries handles
@@ -67,27 +66,27 @@ namespace ECSEngine {
 
 		void Reset();
 
-		void Remove(const char* task_name);
-
 		void Remove(Stream<char> task_name);
 
 		// Returns whether or not it succeded in solving the graph 
 		// Most likely cause for unsuccessful solution is circular dependencies
 		// Or missing tasks
-		bool Solve();
+		bool Solve(CapacityStream<char>* error_message = nullptr);
 
-		// It is needed to initialize per thread information
-		void SetThreadCount(unsigned int thread_count);
+		// Copies all the tasks
+		void SetTaskManagerTasks(TaskManager* task_manager) const;
 
 		// It will set the wrapper for the task manager such that it will respect the scheduling
 		static void SetTaskManagerWrapper(TaskManager* task_manager);
+
+		static MemoryManager DefaultAllocator(GlobalMemoryManager* memory);
 
 		ResizableStream<TaskSchedulerElement> elements;
 		Stream<ECS_TASK_SCHEDULER_BARRIER_TYPE> task_barriers;
 		// This is per query
 		Stream<TaskSchedulerInfo> query_infos;
-		// Per thread
-		Stream<std::atomic<unsigned int>> thread_query_indices;
+		// This is the current query index that was processed
+		unsigned int query_index;
 	};
 
 }

@@ -37,7 +37,7 @@ namespace ECSEngine {
 		{
 			float min = text_vertices[0].position.x;
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min = function::Select(min > text_vertices[index].position.x, text_vertices[index].position.x, min);
+				min = std::min(min, text_vertices[index].position.x);
 			}
 			return min;
 		}
@@ -45,7 +45,7 @@ namespace ECSEngine {
 		float UIDrawerTextElement::GetLowestY() const {
 			float min = text_vertices[0].position.y;
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min = function::Select(min > text_vertices[index].position.y, text_vertices[index].position.y, min);
+				min = std::min(min, text_vertices[index].position.y);
 			}
 			return min;
 		}
@@ -53,8 +53,8 @@ namespace ECSEngine {
 		float2 UIDrawerTextElement::GetLowest() const {
 			float2 min = { text_vertices[0].position.x, text_vertices[0].position.y };
 			for (size_t index = 6; index < text_vertices.size; index += 6) {
-				min.x = function::Select(min.x > text_vertices[index].position.x, text_vertices[index].position.x, min.x);
-				min.y = function::Select(min.y > text_vertices[index].position.y, text_vertices[index].position.y, min.y);
+				min.x = std::min(min.x, text_vertices[index].position.x);
+				min.y = std::min(min.y, text_vertices[index].position.y);
 			}
 			return min;
 		}
@@ -229,15 +229,15 @@ namespace ECSEngine {
 			float2 sprites_bounds = GetRectangleSectionYBounds(sprites, counts[ECS_TOOLS_UI_SPRITE], _counts[ECS_TOOLS_UI_SPRITE]);
 
 			float2 bounds = solid_color_bounds;
-			bounds.x = function::Select(text_sprites_bounds.x < bounds.x, text_sprites_bounds.x, bounds.x);
-			bounds.x = function::Select(sprites_bounds.x < bounds.x, sprites_bounds.x, bounds.x);
-			bounds.y = function::Select(text_sprites_bounds.y > bounds.y, text_sprites_bounds.y, bounds.y);
-			bounds.y = function::Select(sprites_bounds.y > bounds.y, sprites_bounds.y, bounds.y);
+			bounds.x = std::min(bounds.x, text_sprites_bounds.x);
+			bounds.x = std::min(bounds.x, sprites_bounds.x);
+			bounds.y = std::max(bounds.y, text_sprites_bounds.y);
+			bounds.y = std::max(bounds.y, sprites_bounds.y);
 
 			hierarchy_extra->row_y_scale = bounds.y - bounds.x;
 		}
 
-		void UIDrawerSentenceBase::SetWhitespaceCharacters(const char* characters, size_t character_count, char parse_token)
+		void UIDrawerSentenceBase::SetWhitespaceCharacters(Stream<char> characters, char parse_token)
 		{
 			unsigned int temp_chars[256];
 			Stream<unsigned int> temp_stream = { temp_chars, 0 };
@@ -248,7 +248,7 @@ namespace ECSEngine {
 				whitespace_characters[index].type = characters[temp_stream[index]];
 			}
 			whitespace_characters.size = temp_stream.size;
-			whitespace_characters.Add({ (unsigned short)character_count, parse_token });
+			whitespace_characters.Add({ (unsigned short)characters.size, parse_token });
 		}
 
 		UIDrawerSliderFunctions UIDrawerGetFloatSliderFunctions(unsigned int& precision)

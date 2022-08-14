@@ -1,26 +1,29 @@
 #include "editorpch.h"
 #include "ProjectUITemplatePreview.h"
 #include "ProjectUITemplate.h"
-#include "..\Editor\EditorState.h"
-#include "..\UI\ToolbarUI.h"
-#include "..\UI\MiscellaneousBar.h"
-#include "..\UI\Game.h"
-#include "..\UI\DirectoryExplorer.h"
-#include "..\UI\FileExplorer.h"
-#include "..\Editor\EditorParameters.h"
-#include "..\UI\Hub.h"
-#include "..\HelperWindows.h"
-#include "..\UI\ModuleExplorer.h"
-#include "..\UI\Inspector.h"
-#include "..\UI\NotificationBar.h"
-#include "..\UI\Settings.h"
-#include "..\UI\Backups.h"
+#include "../Editor/EditorState.h"
+#include "../UI/ToolbarUI.h"
+#include "../UI/MiscellaneousBar.h"
+#include "../UI/Game.h"
+#include "../UI/DirectoryExplorer.h"
+#include "../UI/FileExplorer.h"
+#include "../Editor/EditorParameters.h"
+#include "../UI/SandboxExplorer.h"
+#include "../UI/Hub.h"
+#include "../HelperWindows.h"
+#include "../UI/ModuleExplorer.h"
+#include "../UI/Inspector.h"
+#include "../UI/NotificationBar.h"
+#include "../UI/Backups.h"
+#include "../UI/Sandbox.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
 
 constexpr const char* SAVE_LAYOUT_WINDOW_NAME = "Save Layout";
 constexpr float2 SAVE_LAYOUT_WINDOW_SIZE = { 0.5f, 0.25f };
+
+// --------------------------------------------------------------------------------------------------------
 
 void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -102,6 +105,8 @@ void MiscellaneousBarNoActions(void* window_data, void* drawer_descriptor, bool 
 
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
@@ -123,6 +128,8 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	 | UI_DOCKSPACE_BORDER_NOTHING);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void DeferredSystemClear(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
@@ -130,6 +137,8 @@ void DeferredSystemClear(ActionData* action_data) {
 	system->Clear();
 	Hub((EditorState*)action_data->data);
 };
+
+// --------------------------------------------------------------------------------------------------------
 
 void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -146,8 +155,8 @@ void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initi
 		ECS_TEMP_ASCII_STRING(error_message, 256);
 		wchar_t path_chars[256];
 		CapacityStream<wchar_t> path(path_chars, 0, 256);
-		path.Copy(ToStream(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE));
-		path.AddStreamSafe(ToStream(PROJECT_UI_TEMPLATE_EXTENSION));
+		path.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+		path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 		path[path.size] = L'\0';
 		bool success = system->WriteUIFile(path.buffer, error_message);
 		if (!success) {
@@ -160,15 +169,17 @@ void SaveLayoutWindowDraw(void* window_data, void* drawer_descriptor, bool initi
 
 	UIDrawConfig config;
 	UIConfigWindowDependentSize size;
-	size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
+	size.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 	size.scale_factor.x = 1.0f;
 
 	config.AddFlag(size);
 
-	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Save", { save_layout, window_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Save", { save_layout, window_data, 0, ECS_UI_DRAW_SYSTEM });
 	drawer.NextRow();
 	drawer.Button(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Exit", { exit, window_data, 0 });
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void CreateSaveLayoutWindow(void* _editor_state) {
 	UIWindowDescriptor descriptor;
@@ -185,6 +196,8 @@ void CreateSaveLayoutWindow(void* _editor_state) {
 
 	ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 struct ToolbarPlaceholderData {
 	UIActionHandler handlers[TOOLBAR_WINDOW_MENU_COUNT];
@@ -206,12 +219,16 @@ unsigned int CreatePlaceholderWindow(EditorState* editor_state, const char* wind
 	return ui_system->Create_Window(descriptor);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void CreatePlaceholderWindowAndDockspace(EditorState* editor_state, const char* window_name, float2 size) {
 	EDITOR_STATE(editor_state);
 	unsigned int window_index = CreatePlaceholderWindow(editor_state, window_name, size);
 	UIElementTransform window_transform = { ui_system->GetWindowPosition(window_index), ui_system->GetWindowScale(window_index) };
 	ui_system->CreateDockspace(window_transform, DockspaceType::FloatingVertical, window_index, false);
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 struct PlaceholderDockspaceActionData {
 	EditorState* editor_state;
@@ -235,6 +252,8 @@ void CreatePlaceholderDockspaceAction(ActionData* action_data) {
 		}
 	}
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
@@ -260,11 +279,12 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		action_data[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { data->editor_state, DIRECTORY_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { data->editor_state, SANDBOX_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, INSPECTOR_WINDOW_NAME, {0.6f, 1.0f} };
-		action_data[TOOLBAR_WINDOW_MENU_SETTINGS] = { data->editor_state, SETTINGS_WINDOW_NAME, {0.4f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = { data->editor_state, SANDBOX_UI_WINDOW_NAME, { 0.6f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
 
-#define SET_HANDLER(string) data->handlers[string] = {CreatePlaceholderDockspaceAction, action_data + string, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM}
+#define SET_HANDLER(index) data->handlers[index] = {CreatePlaceholderDockspaceAction, action_data + index, 0, ECS_UI_DRAW_SYSTEM}
 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INJECT_WINDOW);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_CONSOLE);
@@ -272,8 +292,9 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_FILE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_MODULE_EXPLORER);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INSPECTOR);
-		SET_HANDLER(TOOLBAR_WINDOW_MENU_SETTINGS);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_SANDBOX_UI);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_BACKUPS);
 
 #undef SET_HANDLER
@@ -283,13 +304,13 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 	state.click_handlers = data->handlers;
 	state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
 	state.left_characters = TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
-	state.separation_lines[0] = 1;
-	state.separation_lines[1] = 4;
+	state.separation_lines[0] = TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER - 1;
+	state.separation_lines[1] = TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER;
 	state.separation_line_count = 2;
 	state.submenu_index = 0;
 	
 	UIConfigWindowDependentSize size;
-	size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
+	size.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 
 	UIDrawConfig config;
 	config.AddFlag(size);
@@ -321,6 +342,8 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 		| UI_DOCKSPACE_BORDER_NOTHING);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void CreateProjectUITemplatePreview(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
@@ -336,6 +359,10 @@ void CreateProjectUITemplatePreview(EditorState* editor_state) {
 	CreateSaveLayoutWindow(editor_state);
 }
 
+// --------------------------------------------------------------------------------------------------------
+
 void CreateProjectUITemplatePreviewAction(ActionData* action_data) {
 	CreateProjectUITemplatePreview((EditorState*)action_data->data);
 }
+
+// --------------------------------------------------------------------------------------------------------

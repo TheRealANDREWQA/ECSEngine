@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "AllocatorTypes.h"
+#include <malloc.h>
 
 namespace DirectX {
 	class ScratchImage;

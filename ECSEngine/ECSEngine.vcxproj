@@ -100,6 +100,7 @@
       <SupportJustMyCode>true</SupportJustMyCode>
       <SDLCheck>false</SDLCheck>
       <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -142,11 +143,12 @@
       <SupportJustMyCode>true</SupportJustMyCode>
       <SDLCheck>false</SDLCheck>
       <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <OptimizeReferences>false</OptimizeReferences>
       <ImportLibrary>..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -182,11 +184,12 @@
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <SDLCheck>false</SDLCheck>
       <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <OptimizeReferences>false</OptimizeReferences>
       <ImportLibrary>..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -202,7 +205,13 @@
   <ItemGroup>
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorPolymorphic.h" />
     <ClInclude Include="src\ECSEngine\Allocators\AllocatorTypes.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\LinearAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MemoryManager.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\MultipoolAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\PoolAllocator.h" />
     <ClInclude Include="src\ECSEngine\Allocators\ResizableLinearAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Allocators\StackAllocator.h" />
     <ClInclude Include="src\ECSEngine\ApplicationUtilities.h" />
     <ClInclude Include="src\ECSEngine\Containers\AtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTable.h" />
@@ -220,6 +229,7 @@
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\ForEach.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\RingBuffer.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
@@ -263,13 +273,21 @@
     <ClInclude Include="src\ECSEngine\Tools\UI\UIResourcePaths.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UIStructures.h" />
     <ClInclude Include="src\ECSEngine\Tools\UI\UISystem.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Encryption.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePackaging.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ForEachFiles.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Keyboard.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Mouse.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionMacros.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.h" />
@@ -277,6 +295,8 @@
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\SerializationHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\StackScope.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Timer.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
@@ -288,27 +308,23 @@
     <ClInclude Include="src\Includes\ECSEngineModule.h" />
     <ClInclude Include="src\Includes\ECSEngineMultithreading.h" />
     <ClInclude Include="src\Includes\ECSEngineReflection.h" />
+    <ClInclude Include="src\Includes\ECSEngineReflectionMacros.h" />
     <ClInclude Include="src\Includes\ECSEngineRendering.h" />
     <ClInclude Include="src\Includes\ECSEngineRenderingCompression.h" />
     <ClInclude Include="src\Includes\ECSEngineResources.h" />
     <ClInclude Include="src\Includes\ECSEngineSerialization.h" />
+    <ClInclude Include="src\Includes\ECSEngineSerializationHelpers.h" />
     <ClInclude Include="src\Includes\ECSEngineStream.h" />
     <ClInclude Include="src\Includes\ECSEngineUI.h" />
     <ClInclude Include="src\Includes\ECSEngineUtilities.h" />
     <ClInclude Include="src\ECSEngine\Containers\DataPointer.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
-    <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Multithreading\AtomicLinearAllocator.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskScheduler.h" />
     <ClInclude Include="src\ECSEngine\Math\Matrix.h" />
     <ClInclude Include="src\ECSEngine\Math\VCLExtensions.h" />
     <ClInclude Include="src\ECSEngine\Math\Vector.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\FunctionInterfaces.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Mouse.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Keyboard.h" />
-    <ClInclude Include="src\ECSEngine\Allocators\MemoryArena.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\Archetype.h" />
     <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
@@ -316,12 +332,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\Graphics.h" />
     <ClInclude Include="src\ECSEngine\Internal\InternalStructures.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManager.h" />
-    <ClInclude Include="src\ECSEngine\Allocators\MemoryManager.h" />
     <ClInclude Include="src\Includes\ECSEngine.h" />
-    <ClInclude Include="src\ECSEngine\Allocators\LinearAllocator.h" />
-    <ClInclude Include="src\ECSEngine\Allocators\MultipoolAllocator.h" />
-    <ClInclude Include="src\ECSEngine\Allocators\PoolAllocator.h" />
-    <ClInclude Include="src\ECSEngine\Allocators\StackAllocator.h" />
     <ClInclude Include="src\ECSEngine\Application.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingStructures.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ConcurrentPrimitives.h" />
@@ -330,16 +341,12 @@
     <ClInclude Include="src\ECSEngine\Internal\ArchetypeBase.h" />
     <ClInclude Include="src\ECSEngine\Containers\HashTable.h" />
     <ClInclude Include="src\ECSEngine\Core.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\OSFunctions.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Path.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\Reflection.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\Serialization.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeMultisection.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializeSection.h" />
     <ClInclude Include="src\Includes\ECSEngineWorld.h" />
     <ClInclude Include="src\Includes\EntryPoint.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Function.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\Timer.h" />
     <ClInclude Include="src\Includes\ecspch.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stream.h" />
     <ClInclude Include="src\ECSEngine\Internal\World.h" />
@@ -347,7 +354,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Allocators\AllocatorPolymorphic.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MemoryManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\MultipoolAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\PoolAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Allocators\ResizableLinearAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Allocators\StackAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\ApplicationUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\DataPointer.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp" />
@@ -363,7 +376,8 @@
     <ClCompile Include="src\ECSEngine\Internal\EntityHierarchy.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityManagerSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ForEach.cpp" />
-    <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\AtomicLinearAllocator.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Multithreading\RingBuffer.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
@@ -408,33 +422,27 @@
     <ClCompile Include="src\ECSEngine\Tools\UI\UIReflection.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UISystem.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
-    <ClCompile Include="src\ECSEngine\Allocators\MemoryArena.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Graphics.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\InternalStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ArchetypeBase.cpp" />
-    <ClCompile Include="src\ECSEngine\Allocators\MemoryManager.cpp" />
-    <ClCompile Include="src\ECSEngine\Allocators\LinearAllocator.cpp" />
-    <ClCompile Include="src\ECSEngine\Allocators\MultipoolAllocator.cpp" />
-    <ClCompile Include="src\ECSEngine\Allocators\PoolAllocator.cpp" />
-    <ClCompile Include="src\ECSEngine\Allocators\StackAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Application.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ConcurrentPrimitives.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\BlockRange.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\BooleanBitField.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityManager.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\Reflection.cpp" />
@@ -654,9 +662,6 @@
     <Text Include="src\TODO.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Dependencies\DirectXTex\DirectXTex\DirectXTex_Desktop_2019_Win10.vcxproj">
-      <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\Dependencies\DirectXTK\DirectXTK_Desktop_2019_Win10.vcxproj">
       <Project>{e0b52ae7-e160-4d32-bf3f-910b785e5a8e}</Project>
     </ProjectReference>

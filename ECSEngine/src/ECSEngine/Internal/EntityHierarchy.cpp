@@ -171,34 +171,32 @@ namespace ECSEngine {
             allocator->Deallocate(allocated_buffer);
         }
 
-        children_table.Initialize(allocator, other->children_table.GetCapacity());
-        // For each entry, insert it manually and keep track of allocations
-        unsigned int extended_capacity = other->children_table.GetExtendedCapacity();
-        for (unsigned int index = 0; index < extended_capacity; index++) {
-            if (other->children_table.IsItemAt(index)) {
-                Children other_children = other->children_table.GetValueFromIndex(index);
+        size_t blit_size = other->children_table.MemoryOf(other->children_table.GetCapacity());
+        void* allocation = allocator->Allocate(blit_size);
+        children_table.SetBuffers(allocation, other->children_table.GetCapacity());
 
-                Children* current_children = children_table.GetValuePtrFromIndex(index);
-                current_children->count = other_children.count;
-                current_children->is_root = other_children.is_root;
-                current_children->root_index = other_children.root_index;
-                if (other_children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
-                    // This is allocated from the allocator - must do the same
-                    void* children_allocation = allocator->Allocate(sizeof(Entity) * other_children.count);
-                    memcpy(children_allocation, other_children.entities, sizeof(Entity) * other_children.count);
+        // Blit the entire table, and then resolve the allocated pieces
+        memcpy(allocation, other->children_table.GetAllocatedBuffer(), blit_size);
 
-                    current_children->entities = (Entity*)children_allocation;
-                }
-                else {
-                    current_children->entities = nullptr;
-                    memcpy(current_children->static_children, other_children.static_children, sizeof(Entity) * other_children.count);
-                }
+        other->children_table.ForEachIndexConst([&](unsigned int index) {
+            Children other_children = other->children_table.GetValueFromIndex(index);
+
+            Children* current_children = children_table.GetValuePtrFromIndex(index);
+            current_children->count = other_children.count;
+            current_children->is_root = other_children.is_root;
+            current_children->root_index = other_children.root_index;
+            if (other_children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                // This is allocated from the allocator - must do the same
+                void* children_allocation = allocator->Allocate(sizeof(Entity) * other_children.count);
+                memcpy(children_allocation, other_children.entities, sizeof(Entity) * other_children.count);
+
+                current_children->entities = (Entity*)children_allocation;
             }
-        }
-
-        // Now the metadata and the identifiers can be blitted
-        memcpy(children_table.m_identifiers, other->children_table.m_identifiers, sizeof(Entity) * extended_capacity);
-        memcpy(children_table.m_metadata, other->children_table.m_metadata, sizeof(unsigned char) * extended_capacity);
+            else {
+                current_children->entities = nullptr;
+                memcpy(current_children->static_children, other_children.static_children, sizeof(Entity) * other_children.count);
+            }
+        });
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -394,27 +392,22 @@ namespace ECSEngine {
         }
 
         // Now the children table
-        unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
-        const Entity* children_keys = hierarchy->children_table.GetIdentifiers();
-
         void* temp_buffer = ECS_STACK_ALLOC(sizeof(unsigned char) * ECS_KB * 64);
         uintptr_t temp_ptr = (uintptr_t)temp_buffer;
 
-        for (unsigned int index = 0; index < children_capacity; index++) {
-            if (hierarchy->children_table.IsItemAt(index)) {
-                temp_ptr = (uintptr_t)temp_buffer;
+        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
+            temp_ptr = (uintptr_t)temp_buffer;
 
-                auto children = hierarchy->children_table.GetValueFromIndex(index);
-                Write<true>(&temp_ptr, children_keys + index, sizeof(Entity));
-                Write<true>(&temp_ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-                Write<true>(&temp_ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+            Write<true>(&temp_ptr, &parent, sizeof(Entity));
+            // The 32 bits with the count, root index and is_root
+            Write<true>(&temp_ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Write<true>(&temp_ptr, children.Entities(), sizeof(Entity) * children.count);
 
-                success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
-                if (!success) {
-                    return false;
-                }
+            success = WriteFile(file, { temp_buffer, temp_ptr - (uintptr_t)temp_buffer });
+            if (!success) {
+                return false;
             }
-        }
+        });
 
         // The parent table can be deduced from the children table
         return true;
@@ -438,16 +431,11 @@ namespace ECSEngine {
 
         // Now the children table
         unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
-        const Entity* children_keys = hierarchy->children_table.GetIdentifiers();
-        for (unsigned int index = 0; index < children_capacity; index++) {
-            if (hierarchy->children_table.IsItemAt(index)) {
-                auto children = hierarchy->children_table.GetValueFromIndex(index);
-                Write<true>(ptr, children_keys + index, sizeof(Entity));
-                Write<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-                Write<true>(ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
-            }
-        }
-
+        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
+            Write<true>(ptr, &parent, sizeof(Entity));
+            Write<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
+            Write<true>(ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+        });
         // The parent table can be deduced from the children table
     }
 
@@ -460,15 +448,12 @@ namespace ECSEngine {
 
         // First determine how many entries in the children are and how much memory they require
         unsigned int children_capacity = hierarchy->children_table.GetExtendedCapacity();
-        for (unsigned int index = 0; index < children_capacity; index++) {
-            if (hierarchy->children_table.IsItemAt(index)) {
-                auto children = hierarchy->children_table.GetValueFromIndex(index);
-                // The entities must be written aswell. The final entity represents the key which will be used
-                // when reinserting the values back on deserialization
-                // The unsigned int contains all the necessary extra data
-                size += children.count * sizeof(Entity) + sizeof(unsigned int) + sizeof(Entity);
-            }
-        }
+        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
+            // The entities must be written aswell. The final entity represents the key which will be used
+            // when reinserting the values back on deserialization
+            // The unsigned int contains all the necessary extra data
+            size += children.count * sizeof(Entity) + sizeof(unsigned int) + sizeof(Entity);
+        });
 
         // The parent table can be deduced from the children table
         return size;
@@ -528,7 +513,6 @@ namespace ECSEngine {
 
         void* temp_buffer = ECS_STACK_ALLOC(sizeof(char) * ECS_KB * 64);
         uintptr_t temp_ptr = (uintptr_t)temp_buffer;
-
 
         // Read the children table now
         for (unsigned int index = 0; index < header.children_count; index++) {

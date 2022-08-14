@@ -47,14 +47,14 @@ namespace ECSEngine {
 			while (path.size > 0 && path[path.size - 1] != separator) {
 				path.size--;
 			}
-			return Path(path.buffer, function::Select<size_t>(path.size == 0, 0, path.size - 1));
+			return Path(path.buffer, path.size == 0 ? 0 : path.size - 1);
 		}
 
 		ASCIIPath PathParent(ASCIIPath path, char separator) {
 			while (path.size > 0 && path[path.size - 1] != separator) {
 				path.size--;
 			}
-			return ASCIIPath(path.buffer, function::Select<size_t>(path.size == 0, 0, path.size - 1));
+			return ASCIIPath(path.buffer, path.size == 0 ? 0 : path.size - 1);
 		}
 
 		Path PathParentBoth(Path path)
@@ -73,14 +73,14 @@ namespace ECSEngine {
 			while (path.size > 0 && path[path.size - 1] != separator) {
 				path.size--;
 			}
-			return Select<size_t>(path.size == 0, 0, path.size - 1);
+			return path.size == 0 ? 0 : path.size - 1;
 		}
 
 		size_t PathParentSize(ASCIIPath path, char separator) {
 			while (path.size > 0 && path[path.size - 1] != separator) {
 				path.size--;
 			}
-			return Select<size_t>(path.size == 0, 0, path.size - 1);
+			return path.size == 0 ? 0 : path.size - 1;
 		}
 
 		size_t PathParentSizeBoth(Path path)

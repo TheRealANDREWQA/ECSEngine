@@ -28,6 +28,18 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE Stream(const void* buffer, size_t size) : buffer((T*)buffer), size(size) {}
 		ECS_INLINE Stream(CapacityStream<T> other) : buffer(other.buffer), size(other.size) {}
 
+		template<typename = std::enable_if_t<std::is_same_v<char, T>>>
+		ECS_INLINE Stream(const char* string) : buffer((char*)string) {
+			ECS_ASSERT(string != nullptr);
+			size = strlen(string);
+		}
+
+		template<typename = std::enable_if_t<std::is_same_v<wchar_t, T>>>
+		ECS_INLINE Stream(const wchar_t* string) : buffer((wchar_t*)string) {
+			ECS_ASSERT(string != nullptr);
+			size = wcslen(string);
+		}
+
 		ECS_INLINE Stream(const Stream& other) = default;
 		ECS_INLINE Stream<T>& operator = (const Stream<T>& other) = default;
 
@@ -74,22 +86,48 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		ECS_INLINE void CopyTo(uintptr_t& memory) const {
-			memcpy((void*)memory, buffer, sizeof(T) * size);
+		// Added return type in order to be compatible with StreamDeepCopy
+		ECS_INLINE Stream<T> CopyTo(uintptr_t& memory) const {
+			void* current_buffer = (void*)memory;
+
+			memcpy(current_buffer, buffer, sizeof(T) * size);
 			memory += sizeof(T) * size;
+
+			return Stream<T>(current_buffer, size);
 		}
 
-		ECS_INLINE void PushDownElements(size_t starting_index, size_t count) {
-			for (int64_t index = size - 1; index >= (int64_t)starting_index; index--) {
-				buffer[index + count] = buffer[index];
+		ECS_INLINE size_t CopySize() const {
+			return sizeof(T) * size;
+		}
+
+		ECS_INLINE void Insert(size_t index, T value) {
+			DisplaceElements(index, 1);
+			buffer[index] = value;
+			size++;
+		}
+		
+		// Does not update the size
+		void DisplaceElements(size_t starting_index, int64_t displacement) {
+			// If the displacement is negative, start from the bottom up
+			// Else start from the up downwards
+			if (displacement < 0) {
+				for (int64_t index = (int64_t)starting_index; index < (int64_t)size; index++) {
+					buffer[index + displacement] = buffer[index];
+				}
+			}
+			else if (displacement > 0) {
+				for (int64_t index = (int64_t)size - 1; index >= (int64_t)starting_index; index--) {
+					buffer[index + displacement] = buffer[index];
+				}
 			}
 		}
 
-		ECS_INLINE void Remove(unsigned int index) {
-			for (size_t copy_index = index + 1; copy_index < size; copy_index++) {
-				buffer[copy_index - 1] = buffer[copy_index];
+		// Set the count to the count of elements that you want to be removed
+		ECS_INLINE void Remove(size_t index, size_t count = 1) {
+			for (size_t copy_index = index + count; copy_index < size; copy_index++) {
+				buffer[copy_index - count] = buffer[copy_index];
 			}
-			size--;
+			size -= count;
 		}
 
 		ECS_INLINE void RemoveSwapBack(size_t index) {
@@ -192,6 +230,20 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE CapacityStream(const void* buffer, unsigned int size, unsigned int capacity) : buffer((T*)buffer), size(size), capacity(capacity) {}
 		ECS_INLINE CapacityStream(Stream<T> stream) : buffer(stream.buffer), size(stream.size), capacity(stream.size) {}
 
+		template<typename = std::enable_if_t<std::is_same_v<char, T>>>
+		ECS_INLINE CapacityStream(const char* string) : buffer((char*)string) {
+			ECS_ASSERT(string != nullptr);
+			size = strlen(string);
+			capacity = string_size;
+		}
+
+		template<typename = std::enable_if_t<std::is_same_v<wchar_t, T>>>
+		ECS_INLINE CapacityStream(const wchar_t* string) : buffer((wchar_t*)string) {
+			ECS_ASSERT(string != nullptr);
+			size = wcslen(string);
+			capacity = size;
+		}
+
 		ECS_INLINE CapacityStream(const CapacityStream& other) = default;
 		ECS_INLINE CapacityStream<T>& operator = (const CapacityStream<T>& other) = default;
 
@@ -207,14 +259,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// Returns the first index
 		unsigned int AddStream(Stream<T> other) {
-			CopySlice(size, other.buffer, other.size);
-			unsigned int previous_size = size;
-			size += other.size;
-			return previous_size;
-		}
-
-		// Returns the first index
-		unsigned int AddStream(CapacityStream<T> other) {
 			CopySlice(size, other.buffer, other.size);
 			unsigned int previous_size = size;
 			size += other.size;
@@ -245,14 +289,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return true;
 		}
 
-		ECS_INLINE bool AddStreamSafe(CapacityStream<T> other) {
-			if (size + other.size > capacity) {
-				return false;
-			}
-			AddStream(other);
-			return true;
-		}
-
 		ECS_INLINE void AssertCapacity() const {
 			ECS_ASSERT(size <= capacity);
 		}
@@ -269,11 +305,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			Copy(other.buffer, other.size);
 		}
 
-		// it will set the size
-		ECS_INLINE void Copy(CapacityStream<T> other) {
-			Copy(other.buffer, other.size);
-		}
-
 		// it will not set the size and will not do a check
 		ECS_INLINE void CopySlice(unsigned int starting_index, const void* memory, unsigned int count) {
 			memcpy(buffer + starting_index, memory, sizeof(T) * count);
@@ -284,28 +315,47 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			CopySlice(starting_index, other.buffer, other.size);
 		}
 
-		// it will not set the size and will not do a check
-		ECS_INLINE void CopySlice(unsigned int starting_index, CapacityStream<T> other) {
-			CopySlice(starting_index, other.buffer, other.size);
-		}
-
 		ECS_INLINE void CopyTo(void* memory) const {
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
-		ECS_INLINE void CopyTo(uintptr_t& memory) const {
-			memcpy((void*)memory, buffer, sizeof(T) * size);
+		// Added return type to be able to be used with StreamDeepCopy
+		ECS_INLINE CapacityStream<T> CopyTo(uintptr_t& memory) const {
+			void* current_buffer = (void*)memory;
+			memcpy(current_buffer, buffer, sizeof(T) * size);
 			memory += sizeof(T) * size;
+
+			return CapacityStream<T>(current_buffer, size, size);
+		}
+		
+		ECS_INLINE size_t CopySize() const {
+			return sizeof(T) * size;
 		}
 
 		ECS_INLINE bool IsFull() const {
 			return size == capacity;
 		}
 
-		void PushDownElements(unsigned int starting_index, unsigned int count) {
-			//ECS_ASSERT(count + size <= starting_index);
-			for (int32_t index = (int32_t)size - 1; index >= (int32_t)starting_index; index--) {
-				buffer[index + count] = buffer[index];
+		ECS_INLINE void Insert(unsigned int index, T value) {
+			DisplaceElements(index, 1);
+			buffer[index] = value;
+			size++;
+			AssertCapacity();
+		}
+
+		// Does not update the size
+		void DisplaceElements(unsigned int starting_index, int32_t displacement) {
+			// If the displacement is negative, start from the bottom up
+			// Else start from the up downwards
+			if (displacement < 0) {
+				for (int32_t index = (int32_t)starting_index; index < (int32_t)size; index++) {
+					buffer[index + displacement] = buffer[index];
+				}
+			}
+			else {
+				for (int64_t index = (int32_t)size - 1; index >= (int32_t)starting_index; index--) {
+					buffer[index + displacement] = buffer[index];
+				}
 			}
 		}
 
@@ -313,11 +363,12 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			size = 0;
 		}
 
-		ECS_INLINE void Remove(unsigned int index) {
-			for (unsigned int copy_index = index + 1; copy_index < size; copy_index++) {
-				buffer[copy_index - 1] = buffer[copy_index];
+		// Set the count to the number of elements that you want to be removed
+		ECS_INLINE void Remove(unsigned int index, unsigned int count = 1) {
+			for (unsigned int copy_index = index + count; copy_index < size; copy_index++) {
+				buffer[copy_index - count] = buffer[copy_index];
 			}
-			size--;
+			size -= count;
 		}
 
 		ECS_INLINE void RemoveSwapBack(unsigned int index) {
@@ -331,7 +382,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			buffer[second] = copy;
 		}
 
-		void SwapContents() {
+		ECS_INLINE void SwapContents() {
 			for (unsigned int index = 0; index < size >> 1; index++) {
 				Swap(index, size - index - 1);
 			}
@@ -431,7 +482,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ResizableStream(const ResizableStream& other) = default;
 		ResizableStream<T>& operator = (const ResizableStream<T>& other) = default;
 
-		operator Stream<T>() const {
+		ECS_INLINE operator Stream<T>() const {
 			return { buffer, size };
 		}
 
@@ -460,15 +511,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return previous_size;
 		}
 
-		// Returns the first index
-		unsigned int AddStream(CapacityStream<T> other) {
-			ReserveNewElements(other.size);
-			CopySlice(size, other);
-			unsigned int previous_size = size;
-			size += other.size;
-			return previous_size;
-		}
-
 		// it will set the size
 		ECS_INLINE void Copy(const void* memory, unsigned int count) {
 			ResizeNoCopy(count);
@@ -478,11 +520,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// it will set the size
 		ECS_INLINE void Copy(Stream<T> other) {
-			Copy(other.buffer, other.size);
-		}
-
-		// it will set the size
-		ECS_INLINE void Copy(CapacityStream<T> other) {
 			Copy(other.buffer, other.size);
 		}
 
@@ -496,18 +533,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			CopySlice(starting_index, other.buffer, other.size);
 		}
 
-		// it will not set the size and will not do a check
-		ECS_INLINE void CopySlice(unsigned int starting_index, CapacityStream<T> other) {
-			CopySlice(starting_index, other.buffer, other.size);
-		}
-
 		ECS_INLINE void CopyTo(void* memory) const {
 			memcpy(memory, buffer, sizeof(T) * size);
 		}
 
+		// If it is desirable to be used with StreamDeepCopy, the problem is that
+		// it cannot use coallesced allocation. Wait for a use case to decide
 		ECS_INLINE void CopyTo(uintptr_t& memory) const {
 			memcpy((void*)memory, buffer, sizeof(T) * size);
 			memory += sizeof(T) * size;
+		}
+
+		ECS_INLINE size_t CopySize() const {
+			return sizeof(T) * size;
 		}
 
 		void FreeBuffer() {
@@ -519,21 +557,40 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 
-		void PushDownElements(unsigned int starting_index, unsigned int count) {
-			for (int32_t index = size - 1; index >= (int32_t)starting_index; index--) {
-				buffer[index + count] = buffer[index];
+		ECS_INLINE void Insert(unsigned int index, T value) {
+			ReserveNewElement();
+			DisplaceElements(index, 1);
+			buffer[index] = value;
+			size++;
+		}
+
+		// Does not update the size
+		// Make sure you have enough space before doing this!
+		void DisplaceElements(unsigned int starting_index, int32_t displacement) {
+			// If the displacement is negative, start from the bottom up
+			// Else start from the up downwards
+			if (displacement < 0) {
+				for (int32_t index = (int32_t)starting_index; index < (int32_t)size; index++) {
+					buffer[index + displacement] = buffer[index];
+				}
+			}
+			else {
+				for (int64_t index = (int32_t)size - 1; index >= (int32_t)starting_index; index--) {
+					buffer[index + displacement] = buffer[index];
+				}
 			}
 		}
 
 		ECS_INLINE void Reset() {
-			size = 0;
+			size = 0;	
 		}
 
-		ECS_INLINE void Remove(unsigned int index) {
-			for (unsigned int copy_index = index + 1; copy_index < size; copy_index++) {
-				buffer[copy_index - 1] = buffer[copy_index];
+		// Set the count to the number of elements that you want to be removed
+		ECS_INLINE void Remove(unsigned int index, unsigned int count = 1) {
+			for (unsigned int copy_index = index + count; copy_index < size; copy_index++) {
+				buffer[copy_index - count] = buffer[copy_index];
 			}
-			size--;
+			size -= count;
 		}
 
 		ECS_INLINE void RemoveSwapBack(unsigned int index) {
@@ -586,7 +643,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			buffer[second] = copy;
 		}
 
-		void SwapContents() {
+		ECS_INLINE void SwapContents() {
 			for (unsigned int index = 0; index < size >> 1; index++) {
 				Swap(index, size - index - 1);
 			}
@@ -668,6 +725,19 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 				capacity = 0;
 			}
 			size = 0;
+		}
+
+		void InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream) {
+			allocator = _allocator;
+			if (stream.size > 0) {
+				ResizeNoCopy(stream.size);
+				Copy(stream);
+			}
+			else {
+				buffer = nullptr;
+				capacity = 0;
+				size = 0;
+			}
 		}
 
 		T* buffer;
@@ -914,13 +984,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		AllocatorPolymorphic allocator;
 	};
 
-	ECS_INLINE Stream<char> ToStream(const char* string) {
+	/*ECS_INLINE Stream<char> const char* string {
 		return Stream<char>(string, strlen(string));
 	}
 
-	ECS_INLINE Stream<wchar_t> ToStream(const wchar_t* string) {
+	ECS_INLINE Stream<wchar_t> const wchar_t* string {
 		return Stream<wchar_t>(string, wcslen(string));
-	}
+	}*/
 
 	// The template parameter of the stream must have as functions
 	// size_t CopySize() const;
@@ -935,7 +1005,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		size_t total_size = input.MemoryOf(input.size);
 
 		if (input.size < 1024) {
-			for (size_t index = 0; index < input.size; index++) {
+			for (size_t index = 0; index < (size_t)input.size; index++) {
 				size_t copy_size = input[index].CopySize();
 				total_size += copy_size;
 
@@ -943,7 +1013,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			}
 		}
 		else {
-			for (size_t index = 0; index < input.size; index++) {
+			for (size_t index = 0; index < (size_t)input.size; index++) {
 				total_size += input[index].CopySize();
 			}
 		}
@@ -953,17 +1023,17 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		new_stream.InitializeAndCopy(ptr, input);
 
 		if (input.size < 1024) {
-			for (size_t index = 0; index < input.size; index++) {
+			for (size_t index = 0; index < (size_t)input.size; index++) {
 				if (copy_sizes[index] > 0) {
-					new_stream[index] = input[index].Copy(ptr);
+					new_stream[index] = input[index].CopyTo(ptr);
 				}
 			}
 		}
 		else {
-			for (size_t index = 0; index < input.size; index++) {
+			for (size_t index = 0; index < (size_t)input.size; index++) {
 				size_t copy_size = input[index].CopySize();
 				if (copy_size > 0) {
-					new_stream[index] = input[index].Copy(ptr);
+					new_stream[index] = input[index].CopyTo(ptr);
 				}
 			}
 		}
@@ -971,19 +1041,35 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		return new_stream;
 	}
 
+	// The template parameter of the stream must have as functions
+	// size_t CopySize() const;
+	// void CopyTo(uintptr_t& ptr);
+	// If copy size returns 0, it assumes it needs no buffers and does not call
+	// the copy function.
 	template<typename Stream>
 	Stream StreamDeepCopy(Stream input, uintptr_t& ptr) {
 		Stream new_stream;
 		new_stream.InitializeAndCopy(ptr, input);
 
-		for (size_t index = 0; index < input.size; index++) {
+		for (size_t index = 0; index < (size_t)input.size; index++) {
 			size_t copy_size = input[index].CopySize();
 			if (copy_size > 0) {
-				new_stream[index] = input[index].Copy(ptr);
+				new_stream[index] = input[index].CopyTo(ptr);
 			}
 		}
 
 		return new_stream;
+	}
+
+	template<typename Stream>
+	size_t StreamDeepCopySize(Stream input) {
+		size_t total_size = input.MemoryOf(input.size);
+
+		for (size_t index = 0; index < (size_t)input.size; index++) {
+			total_size += input[index].CopySize();
+		}
+
+		return total_size;
 	}
 
 }

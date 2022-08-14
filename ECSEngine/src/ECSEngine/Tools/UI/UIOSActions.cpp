@@ -6,6 +6,8 @@
 #include "../../Utilities/Keyboard.h"
 #include "../../Utilities/Path.h"
 
+#include "../../Utilities/StackScope.h"
+
 constexpr const char* RENAME_FOLDER_WIZARD_NAME = "Rename Folder";
 constexpr const char* RENAME_FOLDER_WIZARD_INPUT_NAME = "New folder name";
 
@@ -30,7 +32,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			const wchar_t* data = (const wchar_t*)_data;
-			Stream<wchar_t> path = ToStream(data);
+			Stream<wchar_t> path = data;
 			action_data->data = &path;
 			stream_action(action_data);
 		}
@@ -130,7 +132,7 @@ namespace ECSEngine {
 
 			RenameFolderActionData rename_data;
 			rename_data.new_name = wide_name;
-			rename_data.path = ToStream(path);
+			rename_data.path = path;
 
 			action_data->data = &rename_data;
 			RenameFolderAction(action_data);
@@ -184,7 +186,7 @@ namespace ECSEngine {
 
 			RenameFileActionData rename_data;
 			rename_data.new_name = wide_name;
-			rename_data.path = ToStream(path);
+			rename_data.path = path;
 
 			action_data->data = &rename_data;
 			RenameFileAction(action_data);
@@ -238,7 +240,7 @@ namespace ECSEngine {
 
 			ChangeFileExtensionActionData change_data;
 			change_data.new_extension = wide_name;
-			change_data.path = ToStream(path);
+			change_data.path = path;
 
 			action_data->data = &change_data;
 			ChangeFileExtensionAction(action_data);
@@ -294,7 +296,7 @@ namespace ECSEngine {
 			const wchar_t* data = (const wchar_t*)_data;
 
 			ECS_TEMP_ASCII_STRING(ascii_string, 512);
-			function::ConvertWideCharsToASCII(ToStream(data), ascii_string);
+			function::ConvertWideCharsToASCII(Stream<wchar_t>(data), ascii_string);
 			ascii_string[ascii_string.size] = '\0';
 			system->m_application->WriteTextToClipboard(ascii_string.buffer);
 		}
@@ -328,7 +330,7 @@ namespace ECSEngine {
 
 		void SetBasicErrorMessage(const char* error, CapacityStream<char>& message) {
 			if (message.buffer != nullptr) {
-				Stream<char> stream = ToStream(error);
+				Stream<char> stream = error;
 				message.AddStreamSafe(stream);
 				message[message.size] = '\0';
 			}
@@ -340,7 +342,14 @@ namespace ECSEngine {
 			OSFileExplorerGetFileData* data
 		) {
 			IFileOpenDialog* dialog = nullptr;
-			HRESULT result = CoCreateInstance(
+			HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+			if (result != S_OK && result != S_FALSE) {
+				SetBasicErrorMessage("Failed to initialize COM subsystem.", data->error_message);
+				data->path.size = 0;
+				return false;
+			}
+
+			result = CoCreateInstance(
 				CLSID_FileOpenDialog,
 				nullptr,
 				CLSCTX_INPROC_SERVER,
@@ -352,12 +361,38 @@ namespace ECSEngine {
 				result = dialog->GetOptions(&dialog_options);
 
 				if (SUCCEEDED(result)) {
-					result = dialog->SetOptions(dialog_options | FOS_NOCHANGEDIR);
+					if (data->extensions.size == 0) {
+						result = dialog->SetOptions(dialog_options | FOS_NOCHANGEDIR);
+						if (FAILED(result)) {
+							SetBasicErrorMessage("Setting dialog options failed!", data->error_message);
+							data->path.size = 0;
+							return false;
+						}
+					}
+					else {
+						result = dialog->SetOptions(dialog_options | FOS_NOCHANGEDIR | FOS_STRICTFILETYPES);
+						if (FAILED(result)) {
+							SetBasicErrorMessage("Setting dialog options failed!", data->error_message);
+							data->path.size = 0;
+							return false;
+						}
 
-					if (FAILED(result)) {
-						SetBasicErrorMessage("Setting dialog options failed!", data->error_message);
-						data->path.size = 0;
-						return false;
+						ECS_STACK_CAPACITY_STREAM(wchar_t, modified_extensions, 512);
+
+						COMDLG_FILTERSPEC* filters = (COMDLG_FILTERSPEC*)ECS_STACK_ALLOC(sizeof(COMDLG_FILTERSPEC) * data->extensions.size);
+						for (size_t index = 0; index < data->extensions.size; index++) {
+							filters[index] = { L"", modified_extensions.buffer + modified_extensions.size };
+							modified_extensions.Add(L'*');
+							modified_extensions.AddStream(data->extensions[index]);
+							modified_extensions.Add(L'\0');
+						}
+						result = dialog->SetFileTypes(data->extensions.size, filters);
+
+						if (FAILED(result)) {
+							SetBasicErrorMessage("Setting dialog extensions failed!", data->error_message);
+							data->path.size = 0;
+							return false;
+						}
 					}
 				}
 				else {
@@ -399,25 +434,17 @@ namespace ECSEngine {
 					if (SUCCEEDED(result)) {
 						wchar_t* temp_path;
 						result = item->GetDisplayName(SIGDN_FILESYSPATH, &temp_path);
+						if (FAILED(result)) {
+							SetBasicErrorMessage("Getting the path failed!", data->error_message);
+							data->path.size = 0;
+							return false;
+						}
+
 						data->path.Copy(temp_path, wcslen(temp_path));
 						data->path[data->path.size] = L'\0';
 						CoTaskMemFree(temp_path);
 						item->Release();
 						dialog->Release();
-
-						Stream<wchar_t> _extensions[128];
-						Stream<Stream<wchar_t>> extensions(_extensions, data->extensions.size);
-						if (data->extensions.buffer != nullptr) {
-							for (size_t index = 0; index < data->extensions.size; index++) {
-								extensions[index] = ToStream(data->extensions[index]);
-							}
-							Stream<wchar_t> extension = function::PathExtension(data->path);
-							if (function::FindString(extension, extensions) == -1) {
-								SetBasicErrorMessage("The selected file does not conform to the accepted file formats", data->error_message);
-								data->path.size = 0;
-								return false;
-							}
-						}
 
 						return true;
 					}

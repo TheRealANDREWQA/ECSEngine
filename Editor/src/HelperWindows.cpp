@@ -168,7 +168,7 @@ void RenameFileWizardCallback(ActionData* action_data) {
 
 	RenameFileActionData rename_data;
 	rename_data.new_name = wide_name;
-	rename_data.path = ToStream(path);
+	rename_data.path = path;
 	action_data->data = &rename_data;
 	RenameFileAction(action_data);
 }
@@ -207,7 +207,7 @@ void RenameFolderWizardCallback(ActionData* action_data) {
 
 	RenameFolderActionData rename_data;
 	rename_data.new_name = wide_name;
-	rename_data.path = ToStream(path);
+	rename_data.path = path;
 	action_data->data = &rename_data;
 	RenameFolderAction(action_data);
 }

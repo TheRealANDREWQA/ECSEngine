@@ -113,8 +113,6 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ErrorMessageWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
-		ECSENGINE_API unsigned int CreateErrorMessageWindow(UISystem* system, const char* description);
-
 		ECSENGINE_API unsigned int CreateErrorMessageWindow(UISystem* system, Stream<char> description);
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -122,8 +120,6 @@ namespace ECSEngine {
 		ECSENGINE_API void ConfirmWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
 		ECSENGINE_API unsigned int CreateConfirmWindow(UISystem* system, Stream<char> description, UIActionHandler handler);
-
-		ECSENGINE_API unsigned int CreateConfirmWindow(UISystem* ECS_RESTRICT system, const char* ECS_RESTRICT description, UIActionHandler handler);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -146,7 +142,7 @@ namespace ECSEngine {
 			Action callback;
 			void* callback_data;
 			size_t callback_data_size;
-			CapacityStream<char> input_stream;
+			CapacityStream<char> input_stream = { nullptr, 0, 0 }; // Does not need to be initialized - it is used internally
 		};
 
 		ECSENGINE_API void TextInputWizard(void* window_data, void* drawer_descriptor, bool initialize);
@@ -159,9 +155,9 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void DrawTextFile(UIDrawer* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset);
+		ECSENGINE_API void DrawTextFile(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset);
 
-		ECSENGINE_API void DrawTextFileEx(UIDrawer* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset);
+		ECSENGINE_API void DrawTextFileEx(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset);
 
 		struct ECSENGINE_API TextFileDrawData {
 			const wchar_t* path;
@@ -171,11 +167,11 @@ namespace ECSEngine {
 
 		ECSENGINE_API void TextFileDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
-		ECSENGINE_API unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, const char* window_name);
+		ECSENGINE_API unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, Stream<char> window_name);
 		
 		struct ECSENGINE_API TextFileDrawActionData {
 			TextFileDrawData draw_data;
-			const char* window_name;
+			Stream<char> window_name;
 		};
 
 		ECSENGINE_API void CreateTextFileWindowAction(ActionData* action_data);
@@ -234,8 +230,8 @@ namespace ECSEngine {
 
 		struct InjectWindowElement {
 			void* data;
-			const char* name;
-			const char* basic_type_string;
+			Stream<char> name;
+			Stream<char> basic_type_string;
 			Reflection::ReflectionStreamFieldType stream_type = Reflection::ReflectionStreamFieldType::Basic;
 			// It is used to express the initial capacity of non capacity streams
 			unsigned int stream_size = 0;
@@ -243,7 +239,7 @@ namespace ECSEngine {
 
 		struct InjectWindowSection {
 			Stream<InjectWindowElement> elements;
-			const char* name;
+			Stream<char> name;
 		};
 
 		struct InjectWindowData {
@@ -253,11 +249,11 @@ namespace ECSEngine {
 
 		ECSENGINE_API void InjectValuesWindowDraw(void* drawer_descriptor, void* window_data, bool initialize);
 
-		ECSENGINE_API unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, const char* window_name, bool is_pop_up_window = true);
+		ECSENGINE_API unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, Stream<char> window_name, bool is_pop_up_window = true);
 		
 		struct InjectValuesActionData {
 			InjectWindowData data;
-			const char* name;
+			Stream<char> name;
 			bool is_pop_up_window;
 		};
 

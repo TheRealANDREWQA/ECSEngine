@@ -64,53 +64,37 @@ string_name.AssertCapacity();
 		wchar_t* ConvertASCIIToWide(const char* pointer);
 
 		// Calculates the integral and fractional parts and then commits them into a float each that then get summed up
-		template<typename Stream>
-		float ConvertCharactersToFloat(Stream characters);
+		ECSENGINE_API float ConvertCharactersToFloat(Stream<char> characters);
+
+		// Calculates the integral and fractional parts and then commits them into a float each that then get summed up
+		ECSENGINE_API float ConvertCharactersToFloat(Stream<wchar_t> characters);
 		
 		// Calculates the integral and fractional parts and then commits them into a double each that then get summed up
-		template<typename Stream>
-		double ConvertCharactersToDouble(Stream characters);
+		ECSENGINE_API double ConvertCharactersToDouble(Stream<char> characters);
+
+		// Calculates the integral and fractional parts and then commits them into a double each that then get summed up
+		ECSENGINE_API double ConvertCharactersToDouble(Stream<wchar_t> characters);
 
 		// Finds the number of characters that needs to be allocated and a stack buffer can be supplied in order
 		// to fill it if the count is smaller than its capacity
 		// The token can be changed from ' ' to another supplied value (e.g. \\ for paths or /)
-		ECSENGINE_API size_t FindWhitespaceCharactersCount(const char* string, char separator_token = ' ', CapacityStream<unsigned int>*stack_buffer = nullptr);
+		ECSENGINE_API size_t FindWhitespaceCharactersCount(Stream<char> string, char separator_token = ' ', CapacityStream<unsigned int>*stack_buffer = nullptr);
 
 		// it searches for spaces and next line characters
-		template<typename Stream>
-		void FindWhitespaceCharacters(Stream& spaces, const char* string, char separator_token = ' ');
-
-		// finds the tokens that appear in the current string
-		template<typename Stream>
-		void FindToken(const char* string, char token, Stream& tokens);
-
-		// finds the tokens that appear in the current string
-		template<typename Stream>
-		void FindToken(const char* ECS_RESTRICT string, const char* ECS_RESTRICT token, Stream& tokens);
+		template<typename SpaceStream>
+		void FindWhitespaceCharacters(SpaceStream& spaces, Stream<char> string, char separator_token = ' ');
 
 		// it searches for spaces and next line characters; Stream must be uint2
-		template<typename Stream>
-		void ParseWordsFromSentence(const char* sentence, Stream& words);
+		template<typename WordStream>
+		void ParseWordsFromSentence(Stream<char> sentence, WordStream& words);
 
 		// given a token, it will separate words out from it; Stream must be uint2
-		template<typename Stream>
-		void ParseWordsFromSentence(const char* sentence, char token, Stream& words);
+		template<typename WordStream>
+		void ParseWordsFromSentence(Stream<char> sentence, char token, WordStream& words);
 
 		// given multiple tokens, it will separate words based from them; Stream must be uint2
-		template<typename Stream>
-		void ParseWordsFromSentence(const char* ECS_RESTRICT sentence, const char* ECS_RESTRICT tokens, Stream& words);
-
-		// condition ? first_value : second_value
-		// The only full template because it is a one liner
-		template<typename Type>
-		Type Select(bool condition, Type first_value, Type second_value) {
-			return condition ? first_value : second_value;
-		}
-
-		// Calculates the integral and fractional parts and then commits them into a floating point type each that then get summed up 
-		// Returns the count of characters written
-		template<typename Stream>
-		size_t ConvertFloatingPointIntegerToChars(Stream& chars, int64_t integer, size_t precision);
+		template<typename WordStream>
+		void ParseWordsFromSentence(Stream<char> sentence, Stream<char> tokens, WordStream& words);
 
 		// Shifts the float by the power of 10 to the precision that then get cast into an integer;
 		// Afterwards performs the necessary parsing for 0. values and case evaluation for rounding
@@ -137,16 +121,24 @@ string_name.AssertCapacity();
 		size_t ConvertIntToChars(Stream& chars, int64_t value);
 
 		// Non digit characters are discarded
-		template<typename Integer, typename Stream>
-		Integer ConvertCharactersToInt(Stream stream);
+		ECSENGINE_API int64_t ConvertCharactersToInt(Stream<char> stream);
 
 		// Non digit characters are discarded
-		template<typename Integer, typename Stream>
-		Integer ConvertCharactersToInt(Stream stream, size_t& digit_count);
+		ECSENGINE_API int64_t ConvertCharactersToInt(Stream<wchar_t> stream);
 
 		// Non digit characters are discarded
-		template<typename FloatingPoint, typename Stream>
-		FloatingPoint ConvertCharactersToFloatingPoint(Stream stream);
+		ECSENGINE_API int64_t ConvertCharactersToInt(Stream<char> stream, size_t& digit_count);
+
+		// Non digit characters are discarded
+		ECSENGINE_API int64_t ConvertCharactersToInt(Stream<wchar_t> stream, size_t& digit_count);
+
+		// Returns 0 or 1 if it is a boolean (i.e. false or true in the characters)
+		// Else returns -1
+		char ConvertCharactersToBool(Stream<char> characters);
+		
+		// Returns 0 or 1 if it is a boolean (i.e. false or true in the characters)
+		// Else returns -1
+		char ConvertCharactersToBool(Stream<wchar_t> characters);
 
 		template<typename CharacterType, typename ReturnType, typename Functor>
 		ReturnType ParseType(const CharacterType** characters, Stream<CharacterType> delimiters, Functor&& functor) {
@@ -191,24 +183,38 @@ string_name.AssertCapacity();
 		template<typename CharacterType>
 		ECSENGINE_API bool ParseBool(const CharacterType** characters, Stream<CharacterType> delimiters);
 
+		template<typename Allocator>
+		void* Copy(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8) {
+			void* allocation = allocator->Allocate(data_size, alignment);
+			memcpy(allocation, data, data_size);
+			return allocation;
+		}
+
 		ECSENGINE_API void* Copy(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8);
 
 		ECSENGINE_API Stream<void> Copy(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
 
 		// If data size is 0, it will return the data back
-		ECSENGINE_API void* CopyNonZero(AllocatorPolymorphic allocator, void* data, size_t data_size, size_t alignment = 8);
+		ECSENGINE_API void* CopyNonZero(AllocatorPolymorphic allocator, const void* data, size_t data_size, size_t alignment = 8);
 
 		// If data size is 0, it will return the data back
 		ECSENGINE_API Stream<void> CopyNonZero(AllocatorPolymorphic allocator, Stream<void> data, size_t alignment = 8);
 
-		// It will copy the null termination character
-		ECSENGINE_API Stream<char> StringCopy(AllocatorPolymorphic allocator, const char* string);
+		// If data size is zero, it will return data, else it will make a copy and return that instead
+		template<typename Allocator>
+		void* CopyNonZero(Allocator* allocator, const void* data, size_t data_size, size_t alignment = 8) {
+			if (data_size > 0) {
+				void* allocation = allocator->Allocate(data_size, alignment);
+				memcpy(allocation, data, data_size);
+				return allocation;
+			}
+			return (void*)data;
+		}
 
 		// It will copy the null termination character
 		ECSENGINE_API Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string);
 
-		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, const wchar_t* string);
-
+		// It will copy the null termination character
 		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string);
 
 		template<typename Stream>
@@ -488,44 +494,36 @@ string_name.AssertCapacity();
 		//}
 
 		// non digit characters are discarded
-		template<typename Integer, typename Stream>
-		Integer ConvertCharactersToInt(Stream stream) {
+		template<typename Integer, typename CharacterType, typename Stream>
+		Integer ConvertCharactersToIntImpl(Stream stream, size_t& digit_count) {
 			Integer integer = Integer(0);
-			size_t starting_index = Select(stream[0] == '-', 1, 0);
+			size_t starting_index = stream[0] == Character<CharacterType>('-') ? 1 : 0;
+			digit_count = 0;
 
 			for (size_t index = starting_index; index < stream.size; index++) {
-				if (stream[index] >= '0' && stream[index] <= '9') {
-					integer = integer * 10 + stream[index] - '0';
+				if (stream[index] >= Character<CharacterType>('0') && stream[index] <= Character<CharacterType>('9')) {
+					integer = integer * 10 + stream[index] - Character<CharacterType>('0');
+					digit_count++;
 				}
 			}
-			integer = Select<Integer>(starting_index == 1, -integer, integer);
+			integer = starting_index == 1 ? -integer : integer;
 
 			return integer;
 		}
 
 		// non digit characters are discarded
-		template<typename Integer, typename Stream>
-		Integer ConvertCharactersToInt(Stream stream, size_t& digit_count) {
-			Integer integer = Integer(0);
-			size_t starting_index = Select(stream[0] == '-', 1, 0);
-			digit_count = 0;
-
-			for (size_t index = starting_index; index < stream.size; index++) {
-				if (stream[index] >= '0' && stream[index] <= '9') {
-					integer = integer * 10 + stream[index] - '0';
-					digit_count++;
-				}
-			}
-			integer = Select(starting_index == 1, -integer, integer);
-
-			return integer;
+		template<typename Integer, typename CharacterType, typename Stream>
+		Integer ConvertCharactersToIntImpl(Stream stream) {
+			// Dummy
+			size_t digit_count = 0;
+			return ConvertCharactersToIntImpl<Integer, CharacterType>(stream, digit_count);
 		}
 
 		template<typename Stream, typename Value, typename Function>
 		void GetMinFromStream(const Stream& input, Value& value, Function&& function) {
 			for (size_t index = 0; index < input.size; index++) {
 				Value current_value = function(input[index]);
-				value = Select(value > current_value, current_value, value);
+				value = std::min(value, current_value);
 			}
 		}
 
@@ -533,7 +531,7 @@ string_name.AssertCapacity();
 		void GetMaxFromStream(const Stream& input, Value& value, Function&& function) {
 			for (size_t index = 0; index < input.size; index++) {
 				Value current_value = function(input[index]);
-				value = Select(value < current_value, current_value, value);
+				value = std::max(value, current_value);
 			}
 		}
 
@@ -541,8 +539,8 @@ string_name.AssertCapacity();
 		void GetExtremesFromStream(const Stream& input, Value& min, Value& max, Function&& accessor) {
 			for (size_t index = 0; index < input.size; index++) {
 				Value current_value = accessor(input[index]);
-				min = Select(min > current_value, current_value, min);
-				max = Select(max < current_value, current_value, max);
+				min = std::min(min, current_value);
+				max = std::max(max, current_value);
 			}
 		}
 
@@ -652,6 +650,17 @@ string_name.AssertCapacity();
 
 			return { 0, 0 };
 		}
+
+		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double, const char*);
 
 		// returns the count of the characters written;
 		template<typename Parameter>

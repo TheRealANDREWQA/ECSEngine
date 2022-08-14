@@ -131,9 +131,9 @@ namespace ECSEngine {
 			float* float2_values[2];
 			float float2_lower_bounds[1];
 			float float2_upper_bounds[1];
-			const char* float2_names[2];
+			Stream<char> float2_names[2];
 
-			auto float2_sliders = [&](const char* group_name, size_t index) {
+			auto float2_sliders = [&](Stream<char> group_name, size_t index) {
 				drawer.FloatSliderGroup(
 					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
 					config,
@@ -262,23 +262,23 @@ namespace ECSEngine {
 			UI_PREPARE_DRAWER(initialize);
 
 			UIWindowDrawerDescriptor* descriptors = (UIWindowDrawerDescriptor*)window_data;
-			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NEXT_ROW);
+			drawer.SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 			auto color_theme_lambda = [&]() {
 				WindowParameterColorTheme(descriptors, drawer);
 			};
-			drawer.CollapsingHeader("Color theme", color_theme_lambda);
+			drawer.CollapsingHeader("Color theme", nullptr, color_theme_lambda);
 
 			auto layout_lambda = [&]() {
 				WindowParametersLayout(descriptors, drawer);
 			};
 
-			drawer.CollapsingHeader("Layout", layout_lambda);
+			drawer.CollapsingHeader("Layout", nullptr, layout_lambda);
 
 			auto element_lambda = [&]() {
 				WindowParametersElementDescriptor(descriptors, drawer);
 			};
 
-			drawer.CollapsingHeader("Element descriptor", element_lambda);
+			drawer.CollapsingHeader("Element descriptor", nullptr, element_lambda);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -304,14 +304,16 @@ namespace ECSEngine {
 			descriptor.initial_position_x = function::ClampMax(descriptor.initial_position_x + descriptor.initial_size_x, 1.0f) - descriptor.initial_size_x;
 			descriptor.initial_position_y = function::ClampMax(descriptor.initial_position_y + descriptor.initial_size_y, 1.0f) - descriptor.initial_size_y;
 
-			const char* window_name = system->GetWindowName(window_index);
+			Stream<char> window_name = system->GetWindowName(window_index);
 			char* new_name = (char*)system->m_memory->Allocate(sizeof(char) * 64, alignof(char));
-			size_t window_name_size = strlen(window_name);
-			memcpy(new_name, window_name, window_name_size);
-			new_name[window_name_size] = '\0';
-			strcat(new_name, " Parameters");
+			descriptor.window_name.buffer = new_name;
 
-			descriptor.window_name = new_name;
+			window_name.CopyTo(new_name);
+			new_name += window_name.size;
+			memcpy(new_name, " Parameters", sizeof(" Parameters") - 1);
+
+			descriptor.window_name.size = window_name.size + sizeof(" Parameters") - 1;
+	
 			window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_POP_UP_WINDOW);
 
 			// if it is desired to be destroyed when going out of focus
@@ -319,7 +321,7 @@ namespace ECSEngine {
 			system_handler_data.is_fixed = true;
 			system_handler_data.is_initialized = true;
 			system_handler_data.destroy_at_first_click = false;
-			system_handler_data.name = new_name;
+			system_handler_data.name = descriptor.window_name;
 			system_handler_data.reset_when_window_is_destroyed = true;
 			system_handler_data.deallocate_name = true;
 			UIActionHandler handler;
@@ -444,12 +446,12 @@ namespace ECSEngine {
 			float float2_lower_bounds[1];
 			// Uniform bounds
 			float float2_upper_bounds[1];
-			const char* float2_names[2];
+			Stream<char> float2_names[2];
 
 			float2_lower_bounds[0] = 0.0f;
 			float2_upper_bounds[0] = 0.01f;
 
-			auto float2_sliders = [&](const char* group_name) {
+			auto float2_sliders = [&](Stream<char> group_name) {
 				drawer.FloatSliderGroup(
 					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
 					config,
@@ -653,7 +655,7 @@ namespace ECSEngine {
 				"Line count"
 			};
 
-			drawer.CollapsingHeader("Vertex buffer normal phase", [&]() {
+			drawer.CollapsingHeader("Vertex buffer normal phase", nullptr, [&]() {
 				UIDrawConfig config;
 				drawer.PushIdentifierStack("##1");
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
@@ -662,7 +664,7 @@ namespace ECSEngine {
 				drawer.PopIdentifierStack();
 				});
 
-			drawer.CollapsingHeader("Vertex buffer late phase", [&]() {
+			drawer.CollapsingHeader("Vertex buffer late phase", nullptr, [&]() {
 				UIDrawConfig config;
 				drawer.PushIdentifierStack("##2");
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
@@ -714,7 +716,7 @@ namespace ECSEngine {
 				"Line"
 			};
 
-			drawer.CollapsingHeader("System vertex buffer count", [&]() {
+			drawer.CollapsingHeader("System vertex buffer count", nullptr, [&]() {
 				for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
 					drawer.IntSlider<unsigned int>(SLIDER_CONFIGURATION, config, names[index], &misc->system_vertex_buffers[index], 128, 5'000'000);
 				}
@@ -723,11 +725,11 @@ namespace ECSEngine {
 			float* float2_values[2];
 			float float2_lower_bounds[2];
 			float float2_upper_bounds[2];
-			const char* float2_names[2] = { "x:", "y:" };
+			Stream<char> float2_names[2] = { "x:", "y:" };
 
 			drawer.PushIdentifierStack(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 
-			auto float2_lambda = [&](const char* group_name, size_t index) {
+			auto float2_lambda = [&](Stream<char> group_name, size_t index) {
 				drawer.PushIdentifierStackRandom(index);
 				drawer.FloatSliderGroup(
 					SLIDER_CONFIGURATION | UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS,
@@ -796,43 +798,43 @@ namespace ECSEngine {
 				SystemParametersColorTheme(drawer);
 			};
 
-			drawer.CollapsingHeader("Color theme", color_theme_lambda);
+			drawer.CollapsingHeader("Color theme", nullptr, color_theme_lambda);
 
 			auto layout_lambda = [&]() {
 				SystemParametersLayout(drawer);
 			};
 
-			drawer.CollapsingHeader("Layout", layout_lambda);
+			drawer.CollapsingHeader("Layout", nullptr, layout_lambda);
 
 			auto element_descriptor_lambda = [&]() {
 				SystemParametersElementDescriptor(drawer);
 			};
 
-			drawer.CollapsingHeader("Element descriptor", element_descriptor_lambda);
+			drawer.CollapsingHeader("Element descriptor", nullptr, element_descriptor_lambda);
 
 			auto material_lambda = [&]() {
 				SystemParameterMaterial(drawer);
 			};
 
-			drawer.CollapsingHeader("Materials", material_lambda);
+			drawer.CollapsingHeader("Materials", nullptr, material_lambda);
 
 			auto font_lambda = [&]() {
 				SystemParameterFont(drawer);
 			};
 
-			drawer.CollapsingHeader("Font", font_lambda);
+			drawer.CollapsingHeader("Font", nullptr, font_lambda);
 
 			auto dockspace_lambda = [&]() {
 				SystemParameterDockspace(drawer);
 			};
 
-			drawer.CollapsingHeader("Dockspace", dockspace_lambda);
+			drawer.CollapsingHeader("Dockspace", nullptr, dockspace_lambda);
 
 			auto misc_lambda = [&]() {
 				SystemParameterMiscellaneous(drawer);
 			};
 
-			drawer.CollapsingHeader("Miscellaneous", misc_lambda);
+			drawer.CollapsingHeader("Miscellaneous", nullptr, misc_lambda);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -897,17 +899,13 @@ namespace ECSEngine {
 			UIDefaultWindowHandler* data = (UIDefaultWindowHandler*)_data;
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 
-			const char* window_name = system->GetWindowName(window_index);
-			char new_name[256];
-			size_t window_name_size = strlen(window_name);
-			memcpy(new_name, window_name, window_name_size);
-			new_name[window_name_size] = '\0';
-			strcat(new_name, " Parameters");
-			size_t total_name_size = window_name_size + 11;
-			new_name[total_name_size] = '\0';
+			Stream<char> window_name = system->GetWindowName(window_index);
+			ECS_STACK_CAPACITY_STREAM(char, new_name, 256);
+			new_name.Copy(window_name);
+			new_name.AddStream(" Parameters");
 
 			unsigned int parameter_window_index = system->GetWindowFromName(new_name);
-			data->is_parameter_window_opened = function::Select(parameter_window_index == 0xFFFFFFFF, false, true);
+			data->is_parameter_window_opened = parameter_window_index == 0xFFFFFFFF ? false : true;
 
 			int scroll_amount = mouse->GetScrollValue() - data->scroll;
 			float total_scroll = 0.0f;
@@ -954,8 +952,8 @@ namespace ECSEngine {
 			else {
 				if (data->last_frame == system->GetFrameIndex() - 1 && IsPointInRectangle(mouse_position, position, scale)) {
 					float dimming_value = 1.0f;
-					dimming_value = function::Select(keyboard->IsKeyDown(HID::Key::LeftShift), 0.2f, 1.0f);
-					dimming_value = function::Select(keyboard->IsKeyDown(HID::Key::RightShift), 0.02f, dimming_value);
+					dimming_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 0.2f : 1.0f;
+					dimming_value = keyboard->IsKeyDown(HID::Key::RightShift) ? 0.02f : dimming_value;
 
 					if (scroll_amount != 0.0f) {
 						if (system->m_windows[window_index].drawer_draw_difference.y < ECS_TOOLS_UI_DEFAULT_HANDLER_SCROLL_THRESHOLD) {
@@ -969,8 +967,8 @@ namespace ECSEngine {
 						vertical_slider->interpolate_value = true;
 						vertical_slider->slider_position -= total_scroll;
 
-						vertical_slider->slider_position = function::Select(vertical_slider->slider_position > 1.0f, 1.0f, vertical_slider->slider_position);
-						vertical_slider->slider_position = function::Select(vertical_slider->slider_position < 0.0f, 0.0f, vertical_slider->slider_position);
+						vertical_slider->slider_position = vertical_slider->slider_position > 1.0f ? 1.0f : vertical_slider->slider_position;
+						vertical_slider->slider_position = vertical_slider->slider_position < 0.0f ? 0.0f : vertical_slider->slider_position;
 					}
 				}
 			}
@@ -1026,14 +1024,7 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
-		}
-
-		// ------------------------------------------------------------------------------------
-
-		unsigned int CreateErrorMessageWindow(UISystem* system, const char* description) {
-			// capacity is not needed
-			return CreateErrorMessageWindow(system, CapacityStream<char>(description, strlen(description), 0));
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -1083,6 +1074,17 @@ namespace ECSEngine {
 
 			// In case the window gets destroyed, e.g. an UI file is being loaded
 			if (function::CompareStrings(system->m_windows[window_index].name, ECS_TOOLS_UI_CONFIRM_WINDOW_NAME)) {
+				// When pressing enter, the dockspace and the border index will be missing
+				// Set these here
+				if (dockspace == nullptr) {
+					unsigned int border_index;
+					DockspaceType dockspace_type;
+					dockspace = system->GetDockspaceFromWindow(window_index, border_index, dockspace_type);
+
+					action_data->dockspace = dockspace;
+					action_data->border_index = border_index;
+					action_data->type = dockspace_type;
+				}
 				CloseXBorderClickableAction(action_data);
 			}
 		}
@@ -1104,13 +1106,13 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { ConfirmWindowOKAction, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { ConfirmWindowOKAction, data, 0, ECS_UI_DRAW_SYSTEM });
 
 			config.flag_count = 0;
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 
 			// If enter is pressed, confirm the action
 			if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
@@ -1167,12 +1169,6 @@ namespace ECSEngine {
 			UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, type);
 			system->SetPopUpWindowPosition(window_index, { AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.x), AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.y) });
 			return window_index;
-		}
-
-		// -------------------------------------------------------------------------------------------------------
-
-		unsigned int CreateConfirmWindow(UISystem* ECS_RESTRICT system, const char* ECS_RESTRICT description, UIActionHandler handler) {
-			return CreateConfirmWindow(system, Stream<char>(description, strlen(description)), handler);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1272,14 +1268,14 @@ namespace ECSEngine {
 				ChooseOptionActionData index_data;
 				index_data.data = data;
 				index_data.index = index;
-				drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, data->button_names[index], { ChooseOptionAction, &index_data, sizeof(index_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+				drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, data->button_names[index], { ChooseOptionAction, &index_data, sizeof(index_data), ECS_UI_DRAW_SYSTEM });
 				config.flag_count = 0;
 			}
 
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1332,14 +1328,14 @@ namespace ECSEngine {
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { TextInputWizardConfirmAction, window_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { TextInputWizardConfirmAction, window_data, 0, ECS_UI_DRAW_SYSTEM });
 
 			absolute_transform.scale = drawer.GetLabelScale("Cancel");
 			absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// Additional data is the window data that is TextInputWizardData*
@@ -1383,7 +1379,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void DrawTextFile(UIDrawer* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset) {
+		void DrawTextFile(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset) {
 			float2 current_position = drawer->GetCurrentPositionNonOffset();
 			drawer->OffsetNextRow(border_padding.x);
 			drawer->OffsetX(border_padding.x);
@@ -1398,13 +1394,13 @@ namespace ECSEngine {
 				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
 				drawer->OffsetY(old_next_row_y_offset);
 				drawer->SetNextRowYOffset(next_row_y_offset);
-				drawer->Sentence(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
+				drawer->Sentence(UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
 				drawer->SetNextRowYOffset(old_next_row_y_offset);
 				draw_border = true;
 				free(contents.buffer);
 			}
 			else {
-				drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "File could not be opened.");
+				drawer->Text("File could not be opened.");
 			}
 
 			if (draw_border) {
@@ -1424,7 +1420,7 @@ namespace ECSEngine {
 			drawer->NextRow();
 		}
 
-		void DrawTextFileEx(UIDrawer* drawer, const wchar_t* path, float2 border_padding, float next_row_y_offset) {
+		void DrawTextFileEx(UIDrawer* drawer, Stream<wchar_t> path, float2 border_padding, float next_row_y_offset) {
 			constexpr const char* STABILIZE_STRING_NAME = "Stabilized render span";
 
 			float2 current_position = drawer->GetCurrentPositionNonOffset();
@@ -1441,13 +1437,13 @@ namespace ECSEngine {
 				float old_next_row_y_offset = drawer->layout.next_row_y_offset;
 				drawer->OffsetY(old_next_row_y_offset);
 				drawer->SetNextRowYOffset(next_row_y_offset);
-				drawer->Sentence(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
+				drawer->Sentence(UI_CONFIG_SENTENCE_FIT_SPACE, config, contents.buffer);
 				drawer->SetNextRowYOffset(old_next_row_y_offset);
 				draw_border = true;
 				free(contents.buffer);
 			}
 			else {
-				drawer->Text(UI_CONFIG_DO_NOT_CACHE, config, "File could not be opened.");
+				drawer->Text("File could not be opened.");
 			}
 
 			if (draw_border) {
@@ -1478,7 +1474,7 @@ namespace ECSEngine {
 			}
 		}
 
-		unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, const char* window_name) {
+		unsigned int CreateTextFileWindow(TextFileDrawData data, UISystem* system, Stream<char> window_name) {
 			UIWindowDescriptor descriptor;
 			
 			descriptor.window_data = &data;
@@ -1601,8 +1597,8 @@ namespace ECSEngine {
 
 			constexpr size_t filter_menu_configuration = button_configuration | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
 
-			const char* filter_labels[] = { "Info", "Warn", "Error", "Trace" };
-			Stream<const char*> filter_stream = Stream<const char*>(filter_labels, std::size(filter_labels));
+			Stream<char> filter_labels[] = { "Info", "Warn", "Error", "Trace" };
+			Stream<Stream<char>> filter_stream = Stream<Stream<char>>(filter_labels, std::size(filter_labels));
 			UIConfigFilterMenuNotify menu_notify;
 			menu_notify.notifier = &data->filter_message_type_changed;
 			config.AddFlag(menu_notify);
@@ -1614,21 +1610,21 @@ namespace ECSEngine {
 			config.AddFlag(transform);
 			menu_notify.notifier = &data->system_filter_changed;
 			config.AddFlag(menu_notify);
-			Stream<const char*> system_filter_stream = Stream<const char*>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
+			Stream<Stream<char>> system_filter_stream = Stream<Stream<char>>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
 			drawer.FilterMenu(filter_menu_configuration, config, "System", system_filter_stream, data->system_filter.buffer);
 			config.flag_count -= 2;
 
 			transform.position.x += transform.scale.x + border_thickness.x;
 			transform.scale = drawer.GetLabelScale("Verbosity");
 			config.AddFlag(transform);
-			const char* verbosity_labels[] = { "Minimal", "Medium", "Detailed" };
-			Stream<const char*> verbosity_label_stream = Stream<const char*>(verbosity_labels, std::size(verbosity_labels));
+			Stream<char> verbosity_labels[] = { "Minimal", "Medium", "Detailed" };
+			Stream<Stream<char>> verbosity_label_stream = Stream<Stream<char>>(verbosity_labels, std::size(verbosity_labels));
 
 			UIConfigComboBoxPrefix verbosity_prefix;
 			verbosity_prefix.prefix = "Verbosity: ";
 			config.AddFlag(verbosity_prefix);
 			drawer.ComboBox(
-				button_configuration | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_DO_NOT_CACHE,
+				button_configuration | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME,
 				config, 
 				"Verbosity",
 				verbosity_label_stream, 
@@ -1641,8 +1637,8 @@ namespace ECSEngine {
 			transform.position.x += verbosity_label_scale.x /*+ border_thickness.x*/;
 			transform.scale = drawer.GetLabelScale("Dump");
 			config.AddFlag(transform);
-			const char* dump_label_ptrs[] = { "Count Messages", "On Call", "None" };
-			Stream<const char*> dump_labels = Stream<const char*>(dump_label_ptrs, std::size(dump_label_ptrs));
+			Stream<char> dump_label_ptrs[] = { "Count Messages", "On Call", "None" };
+			Stream<Stream<char>> dump_labels = Stream<Stream<char>>(dump_label_ptrs, std::size(dump_label_ptrs));
 
 			float2 get_position = { 0.0f, 0.0f }, get_scale = {0.0f, 0.0f};
 			UIConfigGetTransform get_transform;
@@ -1679,12 +1675,12 @@ namespace ECSEngine {
 			auto draw_sentence = [&](const ConsoleMessage& console_message, unsigned int index) {
 				drawer.NextRow();
 
-				if (console_message.type == ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_MESSAGE_COUNT) {
+				if (console_message.type == ECS_CONSOLE_MESSAGE_COUNT) {
 					drawer.OffsetX(icon_scale.x + drawer.layout.element_indentation);
 				}
 				else {
-					if (console_message.type == ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR) {
-						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR]);
+					if (console_message.type == ECS_CONSOLE_ERROR) {
+						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ECS_CONSOLE_ERROR]);
 					}
 					else {
 						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.type], CONSOLE_COLORS[(unsigned int)console_message.type]);
@@ -1694,7 +1690,7 @@ namespace ECSEngine {
 
 				config.AddFlag(parameters);
 				drawer.Sentence(
-					UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_TEXT_PARAMETERS, 
+					UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE | UI_CONFIG_TEXT_PARAMETERS, 
 					config, 
 					console_message.message.buffer
 				);
@@ -1718,34 +1714,33 @@ namespace ECSEngine {
 			drawer.NextRow(0.25f);
 			if (data->collapse) {
 				// Draw only unique message alongside their counter
-				Stream<UniqueConsoleMessage> unique_counters = data->unique_messages.GetValueStream();
-				for (size_t index = 0; index < unique_counters.size; index++) {
-					if (data->unique_messages.IsItemAt(index)) {
-						bool do_draw = draw_sentence_collapsed(unique_counters[index].message, index);
+				data->unique_messages.ForEachIndexConst([&](unsigned int index) {
+					UniqueConsoleMessage message = data->unique_messages.GetValueFromIndex(index);
 
-						if (do_draw) {
-							// draw the counter
-							parameters.color = CONSOLE_COLORS[(unsigned int)unique_counters[index].message.type];
-							char temp_characters[256];
-							Stream<char> temp_stream = Stream<char>(temp_characters, 0);
-							function::ConvertIntToChars(temp_stream, unique_counters[index].counter);
-							float2 label_scale = drawer.GetLabelScale(temp_stream);
-							float2 aligned_position = drawer.GetAlignedToRightOverLimit(label_scale.x);
+					bool do_draw = draw_sentence_collapsed(message.message, index);
 
-							UIConfigAbsoluteTransform absolute_transform;
-							absolute_transform.position = aligned_position;
-							absolute_transform.scale = label_scale;
-							config.AddFlags(parameters, absolute_transform);
-							drawer.TextLabel(
-								UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE
-								| UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_PARAMETERS,
-								config,
-								temp_characters
-							);
-							config.flag_count -= 2;
-						}
+					if (do_draw) {
+						// draw the counter
+						parameters.color = CONSOLE_COLORS[(unsigned int)message.message.type];
+						char temp_characters[256];
+						Stream<char> temp_stream = Stream<char>(temp_characters, 0);
+						function::ConvertIntToChars(temp_stream, message.counter);
+						float2 label_scale = drawer.GetLabelScale(temp_stream);
+						float2 aligned_position = drawer.GetAlignedToRightOverLimit(label_scale.x);
+
+						UIConfigAbsoluteTransform absolute_transform;
+						absolute_transform.position = aligned_position;
+						absolute_transform.scale = label_scale;
+						config.AddFlags(parameters, absolute_transform);
+						drawer.TextLabel(
+							UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE
+							| UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_PARAMETERS,
+							config,
+							temp_characters
+						);
+						config.flag_count -= 2;
 					}
-				}
+				});
 			}
 			else {
 				// Draw each message one by one
@@ -1793,7 +1788,7 @@ namespace ECSEngine {
 
 				transform.position.y += drawer.element_descriptor.label_padd.y;
 				config.AddFlag(transform);
-				drawer.Text(configuration | UI_CONFIG_DO_NOT_CACHE, config, temp_characters);
+				drawer.Text(configuration, config, temp_characters);
 				transform.position.y -= drawer.element_descriptor.label_padd.y;
 				config.flag_count--;
 
@@ -1816,7 +1811,7 @@ namespace ECSEngine {
 				drawer.AddDefaultClickableHoverable(
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y }, 
 					transform.scale, 
-					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE },
+					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
 					drawer.color_theme.theme
 				);
 				transform.position.x -= border_thickness.x;
@@ -1844,7 +1839,7 @@ namespace ECSEngine {
 				transform.position.x += sprite_scale.x + drawer.element_descriptor.label_padd.x;
 				transform.position.y += drawer.element_descriptor.label_padd.y;
 				config.AddFlag(transform);
-				drawer.Text(configuration | UI_CONFIG_DO_NOT_CACHE, config, temp_characters);
+				drawer.Text(configuration, config, temp_characters);
 				transform.position.y -= drawer.element_descriptor.label_padd.y;
 				config.flag_count--;
 
@@ -1862,7 +1857,7 @@ namespace ECSEngine {
 				drawer.AddDefaultClickableHoverable(
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y },
 					transform.scale,
-					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE },
+					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
 					drawer.color_theme.theme
 				);
 				transform.position.x += border_thickness.x + transform.scale.x;
@@ -2050,9 +2045,9 @@ namespace ECSEngine {
 				allocation_size += sizeof(InjectWindowSection) * data->sections.size;
 				for (size_t index = 0; index < data->sections.size; index++) {
 					allocation_size += sizeof(InjectWindowElement) * data->sections[index].elements.size;
-					allocation_size += sizeof(char) * (strlen(data->sections[index].name) + 1);
+					allocation_size += sizeof(char) * data->sections[index].name.size;
 					for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
-						allocation_size += strlen(data->sections[index].elements[subindex].name) + 1;
+						allocation_size += data->sections[index].elements[subindex].name.size;
 					}
 				}
 
@@ -2065,14 +2060,14 @@ namespace ECSEngine {
 				}
 				for (size_t index = 0; index < data->sections.size; index++) {
 					sections[index].name = (const char*)buffer;
-					size_t section_name_size = strlen(data->sections[index].name) + 1;
-					memcpy((void*)buffer, data->sections[index].name, sizeof(char) * section_name_size);
+					size_t section_name_size = data->sections[index].name.size;
+					memcpy((void*)buffer, data->sections[index].name.buffer, sizeof(char) * section_name_size);
 					buffer += section_name_size;
 
 					for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
 						sections[index].elements[subindex].name = (const char*)buffer;
-						size_t name_size = strlen(data->sections[index].elements[subindex].name) + 1;
-						memcpy((void*)buffer, data->sections[index].elements[subindex].name, sizeof(char) * name_size);
+						size_t name_size = data->sections[index].elements[subindex].name.size;
+						memcpy((void*)buffer, data->sections[index].elements[subindex].name.buffer, sizeof(char) * name_size);
 						buffer += name_size;
 					}
 				}
@@ -2087,7 +2082,7 @@ namespace ECSEngine {
 				// for each sections because the data is provided through pointers for each element
 				for (size_t index = 0; index < data->sections.size; index++) {
 					for (size_t subindex = 0; subindex < sections[index].elements.size; subindex++) {
-						type.name = data->sections[index].elements[subindex].name;;
+						type.name = data->sections[index].elements[subindex].name;
 						type.fields[0].name = sections[index].elements[subindex].name;
 						type.fields[0].definition = sections[index].elements[subindex].basic_type_string;
 
@@ -2109,7 +2104,7 @@ namespace ECSEngine {
 						}
 						type.fields[0].info.has_default_value = false;
 
-						UIReflectionType* ui_type = data->ui_reflection->CreateType(type);
+						UIReflectionType* ui_type = data->ui_reflection->CreateType(&type);
 						data->ui_reflection->ConvertTypeStreamsToResizable(ui_type);
 						UIReflectionInstance* instance = data->ui_reflection->CreateInstance(type.name, ui_type);
 
@@ -2120,15 +2115,15 @@ namespace ECSEngine {
 						if (data->sections[index].elements[subindex].stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 							bind_instance_ptr = &data->sections[index].elements[subindex].data;
 						}
-						data->ui_reflection->BindInstancePtrs(instance, bind_instance_ptr, type);
+						data->ui_reflection->BindInstancePtrs(instance, bind_instance_ptr, &type);
 
 						// Bind the stream capacity - if different from capacity stream
 						if (data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::CapacityStream && 
 							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Basic &&
 							data->sections[index].elements[subindex].stream_type != Reflection::ReflectionStreamFieldType::Unknown
 						) {
-							bool is_text_input = memcmp(data->sections[index].elements[subindex].basic_type_string, STRING(char), strlen(STRING(char))) == 0;
-							bool is_path_input = memcmp(data->sections[index].elements[subindex].basic_type_string, STRING(wchar_t), strlen(STRING(wchar_t))) == 0;
+							bool is_text_input = memcmp(data->sections[index].elements[subindex].basic_type_string.buffer, STRING(char), strlen(STRING(char))) == 0;
+							bool is_path_input = memcmp(data->sections[index].elements[subindex].basic_type_string.buffer, STRING(wchar_t), strlen(STRING(wchar_t))) == 0;
 							if (!is_text_input && !is_path_input)
 							{
 								UIReflectionBindResizableStreamAllocator bind;
@@ -2182,7 +2177,7 @@ namespace ECSEngine {
 
 			UIDrawConfig config;
 			for (size_t index = 0; index < data->sections.size; index++) {
-				drawer.CollapsingHeader(data->sections[index].name, [&]() {
+				drawer.CollapsingHeader(data->sections[index].name, nullptr, [&]() {
 					if (!initializer) {
 						for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
 							data->ui_reflection->DrawInstance(data->sections[index].elements[subindex].name, drawer, config);
@@ -2211,7 +2206,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, const char* window_name, bool is_pop_up_window) {
+		unsigned int CreateInjectValuesWindow(UISystem* system, InjectWindowData data, Stream<char> window_name, bool is_pop_up_window) {
 			constexpr float2 SIZE = { 1.0f, 1.0f };
 
 			UIWindowDescriptor descriptor;

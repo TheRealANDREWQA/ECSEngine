@@ -71,9 +71,9 @@ namespace ECSEngine {
 			if (FAILED(hr)) {
 				_com_error error(hr);
 				ECS_TEMP_ASCII_STRING(temp_string, 512);
-				temp_string.Copy(ToStream("[File] "));
-				temp_string.AddStream(ToStream(filename));
-				temp_string.AddStreamSafe(ToStream("\n[Line] "));
+				temp_string.Copy("[File] ");
+				temp_string.AddStream(filename);
+				temp_string.AddStreamSafe("\n[Line] ");
 				function::ConvertIntToChars(temp_string, line);
 				temp_string.Add('\n');
 				temp_string.AddSafe('\0');
@@ -83,10 +83,12 @@ namespace ECSEngine {
 #endif
 				if (do_exit) {
 					MessageBox(nullptr, (std::wstring(converted_filename) + error.ErrorMessage()).c_str(), box_name, MB_OK | MB_ICONERROR);
+					__debugbreak();
 					exit(0);
 				}
 				else {
 					MessageBox(nullptr, (std::wstring(converted_filename) + error.ErrorMessage()).c_str(), box_name, MB_OK | MB_ICONWARNING);
+					__debugbreak();
 					delete[] converted_filename;
 				}
 			}
@@ -139,12 +141,10 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		size_t ParseWordsFromSentence(const char* sentence, char separator_token)
+		size_t ParseWordsFromSentence(Stream<char> sentence, char separator_token)
 		{
-			size_t length = strlen(sentence);
-
 			size_t count = 0;
-			for (size_t index = 0; index < length; index++) {
+			for (size_t index = 0; index < sentence.size; index++) {
 				count += (sentence[index] == separator_token || sentence[index] == '\n');
 			}
 			return count;
@@ -180,7 +180,7 @@ namespace ECSEngine {
 			// if the ab_slope is positive, than the first one is to the left so it is smaller so it must be substracted
 			// equivalent perpendicular slope is to be negative
 			bool is_negative_slope = perpendicular_slope < 0.0f;
-			float2 difference = { function::Select(is_negative_slope, x_difference, -x_difference), function::Select(is_negative_slope, y_difference, -y_difference) };
+			float2 difference = { is_negative_slope ? x_difference : -x_difference, is_negative_slope ? y_difference : -y_difference };
 			positions[0] = { a.x - difference.x, a.y - difference.y };
 			// for the correlated point, swap the signs
 			positions[2] = { a.x + difference.x, a.y + difference.y };
@@ -269,58 +269,221 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		Stream<char> FindFirstToken(Stream<char> characters, const char* token)
-		{
-			size_t token_size = strlen(token);
+		template<typename VectorType, typename CharacterType>
+		void FindTokenImpl(Stream<CharacterType> string, Stream<CharacterType> token, CapacityStream<unsigned int>& tokens) {
+			// Could use the FindFirstToken function but the disadvantage to that function is
+			// that we cannot cache the SIMD vectors
+			// So unroll that manually here
 
-			// If the token size is greater than 256 (i.e. 8 32 byte element SIMD registers)
+			// If the token size is greater than 256 bytes (i.e. 8 32 byte element SIMD registers)
 			// The check should be done manually with memcmp
+			VectorType simd_token[8];
+			VectorType first_char(token[0]);
 
-			Vec32c simd_token[8];
-			Vec32c first_char(token[0]);
-
-			if (characters.size < token_size) {
-				return { nullptr, 0 };
+			if (string.size < token.size) {
+				return;
 			}
 
+			// Do a SIMD search for the first character
+			// If we get a match, then do the SIMD search from that index
+
 			size_t simd_token_count = 0;
-			size_t iteration_count = characters.size - token_size + 1;
+			size_t iteration_count = string.size - token.size + 1;
 			size_t simd_count = GetSimdCount(iteration_count, first_char.size());
 			size_t simd_remainder = 0;
-			if (token_size <= 256) {
-				while (token_size > first_char.size()) {
+			if (token.size <= 256 / sizeof(CharacterType)) {
+				while (token.size > first_char.size()) {
 					size_t offset = simd_token_count * first_char.size();
-					simd_token[simd_token_count++].load(token + offset);
-					token_size -= first_char.size();
+					simd_token[simd_token_count++].load(token.buffer + offset);
+					token.size -= first_char.size();
 				}
-				if (token_size > 0) {
+				if (token.size > 0) {
 					size_t offset = simd_token_count * first_char.size();
-					simd_token[simd_token_count].load_partial(token_size, token + offset);
-					simd_remainder = token_size;
+					simd_token[simd_token_count].load_partial(token.size * sizeof(CharacterType), token.buffer + offset);
+					simd_remainder = token.size * sizeof(CharacterType);
 				}
 
 				for (size_t index = 0; index < simd_count; index += first_char.size()) {
-					Vec32c current_chars = Vec32c().load(characters.buffer + index);
+					VectorType current_chars = VectorType().load(string.buffer + index);
 					auto match = current_chars == first_char;
 
-					unsigned int found_match = -1;
 					ForEachBit(match, [&](unsigned int bit_index) {
 						size_t subindex = 0;
-						const char* current_characters = characters.buffer + index + bit_index;
-						Vec32c simd_current_characters;
+						const CharacterType* current_characters = string.buffer + index + bit_index;
+						VectorType simd_current_characters;
 
 						for (; subindex < simd_token_count; subindex++) {
-							simd_current_characters.load(current_characters + subindex * simd_current_characters.size());
-							if (horizontal_and(simd_token[subindex] == simd_current_characters)) {
+							simd_current_characters.load(current_characters);
+							if (!horizontal_and(simd_token[subindex] == simd_current_characters)) {
 								// They are different quit
 								break;
 							}
+							current_characters += simd_current_characters.size();
 						}
 
 						// If they subindex is simd_token_count, they might be equal
 						if (subindex == simd_token_count) {
 							if (simd_remainder > 0) {
-								simd_current_characters.load_partial(simd_remainder, current_characters + simd_token_count * simd_current_characters.size());
+								simd_current_characters.load_partial(simd_remainder, current_characters);
+								if (horizontal_and(simd_token[simd_token_count] == simd_current_characters)) {
+									// Found a match
+									tokens.Add(index + bit_index);
+								}
+							}
+							else {
+								// Found a match
+								tokens.Add(index + bit_index);
+							}
+						}
+
+						return false;
+					});
+				}
+			}
+			else {
+				for (size_t index = 0; index < simd_count; index += first_char.size()) {
+					VectorType current_chars = VectorType().load(string.buffer + index);
+					auto match = current_chars == first_char;
+
+					unsigned int found_match = -1;
+					ForEachBit(match, [&](unsigned int bit_index) {
+						if (memcmp(string.buffer + index + bit_index, token.buffer, token.size * sizeof(CharacterType)) == 0) {
+							tokens.Add(index + bit_index);
+						}
+						return false;
+					});
+				}
+			}
+
+			// For the remaining slots, just call memcmp for each index
+			for (size_t index = simd_count; index < iteration_count; index++) {
+				if (string[index] == token[0]) {
+					// Do a precull with the first character
+					if (memcmp(string.buffer + index, token.buffer, sizeof(CharacterType) * token.size) == 0) {
+						tokens.Add(index);
+					}
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename VectorType, typename CharacterType>
+		void FindTokenImpl(Stream<CharacterType> string, CharacterType token, CapacityStream<unsigned int>& tokens)
+		{
+			VectorType simd_token(token);
+			VectorType compare;
+			unsigned int simd_size = GetSimdCount(string.size, simd_token.size());
+			for (unsigned int index = 0; index < simd_size; index += simd_token.size()) {
+				compare.load(string.buffer + index);
+				auto match = compare == simd_token;
+				ForEachBit(match, [&](unsigned int bit_index) {
+					tokens.Add(index + bit_index);
+					return false;
+				});
+			}
+
+			if (simd_size != string.size) {
+				unsigned int count = string.size - simd_size;
+				compare.load_partial(count * sizeof(CharacterType), string.buffer + simd_size);
+				auto match = compare == simd_token;
+				ForEachBit(match, [&](unsigned int bit_index) {
+					tokens.Add(simd_size + bit_index);
+					return false;
+				});
+			}
+
+			tokens.AssertCapacity();
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens)
+		{
+			FindTokenImpl<Vec32c>(string, token, tokens);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens)
+		{
+			FindTokenImpl<Vec32c>(string, token, tokens);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FindToken(Stream<wchar_t> string, wchar_t token, CapacityStream<unsigned int>& tokens)
+		{
+			FindTokenImpl<Vec16s>(string, token, tokens);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens) {
+			FindTokenImpl<Vec16s>(string, token, tokens);
+		}
+		
+		// --------------------------------------------------------------------------------------------------
+
+		template<bool reverse, typename VectorType, typename CharacterType>
+		Stream<CharacterType> FindFirstTokenImpl(Stream<CharacterType> characters, Stream<CharacterType> token)
+		{
+			// If the token size is greater than 256 (i.e. 8 32 byte element SIMD registers)
+			// The check should be done manually with memcmp
+
+			VectorType simd_token[8];
+			VectorType first_char(token[0]);
+
+			if (characters.size < token.size) {
+				return { nullptr, 0 };
+			}
+
+			size_t simd_token_count = 0;
+			size_t iteration_count = characters.size - token.size + 1;
+			size_t simd_count = GetSimdCount(iteration_count, first_char.size());
+			size_t simd_remainder = 0;
+
+			int64_t increment = reverse ? -1 : 1;
+			if (token.size <= 256 / sizeof(CharacterType)) {
+				while (token.size > first_char.size()) {
+					size_t offset = simd_token_count * first_char.size();
+					simd_token[simd_token_count++].load(token.buffer + offset);
+					token.size -= first_char.size();
+				}
+				if (token.size > 0) {
+					size_t offset = simd_token_count * first_char.size();
+					simd_token[simd_token_count].load_partial(token.size * sizeof(CharacterType), token.buffer + offset);
+					simd_remainder = token.size;
+				}
+
+				for (size_t index = 0; index < simd_count; index += first_char.size()) {
+					const CharacterType* load_position = characters.buffer + index;
+					if constexpr (reverse) {
+						load_position = characters.buffer + iteration_count - index;
+					}
+
+					VectorType current_chars = VectorType().load(load_position);
+					auto match = current_chars == first_char;
+
+					unsigned int found_match = -1;
+					ForEachBit<reverse>(match, [&](unsigned int bit_index) {
+						size_t subindex = 0;
+						const CharacterType* current_characters = load_position + bit_index;
+						VectorType simd_current_characters;
+
+						for (; subindex < simd_token_count; subindex++) {
+							simd_current_characters.load(current_characters);
+							if (!horizontal_and(simd_token[subindex] == simd_current_characters)) {
+								// They are different quit
+								break;
+							}
+							current_characters += simd_current_characters.size();
+						}
+
+						// If they subindex is simd_token_count, they might be equal
+						if (subindex == simd_token_count) {
+							if (simd_remainder > 0) {
+								simd_current_characters.load_partial(simd_remainder, current_characters);
 								if (horizontal_and(simd_token[simd_token_count] == simd_current_characters)) {
 									// Found a match
 									found_match = bit_index;
@@ -333,24 +496,29 @@ namespace ECSEngine {
 								return true;
 							}
 						}
-						
+
 						return false;
 					});
 
 					if (found_match != -1) {
-						const char* string = characters.buffer + index + found_match;
-						return { string, PointerDifference(characters.buffer + characters.size, string) };
+						const CharacterType* string = load_position + found_match;
+						return { string, PointerDifference(characters.buffer + characters.size, string) / sizeof(CharacterType) };
 					}
 				}
 			}
 			else {
 				for (size_t index = 0; index < simd_count; index += first_char.size()) {
-					Vec32c current_chars = Vec32c().load(characters.buffer + index);
+					const CharacterType* load_position = characters.buffer + index;
+					if constexpr (reverse) {
+						load_position = characters.buffer + iteration_count - index;
+					}
+
+					VectorType current_chars = VectorType().load(load_position);
 					auto match = current_chars == first_char;
 
 					unsigned int found_match = -1;
-					ForEachBit(match, [&](unsigned int bit_index) {
-						if (memcmp(characters.buffer + index + bit_index, token, token_size * sizeof(char)) == 0) {
+					ForEachBit<reverse>(match, [&](unsigned int bit_index) {
+						if (memcmp(load_position + bit_index, token.buffer, token.size * sizeof(CharacterType)) == 0) {
 							found_match = bit_index;
 							return true;
 						}
@@ -358,17 +526,24 @@ namespace ECSEngine {
 					});
 
 					if (found_match != -1) {
-						const char* string = characters.buffer + index + found_match;
-						return { string, PointerDifference(characters.buffer + characters.size, string) };
+						const CharacterType* string = load_position + found_match;
+						return { string, PointerDifference(characters.buffer + characters.size, string) / sizeof(CharacterType) };
 					}
 				}
 			}
 
 			// For the remaining slots, just call memcmp for each index
 			for (size_t index = simd_count; index < iteration_count; index++) {
-				if (memcmp(characters.buffer + index, token, sizeof(char) * token_size) == 0) {
-					const char* string = characters.buffer + index;
-					return { string, PointerDifference(characters.buffer + characters.size, string) };
+				const CharacterType* compare_position = characters.buffer + index;
+				if constexpr (reverse) {
+					compare_position = characters.buffer + iteration_count - index;
+				}
+
+				// Do a precull with the first character
+				if (*compare_position == token[0]) {
+					if (memcmp(compare_position, token.buffer, sizeof(CharacterType) * token.size) == 0) {
+						return { compare_position, PointerDifference(characters.buffer + characters.size, compare_position) / sizeof(CharacterType) };
+					}
 				}
 			}
 
@@ -377,13 +552,26 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		Stream<char> FindFirstCharacter(Stream<char> characters, char token)
+		Stream<char> FindFirstToken(Stream<char> characters, Stream<char> token) {
+			return FindFirstTokenImpl<false, Vec32c>(characters, token);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<wchar_t> FindFirstToken(Stream<wchar_t> characters, Stream<wchar_t> token) {
+			return FindFirstTokenImpl<false, Vec16s>(characters, token);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename VectorType, typename CharacterType>
+		Stream<CharacterType> FindFirstCharacterImpl(Stream<CharacterType> characters, CharacterType token)
 		{
-			Vec32c simd_token(token);
+			VectorType simd_token(token);
 
 			size_t simd_count = GetSimdCount(characters.size, simd_token.size());
 			for (size_t index = 0; index < simd_count; index += simd_token.size()) {
-				Vec32c current_chars = Vec32c().load(characters.buffer + index);
+				VectorType current_chars = VectorType().load(characters.buffer + index);
 				auto match = current_chars == simd_token;
 				if (horizontal_or(match)) {
 					unsigned int mask = to_bits(match);
@@ -406,79 +594,43 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		const char* FindTokenReverse(const char* characters, const char* token)
-		{
-			size_t character_size = strlen(characters);
-			size_t token_size = strlen(token);
-
-			constexpr size_t all_true = 0xFFFFFFFFFFFFFFFF;
-			size_t token_size_iteration = token_size / 8;
-
-			size_t remainder = token_size % 8;
-			if (remainder != 0) {
-				const size_t* token_size_t = (const size_t*)token;
-				if (token_size_iteration > 0) {
-					for (size_t index = 0; index < character_size - token_size + 1; index++) {
-						size_t iteration = 0;
-						const size_t* reinterpretation = (const size_t*)(characters + character_size - token_size - index);
-						while (iteration < token_size_iteration && *(reinterpretation + iteration) == *(token_size_t + iteration)) {
-							iteration++;
-						}
-						if (iteration == token_size_iteration) {
-							size_t last_index = 0;
-							while (last_index < 8 && characters[character_size - index - token_size + last_index] == token[token_size - token_size + last_index]) {
-								last_index++;
-							}
-							if (last_index == remainder) {
-								return characters + character_size - token_size - index;
-							}
-						}
-					}
-				}
-				else {
-					for (size_t index = 0; index < character_size - token_size + 1; index++) {
-						size_t last_index = 0;
-						while (last_index < 8 && characters[character_size - index - token_size + last_index] == token[token_size - token_size + last_index]) {
-							last_index++;
-						}
-						if (last_index == remainder) {
-							return characters + character_size - token_size - index;
-						}
-					}
-				}
-
-				return nullptr;
-			}
-			else {
-				const size_t* token_size_t = (const size_t*)token;
-				for (size_t index = 0; index < character_size - token_size + 1; index++) {
-					size_t iteration = 0;
-					const size_t* reinterpretation = (const size_t*)(characters + character_size - token_size - index);
-					while (iteration < token_size_iteration && *(reinterpretation + iteration) == *(token_size_t + iteration)) {
-						iteration++;
-					}
-					if (iteration == token_size_iteration) {
-						return characters + character_size - token_size - index;
-					}
-				}
-
-				return nullptr;
-			}
+		Stream<char> FindFirstCharacter(Stream<char> characters, char token) {
+			return FindFirstCharacterImpl<Vec32c>(characters, token);
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		const char* FindCharacterReverse(const char* ending_character, const char* lower_bound, char character)
-		{
-			size_t difference = PointerDifference(ending_character, lower_bound);
-			size_t index = 0;
-			size_t simd_bound = difference >= 32 ? difference - 31 : 0;
+		Stream<wchar_t> FindFirstCharacter(Stream<wchar_t> characters, wchar_t token) {
+			return FindFirstCharacterImpl<Vec16s>(characters, token);
+		}
 
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> FindTokenReverse(Stream<char> characters, Stream<char> token)
+		{
+			return FindFirstTokenImpl<true, Vec32c>(characters, token);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<wchar_t> FindTokenReverse(Stream<wchar_t> characters, Stream<wchar_t> token)
+		{
+			return FindFirstTokenImpl<true, Vec16s>(characters, token);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> FindCharacterReverse(Stream<char> characters, char character)
+		{
+			size_t index = 0;
+			size_t simd_bound = characters.size >= 32 ? characters.size - 31 : 0;
+
+			const char* last_character = characters.buffer + characters.size;
 			if (simd_bound > 0) {
 				Vec32c simd_vector(character);
 
 				for (; index < simd_bound; index++) {
-					const char* data_to_load = ending_character - simd_vector.size() - index + 1;
+					const char* data_to_load = last_character - simd_vector.size() - index + 1;
 					Vec32c string_chars = Vec32c().load(data_to_load);
 					auto is_match = simd_vector == string_chars;
 
@@ -487,20 +639,22 @@ namespace ECSEngine {
 						unsigned int bit_mask = to_bits(is_match);
 						unsigned long highest_bit = -1;
 						if (_BitScanReverse(&highest_bit, bit_mask)) {
-							return data_to_load + highest_bit;
+							const char* position = data_to_load + highest_bit;
+							return { position, function::PointerDifference(last_character, position) + 1 };
 						}
 					}
 				}
 			}
 			
 			// Do a bytewise check
-			for (; index < difference; index++) {
-				if (ending_character[-index] == character) {
-					return ending_character - index;
+			for (; index < characters.size; index++) {
+				if (last_character[-index] == character) {
+					const char* position = last_character - index;
+					return { position, function::PointerDifference(last_character, position) + 1 };
 				}
 			}
 
-			return nullptr;
+			return { nullptr, 0 };
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -514,7 +668,7 @@ namespace ECSEngine {
 
 		unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other)
 		{
-			Stream<char> stream_string = ToStream(string);
+			Stream<char> stream_string = string;
 			for (size_t index = 0; index < other.size; index++) {
 				if (CompareStrings(stream_string, Stream<char>(other[index], strlen(other[index])))) {
 					return index;
@@ -538,7 +692,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------
 
 		unsigned int FindString(const wchar_t* ECS_RESTRICT string, Stream<const wchar_t*> other) {
-			Stream<wchar_t> stream_string = ToStream(string);
+			Stream<wchar_t> stream_string = string;
 			for (size_t index = 0; index < other.size; index++) {
 				if (CompareStrings(string, other[index])) {
 					return index;
@@ -601,11 +755,47 @@ namespace ECSEngine {
 		{
 			size_t starting_index = characters[0] == '+' || characters[0] == '-';
 			for (size_t index = starting_index; index < characters.size; index++) {
-				if (characters[index] < '0' || characters[index] > '9') {
+				// The comma is a separator between the 1000 parts
+				// Include these as well
+				if ((characters[index] < '0' || characters[index] > '9') && characters[index] != ',') {
 					return false;
 				}
 			}
 			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		template<const char* (*SkipFunction)(const char* characters, int increment)>
+		Stream<char> SkipStream(Stream<char> characters, int increment) {
+			if (increment > 0) {
+				const char* skipped = SkipFunction(characters.buffer, increment);
+				return { skipped, function::PointerDifference(characters.buffer + characters.size, skipped) };
+			}
+			else {
+				const char* last = characters.buffer + characters.size;
+				const char* skipped = SkipFunction(last, increment);
+				return { characters.buffer, function::PointerDifference(skipped, characters.buffer) };
+			}
+		}
+
+		Stream<char> SkipSpaceStream(Stream<char> characters, int increment)
+		{
+			return SkipStream<SkipSpace>(characters, increment);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> SkipWhitespace(Stream<char> characters, int increment)
+		{
+			return SkipStream<SkipWhitespace>(characters, increment);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment)
+		{
+			return SkipStream<SkipCodeIdentifier>(characters, increment);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1036,11 +1226,702 @@ namespace ECSEngine {
 		void SetErrorMessage(CapacityStream<char>* error_message, const char* message)
 		{
 			if (error_message != nullptr) {
-				error_message->AddStreamSafe(ToStream(message));
+				error_message->AddStreamSafe(message);
 			}
 		}
 
 		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void ReplaceOccurencesImpl(CapacityStream<CharacterType>& string, Stream<ReplaceOccurence<CharacterType>> occurences, CapacityStream<CharacterType>* output_string) {
+			// Null terminate the string
+			CharacterType previous_character = string[string.size];
+			string[string.size] = Character<CharacterType>('\0');
+
+			// Get the list of occurences for all types
+			ECS_STACK_CAPACITY_STREAM(uint2, replacement_positions, 512);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, current_occurence_positions, 1024);
+
+			size_t insert_index = 0;
+			auto insert_occurences = [&](uint2 occurence) {
+				for (; insert_index < replacement_positions.size && replacement_positions[insert_index].x < occurence.x; insert_index++) {}
+				if (insert_index == replacement_positions.size) {
+					replacement_positions.AddSafe(occurence);
+				}
+				else {
+					replacement_positions.Insert(insert_index, occurence);
+				}
+			};
+
+			for (size_t index = 0; index < occurences.size; index++) {
+				function::FindToken(string, occurences[index].string, current_occurence_positions);
+				// Insert now the positions into the global buffer
+				insert_index = 0;
+				for (unsigned int occurence_index = 0; occurence_index < current_occurence_positions.size; occurence_index++) {
+					insert_occurences({ current_occurence_positions[occurence_index], (unsigned int)index });
+				}
+			}
+
+			// The idea is copy everything until a token appears, then replace it and keep doing it
+			// until all tokens are used
+			unsigned int copy_start_index = 0;
+			for (size_t token_index = 0; token_index < replacement_positions.size; token_index++) {
+				if (output_string != nullptr) {
+					// Copy everything until the start of the token
+					unsigned int end_position = replacement_positions[token_index].x - 1;
+					Stream<CharacterType> copy_stream = Stream<CharacterType>(string.buffer + copy_start_index, end_position - copy_start_index + 1);
+					output_string->AddStream(copy_stream);
+
+					// Put the replacement in
+					output_string->AddStream(occurences[replacement_positions[token_index].y].replacement);
+					copy_start_index = end_position + occurences[replacement_positions[token_index].y].string.size + 1;
+				}
+				else {
+					// Determine if the elements after need to be displaced
+					unsigned int replacement_size = occurences[replacement_positions[token_index].y].replacement.size;
+					unsigned int string_size = occurences[replacement_positions[token_index].y].string.size;
+
+					int int_displacement = (int)replacement_size - (int)string_size;
+					// Put the replacement in
+					memcpy(
+						string.buffer + replacement_positions[token_index].x,
+						occurences[replacement_positions[token_index].y].replacement.buffer,
+						sizeof(CharacterType) * replacement_size
+					);
+
+					// Displace the elements if different from 0
+					string.DisplaceElements(replacement_positions[token_index].x + string_size, int_displacement);
+
+					// It is fine if the int displacement is negative, displacement will be like 0xFFFFFFFF (-1)
+					// which added with 0x1 will give 0 - the same as subtracting 1 from 1.
+					unsigned int displacement = int_displacement;
+					// Update the token positions for the next tokens
+					for (size_t next_token = token_index + 1; next_token < replacement_positions.size; next_token++) {
+						replacement_positions[next_token].x += displacement;
+					}
+				}
+			}		
+
+			string[string.size] = previous_character;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ReplaceOccurrences(CapacityStream<char>& string, Stream<ReplaceOccurence<char>> occurences, CapacityStream<char>* output_string)
+		{
+			ReplaceOccurencesImpl(string, occurences, output_string);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ReplaceOccurences(CapacityStream<wchar_t>& string, Stream<ReplaceOccurence<wchar_t>> occurences, CapacityStream<wchar_t>* output_string)
+		{
+			ReplaceOccurencesImpl(string, occurences, output_string);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperatorImpl(CharacterType character) {
+			if (character == Character<CharacterType>('+')) {
+				return ECS_EVALUATE_EXPRESSION_ADD;
+			}
+			else if (character == Character<CharacterType>('-')) {
+				return ECS_EVALUATE_EXPRESSION_MINUS;
+			}
+			else if (character == Character<CharacterType>('*')) {
+				return ECS_EVALUATE_EXPRESSION_MULTIPLY;
+			}
+			else if (character == Character<CharacterType>('/')) {
+				return ECS_EVALUATE_EXPRESSION_DIVIDE;
+			}
+			else if (character == Character<CharacterType>('%')) {
+				return ECS_EVALUATE_EXPRESSION_MODULO;
+			}
+			else if (character == Character<CharacterType>('~')) {
+				return ECS_EVALUATE_EXPRESSION_NOT;
+			}
+			else if (character == Character<CharacterType>('|')) {
+				return ECS_EVALUATE_EXPRESSION_OR;
+			}
+			else if (character == Character<CharacterType>('&')) {
+				return ECS_EVALUATE_EXPRESSION_AND;
+			}
+			else if (character == Character<CharacterType>('^')) {
+				return ECS_EVALUATE_EXPRESSION_XOR;
+			}
+			else if (character == Character<CharacterType>('<')) {
+				return ECS_EVALUATE_EXPRESSION_LESS;
+			}
+			else if (character == Character<CharacterType>('>')) {
+				return ECS_EVALUATE_EXPRESSION_GREATER;
+			}
+			else if (character == Character<CharacterType>('=')) {
+				return ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY;
+			}
+			else if (character == Character<CharacterType>('!')) {
+				return ECS_EVALUATE_EXPRESSION_LOGICAL_NOT;
+			}
+
+			return ECS_EVALUATE_EXPRESSION_OPERATOR_COUNT;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(char character)
+		{
+			return GetEvaluateExpressionOperatorImpl(character);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(wchar_t character)
+		{
+			return GetEvaluateExpressionOperatorImpl(character);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperatorImpl(CharacterType character, CharacterType next_character, unsigned int& index) {
+			ECS_EVALUATE_EXPRESSION_OPERATORS current = GetEvaluateExpressionOperator(character);
+			ECS_EVALUATE_EXPRESSION_OPERATORS next = GetEvaluateExpressionOperator(next_character);
+
+			if (current == next) {
+				switch (current) {
+				case ECS_EVALUATE_EXPRESSION_AND:
+					index++;
+					return ECS_EVALUATE_EXPRESSION_LOGICAL_AND;
+				case ECS_EVALUATE_EXPRESSION_OR:
+					index++;
+					return ECS_EVALUATE_EXPRESSION_LOGICAL_OR;
+				case ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY:
+					index++;
+					return ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY;
+					index++;
+				case ECS_EVALUATE_EXPRESSION_LESS:
+					index++;
+					return ECS_EVALUATE_EXPRESSION_SHIFT_LEFT;
+				case ECS_EVALUATE_EXPRESSION_GREATER:
+					index++;
+					return ECS_EVALUATE_EXPRESSION_SHIFT_RIGHT;
+				default:
+					// Return a failure if both characters are the same but not of the types with
+					// double characters or they are both not an operator
+					return ECS_EVALUATE_EXPRESSION_OPERATOR_COUNT;
+				}
+			}
+
+			// Check for logical not equality
+			if (current == ECS_EVALUATE_EXPRESSION_LOGICAL_NOT && next == ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY) {
+				index++;
+				return ECS_EVALUATE_EXPRESSION_LOGICAL_INEQUALITY;
+			}
+
+			// Check for less equal and greater equal
+			if (current == ECS_EVALUATE_EXPRESSION_LESS && next == ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY) {
+				index++;
+				return ECS_EVALUATE_EXPRESSION_LESS_EQUAL;
+			}
+
+			if (current == ECS_EVALUATE_EXPRESSION_GREATER && next == ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY) {
+				index++;
+				return ECS_EVALUATE_EXPRESSION_GREATER_EQUAL;
+			}
+
+			// Else just return the current
+			return current;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(char character, char next_character, unsigned int& index)
+		{
+			return GetEvaluateExpressionOperatorImpl(character, next_character, index);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS GetEvaluateExpressionOperator(wchar_t character, wchar_t next_character, unsigned int& index)
+		{
+			return GetEvaluateExpressionOperatorImpl(character, next_character, index);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void GetEvaluateExpressionOperatorsImpl(Stream<CharacterType> characters, CapacityStream<EvaluateExpressionOperator>& operators) {
+			for (unsigned int index = 0; index < characters.size; index++) {
+				CharacterType character = characters[index];
+				CharacterType next_character = index < characters.size - 1 ? characters[index + 1] : Character<CharacterType>('\0');
+
+				ECS_EVALUATE_EXPRESSION_OPERATORS operator_ = GetEvaluateExpressionOperator(character, next_character, index);
+				if (operator_ != ECS_EVALUATE_EXPRESSION_OPERATOR_COUNT) {
+					// We have a match
+					operators.Add({ operator_, index });
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void GetEvaluateExpressionOperators(Stream<char> characters, CapacityStream<EvaluateExpressionOperator>& operators)
+		{
+			GetEvaluateExpressionOperatorsImpl<char>(characters, operators);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void GetEvaluateExpressionOperators(Stream<wchar_t> characters, CapacityStream<EvaluateExpressionOperator>& operators)
+		{
+			GetEvaluateExpressionOperatorsImpl<wchar_t>(characters, operators);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER0[] = {
+			ECS_EVALUATE_EXPRESSION_LOGICAL_NOT,
+			ECS_EVALUATE_EXPRESSION_NOT
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER1[] = {
+			ECS_EVALUATE_EXPRESSION_MULTIPLY,
+			ECS_EVALUATE_EXPRESSION_DIVIDE,
+			ECS_EVALUATE_EXPRESSION_MODULO
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER2[] = {
+			ECS_EVALUATE_EXPRESSION_ADD,
+			ECS_EVALUATE_EXPRESSION_MINUS
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER3[] = {
+			ECS_EVALUATE_EXPRESSION_SHIFT_LEFT,
+			ECS_EVALUATE_EXPRESSION_SHIFT_RIGHT
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER4[] = {
+			ECS_EVALUATE_EXPRESSION_LESS,
+			ECS_EVALUATE_EXPRESSION_LESS_EQUAL,
+			ECS_EVALUATE_EXPRESSION_GREATER,
+			ECS_EVALUATE_EXPRESSION_GREATER_EQUAL
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER5[] = {
+			ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY,
+			ECS_EVALUATE_EXPRESSION_LOGICAL_INEQUALITY
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER6[] = {
+			ECS_EVALUATE_EXPRESSION_AND
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER7[] = {
+			ECS_EVALUATE_EXPRESSION_XOR
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER8[] = {
+			ECS_EVALUATE_EXPRESSION_OR
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER9[] = {
+			ECS_EVALUATE_EXPRESSION_LOGICAL_AND
+		};
+
+		ECS_EVALUATE_EXPRESSION_OPERATORS ORDER10[] = {
+			ECS_EVALUATE_EXPRESSION_LOGICAL_OR
+		};
+
+		Stream<ECS_EVALUATE_EXPRESSION_OPERATORS> OPERATOR_ORDER[] = {
+			{ ORDER0, std::size(ORDER0) },
+			{ ORDER1, std::size(ORDER1) },
+			{ ORDER2, std::size(ORDER2) },
+			{ ORDER3, std::size(ORDER3) },
+			{ ORDER4, std::size(ORDER4) },
+			{ ORDER5, std::size(ORDER5) },
+			{ ORDER6, std::size(ORDER6) },
+			{ ORDER7, std::size(ORDER7) },
+			{ ORDER8, std::size(ORDER8) },
+			{ ORDER9, std::size(ORDER9) },
+			{ ORDER10, std::size(ORDER10) }
+		};
+
+		void GetEvaluateExpressionOperatorOrder(Stream<EvaluateExpressionOperator> operators, CapacityStream<unsigned int>& order)
+		{
+			for (size_t precedence = 0; precedence < std::size(OPERATOR_ORDER); precedence++) {
+				for (size_t index = 0; index < operators.size; index++) {
+					for (size_t op_index = 0; op_index < OPERATOR_ORDER[precedence].size; op_index++) {
+						if (operators[index].operator_index == OPERATOR_ORDER[precedence][op_index]) {
+							order.Add(index);
+						}
+					}
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		double EvaluateExpressionValueImpl(Stream<CharacterType> characters, unsigned int& offset) {
+			// Verify numbers
+			unsigned int first_offset = offset;
+			CharacterType first = characters[offset];
+			if ((first >= Character<CharacterType>('0') && first <= Character<CharacterType>('9')) || first == Character<CharacterType>('.')) {
+				// It is a number
+				// keep going
+				offset++;
+				CharacterType last = characters[offset];
+				while (offset < characters.size && (last >= Character<CharacterType>('0') && last <= Character<CharacterType>('9')) ||
+					last == Character<CharacterType>('.')) {
+					offset++;
+					last = characters[offset];
+				}
+
+				return function::ConvertCharactersToDouble(Stream<CharacterType>(characters.buffer + first_offset, offset - first_offset));
+			}
+
+			// Verify the boolean true and false
+			CharacterType true_chars[] = {
+				Character<CharacterType>('t'),
+				Character<CharacterType>('r'),
+				Character<CharacterType>('u'),
+				Character<CharacterType>('e')
+			};
+
+			CharacterType false_chars[] = {
+				Character<CharacterType>('f'),
+				Character<CharacterType>('a'),
+				Character<CharacterType>('l'),
+				Character<CharacterType>('s'),
+				Character<CharacterType>('e')
+			};
+
+			if (memcmp(true_chars, characters.buffer + offset, sizeof(true_chars)) == 0) {
+				offset += 4;
+				return 1.0;
+			}
+			if (memcmp(false_chars, characters.buffer + offset, sizeof(false_chars)) == 0) {
+				offset += 5;
+				return 0.0;
+			}
+
+			return DBL_MAX;
+		}
+
+		double EvaluateExpressionValue(Stream<char> characters, unsigned int& offset)
+		{
+			return EvaluateExpressionValueImpl<char>(characters, offset);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		double EvaluateExpressionValue(Stream<wchar_t> characters, unsigned int& offset)
+		{
+			return EvaluateExpressionValueImpl<wchar_t>(characters, offset);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		double EvaluateExpressionImpl(Stream<CharacterType> characters) {
+			// Start by looking at braces
+
+			// Get the pairs of braces
+			ECS_STACK_CAPACITY_STREAM(unsigned int, opened_braces, 512);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, closed_braces, 512);
+			// Add an invisible pair of braces, in order to make processing easier
+			opened_braces.Add((unsigned int)0);
+			FindToken(characters, Character<CharacterType>('('), opened_braces);
+			FindToken(characters, Character<CharacterType>(')'), closed_braces);
+			closed_braces.Add(characters.size + 1);
+
+			auto get_matching_brace = [=](size_t closed_index) {
+				size_t subindex = 0;
+				if (closed_index < closed_braces.size - 1) {
+					for (; subindex < opened_braces.size - 1; subindex++) {
+						if (opened_braces[subindex] < closed_braces[closed_index] && opened_braces[subindex + 1] > closed_braces[closed_index]) {
+							break;
+						}
+					}
+				}
+				else {
+					subindex = 0;
+				}
+
+				return subindex;
+			};
+
+			// If the closed_braces count is different from opened braces count, fail with DBL_MAX
+			if (opened_braces.size != closed_braces.size) {
+				return DBL_MAX;
+			}
+
+			// Increase the indices by one for the braces in order to keep order between the first invisible
+			// pair of braces and the rest
+			for (size_t index = 1; index < opened_braces.size; index++) {
+				opened_braces[index]++;
+				closed_braces[index]++;
+			}
+			// This one gets incremented when it shouldn't
+			closed_braces[closed_braces.size - 1]--;
+
+			ECS_STACK_CAPACITY_STREAM(EvaluateExpressionNumber, variables, 512);
+			ECS_STACK_CAPACITY_STREAM(EvaluateExpressionOperator, operators, 512);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, operator_order, 512);
+
+			// In case of success, insert the value of a pair evaluation into the 
+			// scope variables
+			auto insert_brace_value = [&](
+				Stream<EvaluateExpressionNumber> scope_variables, 
+				Stream<EvaluateExpressionOperator> scope_operators, 
+				unsigned int index, 
+				double value
+			) {
+				// Remove all the scope variables and the operators
+				size_t scope_offset = scope_variables.buffer - variables.buffer;
+				variables.Remove(scope_offset, scope_variables.size);
+				size_t operator_offset = scope_operators.buffer - operators.buffer;
+				operators.Remove(operator_offset, scope_operators.size);
+
+				size_t insert_index = 0;
+				for (; insert_index < variables.size; insert_index++) {
+					if (variables[insert_index].index > index) {
+						break;
+					}
+				}
+				variables.Insert(insert_index, { value, index });
+			};
+
+			// Get all the variables and scope operators
+			GetEvaluateExpressionOperators(characters, operators);
+			GetEvaluateExpressionNumbers(characters, variables);
+
+			for (size_t index = 0; index < closed_braces.size; index++) {
+				operator_order.size = 0;
+
+				size_t opened_brace_index = get_matching_brace(index);
+				unsigned int opened_brace_offset = opened_braces[opened_brace_index];
+				unsigned int end_brace_offset = closed_braces[index];
+
+				// For all comparisons we must use greater or equal because the parenthese position
+				// is offseted by 1
+
+				// Determine the operators and the variables in this scope
+				size_t start_operators = 0;
+				for (; start_operators < operators.size; start_operators++) {
+					if (operators[start_operators].index >= opened_brace_offset) {
+						break;
+					}
+				}
+				size_t end_operators = start_operators;
+				for (; end_operators < operators.size; end_operators++) {
+					if (operators[end_operators].index >= end_brace_offset) {
+						break;
+					}
+				}
+				end_operators--;
+
+				size_t start_variables = 0;
+				for (; start_variables < variables.size; start_variables++) {
+					if (variables[start_variables].index >= opened_brace_offset) {
+						break;
+					}
+				}
+
+				size_t end_variables = start_variables;
+				for (; end_variables < variables.size; end_variables++) {
+					if (variables[end_variables].index >= end_brace_offset) {
+						break;
+					}
+				}
+				end_variables--;
+
+				Stream<EvaluateExpressionOperator> scope_operators = { operators.buffer + start_operators, end_operators - start_operators + 1 };
+				Stream<EvaluateExpressionNumber> scope_variables = { variables.buffer + start_variables, end_variables - start_variables + 1 };
+				size_t scope_variable_initial_count = scope_variables.size;
+				size_t scope_operator_initial_count = scope_operators.size;
+
+				// Use the index of the opened brace for insertion
+
+				// Treat the case (-value) separately
+				if (scope_operators.size == 1 && scope_variables.size == 1) {
+					if (scope_operators[0].operator_index == ECS_EVALUATE_EXPRESSION_LOGICAL_NOT) {
+						insert_brace_value(scope_variables, scope_operators, opened_brace_offset, !(bool)(scope_variables[0].value));
+					}
+					else if (scope_operators[0].operator_index == ECS_EVALUATE_EXPRESSION_MINUS) {
+						insert_brace_value(scope_variables, scope_operators, opened_brace_offset, -scope_variables[0].value);
+					}
+					else {
+						// Not a correct operator for a single value
+						return DBL_MAX;
+					}
+				}
+				else {
+					// Get the precedence
+					GetEvaluateExpressionOperatorOrder(scope_operators, operator_order);
+					// Go through the operators, first the *, / and %
+					for (size_t operator_index = 0; operator_index < scope_operators.size; operator_index++) {
+						// Get the left variable
+						unsigned int operator_offset = scope_operators[operator_order[operator_index]].index;
+						ECS_EVALUATE_EXPRESSION_OPERATORS op_type = scope_operators[operator_order[operator_index]].operator_index;
+
+						size_t right_index = 0;
+						for (; right_index < scope_variables.size; right_index++) {
+							if (right_index > 0) {
+								if (scope_variables[right_index].index > operator_offset && scope_variables[right_index - 1].index < operator_offset) {
+									break;
+								}
+							}
+							else {
+								if (scope_variables[right_index].index > operator_offset) {
+									break;
+								}
+							}
+						}
+
+						if (right_index == scope_variables.size) {
+							// No right value, fail
+							return DBL_MAX;
+						}
+
+						// If single operator, evaluate now
+						if (op_type == ECS_EVALUATE_EXPRESSION_LOGICAL_NOT || op_type == ECS_EVALUATE_EXPRESSION_NOT) {
+							scope_variables[right_index].value = EvaluateOperator(op_type, 0.0, scope_variables[right_index].value);
+							// We don't need to do anything else, no need to squash down a value
+						}
+						else {
+							if (right_index == 0) {
+								// Fail, no left value for double operand operator
+								return DBL_MAX;
+							}
+
+							size_t left_index = right_index - 1;
+							// If the left value is not to the left of the operator fail
+							if (scope_variables[left_index].index >= operator_offset) {
+								return DBL_MAX;
+							}
+
+							// Get the result into the left index and move everything one index lower in order to remove right index
+							double result = EvaluateOperator(op_type, scope_variables[left_index].value, scope_variables[right_index].value);
+							scope_variables[left_index].value = result;
+							scope_variables.Remove(right_index);
+						}
+					}
+
+					// If after processing all the operators there is more than 1 value, error
+					if (scope_variables.size > 1) {
+						return DBL_MAX;
+					}
+
+					// In order to remove the scope variables appropriately
+					scope_variables.size = scope_variable_initial_count;
+					scope_operators.size = scope_operator_initial_count;
+					insert_brace_value(scope_variables, scope_operators, opened_brace_offset, scope_variables[0].value);
+				}
+
+				// Remove the brace from the stream
+				opened_braces.Remove(opened_brace_index);
+			}
+
+			ECS_ASSERT(variables.size == 1);
+			return variables[0].value;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void GetEvaluateExpressionNumbersImpl(Stream<CharacterType> characters, CapacityStream<EvaluateExpressionNumber>& numbers) {
+			for (unsigned int index = 0; index < characters.size; index++) {
+				// Skip whitespaces
+				while (characters[index] == Character<CharacterType>(' ') || characters[index] == Character<CharacterType>('\t')) {
+					index++;
+				}
+
+				unsigned int start_index = index;
+				double value = EvaluateExpressionValue(characters, index);
+				if (value != DBL_MAX) {
+					numbers.Add({ value, start_index });
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void GetEvaluateExpressionNumbers(Stream<char> characters, CapacityStream<EvaluateExpressionNumber>& numbers) {
+			GetEvaluateExpressionNumbersImpl(characters, numbers);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void GetEvaluateExpressionNumbers(Stream<wchar_t> characters, CapacityStream<EvaluateExpressionNumber>& numbers) {
+			GetEvaluateExpressionNumbersImpl(characters, numbers);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		double EvaluateOperator(ECS_EVALUATE_EXPRESSION_OPERATORS operator_, double left, double right)
+		{
+			switch (operator_)
+			{
+			case ECS_EVALUATE_EXPRESSION_ADD:
+				return left + right;
+			case ECS_EVALUATE_EXPRESSION_MINUS:
+				return left - right;
+			case ECS_EVALUATE_EXPRESSION_MULTIPLY:
+				return left * right;
+			case ECS_EVALUATE_EXPRESSION_DIVIDE:
+				return left / right;
+			case ECS_EVALUATE_EXPRESSION_MODULO:
+				return (int64_t)left % (int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_NOT:
+				return ~(int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_AND:
+				return (int64_t)left & (int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_OR:
+				return (int64_t)left | (int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_XOR:
+				return (int64_t)left ^ (int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_SHIFT_LEFT:
+				return (int64_t)left << (int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_SHIFT_RIGHT:
+				return (int64_t)left >> (int64_t)right;
+			case ECS_EVALUATE_EXPRESSION_LOGICAL_AND:
+				return (bool)left && (bool)right;
+			case ECS_EVALUATE_EXPRESSION_LOGICAL_OR:
+				return (bool)left || (bool)right;
+			case ECS_EVALUATE_EXPRESSION_LOGICAL_EQUALITY:
+				return left == right;
+			case ECS_EVALUATE_EXPRESSION_LOGICAL_INEQUALITY:
+				return left != right;
+			case ECS_EVALUATE_EXPRESSION_LOGICAL_NOT:
+				return !(bool)right;
+			case ECS_EVALUATE_EXPRESSION_LESS:
+				return left < right;
+			case ECS_EVALUATE_EXPRESSION_LESS_EQUAL:
+				return left <= right;
+			case ECS_EVALUATE_EXPRESSION_GREATER:
+				return left > right;
+			case ECS_EVALUATE_EXPRESSION_GREATER_EQUAL:
+				return left >= right;
+			default:
+				ECS_ASSERT(false);
+			}
+
+			return 0.0;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		double EvaluateExpression(Stream<char> characters)
+		{
+			return EvaluateExpressionImpl<char>(characters);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		double EvaluateExpression(Stream<wchar_t> characters) {
+			return EvaluateExpressionImpl<wchar_t>(characters);
+		}
 
 		// --------------------------------------------------------------------------------------------------
 

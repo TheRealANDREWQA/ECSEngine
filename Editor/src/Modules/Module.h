@@ -4,8 +4,6 @@
 
 using namespace ECSEngine;
 
-constexpr unsigned int GRAPHICS_MODULE_INDEX = 0;
-
 extern const wchar_t* ECS_RUNTIME_PDB_PATHS[];
 
 
@@ -27,7 +25,7 @@ enum EDITOR_FINISH_BUILD_COMMAND_STATUS : unsigned char {
 
 // Returns whether or not it succeeded in adding the module. It can fail if the solution or project file doesn't exist, 
 // the project already is added to the ECSEngine project
-bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name);
+bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name, bool is_graphics_module = false);
 
 // Runs on multiple threads
 // It will report the status, in order, for each module - the launch status and optionally the build status.
@@ -104,6 +102,8 @@ void InitializeModuleConfigurations(EditorState* editor_state);
 
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
+bool IsGraphicsModule(const EditorState* editor_state, unsigned int index);
+
 unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> solution_path);
 
 unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_Name);
@@ -147,12 +147,23 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 // Returns -1 if it fails
 unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, unsigned int module_index);
 
+// The indices inside the normal reflection, not UI reflection
+void GetModuleReflectionComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* indices);
+
+// The indices inside the normal reflection, not UI reflection
+void GetModuleReflectionSharedComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* indices);
+
+// The indices inside the normal reflection, not UI reflection
+void GetModuleReflectionAllComponentIndices(
+	const EditorState* editor_state,
+	unsigned int module_index,
+	CapacityStream<unsigned int>* unique_indices,
+	CapacityStream<unsigned int>* shared_indices
+);
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
-
-// This does not verify if the dll exists, only that there is a module placed as a graphics one
-bool HasGraphicsModule(const EditorState* editor_state);
 
 // This function can also fail if the temporary dll could not be created
 bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
@@ -183,14 +194,7 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_t> solu
 // Releases all the modules and basically no module will be kept
 void ResetModules(EditorState* editor_state);
 
-// If the configuration is defaulted, it will do it for all configurations
-void ResetGraphicsModule(EditorState* editor_state, EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT);
-
 void SetModuleLoadStatus(EditorModule* module, bool has_functions, EDITOR_MODULE_CONFIGURATION configuration);
-
-// Returns whether or not it succeeded in adding the module. It can fail if the solution or project file doesn't exist, 
-// the project already is added to the ECSEngine project
-bool SetGraphicsModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<wchar_t> library_name);
 
 // Returns whether or not the module has been modified; it updates both the solution and the library last write times
 // If the configuration is defaulted, it will update all configurations for the library. In this case, it will return true

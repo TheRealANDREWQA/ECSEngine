@@ -195,6 +195,8 @@ namespace ECSEngine {
 
 		void SetFileLocation(Stream<wchar_t> file_location);
 
+		ECS_FIELDS_START_REFLECT;
+
 		ResizableSparseSet<ReferenceCountedAsset<MeshMetadata>> mesh_metadata;
 		ResizableSparseSet<ReferenceCountedAsset<TextureMetadata>> texture_metadata;
 		ResizableSparseSet<ReferenceCountedAsset<GPUBufferMetadata>> gpu_buffer_metadata;
@@ -203,6 +205,8 @@ namespace ECSEngine {
 		ResizableSparseSet<ReferenceCountedAsset<MaterialAsset>> material_asset;
 		ResizableSparseSet<ReferenceCountedAsset<MiscAsset>> misc_asset;
 		Stream<wchar_t> file_location;
+
+		ECS_FIELDS_END_REFLECT;
 		Reflection::ReflectionManager* reflection_manager;
 	};
 

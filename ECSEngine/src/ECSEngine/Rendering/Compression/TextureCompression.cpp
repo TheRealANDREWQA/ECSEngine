@@ -71,7 +71,7 @@ namespace ECSEngine {
 
 	void SetErrorMessage(CapacityStream<char>* error_message, const char* error) {
 		if (error_message != nullptr) {
-			error_message->Copy(ToStream(error));
+			error_message->Copy(error);
 			error_message->AssertCapacity();
 		}
 	}
@@ -571,7 +571,7 @@ namespace ECSEngine {
 
 	TextureCompressionExplicit GetTextureCompressionType(const wchar_t* texture)
 	{
-		Stream<wchar_t> path = ToStream(texture);
+		Stream<wchar_t> path = texture;
 		Path extension = function::PathExtensionBoth(path);
 
 		// Fail
@@ -581,8 +581,8 @@ namespace ECSEngine {
 
 		bool is_hdr = false;
 		bool is_tga = false;
-		is_hdr = function::CompareStrings(extension, ToStream(L".hdr"));
-		is_tga = function::CompareStrings(extension, ToStream(L".tga"));
+		is_hdr = function::CompareStrings(extension, L".hdr");
+		is_tga = function::CompareStrings(extension, L".tga");
 
 		if (is_hdr) {
 			return TextureCompressionExplicit::HDRMap;

@@ -54,7 +54,12 @@ namespace ECSEngine {
 	void ArchetypeBase::CopyOther(const ArchetypeBase* other)
 	{
 		// Assert they have the same capacity
-		ECS_CRASH_RETURN(other->m_capacity == m_capacity, "Trying to copy a base archetype with different capacity. Expected {#}, got {#}.", m_capacity, other->m_capacity);
+		ECS_CRASH_RETURN(
+			other->m_capacity == m_capacity, 
+			"Trying to copy a base archetype with different capacity. Expected {#}, got {#}.", 
+			m_capacity,
+			other->m_capacity
+		);
 
 		// Normally, we would have to assert that they have the same component order, but that should already be taken care of
 		// E.g. don't call copy other if they are from different archetypes
@@ -228,6 +233,13 @@ namespace ECSEngine {
 		m_capacity = 0;
 		m_entities = nullptr;
 		m_buffers = nullptr;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int ArchetypeBase::EntityCount() const
+	{
+		return m_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

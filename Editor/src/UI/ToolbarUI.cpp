@@ -12,9 +12,10 @@
 #include "MiscellaneousBar.h"
 #include "Game.h"
 #include "ModuleExplorer.h"
+#include "SandboxExplorer.h"
 #include "Inspector.h"
-#include "Settings.h"
 #include "Backups.h"
+#include "Sandbox.h"
 
 #endif
 
@@ -28,10 +29,18 @@ constexpr size_t TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT = 4;
 
 constexpr wchar_t* PATH = L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\Editor\\TEMPLATE.uit";
 
+// ------------------------------------------------------------------------------------------------
+
 struct ToolbarData {
 	UIActionHandler file_actions[TOOLBAR_DATA_FILE_ROW_COUNT];
 	UIActionHandler window_actions[TOOLBAR_WINDOW_MENU_COUNT];
 	UIActionHandler layout_actions[TOOLBAR_DATA_LAYOUT_ROW_COUNT];
+
+	// This is needed because the sandbox UI can have multiple sub windows
+	Stream<UIActionHandler> sandbox_ui_handlers;
+	bool window_has_submenu[TOOLBAR_WINDOW_MENU_COUNT];
+	bool window_submenu_unavailable[TOOLBAR_WINDOW_MENU_COUNT];
+
 	bool layout_has_submenu[TOOLBAR_DATA_LAYOUT_ROW_COUNT];
 	bool layout_submenu_unavailables[TOOLBAR_DATA_LAYOUT_ROW_COUNT * 2];
 	UIDrawerMenuState* layout_submenu_states;
@@ -39,12 +48,14 @@ struct ToolbarData {
 	EditorState* editor_state;
 };
 
+// ------------------------------------------------------------------------------------------------
+
 void DefaultUITemplate(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ECS_TEMP_STRING(template_path, 256);
-	template_path.Copy(ToStream(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE));
-	template_path.AddStreamSafe(ToStream(PROJECT_UI_TEMPLATE_EXTENSION));
+	template_path.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+	template_path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 	template_path[template_path.size] = L'\0';
 	if (ExistsFileOrFolder(template_path)) {
 		LoadProjectUITemplateData data;
@@ -62,16 +73,22 @@ void DefaultUITemplate(ActionData* action_data) {
 	}
 }
 
+// ------------------------------------------------------------------------------------------------
+
 void LoadProjectUITemplateClickable(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	LoadProjectUITemplateAction(action_data);
 }
 
+// ------------------------------------------------------------------------------------------------
+
 void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UI_PREPARE_DRAWER(initialize);
 
 	ToolbarData* data = (ToolbarData*)window_data;
+	EditorState* editor_state = data->editor_state;
+
 	if (initialize) {
 		// Default initialize all handlers with SkipAction, data size 0
 		Stream<UIActionHandler> handlers(data,  TOOLBAR_DATA_FILE_ROW_COUNT + TOOLBAR_WINDOW_MENU_COUNT + TOOLBAR_DATA_LAYOUT_ROW_COUNT);
@@ -80,7 +97,6 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		}
 
 		EDITOR_STATE(data->editor_state);
-		EditorState* editor_state = data->editor_state;
 		ProjectFile* project_file = editor_state->project_file;
 
 #pragma region File
@@ -94,15 +110,24 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 #pragma region Windows
 
 		// The action data is the inject data + the window name
-		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, GetConsole(), 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_SETTINGS] = { CreateSettingsWindowAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, GetConsole(), 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { CreateSandboxExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->sandbox_ui_handlers.size = 0;
+		
+		for (size_t index = 0; index < TOOLBAR_WINDOW_MENU_COUNT; index++) {
+			data->window_has_submenu[index] = false;
+			data->window_submenu_unavailable[index] = false;
+		}
+
+		data->window_has_submenu[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
 
 #pragma endregion
 
@@ -116,12 +141,12 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			allocation, sizeof(LoadProjectUITemplateData) * (TOOLBAR_DATA_LAYOUT_ROW_COUNT - 1)
 		);
 		ECS_TEMP_STRING(system_string, 256);
-		system_string.Copy(ToStream(EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX));
+		system_string.Copy(EDITOR_SYSTEM_PROJECT_UI_TEMPLATE_PREFIX);
 		system_string.Add(L' ');
 
 		size_t prefix_size = system_string.size;
 		system_string.size++;
-		system_string.AddStreamSafe(ToStream(PROJECT_UI_TEMPLATE_EXTENSION));
+		system_string.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 
 		size_t string_total_size = system_string.size * TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT * sizeof(wchar_t);
 
@@ -130,11 +155,11 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		project_string.Copy(project_file->path);
 		project_string.Add(ECS_OS_PATH_SEPARATOR);
 
-		project_string.AddStream(ToStream(L"UI"));
+		project_string.AddStream(L"UI");
 		project_string.Add(ECS_OS_PATH_SEPARATOR);
 		size_t project_number_index = project_string.size;
 		project_string.size++;
-		project_string.AddStreamSafe(ToStream(PROJECT_UI_TEMPLATE_EXTENSION));
+		project_string.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 
 		string_total_size += project_string.size * (TOOLBAR_DATA_LAYOUT_ROW_COUNT - TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT - 1) * sizeof(wchar_t);
 		void* string_allocation = drawer.GetMainAllocatorBuffer(string_total_size);
@@ -157,7 +182,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		}
 
 		// default template
-		data->layout_actions[0] = { DefaultUITemplate, data->editor_state, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->layout_actions[0] = { DefaultUITemplate, data->editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
 		size_t layout_memory_size = sizeof(UIDrawerMenuState) * TOOLBAR_DATA_LAYOUT_ROW_COUNT + sizeof(UIActionHandler) * TOOLBAR_DATA_LAYOUT_ROW_COUNT * 2;
 		void* layout_submenu_allocation = drawer.GetMainAllocatorBuffer(layout_memory_size);
@@ -181,8 +206,8 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		};
 
 		for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_ROW_COUNT; index++) {
-			data->layout_submenu_handlers[index * 2] = { SavProjectUITemplateClickable, layout_save_data + index, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-			data->layout_submenu_handlers[index * 2 + 1] = { LoadProjectUITemplateClickable, layout_load_data + index, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->layout_submenu_handlers[index * 2] = { SavProjectUITemplateClickable, layout_save_data + index, 0, ECS_UI_DRAW_SYSTEM };
+			data->layout_submenu_handlers[index * 2 + 1] = { LoadProjectUITemplateClickable, layout_load_data + index, 0, ECS_UI_DRAW_SYSTEM };
 		}
 
 		data->layout_has_submenu[0] = false;
@@ -196,7 +221,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			data->layout_submenu_states[index + 1].left_characters = "Save\nLoad";
 			data->layout_submenu_states[index + 1].row_count = 2;
 			data->layout_submenu_states[index + 1].submenu_index = 1;
-			data->layout_submenu_states[index + 1].right_characters = nullptr;
+			data->layout_submenu_states[index + 1].right_characters = { nullptr, 0 };
 			data->layout_submenu_states[index + 1].row_has_submenu = nullptr;
 			data->layout_submenu_states[index + 1].separation_line_count = 0;
 			data->layout_submenu_states[index + 1].submenues = nullptr;
@@ -211,7 +236,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			data->layout_submenu_states[submenu_index].left_characters = "Save\nLoad";
 			data->layout_submenu_states[submenu_index].row_count = 2;
 			data->layout_submenu_states[submenu_index].submenu_index = 1;
-			data->layout_submenu_states[submenu_index].right_characters = nullptr;
+			data->layout_submenu_states[submenu_index].right_characters = { nullptr, 0 };
 			data->layout_submenu_states[submenu_index].row_has_submenu = nullptr;
 			data->layout_submenu_states[submenu_index].separation_line_count = 0;
 			data->layout_submenu_states[submenu_index].submenues = nullptr;
@@ -222,12 +247,36 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 	}
 
+	// If the number of sandboxes has changed, modify the buffer
+	if (editor_state->sandboxes.size != data->sandbox_ui_handlers.size) {
+		if (data->sandbox_ui_handlers.size != 0) {
+			// Deallocate if valid
+			drawer.RemoveAllocation(data->sandbox_ui_handlers.buffer);
+		}
+
+		void* allocation = drawer.GetMainAllocatorBuffer((sizeof(UIActionHandler) + sizeof(CreateSandboxUIActionData)) * editor_state->sandboxes.size);
+		data->sandbox_ui_handlers.buffer = (UIActionHandler*)allocation;
+		allocation = function::OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
+
+		// Now initialize the action data
+		CreateSandboxUIActionData* action_data = (CreateSandboxUIActionData*)allocation;
+		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+			action_data[index] = { editor_state, index };
+			data->sandbox_ui_handlers[index] = { CreateSandboxUIAction, action_data + index, 0, ECS_UI_DRAW_SYSTEM };
+		}
+		data->sandbox_ui_handlers.size = editor_state->sandboxes.size;
+
+		if (data->sandbox_ui_handlers.size == 0) {
+			data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
+		}
+	}
+
 	drawer.SetNextRowYOffset(0.0f);
 	drawer.SetRowPadding(0.0f);
 	drawer.DisablePaddingForRenderRegion();
 	drawer.DisablePaddingForRenderSliders();
 	drawer.DisableZoom();
-	drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NOTHING);
+	drawer.SetDrawMode(ECS_UI_DRAWER_NOTHING);
 
 	UILayoutDescriptor* layout = drawer.GetLayoutDescriptor();
 	drawer.SetCurrentX(drawer.GetNextRowXPosition());
@@ -236,7 +285,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 	UIDrawConfig config;
 	UIConfigWindowDependentSize transform;
-	transform.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_VERTICAL;
+	transform.type = ECS_UI_WINDOW_DEPENDENT_VERTICAL;
 	transform.scale_factor.y = 1.0f;
 
 	UIConfigBorder border;
@@ -254,29 +303,60 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	current_state.row_count = TOOLBAR_DATA_FILE_ROW_COUNT;
 	current_state.submenu_index = 0;
 
-	drawer.Menu(configuration, config, "File", &current_state);
+	drawer.Menu(configuration | UI_CONFIG_DO_CACHE, config, "File", &current_state);
 
-	current_state.right_characters = nullptr;
-	current_state.separation_lines[0] = 2;
-	current_state.separation_lines[1] = 5;
+	current_state.right_characters = { nullptr, 0 };
+	current_state.separation_lines[0] = TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER - 1;
+	current_state.separation_lines[1] = TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER;
 	current_state.separation_line_count = 2;
 	current_state.left_characters = (char*)TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
 	current_state.click_handlers = data->window_actions;
 	current_state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
 
+	UIDrawerMenuState sandbox_ui_state[TOOLBAR_WINDOW_MENU_COUNT];
+	current_state.row_has_submenu = data->window_has_submenu;
+	ECS_STACK_CAPACITY_STREAM(char, sandbox_ui_characters, 512);
+
+	current_state.unavailables = data->window_submenu_unavailable;
+	current_state.submenues = sandbox_ui_state;
+
+	if (data->sandbox_ui_handlers.size > 0) {
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = false;
+		
+		ECS_STACK_CAPACITY_STREAM(char, current_window_name, 64);
+
+		for (unsigned int index = 0; index < data->sandbox_ui_handlers.size; index++) {
+			GetSandboxUIWindowName(index, current_window_name);
+			sandbox_ui_characters.AddStreamSafe(current_window_name);
+			sandbox_ui_characters.Add('\n');
+		}
+		// Remove the last '\n' and replace it with '\0'
+		sandbox_ui_characters.size--;
+		sandbox_ui_characters[sandbox_ui_characters.size] = '\0';
+		
+		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].left_characters = sandbox_ui_characters.buffer;
+		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].row_count = data->sandbox_ui_handlers.size;
+		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].click_handlers = data->sandbox_ui_handlers.buffer;
+		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].row_has_submenu = nullptr;
+	}
+	else {
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
+		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].row_count = 0;
+	}
+
 	drawer.Menu(configuration, config, "Window", &current_state);
 
 	char layout_state_characters[256];
 	CapacityStream<char> layout_state_stream(layout_state_characters, 0, 256);
-	layout_state_stream.Copy(ToStream("Default"));
+	layout_state_stream.Copy("Default");
 
-	Stream<char> layout_system_string = ToStream("System ");
+	Stream<char> layout_system_string = "System ";
 	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT; index++) {
 		layout_state_stream.Add('\n');
 		layout_state_stream.AddStream(layout_system_string);
 		layout_state_stream.Add(index + '1');
 	}
-	Stream<char> layout_project_string = ToStream("Project ");
+	Stream<char> layout_project_string = "Project ";
 	for (size_t index = 0; index < TOOLBAR_DATA_LAYOUT_ROW_COUNT - TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT - 1; index++) {
 		layout_state_stream.Add('\n');
 		layout_state_stream.AddStream(layout_project_string);
@@ -304,7 +384,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		data->layout_submenu_states[index + 1 + TOOLBAR_DATA_LAYOUT_SYSTEM_COUNT].unavailables[1] = !ExistsFileOrFolder(_template->ui_template.ui_file);
 	}
 
-	drawer.Menu(configuration, config, "Layout", &current_state);
+	drawer.Menu(configuration | UI_CONFIG_DO_CACHE, config, "Layout", &current_state);
 
 	UIConfigRelativeTransform logo_transform;
 	logo_transform.scale.x = 0.7f;
@@ -320,13 +400,14 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	const ProjectFile* project_file = (const ProjectFile*)data->editor_state->project_file;
 	ECS_TEMP_ASCII_STRING(project_name, 256);
 	function::ConvertWideCharsToASCII(project_file->project_name, project_name);
-	project_name[project_file->project_name.size] = '\0';
-	project_transform.scale = drawer.GetLabelScale(project_name.buffer);
+	project_transform.scale = drawer.GetLabelScale(project_name);
 	project_transform.position.x = drawer.GetAlignedToRightOverLimit(project_transform.scale.x).x;
 	project_transform.position.y = drawer.current_y;
 	config.AddFlag(project_transform);
-	drawer.TextLabel(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_BORDER, config, project_name.buffer);
+	drawer.TextLabel(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER, config, project_name);
 }
+
+// ------------------------------------------------------------------------------------------------
 
 void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
@@ -338,6 +419,8 @@ void ToolbarSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_st
 	descriptor.window_data_size = sizeof(*data);
 	descriptor.window_name = TOOLBAR_WINDOW_NAME;
 }
+
+// ------------------------------------------------------------------------------------------------
 
 void CreateToolbarUI(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
@@ -354,3 +437,5 @@ void CreateToolbarUI(EditorState* editor_state) {
 	ui_system->CreateWindowAndDockspace(toolbar_window, UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING 
 		| UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_NO_TITLE);
 }
+
+// ------------------------------------------------------------------------------------------------

@@ -397,10 +397,10 @@ namespace ECSEngine {
 			// making this nullptr in order for the write argument to copy correctly
 			default_click.hoverable_handler.data = nullptr;
 			default_click.click_handler = data.clickable_handler;
-			void* clickable_data = (void*)function::Select(data.clickable_handler.data == nullptr, (uintptr_t)&default_click, (uintptr_t)data.clickable_handler.data);
+			void* clickable_data = data.clickable_handler.data == nullptr ? &default_click : data.clickable_handler.data;
 
 			ECS_UI_DRAW_PHASE clickable_phase = data.clickable_handler.phase;
-			if (!data.disable_system_phase_retarget && data.clickable_handler.phase == ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM && data.hoverable_handler.phase != ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM) {
+			if (!data.disable_system_phase_retarget && data.clickable_handler.phase == ECS_UI_DRAW_SYSTEM && data.hoverable_handler.phase != ECS_UI_DRAW_SYSTEM) {
 				clickable_phase = data.hoverable_handler.phase;
 			}
 
@@ -445,7 +445,7 @@ namespace ECSEngine {
 			default_click.click_handler = data.clickable_handler;
 			default_click.hoverable_handler.action = data.hoverable_handler.action;
 			default_click.hoverable_handler.data = nullptr;
-			void* clickable_data = (void*)function::Select(data.clickable_handler.data == nullptr, (uintptr_t)&default_click, (uintptr_t)data.clickable_handler.data);
+			void* clickable_data = (void*)data.clickable_handler.data == nullptr ? &default_click : data.clickable_handler.data;
 			AddActionHandler(
 				allocator,
 				hoverable,
@@ -569,13 +569,9 @@ namespace ECSEngine {
 			click_data.max_duration_between_clicks = duration_between_clicks;
 			click_data.first_click_handler.data = nullptr;
 			click_data.identifier = identifier;
-			void* first_click_data = (void*)function::Select(first_click_handler.data == nullptr, (uintptr_t)&click_data, (uintptr_t)first_click_handler.data);
-			void* second_click_data = (void*)function::Select(second_click_handler.data == nullptr, (uintptr_t)&click_data, (uintptr_t)second_click_handler.data);
-			ECS_UI_DRAW_PHASE phase = (ECS_UI_DRAW_PHASE)function::Select(
-				(unsigned int)first_click_handler.phase > (unsigned int)second_click_handler.phase,
-				(unsigned int)first_click_handler.phase, 
-				(unsigned int)second_click_handler.phase
-			);
+			void* first_click_data = first_click_handler.data == nullptr ? &click_data : first_click_handler.data;
+			void* second_click_data = second_click_handler.data == nullptr ? &click_data : second_click_handler.data;
+			ECS_UI_DRAW_PHASE phase = first_click_handler.phase > second_click_handler.phase ? first_click_handler.phase : second_click_handler.phase;
 			AddGeneralActionToDockspaceRegion(
 				thread_id, 
 				dockspace, 
@@ -1217,14 +1213,13 @@ namespace ECSEngine {
 
 		void UISystem::AddWindowDrawerElement(
 			unsigned int window_index, 
-			const char* name, 
+			Stream<char> name, 
 			Stream<void*> allocations, 
 			Stream<ResourceIdentifier> table_resources
 		)
 		{
 			// Calculate the total memory needed
-			size_t name_size = strlen(name);
-			size_t memory_size = name_size + sizeof(void*) * allocations.size + sizeof(ResourceIdentifier) * table_resources.size;
+			size_t memory_size = name.size + sizeof(void*) * allocations.size + sizeof(ResourceIdentifier) * table_resources.size;
 			for (size_t index = 0; index < table_resources.size; index++) {
 				memory_size += table_resources[index].size;
 			}
@@ -1246,9 +1241,9 @@ namespace ECSEngine {
 				ptr += table_resources[index].size;
 			}
 			// Copy the name
-			memcpy((void*)ptr, name, sizeof(char) * name_size);
-			ResourceIdentifier identifier{(void*)ptr, (unsigned int)name_size};
-			InsertIntoDynamicTable(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, ResourceIdentifier((void*)ptr, name_size));
+			memcpy((void*)ptr, name.buffer, sizeof(char) * name.size);
+			ResourceIdentifier identifier{(void*)ptr, (unsigned int)name.size};
+			InsertIntoDynamicTable(m_windows[window_index].dynamic_resources, m_memory, dynamic_resource, identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1492,17 +1487,34 @@ namespace ECSEngine {
 		void UISystem::ConfigureToolTipBase(UITooltipBaseData* data) const
 		{
 			if (data->default_background) {
-				data->background_color = m_descriptors.misc.tool_tip_background_color;
+				if (data->background_color == ECS_COLOR_BLACK) {
+					data->background_color = m_descriptors.misc.tool_tip_background_color;
+				}
 			}
 			if (data->default_border) {
-				data->border_color = m_descriptors.misc.tool_tip_border_color;
-				data->border_size = GetSquareScale(m_descriptors.dockspaces.border_size);
+				if (data->border_color == ECS_COLOR_BLACK) {
+					data->border_color = m_descriptors.misc.tool_tip_border_color;
+				}
+				if (data->border_size == float2(0.0f, 0.0f)) {
+					data->border_size = GetSquareScale(m_descriptors.dockspaces.border_size);
+				}
 			}
 			if (data->default_font) {
-				data->font_color = m_descriptors.misc.tool_tip_font_color;
-				data->unavailable_font_color = m_descriptors.misc.tool_tip_unavailable_font_color;
-				data->font_size = { m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, m_descriptors.font.size };
-				data->character_spacing = m_descriptors.font.character_spacing;
+				if (data->font_color == ECS_COLOR_BLACK) {
+					data->font_color = m_descriptors.misc.tool_tip_font_color;
+				}
+
+				if (data->unavailable_font_color == ECS_COLOR_BLACK) {
+					data->unavailable_font_color = m_descriptors.misc.tool_tip_unavailable_font_color;
+				}
+
+				if (data->font_size == float2(0.0f, 0.0f)) {
+					data->font_size = { m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, m_descriptors.font.size };
+				}
+
+				if (data->character_spacing == 0.0f) {
+					data->character_spacing = m_descriptors.font.character_spacing;
+				}
 			}
 		}
 
@@ -2124,7 +2136,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::CreateSpriteTexture(const wchar_t* filename, UISpriteTexture* sprite_texture)
+		void UISystem::CreateSpriteTexture(Stream<wchar_t> filename, UISpriteTexture* sprite_texture)
 		{
 			ResourceManagerTextureDesc descriptor;
 			ResourceView view = m_resource_manager->LoadTexture<true>(filename, &descriptor);
@@ -2170,7 +2182,7 @@ namespace ECSEngine {
 
 			void* window_drawer_allocation = m_memory->Allocate(sizeof(UIWindowDrawerDescriptor), alignof(UIWindowDrawerDescriptor));
 			m_windows[window_index].descriptors = (UIWindowDrawerDescriptor*)window_drawer_allocation;
-			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
+			for (size_t index = 0; index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT; index++) {
 				m_windows[window_index].descriptors->configured[index] = false;
 			}
 			memcpy(&m_windows[window_index].descriptors->color_theme, &m_descriptors.color_theme, sizeof(UIColorThemeDescriptor));
@@ -2201,10 +2213,8 @@ namespace ECSEngine {
 			m_windows[window_index].window_data_size = descriptor.window_data_size;
 
 			// resource table
-			unsigned short resource_count = function::Select(descriptor.resource_count == 0, m_descriptors.misc.window_table_default_count, descriptor.resource_count);
-			void* table_allocation = m_memory->Allocate(WindowTable::MemoryOf(resource_count), 8);
-			memset(table_allocation, 0, WindowTable::MemoryOf(resource_count));
-			m_windows[window_index].table = WindowTable(table_allocation, resource_count);
+			unsigned short resource_count = descriptor.resource_count == 0 ? m_descriptors.misc.window_table_default_count : descriptor.resource_count;
+			m_windows[window_index].table.Initialize(m_memory, resource_count);
 			
 			m_windows[window_index].name_vertex_buffer.buffer = nullptr;
 			SetWindowName(window_index, descriptor.window_name);
@@ -2429,10 +2439,10 @@ namespace ECSEngine {
 				second_y.store(handler->scale_y + index);
 			}
 			for (; index < handler->position_x.size; index++) {
-				handler->position_x[index] = function::Select(handler->position_x[index] < left, left, handler->position_x[index]);
-				handler->position_y[index] = function::Select(handler->position_y[index] < top, top, handler->position_y[index]);
-				handler->scale_x[index] = function::Select(handler->scale_x[index] + handler->position_x[index] > right, right - handler->position_x[index], handler->scale_x[index]);
-				handler->scale_y[index] = function::Select(handler->scale_y[index] + handler->position_y[index] > bottom, bottom - handler->position_y[index], handler->scale_y[index]);
+				handler->position_x[index] = handler->position_x[index] < left ? left : handler->position_x[index];
+				handler->position_y[index] = handler->position_y[index] < top ? top : handler->position_y[index];
+				handler->scale_x[index] = handler->scale_x[index] + handler->position_x[index] > right ? right - handler->position_x[index] : handler->scale_x[index];
+				handler->scale_y[index] = handler->scale_y[index] + handler->position_y[index] > bottom ? bottom - handler->position_y[index] : handler->scale_y[index];
 			}
 		}
 
@@ -2634,18 +2644,17 @@ namespace ECSEngine {
 
 		void UISystem::DecrementWindowDynamicResource(unsigned int window_index)
 		{
-			unsigned int count = m_windows[window_index].dynamic_resources.GetExtendedCapacity();
-			for (size_t index = 0; index < count; index++) {
-				if (m_windows[window_index].dynamic_resources.IsItemAt(index)) {
-					UIWindowDynamicResource* dynamic_resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
-					dynamic_resource->reference_count--;
-					if (dynamic_resource->reference_count == 0) {
-						// A new dynamic resource will replace this one; so decrement the current index in order to keep
-						// checking the right resource
-						RemoveWindowDynamicResource(window_index, index);
-					}
+			m_windows[window_index].dynamic_resources.ForEachIndex([&](unsigned int index) {
+				UIWindowDynamicResource* dynamic_resource = m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
+				dynamic_resource->reference_count--;
+				if (dynamic_resource->reference_count == 0) {
+					// A new dynamic resource will replace this one; so decrement the current index in order to keep
+					// checking the right resource
+					RemoveWindowDynamicResource(window_index, index);
+					return true;
 				}
-			}
+				return false;
+			});
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -2851,7 +2860,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		template<bool destroy_fixed_dockspace>
-		bool UISystem::DestroyWindowIfFound(const char* name)
+		bool UISystem::DestroyWindowIfFound(Stream<char> name)
 		{
 			unsigned int window_index = GetWindowFromName(name);
 			if (window_index != 0xFFFFFFFF) {
@@ -2879,7 +2888,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL(bool, UISystem::DestroyWindowIfFound, const char*);
+		ECS_TEMPLATE_FUNCTION_BOOL(bool, UISystem::DestroyWindowIfFound, Stream<char>);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -3482,13 +3491,13 @@ namespace ECSEngine {
 			m_focused_window_data.buffers = buffers;
 			m_focused_window_data.counts = counts;
 
-			if (m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM) {
+			if (m_focused_window_data.hoverable_handler.phase == ECS_UI_DRAW_SYSTEM) {
 				auto phase_copy = m_resources.thread_resources[0].phase;
 				HandleHoverable(mouse_position, 0, buffers, counts);
 				m_resources.thread_resources[0].phase = phase_copy;
-				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
+				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_LOW ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
 			}
-			if (m_focused_window_data.clickable_handler.phase == ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM) {
+			if (m_focused_window_data.clickable_handler.phase == ECS_UI_DRAW_SYSTEM) {
 				if (m_mouse_tracker->LeftButton() == MBHELD || m_mouse_tracker->LeftButton() == MBPRESSED) {
 					auto phase_copy = m_resources.thread_resources[0].phase;
 					HandleFocusedWindowClickable(mouse_position, 0);
@@ -3503,16 +3512,16 @@ namespace ECSEngine {
 						}
 						m_focused_window_data.clickable_handler.action = nullptr;
 					}
-					m_focused_window_data.clickable_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+					m_focused_window_data.clickable_handler.phase = ECS_UI_DRAW_NORMAL;
 					m_resources.thread_resources[0].phase = phase_copy;
 				}
-				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
+				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 			}
-			if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM) {
+			if (m_focused_window_data.general_handler.phase == ECS_UI_DRAW_SYSTEM) {
 				auto phase_copy = m_resources.thread_resources[0].phase;
 				HandleFocusedWindowGeneral(mouse_position, 0);
 				m_resources.thread_resources[0].phase = phase_copy;
-				m_frame_pacing = function::Select<unsigned int>(m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
+				m_frame_pacing = m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 			}
 
 			if (m_focused_window_data.additional_general_data != nullptr && m_focused_window_data.general_handler.data_size > 0) {
@@ -3545,7 +3554,7 @@ namespace ECSEngine {
 				{ 2.0f, 2.0f },
 				m_graphics->GetContext()
 			);
-			DrawPass<ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM>(
+			DrawPass<ECS_UI_DRAW_SYSTEM>(
 				m_resources.system_draw,
 				counts,
 				{ -1.0f, -1.0f },
@@ -3787,7 +3796,7 @@ namespace ECSEngine {
 #endif
 			);
 
-			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_NORMAL;
 
 			m_resources.thread_resources[data->thread_id].temp_allocator.Clear();
 			if (!data->is_fixed_default_when_border_zero) {
@@ -3866,7 +3875,7 @@ namespace ECSEngine {
 						data->mouse_position,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
+					m_frame_pacing = (is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
 				}
 
 				if (m_mouse_tracker->LeftButton() == MBPRESSED) {
@@ -3900,7 +3909,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_clicked || is_general && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
+					m_frame_pacing = (is_clicked || is_general && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 				}
 			}
 
@@ -3927,8 +3936,8 @@ namespace ECSEngine {
 				region_half_scale
 			);
 
-			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
-			DrawPass<ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL>(
+			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_NORMAL;
+			DrawPass<ECS_UI_DRAW_NORMAL>(
 				data->dockspace->borders[data->border_index].draw_resources,
 				vertex_count,
 				{ region_position.x, region_position.y },
@@ -3970,8 +3979,8 @@ namespace ECSEngine {
 				region_half_scale
 			);
 
-			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE;
-			DrawPass<ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE>(
+			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_LATE;
+			DrawPass<ECS_UI_DRAW_LATE>(
 				data->dockspace->borders[data->border_index].draw_resources,
 				vertex_count,
 				region_position,
@@ -4039,7 +4048,7 @@ namespace ECSEngine {
 			void* buffers[ECS_TOOLS_UI_MATERIALS * ECS_TOOLS_UI_PASSES];
 
 			data->dockspace->borders[data->border_index].draw_resources.Map(buffers, m_graphics->GetContext());
-			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			m_resources.thread_resources[data->thread_id].phase = ECS_UI_DRAW_NORMAL;
 
 			m_resources.thread_resources[data->thread_id].temp_allocator.Clear();
 			if (!data->is_fixed_default_when_border_zero) {
@@ -4115,7 +4124,7 @@ namespace ECSEngine {
 						data->mouse_position,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
+					m_frame_pacing = (is_hoverable && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
 				}
 				if (m_mouse_tracker->LeftButton() == MBPRESSED) {
 					DockspaceType floating_type;
@@ -4146,7 +4155,7 @@ namespace ECSEngine {
 						data->thread_id,
 						0
 					);
-					m_frame_pacing = function::Select<unsigned int>(is_clickable && is_general && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
+					m_frame_pacing = (is_clickable && is_general && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 				}
 			}
 
@@ -4576,7 +4585,7 @@ namespace ECSEngine {
 
 		float2  UISystem::DrawToolTipSentence(
 			ActionData* action_data,
-			const char* characters,
+			Stream<char> characters,
 			UITooltipBaseData* data
 		)
 		{
@@ -4587,19 +4596,18 @@ namespace ECSEngine {
 			size_t* counts = action_data->counts;
 			float2 mouse_position = action_data->mouse_position;
 			position += data->offset;
-			position.x += function::Select(data->offset_scale.x, scale.x, 0.0f);
-			position.y += function::Select(data->offset_scale.y, scale.y, 0.0f);
+			position.x += data->offset_scale.x ? scale.x : 0.0f;
+			position.y += data->offset_scale.y ? scale.y : 0.0f;
 
-			size_t character_count = strlen(characters);
 			unsigned int new_line_characters[256];
 			Stream<unsigned int> temp_stream = Stream<unsigned int>(new_line_characters, 0);
-			for (size_t index = 0; index < character_count; index++) {
+			for (size_t index = 0; index < characters.size; index++) {
 				if (characters[index] == '\n') {
 					temp_stream.Add(index);
 				}
 			}
 
-			temp_stream.Add(character_count);
+			temp_stream.Add(characters.size);
 			size_t word_start_index = 0;
 			size_t word_end_index = 0;
 
@@ -4608,8 +4616,8 @@ namespace ECSEngine {
 			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
-			position.x = function::Select(position.x < -0.99f, -0.99f, position.x);
-			position.y = function::Select(position.y < -0.99f, -0.99f, position.y);
+			position.x = function::ClampMin(position.x, -0.99f);
+			position.y = function::ClampMin(position.y, -0.99f);
 			float2 initial_position = position;
 
 			position.x += m_descriptors.misc.tool_tip_padding.x;
@@ -4649,7 +4657,7 @@ namespace ECSEngine {
 
 					Stream<UISpriteVertex> temp_vertex_stream = Stream<UISpriteVertex>(text_vertices + *count, (word_end_index - word_start_index + 1) * 6);
 					ConvertCharactersToTextSprites(
-						{ characters + word_start_index, temp_vertex_stream.size / 6 },
+						{ characters.buffer + word_start_index, temp_vertex_stream.size / 6 },
 						position,
 						text_vertices,
 						current_color,
@@ -4665,13 +4673,13 @@ namespace ECSEngine {
 
 				while (temp_stream[index] == temp_stream[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-					max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
-					max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
+					max_bounds.x = std::max(max_bounds.x, position.x);
+					max_bounds.y = std::max(max_bounds.y, position.y);
 					index++;
 				}
 
 				// last character will cause a next row jump and invalidate last recorded position on the x axis
-				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
+				max_bounds.x = std::max(max_bounds.x, position.x);
 				bool is_available = true;
 				if (data->unavailable_rows != nullptr && data->unavailable_rows[row_index] == true) {
 					current_color = data->unavailable_font_color;
@@ -4700,8 +4708,8 @@ namespace ECSEngine {
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
-				max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
+				max_bounds.x = std::max(max_bounds.x, position.x);
+				max_bounds.y = std::max(max_bounds.y, position.y);
 				word_start_index = temp_stream[index] + 1;
 			}
 
@@ -4709,8 +4717,8 @@ namespace ECSEngine {
 			max_bounds.x += m_descriptors.misc.tool_tip_padding.x;
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = function::Select(max_bounds.x > 0.99f, max_bounds.x - 0.99f, 0.0f);
-			translation.y = function::Select(max_bounds.y > 0.99f, max_bounds.y - 0.99f, 0.0f);
+			translation.x = max_bounds.x > 0.99f ? max_bounds.x - 0.99f : 0.0f;
+			translation.y = max_bounds.y > 0.99f ? max_bounds.y - 0.99f : 0.0f;
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t index = initial_vertex_count; index < *count; index++) {
@@ -4731,27 +4739,22 @@ namespace ECSEngine {
 
 		float2 UISystem::DrawToolTipSentenceWithTextToRight(
 			ActionData* action_data,
-			const char* aligned_to_left_text,
-			const char* aligned_to_right_text,
+			Stream<char> aligned_to_left_text,
+			Stream<char> aligned_to_right_text,
 			UITooltipBaseData* data
 		)
 		{
 
 #pragma region New line detection
 
-			size_t left_character_count = strlen(aligned_to_left_text);
-			size_t right_character_count = strlen(aligned_to_right_text);
-
-			unsigned int left_new_lines_buffer[256];
-			unsigned int right_new_lines_buffer[256];
-			Stream<unsigned int> left_new_lines(left_new_lines_buffer, 0);
-			Stream<unsigned int> right_new_lines(right_new_lines_buffer, 0);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, left_new_lines, 256);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, right_new_lines, 256);
 
 			function::FindToken(aligned_to_left_text, '\n', left_new_lines);
 			function::FindToken(aligned_to_right_text, '\n', right_new_lines);
 
-			left_new_lines.Add(left_character_count);
-			right_new_lines.Add(right_character_count);
+			left_new_lines.Add(aligned_to_left_text.size);
+			right_new_lines.Add(aligned_to_right_text.size);
 
 			ECS_ASSERT(left_new_lines.size == right_new_lines.size);
 
@@ -4769,8 +4772,8 @@ namespace ECSEngine {
 			size_t* counts = action_data->counts;
 			float2 mouse_position = action_data->mouse_position;
 			position += data->offset;
-			position.x += function::Select(data->offset_scale.x, scale.x, 0.0f);
-			position.y += function::Select(data->offset_scale.y, scale.y, 0.0f);
+			position.x += data->offset_scale.x ? scale.x : 0.0f;
+			position.y += data->offset_scale.y ? scale.y : 0.0f;
 			size_t word_start_index = 0;
 			size_t word_end_index = 0;
 
@@ -4779,8 +4782,8 @@ namespace ECSEngine {
 			float space_x_scale = GetSpaceXSpan(data->font_size.x);
 			float text_y_span = GetTextSpriteYScale(data->font_size.y);
 
-			position.x = function::Select(position.x < -0.99f, -0.99f, position.x);
-			position.y = function::Select(position.y < -0.99f, -0.99f, position.y);
+			position.x = position.x < -0.99f ? -0.99f : position.x;
+			position.y = position.y < -0.99f ? -0.99f : position.y;
 			float2 initial_position = position;
 
 			position.x += m_descriptors.misc.tool_tip_padding.x;
@@ -4812,7 +4815,7 @@ namespace ECSEngine {
 
 					Stream<UISpriteVertex> temp_vertex_stream = Stream<UISpriteVertex>(text_vertices + *count, (word_end_index - word_start_index + 1) * 6);
 					ConvertCharactersToTextSprites(
-						{ aligned_to_left_text + word_start_index, temp_vertex_stream.size / 6 },
+						{ aligned_to_left_text.buffer + word_start_index, temp_vertex_stream.size / 6 },
 						position,
 						text_vertices,
 						current_color,
@@ -4822,7 +4825,7 @@ namespace ECSEngine {
 					);
 
 					text_span = ECSEngine::Tools::GetTextSpan(temp_vertex_stream);
-					max_left_scale = function::Select(max_left_scale < text_span.x, text_span.x, max_left_scale);
+					max_left_scale = std::max(max_left_scale, text_span.x);
 					position.x += text_span.x;
 					*count += temp_vertex_stream.size;
 				}
@@ -4837,7 +4840,7 @@ namespace ECSEngine {
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
 				row_position = position;
 				row_index++;
-				max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
+				max_bounds.y = std::max(max_bounds.y, position.y);
 				word_start_index = left_new_lines[index] + 1;
 			}
 
@@ -4853,13 +4856,12 @@ namespace ECSEngine {
 			auto calculate_span_kernel = [data, this, &current_position](float& max_scale, const char* characters, size_t new_line_character, float& text_x_scale) {
 				if (new_line_character > current_position) {
 					float2 text_span = GetTextSpan(
-						characters + current_position,
-						new_line_character - current_position,
+						{ characters + current_position, new_line_character - current_position },
 						data->font_size.x,
 						data->font_size.y,
 						data->character_spacing
 					);
-					max_scale = function::Select(max_scale < text_span.x, text_span.x, max_scale);
+					max_scale = std::max(max_scale, text_span.x);
 					text_x_scale = text_span.x;
 				}
 				else {
@@ -4868,7 +4870,7 @@ namespace ECSEngine {
 			};
 
 			for (size_t index = 0; index < right_new_lines.size; index++) {
-				calculate_span_kernel(max_right_scale, aligned_to_right_text, right_new_lines[index], right_text_spans[index]);
+				calculate_span_kernel(max_right_scale, aligned_to_right_text.buffer, right_new_lines[index], right_text_spans[index]);
 				current_position = right_new_lines[index] + 1;
 			}
 
@@ -4889,7 +4891,7 @@ namespace ECSEngine {
 						current_color = data->unavailable_font_color;
 					}
 					ConvertCharactersToTextSprites(
-						{ aligned_to_right_text + _word_start_index, (size_t)_word_end_index - (size_t)_word_start_index + 1 },
+						{ aligned_to_right_text.buffer + _word_start_index, (size_t)_word_end_index - (size_t)_word_start_index + 1 },
 						text_position,
 						text_vertices,
 						current_color,
@@ -4909,8 +4911,8 @@ namespace ECSEngine {
 #pragma region Translation if needed
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = function::Select(max_bounds.x > 0.99f, max_bounds.x - 0.99f, 0.0f);
-			translation.y = function::Select(max_bounds.y > 0.99f, max_bounds.y - 0.99f, 0.0f);
+			translation.x = max_bounds.x > 0.99f ? max_bounds.x - 0.99f : 0.0f;
+			translation.y = max_bounds.y > 0.99f ? max_bounds.y - 0.99f : 0.0f;
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t index = initial_vertex_count; index < *count; index++) {
@@ -4931,18 +4933,17 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UISystem::DrawToolTipSentenceSize(const char* characters, UITooltipBaseData* data)
+		float2 UISystem::DrawToolTipSentenceSize(Stream<char> characters, UITooltipBaseData* data)
 		{
-			size_t character_count = strlen(characters);
 			unsigned int new_line_characters[256];
 			Stream<unsigned int> temp_stream = Stream<unsigned int>(new_line_characters, 0);
-			for (size_t index = 0; index < character_count; index++) {
+			for (size_t index = 0; index < characters.size; index++) {
 				if (characters[index] == '\n') {
 					temp_stream.Add(index);
 				}
 			}
 
-			temp_stream.Add(character_count);
+			temp_stream.Add(characters.size);
 			size_t word_start_index = 0;
 			size_t word_end_index = 0;
 
@@ -4963,22 +4964,22 @@ namespace ECSEngine {
 					word_end_index = temp_stream[index] - 1;
 				}
 				if (word_end_index >= word_start_index) {
-					float2 text_span = GetTextSpan(characters + word_start_index, word_end_index - word_start_index + 1, data->font_size.x, data->font_size.y, data->character_spacing);
+					float2 text_span = GetTextSpan({ characters.buffer + word_start_index, word_end_index - word_start_index + 1 }, data->font_size.x, data->font_size.y, data->character_spacing);
 					position.x += text_span.x;
 				}
 
 				while (temp_stream[index] == temp_stream[index + 1] - 1) {
 					position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-					max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
-					max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
+					max_bounds.x = std::max(max_bounds.x, position.x);
+					max_bounds.y = std::max(max_bounds.y, position.y);
 					index++;
 				}
 
 				// last character will cause a next row jump and invalidate last recorded position on the x axis
-				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
+				max_bounds.x = std::max(max_bounds.x, position.x);
 				position = { initial_position.x + m_descriptors.misc.tool_tip_padding.x, position.y + text_y_span + data->next_row_offset };
-				max_bounds.x = function::Select(max_bounds.x < position.x, position.x, max_bounds.x);
-				max_bounds.y = function::Select(max_bounds.y < position.y, position.y, max_bounds.y);
+				max_bounds.x = std::max(max_bounds.x, position.x);
+				max_bounds.y = std::max(max_bounds.y, position.y);
 				word_start_index = temp_stream[index] + 1;
 			}
 
@@ -4991,25 +4992,20 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		float2 UISystem::DrawToolTipSentenceWithTextToRightSize(
-			const char* aligned_to_left_text,
-			const char* aligned_to_right_text,
+			Stream<char> aligned_to_left_text,
+			Stream<char> aligned_to_right_text,
 			UITooltipBaseData* data
 		)
 		{
 			ConfigureToolTipBase(data);
-			size_t left_character_count = strlen(aligned_to_left_text);
-			size_t right_character_count = strlen(aligned_to_right_text);
-
-			unsigned int left_new_lines_buffer[256];
-			unsigned int right_new_lines_buffer[256];
-			Stream<unsigned int> left_new_lines(left_new_lines_buffer, 0);
-			Stream<unsigned int> right_new_lines(right_new_lines_buffer, 0);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, left_new_lines, 256);
+			ECS_STACK_CAPACITY_STREAM(unsigned int, right_new_lines, 256);
 
 			function::FindToken(aligned_to_left_text, '\n', left_new_lines);
 			function::FindToken(aligned_to_right_text, '\n', right_new_lines);
 
-			left_new_lines.Add(left_character_count);
-			right_new_lines.Add(right_character_count);
+			left_new_lines.Add(aligned_to_left_text.size);
+			right_new_lines.Add(aligned_to_right_text.size);
 
 			ECS_ASSERT(left_new_lines.size == right_new_lines.size);
 
@@ -5020,26 +5016,24 @@ namespace ECSEngine {
 			size_t current_position = 0;
 			for (size_t index = 0; index < left_new_lines.size; index++) {
 				float2 text_span = GetTextSpan(
-					aligned_to_left_text + current_position,
-					left_new_lines[index] - current_position,
+					{ aligned_to_left_text.buffer + current_position, left_new_lines[index] - current_position },
 					data->font_size.x,
 					data->font_size.y,
 					data->character_spacing
 				);
-				max_left_scale = function::Select(max_left_scale < text_span.x, text_span.x, max_left_scale);
+				max_left_scale = std::max(max_left_scale, text_span.x);
 				current_position = left_new_lines[index] + 1;
 			}
 
 			current_position = 0;
 			for (size_t index = 0; index < right_new_lines.size; index++) {
 				float2 text_span = GetTextSpan(
-					aligned_to_right_text + current_position,
-					right_new_lines[index] - current_position,
+					{ aligned_to_right_text.buffer + current_position, right_new_lines[index] - current_position },
 					data->font_size.x,
 					data->font_size.y,
 					data->character_spacing
 				);
-				max_right_scale = function::Select(max_right_scale < text_span.x, text_span.x, max_right_scale);
+				max_right_scale = std::max(max_right_scale, text_span.x);
 				current_position = right_new_lines[index] + 1;
 			}
 
@@ -5167,22 +5161,15 @@ namespace ECSEngine {
 			}
 		}
 
-		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
-		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
-		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
+		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_NORMAL>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
+		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_LATE>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
+		template ECSENGINE_API void UISystem::DrawPass<ECS_UI_DRAW_SYSTEM>(UIDrawResources&, const size_t*, float2, float2, GraphicsContext*);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::ExistsWindowResource(unsigned int window_index, const char* name) const
+		bool UISystem::ExistsWindowResource(unsigned int window_index, Stream<char> name) const
 		{
-			ResourceIdentifier identifier(name, strlen(name));
-			return m_windows[window_index].table.Find<true>(identifier) != -1;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		bool UISystem::ExistsWindowResource(unsigned int window_index, Stream<void> identifier_stream) const {
-			ResourceIdentifier identifier(identifier_stream);
+			ResourceIdentifier identifier(name);
 			return m_windows[window_index].table.Find<true>(identifier) != -1;
 		}
 
@@ -5211,23 +5198,10 @@ namespace ECSEngine {
 			for (size_t index = 0; index < m_windows.size; index++) {
 				m_windows[index].draw = data[index].draw;
 				m_windows[index].private_handler.action = data[index].private_action;
-				if (data[index].private_action_data_size > 0) {
-					void* allocation = m_memory->Allocate(data[index].private_action_data_size);
-					memcpy(allocation, data[index].private_action_data, data[index].private_action_data_size);
-					m_windows[index].private_handler.data = allocation;
-				}
-				else {
-					m_windows[index].private_handler.data = data[index].private_action_data;
-				}
 
-				if (data[index].window_data_size > 0) {
-					void* allocation = m_memory->Allocate(data[index].window_data_size);
-					memcpy(allocation, data[index].window_data, data[index].window_data_size);
-					m_windows[index].window_data = allocation;
-				}
-				else {
-					m_windows[index].window_data = data[index].window_data;
-				}
+				m_windows[index].private_handler.data = function::CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].private_action_data, data[index].private_action_data_size);
+				m_windows[index].window_data = function::CopyNonZero(GetAllocatorPolymorphic(m_memory), data[index].window_data, data[index].window_data_size);
+
 				if (data[index].resource_count != 0) {
 					m_memory->Deallocate(m_windows[index].table.GetAllocatedBuffer());
 					size_t table_memory = WindowTable::MemoryOf(data[index].resource_count);
@@ -5309,6 +5283,13 @@ namespace ECSEngine {
 
 		unsigned int UISystem::FindCharacterType(char character, CharacterType& character_type) const {
 			return function::GetAlphabetIndex(character, character_type);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void* UISystem::FindWindowResource(unsigned int window_index, Stream<char> name) const
+		{
+			return FindWindowResource(window_index, name.buffer, name.size);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5903,8 +5884,7 @@ namespace ECSEngine {
 
 		template<bool horizontal>
 		float2 UISystem::GetTextSpan(
-			const char* characters,
-			unsigned int character_count,
+			Stream<char> characters,
 			float font_size_x,
 			float font_size_y,
 			float character_spacing
@@ -5923,7 +5903,7 @@ namespace ECSEngine {
 				text_span.y = GetTextSpriteYScale(font_size_y);
 			}
 
-			for (size_t index = 0; index < character_count; index++) {
+			for (size_t index = 0; index < characters.size; index++) {
 				unsigned int character_uv_index = FindCharacterType(characters[index]);
 
 				size_t character_index = character_uv_index * 2;
@@ -5939,7 +5919,7 @@ namespace ECSEngine {
 				}
 				else {
 					text_span.y += scale.y + new_character_spacing;
-					text_span.x = function::Select(text_span.x < scale.x, scale.x, text_span.x);
+					text_span.x = std::max(text_span.x, scale.x);
 				}
 			}
 			if constexpr (horizontal) {
@@ -5948,7 +5928,7 @@ namespace ECSEngine {
 			return text_span;
 		}
 
-		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, const char*, unsigned int, float, float, float);
+		ECS_TEMPLATE_FUNCTION_BOOL_CONST(float2, UISystem::GetTextSpan, Stream<char>, float, float, float);
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -6715,7 +6695,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		const char* UISystem::GetDrawElementName(unsigned int window_index, unsigned int index) const
+		Stream<char> UISystem::GetDrawElementName(unsigned int window_index, unsigned int index) const
 		{
 			return m_windows[window_index].draw_element_names[index];
 		}
@@ -6774,6 +6754,20 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		unsigned int UISystem::GetWindowDrawerElement(unsigned int window_index, Stream<char> identifier) const
+		{
+			return m_windows[window_index].dynamic_resources.Find(identifier);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		UIWindowDynamicResource* UISystem::GetWindowDrawerElement(unsigned int window_index, unsigned int index)
+		{
+			return m_windows[window_index].dynamic_resources.GetValuePtrFromIndex(index);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id) {
 			ActionData action_data;
 			action_data.system = this;
@@ -6796,7 +6790,7 @@ namespace ECSEngine {
 			
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.clickable_handler.phase;
 			m_execute_events = !m_focused_window_data.ExecuteClickableHandler(&action_data);
-			m_frame_pacing = function::Select<unsigned int>(!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
+			m_frame_pacing = (!m_execute_events && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6820,7 +6814,7 @@ namespace ECSEngine {
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.hoverable_handler.phase;
 			bool executed = m_focused_window_data.ExecuteHoverableHandler(&action_data);
-			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW, ECS_UI_FRAME_PACING_LOW, m_frame_pacing);
+			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_LOW) ? ECS_UI_FRAME_PACING_LOW : m_frame_pacing;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6843,7 +6837,7 @@ namespace ECSEngine {
 
 			m_resources.thread_resources[thread_id].phase = m_focused_window_data.general_handler.phase;
 			bool executed = m_focused_window_data.ExecuteGeneralHandler(&action_data);
-			m_frame_pacing = function::Select<unsigned int>(executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM, ECS_UI_FRAME_PACING_MEDIUM, m_frame_pacing);
+			m_frame_pacing = (executed && m_frame_pacing < ECS_UI_FRAME_PACING_MEDIUM) ? ECS_UI_FRAME_PACING_MEDIUM : m_frame_pacing;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6983,20 +6977,11 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::GetWindowFromName(const char* name) const
-		{
-			size_t name_size = strlen(name);
-			return GetWindowFromName(Stream<char>(name, name_size));
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		unsigned int UISystem::GetWindowFromName(Stream<char> name) const
 		{
 			for (size_t index = 0; index < m_windows.size; index++) {
-				const char* window_name = GetWindowName(index);
-				size_t current_window_name_size = strlen(window_name);
-				if (function::CompareStrings(name, Stream<char>(window_name, current_window_name_size))) {
+				Stream<char> window_name = GetWindowName(index);
+				if (function::CompareStrings(name, window_name)) {
 					return index;
 				}
 			}
@@ -7012,7 +6997,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		const char* UISystem::GetWindowName(unsigned int window_index) const
+		Stream<char> UISystem::GetWindowName(unsigned int window_index) const
 		{
 			return m_windows[window_index].name;
 		}
@@ -7778,20 +7763,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::HashString(const char* string) const
-		{
-			return ResourceIdentifier(string).Hash();
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		unsigned int UISystem::HashString(LPCWSTR string) const {
-			return ResourceIdentifier(string).Hash();
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::IncrementWindowDynamicResource(unsigned int window_index, const char* name)
+		void UISystem::IncrementWindowDynamicResource(unsigned int window_index, Stream<char> name)
 		{
 			ResourceIdentifier identifier(name);
 			UIWindowDynamicResource* resource = m_windows[window_index].dynamic_resources.GetValuePtr(identifier);
@@ -7998,12 +7970,6 @@ namespace ECSEngine {
 			drawer_descriptor.export_scale = nullptr;
 			
 			initialize(m_windows[index].window_data, &drawer_descriptor, true);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::InitializeWindowDraw(const char* window_name, WindowDraw initialize) {
-			InitializeWindowDraw(Stream<char>(window_name, strlen(window_name)), initialize);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -8226,7 +8192,7 @@ namespace ECSEngine {
 				system->CreateEmptyWindow();
 				buffer += system->m_windows[index].LoadFromFile((const void*)buffer, window_name_stream);
 				system->SetWindowName(index, window_name_characters);
-				parameter->name = Stream<char>(system->m_windows[index].name, window_name_stream.size);
+				parameter->name = Stream<char>(system->m_windows[index].name.buffer, window_name_stream.size);
 				handler(parameter);
 			}
 #pragma endregion
@@ -8287,17 +8253,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::LoadUIFile(const wchar_t* filename, Stream<const char*>& window_names)
-		{
-			Stream<void> contents = ReadWholeFileBinary(filename, GetAllocatorPolymorphic(m_memory));
-
-			AddToUIFileData data;
-			data.window_names = &window_names;
-			return LoadUIFileBase(this, contents, &data, AddToUIFileChar);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		bool UISystem::LoadUIFile(Stream<wchar_t> filename, Stream<Stream<char>>& window_names)
 		{
 			Stream<void> contents = ReadWholeFileBinary(filename, GetAllocatorPolymorphic(m_memory));
@@ -8309,13 +8264,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::LoadDescriptorFile(const wchar_t* filename)
+		bool UISystem::LoadDescriptorFile(Stream<wchar_t> filename)
 		{
 			ECS_FILE_HANDLE file = 0;
 			ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_TEXT);
 
 			if (status == ECS_FILE_STATUS_OK) {
-				ScopedFile scoped_file(file);
+				ScopedFile scoped_file({ file });
 
 				unsigned int version = 0;
 				bool success = ReadFile(file, { &version, sizeof(version) });
@@ -8465,7 +8420,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void UISystem::PopUpFrameHandler(
-			const char* name, 
+			Stream<char> name, 
 			bool is_fixed,
 			bool destroy_at_first_click,
 			bool is_initialized,
@@ -8479,10 +8434,7 @@ namespace ECSEngine {
 			data.is_fixed = is_fixed;
 			data.is_initialized = is_initialized;
 
-			size_t name_size = strlen(name);
-			char* allocation = (char*)m_memory->Allocate(sizeof(char) * (name_size + 1));
-			memcpy(allocation, name, sizeof(char) * (name_size + 1));
-			data.name = allocation;
+			data.name = function::StringCopy(GetAllocatorPolymorphic(m_memory), name);
 			data.reset_when_window_is_destroyed = true;
 
 			UIActionHandler handler;
@@ -8530,7 +8482,7 @@ namespace ECSEngine {
 		void UISystem::PushFrameHandler(UIActionHandler handler)
 		{
 			handler.data = function::CopyNonZero(Allocator(), handler.data, handler.data_size);
-			m_frame_handlers.PushDownElements(0, m_frame_handlers.size);
+			m_frame_handlers.DisplaceElements(0, m_frame_handlers.size);
 			m_frame_handlers[0] = handler;
 			m_frame_handlers.size++;
 			m_frame_handlers.AssertCapacity();
@@ -8563,7 +8515,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::ReadFontDescriptionFile(const wchar_t* filename) {
+		void UISystem::ReadFontDescriptionFile(Stream<wchar_t> filename) {
 			// loading font uv descriptor;
 			size_t size = 2000;
 			void* uv_buffer = m_resource_manager->LoadTextFileImplementation(filename, &size);
@@ -8798,7 +8750,7 @@ namespace ECSEngine {
 		void UISystem::SetSprite(
 			UIDockspace* dockspace,
 			unsigned int border_index,
-			const wchar_t* texture,
+			Stream<wchar_t> texture,
 			float2 position,
 			float2 scale,
 			void** buffers,
@@ -8826,7 +8778,7 @@ namespace ECSEngine {
 		void UISystem::SetVertexColorSprite(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
-			const wchar_t* texture, 
+			Stream<wchar_t> texture, 
 			float2 position,
 			float2 scale, 
 			void** buffers, 
@@ -8854,7 +8806,7 @@ namespace ECSEngine {
 		void UISystem::SetVertexColorSprite(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
-			const wchar_t* texture, 
+			Stream<wchar_t> texture, 
 			float2 position, 
 			float2 scale, 
 			void** buffers, 
@@ -8882,7 +8834,7 @@ namespace ECSEngine {
 		void UISystem::SetSpriteCluster(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
-			const wchar_t* texture, 
+			Stream<wchar_t> texture, 
 			unsigned int count,
 			ECS_UI_DRAW_PHASE phase
 		)
@@ -8902,7 +8854,7 @@ namespace ECSEngine {
 		void UISystem::SetSpriteTextureToDraw(
 			UIDockspace* dockspace, 
 			unsigned int border_index, 
-			const wchar_t* _texture,
+			Stream<wchar_t> _texture,
 			ECS_UI_SPRITE_TYPE type,
 			ECS_UI_DRAW_PHASE phase
 		)
@@ -8944,8 +8896,8 @@ namespace ECSEngine {
 			DockspaceType type;
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 
-			new_scale.x = function::Select(new_scale.x > 0.0f, new_scale.x, 0.0f);
-			new_scale.y = function::Select(new_scale.y > 0.0f, new_scale.y, 0.0f);
+			new_scale.x = new_scale.x > 0.0f ? new_scale.x : 0.0f;
+			new_scale.y = new_scale.y > 0.0f ? new_scale.y : 0.0f;
 			dockspace->transform.scale = new_scale;
 		}
 
@@ -9007,12 +8959,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::SetWindowActions(const char* name, const UIWindowDescriptor& descriptor) {
-			SetWindowActions(Stream<char>(name, strlen(name)), descriptor);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::SetWindowActions(Stream<char> name, const UIWindowDescriptor& descriptor) {
 			unsigned int window_index = GetWindowFromName(name);
 			SetWindowActions(window_index, descriptor);
@@ -9027,13 +8973,6 @@ namespace ECSEngine {
 			m_windows[index].destroy_handler.data_size = handler.data_size;
 			m_windows[index].destroy_handler.data = handler.data;
 			m_windows[index].destroy_handler.action = handler.action;
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::SetWindowDestroyAction(const char* name, UIActionHandler handler)
-		{
-			SetWindowDestroyAction(ToStream(name), handler);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9057,23 +8996,10 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::SetWindowPrivateAction(const char* name, UIActionHandler handler) {
-			SetWindowPrivateAction(ToStream(name), handler);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::SetWindowPrivateAction(Stream<char> name, UIActionHandler handler) {
 			unsigned int window_index = GetWindowFromName(name);
 			ECS_ASSERT(window_index != -1);
 			SetWindowPrivateAction(window_index, handler);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::SetWindowName(unsigned int window_index, const char* name)
-		{
-			SetWindowName(window_index, ToStream(name));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9085,16 +9011,16 @@ namespace ECSEngine {
 			if (name.size == 0) {
 				m_windows[window_index].name_vertex_buffer.buffer = nullptr;
 				m_windows[window_index].name_vertex_buffer.size = 0;
+
+				m_windows[window_index].name.size = 0;
 			}
 			else {
-				void* new_allocation = m_memory->Allocate((sizeof(UISpriteVertex) * 6 + sizeof(char)) * name.size + sizeof(char), alignof(UISpriteVertex));
+				void* new_allocation = m_memory->Allocate((sizeof(UISpriteVertex) * 6 + sizeof(char)) * name.size, alignof(UISpriteVertex));
 				uintptr_t buffer = (uintptr_t)new_allocation;
 				m_windows[window_index].name_vertex_buffer.buffer = (UISpriteVertex*)new_allocation;
 				m_windows[window_index].name_vertex_buffer.size = name.size * 6;
 				buffer += sizeof(UISpriteVertex) * 6 * name.size;
-				m_windows[window_index].name = (char*)buffer;
-				name.CopyTo(buffer);
-				m_windows[window_index].name[name.size] = '\0';
+				m_windows[window_index].name.InitializeAndCopy(buffer, name);
 				float sprite_y_scale = GetTextSpriteYScale(m_descriptors.font.size);
 				ConvertCharactersToTextSprites(
 					name,
@@ -9293,10 +9219,9 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::RemoveWindowDynamicResource(unsigned int window_index, const char* name)
+		void UISystem::RemoveWindowDynamicResource(unsigned int window_index, Stream<char> name)
 		{
-			ResourceIdentifier identifier(name);
-			unsigned int index = m_windows[window_index].dynamic_resources.Find(identifier);
+			unsigned int index = GetWindowDrawerElement(window_index, name);
 			ECS_ASSERT(index != -1);
 			RemoveWindowDynamicResource(window_index, index);
 		}
@@ -9322,6 +9247,65 @@ namespace ECSEngine {
 			// The element allocations contains the starting coallesced allocation
 			m_memory->Deallocate(resource->element_allocations.buffer);
 			m_windows[window_index].dynamic_resources.EraseFromIndex(index);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::RemoveWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* buffer)
+		{
+			UIWindowDynamicResource* resource = GetWindowDrawerElement(window_index, index);
+			for (size_t index = 0; index < resource->element_allocations.size; index++) {
+				if (resource->element_allocations[index] == buffer) {
+					resource->element_allocations.RemoveSwapBack(index);
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::RemoveWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier)
+		{
+			UIWindowDynamicResource* resource = GetWindowDrawerElement(window_index, index);
+			for (size_t index = 0; index < resource->table_resources.size; index++) {
+				if (resource->table_resources[index].Compare(identifier)) {
+					resource->table_resources.RemoveSwapBack(index);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ReplaceWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* old_buffer, void* new_buffer)
+		{
+			UIWindowDynamicResource* resource = GetWindowDrawerElement(window_index, index);
+			for (size_t index = 0; index < resource->element_allocations.size; index++) {
+				if (resource->element_allocations[index] == old_buffer) {
+					resource->element_allocations[index] = new_buffer;
+					return;
+				}
+			}
+
+			ECS_ASSERT(false);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ReplaceWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier old_identifier, ResourceIdentifier new_identifier)
+		{
+			UIWindowDynamicResource* resource = GetWindowDrawerElement(window_index, index);
+			for (size_t index = 0; index < resource->table_resources.size; index++) {
+				if (resource->table_resources[index].Compare(old_identifier)) {
+					resource->table_resources[index] = new_identifier;
+					return;
+				}
+			}
+
+			ECS_ASSERT(false);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10078,13 +10062,6 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void UISystem::RestoreWindow(const char* window_name, const UIWindowDescriptor& descriptor)
-		{
-			RestoreWindow(ToStream(window_name), descriptor);
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
 		void UISystem::RestoreWindow(Stream<char> window_name, const UIWindowDescriptor& descriptor)
 		{
 			unsigned int window_index = GetWindowFromName(window_name);
@@ -10488,7 +10465,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				UIDockspaceBorder* border = (UIDockspaceBorder*)function::Select(border_index == 0, (uintptr_t)&dockspace->borders[1], (uintptr_t)&dockspace->borders[0]);
+				UIDockspaceBorder* border = border_index == 0 ? &dockspace->borders[1] : &dockspace->borders[0];
 				
 				// not assigning because the draw resources and border ones must be separate
 				parent_dockspace->borders[parent_border_index].is_dock = border->is_dock;
@@ -10602,16 +10579,6 @@ namespace ECSEngine {
 					dockspace->borders[border_index].active_window = index;
 					break;
 				}
-			}
-		}
-
-		// -----------------------------------------------------------------------------------------------------------------------------------
-
-		void UISystem::SetActiveWindow(const char* name)
-		{
-			unsigned int window_index = GetWindowFromName(name);
-			if (window_index != -1) {
-				SetActiveWindow(window_index);
 			}
 		}
 
@@ -10801,7 +10768,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::WriteDescriptorsFile(const wchar_t* filename) const
+		bool UISystem::WriteDescriptorsFile(Stream<wchar_t> filename) const
 		{
 			ECS_FILE_HANDLE file = 0;
 			ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file, ECS_FILE_ACCESS_BINARY | ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TRUNCATE_FILE);
@@ -10820,7 +10787,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		bool UISystem::WriteUIFile(const wchar_t* filename, CapacityStream<char>& error_message) const
+		bool UISystem::WriteUIFile(Stream<wchar_t> filename, CapacityStream<char>& error_message) const
 		{
 			ECS_FILE_HANDLE file = 0;
 			CapacityStream<char>* open_file_error_message = error_message.buffer != nullptr ? &error_message : nullptr;
@@ -11062,14 +11029,13 @@ namespace ECSEngine {
 				CloseFile(file);
 				if (!success) {
 					if (error_message.buffer != nullptr) {
-						Stream<char> first_error = ToStream(FIRST_ERROR);
-						Stream<char> second_error = ToStream(SECOND_ERROR);
+						Stream<char> first_error = FIRST_ERROR;
+						Stream<char> second_error = SECOND_ERROR;
 						error_message.AddStreamSafe(first_error);
 
-						char temp_characters[512];
-						size_t filename_size = wcslen(filename);
-						function::ConvertWideCharsToASCII(filename, temp_characters, filename_size, 512);
-						error_message.AddStreamSafe(Stream<char>(temp_characters, filename_size));
+						ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
+						function::ConvertWideCharsToASCII(filename, temp_characters);
+						error_message.AddStreamSafe(temp_characters);
 						error_message.AddStreamSafe(second_error);
 						error_message[error_message.size] = '\0';
 					}
@@ -11090,14 +11056,13 @@ namespace ECSEngine {
 				const char* SECOND_ERROR = " to write UI windows failed!";
 
 				if (error_message.buffer != nullptr) {
-					Stream<char> first_error = ToStream(FIRST_ERROR);
-					Stream<char> second_error = ToStream(SECOND_ERROR);
+					Stream<char> first_error = FIRST_ERROR;
+					Stream<char> second_error = SECOND_ERROR;
 					error_message.AddStreamSafe(first_error);
 
-					char temp_characters[512];
-					size_t filename_size = wcslen(filename);
-					function::ConvertWideCharsToASCII(filename, temp_characters, filename_size, 512);
-					error_message.AddStreamSafe(Stream<char>(temp_characters, filename_size));
+					ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
+					function::ConvertWideCharsToASCII(filename, temp_characters);
+					error_message.AddStreamSafe(temp_characters);
 					error_message.AddStreamSafe(second_error);
 					error_message[error_message.size] = '\0';
 				}
@@ -11213,7 +11178,7 @@ namespace ECSEngine {
 						if (system->GetWindowFromName(data->name) == -1) {
 							system->PopFrameHandler();
 							if (data->deallocate_name) {
-								system->m_memory->Deallocate(data->name);
+								system->m_memory->Deallocate(data->name.buffer);
 							}
 							return;
 						}
@@ -11226,7 +11191,7 @@ namespace ECSEngine {
 						if (window_index == -1) {
 							system->PopFrameHandler();
 							if (data->deallocate_name) {
-								system->m_memory->Deallocate(data->name);
+								system->m_memory->Deallocate(data->name.buffer);
 							}
 							return;
 						}
@@ -11421,11 +11386,9 @@ namespace ECSEngine {
 				TranslateText(position.x + data->text_offset.x, position.y + data->text_offset.y, vertices, 0, 0);
 			}
 			else {
-				size_t text_count = strlen(data->text);
-
 				size_t before_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
 				system->ConvertCharactersToTextSprites(
-					{ data->text, text_count },
+					data->text,
 					{ position.x + data->text_offset.x, position.y + data->text_offset.y }, 
 					(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE], 
 					data->text_color, 
@@ -11434,28 +11397,27 @@ namespace ECSEngine {
 					data->character_spacing,
 					!data->vertical_text
 				);
-				counts[ECS_TOOLS_UI_TEXT_SPRITE] += text_count * 6;
-
+				counts[ECS_TOOLS_UI_TEXT_SPRITE] += data->text.size * 6;
 				if (data->horizontal_cull || data->vertical_cull) {
-					Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>((UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE] + before_count, text_count * 6);
+					Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>((UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE] + before_count, data->text.size * 6);
 					float2 text_span;
 					if (data->vertical_text) {
 						text_span = GetTextSpan(vertices, false);
 						if (data->horizontal_cull) {
 							if (position.x + data->text_offset.x + text_span.x > data->horizontal_cull_bound) {
-								counts[ECS_TOOLS_UI_TEXT_SPRITE] -= text_count * 6;
+								counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6;
 							}
 						}
 						if (data->vertical_cull) {
 							size_t validated_vertices = CullTextSprites<3>(vertices, data->vertical_cull_bound);
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= text_count * 6 - validated_vertices;
+							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
 						}
 					}
 					else {
 						text_span = GetTextSpan(vertices);
 						if (data->horizontal_cull) {
 							size_t validated_vertices = CullTextSprites<0>(vertices, data->horizontal_cull_bound);
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= text_count * 6 - validated_vertices;
+							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
 						}
 					}
 
@@ -11500,11 +11462,12 @@ namespace ECSEngine {
 
 			UIDefaultClickableData* data = (UIDefaultClickableData*)_data;
 
-			if (mouse_tracker->LeftButton() == MBPRESSED || mouse_tracker->LeftButton() == MBHELD) {
+			HID::MouseButtonState left_state = mouse_tracker->LeftButton();
+			if (left_state == MBPRESSED || left_state == MBHELD) {
 				action_data->data = data->hoverable_handler.data;
 				data->hoverable_handler.action(action_data);
 			}
-			else if (mouse_tracker->LeftButton() == MBRELEASED) {
+			else if (left_state == MBRELEASED) {
 				if (IsPointInRectangle(
 					mouse_position,
 					position,
@@ -11555,7 +11518,7 @@ namespace ECSEngine {
 
 								GeneralWrapperData* data = (GeneralWrapperData*)_data;
 
-								data->clickable_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM;
+								data->clickable_handler.phase = ECS_UI_DRAW_SYSTEM;
 								// Change the clickable
 								system->m_focused_window_data.ChangeClickableHandler(data->clickable_position, data->clickable_scale, &data->clickable_handler);
 
@@ -12042,13 +12005,13 @@ namespace ECSEngine {
 			UITooltipHoverableData* data = (UITooltipHoverableData*)_data;
 			system->m_focused_window_data.always_hoverable = true;
 			position += data->base.offset;
-			position.x += function::Select(data->base.offset_scale.x, scale.x, 0.0f);
-			position.y += function::Select(data->base.offset_scale.y, scale.y, 0.0f);
+			position.x += data->base.offset_scale.x ? scale.x : 0.0f;
+			position.y += data->base.offset_scale.y ? scale.y : 0.0f;
 
 			system->ConfigureToolTipBase(&data->base);
 
-			position.x = function::Select(position.x < -0.99f, -0.99f, position.x);
-			position.y = function::Select(position.y < -0.99f, -0.99f, position.y);
+			position.x = position.x < -0.99f ? -0.99f : position.x;
+			position.y = position.y < -0.99f ? -0.99f : position.y;
 
 			size_t initial_counts[ECS_TOOLS_UI_MATERIALS];
 			for (size_t index = 0; index < ECS_TOOLS_UI_MATERIALS; index++) {
@@ -12074,8 +12037,8 @@ namespace ECSEngine {
 			draw_data.max_bounds.x += system->m_descriptors.misc.tool_tip_padding.x;
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = function::Select(draw_data.max_bounds.x > 0.99f, draw_data.max_bounds.x - 0.99f, 0.0f);
-			translation.y = function::Select(draw_data.max_bounds.y > 0.99f, draw_data.max_bounds.y - 0.99f, 0.0f);
+			translation.x = draw_data.max_bounds.x > 0.99f ? draw_data.max_bounds.x - 0.99f : 0.0f;
+			translation.y = draw_data.max_bounds.y > 0.99f ? draw_data.max_bounds.y - 0.99f : 0.0f;
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
 				for (size_t material = 0; material < ECS_TOOLS_UI_MATERIALS; material++) {

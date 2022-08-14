@@ -364,10 +364,11 @@ void FileExplorerPasteElements(ActionData* action_data) {
 
 		char* _error_message = (char*)ECS_MALLOCA(sizeof(char) * total_buffer_size);
 		CapacityStream<char> error_message(_error_message, 0, total_buffer_size);
-		error_message.Copy(ToStream(BASE_ERROR_MESSAGE));
+		error_message.Copy(BASE_ERROR_MESSAGE);
 
 		for (size_t index = 0; index < invalid_files.size; index++) {
 			error_message.Add('\n');
+			error_message.Add('\t');
 			function::ConvertWideCharsToASCII(data->copied_files[invalid_files[index]], error_message);
 		}
 
@@ -460,7 +461,7 @@ void FileExplorerDeleteSelection(ActionData* action_data) {
 		char* temp_allocation = (char*)ECS_MALLOCA(sizeof(char) * total_size + 8);
 		CapacityStream<char> error_message(temp_allocation, 0, total_size + 8);
 
-		error_message.Copy(ToStream(ERROR_MESSAGE));
+		error_message.Copy(ERROR_MESSAGE);
 		for (size_t index = 0; index < invalid_files.size; index++) {
 			error_message.Add('\n');
 			function::ConvertWideCharsToASCII(data->selected_files[invalid_files[index]], error_message);
@@ -546,14 +547,14 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	path_filename.size -= extension_size;
 	ascii_stream[path_filename.size] = '\0';
 
-	constexpr size_t LABEL_CONFIGURATION = UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
+	constexpr size_t LABEL_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
 		| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_TEXT_PARAMETERS;
 
 	float2 current_position = drawer->GetCurrentPosition();
-	float label_horizontal_scale = drawer->GetSquareScale(THUMBNAIL_SIZE).x;
+	float label_horizontal_scale = drawer->GetSquareScaleScaled(THUMBNAIL_SIZE).x;
 
 	UIConfigWindowDependentSize transform;	
-	transform.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
+	transform.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 	transform.scale_factor = drawer->GetWindowSizeFactors(transform.type, { label_horizontal_scale, drawer->layout.default_element_y });
 	config->AddFlag(transform);
 	UIConfigTextParameters text_parameters;
@@ -582,7 +583,7 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	config->flag_count -= 2;
 
 	UIConfigGeneralAction general_action;
-	general_action.handler = { FileExplorerLabelRenameCallback, _data, sizeof(*_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+	general_action.handler = { FileExplorerLabelRenameCallback, _data, sizeof(*_data), ECS_UI_DRAW_SYSTEM };
 	config->AddFlag(general_action);
 
 	drawer->Rectangle(
@@ -594,11 +595,11 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 
 	config->flag_count--;
 
-	ascii_stream[path_filename.size] = function::Select<char>(extension_size > 0, '.', '\0');
+	ascii_stream[path_filename.size] = extension_size > 0 ? '.' : '\0';
 	ascii_stream.size = path_filename.size + extension_size;
 
 	float2 font_size = drawer->GetFontSize();
-	float2 text_span = drawer->system->GetTextSpan(ascii_stream.buffer, ascii_stream.size, font_size.x, font_size.y, drawer->font.character_spacing);
+	float2 text_span = drawer->TextSpan(ascii_stream, font_size, drawer->font.character_spacing);
 	text_span.x += 2.0f * drawer->system->m_descriptors.misc.tool_tip_padding.x;
 
 	float position_x = AlignMiddle(current_position.x, label_horizontal_scale, text_span.x);
@@ -608,6 +609,7 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	tooltip_data.base.offset_scale.y = true;
 	tooltip_data.base.offset.y = TOOLTIP_OFFSET;
 	tooltip_data.base.offset.x = position_x - current_position.x;
+	tooltip_data.base.font_size = font_size;
 	
 	drawer->AddTextTooltipHoverable(current_position, { label_horizontal_scale, drawer->layout.default_element_y }, &tooltip_data);
 }
@@ -755,7 +757,7 @@ void FileExplorerDrag(ActionData* action_data) {
 			Color theme_color = system->m_windows[window_index].descriptors->color_theme.theme;
 			theme_color.alpha = 100;
 
-			float2 hover_scale = system->GetSquareScale(THUMBNAIL_SIZE);
+			float2 hover_scale = system->GetSquareScale(THUMBNAIL_SIZE) * system->m_windows[window_index].zoom;
 			float2 hover_position = { mouse_position.x - hover_scale.x * 0.5f, mouse_position.y - hover_scale.y + THUMBNAIL_TO_LABEL_SPACING };
 
 			// The theme transparent hover
@@ -1008,7 +1010,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 
 		InternalData* data = (InternalData*)_data;
 		ECS_TEMP_ASCII_STRING(error_message, 1024);
-		error_message.Copy(ToStream("One or more files could not be copied. These are:"));
+		error_message.Copy("One or more files could not be copied. These are:");
 		unsigned int error_files_count = 0;
 		for (size_t index = 0; index < data->data->overwrite_files.size; index++) {
 			if (data->states[index]) {
@@ -1253,7 +1255,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 
 	FunctorData functor_data = { editor_state, data, &new_preloads, was_verified };
 
-	auto functor = [](const wchar_t* path, void* _data) {
+	auto functor = [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		EDITOR_STATE(data->editor_state);
 
@@ -1263,7 +1265,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 		unsigned int total_pixel_count = texture_dimensions.x * texture_dimensions.y;
 		if (total_pixel_count > 512 * 512) {
 			// Check to see if this texture already exists
-			Stream<wchar_t> stream_path = ToStream(path);
+			Stream<wchar_t> stream_path = path;
 			size_t file_last_write = OS::GetFileLastWrite(path);
 			bool is_alive = false;
 			for (unsigned int index = 0; index < data->explorer_data->preloaded_textures.size; index++) {
@@ -1290,7 +1292,7 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 
 	ECS_TEMP_STRING(assests_folder, 256);
 	GetProjectAssetsFolder(editor_state, assests_folder);
-	const wchar_t* extensions[] = {
+	Stream<wchar_t> extensions[] = {
 		L".jpg",
 		L".png",
 		L".tiff",
@@ -1341,7 +1343,7 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 
 		Semaphore* semaphore = (Semaphore*)editor_allocator->Allocate(sizeof(Semaphore));
 		semaphore->ClearCount();
-		unsigned int launch_thread_count = function::Select<unsigned int>(per_thread_textures > 0, thread_count, per_thread_remainder);
+		unsigned int launch_thread_count = per_thread_textures > 0 ? thread_count : per_thread_remainder;
 		semaphore->target.store(launch_thread_count, ECS_RELAXED);
 
 		for (size_t index = 0; index < launch_thread_count; index++) {
@@ -1375,7 +1377,7 @@ void FileExplorerReleaseMeshThumbnail(EditorState* editor_state, FileExplorerDat
 
 	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValueFromIndex(table_index);
 	// Release the resource view and the memory allocated for the resource identifier
-	ResourceIdentifier identifier = explorer_data->mesh_thumbnails.GetIdentifiers()[table_index];
+	ResourceIdentifier identifier = explorer_data->mesh_thumbnails.GetIdentifierFromIndex(table_index);
 
 	editor_allocator->Deallocate(identifier.ptr);
 	// Release the resources only if the thumbnail could be loaded
@@ -1393,20 +1395,19 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 	FileExplorerData* data = editor_state->file_explorer_data;
 
-	Stream<FileExplorerMeshThumbnail> thumbnails = data->mesh_thumbnails.GetValueStream();
-	const ResourceIdentifier* identifiers = data->mesh_thumbnails.GetIdentifiers();
-	// Walk through the thumbnails and if one such thumbnail doesn't exist, kick it
-	for (int64_t index = 0; index < (int64_t)thumbnails.size; index++) {
-		if (data->mesh_thumbnails.IsItemAt(index)) {
-			Stream<wchar_t> path = { identifiers[index].ptr, identifiers[index].size };
-			// If the mesh was changed or deleted, remove it
-			size_t last_write = OS::GetFileLastWrite(path.buffer);
-			if (!ExistsFileOrFolder(path) || last_write > thumbnails[index].last_write_time) {
-				FileExplorerReleaseMeshThumbnail(editor_state, data, index);
-				index--;
-			}
+	data->mesh_thumbnails.ForEachIndex([&](unsigned int index) {
+		ResourceIdentifier identifier = data->mesh_thumbnails.GetIdentifierFromIndex(index);
+
+		Stream<wchar_t> path = { identifier.ptr, identifier.size };
+		// If the mesh was changed or deleted, remove it
+		size_t last_write = OS::GetFileLastWrite(path.buffer);
+		if (!ExistsFileOrFolder(path) || last_write > data->mesh_thumbnails.GetValueFromIndex(index).last_write_time) {
+			FileExplorerReleaseMeshThumbnail(editor_state, data, index);
+			return true;
 		}
-	}
+
+		return false;
+	});
 
 	struct FunctorData {
 		MemoryManager* editor_allocator;
@@ -1417,7 +1418,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 
 	FunctorData functor_data = { editor_allocator, editor_state->resource_manager, data };
 
-	auto functor = [](const wchar_t* path, void* _data) {
+	auto functor = [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 
 		// If the path doesn't exist, record it, add it to the GPU tasks and end the loop
@@ -1456,7 +1457,7 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 
 	ECS_TEMP_STRING(assests_folder, 256);
 	GetProjectAssetsFolder(editor_state, assests_folder);
-	const wchar_t* extensions[] = {
+	Stream<wchar_t> extensions[] = {
 		L".gltf",
 		L".glb",
 	};
@@ -1537,10 +1538,10 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_RIGHT_CLICK_ROW_COUNT);
 			data->file_right_click_handlers.InitializeFromBuffer(allocation, FILE_RIGHT_CLICK_ROW_COUNT, FILE_RIGHT_CLICK_ROW_COUNT);
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_OPEN] = { OpenFileWithDefaultApplicationStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
+			data->file_right_click_handlers[FILE_RIGHT_CLICK_RENAME] = { RenameFileWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
 			data->file_right_click_handlers[FILE_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
@@ -1552,9 +1553,9 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FOLDER_RIGHT_CLICK_ROW_COUNT);
 			data->folder_right_click_handlers.InitializeFromBuffer(allocation, FOLDER_RIGHT_CLICK_ROW_COUNT, FOLDER_RIGHT_CLICK_ROW_COUNT);
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_OPEN] = { FileExplorerChangeDirectoryFromFile, editor_state, 0 };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_SHOW_IN_EXPLORER] = { LaunchFileExplorerStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_DELETE] = { FileExplorerDeleteSelection, data, 0, ECS_UI_DRAW_SYSTEM };
+			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_RENAME] = { RenameFolderWizardStreamAction, &data->right_click_stream, 0, ECS_UI_DRAW_SYSTEM };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_PATH] = { CopyPath, &data->right_click_stream, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_COPY_SELECTION] = { FileExplorerCopySelection, data, 0 };
 			data->folder_right_click_handlers[FOLDER_RIGHT_CLICK_CUT_SELECTION] = { FileExplorerCutSelection, data, 0 };
@@ -1564,7 +1565,7 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 			ResourceIdentifier identifier;
 			unsigned int hash;
 
-#define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(ToStream(string)); \
+#define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(string); \
 ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			ADD_FUNCTOR(TextureDraw, L".jpg");
@@ -1625,7 +1626,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 	float row_padding = drawer.layout.next_row_padding;
 	float next_row_offset = drawer.layout.next_row_y_offset;
-	drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NOTHING);
+	drawer.SetDrawMode(ECS_UI_DRAWER_NOTHING);
 	drawer.SetRowPadding(0.001f);
 	drawer.SetNextRowYOffset(0.0025f);
 
@@ -1676,6 +1677,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	header_config.flag_count--;
 	absolute_transform.position.x += absolute_transform.scale.x + border.thickness;
 	absolute_transform.scale.x = drawer.layout.default_element_x * 2.5f;
+	absolute_transform.scale.y = drawer.layout.default_element_y;
 	header_config.AddFlags(hint, absolute_transform);
 	drawer.TextInput(
 		HEADER_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_NO_NAME,
@@ -1700,7 +1702,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 		size_t total_path_size = project_file->path.size + 1;
 		char* delimiter = strchr(ascii_path.buffer, ECS_OS_PATH_SEPARATOR_ASCII);
-		delimiter = (char*)function::Select<uintptr_t>(delimiter == nullptr, (uintptr_t)ascii_path.buffer, (uintptr_t)delimiter);
+		delimiter = delimiter == nullptr ? ascii_path.buffer : delimiter;
 		ASCIIPath current_path(ascii_path.buffer, delimiter - ascii_path.buffer);
 
 		const auto mouse_state = drawer.system->m_mouse_tracker->LeftButton();
@@ -1718,7 +1720,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			header_config.AddFlag(absolute_transform);
 
 			drawer.Button(
-				HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
+				HEADER_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 				header_config,
 				current_path.buffer, 
 				{ FileExplorerPathButtonAction, &button_data, sizeof(button_data) }
@@ -1736,7 +1738,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			absolute_transform.scale.x = drawer.GetLabelScale("\\").x;
 			header_config.AddFlag(absolute_transform);
 			drawer.TextLabel(
-				HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
+				HEADER_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 				header_config,
 				"\\"
 			);
@@ -1746,7 +1748,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			current_path.buffer = current_path.buffer + current_path.size + 1;
 			delimiter = strchr(current_path.buffer, ECS_OS_PATH_SEPARATOR_ASCII);
-			delimiter = (char*)function::Select<uintptr_t>(delimiter == nullptr, (uintptr_t)current_path.buffer, (uintptr_t)delimiter);
+			delimiter = delimiter == nullptr ? current_path.buffer : delimiter;
 			current_path.size = (uintptr_t)delimiter - (uintptr_t)current_path.buffer;
 		}
 
@@ -1761,7 +1763,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 		float label_scale = drawer.GetLabelScale(current_path.buffer).x;
 		drawer.Button(
-			HEADER_CONFIGURATION | UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
+			HEADER_CONFIGURATION | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y,
 			header_config, 
 			current_path.buffer, 
 			{ FileExplorerPathButtonAction, &button_data, sizeof(button_data) }
@@ -1786,15 +1788,15 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	// Element Draw
 	if (!initialize) {
 
-		drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE, 2, THUMBNAIL_TO_LABEL_SPACING);
+		drawer.SetDrawMode(ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE, 2, THUMBNAIL_TO_LABEL_SPACING);
 		UIDrawConfig config;
 
 		UIConfigRelativeTransform transform;
-		transform.scale = drawer.GetRelativeTransformFactorsZoomed(drawer.GetSquareScale(THUMBNAIL_SIZE));
+		transform.scale = drawer.GetRelativeTransformFactors(drawer.GetSquareScaleScaled(THUMBNAIL_SIZE));
 		config.AddFlag(transform);
 
 		UIConfigClickableAction drag_click;
-		drag_click = { FileExplorerDrag, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		drag_click = { FileExplorerDrag, data, 0, ECS_UI_DRAW_SYSTEM };
 		config.AddFlag(drag_click);
 
 		ForEachData for_each_data;
@@ -1809,7 +1811,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			data->flags = function::ClearFlag(data->flags, FILE_EXPLORER_FLAGS_GET_SELECTED_FILES_FROM_INDICES);
 		}
 
-		auto directory_functor = [](const wchar_t* path, void* __data) {
+		auto directory_functor = [](Stream<wchar_t> path, void* __data) {
 			ForEachData* _data = (ForEachData*)__data;
 
 			FileExplorerData* data = _data->editor_state->file_explorer_data;
@@ -1833,7 +1835,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			if (is_valid) {
 				bool is_selected = FileExplorerIsElementSelected(data, stream_path);
-				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, stream_path), COLOR_CUT_ALPHA, 255);
+				unsigned char color_alpha = FileExplorerIsElementCut(data, stream_path) ? COLOR_CUT_ALPHA : 255;
 
 				Color white_color = ECS_COLOR_WHITE;
 				white_color.alpha = color_alpha;
@@ -1915,7 +1917,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			return true;
 		};
 
-		auto file_functor = [](const wchar_t* path, void* __data) {
+		auto file_functor = [](Stream<wchar_t> path, void* __data) {
 			ForEachData* _data = (ForEachData*)__data;
 
 			FileExplorerData* data = _data->editor_state->file_explorer_data;
@@ -1946,7 +1948,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
 			if (is_valid && extension.size > 0) {
 				bool is_selected = FileExplorerIsElementSelected(data, stream_path);
-				unsigned char color_alpha = function::Select(FileExplorerIsElementCut(data, stream_path), COLOR_CUT_ALPHA, 255);
+				unsigned char color_alpha = FileExplorerIsElementCut(data, stream_path) ? COLOR_CUT_ALPHA : 255;
 
 				FileFunctorData functor_data;
 				functor_data.for_each_data = _data;
@@ -2103,7 +2105,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					constexpr size_t ERROR_BUFFER_SIZE = 8192;
 					size_t drawer_temp_allocator_marker = drawer.GetTempAllocatorMarker();
 					CapacityStream<char> error_files(drawer.GetTempBuffer(ERROR_BUFFER_SIZE), 0, ERROR_BUFFER_SIZE);
-					error_files.Copy(ToStream("One or more files/folders could not be copied. These are: "));
+					error_files.Copy("One or more files/folders could not be copied. These are: ");
 
 					// For the files that already exist, allocate a buffer of indices that will point to
 					// the invalid ones and at the final stage when commiting to the overwrite window

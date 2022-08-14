@@ -7,7 +7,7 @@
 
 using namespace ECSEngine;
 
-const wchar_t* METAFILE_EXTENSIONS[] = {
+Stream<wchar_t> METAFILE_EXTENSIONS[] = {
 	L".jpg",
 	L".jpeg",
 	L".png",
@@ -77,13 +77,12 @@ void RemoveProjectUnbindedMetafiles(const EditorState* editor_state)
 
 	// Removes every file
 	ForEachInDirectoryRecursive(metafile_folder, &functor_data,
-		[](const wchar_t* path, void* _data) {
+		[](Stream<wchar_t> path, void* _data) {
 			FunctorData* data = (FunctorData*)_data;
-			Stream<wchar_t> stream_path = ToStream(path);
-			FromMetafilePathToAssetsPath(data->editor_state, data->path, stream_path);
+			FromMetafilePathToAssetsPath(data->editor_state, data->path, path);
 
 			if (!ExistsFileOrFolder(data->path)) {
-				bool success = RemoveFolder(stream_path);
+				bool success = RemoveFolder(path);
 				if (!success) {
 					data->remove_success = false;
 				}
@@ -92,23 +91,22 @@ void RemoveProjectUnbindedMetafiles(const EditorState* editor_state)
 			data->path.size = 0;
 			return true;
 		},
-		[](const wchar_t* path, void* _data) {
+		[](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 
-		Stream<wchar_t> stream_path = ToStream(path);
-		Stream<wchar_t> extension = function::PathExtension(stream_path);
+		Stream<wchar_t> extension = function::PathExtension(path);
 		// If it is not a .meta file, delete it
-		if (!function::CompareStrings(extension, ToStream(METAFILE_EXTENSION))) {
-			bool success = RemoveFile(stream_path);
+		if (!function::CompareStrings(extension, METAFILE_EXTENSION)) {
+			bool success = RemoveFile(path);
 			if (!success) {
 				data->remove_success = false;
 			}
 		}
 		else {
-			FromMetafilePathToAssetsPath(data->editor_state, data->path, stream_path);
+			FromMetafilePathToAssetsPath(data->editor_state, data->path, path);
 			// If the associated file does not exist, remove this meta file
 			if (!ExistsFileOrFolder(data->path)) {
-				bool success = RemoveFile(stream_path);
+				bool success = RemoveFile(path);
 				if (!success) {
 					data->remove_success = false;
 				}
@@ -161,12 +159,11 @@ void CreateProjectMissingMetafiles(EditorState* editor_state)
 	FunctorData functor_data = { editor_state, false };
 
 	// Create all the necessary subdirectories
-	ForEachDirectoryRecursive(assets_folder, &functor_data, [](const wchar_t* path, void* _data) {
+	ForEachDirectoryRecursive(assets_folder, &functor_data, [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 
-		Stream<wchar_t> stream_path = ToStream(path);
 		ECS_TEMP_STRING(metafile_path, 256);
-		FromAssetsPathToMetafilePath(data->editor_state, metafile_path, stream_path);
+		FromAssetsPathToMetafilePath(data->editor_state, metafile_path, path);
 		// Remove the .meta
 		metafile_path.size -= 5;
 		if (!ExistsFileOrFolder(metafile_path)) {
@@ -179,19 +176,18 @@ void CreateProjectMissingMetafiles(EditorState* editor_state)
 	});
 
 	if (functor_data.error) {
-		EditorSetConsoleError(ToStream("An error has occured when creating metafile folder."));
+		EditorSetConsoleError("An error has occured when creating metafile folder.");
 	}
 
-	ForEachFileInDirectoryRecursiveWithExtension(assets_folder, Stream<const wchar_t*>(METAFILE_EXTENSIONS, METAFILE_EXTENSION_COUNT), editor_state,
-		[](const wchar_t* path, void* _data) {
+	ForEachFileInDirectoryRecursiveWithExtension(assets_folder, Stream<Stream<wchar_t>>(METAFILE_EXTENSIONS, METAFILE_EXTENSION_COUNT), editor_state,
+		[](Stream<wchar_t> path, void* _data) {
 			EditorState* data = (EditorState*)_data;
 
-			Stream<wchar_t> stream_path = ToStream(path);
 			ECS_TEMP_STRING(metafile_path, 256);
-			FromAssetsPathToMetafilePath(data, metafile_path, stream_path);
+			FromAssetsPathToMetafilePath(data, metafile_path, path);
 
 			if (!ExistsFileOrFolder(metafile_path)) {
-				CreateProjectMetafile(data, stream_path);
+				CreateProjectMetafile(data, path);
 			}
 		return true;
 	});
@@ -199,7 +195,7 @@ void CreateProjectMissingMetafiles(EditorState* editor_state)
 
 void FromMetafilePathToAssetsPath(const EditorState* editor_state, CapacityStream<wchar_t>& demangled_path, Stream<wchar_t> path)
 {
-	Stream<wchar_t> relative_path = function::PathRelativeTo(path, ToStream(PROJECT_METAFILES_RELATIVE_PATH));
+	Stream<wchar_t> relative_path = function::PathRelativeTo(path, PROJECT_METAFILES_RELATIVE_PATH);
 	GetProjectAssetsFolder(editor_state, demangled_path);
 	demangled_path.Add(ECS_OS_PATH_SEPARATOR);
 
@@ -214,7 +210,7 @@ void FromMetafilePathToAssetsPath(const EditorState* editor_state, CapacityStrea
 void FromAssetsPathToMetafilePath(const EditorState* editor_state, CapacityStream<wchar_t>& mangled_path, Stream<wchar_t> path)
 {
 	// Extract the relative path to the assets folder
-	Stream<wchar_t> relative_path = function::PathRelativeTo(path, ToStream(PROJECT_ASSETS_RELATIVE_PATH));
+	Stream<wchar_t> relative_path = function::PathRelativeTo(path, PROJECT_ASSETS_RELATIVE_PATH);
 
 	// Copy the metafile folder path
 	GetProjectMetafilesFolder(editor_state, mangled_path);
@@ -223,7 +219,7 @@ void FromAssetsPathToMetafilePath(const EditorState* editor_state, CapacityStrea
 	mangled_path.AddStream(relative_path);
 
 	// Append the .meta at the end
-	mangled_path.AddStreamSafe(ToStream(METAFILE_EXTENSION));
+	mangled_path.AddStreamSafe(METAFILE_EXTENSION);
 	mangled_path[mangled_path.size] = L'\0';
 }
 
@@ -232,7 +228,7 @@ void WriteMetafileDefaultValues(ECSEngine::ECS_FILE_HANDLE file_handle, Stream<w
 	Stream<wchar_t> extension = function::PathExtension(path);
 	size_t index = 0;
 	for (; index < METAFILE_EXTENSION_COUNT; index++) {
-		if (function::CompareStrings(extension, ToStream(METAFILE_EXTENSIONS[index]))) {
+		if (function::CompareStrings(extension, METAFILE_EXTENSIONS[index])) {
 			METAFILE_WRITE_DEFAULT_VALUES[index](file_handle);
 			// Exit the loop
 			index = METAFILE_EXTENSION_COUNT + 1;

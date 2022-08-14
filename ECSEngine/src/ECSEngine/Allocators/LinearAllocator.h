@@ -4,6 +4,9 @@
 
 namespace ECSEngine {
 
+#define ECS_STACK_LINEAR_ALLOCATOR(name, capacity)	char allocator_bytes##name[capacity]; \
+													LinearAllocator name(allocator_bytes##name, capacity);
+
 	struct ECSENGINE_API LinearAllocator
 	{
 		LinearAllocator() : m_buffer(nullptr), m_capacity(0), m_top(0), m_marker(0) {}

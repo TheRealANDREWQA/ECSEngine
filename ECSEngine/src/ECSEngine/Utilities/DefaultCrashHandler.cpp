@@ -15,8 +15,8 @@ namespace ECSEngine {
 		World* world = (World*)_data;
 
 		ECS_STACK_CAPACITY_STREAM(char, full_error_message, ECS_KB);
-		full_error_message.Copy(ToStream(error_string));
-		full_error_message.AddStream(ToStream("\nThe call stack of the crash: "));
+		full_error_message.Copy(error_string);
+		full_error_message.AddStream("\nThe call stack of the crash: ");
 
 		Console* console = GetConsole();
 
@@ -25,7 +25,7 @@ namespace ECSEngine {
 		console->Error(full_error_message);
 	}
 
-	void SetDefaultCrashHandler(World* world, Stream<wchar_t*> module_search_path) {
+	void SetDefaultCrashHandler(World* world, Stream<Stream<wchar_t>> module_search_path) {
 		OS::InitializeSymbolicLinksPaths(module_search_path);
 		SetCrashHandler(DefaultCrashHandlerFunction, world);
 	}

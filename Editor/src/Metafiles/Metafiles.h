@@ -4,7 +4,7 @@
 struct EditorState;
 
 // This is an array of extensions that can generate metafile extensions
-extern const wchar_t* METAFILE_EXTENSIONS[];
+extern ECSEngine::Stream<wchar_t> METAFILE_EXTENSIONS[];
 extern size_t METAFILE_EXTENSION_COUNT;
 
 enum EDTIOR_METAFILE {

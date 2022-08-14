@@ -44,6 +44,8 @@ namespace ECSEngine {
 }
 
 #define STRING(s) #s
+// Places the type followed by a comma with the stringified name
+#define WITH_NAME(type) type, ##type
 #define ECS_CACHE_LINE_SIZE 64
 #define ECS_MICROSOFT_WRL using namespace Microsoft::WRL
 #define ECS_VECTORCALL __vectorcall
@@ -86,26 +88,6 @@ struct_name.field9 = field9;
 #define ECS_FORWARD_STRUCT_MEMBERS_10(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9, field10) ECS_FORWARD_STRUCT_MEMBERS_9(struct_name, field1, field2, field3, field4, field5, field6, field7, field8, field9); \
 struct_name.field10 = field10;
 
-#define ECS_FORWARD_STREAM(stream, function, ...) if (stream[stream.size] == '\0') {\
-												return function(stream.buffer, __VA_ARGS__); \
-											} \
-											else { \
-												char _null_path[512]; \
-												CapacityStream<char> null_path(_null_path, 0, 512); \
-												null_path.Copy(stream); \
-												null_path[stream.size] = '\0'; \
-												return function(null_path.buffer, __VA_ARGS__); \
-
-#define ECS_FORWARD_STREAM_WIDE(stream, function, ...) if (stream[stream.size] == L'\0') {\
-												return function(stream.buffer, __VA_ARGS__); \
-											} \
-											else { \
-												wchar_t _null_path[512]; \
-												CapacityStream<wchar_t> null_path(_null_path, 0, 512); \
-												null_path.Copy(stream); \
-												null_path[stream.size] = L'\0'; \
-												return function(null_path.buffer, __VA_ARGS__); \
-											}
 
 #define ECS_TEMPLATE_FUNCTION(return_type, function_name, ...) template ECSENGINE_API return_type function_name(__VA_ARGS__)
 

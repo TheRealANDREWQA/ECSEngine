@@ -9,7 +9,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_RELATIVE_TRANSFORM = 1 << 1;
 		constexpr size_t UI_CONFIG_MAKE_SQUARE = 1 << 2;
 		constexpr size_t UI_CONFIG_WINDOW_DEPENDENT_SIZE = 1 << 3;
-		constexpr size_t UI_CONFIG_DO_NOT_CACHE = 1 << 4;
+		constexpr size_t UI_CONFIG_DO_CACHE = 1 << 4;
 		constexpr size_t UI_CONFIG_TEXT_PARAMETERS = 1 << 5;
 		constexpr size_t UI_CONFIG_TEXT_ALIGNMENT = 1 << 6;
 		constexpr size_t UI_CONFIG_COLOR = 1 << 7;
@@ -27,12 +27,20 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_UNAVAILABLE_TEXT = (size_t)1 << 19;
 		constexpr size_t UI_CONFIG_ALIGN_TO_ROW_Y = (size_t)1 << 20;
 		constexpr size_t UI_CONFIG_ACTIVE_STATE = (size_t)1 << 21;
-		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 22;
-		constexpr size_t UI_CONFIG_RECTANGLE_CLICKABLE_ACTION = (size_t)1 << 23;
-		constexpr size_t UI_CONFIG_RECTANGLE_GENERAL_ACTION = (size_t)1 << 24;
-		constexpr size_t UI_CONFIG_RECTANGLE_TOOL_TIP = (size_t)1 << 25;
 
-		// Slots available are 27, 28 and 29
+		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 22;
+		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 23;
+		constexpr size_t UI_CONFIG_RECTANGLE_CLICKABLE_ACTION = (size_t)1 << 24;
+		constexpr size_t UI_CONFIG_RECTANGLE_GENERAL_ACTION = (size_t)1 << 25;
+		constexpr size_t UI_CONFIG_RECTANGLE_TOOL_TIP = (size_t)1 << 26;
+
+		constexpr size_t UI_CONFIG_ALIGN_ELEMENT = (size_t)1 << 27;
+		constexpr size_t UI_CONFIG_ALIGN_ELEMENT_RIGHT = (size_t)1 << 28;
+		constexpr size_t UI_CONFIG_ALIGN_ELEMENT_BOTTOM = (size_t)1 << 29;
+
+		// Slots 28 and 29 could be available, at the moment these are just aliases for 
+		// UI_CONFIG_ALIGN_ELEMENT values
+		// No other slot is available
 		
 		constexpr size_t UI_CONFIG_NAME_PADDING = (size_t)1 << 60;
 		constexpr size_t UI_CONFIG_DYNAMIC_RESOURCE = (size_t)1 << 61;
@@ -45,8 +53,6 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_BUTTON_HOVERABLE = (size_t)1 << 40;
 		
-		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 30;
-
 		constexpr size_t UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS = (size_t)1 << 35;
 
 		constexpr size_t UI_CONFIG_SPRITE_GRADIENT = (size_t)1 << 32;
@@ -66,30 +72,30 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_PATH_INPUT_CALLBACK = (size_t)1 << 40;
 		constexpr size_t UI_CONFIG_PATH_INPUT_SPRITE_TEXTURE = (size_t)1 << 41;
 
-		constexpr size_t UI_CONFIG_SLIDER_NO_TEXT = (size_t)1 << 38;
-		constexpr size_t UI_CONFIG_SLIDER_NO_NAME = (size_t)1 << 39;
-		constexpr size_t UI_CONFIG_SLIDER_COLOR = (size_t)1 << 40;
-		constexpr size_t UI_CONFIG_SLIDER_SHRINK = (size_t)1 << 41;
-		constexpr size_t UI_CONFIG_SLIDER_LENGTH = (size_t)1 << 42;
-		constexpr size_t UI_CONFIG_SLIDER_PADDING = (size_t)1 << 43;
-		constexpr size_t UI_CONFIG_SLIDER_MOUSE_DRAGGABLE = (size_t)1 << 44;
-		constexpr size_t UI_CONFIG_SLIDER_ENTER_VALUES = (size_t)1 << 45;
-		constexpr size_t UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_SLIDER_DEFAULT_VALUE = (size_t)1 << 47;
+		constexpr size_t UI_CONFIG_SLIDER_NO_TEXT = (size_t)1 << 37;
+		constexpr size_t UI_CONFIG_SLIDER_NO_NAME = (size_t)1 << 38;
+		constexpr size_t UI_CONFIG_SLIDER_COLOR = (size_t)1 << 39;
+		constexpr size_t UI_CONFIG_SLIDER_SHRINK = (size_t)1 << 40;
+		constexpr size_t UI_CONFIG_SLIDER_LENGTH = (size_t)1 << 41;
+		constexpr size_t UI_CONFIG_SLIDER_PADDING = (size_t)1 << 42;
+		constexpr size_t UI_CONFIG_SLIDER_MOUSE_DRAGGABLE = (size_t)1 << 43;
+		constexpr size_t UI_CONFIG_SLIDER_ENTER_VALUES = (size_t)1 << 44;
+		constexpr size_t UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_SLIDER_DEFAULT_VALUE = (size_t)1 << 46;
 
 		constexpr size_t UI_CONFIG_SLIDER_GROUP_NO_NAME = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_SLIDER_GROUP_UNIFORM_BOUNDS = (size_t)1 << 51;
 		constexpr size_t UI_CONFIG_SLIDER_GROUP_UNIFORM_DEFAULT = (size_t)1 << 52;
 		constexpr size_t UI_CONFIG_SLIDER_GROUP_NO_SUBNAMES = (size_t)1 << 53;
 
-		constexpr size_t UI_CONFIG_COLOR_INPUT_RGB_SLIDERS = (size_t)1 << 50;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_HSV_SLIDERS = (size_t)1 << 51;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER = (size_t)1 << 52;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_NO_NAME = (size_t)1 << 53;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR = (size_t)1 << 54;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_HEX_INPUT = (size_t)1 << 55;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_CALLBACK = (size_t)1 << 56;
-		constexpr size_t UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE = (size_t)1 << 57;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_RGB_SLIDERS = (size_t)1 << 47;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_HSV_SLIDERS = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER = (size_t)1 << 49;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_NO_NAME = (size_t)1 << 50;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR = (size_t)1 << 51;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_HEX_INPUT = (size_t)1 << 52;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_CALLBACK = (size_t)1 << 53;
+		constexpr size_t UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE = (size_t)1 << 54;
 
 		constexpr size_t UI_CONFIG_COMBO_BOX_NO_NAME = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_COMBO_BOX_DISABLE_X_SCALING = (size_t)1 << 46;
@@ -183,11 +189,11 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_LABEL_LIST_NO_NAME = (size_t)1 << 45;
 
-		constexpr size_t UI_CONFIG_ARRAY_FIXED_SIZE = (size_t)1 << 55;
-		constexpr size_t UI_CONFIG_ARRAY_PROVIDE_NAMES = (size_t)1 << 56;
-		constexpr size_t UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT = (size_t)1 << 57;
-		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 58;
-		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 59;
+		constexpr size_t UI_CONFIG_ARRAY_ADD_CALLBACK = (size_t)1 << 54;
+		constexpr size_t UI_CONFIG_ARRAY_REMOVE_CALLBACK = (size_t)1 << 55;
+		constexpr size_t UI_CONFIG_ARRAY_FIXED_SIZE = (size_t)1 << 56;
+		constexpr size_t UI_CONFIG_ARRAY_PROVIDE_NAMES = (size_t)1 << 57;
+		constexpr size_t UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT = (size_t)1 << 58;
 
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 51;

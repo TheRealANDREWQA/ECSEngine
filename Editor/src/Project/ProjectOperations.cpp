@@ -13,7 +13,6 @@
 #include "ProjectUITemplate.h"
 #include "..\Modules\ModuleFile.h"
 #include "..\Modules\Module.h"
-#include "..\Project\ProjectSettings.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -34,7 +33,7 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	ECS_TEMP_STRING(new_console_dump_stream, 512);
 
 	new_console_dump_stream.AddStreamSafe(data->file_data->path);
-	new_console_dump_stream.AddStreamSafe(ToStream(CONSOLE_RELATIVE_DUMP_PATH));
+	new_console_dump_stream.AddStreamSafe(CONSOLE_RELATIVE_DUMP_PATH);
 	GetConsole()->ChangeDumpPath(new_console_dump_stream);
 
 	wchar_t hub_characters[256];
@@ -42,7 +41,7 @@ void CreateProjectMisc(ProjectOperationData* data) {
 	hub_path.Copy(data->file_data->path);
 	hub_path.Add(ECS_OS_PATH_SEPARATOR);
 	hub_path.AddStream(data->file_data->project_name);
-	hub_path.AddStreamSafe(ToStream(PROJECT_EXTENSION));
+	hub_path.AddStreamSafe(PROJECT_EXTENSION);
 	AddHubProject(data->editor_state, hub_path);
 
 	data->editor_state->editor_tick = EditorStateProjectTick;
@@ -66,8 +65,8 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	new_directory_path.AddSafe(ECS_OS_PATH_SEPARATOR);
 
 	size_t predirectory_size = new_directory_path.size;
-	for (size_t index = 0; index < std::size(PROJECT_DIRECTORIES); index++) {
-		new_directory_path.AddStreamSafe(ToStream(PROJECT_DIRECTORIES[index]));
+	for (size_t index = 0; index < PROJECT_DIRECTORIES_SIZE(); index++) {
+		new_directory_path.AddStreamSafe(PROJECT_DIRECTORIES[index]);
 
 		bool success = CreateFolder(new_directory_path);
 		if (!success) {
@@ -121,8 +120,8 @@ void CreateProjectAuxiliaryDirectories(ProjectOperationData* data) {
 	bool success = HideFolder(backup_folder);
 
 	ECS_TEMP_STRING(default_template, 256);
-	default_template.Copy(ToStream(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE));
-	default_template.AddStreamSafe(ToStream(PROJECT_UI_TEMPLATE_EXTENSION));
+	default_template.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+	default_template.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 	ProjectOperationData temp_data = *data;
 	// data will be invalidated by the template load since it will release all the memory
 	// that the windows hold so a copy of the data must be done before entering
@@ -160,8 +159,8 @@ void CreateProject(ProjectOperationData* data)
 			DeleteData* data = (DeleteData*)_data;
 			ECS_TEMP_STRING(temp_string, 256);
 
-			const wchar_t* extension_[1] = { PROJECT_EXTENSION };
-			Stream<const wchar_t*> extension(extension_, 1);
+			Stream<wchar_t> extension_[1] = { PROJECT_EXTENSION };
+			Stream<Stream<wchar_t>> extension(extension_, 1);
 
 			bool success = true;
 
@@ -170,11 +169,10 @@ void CreateProject(ProjectOperationData* data)
 				EditorState* editor_state;
 			};
 
-			auto functor = [](const wchar_t* path, void* _data) {
+			auto functor = [](Stream<wchar_t> path, void* _data) {
 				ForEachData* data = (ForEachData*)_data;
-				Stream<wchar_t> ecs_path = ToStream(path);
-				*data->success &= RemoveFile(ecs_path);
-				RemoveHubProject(data->editor_state, ecs_path);
+				*data->success &= RemoveFile(path);
+				RemoveHubProject(data->editor_state, path);
 
 				return true;
 			};
@@ -182,7 +180,7 @@ void CreateProject(ProjectOperationData* data)
 			ForEachData for_each_data = { &success, data->data->editor_state };
 			ForEachFileInDirectoryWithExtension(data->data->file_data->path, extension, &for_each_data, functor);
 
-			GetProjectFilePath(temp_string, data->data->file_data);
+			GetProjectFilePath(data->data->file_data, temp_string);
 			wchar_t temp_project_name[256];
 			temp_string.CopyTo(temp_project_name);
 			Path project_path(temp_project_name, temp_string.size);
@@ -192,7 +190,7 @@ void CreateProject(ProjectOperationData* data)
 			}
 			for (size_t index = 0; index < data->project_directories.size; index++) {
 				temp_string.size = data->data->file_data->path.size + 1;
-				temp_string.AddStreamSafe(ToStream(data->project_directories[index]));
+				temp_string.AddStreamSafe(data->project_directories[index]);
 				if (ExistsFileOrFolder(temp_string)) {
 					success &= RemoveFolder(temp_string);
 				}
@@ -210,7 +208,7 @@ void CreateProject(ProjectOperationData* data)
 
 		DeleteData delete_data;
 		delete_data.data = data;
-		delete_data.project_directories = Stream<const wchar_t*>(PROJECT_DIRECTORIES, std::size(PROJECT_DIRECTORIES));
+		delete_data.project_directories = Stream<const wchar_t*>(PROJECT_DIRECTORIES, PROJECT_DIRECTORIES_SIZE());
 
 		UIActionHandler handler;
 		handler.action = delete_project;
@@ -252,15 +250,20 @@ void CreateProjectAction(ActionData* action_data)
 // -------------------------------------------------------------------------------------------------------------------
 
 bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
-	Stream<wchar_t> required_folders_buffer[std::size(PROJECT_DIRECTORIES)];
-	Stream<Stream<wchar_t>> required_folders(required_folders_buffer, std::size(PROJECT_DIRECTORIES));
+	// Can't get that as a constexpr variable in order to initialize the stack buffer
+	// So use a fixed size with a big value
+	size_t folders_size = PROJECT_DIRECTORIES_SIZE();
+	ECS_ASSERT(folders_size < 128);
+
+	Stream<wchar_t> required_folders_buffer[128];
+	Stream<Stream<wchar_t>> required_folders(required_folders_buffer, PROJECT_DIRECTORIES_SIZE());
 	for (size_t index = 0; index < required_folders.size; index++) {
-		required_folders[index] = ToStream(PROJECT_DIRECTORIES[index]);
+		required_folders[index] = PROJECT_DIRECTORIES[index];
 	}
 
-	auto functor = [](const wchar_t* path, void* data) {
+	auto functor = [](Stream<wchar_t> path, void* data) {
 		Stream<Stream<wchar_t>>* required_folders = (Stream<Stream<wchar_t>>*)data;
-		unsigned int index = function::FindString(ToStream(path), *required_folders);
+		unsigned int index = function::FindString(path, *required_folders);
 		if (index != -1) {
 			required_folders->RemoveSwapBack(index);
 		}
@@ -286,7 +289,7 @@ void DeallocateCurrentProject(EditorState* editor_state)
 // -------------------------------------------------------------------------------------------------------------------
 
 bool ExistsProjectInFolder(const ProjectFile* project_file) {
-	return IsFileWithExtension(project_file->path, ToStream(PROJECT_EXTENSION));
+	return IsFileWithExtension(project_file->path, PROJECT_EXTENSION);
 }
 // -------------------------------------------------------------------------------------------------------------------
 
@@ -299,7 +302,21 @@ void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, s
 void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile* project_file) {
 	characters.Copy(project_file->path);
 	characters.Add(ECS_OS_PATH_SEPARATOR);
-	characters.AddStreamSafe(ToStream(PROJECT_CURRENT_UI_TEMPLATE));
+	characters.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+
+ProjectFile GetProjectFileDefaultConfiguration()
+{
+	ProjectFile project_file;
+
+	project_file.platform = ECS_PLATFORM_WIN64_DX11;
+	project_file.version = VERSION_INDEX;
+	memcpy(&project_file.version_description, VERSION_DESCRIPTION, std::size(VERSION_DESCRIPTION));
+	memcpy(&project_file.platform_description, ECS_PLATFORM_STRINGS[ECS_PLATFORM_WIN64_DX11_STRING_INDEX], strlen(ECS_PLATFORM_STRINGS[ECS_PLATFORM_WIN64_DX11_STRING_INDEX]));
+
+	return project_file;
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -344,10 +361,7 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 		resource_folder_stream = drawer.GetMainAllocatorBufferAndStoreAsResource<CapacityStream<char>>("Resource folder stream");
 		get_directory_data = drawer.GetMainAllocatorBufferAndStoreAsResource<OSFileExplorerGetDirectoryActionData>("Directory data");
 
-		memcpy(&data->project_data.file_data->version_description, VERSION_DESCRIPTION, std::size(VERSION_DESCRIPTION));
-		memcpy(&data->project_data.file_data->platform_description, ECS_PLATFORM_STRINGS[ECS_PLATFORM_WIN64_DX11_STRING_INDEX], strlen(ECS_PLATFORM_STRINGS[ECS_PLATFORM_WIN64_DX11_STRING_INDEX]) + 1);
-		data->project_data.file_data->version = VERSION_INDEX;
-		data->project_data.file_data->platform = ECS_PLATFORM_WIN64_DX11;
+		*data->project_data.file_data = GetProjectFileDefaultConfiguration();
 
 		project_name_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * project_name_stream_capacity), 0, project_name_stream_capacity - 1);
 		directory_stream->InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * directory_stream_capacity), 0, directory_stream_capacity - 1);
@@ -397,13 +411,13 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 	bottom_button_transform.position = drawer.GetAlignedToBottom(drawer.GetElementDefaultScale().y);
 	bottom_button_transform.scale = drawer.GetElementDefaultScale();
 	config.AddFlag(bottom_button_transform);
-	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Create", { CreateProjectAction, &data->project_data, sizeof(data->project_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Create", { CreateProjectAction, &data->project_data, sizeof(data->project_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 
 	config.flag_count = 0;
 	bottom_button_transform.position.x = drawer.GetAlignedToRight(drawer.GetElementDefaultScale().x).x;
 	config.AddFlag(bottom_button_transform);
 
-	drawer.Button(UI_CONFIG_DO_NOT_CACHE | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -437,88 +451,81 @@ bool OpenProjectFile(ProjectOperationData data) {
 	EDITOR_STATE(data.editor_state);
 
 	ECS_TEMP_STRING(project_path, 256);
-	GetProjectFilePath(project_path, data.file_data);
-
-	const size_t TEMP_MEMORY_SIZE = 1024;
-	size_t temp_memory[TEMP_MEMORY_SIZE];
+	GetProjectFilePath(data.file_data, project_path);
 
 	ProjectFile* file_data = data.file_data;
-	CapacityStream<void> memory_pool = CapacityStream<void>(temp_memory, 0, sizeof(size_t) * TEMP_MEMORY_SIZE);
-	
-	// There are currently only 3 stream fields
-	const size_t MAX_STREAM_FIELDS = 8;
-	const char** _field_names_deserialized = (const char**)ECS_STACK_ALLOC(sizeof(const char*) * MAX_STREAM_FIELDS);
-	CapacityStream<const char*> field_names_deserialized(_field_names_deserialized, 0, MAX_STREAM_FIELDS);
 
-#define RETURN_ERROR_MESSAGE(string, ...) if (data.error_message.buffer != nullptr) { data.error_message.size = function::FormatString(data.error_message.buffer, string, __VA_ARGS__); data.error_message.AssertCapacity(); }\
-											return false;
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_allocator, ECS_KB * 16, ECS_MB);
+	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_allocator);
 
 	// Set the file data to 0. If a field could not be deserialized, it will be 0
 	memset(file_data, 0, sizeof(*file_data));
 	bool success = true;
-	ECS_TEXT_DESERIALIZE_STATUS status = TextDeserialize(ui_reflection->reflection->GetType(STRING(ProjectFile)), file_data, memory_pool, project_path);
-	if (status == ECS_TEXT_DESERIALIZE_COULD_NOT_READ) {
-		RETURN_ERROR_MESSAGE("Opening project file {#} failed; data could not be read (byte size might be too small)", project_path);
+
+	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+
+	DeserializeOptions options;
+	options.field_allocator = allocator;
+	options.file_allocator = allocator;
+	options.backup_allocator = allocator;
+	options.error_message = &error_message;
+
+	ECS_DESERIALIZE_CODE status = Deserialize(ui_reflection->reflection, ui_reflection->reflection->GetType(STRING(ProjectFile)), file_data, project_path, &options);
+	if (status != ECS_DESERIALIZE_OK) {
+		if (data.error_message.buffer != nullptr) {
+			ECS_FORMAT_STRING(data.error_message, "Failed to deserialize project file {#}. Detailed message: {#}.", project_path, error_message);
+		}
+		return false;
 	}
 
 	// If the version is different, fail
 	if (file_data->version < COMPATIBLE_PROJECT_FILE_VERSION_INDEX) {
-		RETURN_ERROR_MESSAGE("Opening project file {#} failed; version is {1} while compatible versions are above {2}.", project_path, file_data->version, COMPATIBLE_PROJECT_FILE_VERSION_INDEX);
+		if (data.error_message.buffer != nullptr) {
+			ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; version is {#} while compatible versions are above {#}.", project_path, file_data->version, COMPATIBLE_PROJECT_FILE_VERSION_INDEX);
+		}
+		return false;
 	}
 
 	if (status == ECS_TEXT_DESERIALIZE_FIELD_DATA_MISSING || status == ECS_TEXT_DESERIALIZE_FAILED_TO_READ_SOME_FIELDS) {
 		// If the version description could not be deserialized, fail
 		if (file_data->version_description[0] == 0) {
-			RETURN_ERROR_MESSAGE("Opening project file {#} failed; version description is missing.", project_path);
+			if (data.error_message.buffer != nullptr) {
+				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; version description is missing.", project_path);
+			}
+			return false;
 		}
 		if (file_data->platform_description[0] == 0) {
-			RETURN_ERROR_MESSAGE("Opening project file {#} failed; platform description is missing.", project_path);
+			if (data.error_message.buffer != nullptr) {
+				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; platform description is missing.", project_path);
+			}
+			return false;
 		}
 		if (file_data->project_name.buffer == nullptr) {
-			RETURN_ERROR_MESSAGE("Opening project file {#} failed; project name is missing.", project_path);
+			if (data.error_message.buffer != nullptr) {
+				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; project name is missing.", project_path);
+			}
+			return false;
 		}
 		if (file_data->path.buffer == nullptr) {
-			RETURN_ERROR_MESSAGE("Opening project file {#} failed; the project's path is missing.", project_path);
+			if (data.error_message.buffer != nullptr) {
+				ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed; the project's path is missing.", project_path);
+			}
+			return false;
 		}
 	}
 
 	if (!function::HasFlag(file_data->platform, ECS_PLATFORM_WIN64_DX11)) {
-		RETURN_ERROR_MESSAGE("Opening project file {#} failed, compatible platform {1}, actual platform {2}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
+		if (data.error_message.buffer != nullptr) {
+			ECS_FORMAT_STRING(data.error_message, "Opening project file {#} failed, compatible platform {#}, actual platform {#}", project_path, ECS_PLATFORM_WIN64_DX11, file_data->platform);
+		}
+		return false;
 	}
 
-	// A coallesced allocation is used to copy the project settings path, the path and the name
-	size_t project_setting_path_size = 0;
-	const wchar_t* project_settings_path = nullptr;
-	if (file_data->project_settings.buffer != nullptr) {
-		project_setting_path_size = file_data->project_settings.size;
-		project_settings_path = file_data->project_settings.buffer;
-	}
-	else {
-		project_setting_path_size = wcslen(DEFAULT_SETTINGS_FILE_NAME);
-		project_settings_path = DEFAULT_SETTINGS_FILE_NAME;
-	}
-
-	void* allocation = editor_allocator->Allocate(sizeof(wchar_t) * (file_data->path.size + file_data->project_name.size + 2));
-	wchar_t* strings = (wchar_t*)allocation;
-	file_data->path.CopyTo(strings);
-	file_data->path.buffer = strings;
-	file_data->path[file_data->path.size] = L'\0';
-	strings += file_data->path.size + 1;
-
-	file_data->project_name.CopyTo(strings);
-	file_data->project_name.buffer = strings;
-	file_data->project_name[file_data->project_name.size] = L'\0';
-	strings += file_data->project_name.size + 1;
-
-	// Account for the null termination character
-	file_data->project_settings.Initialize(editor_allocator, project_setting_path_size + 1, project_setting_path_size + 1);
-	file_data->project_settings.Copy(Stream<wchar_t>(project_settings_path, project_setting_path_size));
-	file_data->project_settings[project_setting_path_size] = L'\0';
-	file_data->project_settings.capacity--;
-
+	void* allocation = editor_allocator->Allocate(sizeof(wchar_t) * (file_data->path.size + file_data->project_name.size));
+	uintptr_t ptr = (uintptr_t)allocation;
+	file_data->path.InitializeAndCopy(ptr, file_data->path);
+	file_data->project_name.InitializeAndCopy(ptr, file_data->project_name);
 	return true;
-
-#undef RETURN_ERROR_MESSAGE
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -545,7 +552,7 @@ bool OpenProject(ProjectOperationData data)
 	ECS_TEMP_STRING(ui_template_stream, 256);
 	ui_template_stream.Copy(data.file_data->path);
 	ui_template_stream.Add(ECS_OS_PATH_SEPARATOR);
-	ui_template_stream.AddStreamSafe(ToStream(PROJECT_CURRENT_UI_TEMPLATE));
+	ui_template_stream.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
 
 	ProjectUITemplate ui_template;
 	ui_template.ui_file = ui_template_stream;
@@ -553,14 +560,31 @@ bool OpenProject(ProjectOperationData data)
 	CapacityStream<char> error_message = { nullptr, 0, 0 };
 	data.editor_state->project_file = data.file_data;
 
+	// Change the dump path early on
 	wchar_t console_dump_path_characters[256];
 	Stream<wchar_t> console_dump_path(console_dump_path_characters, 0);
 	console_dump_path.Copy(data.file_data->path);
-	console_dump_path.AddStream(ToStream(CONSOLE_RELATIVE_DUMP_PATH));
+	console_dump_path.AddStream(CONSOLE_RELATIVE_DUMP_PATH);
 	ECS_ASSERT(console_dump_path.size < 256);
 	GetConsole()->ChangeDumpPath(console_dump_path);
 
-	bool is_valid = CheckProjectSettingsValidity(data.editor_state);
+	// Before we load the UI we need to load the modules and the sandboxes
+	ECS_STACK_CAPACITY_STREAM(wchar_t, module_path, 256);
+	GetProjectModulesFilePath(data.editor_state, module_path);
+
+	// The modules
+	if (ExistsFileOrFolder(module_path)) {
+		bool success = LoadModuleFile(data.editor_state);
+		if (!success) {
+			EditorSetConsoleError("An error occured during loading module file. No modules have been imported");
+		}
+	}
+	else {
+		ResetModules(data.editor_state);
+	}
+
+	// The sandboxes. If a failure has happened, then it will be reported to the user
+	LoadEditorSandboxFile(data.editor_state);
 
 	if (ExistsFileOrFolder(ui_template_stream)) {
 		bool success = LoadProjectUITemplate(data.editor_state, ui_template, error_message);
@@ -570,8 +594,8 @@ bool OpenProject(ProjectOperationData data)
 	}
 	else {
 		ECS_TEMP_STRING(default_template_path, 256);
-		default_template_path.Copy(ToStream(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE));
-		default_template_path.AddStreamSafe(ToStream(PROJECT_UI_TEMPLATE_EXTENSION));
+		default_template_path.Copy(EDITOR_DEFAULT_PROJECT_UI_TEMPLATE);
+		default_template_path.AddStreamSafe(PROJECT_UI_TEMPLATE_EXTENSION);
 
 		if (ExistsFileOrFolder(default_template_path)) {
 			bool success = LoadProjectUITemplate(data.editor_state, { default_template_path }, error_message);
@@ -587,20 +611,6 @@ bool OpenProject(ProjectOperationData data)
 				return false;
 			}
 		}
-	}
-
-	wchar_t _temp_chars[256];
-	CapacityStream<wchar_t> module_path(_temp_chars, 0, 256);
-	GetProjectModuleFilePath(data.editor_state, module_path);
-	if (ExistsFileOrFolder(module_path)) {
-		bool success = LoadModuleFile(data.editor_state);
-		if (!success) {
-			EditorSetConsoleError(ToStream("An error occured during loading module file. No modules have been imported"));
-		}
-	}
-	else {
-		ResetModules(data.editor_state);
-		ResetGraphicsModule(data.editor_state);
 	}
 
 	// Delete all the auxiliary build files .build, .clean, .rebuild
@@ -648,7 +658,7 @@ void OpenProjectSystemHandlerAction(ActionData* action_data) {
 	bool success = OpenProject(*data);
 	if (!success) {
 		system->PopFrameHandler();
-		EditorSetConsoleError(ToStream("Could not open project."));
+		EditorSetConsoleError("Could not open project.");
 	}
 }
 
@@ -670,8 +680,8 @@ void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 	project_path.Add(ECS_OS_PATH_SEPARATOR);
 	
 	unsigned int path_base_size = project_path.size;
-	for (size_t index = 0; index < std::size(PROJECT_DIRECTORIES); index++) {
-		project_path.AddStreamSafe(ToStream(PROJECT_DIRECTORIES[index]));
+	for (size_t index = 0; index < PROJECT_DIRECTORIES_SIZE(); index++) {
+		project_path.AddStreamSafe(PROJECT_DIRECTORIES[index]);
 		if (!ExistsFileOrFolder(project_path)) {
 			CreateFolder(project_path);
 		}
@@ -679,7 +689,7 @@ void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 	}
 
 	// Make hidden the .backup folder
-	project_path.AddStreamSafe(ToStream(PROJECT_BACKUP_RELATIVE_PATH));
+	project_path.AddStreamSafe(PROJECT_BACKUP_RELATIVE_PATH);
 	HideFolder(project_path);
 }
 
@@ -690,10 +700,10 @@ bool SaveProjectFile(ProjectOperationData data) {
 
 	wchar_t temp_characters[256];
 	CapacityStream<wchar_t> project_path = CapacityStream<wchar_t>(temp_characters, 0, 256);
-	GetProjectFilePath(project_path, data.file_data);
+	GetProjectFilePath(data.file_data, project_path);
 
-	bool success = TextSerialize(ui_reflection->reflection->GetType(STRING(ProjectFile)), data.file_data, project_path);
-	
+	bool success = Serialize(ui_reflection->reflection, ui_reflection->reflection->GetType(STRING(ProjectFile)), data.file_data, project_path) == ECS_SERIALIZE_OK;
+
 	if (!success) {
 		if (data.error_message.buffer != nullptr) {
 			data.error_message.size = function::FormatString(data.error_message.buffer, "Saving project file failed; writing to {#}", project_path.buffer);
@@ -721,7 +731,7 @@ void SaveProjectFileAction(ActionData* action_data) {
 			ECS_TEMP_ASCII_STRING(error_message, 256);
 			wchar_t project_name_characters[256];
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
-			GetProjectFilePath(project_name, data->file_data);
+			GetProjectFilePath(data->file_data, project_name);
 
 			error_message.size = function::FormatString(error_message.buffer, "Saving project file {#} failed.", project_name);
 			error_message.AssertCapacity();
@@ -764,7 +774,7 @@ void SaveProjectAction(ActionData* action_data) {
 			ECS_TEMP_ASCII_STRING(error_message, 256);
 			wchar_t project_name_characters[256];
 			CapacityStream<wchar_t> project_name(project_name_characters, 0, 256);
-			GetProjectFilePath(project_name, data->file_data);
+			GetProjectFilePath(data->file_data, project_name);
 			
 			error_message.size = function::FormatString(error_message.buffer, "Saving project {#} failed.", project_name);
 			error_message.AssertCapacity();
@@ -870,12 +880,12 @@ ECS_THREAD_TASK(SaveProjectThreadTask) {
 	ECS_TEMP_STRING(template_path, 256);
 	template_path.Copy(project_file->path);
 	template_path.Add(ECS_OS_PATH_SEPARATOR);
-	template_path.AddStreamSafe(ToStream(PROJECT_CURRENT_UI_TEMPLATE));
+	template_path.AddStreamSafe(PROJECT_CURRENT_UI_TEMPLATE);
 
 	CapacityStream<char> error_message = { nullptr, 0, 0 };
 	bool success = SaveProjectUITemplate(ui_system, { template_path }, error_message);
 	if (!success) {
-		EditorSetConsoleError(ToStream("Automatic project UI save failed."));
+		EditorSetConsoleError("Automatic project UI save failed.");
 	}
 }
 

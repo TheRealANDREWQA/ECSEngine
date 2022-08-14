@@ -41,6 +41,9 @@ void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, s
 
 void GetProjectCurrentUI(CapacityStream<wchar_t>& characters, const ProjectFile* project_file);
 
+// Does not initialize the path or the name. Only the version, platform and other metadata
+ProjectFile GetProjectFileDefaultConfiguration();
+
 // Error message needs to have memory allocated or nullptr to skip it
 bool OpenProjectFile(ProjectOperationData data);
 

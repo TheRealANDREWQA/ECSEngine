@@ -2549,29 +2549,23 @@ namespace ECSEngine {
 
 				// If there are any named instances, allocate them separately
 				if (entity_manager->m_shared_components[index].named_instances.GetCount() > 0) {
-					m_shared_components[index].named_instances.Initialize(&m_small_memory_manager, entity_manager->m_shared_components[index].named_instances.GetCapacity());
+					size_t blit_size = entity_manager->m_shared_components[index].named_instances.MemoryOf(entity_manager->m_shared_components[index].named_instances.GetCapacity());
+					void* allocation = m_small_memory_manager.Allocate(blit_size);
+
+					m_shared_components[index].named_instances.SetBuffers(allocation, entity_manager->m_shared_components[index].named_instances.GetCapacity());
+
+					// Blit the entire table
+					memcpy(allocation, entity_manager->m_shared_components[index].named_instances.GetAllocatedBuffer(), blit_size);
+
 					// Iterate through the named instances and allocate the identifiers and copy the value
-					unsigned int extended_capacity = entity_manager->m_shared_components[index].named_instances.GetExtendedCapacity();
-					const ResourceIdentifier* identifiers = entity_manager->m_shared_components[index].named_instances.GetIdentifiers();
-
-					for (unsigned int subindex = 0; subindex < extended_capacity; subindex++) {
-						if (entity_manager->m_shared_components[index].named_instances.IsItemAt(subindex)) {
-							Stream<void> identifier = function::Copy(GetAllocatorPolymorphic(&m_small_memory_manager), { identifiers[subindex].ptr, identifiers[subindex].size });
-							m_shared_components[index].named_instances.m_identifiers[subindex] = identifier;
-						}
-					}
-
-					// Blit the values and the metadata
-					memcpy(
-						m_shared_components[index].named_instances.m_values, 
-						entity_manager->m_shared_components[index].named_instances.m_values,
-						sizeof(SharedInstance) * extended_capacity
-					);
-					memcpy(
-						m_shared_components[index].named_instances.m_metadata,
-						entity_manager->m_shared_components[index].named_instances.m_metadata,
-						sizeof(unsigned char) * extended_capacity
-					);
+					entity_manager->m_shared_components[index].named_instances.ForEachIndexConst([&](unsigned int subindex) {
+						ResourceIdentifier current_identifier = entity_manager->m_shared_components[index].named_instances.GetIdentifierFromIndex(subindex);
+						Stream<void> identifier = function::Copy(
+							GetAllocatorPolymorphic(&m_small_memory_manager),
+							{ current_identifier.ptr, current_identifier.size }
+						);
+						*m_shared_components[index].named_instances.GetIdentifierPtrFromIndex(subindex) = identifier;
+					});
 				}
 			}
 		}
@@ -2866,6 +2860,13 @@ namespace ECSEngine {
 		}
 		m_hierarchies[hierarchy_index].allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
 		m_hierarchies[hierarchy_index].hierarchy = EntityHierarchy(&m_hierarchies[hierarchy_index].allocator, starting_root_count, starting_children_table_capacity, starting_parent_table_capacity);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned short EntityManager::ComponentSize(Component component) const
+	{
+		return m_unique_components[component.value].size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3612,6 +3613,20 @@ namespace ECSEngine {
 	Stream<unsigned short> EntityManager::GetQueryResults(unsigned int handle) const
 	{
 		return m_query_cache->GetResults(handle);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	ArchetypeQuery ECS_VECTORCALL EntityManager::GetQueryComponents(unsigned int handle) const
+	{
+		return m_query_cache->GetComponents(handle);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const
+	{
+		m_query_cache->GetResultsAndComponents(handle, results, query);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

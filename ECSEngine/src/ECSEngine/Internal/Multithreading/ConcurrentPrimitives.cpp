@@ -13,7 +13,7 @@ namespace ECSEngine {
 	void SpinLock::lock() {
 		while (true) {
 			// Optimistically assume the lock is free on the first try
-			if (!value.exchange(true, ECS_ACQUIRE)) {
+			if (!value.exchange(1, ECS_ACQUIRE)) {
 				return;
 			}
 
@@ -22,13 +22,13 @@ namespace ECSEngine {
 	}
 
 	void SpinLock::unlock() {
-		value.store(false, ECS_RELEASE);
+		value.store(0, ECS_RELEASE);
 		WakeByAddressAll(&value);
 	}
 
 	bool SpinLock::is_locked() const
 	{
-		return value.load(ECS_RELAXED);
+		return value.load(ECS_RELAXED) > 0;
 	}
 
 	void SpinLock::wait_locked()
@@ -46,9 +46,30 @@ namespace ECSEngine {
 			}
 
 			// Do this in a loop since the WaitOnAddress can wake the thread spuriously
-			bool true_var = true;
+			unsigned char true_var = 1;
 			while (value.load(ECS_RELAXED)) {
-				BOOL success = WaitOnAddress(&value, &true_var, sizeof(bool), INFINITE);
+				BOOL success = WaitOnAddress(&value, &true_var, sizeof(unsigned char), INFINITE);
+			}
+		}
+	}
+
+	void SpinLock::wait_signaled()
+	{
+		const size_t SPIN_COUNT_UNTIL_WAIT = 2'000;
+
+		while (!is_locked()) {
+			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
+				if (!is_locked()) {
+					return;
+				}
+				_mm_pause();
+			}
+
+			// Here we don't want to use a loop since the thread will be woken up
+			// when the value becomes 0
+			if (!is_locked()) {
+				unsigned char compare_value = 0;
+				WaitOnAddress(&value, &compare_value, sizeof(unsigned char), INFINITE);
 			}
 		}
 	}
@@ -56,7 +77,7 @@ namespace ECSEngine {
 	bool SpinLock::try_lock() {
 		// First do a relaxed load to check if lock is free in order to prevent
 		// unnecessary cache misses in while(!try_lock())
-		return !value.load(ECS_RELAXED) && !value.exchange(true, ECS_ACQUIRE);
+		return value.load(ECS_RELAXED) == 0 && value.exchange(1, ECS_ACQUIRE) == 0;
 	}
 
 	// ----------------------------------------------------------------------------------------------
@@ -254,6 +275,16 @@ namespace ECSEngine {
 
 	void ConditionVariable::Reset() {
 		signal_count.store(0, ECS_RELAXED);
+	}
+
+	unsigned int ConditionVariable::WaitingThreadCount()
+	{
+		int current_count = signal_count.load(ECS_RELAXED);
+		if (current_count < 0) {
+			return -current_count;
+		}
+
+		return 0;
 	}
 
 	// ----------------------------------------------------------------------------------------------

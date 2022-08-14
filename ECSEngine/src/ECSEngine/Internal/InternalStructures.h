@@ -6,9 +6,9 @@
 #include "../Containers/Stream.h"
 #include "../Containers/HashTable.h"
 #include "ecspch.h"
-#include "../Math/VCLExtensions.h"
 #include "../Containers/StableReferenceStream.h"
 #include "../Utilities/File.h"
+#include "../Containers/DataPointer.h"
 
 #define ECS_ARCHETYPE_MAX_COMPONENTS 15
 #define ECS_ARCHETYPE_MAX_SHARED_COMPONENTS 15
@@ -143,6 +143,13 @@ namespace ECSEngine {
 		SharedInstance* instances;
 		unsigned char count;
 	};
+
+	struct DeferredAction {
+		DataPointer data_and_type;
+		DebugInfo debug_info;
+	};
+
+	typedef CapacityStream<DeferredAction> EntityManagerCommandStream;
 
 	// Returns a memory manager that would suit an EntityPool with the given pool capacity
 	//ECSENGINE_API MemoryManager DefaultEntityPoolManager(GlobalMemoryManager* global_memory);

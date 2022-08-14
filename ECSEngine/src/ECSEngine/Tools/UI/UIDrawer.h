@@ -44,7 +44,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		inline size_t DynamicConfiguration(size_t configuration) {
-			return function::ClearFlag(configuration, UI_CONFIG_DO_NOT_CACHE) | UI_CONFIG_DYNAMIC_RESOURCE;
+			return function::SetFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_DYNAMIC_RESOURCE;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ConvertTextToWindowResource(size_t configuration, const UIDrawConfig& config, const char* text, UIDrawerTextElement* element, float2 position, float2 scale);
+			void ConvertTextToWindowResource(size_t configuration, const UIDrawConfig& config, Stream<char> text, UIDrawerTextElement* element, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -91,19 +91,19 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			bool ValidatePosition(size_t configuration, float2 position);
+			bool ValidatePosition(size_t configuration, float2 position) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			bool ValidatePosition(size_t configuration, float2 position, float2 scale);
+			bool ValidatePosition(size_t configuration, float2 position, float2 scale) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			bool ValidatePositionY(size_t configuration, float2 position, float2 scale);
+			bool ValidatePositionY(size_t configuration, float2 position, float2 scale) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			bool ValidatePositionMinBound(size_t configuration, float2 position, float2 scale);
+			bool ValidatePositionMinBound(size_t configuration, float2 position, float2 scale) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -155,11 +155,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			ECS_UI_DRAW_PHASE HandlePhase(size_t configuration);
+			ECS_UI_DRAW_PHASE HandlePhase(size_t configuration) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void HandleTransformFlags(size_t configuration, const UIDrawConfig& config, float2& position, float2& scale);
+			void HandleTransformFlags(size_t configuration, const UIDrawConfig& config, float2& position, float2& scale) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -167,11 +167,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void HandleTextStreamColorUpdate(Color color, Stream<UISpriteVertex> vertices);
+			void HandleTextStreamColorUpdate(Color color, Stream<UISpriteVertex> vertices) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void HandleTextStreamColorUpdate(Color color, CapacityStream<UISpriteVertex> vertices);
+			void HandleTextStreamColorUpdate(Color color, CapacityStream<UISpriteVertex> vertices) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -183,9 +183,9 @@ namespace ECSEngine {
 				float2 label_position,
 				float& x_position,
 				float& y_position,
-				ECS_UI_TEXT_ALIGN& horizontal_alignment,
-				ECS_UI_TEXT_ALIGN& vertical_alignment
-			);
+				ECS_UI_ALIGN& horizontal_alignment,
+				ECS_UI_ALIGN& vertical_alignment
+			) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -195,13 +195,13 @@ namespace ECSEngine {
 				float2 label_position,
 				float& x_position,
 				float& y_position,
-				ECS_UI_TEXT_ALIGN horizontal,
-				ECS_UI_TEXT_ALIGN vertical
-			);
+				ECS_UI_ALIGN horizontal,
+				ECS_UI_ALIGN vertical
+			) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void HandleDynamicResource(size_t configuration, const char* name);
+			void HandleDynamicResource(size_t configuration, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -213,11 +213,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			const char* HandleResourceIdentifier(const char* input, bool permanent_buffer = false);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			const char* HandleResourceIdentifier(const char* input, size_t& size, bool permanent_buffer = false);
+			Stream<char> HandleResourceIdentifier(Stream<char> input, bool permanent_buffer = false);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -227,7 +223,7 @@ namespace ECSEngine {
 
 			UIDrawerTextElement* HandleTextCopyFromResource(
 				size_t configuration,
-				const char* text, 
+				Stream<char> text, 
 				float2& position,
 				Color font_color,
 				float2 (*scale_from_text)(float2 scale, const UIDrawer& drawer)
@@ -256,7 +252,7 @@ namespace ECSEngine {
 			UIDrawerTextElement* HandleLabelTextCopyFromResourceWithCull(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* text,
+				Stream<char> text,
 				float2& position,
 				float2 scale,
 				float2& text_span,
@@ -310,7 +306,8 @@ namespace ECSEngine {
 			void HandleSliderVariables(
 				size_t configuration,
 				const UIDrawConfig& config,
-				float& length, float& padding,
+				float& length, 
+				float& padding,
 				float2& shrink_factor,
 				Color& slider_color,
 				Color background_color
@@ -331,7 +328,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// it will finalize the rectangle
-			void TextLabel(size_t configuration, const UIDrawConfig& config, const char* text, float2& position, float2& scale);
+			void TextLabel(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2& position, float2& scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -348,7 +345,7 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				LPCWSTR texture,
+				Stream<wchar_t> texture,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
 				Color color = ECS_COLOR_WHITE
@@ -360,7 +357,7 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -372,7 +369,7 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -385,15 +382,15 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void TextLabelWithCull(size_t configuration, const UIDrawConfig& config, const char* text, float2 position, float2 scale);
+			void TextLabelWithCull(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerTextElement* TextInitializer(size_t configuration, const UIDrawConfig& config, const char* characters, float2 position);
+			UIDrawerTextElement* TextInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> characters, float2 position);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerTextElement* TextLabelInitializer(size_t configuration, const UIDrawConfig& config, const char* characters, float2 position, float2 scale);
+			UIDrawerTextElement* TextLabelInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> characters, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -406,14 +403,14 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerTextInput* TextInputInitializer(size_t configuration, UIDrawConfig& config, const char* name, CapacityStream<char>* text_to_fill, float2 position, float2 scale);
+			UIDrawerTextInput* TextInputInitializer(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<char>* text_to_fill, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawerSlider* SliderInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				float2 position,
 				float2 scale,
 				unsigned int byte_size,
@@ -445,8 +442,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* ECS_RESTRICT group_name,
-				const char** ECS_RESTRICT names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				void** ECS_RESTRICT values_to_modify,
 				const void* ECS_RESTRICT lower_bounds,
 				const void* ECS_RESTRICT upper_bounds,
@@ -462,8 +459,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* ECS_RESTRICT group_name,
-				const char** ECS_RESTRICT names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				unsigned int byte_size,
 				void** ECS_RESTRICT values_to_modify,
 				const void* ECS_RESTRICT lower_bounds,
@@ -480,7 +477,7 @@ namespace ECSEngine {
 			ECSENGINE_API UIDrawerSlider* IntSliderInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				float2 position,
 				float2 scale,
 				Integer* value_to_modify,
@@ -508,7 +505,7 @@ namespace ECSEngine {
 			UIDrawerSlider* FloatSliderInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				float2 position,
 				float2 scale,
 				float* value_to_modify,
@@ -537,7 +534,7 @@ namespace ECSEngine {
 			UIDrawerSlider* DoubleSliderInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				float2 position,
 				float2 scale,
 				double* value_to_modify,
@@ -566,8 +563,8 @@ namespace ECSEngine {
 			UIDrawerComboBox* ComboBoxInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
-				Stream<const char*> labels,
+				Stream<char> name,
+				Stream<Stream<char>> labels,
 				unsigned int label_display_count,
 				unsigned char* active_label,
 				float2 scale
@@ -575,7 +572,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerTextElement* CheckBoxInitializer(size_t configuration, const UIDrawConfig& config, const char* name, float2 scale);
+			UIDrawerTextElement* CheckBoxInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -583,7 +580,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, const char* name, bool* value_to_modify, float2 position, float2 scale);
+			void CheckBoxDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, bool* value_to_modify, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -594,7 +591,7 @@ namespace ECSEngine {
 			UIDrawerColorInput* ColorInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				Color* color,
 				Color default_color,
 				float2 position,
@@ -605,7 +602,7 @@ namespace ECSEngine {
 
 			void ColorInputDrawer(size_t configuration, UIDrawConfig& config, UIDrawerColorInput* data, float2 position, float2 scale, Color* color);
 
-			UIDrawerCollapsingHeader* CollapsingHeaderInitializer(size_t configuration, const UIDrawConfig& config, const char* name, float2 position, float2 scale);
+			UIDrawerCollapsingHeader* CollapsingHeaderInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -613,11 +610,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void CollapsingHeaderDrawer(size_t configuration, UIDrawConfig& config, const char* name, bool* state, float2 position, float2 scale);
+			void CollapsingHeaderDrawer(size_t configuration, UIDrawConfig& config, Stream<char> name, bool* state, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerHierarchy* HierarchyInitializer(size_t configuration, const UIDrawConfig& config, const char* name);
+			UIDrawerHierarchy* HierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -625,7 +622,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* NumberInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config, 
-				const char* name, 
+				Stream<char> name, 
 				Action callback_action, 
 				void* callback_data,
 				size_t callback_data_size,
@@ -639,14 +636,12 @@ namespace ECSEngine {
 					BeginElement();
 				}
 				// kinda unnecessary memcpy's here but should not cost too much
-				char full_name[256];
-				const char* identifier = HandleResourceIdentifier(name);
-				size_t identifier_size = strlen(identifier);
-				memcpy(full_name, identifier, identifier_size);
-				full_name[identifier_size] = '\0';
-				strcat(full_name, "stream");
-
-				ECS_ASSERT(identifier_size + std::size("stream") < 256);
+				ECS_STACK_CAPACITY_STREAM(char, full_name, 256);
+				Stream<char> identifier = HandleResourceIdentifier(name);
+				full_name.Copy(identifier);
+				full_name.AddStream("stream");
+				full_name.AssertCapacity();
+				
 				CapacityStream<char>* stream = GetMainAllocatorBufferAndStoreAsResource<CapacityStream<char>>(full_name);
 				stream->InitializeFromBuffer(GetMainAllocatorBuffer(sizeof(char) * 64, alignof(char)), 0, 63);
 				initial_value_init(stream);
@@ -703,8 +698,8 @@ namespace ECSEngine {
 					config.flag_count--;
 				}
 
-				full_name[identifier_size] = '\0';
-				strcat(full_name, "tool tip");
+				full_name.size = identifier.size;
+				full_name.AddStream("tool tip");
 				char* tool_tip_characters = (char*)GetMainAllocatorBufferAndStoreAsResource(full_name, sizeof(char) * 64, alignof(char));
 				Stream<char> tool_tip_stream = Stream<char>(tool_tip_characters, 0);
 				tool_tip_stream.Add('[');
@@ -721,7 +716,7 @@ namespace ECSEngine {
 			void NumberInputDrawer(
 				size_t configuration,
 				const UIDrawConfig& config, 
-				const char* name, 
+				Stream<char> name, 
 				void* number,
 				Action hoverable_action,
 				Action wrapper_hoverable_action,
@@ -739,20 +734,6 @@ namespace ECSEngine {
 				bool is_valid_y = ValidatePositionY(configuration, position, scale);
 				const char* tool_tip_characters = nullptr;
 				if (is_valid_y) {
-					Stream<char> tool_tip_stream;
-					const char* identifier = HandleResourceIdentifier(name);
-					size_t identifier_size = strlen(identifier);
-					char tool_tip_name[128];
-					memcpy(tool_tip_name, identifier, identifier_size);
-					tool_tip_name[identifier_size] = '\0';
-					strcat(tool_tip_name, "tool tip");
-
-					ECS_ASSERT(identifier_size + _countof("tool tip") < 128);
-					tool_tip_characters = (char*)FindWindowResource(tool_tip_name);
-					tool_tip_stream = Stream<char>(tool_tip_characters, 0);
-
-					lambda(input, tool_tip_stream);
-
 					// Update the pointer in the callback data - if any
 					if (input->HasCallback()) {
 						// The layout is like this:
@@ -766,6 +747,18 @@ namespace ECSEngine {
 
 					size_t text_count_before = *HandleTextSpriteCount(configuration);
 					TextInputDrawer(configuration, config, input, position, scale, UIDrawerTextInputFilterNumbers);
+
+					Stream<char> tool_tip_stream;
+					Stream<char> identifier = HandleResourceIdentifier(name);
+					ECS_STACK_CAPACITY_STREAM(char, tool_tip_name, 128);
+					tool_tip_name.Copy(identifier);
+					tool_tip_name.AddStream("tool tip");
+					tool_tip_name.AssertCapacity();
+
+					tool_tip_characters = (char*)FindWindowResource(tool_tip_name);
+					tool_tip_stream = Stream<char>(tool_tip_characters, 0);
+
+					lambda(input, tool_tip_stream);
 
 					UISpriteVertex* text_buffer = HandleTextSpriteBuffer(configuration);
 					size_t* text_count = HandleTextSpriteCount(configuration);
@@ -818,7 +811,7 @@ namespace ECSEngine {
 						void** temp_reinterpretation = (void**)tool_tip_reinterpretation;
 						*temp_reinterpretation = input->callback_data;
 
-						AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+						AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
 
 						if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
 							UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
@@ -833,7 +826,7 @@ namespace ECSEngine {
 						// For window dependent size the x scale is the same - should not add the indentation and the name scale
 						const UIConfigWindowDependentSize* size = (const UIConfigWindowDependentSize*)config.GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
 
-						if (size->type == ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL || size->type == ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_BOTH) {
+						if (size->type == ECS_UI_WINDOW_DEPENDENT_HORIZONTAL || size->type == ECS_UI_WINDOW_DEPENDENT_BOTH) {
 							scale_to_finalize.x = scale.x;
 						}
 					}
@@ -847,7 +840,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* FloatInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				float* number,
 				float default_value,
 				float min,
@@ -861,7 +854,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* DoubleInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				double* number,
 				double default_value,
 				double min,
@@ -876,7 +869,7 @@ namespace ECSEngine {
 			ECSENGINE_API UIDrawerTextInput* IntInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				Integer* number,
 				Integer default_value,
 				Integer min,
@@ -887,25 +880,25 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FloatInputDrawer(size_t configuration, const UIDrawConfig& config, const char* name, float* number, float min, float max, float2 position, float2 scale);
+			void FloatInputDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, float* number, float min, float max, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DoubleInputDrawer(size_t configuration, const UIDrawConfig& config, const char* name, double* number, double min, double max, float2 position, float2 scale);
+			void DoubleInputDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, double* number, double min, double max, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			ECSENGINE_API void IntInputDrawer(size_t configuration, const UIDrawConfig& config, const char* name, Integer* number, Integer min, Integer max, float2 position, float2 scale);
+			ECSENGINE_API void IntInputDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, Integer* number, Integer min, Integer max, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void FloatInputGroupDrawer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* group_name,
+				Stream<char> group_name,
 				size_t count,
-				const char** names,
+				Stream<char>* names,
 				float** values,
 				const float* lower_bounds,
 				const float* upper_bounds,
@@ -918,9 +911,9 @@ namespace ECSEngine {
 			void FloatInputGroupInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* group_name,
+				Stream<char> group_name,
 				size_t count,
-				const char** names,
+				Stream<char>* names,
 				float** values,
 				const float* default_values,
 				const float* lower_bounds,
@@ -934,9 +927,9 @@ namespace ECSEngine {
 			void DoubleInputGroupDrawer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* group_name,
+				Stream<char> group_name,
 				size_t count,
-				const char** names,
+				Stream<char>* names,
 				double** values,
 				const double* lower_bounds,
 				const double* upper_bounds,
@@ -949,9 +942,9 @@ namespace ECSEngine {
 			void DoubleInputGroupInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* group_name,
+				Stream<char> group_name,
 				size_t count,
-				const char** names,
+				Stream<char>* names,
 				double** values,
 				const double* default_values,
 				const double* lower_bounds,
@@ -966,9 +959,9 @@ namespace ECSEngine {
 			ECSENGINE_API void IntInputGroupDrawer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* group_name,
+				Stream<char> group_name,
 				size_t count,
-				const char** names,
+				Stream<char>* names,
 				Integer** values,
 				const Integer* lower_bounds,
 				const Integer* upper_bounds,
@@ -982,9 +975,9 @@ namespace ECSEngine {
 			ECSENGINE_API void IntInputGroupInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* group_name,
+				Stream<char> group_name,
 				size_t count,
-				const char** names,
+				Stream<char>* names,
 				Integer** values,
 				const Integer* default_values,
 				const Integer* lower_bounds,
@@ -999,11 +992,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void HistogramDrawer(size_t configuration, const UIDrawConfig& config, const Stream<float> samples, const char* name, float2 position, float2 scale, unsigned int precision = 2);
+			void HistogramDrawer(size_t configuration, const UIDrawConfig& config, const Stream<float> samples, Stream<char> name, float2 position, float2 scale, unsigned int precision = 2);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerList* ListInitializer(size_t configuration, const UIDrawConfig& config, const char* name);
+			UIDrawerList* ListInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1041,14 +1034,14 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerMenu* MenuInitializer(size_t configuration, const UIDrawConfig& config, const char* name, float2 scale, UIDrawerMenuState* menu_state);
+			UIDrawerMenu* MenuInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, float2 scale, UIDrawerMenuState* menu_state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void MultiGraphDrawer(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				Stream<float> samples,
 				size_t sample_count,
 				const Color* colors,
@@ -1060,23 +1053,23 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void* SentenceInitializer(size_t configuration, const UIDrawConfig& config, const char* text, char separator_token = ' ');
+			void* SentenceInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> text, char separator_token = ' ');
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t SentenceWhitespaceCharactersCount(const char* identifier, CapacityStream<unsigned int> stack_buffer, char separator_token = ' ');
+			size_t SentenceWhitespaceCharactersCount(Stream<char> identifier, CapacityStream<unsigned int> stack_buffer, char separator_token = ' ');
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void SentenceNonCachedInitializerKernel(const char* identifier, UIDrawerSentenceNotCached* data, char separator_token = ' ');
+			void SentenceNonCachedInitializerKernel(Stream<char> identifier, UIDrawerSentenceNotCached* data, char separator_token = ' ');
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void SentenceDrawer(size_t configuration, const UIDrawConfig& config, const char* identifier, void* resource, float2 position);
+			void SentenceDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> identifier, void* resource, float2 position);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerTextTable* TextTableInitializer(size_t configuration, const UIDrawConfig& config, const char* name, unsigned int rows, unsigned int columns, const char** labels);
+			UIDrawerTextTable* TextTableInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, unsigned int rows, unsigned int columns, Stream<char>* labels);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1099,7 +1092,7 @@ namespace ECSEngine {
 				float2 scale,
 				unsigned int rows,
 				unsigned int columns,
-				const char**& labels
+				Stream<char>* labels
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1139,7 +1132,7 @@ namespace ECSEngine {
 			void GraphDrawer(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				Stream<float2> samples,
 				float2 position,
 				float2 scale,
@@ -1155,14 +1148,14 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FixedScaleTextLabel(size_t configuration, const UIDrawConfig& config, const char* text, float2 position, float2 scale);
+			void FixedScaleTextLabel(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// this will add automatically VerticalSlider and HorizontalSlider to name
 			void ViewportRegionSliderInitializer(
 				float2* region_offset,
-				const char* name,
+				Stream<char> name,
 				void** horizontal_slider,
 				void** vertical_slider
 			);
@@ -1180,8 +1173,8 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void ViewportRegionSliders(
-				const char* horizontal_slider_name,
-				const char* vertical_slider_name,
+				Stream<char> horizontal_slider_name,
+				Stream<char> vertical_slider_name,
 				float2 render_span,
 				float2 render_zone,
 				float2* region_offset
@@ -1193,7 +1186,7 @@ namespace ECSEngine {
 				size_t configuration,
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -1267,10 +1260,10 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const Color* colors,
 				const float2* uvs,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1278,11 +1271,11 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1290,10 +1283,10 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const ColorFloat* colors,
 				const float2* uvs,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1301,11 +1294,11 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				float2 position,
 				float2 scale,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1326,39 +1319,32 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 TextSpan(Stream<char> characters, float2 font_size, float character_spacing);
+			float2 TextSpan(Stream<char> characters, float2 font_size, float character_spacing) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 TextSpan(const char* characters, float2 font_size, float character_spacing);
+			float2 TextSpan(Stream<char> characters) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 TextSpan(Stream<char> characters);
+			float2 GetLabelScale(Stream<char> characters) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 TextSpan(const char* characters);
+			float2 GetLabelScale(Stream<char> characters, float2 font_size, float character_spacing) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetLabelScale(Stream<char> characters);
+			void GetTextLabelAlignment(size_t configuration, const UIDrawConfig& config, ECS_UI_ALIGN& horizontal, ECS_UI_ALIGN& vertical) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetLabelScale(const char* characters);
+			void GetElementAlignment(size_t configuration, const UIDrawConfig& config, ECS_UI_ALIGN& horizontal, ECS_UI_ALIGN& vertical) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetLabelScale(Stream<char> characters, float2 font_size, float character_spacing);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			float2 GetLabelScale(const char* characters, float2 font_size, float character_spacing);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			void GetTextLabelAlignment(size_t configuration, const UIDrawConfig& config, ECS_UI_TEXT_ALIGN& horizontal, ECS_UI_TEXT_ALIGN& vertical);
+			// Uses GetElementAlignment to get the element alignment and then calculates the new position based on the scale
+			void GetElementAlignedPosition(size_t configuration, const UIDrawConfig& config, float2& position, float2 scale) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1366,11 +1352,15 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			float GetYScaleUntilBorder(float position) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			float GetNextRowXPosition() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t GetRandomIntIdentifier(size_t index);
+			size_t GetRandomIntIdentifier(size_t index) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1414,11 +1404,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ElementName(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* text, float2 position, float2 scale);
+			void ElementName(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* text, float2& position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ElementName(size_t configuration, const UIDrawConfig& config, const char* text, float2 position, float2 scale);
+			void ElementName(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2& position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1426,11 +1416,11 @@ namespace ECSEngine {
 			float ElementNameSize(size_t configuration, const UIDrawConfig& config, UIDrawerTextElement* text, float2 scale);
 
 			// Takes into account the name padding
-			float ElementNameSize(size_t configuration, const UIDrawConfig& config, const char* text, float2 scale);
+			float ElementNameSize(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			bool ExistsResource(const char* name);
+			bool ExistsResource(Stream<char> name);
 
 		public:
 
@@ -1460,9 +1450,9 @@ namespace ECSEngine {
 
 			// the initializer must return a pointer to the data and take as a parameter the resource identifier (i.e. its name)
 			template<typename Initializer>
-			void AddWindowResource(const char* label, Initializer&& init) {
-				const char* label_identifier = HandleResourceIdentifier(label, true);
-				ResourceIdentifier identifier(label_identifier, strlen(label_identifier));
+			void AddWindowResource(Stream<char> label, Initializer&& init) {
+				Stream<char> label_identifier = HandleResourceIdentifier(label, true);
+				ResourceIdentifier identifier(label_identifier);
 				void* data = init(label_identifier);
 				AddWindowResourceToTable(data, identifier);
 			}
@@ -1475,7 +1465,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM);
+			void AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_SYSTEM);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1500,7 +1490,7 @@ namespace ECSEngine {
 				float2 scale,
 				Color color,
 				float percentage = 1.25f,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1513,7 +1503,7 @@ namespace ECSEngine {
 				const Color* colors,
 				const float* percentages,
 				unsigned int count,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1543,9 +1533,9 @@ namespace ECSEngine {
 				float2 scale,
 				UIActionHandler handler,
 				Color color,
-				const char* text,
+				Stream<char> text,
 				float2 text_offset,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE,
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_LATE,
 				Color font_color = ECS_COLOR_WHITE,
 				float percentage = 1.25f
 			);
@@ -1558,14 +1548,14 @@ namespace ECSEngine {
 				float2 scale,
 				UIActionHandler handler,
 				Color color,
-				const char* text,
+				Stream<char> text,
 				float2 text_offset,
 				bool horizontal_cull = false,
 				float horizontal_cull_bound = 0.0f,
 				bool vertical_cull = false,
 				float vertical_cull_bound = 0.0f,
 				bool vertical_text = false,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_LATE,
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_LATE,
 				Color font_color = ECS_COLOR_WHITE,
 				float percentage = 1.25f
 			);
@@ -1611,7 +1601,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Only draw function, no initialization; data is the per element data; additional_data can be used to access data outside the element
-			using UIDrawerArrayDrawFunction = void (*)(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData data);
+			using UIDrawerArrayDrawFunction = void (*)(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data);
 
 			// Optional handler for when an element has been dragged to a new position
 			// The new order points indicates elements in the new order
@@ -1626,7 +1616,7 @@ namespace ECSEngine {
 				size_t element_configuration,
 				const UIDrawConfig& config,
 				const UIDrawConfig* element_config,
-				const char* name,
+				Stream<char> name,
 				StreamType* elements,
 				void* additional_data,
 				UIDrawerArrayDrawFunction draw_function,
@@ -1637,14 +1627,13 @@ namespace ECSEngine {
 				HandleTransformFlags(configuration, config, position, scale);
 
 				ECS_TEMP_ASCII_STRING(data_name, 256);
-				data_name.Copy(ToStream(name));
-				data_name.AddStream(ToStream(" data"));
-				data_name.AddSafe('\0');
-				data_name.buffer = (char*)HandleResourceIdentifier(data_name.buffer);
+				data_name.Copy(name);
+				data_name.AddStream(" data");
+				data_name = HandleResourceIdentifier(data_name);
 
 				if (!initializer) {
-					if (~configuration & UI_CONFIG_DO_NOT_CACHE) {		
-						UIDrawerArrayData* data = (UIDrawerArrayData*)FindWindowResource(data_name.buffer);
+					if (configuration & UI_CONFIG_DO_CACHE) {		
+						UIDrawerArrayData* data = (UIDrawerArrayData*)FindWindowResource(data_name);
 
 						ArrayDrawer(
 							configuration | UI_CONFIG_DO_NOT_VALIDATE_POSITION,
@@ -1668,7 +1657,7 @@ namespace ECSEngine {
 					}
 					else {
 						// Must check for the name manually
-						bool exists = system->ExistsWindowResource(window_index, data_name.buffer);
+						bool exists = system->ExistsWindowResource(window_index, data_name);
 						if (!exists) {
 							UIDrawerInitializeArrayElementData initialize_data;
 							initialize_data.config = (UIDrawConfig*)&config;
@@ -1680,7 +1669,7 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					if (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+					if (configuration & UI_CONFIG_DO_CACHE) {
 						ArrayInitializer(configuration, config, name, elements->size);
 					}
 				}
@@ -1696,7 +1685,7 @@ namespace ECSEngine {
 				const UIDrawConfig& config,
 				const UIDrawConfig* element_config,
 				UIDrawerArrayData* data, 
-				const char* name, 
+				Stream<char> name, 
 				StreamType* elements,
 				void* additional_data,
 				UIDrawerArrayDrawFunction draw_function,
@@ -1710,10 +1699,6 @@ namespace ECSEngine {
 				// The collapsing header will control the active state
 				float collapsing_header_size = GetXScaleUntilBorder(position.x);
 				UIDrawConfig header_config;
-
-				UIConfigCollapsingHeaderDoNotCache do_not_cache;
-				do_not_cache.state = &data->collapsing_header_state;
-				header_config.AddFlag(do_not_cache);
 
 				// Copy all the other configurations except the transform ones
 				for (size_t index = 0; index < config.flag_count; index++) {
@@ -1753,21 +1738,24 @@ namespace ECSEngine {
 				get_header_transform.scale = &header_scale;
 				header_config.AddFlag(get_header_transform);
 
-				size_t NEW_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_CACHE |
-					function::ClearFlag(function::ClearFlag(function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM), UI_CONFIG_WINDOW_DEPENDENT_SIZE),
-						UI_CONFIG_MAKE_SQUARE);
+				size_t NEW_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM,
+					UI_CONFIG_WINDOW_DEPENDENT_SIZE, UI_CONFIG_MAKE_SQUARE, UI_CONFIG_DO_CACHE);
 
 				// Draw the collapsing header - nullified configurations - relative transform, window dependent size, make square
-				CollapsingHeader(NEW_CONFIGURATION | UI_CONFIG_COLLAPSING_HEADER_DO_NOT_INFER | UI_CONFIG_GET_TRANSFORM, header_config, name, [&]() {
+				CollapsingHeader(NEW_CONFIGURATION | UI_CONFIG_COLLAPSING_HEADER_DO_NOT_INFER | UI_CONFIG_GET_TRANSFORM,
+					header_config, 
+					name, 
+					&data->collapsing_header_state, 
+				[&]() {
 					ECS_TEMP_ASCII_STRING(temp_name, 64);
-					temp_name.Copy(ToStream("Element "));
+					temp_name.Copy("Element ");
 					size_t base_name_size = temp_name.size;
 
 					// Set the draw mode to indent if it is different
 					ECS_UI_DRAWER_MODE old_draw_mode = draw_mode;
 					unsigned short old_draw_count = draw_mode_count;
 					unsigned short old_draw_target = draw_mode_target;
-					SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_INDENT);
+					SetDrawMode(ECS_UI_DRAWER_INDENT);
 
 					// Push onto the identifier stack the field name
 					bool has_pushed_stack = PushIdentifierStackStringPattern();
@@ -2001,7 +1989,7 @@ namespace ECSEngine {
 							);
 						
 							draw_row_no_action(data->drag_index);
-							unsigned int last_element = function::Select(data->drag_index == elements->size - 1, elements->size - 1, elements->size);
+							unsigned int last_element = data->drag_index == elements->size - 1 ? elements->size - 1 : elements->size;
 							for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
 								// Skip the current drag index if it is before drawn
 								index += data->drag_index == index;
@@ -2072,7 +2060,7 @@ namespace ECSEngine {
 							);
 
 							draw_row_no_action(data->drag_index);
-							unsigned int last_element = function::Select(data->drag_index == elements->size - 1, elements->size - 1, elements->size);
+							unsigned int last_element = data->drag_index == elements->size - 1 ? elements->size - 1 : elements->size;
 							for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
 								// Skip the current drag index if it is before drawn
 								index += data->drag_index == index;
@@ -2112,7 +2100,7 @@ namespace ECSEngine {
 
 					float x_scale_till_border = GetXScaleUntilBorder(current_x) - layout.element_indentation;
 					UIConfigWindowDependentSize button_size;
-					button_size.type = ECS_UI_WINDOW_DEPENDENT_SIZE::ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
+					button_size.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
 					button_size.scale_factor = GetWindowSizeFactors(button_size.type, {x_scale_till_border * 0.5f, layout.default_element_y});
 					header_config.AddFlag(button_size);
 
@@ -2123,12 +2111,12 @@ namespace ECSEngine {
 					get_transform.scale = &button_scale;
 					header_config.AddFlag(get_transform);
 
-					size_t COLOR_RECTANGLE_CONFIGURATION = function::ClearFlag(function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM), UI_CONFIG_ABSOLUTE_TRANSFORM)
+					size_t COLOR_RECTANGLE_CONFIGURATION = function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM, UI_CONFIG_ABSOLUTE_TRANSFORM)
 						| UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_GET_TRANSFORM;
 
 					SolidColorRectangle(COLOR_RECTANGLE_CONFIGURATION, header_config, color_theme.theme);
 
-					size_t BUTTON_CONFIGURATION = function::ClearFlag(function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM), UI_CONFIG_WINDOW_DEPENDENT_SIZE) |
+					size_t BUTTON_CONFIGURATION = function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM, UI_CONFIG_WINDOW_DEPENDENT_SIZE) |
 						UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE;
 
 					float2 square_scale = GetSquareScale(layout.default_element_y);
@@ -2227,12 +2215,13 @@ namespace ECSEngine {
 						PopIdentifierStack();
 					}
 					PopIdentifierStack();
-				});
+				}
+				);
 
 				if (~configuration & UI_CONFIG_ARRAY_DISABLE_SIZE_INPUT) {
 					ECS_TEMP_ASCII_STRING(temp_input_name, 256);
-					temp_input_name.Copy(ToStream(name));
-					temp_input_name.AddStream(ToStream("Size input"));
+					temp_input_name.Copy(name);
+					temp_input_name.AddStream("Size input");
 					temp_input_name.AddSafe('\0');
 
 					// Eliminate the get transform
@@ -2271,7 +2260,7 @@ namespace ECSEngine {
 						IntInput(
 							NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE | UI_CONFIG_TEXT_INPUT_CALLBACK,
 							header_config,
-							temp_input_name.buffer,
+							temp_input_name,
 							&elements->size,
 							(unsigned int)0,
 							(unsigned int)0,
@@ -2285,7 +2274,7 @@ namespace ECSEngine {
 						IntInput(
 							NEW_CONFIGURATION | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_ACTIVE_STATE,
 							header_config,
-							temp_input_name.buffer,
+							temp_input_name,
 							&elements->size,
 							(unsigned int)0,
 							(unsigned int)0,
@@ -2300,7 +2289,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerArrayData* ArrayInitializer(size_t configuration, const UIDrawConfig& config, const char* name, size_t element_count);
+			UIDrawerArrayData* ArrayInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, size_t element_count);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2311,7 +2300,7 @@ namespace ECSEngine {
 			void ArrayFloat(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2328,7 +2317,7 @@ namespace ECSEngine {
 			void ArrayDouble(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2345,7 +2334,7 @@ namespace ECSEngine {
 			void ArrayInteger(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2368,7 +2357,7 @@ namespace ECSEngine {
 			void ArrayFloat2(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2385,7 +2374,7 @@ namespace ECSEngine {
 			void ArrayDouble2(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2402,7 +2391,7 @@ namespace ECSEngine {
 			void ArrayInteger2(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2483,7 +2472,7 @@ namespace ECSEngine {
 			void ArrayInteger2Infer(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2505,7 +2494,7 @@ namespace ECSEngine {
 			void ArrayFloat3(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2522,7 +2511,7 @@ namespace ECSEngine {
 			void ArrayDouble3(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2539,7 +2528,7 @@ namespace ECSEngine {
 			void ArrayInteger3(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2552,7 +2541,7 @@ namespace ECSEngine {
 			void ArrayInteger3Infer(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2575,7 +2564,7 @@ namespace ECSEngine {
 			void ArrayFloat4(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2592,7 +2581,7 @@ namespace ECSEngine {
 			void ArrayDouble4(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2609,7 +2598,7 @@ namespace ECSEngine {
 			void ArrayInteger4(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2622,7 +2611,7 @@ namespace ECSEngine {
 			void ArrayInteger4Infer(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* values,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2648,7 +2637,7 @@ namespace ECSEngine {
 			void ArrayColor(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* colors,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2671,7 +2660,7 @@ namespace ECSEngine {
 			void ArrayColorFloat(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* colors,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2695,7 +2684,7 @@ namespace ECSEngine {
 			void ArrayCheckBox(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* states,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2718,7 +2707,7 @@ namespace ECSEngine {
 			void ArrayTextInput(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* texts,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2764,9 +2753,9 @@ namespace ECSEngine {
 			void ArrayComboBox(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* flags,
-				CapacityStream<Stream<const char*>> flag_labels,
+				CapacityStream<Stream<Stream<char>>> flag_labels,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
 			) {
@@ -2787,7 +2776,7 @@ namespace ECSEngine {
 			void ArrayDirectoryInput(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* texts,
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
@@ -2809,9 +2798,9 @@ namespace ECSEngine {
 			void ArrayFileInput(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				StreamType* texts,
-				Stream<const wchar_t*> extensions = { nullptr, 0 },
+				Stream<Stream<wchar_t>> extensions = { nullptr, 0 },
 				size_t element_configuration = 0,
 				const UIDrawConfig* element_config = nullptr
 			) {
@@ -2848,27 +2837,35 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Button(
-				const char* label,
+				Stream<char> label,
 				UIActionHandler handler
 			);
 
 			void Button(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* text,
+				Stream<char> label,
 				UIActionHandler handler
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void StateButton(const char* name, bool* state);
+			// Converts to ASCII and sends it over to the ASCII variant
+			void ButtonWide(Stream<wchar_t> label, UIActionHandler handler);
 
-			void StateButton(size_t configuration, const UIDrawConfig& config, const char* name, bool* state);
+			// Converts to ASCII and sends it over to the ASCII variant
+			void ButtonWide(size_t configuration, const UIDrawConfig& config, Stream<wchar_t> label, UIActionHandler handler);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void StateButton(Stream<char> name, bool* state);
+
+			void StateButton(size_t configuration, const UIDrawConfig& config, Stream<char> name, bool* state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SpriteStateButton(
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				bool* state,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
@@ -2879,7 +2876,7 @@ namespace ECSEngine {
 			void SpriteStateButton(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				bool* state,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
@@ -2891,11 +2888,11 @@ namespace ECSEngine {
 
 			// Stateless, label is done with UI_CONFIG_DO_NOT_CACHE; if drawing with a sprite
 			// name can be made nullptr
-			void MenuButton(const char* name, UIWindowDescriptor& window_descriptor, size_t border_flags = 0);
+			void MenuButton(Stream<char> name, UIWindowDescriptor& window_descriptor, size_t border_flags = 0);
 
 			// Stateless, label is done with UI_CONFIG_DO_NOT_CACHE; if drawing with a sprite
 			// name can be made nullptr
-			void MenuButton(size_t configuration, const UIDrawConfig& config, const char* name, UIWindowDescriptor& window_descriptor, size_t border_flags = 0);
+			void MenuButton(size_t configuration, const UIDrawConfig& config, Stream<char> name, UIWindowDescriptor& window_descriptor, size_t border_flags = 0);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2909,9 +2906,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void CheckBox(const char* name, bool* value_to_change);
+			void CheckBox(Stream<char> name, bool* value_to_change);
 
-			void CheckBox(size_t configuration, const UIDrawConfig& config, const char* name, bool* value_to_change);
+			void CheckBox(size_t configuration, const UIDrawConfig& config, Stream<char> name, bool* value_to_change);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2921,13 +2918,19 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ComboBox(const char* name, Stream<const char*> labels, unsigned int label_display_count, unsigned char* active_label);
+			void ComboBox(Stream<char> name, Stream<Stream<char>> labels, unsigned int label_display_count, unsigned char* active_label);
 
-			void ComboBox(size_t configuration, UIDrawConfig& config, const char* name, Stream<const char*> labels, unsigned int label_display_count, unsigned char* active_label);
+			void ComboBox(size_t configuration, UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, unsigned int label_display_count, unsigned char* active_label);
+
+			// If the name is nullptr, then it will ignore it aswell
+			float ComboBoxDefaultSize(Stream<Stream<char>> labels, Stream<char> name = { nullptr, 0 }, Stream<char> prefix = { nullptr, 0 }) const;
+
+			// It will report which label is the biggest.
+			unsigned int ComboBoxBiggestLabel(Stream<Stream<char>> labels) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ComboBoxDropDownDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerComboBox* data);
+			void ComboBoxDropDownDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2938,13 +2941,13 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Function>
-			bool CollapsingHeader(const char* name, Function&& function) {
+			bool CollapsingHeader(Stream<char> name, bool* state, Function&& function) {
 				UIDrawConfig config;
-				return CollapsingHeader(0, config, name, function);
+				return CollapsingHeader(0, config, name, state, function);
 			}
 
 			template<typename Function>
-			bool CollapsingHeader(size_t configuration, UIDrawConfig& config, const char* name, Function&& function) {
+			bool CollapsingHeader(size_t configuration, UIDrawConfig& config, Stream<char> name, bool* state, Function&& function) {
 				float2 position;
 				float2 scale;
 				HandleTransformFlags(configuration, config, position, scale);
@@ -2958,7 +2961,7 @@ namespace ECSEngine {
 				};
 
 				if (!initializer) {
-					if (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+					if (state == nullptr) {
 						UIDrawerCollapsingHeader* element = (UIDrawerCollapsingHeader*)GetResource(name);
 
 						CollapsingHeaderDrawer(configuration, config, element, position, scale);
@@ -2969,18 +2972,17 @@ namespace ECSEngine {
 						return element->state;
 					}
 					else {
-						UIConfigCollapsingHeaderDoNotCache* data = (UIConfigCollapsingHeaderDoNotCache*)config.GetParameter(UI_CONFIG_DO_NOT_CACHE);
-						CollapsingHeaderDrawer(configuration, config, name, data->state, position, scale);
+						CollapsingHeaderDrawer(configuration, config, name, state, position, scale);
 						HandleDynamicResource(configuration, name);
 
-						if (*data->state) {
+						if (*state) {
 							call_function();
 						}
-						return *data->state;
+						return *state;
 					}
 				}
 				else {
-					if (~configuration & UI_CONFIG_DO_NOT_CACHE) {
+					if (state == nullptr) {
 						CollapsingHeaderInitializer(configuration, config, name, position, scale);
 					}
 					function();
@@ -2996,9 +2998,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ColorInput(const char* name, Color* color, Color default_color = ECS_COLOR_WHITE);
+			void ColorInput(Stream<char> name, Color* color, Color default_color = ECS_COLOR_WHITE);
 
-			void ColorInput(size_t configuration, UIDrawConfig& config, const char* name, Color* color, Color default_color = ECS_COLOR_WHITE);
+			void ColorInput(size_t configuration, UIDrawConfig& config, Stream<char> name, Color* color, Color default_color = ECS_COLOR_WHITE);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3008,9 +3010,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ColorFloatInput(const char* name, ColorFloat* color, ColorFloat default_color = ECS_COLOR_WHITE);
+			void ColorFloatInput(Stream<char> name, ColorFloat* color, ColorFloat default_color = ECS_COLOR_WHITE);
 
-			void ColorFloatInput(size_t configuration, UIDrawConfig& config, const char* name, ColorFloat* color, ColorFloat default_color = ECS_COLOR_WHITE);
+			void ColorFloatInput(size_t configuration, UIDrawConfig& config, Stream<char> name, ColorFloat* color, ColorFloat default_color = ECS_COLOR_WHITE);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3018,11 +3020,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ColorFloatInputDrawer(size_t configuration, UIDrawConfig& config, const char* name, ColorFloat* color, float2 position, float2 scale);
+			void ColorFloatInputDrawer(size_t configuration, UIDrawConfig& config, Stream<char> name, ColorFloat* color, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerColorFloatInput* ColorFloatInputInitializer(size_t configuration, UIDrawConfig& config, const char* name, ColorFloat* color, ColorFloat default_color, float2 position, float2 scale);
+			UIDrawerColorFloatInput* ColorFloatInputInitializer(size_t configuration, UIDrawConfig& config, Stream<char> name, ColorFloat* color, ColorFloat default_color, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3059,16 +3061,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DirectoryInput(const char* name, CapacityStream<wchar_t>* path);
+			void DirectoryInput(Stream<char> name, CapacityStream<wchar_t>* path);
 
-			void DirectoryInput(size_t configuration, UIDrawConfig& config, const char* name, CapacityStream<wchar_t>* path);
+			void DirectoryInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* path);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DirectoryInputDrawer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				CapacityStream<wchar_t>* path,
 				float2 position,
 				float2 scale
@@ -3079,7 +3081,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* DirectoryInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				CapacityStream<wchar_t>* path
 			);
 
@@ -3091,18 +3093,18 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FileInput(const char* name, CapacityStream<wchar_t>* path, Stream<const wchar_t*> extensions = { nullptr, 0 });
+			void FileInput(Stream<char> name, CapacityStream<wchar_t>* path, Stream<Stream<wchar_t>> extensions = { nullptr, 0 });
 
-			void FileInput(size_t configuration, UIDrawConfig& config, const char* name, CapacityStream<wchar_t>* path, Stream<const wchar_t*> extensions = { nullptr, 0 });
+			void FileInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<wchar_t>* path, Stream<Stream<wchar_t>> extensions = { nullptr, 0 });
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void FileInputDrawer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				CapacityStream<wchar_t>* path,
-				Stream<const wchar_t*> extensions,
+				Stream<Stream<wchar_t>> extensions,
 				float2 position,
 				float2 scale
 			);
@@ -3112,7 +3114,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* FileInputInitializer(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				CapacityStream<wchar_t>* path
 			);
 
@@ -3125,38 +3127,38 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States needs to be stable
-			void FilterMenu(const char* name, Stream<const char*> label_names, bool** states);
+			void FilterMenu(Stream<char> name, Stream<Stream<char>> label_names, bool** states);
 
 			// States needs to be stable
-			void FilterMenu(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool** states);
+			void FilterMenu(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> label_names, bool** states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stable bool array
-			void FilterMenu(const char* name, Stream<const char*> label_names, bool* states);
+			void FilterMenu(Stream<char> name, Stream<Stream<char>> label_names, bool* states);
 
 			// States should be a stable bool array
-			void FilterMenu(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool* states);
+			void FilterMenu(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> label_names, bool* states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FilterMenuDrawer(size_t configuration, const UIDrawConfig& config, const char* name, UIDrawerFilterMenuData* data);
+			void FilterMenuDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, UIDrawerFilterMenuData* data);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerFilterMenuData* FilterMenuInitializer(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> label_names, bool** states);
+			UIDrawerFilterMenuData* FilterMenuInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> label_names, bool** states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FilterMenuDrawer(size_t configuration, const UIDrawConfig& config, const char* name, UIDrawerFilterMenuSinglePointerData* data);
+			void FilterMenuDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, UIDrawerFilterMenuSinglePointerData* data);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			UIDrawerFilterMenuSinglePointerData* FilterMenuInitializer(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const char* name,
-				Stream<const char*> label_names,
+				Stream<char> name,
+				Stream<Stream<char>> label_names,
 				bool* states
 			);
 
@@ -3203,25 +3205,41 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Graph(Stream<float2> samples, const char* name = nullptr, unsigned int x_axis_precision = 2, unsigned int y_axis_precision = 2);
+			void Graph(Stream<float2> samples, Stream<char> name = { nullptr, 0 }, unsigned int x_axis_precision = 2, unsigned int y_axis_precision = 2);
 
 			void Graph(
 				size_t configuration,
 				const UIDrawConfig& config,
 				Stream<float2> unfiltered_samples,
 				float filter_delta,
-				const char* name = nullptr,
+				Stream<char> name = { nullptr, 0 },
 				unsigned int x_axis_precision = 2,
 				unsigned int y_axis_precision = 2
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Graph(size_t configuration, const UIDrawConfig& config, Stream<float2> samples, const char* name = nullptr, unsigned int x_axis_precision = 2, unsigned int y_axis_precision = 2);
+			void Graph(
+				size_t configuration,
+				const UIDrawConfig& config,
+				Stream<float2> samples, 
+				Stream<char> name = { nullptr, 0 },
+				unsigned int x_axis_precision = 2,
+				unsigned int y_axis_precision = 2
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void MultiGraph(size_t configuration, const UIDrawConfig& config, Stream<float> samples, size_t sample_count, const Color* colors = MULTI_GRAPH_COLORS, const char* name = nullptr, unsigned int x_axis_precision = 2, unsigned int y_axis_precision = 2);
+			void MultiGraph(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				Stream<float> samples, 
+				size_t sample_count,
+				const Color* colors = MULTI_GRAPH_COLORS,
+				Stream<char> name = { nullptr, 0 },
+				unsigned int x_axis_precision = 2,
+				unsigned int y_axis_precision = 2
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3229,7 +3247,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
-			const char* GetElementName(unsigned int index) const;
+			Stream<char> GetElementName(unsigned int index) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3265,7 +3283,13 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// It returns the factor for ECS_UI_WINDOW_DEPENDENT_SIZE
 			float2 GetWindowSizeScaleUntilBorder() const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// It returns the actual size until the border
+			float GetWindowScaleUntilBorder() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3294,17 +3318,23 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			float2 GetSquareScale(float value) const;
+			// If defaulted, it will return the square scale of the default_element_y
+			float2 GetSquareScale(float value = FLT_MAX) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// If defaulted, it will return the square scale of the default_element_y
+			float2 GetSquareScaleScaled(float value = FLT_MAX) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// It will use HandleResourceIdentifier to construct the string
-			void* GetResource(const char* string);
+			void* GetResource(Stream<char> string);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// It will forward directly to the UI system; No HandleResourceIdentifier used
-			void* FindWindowResource(const char* string);
+			void* FindWindowResource(Stream<char> string);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3443,13 +3473,13 @@ namespace ECSEngine {
 
 			// name must not conflict with other element names
 			template<typename T>
-			T* GetMainAllocatorBufferAndStoreAsResource(const char* name) {
+			T* GetMainAllocatorBufferAndStoreAsResource(Stream<char> name) {
 				return (T*)GetMainAllocatorBufferAndStoreAsResource(name, sizeof(T), alignof(T));
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void* GetMainAllocatorBufferAndStoreAsResource(const char* name, size_t size, size_t alignment = 8);
+			void* GetMainAllocatorBufferAndStoreAsResource(Stream<char> name, size_t size, size_t alignment = 8);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3461,9 +3491,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerHierarchy* Hierarchy(const char* name);
+			UIDrawerHierarchy* Hierarchy(Stream<char> name);
 
-			UIDrawerHierarchy* Hierarchy(size_t configuration, const UIDrawConfig& config, const char* name);
+			UIDrawerHierarchy* Hierarchy(size_t configuration, const UIDrawConfig& config, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3473,9 +3503,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Histogram(Stream<float> samples, const char* name = nullptr);
+			void Histogram(Stream<float> samples, Stream<char> name = { nullptr, 0 });
 
-			void Histogram(size_t configuration, const UIDrawConfig& config, Stream<float> samples, const char* name = nullptr);
+			void Histogram(size_t configuration, const UIDrawConfig& config, Stream<float> samples, Stream<char> name = { nullptr, 0 });
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3487,7 +3517,7 @@ namespace ECSEngine {
 				size_t configuration,
 				size_t no_element_name,
 				const UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				UIDrawerTextElement* element,
 				float2 position,
 				float2 scale
@@ -3524,14 +3554,14 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void LabelHierarchy(const char* identifier, Stream<const char*> labels);
+			void LabelHierarchy(Stream<char> identifier, Stream<Stream<char>> labels);
 
 			// Parent index 0 means root
-			UIDrawerLabelHierarchy* LabelHierarchy(size_t configuration, UIDrawConfig& config, const char* identifier, Stream<const char*> labels);
+			UIDrawerLabelHierarchy* LabelHierarchy(size_t configuration, UIDrawConfig& config, Stream<char> identifier, Stream<Stream<char>> labels);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerLabelHierarchy* LabelHierarchyInitializer(size_t configuration, const UIDrawConfig& config, const char* _identifier);
+			UIDrawerLabelHierarchy* LabelHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> identifier);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3539,7 +3569,7 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				UIDrawerLabelHierarchy* data,
-				Stream<const char*> labels,
+				Stream<Stream<char>> labels,
 				float2 position,
 				float2 scale
 			);
@@ -3552,9 +3582,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerList* List(const char* name);
+			UIDrawerList* List(Stream<char> name);
 
-			UIDrawerList* List(size_t configuration, UIDrawConfig& config, const char* name);
+			UIDrawerList* List(size_t configuration, UIDrawConfig& config, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3568,9 +3598,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void LabelList(const char* name, Stream<const char*> labels);
+			void LabelList(Stream<char> name, Stream<Stream<char>> labels);
 
-			void LabelList(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> labels);
+			void LabelList(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3578,11 +3608,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void LabelListDrawer(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> labels, float2 position, float2 scale);
+			void LabelListDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerLabelList* LabelListInitializer(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> labels);
+			UIDrawerLabelList* LabelListInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3593,10 +3623,10 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// State can be stack allocated; name should be unique if drawing with a sprite
-			void Menu(const char* name, UIDrawerMenuState* state);
+			void Menu(Stream<char> name, UIDrawerMenuState* state);
 
 			// State can be stack allocated; name should be unique if drawing with a sprite
-			void Menu(size_t configuration, const UIDrawConfig& config, const char* name, UIDrawerMenuState* state);
+			void Menu(size_t configuration, const UIDrawConfig& config, Stream<char> name, UIDrawerMenuState* state);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3608,16 +3638,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FloatInput(const char* name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX);
+			void FloatInput(Stream<char> name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX);
 
-			void FloatInput(size_t configuration, UIDrawConfig& config, const char* name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX);
+			void FloatInput(size_t configuration, UIDrawConfig& config, Stream<char> name, float* value, float default_value = 0.0f, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void FloatInputGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				float** values,
 				const float* default_values = nullptr,
 				const float* lower_bound = nullptr,
@@ -3628,8 +3658,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				float** values,
 				const float* default_values = nullptr,
 				const float* lower_bound = nullptr,
@@ -3638,16 +3668,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DoubleInput(const char* name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX);
+			void DoubleInput(Stream<char> name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX);
 
-			void DoubleInput(size_t configuration, UIDrawConfig& config, const char* name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX);
+			void DoubleInput(size_t configuration, UIDrawConfig& config, Stream<char> name, double* value, double default_value = 0, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DoubleInputGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				double** values,
 				const double* default_values = nullptr,
 				const double* lower_bound = nullptr,
@@ -3658,8 +3688,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				double** values,
 				const double* default_values = nullptr,
 				const double* lower_bound = nullptr,
@@ -3669,18 +3699,18 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			ECSENGINE_API void IntInput(const char* name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX);
+			ECSENGINE_API void IntInput(Stream<char> name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX);
 
 			template<typename Integer>
-			ECSENGINE_API void IntInput(size_t configuration, UIDrawConfig& config, const char* name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX);
+			ECSENGINE_API void IntInput(size_t configuration, UIDrawConfig& config, Stream<char> name, Integer* value, Integer default_value = 0, Integer min = LLONG_MIN, Integer max = ULLONG_MAX);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
 			ECSENGINE_API void IntInputGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				Integer** values,
 				const Integer* default_values = nullptr,
 				const Integer* lower_bound = nullptr,
@@ -3692,8 +3722,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				Integer** values,
 				const Integer* default_values = nullptr,
 				const Integer* lower_bound = nullptr,
@@ -3737,9 +3767,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ProgressBar(const char* name, float percentage, float x_scale_factor = 1);
+			void ProgressBar(Stream<char> name, float percentage, float x_scale_factor = 1);
 
-			void ProgressBar(size_t configuration, UIDrawConfig& config, const char* name, float percentage, float x_scale_factor = 1);
+			void ProgressBar(size_t configuration, UIDrawConfig& config, Stream<char> name, float percentage, float x_scale_factor = 1);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3751,7 +3781,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void PushIdentifierStack(const char* identifier);
+			void PushIdentifierStack(Stream<char> identifier);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3784,9 +3814,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Sentence(const char* text);
+			void Sentence(Stream<char> text);
 
-			void Sentence(size_t configuration, const UIDrawConfig& config, const char* text);
+			void Sentence(size_t configuration, const UIDrawConfig& config, Stream<char> text);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3836,7 +3866,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void Slider(
-				const char* name,
+				Stream<char> name,
 				unsigned int byte_size,
 				void* value_to_modify,
 				const void* lower_bound,
@@ -3851,7 +3881,7 @@ namespace ECSEngine {
 			void Slider(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name,
+				Stream<char> name,
 				unsigned int byte_size,
 				void* value_to_modify,
 				const void* lower_bound,
@@ -3865,8 +3895,8 @@ namespace ECSEngine {
 
 			void SliderGroup(
 				size_t count,
-				const char* ECS_RESTRICT group_name,
-				const char** ECS_RESTRICT names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				unsigned int byte_size,
 				void** ECS_RESTRICT values_to_modify,
 				const void* ECS_RESTRICT lower_bounds,
@@ -3880,8 +3910,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* ECS_RESTRICT group_name,
-				const char** ECS_RESTRICT names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				unsigned int byte_size,
 				void** ECS_RESTRICT values_to_modify,
 				const void* ECS_RESTRICT lower_bounds,
@@ -3893,16 +3923,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FloatSlider(const char* name, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 3);
+			void FloatSlider(Stream<char> name, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 3);
 
-			void FloatSlider(size_t configuration, UIDrawConfig& config, const char* name, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 3);
+			void FloatSlider(size_t configuration, UIDrawConfig& config, Stream<char> name, float* value_to_modify, float lower_bound, float upper_bound, float default_value = 0.0f, unsigned int precision = 3);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void FloatSliderGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				float** values_to_modify,
 				const float* lower_bounds,
 				const float* upper_bounds,
@@ -3914,8 +3944,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				float** values_to_modify,
 				const float* lower_bounds,
 				const float* upper_bounds,
@@ -3925,16 +3955,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DoubleSlider(const char* name, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, unsigned int precision = 3);
+			void DoubleSlider(Stream<char> name, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, unsigned int precision = 3);
 
-			void DoubleSlider(size_t configuration, UIDrawConfig& config, const char* name, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, unsigned int precision = 3);
+			void DoubleSlider(size_t configuration, UIDrawConfig& config, Stream<char> name, double* value_to_modify, double lower_bound, double upper_bound, double default_value = 0, unsigned int precision = 3);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void DoubleSliderGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				double** values_to_modify,
 				const double* lower_bounds,
 				const double* upper_bounds,
@@ -3946,8 +3976,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				double** values_to_modify,
 				const double* lower_bounds,
 				const double* upper_bounds,
@@ -3958,18 +3988,18 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			ECSENGINE_API void IntSlider(const char* name, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = 0);
+			ECSENGINE_API void IntSlider(Stream<char> name, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = 0);
 
 			template<typename Integer>
-			ECSENGINE_API void IntSlider(size_t configuration, UIDrawConfig& config, const char* name, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = 0);
+			ECSENGINE_API void IntSlider(size_t configuration, UIDrawConfig& config, Stream<char> name, Integer* value_to_modify, Integer lower_bound, Integer upper_bound, Integer default_value = 0);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
 			ECSENGINE_API void IntSliderGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				Integer** values_to_modify,
 				const Integer* lower_bounds,
 				const Integer* upper_bounds,
@@ -3981,8 +4011,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				Integer** values_to_modify,
 				const Integer* lower_bounds,
 				const Integer* upper_bounds,
@@ -3991,12 +4021,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void FloatDraggable(const char* name, float* value_to_modify, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX, float default_value = 0.0f, unsigned int precision = 3);
+			void FloatDraggable(Stream<char> name, float* value_to_modify, float lower_bound = -FLT_MAX, float upper_bound = FLT_MAX, float default_value = 0.0f, unsigned int precision = 3);
 
 			void FloatDraggable(
 				size_t configuration,
 				UIDrawConfig& config, 
-				const char* name,
+				Stream<char> name,
 				float* value_to_modify,
 				float lower_bound = -FLT_MAX, 
 				float upper_bound = FLT_MAX, 
@@ -4008,8 +4038,8 @@ namespace ECSEngine {
 
 			void FloatDraggableGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				float** values_to_modify,
 				const float* lower_bounds = nullptr,
 				const float* upper_bounds = nullptr,
@@ -4021,8 +4051,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				float** values_to_modify,
 				const float* lower_bounds = nullptr,
 				const float* upper_bounds = nullptr,
@@ -4032,12 +4062,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DoubleDraggable(const char* name, double* value_to_modify, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX, double default_value = 0, unsigned int precision = 3);
+			void DoubleDraggable(Stream<char> name, double* value_to_modify, double lower_bound = -DBL_MAX, double upper_bound = DBL_MAX, double default_value = 0, unsigned int precision = 3);
 
 			void DoubleDraggable(
 				size_t configuration, 
 				UIDrawConfig& config, 
-				const char* name, 
+				Stream<char> name, 
 				double* value_to_modify, 
 				double lower_bound = -DBL_MAX,
 				double upper_bound = DBL_MAX,
@@ -4049,8 +4079,8 @@ namespace ECSEngine {
 
 			void DoubleDraggableGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				double** values_to_modify,
 				const double* lower_bounds = nullptr,
 				const double* upper_bounds = nullptr,
@@ -4062,8 +4092,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				double** values_to_modify,
 				const double* lower_bounds = nullptr,
 				const double* upper_bounds = nullptr,
@@ -4074,13 +4104,13 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			template<typename Integer>
-			ECSENGINE_API void IntDraggable(const char* name, Integer* value_to_modify, Integer lower_bound = 0, Integer upper_bound = 0, Integer default_value = 0);
+			ECSENGINE_API void IntDraggable(Stream<char> name, Integer* value_to_modify, Integer lower_bound = 0, Integer upper_bound = 0, Integer default_value = 0);
 
 			template<typename Integer>
 			ECSENGINE_API void IntDraggable(
 				size_t configuration,
 				UIDrawConfig& config,
-				const char* name, 
+				Stream<char> name, 
 				Integer* value_to_modify, 
 				Integer lower_bound = 0, 
 				Integer upper_bound = 0,
@@ -4092,8 +4122,8 @@ namespace ECSEngine {
 			template<typename Integer>
 			ECSENGINE_API void IntDraggableGroup(
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				Integer** values_to_modify,
 				const Integer* lower_bounds = nullptr,
 				const Integer* upper_bounds = nullptr,
@@ -4105,8 +4135,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				size_t count,
-				const char* group_name,
-				const char** names,
+				Stream<char> group_name,
+				Stream<char>* names,
 				Integer** values_to_modify,
 				const Integer* lower_bounds = nullptr,
 				const Integer* upper_bounds = nullptr,
@@ -4166,7 +4196,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// configuration is needed for phase deduction
-			void SetSpriteClusterTexture(size_t configuration, const wchar_t* texture, unsigned int count);
+			void SetSpriteClusterTexture(size_t configuration, Stream<wchar_t> texture, unsigned int count);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4187,22 +4217,22 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer to bool* to the members that should be changed
-			void StateTable(const char* name, Stream<const char*> labels, bool** states);
+			void StateTable(Stream<char> name, Stream<Stream<char>> labels, bool** states);
 
 			// States should be a stack pointer to a bool array
-			void StateTable(const char* name, Stream<const char*> labels, bool* states);
+			void StateTable(Stream<char> name, Stream<Stream<char>> labels, bool* states);
 
 			// States should be a stack pointer to bool* to the members that should be changed
-			void StateTable(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> labels, bool** states);
+			void StateTable(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, bool** states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// States should be a stack pointer to a bool array
-			void StateTable(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> labels, bool* states);
+			void StateTable(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, bool* states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			UIDrawerStateTable* StateTableInitializer(size_t configuration, const UIDrawConfig& config, const char* name, Stream<const char*> labels, float2 position);
+			UIDrawerStateTable* StateTableInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, float2 position);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4216,12 +4246,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void SpriteRectangle(const wchar_t* texture, Color color = ECS_COLOR_WHITE, float2 top_left_uv = { 0.0f, 0.0f }, float2 bottom_right_uv = { 1.0f, 1.0f });
+			void SpriteRectangle(Stream<wchar_t> texture, Color color = ECS_COLOR_WHITE, float2 top_left_uv = { 0.0f, 0.0f }, float2 bottom_right_uv = { 1.0f, 1.0f });
 
 			void SpriteRectangle(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -4230,8 +4260,8 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SpriteRectangleDouble(
-				const wchar_t* texture0,
-				const wchar_t* texture1,
+				Stream<wchar_t> texture0,
+				Stream<wchar_t> texture1,
 				Color color0 = ECS_COLOR_WHITE,
 				Color color1 = ECS_COLOR_WHITE,
 				float2 top_left_uv0 = { 0.0f, 0.0f },
@@ -4243,8 +4273,8 @@ namespace ECSEngine {
 			void SpriteRectangleDouble(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture0,
-				const wchar_t* texture1,
+				Stream<wchar_t> texture0,
+				Stream<wchar_t> texture1,
 				Color color0 = ECS_COLOR_WHITE,
 				Color color1 = ECS_COLOR_WHITE,
 				float2 top_left_uv0 = { 0.0f, 0.0f },
@@ -4263,7 +4293,7 @@ namespace ECSEngine {
 
 			void SpriteButton(
 				UIActionHandler clickable,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -4273,7 +4303,7 @@ namespace ECSEngine {
 				size_t configuration,
 				const UIDrawConfig& config,
 				UIActionHandler clickable,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
@@ -4285,29 +4315,35 @@ namespace ECSEngine {
 
 #pragma region Sprite Texture Bool
 
+			// A clickable handler can be supplied in addition to the default state change
+			// It receives the state in the additional_data parameter
 			void SpriteTextureBool(
-				const wchar_t* texture_false,
-				const wchar_t* texture_true,
+				Stream<wchar_t> texture_false,
+				Stream<wchar_t> texture_true,
 				bool* state,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
 			);
 
+			// A clickable handler can be supplied in addition to the default state change
+			// It receives the state in the additional_data parameter
 			void SpriteTextureBool(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture_false,
-				const wchar_t* texture_true,
+				Stream<wchar_t> texture_false,
+				Stream<wchar_t> texture_true,
 				bool* state,
 				Color color = ECS_COLOR_WHITE,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f }
 			);
 
+			// A clickable handler can be supplied in addition to the default state change
+			// It receives the state in the additional_data parameter
 			void SpriteTextureBool(
-				const wchar_t* texture_false,
-				const wchar_t* texture_true,
+				Stream<wchar_t> texture_false,
+				Stream<wchar_t> texture_true,
 				size_t* flags,
 				size_t flag_to_set,
 				Color color = ECS_COLOR_WHITE,
@@ -4315,11 +4351,13 @@ namespace ECSEngine {
 				float2 bottom_right_uv = { 1.0f, 1.0f }
 			);
 
+			// A clickable handler can be supplied in addition to the default state change
+			// It receives the state in the additional_data parameter
 			void SpriteTextureBool(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture_false,
-				const wchar_t* texture_true,
+				Stream<wchar_t> texture_false,
+				Stream<wchar_t> texture_true,
 				size_t* flags,
 				size_t flag_to_set,
 				Color color = ECS_COLOR_WHITE,
@@ -4333,9 +4371,9 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void TextTable(const char* name, unsigned int rows, unsigned int columns, const char** labels);
+			void TextTable(Stream<char> name, unsigned int rows, unsigned int columns, Stream<char>* labels);
 
-			void TextTable(size_t configuration, const UIDrawConfig& config, const char* name, unsigned int rows, unsigned int columns, const char** labels);
+			void TextTable(size_t configuration, const UIDrawConfig& config, Stream<char> name, unsigned int rows, unsigned int columns, Stream<char>* labels);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4346,16 +4384,16 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Single lined text input
-			UIDrawerTextInput* TextInput(const char* name, CapacityStream<char>* text_to_fill);
+			UIDrawerTextInput* TextInput(Stream<char> name, CapacityStream<char>* text_to_fill);
 
 			// Single lined text input
-			UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, const char* name, CapacityStream<char>* text_to_fill, UIDrawerTextInputFilter filter = UIDrawerTextInputFilterAll);
+			UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, CapacityStream<char>* text_to_fill, UIDrawerTextInputFilter filter = UIDrawerTextInputFilterAll);
 
 			//// Single lined text input
-			//UIDrawerTextInput* TextInput(const char* name, ResizableStream<char>* text_to_fill);
+			//UIDrawerTextInput* TextInput(Stream<char> name, ResizableStream<char>* text_to_fill);
 
 			//// Single lined text input
-			//UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, const char* name, ResizableStream<char>* text_to_fill, UIDrawerTextInputFilter filter = UIDrawerTextInputFilterAll);
+			//UIDrawerTextInput* TextInput(size_t configuration, UIDrawConfig& config, Stream<char> name, ResizableStream<char>* text_to_fill, UIDrawerTextInputFilter filter = UIDrawerTextInputFilterAll);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4365,9 +4403,15 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void TextLabel(const char* characters);
+			void TextLabel(Stream<char> characters);
 
-			void TextLabel(size_t configuration, const UIDrawConfig& config, const char* characters);
+			void TextLabel(size_t configuration, const UIDrawConfig& config, Stream<char> characters);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void TextLabelWide(Stream<wchar_t> characters);
+
+			void TextLabelWide(size_t configuration, const UIDrawConfig& config, Stream<wchar_t> characters);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4377,18 +4421,32 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Text(const char* text);
+			void Text(Stream<char> text);
 
 			// non cached drawer
-			void Text(size_t configuration, const UIDrawConfig& config, const char* characters, float2 position);
+			void Text(size_t configuration, const UIDrawConfig& config, Stream<char> characters, float2 position);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Text(size_t configuration, const UIDrawConfig& config, const char* text, float2& position, float2& text_span);
+			void Text(size_t configuration, const UIDrawConfig& config, Stream<char> text, float2& position, float2& text_span);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void Text(size_t configuration, const UIDrawConfig& config, const char* characters);
+			void Text(size_t configuration, const UIDrawConfig& config, Stream<char> characters);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region TextWide - Just converts to ASCII and then forwards
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void TextWide(Stream<wchar_t> text);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void TextWide(size_t configuration, const UIDrawConfig& config, Stream<wchar_t> characters);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4396,11 +4454,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void TextToolTip(const char* characters, float2 position, float2 scale, const UITooltipBaseData* base = nullptr);
+			void TextToolTip(Stream<char> characters, float2 position, float2 scale, const UITooltipBaseData* base = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DefaultHoverableWithToolTip(const char* characters, float2 position, float2 scale, const Color* color = nullptr, const float* percentage = nullptr, const UITooltipBaseData* base = nullptr);
+			void DefaultHoverableWithToolTip(Stream<char> characters, float2 position, float2 scale, const Color* color = nullptr, const float* percentage = nullptr, const UITooltipBaseData* base = nullptr);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4437,10 +4495,10 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const Color* colors,
 				const float2* uvs,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4448,11 +4506,11 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const Color* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4460,10 +4518,10 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const ColorFloat* colors,
 				const float2* uvs,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4471,11 +4529,11 @@ namespace ECSEngine {
 			void VertexColorSpriteRectangle(
 				size_t configuration,
 				const UIDrawConfig& config,
-				const wchar_t* texture,
+				Stream<wchar_t> texture,
 				const ColorFloat* colors,
 				float2 top_left_uv = { 0.0f, 0.0f },
 				float2 bottom_right_uv = { 1.0f, 1.0f },
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4548,7 +4606,7 @@ namespace ECSEngine {
 		ECSENGINE_API void InitializeDrawerElement(
 			UIDrawer& drawer_to_copy,
 			void* additional_data,
-			const char* name,
+			Stream<char> name,
 			UIDrawerInitializeFunction initialize,
 			size_t configuration
 		);
@@ -4658,83 +4716,83 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayFloatFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayFloatFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayDoubleFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayDoubleFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		template<typename Integer>
-		ECSENGINE_API void UIDrawerArrayIntegerFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayIntegerFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayFloat2Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayFloat2Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayDouble2Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayDouble2Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		template<typename BaseInteger>
-		ECSENGINE_API void UIDrawerArrayInteger2Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayInteger2Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 		
-		ECSENGINE_API void UIDrawerArrayFloat3Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayFloat3Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayDouble3Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		template<typename BaseInteger>
-		ECSENGINE_API void UIDrawerArrayInteger3Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void UIDrawerArrayFloat4Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		ECSENGINE_API void UIDrawerArrayDouble4Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayDouble3Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		template<typename BaseInteger>
-		ECSENGINE_API void UIDrawerArrayInteger4Function(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayInteger3Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayColorFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayFloat4Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayColorFloatFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayDouble4Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayCheckBoxFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		template<typename BaseInteger>
+		ECSENGINE_API void UIDrawerArrayInteger4Function(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayTextInputFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayColorFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayComboBoxFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayColorFloatFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayDirectoryInputFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayCheckBoxFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void UIDrawerArrayFileInputFunction(UIDrawer& drawer, const char* element_name, UIDrawerArrayDrawData draw_data);
+		ECSENGINE_API void UIDrawerArrayTextInputFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void UIDrawerArrayComboBoxFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void UIDrawerArrayDirectoryInputFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void UIDrawerArrayFileInputFunction(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData draw_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 

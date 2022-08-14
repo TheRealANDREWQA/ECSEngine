@@ -41,7 +41,7 @@ namespace ECSEngine {
 	};
 
 	// If read_data is false, just determine how many buffer bytes are needed
-	typedef size_t(*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
+	typedef size_t (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
 
 	struct SerializeCustomType {
 		Reflection::ReflectionContainerType container_type;
@@ -52,14 +52,14 @@ namespace ECSEngine {
 
 	extern SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[];
 
-	// Returns the byte size of the element in between the template parentheses.
+	// Returns the byte size of the element in between the template parenthesis.
 	// It also finds out if the template parameter is a user defined type, it has a serialize functor
 	// or it is just a basic type
 	// At the moment, pointers can be detected
 	ECSENGINE_API size_t SerializeCustomTypeBasicTypeHelper(
 		Stream<char>& template_type,
 		const Reflection::ReflectionManager* reflection_manager,
-		Reflection::ReflectionType& type,
+		Reflection::ReflectionType* type,
 		unsigned int& custom_serializer_index,
 		Reflection::ReflectionBasicFieldType& basic_type,
 		Reflection::ReflectionStreamFieldType& stream_type
@@ -71,7 +71,7 @@ namespace ECSEngine {
 	ECSENGINE_API size_t SerializeCustomWriteHelper(
 		Reflection::ReflectionBasicFieldType basic_type,
 		Reflection::ReflectionStreamFieldType stream_type,
-		Reflection::ReflectionType reflection_type,
+		const Reflection::ReflectionType* reflection_type,
 		unsigned int custom_serializer_index,
 		SerializeCustomTypeWriteFunctionData* write_data,
 		Stream<void> data_to_write,
@@ -86,7 +86,7 @@ namespace ECSEngine {
 	ECSENGINE_API size_t DeserializeCustomReadHelper(
 		Reflection::ReflectionBasicFieldType basic_type,
 		Reflection::ReflectionStreamFieldType stream_type,
-		Reflection::ReflectionType reflection_type,
+		const Reflection::ReflectionType* reflection_type,
 		unsigned int custom_serializer_index,
 		SerializeCustomTypeReadFunctionData* read_data,
 		size_t element_count,
@@ -323,6 +323,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionFieldInfo& info,
 		void* data,
 		uintptr_t& stream,
+		unsigned short basic_type_array_count,
 		AllocatorPolymorphic allocator
 	) {
 		if (info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
@@ -331,10 +332,7 @@ namespace ECSEngine {
 		}
 		else {
 			if (info.stream_type == Reflection::ReflectionStreamFieldType::BasicTypeArray) {
-				unsigned short written_elements = 0;
-				Read<true>(&stream, &written_elements, sizeof(written_elements));
-
-				unsigned short elements_to_read = function::ClampMax(info.basic_type_count, written_elements);
+				unsigned short elements_to_read = function::ClampMax(info.basic_type_count, basic_type_array_count);
 				Read<read_data>(&stream, data, elements_to_read * GetBasicTypeArrayElementSize(info));
 
 				Ignore(&stream, (info.basic_type_count - elements_to_read) * GetBasicTypeArrayElementSize(info));
@@ -491,7 +489,7 @@ namespace ECSEngine {
 		access_flags |= binary ? ECS_FILE_ACCESS_BINARY : ECS_FILE_ACCESS_TEXT;
 		ECS_FILE_STATUS_FLAGS flags = FileCreate(file, &file_handle, access_flags);
 		if (flags == ECS_FILE_STATUS_OK) {
-			ScopedFile scoped_file(file_handle);
+			ScopedFile scoped_file({ file_handle });
 
 			void* allocation = AllocateEx(allocator, allocation_size);
 			uintptr_t buffer = (uintptr_t)allocation;

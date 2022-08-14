@@ -64,6 +64,18 @@ namespace ECSEngine {
 		union Children {
 			Children() {}
 
+			inline Entity* Entities() {
+				return IsPointer() ? entities : static_children;
+			}
+
+			inline const Entity* Entities() const {
+				return IsPointer() ? entities : static_children;
+			}
+
+			inline bool IsPointer() const {
+				return count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE;
+			}
+
 			// Unfortunately, some bits need to be wasted. Only 3 static children can be stored at a time
 			Entity static_children[ECS_ENTITY_HIERARCHY_STATIC_STORAGE];
 			struct {

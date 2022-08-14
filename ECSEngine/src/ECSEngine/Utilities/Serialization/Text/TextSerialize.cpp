@@ -71,13 +71,13 @@ namespace ECSEngine {
 	ECS_TEXT_DESERIALIZE_STATUS TextDeserializeFromAPIToType(ReflectionType type, void* data, Stream<TextDeserializeField> deserialize_fields) {
 		Stream<char>* field_names = (Stream<char>*)ECS_STACK_ALLOC(sizeof(Stream<char>) * type.fields.size);
 		for (size_t index = 0; index < type.fields.size; index++) {
-			field_names[index] = ToStream(type.fields[index].name);
+			field_names[index] = type.fields[index].name;
 		}
 
 		bool some_fields_missed = false;
 		for (size_t index = 0; index < deserialize_fields.size; index++) {
 			// Check to see if the field exists in the type
-			unsigned int in_type_name_index = function::FindString(ToStream(deserialize_fields[index].name), Stream<Stream<char>>(field_names, type.fields.size));
+			unsigned int in_type_name_index = function::FindString(deserialize_fields[index].name, Stream<Stream<char>>(field_names, type.fields.size));
 			if (in_type_name_index != -1) {
 				// If the types mismatch, don't assign to it
 				// Change the enum type to Int8

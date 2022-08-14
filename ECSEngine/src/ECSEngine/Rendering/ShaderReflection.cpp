@@ -185,8 +185,6 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC7_UNORM, table); \
 	ADD_TO_STRING_FORMAT_TABLE(DXGI_FORMAT_BC7_UNORM_SRGB, table);
 
-#define ADD_BASIC_TYPE_TO_TABLE(type, table) 
-
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -222,7 +220,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		while (function::IsNumberCharacter(*number_end)) {
 			number_end++;
 		}
-		return function::ConvertCharactersToInt<unsigned short>(Stream<char>(number_start, number_end - number_start));
+		return function::ConvertCharactersToInt(Stream<char>(number_start, number_end - number_start));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -524,7 +522,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			structure_name++;
 
 			char* last_character = structure_name;
-			last_character = (char*)function::Select<uintptr_t>(*last_character == '{', (uintptr_t)last_character + 2, (uintptr_t)last_character);
+			last_character = *last_character == '{' ? last_character + 2 : last_character;
 			while (*last_character != '}') {
 				size_t current_index = elements.size;
 
@@ -671,7 +669,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 						while (function::IsNumberCharacter(*input_slot)) {
 							input_slot++;
 						}
-						elements[current_index].InputSlot = function::ConvertCharactersToInt<size_t>(Stream<char>(starting_input_slot, input_slot - starting_input_slot));
+						elements[current_index].InputSlot = function::ConvertCharactersToInt(Stream<char>(starting_input_slot, input_slot - starting_input_slot));
 					}
 					else {
 						elements[current_index].InputSlot = 0;
@@ -694,7 +692,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					while (function::IsNumberCharacter(*instance)) {
 						instance++;
 					}
-					elements[current_index].InstanceDataStepRate = function::ConvertCharactersToInt<size_t>(Stream<char>(instance_step_rate_start, instance - instance_step_rate_start));
+					elements[current_index].InstanceDataStepRate = function::ConvertCharactersToInt(Stream<char>(instance_step_rate_start, instance - instance_step_rate_start));
 				}
 
 				// Semantic count
@@ -714,7 +712,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 					while (function::IsNumberCharacter(*semantic_count)) {
 						semantic_count++;
 					}
-					integer_semantic_count = function::ConvertCharactersToInt<size_t>(Stream<char>(semantic_count_start, semantic_count - semantic_count_start));
+					integer_semantic_count = function::ConvertCharactersToInt(Stream<char>(semantic_count_start, semantic_count - semantic_count_start));
 				}
 
 				elements[current_index].SemanticIndex = 0;
@@ -824,7 +822,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				unsigned short register_index;
 				bool default_register = ParseNameAndRegister(current_buffer, name_pool, name, register_index);
 				buffers[current_index].name = name;
-				buffers[current_index].register_index = function::Select<unsigned int>(default_register, current_index - constant_buffer_count, register_index);
+				buffers[current_index].register_index = default_register ? current_index - constant_buffer_count : register_index;
 
 				buffers.size++;
 				*end_line = '\n';
@@ -864,7 +862,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				size_t current_index = textures.size;
 				textures[current_index].name = name;
 				textures[current_index].type = (ShaderTextureType)index;
-				textures[current_index].register_index = function::Select<unsigned short>(default_value, current_index, register_index);
+				textures[current_index].register_index = default_value ? current_index : register_index;
 
 				*end_line = '\n';
 				texture_ptr = strstr(end_line + 1, TEXTURE_KEYWORDS[index]);

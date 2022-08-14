@@ -25,7 +25,7 @@ void RunProjectAction(ActionData* action_data) {
 	//	
 	//}
 	//else {
-	//	EditorSetConsoleError(ToStream("Could not start the runtime: the modules could not be compiled or loaded."));
+	//	EditorSetConsoleError("Could not start the runtime: the modules could not be compiled or loaded.");
 	//}
 }
 
@@ -40,7 +40,7 @@ void PauseProjectAction(ActionData* action_data) {
 		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_PAUSED);
 	}
 	else {
-		EditorSetConsoleWarn(ToStream("Could not pause the runtime - the runtime is not active."));
+		EditorSetConsoleWarn("Could not pause the runtime - the runtime is not active.");
 	}*/
 }
 
@@ -54,7 +54,7 @@ void StepProjectAction(ActionData* action_data) {
 		EditorStateSetFlag(editor_state, EDITOR_STATE_STEP);
 	}
 	else {
-		EditorSetConsoleWarn(ToStream("Could not step the runtime - the runtime is not yet paused"));
+		EditorSetConsoleWarn("Could not step the runtime - the runtime is not yet paused");
 	}
 }
 

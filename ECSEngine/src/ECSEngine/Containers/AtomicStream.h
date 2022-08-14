@@ -139,6 +139,13 @@ namespace ECSEngine {
 			write_index.store(new_size, std::memory_order_release);
 		}
 
+		// It will wait until all writes are commited into the stream
+		// (i.e. size becomes equal to write index)
+		void SpinWaitWrites() const {
+			unsigned int write_count = write_index.load(ECS_RELAXED);
+			SpinWait<'!'>(size, write_count);
+		}
+
 		void Swap(unsigned int first, unsigned int second) {
 			T copy = buffer[first];
 			buffer[first] = buffer[second];

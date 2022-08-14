@@ -358,7 +358,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationMesh(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(MESH_FOLDER));
+		path.AddStreamSafe(MESH_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -366,7 +366,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationTexture(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(TEXTURE_FOLDER));
+		path.AddStreamSafe(TEXTURE_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -374,7 +374,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationGPUBuffer(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(GPU_BUFFER_FOLDER));
+		path.AddStreamSafe(GPU_BUFFER_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -382,7 +382,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationGPUSampler(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(GPU_SAMPLER_FOLDER));
+		path.AddStreamSafe(GPU_SAMPLER_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -390,7 +390,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationShader(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(SHADER_FOLDER));
+		path.AddStreamSafe(SHADER_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -398,7 +398,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationMaterial(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(MATERIAL_FOLDER));
+		path.AddStreamSafe(MATERIAL_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -406,7 +406,7 @@ namespace ECSEngine {
 	void AssetDatabase::FileLocationMisc(CapacityStream<wchar_t>& path) const
 	{
 		path.Copy(file_location);
-		path.AddStreamSafe(ToStream(MISC_FOLDER));
+		path.AddStreamSafe(MISC_FOLDER);
 	}
 
 	// --------------------------------------------------------------------------------------

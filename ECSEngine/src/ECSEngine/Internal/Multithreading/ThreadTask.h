@@ -9,10 +9,7 @@ namespace ECSEngine {
 	struct World;
 
 	typedef void (*ThreadFunction)(unsigned int thread_id, World* world, void* _data);
-	typedef void (*ThreadFunctionWrapper)(unsigned int thread_id, World* world, ThreadFunction function, void* data, void* wrapper_data);
-
 #define ECS_THREAD_TASK(name) void name(unsigned int thread_id, ECSEngine::World* world, void* _data)
-#define ECS_THREAD_WRAPPER_TASK(name) void name(unsigned int thread_id, ECSEngine::World* world, ECSEngine::ThreadFunction function, void* _data, void* _wrapper_data)
 
 	struct ECSENGINE_API ThreadTask
 	{
@@ -28,5 +25,8 @@ namespace ECSEngine {
 		size_t data_size = 0;
 		const char* name;
 	};
+
+	typedef void (*ThreadFunctionWrapper)(unsigned int thread_id, World* world, ThreadTask task, void* wrapper_data);
+#define ECS_THREAD_WRAPPER_TASK(name) void name(unsigned int thread_id, ECSEngine::World* world, ECSEngine::ThreadTask task, void* _wrapper_data)
 
 }
