@@ -133,7 +133,7 @@ namespace ECSEngine {
 		}
 	}
 
-	inline DeallocateFunction GetDeallocateFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
+	inline DeallocateFunction GetDeallocateFunction(ECS_ALLOCATOR_TYPE type, ECS_ALLOCATION_TYPE allocation_type = ECS_ALLOCATION_SINGLE) {
 		if (allocation_type == ECS_ALLOCATION_TYPE::ECS_ALLOCATION_SINGLE) {
 			return ECS_DEALLOCATE_FUNCTIONS[(unsigned int)type];
 		}

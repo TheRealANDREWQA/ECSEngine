@@ -85,6 +85,8 @@ void SandboxUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_
 unsigned int CreateSandboxUIWindow(EditorState* editor_state, unsigned int sandbox_index) {
 	EDITOR_STATE(editor_state);
 
+	ECS_ASSERT(sandbox_index < MAX_SANDBOX_UI_WINDOWS);
+
 	constexpr float window_size_x = 0.8f;
 	constexpr float window_size_y = 0.8f;
 	float2 window_size = { window_size_x, window_size_y };

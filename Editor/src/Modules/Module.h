@@ -34,7 +34,7 @@ void BuildModules(
 	EditorState* editor_state,
 	Stream<unsigned int> module_indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
-	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses, 
+	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_statuses = nullptr
 );
 
@@ -43,15 +43,15 @@ void BuildModules(
 // if the module is in flight running on the same configuration a build command or if it is up to date
 // The build status can be used to query
 EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
-	EditorState* editor_state, 
-	unsigned int index, 
+	EditorState* editor_state,
+	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr
 );
 
 // Returns true if the projects were built and the modules could be successfully loaded
 bool BuildModulesAndLoad(
-	EditorState* editor_state, 
+	EditorState* editor_state,
 	Stream<unsigned int> module_indices,
 	EDITOR_MODULE_CONFIGURATION* configurations
 );
@@ -59,7 +59,7 @@ bool BuildModulesAndLoad(
 // Runs on multiple threads
 // It will report the status, in order, for each module
 void CleanModules(
-	EditorState* editor_state, 
+	EditorState* editor_state,
 	Stream<unsigned int> module_indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
@@ -70,8 +70,8 @@ void CleanModules(
 // Returns whether or not the command will actually will execute. It can be skipped 
 // if the module is in flight running on the same configuration a build command
 EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
-	EditorState* editor_state, 
-	unsigned int index, 
+	EditorState* editor_state,
+	unsigned int index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	EDITOR_FINISH_BUILD_COMMAND_STATUS* build_status = nullptr
 );
@@ -79,7 +79,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 // Runs on multiple threads
 // It will report the status, in order, for each module
 void RebuildModules(
-	EditorState* editor_state, 
+	EditorState* editor_state,
 	Stream<unsigned int> indices,
 	EDITOR_MODULE_CONFIGURATION* configurations,
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* launch_statuses,
@@ -98,8 +98,6 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 
 void DeleteModuleFlagFiles(EditorState* editor_state);
 
-void InitializeModuleConfigurations(EditorState* editor_state);
-
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool IsGraphicsModule(const EditorState* editor_state, unsigned int index);
@@ -109,7 +107,7 @@ unsigned int GetModuleIndex(const EditorState* editor_state, Stream<wchar_t> sol
 unsigned int GetModuleIndexFromName(const EditorState* editor_state, Stream<wchar_t> library_Name);
 
 void GetModuleBuildFlagFile(
-	const EditorState* editor_state, 
+	const EditorState* editor_state,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION configuration,
 	Stream<wchar_t> command,
@@ -118,9 +116,9 @@ void GetModuleBuildFlagFile(
 
 void GetModuleBuildLogPath(
 	const EditorState* editor_state,
-	unsigned int module_index, 
+	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	Stream<wchar_t> command, 
+	Stream<wchar_t> command,
 	Stream<wchar_t>& log_path
 );
 

@@ -79,7 +79,7 @@ void EditorStateClearFlag(EditorState* editor_state, size_t flag) {
 
 // -----------------------------------------------------------------------------------------------------------------
 
-bool EditorStateHasFlag(EditorState* editor_state, size_t flag) {
+bool EditorStateHasFlag(const EditorState* editor_state, size_t flag) {
 	return function::HasFlagAtomic(editor_state->flags, flag);
 }
 
@@ -106,7 +106,7 @@ void TickModuleStatus(EditorState* editor_state) {
 					if (info->library_last_write_time != 0) {
 						success = HasModuleFunction(editor_state, index, configuration);
 					}
-					SetModuleLoadStatus(project_modules->buffer + index, success, configuration);
+					SetModuleLoadStatus(&project_modules->buffer[index], success, configuration);
 				}
 				if (is_solution_updated && info->load_status == EDITOR_MODULE_LOAD_GOOD) {
 					info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
@@ -354,6 +354,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
 	ECS_ASSERT(success);
 
+	size_t editor_component_allocator_size = editor_state->editor_components.DefaultAllocatorSize();
+	void* editor_component_allocator_buffer = editor_allocator->Allocate(editor_component_allocator_size);
+	editor_state->editor_components.Initialize(editor_component_allocator_buffer);
+
 	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
 	editor_state->ui_reflection = editor_ui_reflection;
@@ -381,7 +385,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	SetConsole(console_memory_manager, editor_task_manager, CONSOLE_RELATIVE_DUMP_PATH);
 
 	GetConsole()->AddSystemFilterString(EDITOR_CONSOLE_SYSTEM_NAME);
-	InitializeModuleConfigurations(editor_state);
 
 	FileExplorerData* file_explorer_data = (FileExplorerData*)calloc(1, sizeof(FileExplorerData));
 	editor_state->file_explorer_data = file_explorer_data;
@@ -391,7 +394,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->event_queue.InitializeFromBuffer(editor_events, EDITOR_EVENT_QUEUE_CAPACITY);
 
 	ProjectModules* project_modules = (ProjectModules*)malloc(sizeof(ProjectModules));
-	*project_modules = ProjectModules(polymorphic_editor_allocator, 1);
+	project_modules->Initialize(polymorphic_editor_allocator, 0);
 	editor_state->project_modules = project_modules;
 
 	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
@@ -412,6 +415,21 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	InitializeSandboxes(editor_state);
 
 	CreateWorldDescriptorUIReflectionType(editor_state);
+
+	unsigned int ecs_runtime_index = 0;
+#ifdef ECSENGINE_RELEASE
+	ecs_runtime_index = 2;
+#endif
+
+#ifdef ECSENGINE_DISTRIBUTION
+	ecs_runtime_index = 4;
+#endif
+
+	Stream<wchar_t> pdb_paths[2] = {
+		 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index],
+		 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index + 1]
+	};
+	OS::InitializeSymbolicLinksPaths({ pdb_paths, std::size(pdb_paths) });
 }
 
 // -----------------------------------------------------------------------------------------------------------------

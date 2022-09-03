@@ -28,7 +28,7 @@ namespace ECSEngine {
 		HWND hWnd;
 		uint2 window_size;
 		MemoryManager* allocator;
-		DXGI_USAGE target_usage = 0;
+		ECS_GRAPHICS_USAGE target_usage = ECS_GRAPHICS_USAGE_NONE;
 		bool gamma_corrected = true;
 	};
 
@@ -36,56 +36,59 @@ namespace ECSEngine {
 	// The initial data is a stream of Stream<void> for each mip map data
 	struct GraphicsTexture1DDescriptor {
 		unsigned int width;
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
-		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
-		D3D11_CPU_ACCESS_FLAG cpu_flag = static_cast<D3D11_CPU_ACCESS_FLAG>(0);
-		D3D11_BIND_FLAG bind_flag = D3D11_BIND_SHADER_RESOURCE;
-		unsigned int misc_flag = 0u;
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
 	};
 
 	// Size must always be initialized;
 	// The initial data is a stream of Stream<void> for each mip map data
 	struct GraphicsTexture2DDescriptor {
 		uint2 size;
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
-		unsigned int usage = D3D11_USAGE_DEFAULT;
-		unsigned int cpu_flag = 0;
-		unsigned int bind_flag = D3D11_BIND_SHADER_RESOURCE;
-		unsigned int misc_flag = 0u;
 		unsigned int sample_count = 1u;
 		unsigned int sampler_quality = 0u;
+
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
 	};
 
 	// Size must be set
 	// The initial data is a stream of Stream<void> for each mip map data
 	struct GraphicsTexture3DDescriptor {
 		uint3 size;
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
 		unsigned int array_size = 1u;
 		unsigned int mip_levels = 0u;
-		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
-		D3D11_CPU_ACCESS_FLAG cpu_flag = static_cast<D3D11_CPU_ACCESS_FLAG>(0);
-		D3D11_BIND_FLAG bind_flag = D3D11_BIND_SHADER_RESOURCE;
-		unsigned int misc_flag = 0u;
+
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
 	};
 
 	// The initial data is a stream of Stream<void> for each mip map data
 	struct GraphicsTextureCubeDescriptor {
 		uint2 size;
-		Stream<Stream<void>> mip_data = { nullptr, 0 };
-		DXGI_FORMAT format = DXGI_FORMAT_R32G32B32_FLOAT;
 		unsigned int mip_levels = 0u;
-		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
-		D3D11_CPU_ACCESS_FLAG cpu_flag = static_cast<D3D11_CPU_ACCESS_FLAG>(0);
-		D3D11_BIND_FLAG bind_flag = D3D11_BIND_SHADER_RESOURCE;
-		unsigned int misc_flag = 0u;
+
+		Stream<Stream<void>> mip_data = { nullptr, 0 };
+		ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flag = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_BIND_TYPE bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flag = ECS_GRAPHICS_MISC_NONE;
 	};
 
 	struct GraphicsPipelineBlendState {
@@ -357,75 +360,75 @@ namespace ECSEngine {
 
 		void BindComputeShader(ComputeShader shader);
 
-		void BindVertexConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+		void BindVertexConstantBuffer(ConstantBuffer buffer, unsigned int slot = 0u);
 
-		void BindVertexConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+		void BindVertexConstantBuffers(Stream<ConstantBuffer> buffers, unsigned int start_slot = 0u);
 
-		void BindPixelConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+		void BindPixelConstantBuffer(ConstantBuffer buffer, unsigned int slot = 0u);
 
-		void BindPixelConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+		void BindPixelConstantBuffers(Stream<ConstantBuffer> buffers, unsigned int start_slot = 0u);
 
-		void BindDomainConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+		void BindDomainConstantBuffer(ConstantBuffer buffer, unsigned int slot = 0u);
 
-		void BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+		void BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, unsigned int start_slot = 0u);
 
-		void BindHullConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+		void BindHullConstantBuffer(ConstantBuffer buffer, unsigned int slot = 0u);
 
-		void BindHullConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+		void BindHullConstantBuffers(Stream<ConstantBuffer> buffers, unsigned int start_slot = 0u);
 
-		void BindGeometryConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+		void BindGeometryConstantBuffer(ConstantBuffer buffer, unsigned int slot = 0u);
 
-		void BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+		void BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, unsigned int start_slot = 0u);
 
-		void BindComputeConstantBuffer(ConstantBuffer buffer, UINT slot = 0u);
+		void BindComputeConstantBuffer(ConstantBuffer buffer, unsigned int slot = 0u);
 
-		void BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, UINT start_slot = 0u);
+		void BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, unsigned int start_slot = 0u);
 
-		void BindVertexBuffer(VertexBuffer buffer, UINT slot = 0u);
+		void BindVertexBuffer(VertexBuffer buffer, unsigned int slot = 0u);
 
-		void BindVertexBuffers(Stream<VertexBuffer> buffers, UINT start_slot = 0u);
+		void BindVertexBuffers(Stream<VertexBuffer> buffers, unsigned int start_slot = 0u);
 
 		void BindTopology(Topology topology);
 
-		void BindPixelResourceView(ResourceView component, UINT slot = 0u);
+		void BindPixelResourceView(ResourceView component, unsigned int slot = 0u);
 
-		void BindPixelResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindPixelResourceViews(Stream<ResourceView> component, unsigned int start_slot = 0u);
 
-		void BindVertexResourceView(ResourceView component, UINT slot = 0u);
+		void BindVertexResourceView(ResourceView component, unsigned int slot = 0u);
 
-		void BindVertexResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindVertexResourceViews(Stream<ResourceView> component, unsigned int start_slot = 0u);
 
-		void BindDomainResourceView(ResourceView component, UINT slot = 0u);
+		void BindDomainResourceView(ResourceView component, unsigned int slot = 0u);
 
-		void BindDomainResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindDomainResourceViews(Stream<ResourceView> component, unsigned int start_slot = 0u);
 
-		void BindHullResourceView(ResourceView component, UINT slot = 0u);
+		void BindHullResourceView(ResourceView component, unsigned int slot = 0u);
 
-		void BindHullResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindHullResourceViews(Stream<ResourceView> component, unsigned int start_slot = 0u);
 
-		void BindGeometryResourceView(ResourceView component, UINT slot = 0u);
+		void BindGeometryResourceView(ResourceView component, unsigned int slot = 0u);
 
-		void BindGeometryResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindGeometryResourceViews(Stream<ResourceView> component, unsigned int start_slot = 0u);
 
-		void BindComputeResourceView(ResourceView component, UINT slot = 0u);
+		void BindComputeResourceView(ResourceView component, unsigned int slot = 0u);
 
-		void BindComputeResourceViews(Stream<ResourceView> component, UINT start_slot = 0u);
+		void BindComputeResourceViews(Stream<ResourceView> component, unsigned int start_slot = 0u);
 
-		void BindSamplerState(SamplerState sampler, UINT slot = 0u);
+		void BindSamplerState(SamplerState sampler, unsigned int slot = 0u);
 
-		void BindSamplerStates(Stream<SamplerState> samplers, UINT start_slot = 0u);
+		void BindSamplerStates(Stream<SamplerState> samplers, unsigned int start_slot = 0u);
 
-		void BindPixelUAView(UAView view, UINT start_slot = 0u);
+		void BindPixelUAView(UAView view, unsigned int start_slot = 0u);
 
-		void BindPixelUAViews(Stream<UAView> views, UINT start_slot = 0u);
+		void BindPixelUAViews(Stream<UAView> views, unsigned int start_slot = 0u);
 
-		void BindComputeUAView(UAView view, UINT start_slot = 0u);
+		void BindComputeUAView(UAView view, unsigned int start_slot = 0u);
 
-		void BindComputeUAViews(Stream<UAView> views, UINT start_slot = 0u);
+		void BindComputeUAViews(Stream<UAView> views, unsigned int start_slot = 0u);
 
 		void BindRasterizerState(RasterizerState state);
 
-		void BindDepthStencilState(DepthStencilState state, UINT stencil_ref = 0);
+		void BindDepthStencilState(DepthStencilState state, unsigned int stencil_ref = 0);
 
 		void BindBlendState(BlendState state);
 
@@ -462,9 +465,9 @@ namespace ECSEngine {
 			size_t int_size,
 			size_t element_count,
 			bool temporary = false, 
-			D3D11_USAGE usage = D3D11_USAGE_DEFAULT, 
-			unsigned int cpu_access = 0, 
-			unsigned int misc_flags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT, 
+			ECS_GRAPHICS_CPU_ACCESS cpu_access = ECS_GRAPHICS_CPU_ACCESS_NONE, 
+			ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -473,9 +476,9 @@ namespace ECSEngine {
 			size_t element_count,
 			const void* data,
 			bool temporary = false, 
-			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE, 
-			unsigned int cpu_access = 0,
-			unsigned int misc_flags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_IMMUTABLE,
+			ECS_GRAPHICS_CPU_ACCESS cpu_access = ECS_GRAPHICS_CPU_ACCESS_NONE,
+			ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -569,9 +572,9 @@ namespace ECSEngine {
 			size_t element_size, 
 			size_t element_count, 
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC, 
-			unsigned int cpuFlags = D3D11_CPU_ACCESS_WRITE, 
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DYNAMIC, 
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_WRITE, 
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -580,9 +583,9 @@ namespace ECSEngine {
 			size_t element_count,
 			const void* buffer,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
-			unsigned int cpuFlags = 0,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_IMMUTABLE,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_NONE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 		
@@ -590,18 +593,18 @@ namespace ECSEngine {
 			size_t byte_size,
 			const void* buffer,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
-			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DYNAMIC,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_WRITE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		ConstantBuffer CreateConstantBuffer(
 			size_t byte_size,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
-			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DYNAMIC,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_WRITE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -609,9 +612,9 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
-			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DYNAMIC,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_WRITE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -620,9 +623,9 @@ namespace ECSEngine {
 			size_t element_count,
 			const void* data,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
-			unsigned int cpuAccessFlags = 0,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_IMMUTABLE,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_NONE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -630,9 +633,9 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
-			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DYNAMIC,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_WRITE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -641,9 +644,9 @@ namespace ECSEngine {
 			size_t element_count,
 			const void* data,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
-			unsigned int cpuAccessFlags = 0,
-			unsigned int miscFlags = 0, 
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_IMMUTABLE,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_NONE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -651,9 +654,9 @@ namespace ECSEngine {
 			size_t element_size,
 			size_t element_count,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_DYNAMIC,
-			unsigned int cpuAccessFlags = D3D11_CPU_ACCESS_WRITE,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DYNAMIC,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_WRITE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -662,9 +665,9 @@ namespace ECSEngine {
 			size_t element_count,
 			const void* data,
 			bool temporary = false,
-			D3D11_USAGE usage = D3D11_USAGE_IMMUTABLE,
-			unsigned int cpuAccessFlags = 0,
-			unsigned int miscFlags = 0,
+			ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_IMMUTABLE,
+			ECS_GRAPHICS_CPU_ACCESS cpuFlags = ECS_GRAPHICS_CPU_ACCESS_NONE,
+			ECS_GRAPHICS_MISC_FLAGS miscFlags = ECS_GRAPHICS_MISC_NONE,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
@@ -674,7 +677,7 @@ namespace ECSEngine {
 
 		ConsumeStructuredBuffer CreateConsumeStructuredBuffer(size_t element_size, size_t element_count, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		SamplerState CreateSamplerState(const D3D11_SAMPLER_DESC& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		SamplerState CreateSamplerState(const SamplerDescriptor& descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -684,10 +687,10 @@ namespace ECSEngine {
 
 		TextureCube CreateTexture(const GraphicsTextureCubeDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
+		// ECS_GRAPHICS_FORMAT_UNKNOWN means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			Texture1D texture,
-			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1,
 			bool temporary = false,
@@ -696,10 +699,10 @@ namespace ECSEngine {
 
 		ResourceView CreateTextureShaderViewResource(Texture1D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
+		// ECS_GRAPHICS_FORMAT_UNKNOWN means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			Texture2D texture,
-			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1,
 			bool temporary = false,
@@ -708,10 +711,10 @@ namespace ECSEngine {
 
 		ResourceView CreateTextureShaderViewResource(Texture2D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
+		// ECS_GRAPHICS_FORMAT_UNKNOWN means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			Texture3D texture,
-			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT,
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN,
 			unsigned int most_detailed_mip = 0u,
 			unsigned int mip_levels = -1,
 			bool temporary = false,
@@ -720,10 +723,10 @@ namespace ECSEngine {
 
 		ResourceView CreateTextureShaderViewResource(Texture3D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// DXGI_FORMAT_FORCE_UINT means get the format from the texture descriptor
+		// ECS_GRAPHICS_FORMAT_UNKNOWN means get the format from the texture descriptor
 		ResourceView CreateTextureShaderView(
 			TextureCube texture, 
-			DXGI_FORMAT format = DXGI_FORMAT_FORCE_UINT, 
+			ECS_GRAPHICS_FORMAT format = ECS_GRAPHICS_FORMAT_UNKNOWN,
 			unsigned int most_detailed_mip = 0u, 
 			unsigned int mip_levels = -1,
 			bool temporary = false,
@@ -738,11 +741,11 @@ namespace ECSEngine {
 
 		DepthStencilView CreateDepthStencilView(Texture2D texture, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		ResourceView CreateBufferView(StandardBuffer buffer, DXGI_FORMAT format, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		ResourceView CreateBufferView(StandardBuffer buffer, ECS_GRAPHICS_FORMAT format, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		ResourceView CreateBufferView(StructuredBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		UAView CreateUAView(UABuffer buffer, DXGI_FORMAT format, unsigned int first_element = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		UAView CreateUAView(UABuffer buffer, ECS_GRAPHICS_FORMAT format, unsigned int first_element = 0, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		UAView CreateUAView(AppendStructuredBuffer buffer, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -842,15 +845,15 @@ namespace ECSEngine {
 
 		GraphicsViewport GetBoundViewport() const;
 
-		void* MapBuffer(ID3D11Buffer* buffer, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		void* MapBuffer(ID3D11Buffer* buffer, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture(Texture1D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		void* MapTexture(Texture1D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture(Texture2D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		void* MapTexture(Texture2D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void* MapTexture(Texture3D texture, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
+		void* MapTexture(Texture3D texture, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int subresource_index = 0, unsigned int map_flags = 0);
 
-		void UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD, unsigned int map_flags = 0u, unsigned int subresource_index = 0);
+		void UpdateBuffer(ID3D11Buffer* buffer, const void* data, size_t data_size, ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD, unsigned int map_flags = 0u, unsigned int subresource_index = 0);
 
 		void UnmapBuffer(ID3D11Buffer* buffer, unsigned int subresource_index = 0);
 
@@ -1094,9 +1097,9 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindVertexBuffer(VertexBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindVertexBuffers(Stream<VertexBuffer> buffers, GraphicsContext* context, unsigned int start_slot = 0u);
 
 	ECSENGINE_API void BindIndexBuffer(IndexBuffer index_buffer, GraphicsContext* context);
 
@@ -1114,79 +1117,79 @@ namespace ECSEngine {
 
 	ECSENGINE_API void BindComputeShader(ComputeShader shader, GraphicsContext* context);
 
-	ECSENGINE_API void BindVertexConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindVertexConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
 	ECSENGINE_API void BindVertexConstantBuffers(
 		Stream<ConstantBuffer> buffers,
 		GraphicsContext* context,
-		UINT start_slot = 0u
+		unsigned int start_slot = 0u
 	);
 
-	ECSENGINE_API void BindPixelConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindPixelConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
 	ECSENGINE_API void BindPixelConstantBuffers(
 		Stream<ConstantBuffer> buffers,
 		GraphicsContext* context,
-		UINT start_slot = 0u
+		unsigned int start_slot = 0u
 	);
 
-	ECSENGINE_API void BindComputeConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindComputeConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindComputeConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindDomainConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindDomainConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindDomainConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindHullConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindHullConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindHullConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindHullConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindGeometryConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindGeometryConstantBuffer(ConstantBuffer buffer, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindGeometryConstantBuffers(Stream<ConstantBuffer> buffers, GraphicsContext* context, unsigned int slot = 0u);
 
 	ECSENGINE_API void BindTopology(Topology topology, GraphicsContext* context);
 
-	ECSENGINE_API void BindPixelResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindPixelResourceView(ResourceView view, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindPixelResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindPixelResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int start_slot = 0u);
 
-	ECSENGINE_API void BindVertexResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindVertexResourceView(ResourceView view, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindVertexResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindVertexResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindDomainResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindDomainResourceView(ResourceView view, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindDomainResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindDomainResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindHullResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindHullResourceView(ResourceView view, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindHullResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindHullResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindGeometryResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindGeometryResourceView(ResourceView view, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindGeometryResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindGeometryResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindComputeResourceView(ResourceView view, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindComputeResourceView(ResourceView view, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindComputeResourceViews(Stream<ResourceView> views, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindComputeResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindSamplerState(SamplerState sampler, GraphicsContext* context, UINT slot = 0u);
+	ECSENGINE_API void BindSamplerState(SamplerState sampler, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, unsigned int start_slot = 0u);
 
-	ECSENGINE_API void BindPixelUAView(UAView view, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindPixelUAView(UAView view, GraphicsContext* context, unsigned int start_slot = 0u);
 
-	ECSENGINE_API void BindPixelUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindPixelUAViews(Stream<UAView> views, GraphicsContext* context, unsigned int start_slot = 0u);
 
-	ECSENGINE_API void BindComputeUAView(UAView view, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindComputeUAView(UAView view, GraphicsContext* context, unsigned int start_slot = 0u);
 
-	ECSENGINE_API void BindComputeUAViews(Stream<UAView> views, GraphicsContext* context, UINT start_slot = 0u);
+	ECSENGINE_API void BindComputeUAViews(Stream<UAView> views, GraphicsContext* context, unsigned int start_slot = 0u);
 
 	ECSENGINE_API void BindRasterizerState(RasterizerState state, GraphicsContext* context);
 
-	ECSENGINE_API void BindDepthStencilState(DepthStencilState state, GraphicsContext* context, UINT stencil_ref = 0);
+	ECSENGINE_API void BindDepthStencilState(DepthStencilState state, GraphicsContext* context, unsigned int stencil_ref = 0);
 
 	ECSENGINE_API void BindBlendState(BlendState state, GraphicsContext* context);
 
@@ -1327,7 +1330,7 @@ namespace ECSEngine {
 	ECSENGINE_API void* MapBuffer(
 		ID3D11Buffer* buffer,
 		GraphicsContext* context,
-		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
 		unsigned int map_flags = 0
 	);
@@ -1336,7 +1339,7 @@ namespace ECSEngine {
 	ECSENGINE_API D3D11_MAPPED_SUBRESOURCE MapBufferEx(
 		ID3D11Buffer* buffer,
 		GraphicsContext* context,
-		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
 		unsigned int map_flags = 0
 	);
@@ -1346,7 +1349,7 @@ namespace ECSEngine {
 	ECSENGINE_API void* MapTexture(
 		Texture texture,
 		GraphicsContext* context,
-		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
 		unsigned int map_flags = 0
 	);
@@ -1356,7 +1359,7 @@ namespace ECSEngine {
 	ECSENGINE_API D3D11_MAPPED_SUBRESOURCE MapTextureEx(
 		Texture texture,
 		GraphicsContext* context,
-		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
 		unsigned int subresource_index = 0,
 		unsigned int map_flags = 0
 	);
@@ -1391,7 +1394,7 @@ namespace ECSEngine {
 		const void* data,
 		size_t data_size,
 		GraphicsContext* context,
-		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
 		unsigned int map_flags = 0u,
 		unsigned int subresource_index = 0
 	);
@@ -1404,7 +1407,7 @@ namespace ECSEngine {
 		const void* data,
 		size_t data_size,
 		GraphicsContext* context,
-		D3D11_MAP map_type = D3D11_MAP_WRITE_DISCARD,
+		ECS_GRAPHICS_MAP_TYPE map_type = ECS_GRAPHICS_MAP_WRITE_DISCARD,
 		unsigned int map_flags = 0u,
 		unsigned int subresource_index = 0
 	);
@@ -1435,7 +1438,7 @@ namespace ECSEngine {
 	// The mesh will have no name associated with it
 	// It will release the graphics resources of the meshes
 	// The submeshes will inherit the mesh name if it has one
-	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, unsigned int misc_flags = 0);
+	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
 
 	// Same as the non mask variant - the difference is that it will only convert the meshes specified
 	// in the mesh mask
@@ -1447,7 +1450,7 @@ namespace ECSEngine {
 		Stream<Mesh> meshes, 
 		Submesh* submeshes,
 		Stream<unsigned int> mesh_mask, 
-		unsigned int misc_flags = 0
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
 	);
 
 #endif // ECSENGINE_DIRECTX11

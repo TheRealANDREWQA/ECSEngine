@@ -334,7 +334,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		void SystemParametersColorTheme(UIDrawer& drawer) {
-			const size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK;
+			const size_t input_configuration = UI_CONFIG_COLOR_INPUT_CALLBACK | UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE;
 			const size_t slider_configuration = UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
 			UIDrawConfig config;
@@ -348,33 +348,33 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_startup_descriptors.color_theme;
 			button_data.descriptor_size = sizeof(UIColorThemeDescriptor);
-			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME;
 			button_data.is_system_theme = true;
 			button_data.system_descriptor = theme;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
 
 			const UIColorThemeDescriptor* startup_theme = &system->m_startup_descriptors.color_theme;
-			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme);
+			drawer.ColorInput(input_configuration, config, "Theme", &theme->theme, theme->theme);
 
 			color_input_callback.callback = { SystemParameterColorThemeCallback, nullptr, 0 };
-			drawer.ColorInput(input_configuration, config, "Text", &theme->text);
-			drawer.ColorInput(input_configuration, config, "Graph hover line", &theme->graph_hover_line);
-			drawer.ColorInput(input_configuration, config, "Graph line", &theme->graph_line);
-			drawer.ColorInput(input_configuration, config, "Graph sample circle", &theme->graph_sample_circle);
-			drawer.ColorInput(input_configuration, config, "Histogram", &theme->histogram_color);
-			drawer.ColorInput(input_configuration, config, "Histogram hovered", &theme->histogram_hovered_color);
-			drawer.ColorInput(input_configuration, config, "Histogram text", &theme->histogram_text_color);
-			drawer.ColorInput(input_configuration, config, "Unavailable text", &theme->unavailable_text);
-			drawer.ColorInput(input_configuration, config, "Background", &theme->background);
-			drawer.ColorInput(input_configuration, config, "Borders", &theme->borders);
-			drawer.ColorInput(input_configuration, config, "Collapse Triangle", &theme->collapse_triangle);
-			drawer.ColorInput(input_configuration, config, "Docking gizmo background", &theme->docking_gizmo_background);
-			drawer.ColorInput(input_configuration, config, "Docking gizmo border", &theme->docking_gizmo_border);
-			drawer.ColorInput(input_configuration, config, "Hierarchy drag node bar", &theme->hierarchy_drag_node_bar);
-			drawer.ColorInput(input_configuration, config, "Render sliders active part", &theme->render_sliders_active_part);
-			drawer.ColorInput(input_configuration, config, "Render sliders background", &theme->render_sliders_background);
-			drawer.ColorInput(input_configuration, config, "Region header X", &theme->region_header_x);
-			drawer.ColorInput(input_configuration, config, "Region header hovered X", &theme->region_header_hover_x);
+			drawer.ColorInput(input_configuration, config, "Text", &theme->text, theme->text);
+			drawer.ColorInput(input_configuration, config, "Graph hover line", &theme->graph_hover_line, theme->graph_hover_line);
+			drawer.ColorInput(input_configuration, config, "Graph line", &theme->graph_line, theme->graph_line);
+			drawer.ColorInput(input_configuration, config, "Graph sample circle", &theme->graph_sample_circle, theme->graph_sample_circle);
+			drawer.ColorInput(input_configuration, config, "Histogram", &theme->histogram_color, theme->histogram_color);
+			drawer.ColorInput(input_configuration, config, "Histogram hovered", &theme->histogram_hovered_color, theme->histogram_hovered_color);
+			drawer.ColorInput(input_configuration, config, "Histogram text", &theme->histogram_text_color, theme->histogram_text_color);
+			drawer.ColorInput(input_configuration, config, "Unavailable text", &theme->unavailable_text, theme->unavailable_text);
+			drawer.ColorInput(input_configuration, config, "Background", &theme->background, theme->background);
+			drawer.ColorInput(input_configuration, config, "Borders", &theme->borders, theme->borders);
+			drawer.ColorInput(input_configuration, config, "Collapse Triangle", &theme->collapse_triangle, theme->collapse_triangle);
+			drawer.ColorInput(input_configuration, config, "Docking gizmo background", &theme->docking_gizmo_background, theme->docking_gizmo_background);
+			drawer.ColorInput(input_configuration, config, "Docking gizmo border", &theme->docking_gizmo_border, theme->docking_gizmo_border);
+			drawer.ColorInput(input_configuration, config, "Hierarchy drag node bar", &theme->hierarchy_drag_node_bar, theme->hierarchy_drag_node_bar);
+			drawer.ColorInput(input_configuration, config, "Render sliders active part", &theme->render_sliders_active_part, theme->render_sliders_active_part);
+			drawer.ColorInput(input_configuration, config, "Render sliders background", &theme->render_sliders_background, theme->render_sliders_background);
+			drawer.ColorInput(input_configuration, config, "Region header X", &theme->region_header_x, theme->region_header_x);
+			drawer.ColorInput(input_configuration, config, "Region header hovered X", &theme->region_header_hover_x, theme->region_header_hover_x);
 
 			config.flag_count = 0;
 			UIConfigSliderChangedValueCallback callback;
@@ -1158,16 +1158,16 @@ namespace ECSEngine {
 			descriptor.destroy_action = ReleaseLockedWindow;
 
 			unsigned int window_index = system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_NO_DOCKING | UI_DOCKSPACE_LOCK_WINDOW
-				| UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_DOCKSPACE_LOCK_WINDOW);
+				| UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER);
 			system->AddWindowMemoryResource(sentence, window_index);
 			if (handler_memory != nullptr) {
 				system->AddWindowMemoryResource(handler_memory, window_index);
 			}
 
-			unsigned int border_index;
+			/*unsigned int border_index;
 			DockspaceType type;
 			UIDockspace* dockspace = system->GetDockspaceFromWindow(window_index, border_index, type);
-			system->SetPopUpWindowPosition(window_index, { AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.x), AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.y) });
+			system->SetPopUpWindowPosition(window_index, { AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.x), AlignMiddle(-1.0f, 2.0f, dockspace->transform.scale.y) });*/
 			return window_index;
 		}
 

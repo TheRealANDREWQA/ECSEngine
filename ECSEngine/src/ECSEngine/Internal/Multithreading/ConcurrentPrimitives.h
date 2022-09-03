@@ -70,14 +70,13 @@ namespace ECSEngine {
 
 		unsigned int Exit(unsigned int count = 1);
 
-		// It will spin wait until the target is reached
 		// Default behaviour - waits until count is the same as target
-		// If one of the values is not -1, then it will wait until that value is reached
+		// If one of the parameters is not -1, then it will wait until that value is reached
 		void SpinWait(unsigned int count_value = -1, unsigned int target_value = -1);
 
-		// It will check the value at certain intervals. In between it will sleep.
+		// It will check a value at certain intervals. In between it will sleep.
 		// Default behaviour - wait until count is the same as target
-		// If one of the values is not -1, then it will wait until the value is reached
+		// If one of the parameters is not -1, then it will wait until the value is reached
 		void TickWait(size_t sleep_microseconds, unsigned int count_value = -1, unsigned int target_value = -1);
 
 		std::atomic<unsigned int> count;

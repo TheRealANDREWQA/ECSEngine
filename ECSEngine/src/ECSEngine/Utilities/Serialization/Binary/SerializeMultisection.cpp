@@ -12,7 +12,7 @@ namespace ECSEngine {
 
 	// Add 32 to the multisection size so as to avoid breaking the load factor of the hash table for values like 29 -> 32
 #define CREATE_ACCELERATION_TABLE(multisections) ECS_ASSERT(multisections.size < MAX_ACCELERATION_TABLE_MULTISECTIONS); \
-									size_t table_capacity = function::PowerOfTwoGreater(multisections.size + 32).x; \
+									size_t table_capacity = function::PowerOfTwoGreater(multisections.size + 32); \
 									size_t table_size = AccelerationTable::MemoryOf(table_capacity); \
 									void* table_allocation = ECS_STACK_ALLOC(table_size); \
 									AccelerationTable table(table_allocation, table_capacity); \

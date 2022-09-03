@@ -783,77 +783,16 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------
 
-		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float, const char*);
-		template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double, const char*);
-
-		// ----------------------------------------------------------------------------------------------------------
-
-		size_t SearchBytes(const void* data, size_t element_count, const void* value_to_search, size_t byte_size)
-		{
-			auto loop = [=](auto values, auto simd_value_to_search, auto constant_byte_size) {
-				constexpr size_t byte_size = constant_byte_size();
-
-				size_t simd_count = GetSimdCount(element_count, simd_value_to_search.size());
-				for (size_t index = 0; index < simd_count; index += simd_value_to_search.size()) {
-					values.load(function::OffsetPointer(data, byte_size * index));
-					auto compare = values == simd_value_to_search;
-					int first = horizontal_find_first(compare);
-					if (first != -1) {
-						// We have a match
-						return index + first;
-					}
-				}
-
-				// For the last elements use a partial load
-				values.load_partial(element_count - simd_count, function::OffsetPointer(data, byte_size * simd_count));
-				auto compare = values == simd_value_to_search;
-				int first = horizontal_find_first(compare);
-				if (first != -1) {
-					return simd_count + first;
-				}
-				return (size_t)-1;
-			};
-
-			if (byte_size == 1) {
-				// Use a Vec32uc
-				Vec32uc values;
-				Vec32uc simd_value_to_search(*(unsigned char*)value_to_search);
-
-				return loop(values, simd_value_to_search, std::integral_constant<size_t, 1>());
-			}
-			else if (byte_size == 2) {
-				// Use a Vec16us
-				Vec16us values;
-				Vec16us simd_value_to_search(*(unsigned short*)value_to_search);
-
-				return loop(values, simd_value_to_search, std::integral_constant<size_t, 2>());
-			}
-			else if (byte_size == 4) {
-				Vec8ui values;
-				Vec8ui simd_value_to_search(*(unsigned int*)value_to_search);
-
-				return loop(values, simd_value_to_search, std::integral_constant<size_t, 4>());
-			}
-			else if (byte_size == 8) {
-				Vec4ui values;
-				Vec4ui simd_value_to_search(*(size_t*)value_to_search);
-
-				return loop(values, simd_value_to_search, std::integral_constant<size_t, 8>());
-			}
-			else {
-				ECS_ASSERT(false);
-			}
-
-			return -1;
-		}
+		template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
+		template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
+		template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
+		template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
+		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
+		template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
+		template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
+		template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
+		template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
+		template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
 
 		// ----------------------------------------------------------------------------------------------------------
 

@@ -62,4 +62,4 @@ struct EditorModule {
 	EditorModuleInfo infos[EDITOR_MODULE_CONFIGURATION_COUNT];
 };
 
-using ProjectModules = ECSEngine::ResizableStream<EditorModule>;
+typedef ECSEngine::ResizableStream<EditorModule> ProjectModules;

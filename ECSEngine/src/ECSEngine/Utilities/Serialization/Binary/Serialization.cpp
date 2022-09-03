@@ -13,10 +13,69 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	bool SerializeShouldOmitField(Stream<char> type, Stream<char> name, Stream<SerializeOmitField> omit_fields)
+	{
+		for (size_t index = 0; index < omit_fields.size; index++) {
+			if (function::CompareStrings(omit_fields[index].type, type) && function::CompareStrings(omit_fields[index].name, name)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	bool AssetSerializeOmitFieldsExist(const ReflectionManager* reflection_manager, Stream<SerializeOmitField> omit_fields)
+	{
+		for (size_t index = 0; index < omit_fields.size; index++) {
+			ReflectionType type;
+			if (reflection_manager->TryGetType(omit_fields[index].type, type)) {
+				size_t subindex = 0;
+				for (; subindex < type.fields.size; subindex++) {
+					if (function::CompareStrings(type.fields[subindex].name, omit_fields[index].name)) {
+						break;
+					}
+				}
+
+				if (subindex == type.fields.size) {
+					return false;
+				}
+			}
+			else {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	void GetSerializeOmitFieldsFromExclude(
+		const ReflectionManager* reflection_manager, 
+		CapacityStream<SerializeOmitField>& omit_fields,
+		Stream<char> type_name,
+		Stream<Stream<char>> fields_to_keep
+	)
+	{
+		const ReflectionType* type = reflection_manager->GetType(type_name);
+		for (size_t index = 0; index < type->fields.size; index++) {
+			unsigned int subindex = function::FindString(type->fields[index].name, fields_to_keep);
+			if (subindex == -1) {
+				omit_fields.Add({ type->name, type->fields[index].name });
+			}
+		}
+
+		omit_fields.AssertCapacity();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	// It will write only the fields of this type, the user defined types are only specified by name
 	// The custom fields should be filled in with the fields which have a custom serializer
 	template<bool write_data>
-	size_t WriteTypeTable(const ReflectionType* type, uintptr_t& stream, CapacityStream<uint2>& custom_fields) {
+	size_t WriteTypeTable(const ReflectionType* type, uintptr_t& stream, CapacityStream<uint2>& custom_fields, Stream<SerializeOmitField> omit_fields) {
 		size_t total_size = 0;
 
 		// Write the name of the type first
@@ -25,9 +84,12 @@ namespace ECSEngine {
 
 		// Get the count of fields that want to be serialized
 		size_t serializable_field_count = type->fields.size;
+
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
-
+			if (!skip_serializable && omit_fields.size > 0) {
+				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].definition, omit_fields);
+			}
 			serializable_field_count -= skip_serializable;
 		}
 		
@@ -37,35 +99,41 @@ namespace ECSEngine {
 			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
 
 			if (!skip_serializable) {
-				const ReflectionField* field = &type->fields[index];
-
-				// Write the field name
-				unsigned short field_name_size = (unsigned short)field->name.size;
-				total_size += WriteWithSizeShort<write_data>(&stream, field->name.buffer, field_name_size);
-
-				// Write the field type - the stream type, basic type, basic type count, stream byte size and the byte size all
-				// need to be written or the custom serializer index with its version if a match was found
-				unsigned int custom_serializer_index = -1;
-				unsigned int custom_serializer_version = 0;
-				if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					custom_serializer_index = FindSerializeCustomType(field->definition);
+				if (omit_fields.size > 0) {
+					skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].definition, omit_fields);
 				}
+				
+				if (!skip_serializable) {
+					const ReflectionField* field = &type->fields[index];
 
-				total_size += Write<write_data>(&stream, &field->info.stream_type, sizeof(field->info.stream_type));
-				total_size += Write<write_data>(&stream, &field->info.stream_byte_size, sizeof(field->info.stream_byte_size));
-				total_size += Write<write_data>(&stream, &field->info.basic_type, sizeof(field->info.basic_type));
-				total_size += Write<write_data>(&stream, &field->info.basic_type_count, sizeof(field->info.basic_type_count));
-				total_size += Write<write_data>(&stream, &field->info.byte_size, sizeof(field->info.byte_size));
-				total_size += Write<write_data>(&stream, &custom_serializer_index, sizeof(custom_serializer_index));
+					// Write the field name
+					unsigned short field_name_size = (unsigned short)field->name.size;
+					total_size += WriteWithSizeShort<write_data>(&stream, field->name.buffer, field_name_size);
 
-				if (custom_serializer_index != -1) {
-					custom_fields.AddSafe({ (unsigned int)index, custom_serializer_index });
-				}
+					// Write the field type - the stream type, basic type, basic type count, stream byte size and the byte size all
+					// need to be written or the custom serializer index with its version if a match was found
+					unsigned int custom_serializer_index = -1;
+					unsigned int custom_serializer_version = 0;
+					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
+						custom_serializer_index = FindSerializeCustomType(field->definition);
+					}
 
-				// If user defined, write the definition aswell
-				if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					Stream<char> definition_stream = field->definition;
-					total_size += WriteWithSizeShort<write_data>(&stream, definition_stream.buffer, (unsigned short)definition_stream.size);
+					total_size += Write<write_data>(&stream, &field->info.stream_type, sizeof(field->info.stream_type));
+					total_size += Write<write_data>(&stream, &field->info.stream_byte_size, sizeof(field->info.stream_byte_size));
+					total_size += Write<write_data>(&stream, &field->info.basic_type, sizeof(field->info.basic_type));
+					total_size += Write<write_data>(&stream, &field->info.basic_type_count, sizeof(field->info.basic_type_count));
+					total_size += Write<write_data>(&stream, &field->info.byte_size, sizeof(field->info.byte_size));
+					total_size += Write<write_data>(&stream, &custom_serializer_index, sizeof(custom_serializer_index));
+
+					if (custom_serializer_index != -1) {
+						custom_fields.AddSafe({ (unsigned int)index, custom_serializer_index });
+					}
+
+					// If user defined, write the definition aswell
+					if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
+						Stream<char> definition_stream = field->definition;
+						total_size += WriteWithSizeShort<write_data>(&stream, definition_stream.buffer, (unsigned short)definition_stream.size);
+					}
 				}
 			}
 		}
@@ -83,7 +151,8 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type, 
 		uintptr_t& stream,
-		CapacityStream<Stream<char>>& deserialized_type_names
+		CapacityStream<Stream<char>>& deserialized_type_names,
+		Stream<SerializeOmitField> omit_fields
 	) {
 		size_t write_total = 0;
 
@@ -93,20 +162,24 @@ namespace ECSEngine {
 		deserialized_type_names.Add(type->name);
 
 		// Write the top most type first
-		write_total += WriteTypeTable<write_data>(type, stream, custom_fields);
+		write_total += WriteTypeTable<write_data>(type, stream, custom_fields, omit_fields);
 
 		// Now write all the nested types
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
 
 			if (!skip_serializable && type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				// Check that the type has not been already written
-				bool is_missing = function::FindString(type->fields[index].definition, deserialized_type_names) == -1;
-				if (is_missing) {
-					ReflectionType nested_type;
-					// Can be a custom serializer type
-					if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-						write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names);
+				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+
+				if (!skip_serializable) {
+					// Check that the type has not been already written
+					bool is_missing = function::FindString(type->fields[index].definition, deserialized_type_names) == -1;
+					if (is_missing) {
+						ReflectionType nested_type;
+						// Can be a custom serializer type
+						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+							write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names, omit_fields);
+						}
 					}
 				}
 			}
@@ -120,7 +193,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < custom_fields.size; index++) {
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, current_custom_dependent_types, DESERIALIZE_FIELD_TABLE_MAX_TYPES / 2);
 
-			ReflectionContainerTypeDependentTypesData dependent_data;
+			ReflectionCustomTypeDependentTypesData dependent_data;
 			dependent_data.definition = type->fields[custom_fields[index].x].definition;
 			dependent_data.dependent_types = current_custom_dependent_types;
 
@@ -139,7 +212,7 @@ namespace ECSEngine {
 			if (reflection_manager->TryGetType(current_dependent_type.buffer, nested_type)) {
 				bool is_missing = function::FindString(current_dependent_type, deserialized_type_names) == -1;
 				if (is_missing) {
-					write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names);
+					write_total += WriteTypeTable<write_data>(reflection_manager, &nested_type, stream, deserialized_type_names, omit_fields);
 				}
 			}
 			else {
@@ -148,7 +221,7 @@ namespace ECSEngine {
 				if (nested_custom_serializer != -1) {
 					ECS_STACK_CAPACITY_STREAM(Stream<char>, current_custom_dependent_types, DESERIALIZE_FIELD_TABLE_MAX_TYPES / 2);
 
-					ReflectionContainerTypeDependentTypesData dependent_data;
+					ReflectionCustomTypeDependentTypesData dependent_data;
 					dependent_data.definition = current_dependent_type;
 					dependent_data.dependent_types = current_custom_dependent_types;
 
@@ -174,7 +247,8 @@ namespace ECSEngine {
 	size_t WriteTypeTable(
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
-		uintptr_t& stream
+		uintptr_t& stream,
+		Stream<SerializeOmitField> omit_fields
 	) {
 		size_t write_total = 0;
 
@@ -188,18 +262,18 @@ namespace ECSEngine {
 			write_total += Write<write_data>(&stream, &ECS_SERIALIZE_CUSTOM_TYPES[index].version, sizeof(unsigned int));
 		}
 
-		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names);
+		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names, omit_fields);
 
 		return write_total;
 	}
-
 
 	// ------------------------------------------------------------------------------------------------------------------
 
 	bool SerializeHasDependentTypesCustomSerializerRecurse(
 		const ReflectionManager* reflection_manager, 
 		Stream<char> definition, 
-		bool& custom_serializer_success
+		bool& custom_serializer_success,
+		Stream<SerializeOmitField> omit_fields
 	) {
 		// Get the list of dependent types
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 16);
@@ -207,7 +281,7 @@ namespace ECSEngine {
 		unsigned int custom_serializer = FindSerializeCustomType(definition);
 
 		if (custom_serializer != -1) {
-			ReflectionContainerTypeDependentTypesData dependent_data;
+			ReflectionCustomTypeDependentTypesData dependent_data;
 			dependent_data.definition = definition;
 			dependent_data.dependent_types = dependent_types;
 			ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer].container_type.dependent_types(&dependent_data);
@@ -225,14 +299,14 @@ namespace ECSEngine {
 
 					// It is a reflected type - make sure its dependencies are met
 					if (reflection_manager->TryGetType(dependent_data.dependent_types[subindex].buffer, nested_type)) {
-						if (!SerializeHasDependentTypes(reflection_manager, &nested_type)) {
+						if (!SerializeHasDependentTypes(reflection_manager, &nested_type, omit_fields)) {
 							custom_serializer_success = false;
 							return true;
 						}
 					}
 					else {
 						// Might be a custom serializer type again
-						SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, dependent_data.dependent_types[subindex], custom_serializer_success);
+						SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, dependent_data.dependent_types[subindex], custom_serializer_success, omit_fields);
 						if (!custom_serializer_success) {
 							return true;
 						}
@@ -248,20 +322,25 @@ namespace ECSEngine {
 		return false;
 	}
 
-	bool SerializeHasDependentTypes(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type)
+	// ------------------------------------------------------------------------------------------------------------------
+
+	bool SerializeHasDependentTypes(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, Stream<SerializeOmitField> omit_fields)
 	{
 		bool custom_serializer_success = true;
 
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
+			if (!skip_serializable) {
+				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+			}
 
 			if (!skip_serializable && type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				// Check to see if it has a custom serializer
-				if (!SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, type->fields[index].definition, custom_serializer_success)) {
+				if (!SerializeHasDependentTypesCustomSerializerRecurse(reflection_manager, type->fields[index].definition, custom_serializer_success, omit_fields)) {
 					// Check to see if it is a reflected type
 					ReflectionType nested_type;
 					if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-						if (!SerializeHasDependentTypes(reflection_manager, &nested_type)) {
+						if (!SerializeHasDependentTypes(reflection_manager, &nested_type, omit_fields)) {
 							return false;
 						}
 					}
@@ -318,9 +397,11 @@ namespace ECSEngine {
 	) {
 		bool has_options = options != nullptr;
 
+		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
+
 		if (!has_options || (has_options && options->verify_dependent_types)) {
 			// Check that the type has all its dependencies met
-			bool has_dependencies = SerializeHasDependentTypes(reflection_manager, type);
+			bool has_dependencies = SerializeHasDependentTypes(reflection_manager, type, omit_fields);
 			if (!has_dependencies) {
 				if (has_options) {
 					ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not serialize type {#}. Its nested user defined types are missing.", type->name);
@@ -336,7 +417,7 @@ namespace ECSEngine {
 
 		if (!has_options || (has_options && options->write_type_table)) {
 			// The type table must be written
-			*total_size += WriteTypeTable<write_data>(reflection_manager, type, stream);
+			*total_size += WriteTypeTable<write_data>(reflection_manager, type, stream, omit_fields);
 		}
 
 		SerializeOptions _nested_options;
@@ -346,12 +427,17 @@ namespace ECSEngine {
 			nested_options->error_message = options->error_message;
 			nested_options->verify_dependent_types = false;
 			nested_options->write_type_table = false;
+			nested_options->omit_fields = omit_fields;
 		}
 
 		for (size_t index = 0; index < type->fields.size; index++) {
 			const ReflectionField* field = &type->fields[index];
 
 			bool skip_serializable = field->Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
+
+			if (!skip_serializable && omit_fields.size > 0) {
+				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+			}
 
 			if (!skip_serializable) {
 				// If a basic type, copy the data directly
@@ -437,6 +523,7 @@ namespace ECSEngine {
 								*total_size += Write<write_data>(&stream, field_data, field->info.byte_size);
 							}
 						}
+						// Streams should be handled by the custom serializer					
 						else {
 							// Check for streams. All, Stream, CapacityStream and ResizableStream can be aliased with a normal stream
 							// Since we are interested in writing only the data along side the byte size
@@ -490,17 +577,17 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	void SerializeFieldTable(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, uintptr_t& stream)
+	void SerializeFieldTable(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, uintptr_t& stream, Stream<SerializeOmitField> omit_fields)
 	{
-		WriteTypeTable<true>(reflection_manager, type, stream);
+		WriteTypeTable<true>(reflection_manager, type, stream, omit_fields);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	size_t SerializeFieldTableSize(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type)
+	size_t SerializeFieldTableSize(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, Stream<SerializeOmitField> omit_fields)
 	{
 		uintptr_t dummy = 0;
-		return WriteTypeTable<false>(reflection_manager, type, dummy);
+		return WriteTypeTable<false>(reflection_manager, type, dummy, omit_fields);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -657,10 +744,12 @@ namespace ECSEngine {
 	) {
 		bool has_options = options != nullptr;
 
+		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
+
 		bool has_backup_allocator = has_options && options->backup_allocator.allocator != nullptr;
 		if (!has_options || (has_options && options->verify_dependent_types)) {
 			// Verify that it has its dependencies met
-			bool has_dependencies = SerializeHasDependentTypes(reflection_manager, type);
+			bool has_dependencies = SerializeHasDependentTypes(reflection_manager, type, omit_fields);
 			if (!has_dependencies) {
 				if (has_options) {
 					ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not deserialize type {#} because it doesn't have its dependencies met.", type->name);
@@ -753,6 +842,7 @@ namespace ECSEngine {
 			nested_options->use_resizable_stream_allocator = options->use_resizable_stream_allocator;
 			nested_options->read_type_table = false;
 			nested_options->verify_dependent_types = false;
+			nested_options->omit_fields = omit_fields;
 		}
 
 		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, DeserializeFieldInfo file_info, ReflectionFieldInfo type_info) {
@@ -840,6 +930,12 @@ namespace ECSEngine {
 				if (subindex == type->fields.size) {
 					// Just go to the next field
 					// But first the data inside the stream must be skipped
+					IgnoreTypeField(stream, deserialize_table, type_index, index);
+					continue;
+				}
+
+				// Check to see if it is omitted
+				if (SerializeShouldOmitField(type->name, type->fields[subindex].name, omit_fields)) {
 					IgnoreTypeField(stream, deserialize_table, type_index, index);
 					continue;
 				}
@@ -1545,7 +1641,7 @@ namespace ECSEngine {
 
 						custom_serializer_index = FindSerializeCustomType(current_definition);
 
-						ReflectionContainerTypeDependentTypesData dependent_data;
+						ReflectionCustomTypeDependentTypesData dependent_data;
 						dependent_data.definition = current_definition;
 						dependent_data.dependent_types = nested_dependent_types;
 						ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].container_type.dependent_types(&dependent_data);
@@ -1664,6 +1760,68 @@ namespace ECSEngine {
 		}
 
 		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	bool DeserializeFieldTable::IsUnchanged(unsigned int type_index, const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type) const
+	{
+		// If different field count, they are different
+		if (type->fields.size != types[type_index].fields.size) {
+			return false;
+		}
+
+		// Go through all fields. All recursive user defined types need to be unchanged for the whole struct to be unchanged
+		for (size_t index = 0; index < type->fields.size; index++) {
+			if (type->fields[index].info.basic_type != types[type_index].fields[index].basic_type) {
+				return false;
+			}
+
+			if (type->fields[index].info.stream_type != types[type_index].fields[index].stream_type) {
+				return false;
+			}
+
+			if (type->fields[index].info.basic_type_count != types[type_index].fields[index].basic_type_count) {
+				return false;
+			}
+
+			if (type->fields[index].info.stream_byte_size != types[type_index].fields[index].stream_byte_size) {
+				return false;
+			}
+
+			if (type->fields[index].info.byte_size != types[type_index].fields[index].byte_size) {
+				return false;
+			}
+
+			if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+				// If the user defined definition changed, then they are not equal
+				if (!function::CompareStrings(types[type_index].fields[index].definition, type->fields[index].definition)) {
+					return false;
+				}
+
+				// If not a custom serializer, check here in the field table that the type is unchanged
+				unsigned int serializer_index = types[type_index].fields[index].custom_serializer_index;
+				if (serializer_index != -1) {
+					// Check that both versions are the same
+					if (custom_serializers[serializer_index] != ECS_SERIALIZE_CUSTOM_TYPES[serializer_index].version) {
+						return false;
+					}
+				}
+				else {
+					// Check user defined type
+					unsigned int nested_type_index = TypeIndex(types[type_index].fields[index].definition);
+					// The nested type should be found
+					ECS_ASSERT(nested_type_index != -1);
+
+					const Reflection::ReflectionType* nested_type = reflection_manager->GetType(types[type_index].fields[index].definition);
+					if (!IsUnchanged(nested_type_index, reflection_manager, nested_type)) {
+						return false;
+					}
+				}
+			}
+		}
+
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

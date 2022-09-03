@@ -3,16 +3,18 @@
 #include "Stream.h"
 #include "../Utilities/FunctionInterfaces.h"
 
-constexpr float ECS_CIRCULAR_STACK_RESIZE_FACTOR = 1.5f;
+#define ECS_CIRCULAR_STACK_RESIZE_FACTOR (1.5f)
 
 namespace ECSEngine {
 
-	// does not check to see if it goes out of boundaries
+	// It uses a capacity stream as it basis. The difference between a capacity stream and this
+	// is that the stack when gets full it will overwrite the old elements (useful for undo stacks
+	// for example)
 	template<typename T>
 	struct Stack {
 	public:
-		Stack() : m_stack(nullptr, 0, 0), m_first_item(0), m_last_item(0) {}
-		Stack(void* buffer, size_t capacity) {
+		Stack() : m_stack(nullptr, 0, 0), m_first_item(0) {}
+		Stack(void* buffer, unsigned int capacity) {
 			InitializeFromBuffer(buffer, capacity);
 		}
 
@@ -35,14 +37,23 @@ namespace ECSEngine {
 			return m_stack.size + count <= m_stack.capacity;
 		}
 
+		// Returns the index of the "first" item
+		// Make sure that there is an item in the stack.
+		ECS_INLINE unsigned int PeekIndex() const {
+			unsigned int last_index = m_first_item + m_stack.size;
+			return last_index >= m_stack.capacity ? last_index - m_stack.capacity : last_index;
+		}
+
+		// Returns a pointer to the "first" element (the one to be popped)
+		// such that it can be modifed while inside the stack.
+		// Make sure that the size is greater than 0
+		ECS_INLINE T* PeekIntrusive() {
+			return m_stack.buffer + PeekIndex();
+		}
+
 		ECS_INLINE bool Peek(T& element) const {
 			if (m_stack.size > 0) {
-				if (m_last_item != 0) {
-					element = m_stack[m_last_item - 1];
-				}
-				else {
-					element = m_stack[m_stack.size - 1];
-				}
+				element = m_stack[PeekIndex()];
 				return true;
 			}
 			else {
@@ -52,8 +63,8 @@ namespace ECSEngine {
 
 		bool Pop(T& element) {
 			if (m_stack.size > 0) {
-				m_last_item = m_last_item == 0 ? m_stack.capacity - 1 : m_last_item - 1;
-				element = m_stack[m_last_item];
+				unsigned int peek_index = PeekIndex();
+				element = m_stack[peek_index];
 				m_stack.size--;
 				return true;
 			}
@@ -61,34 +72,33 @@ namespace ECSEngine {
 		}
 
 		void Push(T element) {
+			unsigned int peek_index = PeekIndex();
+			peek_index = peek_index == m_stack.capacity - 1 ? 0 : peek_index + 1;
+			m_stack[peek_index] = element;
+
 			if (m_stack.size == m_stack.capacity) {
-				m_stack[m_first_item] = element;
-				m_last_item = m_first_item;
 				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
 			}
 			else {
-				m_stack[m_last_item] = element;
-				m_last_item = m_first_item == m_stack.capacity - 1 ? 0 : m_last_item + 1;
 				m_stack.size++;
 			}
 		}
 
 		void Push(const T* element) {
+			unsigned int peek_index = PeekIndex();
+			peek_index = peek_index == m_stack.capacity - 1 ? 0 : peek_index + 1;
+			m_stack[peek_index] = *element;
+
 			if (m_stack.size == m_stack.capacity) {
-				m_stack[m_first_item] = *element;
-				m_last_item = m_first_item;
 				m_first_item = m_first_item == m_stack.capacity - 1 ? 0 : m_first_item + 1;
 			}
 			else {
-				m_stack[m_last_item] = *element;
-				m_last_item = m_first_item == m_stack.capacity - 1 ? 0 : m_last_item + 1;
 				m_stack.size++;
 			}
 		}
 
 		void Reset() {
 			m_first_item = 0;
-			m_last_item = 0;
 			m_stack.Reset();
 		}
 
@@ -96,27 +106,22 @@ namespace ECSEngine {
 			return m_stack.buffer;
 		}
 
-		ECS_INLINE const T* PeekLastItem() const {
-			return &m_stack[m_first_item];
-		}
-
 		ECS_INLINE static size_t MemoryOf(size_t count) {
 			return CapacityStream<T>::MemoryOf(count);
 		}
 
-		void InitializeFromBuffer(void* buffer, size_t capacity) {
+		void InitializeFromBuffer(void* buffer, unsigned int capacity) {
 			m_stack = CapacityStream<T>(buffer, 0, capacity); 
 			m_first_item = 0; 
-			m_last_item = 0;
 		}
 
-		void InitializeFromBuffer(uintptr_t& buffer, size_t capacity) {
+		void InitializeFromBuffer(uintptr_t& buffer, unsigned int capacity) {
 			InitializeFromBuffer((void*)buffer, capacity);
 			buffer += MemoryOf(capacity);
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator* allocator, size_t capacity) {
+		void Initialize(Allocator* allocator, unsigned int capacity) {
 			size_t memory_size = MemoryOf(capacity);
 			void* allocation = allocator->Allocate(memory_size, alignof(T));
 			InitializeFromBuffer(allocation, capacity);
@@ -125,23 +130,21 @@ namespace ECSEngine {
 		// Returns the i'th element - 0 means the top most one (the one that would be returned by peek)
 		// and increasingly away from it
 		ECS_INLINE T GetElement(unsigned int index) const {
-			if (m_last_item < index - 1) {
-				return m_stack[m_stack.size + m_last_item - index - 1];
-			}
-			return m_stack[m_last_item - index - 1];
+			unsigned int peek_index = m_first_item + m_stack.size - index;
+			peek_index = peek_index >= m_stack.capacity ? peek_index - m_stack.capacity : peek_index;
+			return m_stack[peek_index];
 		}
 
-	//private:
 		CapacityStream<T> m_stack;
 		unsigned int m_first_item;
-		unsigned int m_last_item;
 	};
 
+	// The same as a resizable stream, the difference being that it has only a push, pop, peek interface
 	template<typename T>
 	struct ResizableStack {
 	public:
-		ResizableStack() : m_first_item(0), m_last_item(0) {}
-		ResizableStack(AllocatorPolymorphic allocator, size_t capacity) : m_stack(allocator, 0, capacity), m_first_item(0), m_last_item(0) {}
+		ResizableStack() {}
+		ResizableStack(AllocatorPolymorphic allocator, unsigned int capacity) : m_stack(allocator, capacity) {}
 
 		ResizableStack(const ResizableStack& other) = default;
 		ResizableStack& operator = (const ResizableStack& other) = default;
@@ -162,10 +165,14 @@ namespace ECSEngine {
 			return &m_stack;
 		}
 
+		// Make sure that there is an element
+		ECS_INLINE T* PeekIntrusive() {
+			return m_stack.buffer + m_stack.size - 1;
+		}
+
 		ECS_INLINE bool Peek(T& element) const {
 			if (m_stack.size > 0) {
-				unsigned int index = function::Select(m_last_item != 0, m_last_item - 1, m_stack.size - 1);
-				element = m_stack[index];
+				element = m_stack[m_stack.size - 1];
 				return true;
 			}
 			else {
@@ -175,66 +182,26 @@ namespace ECSEngine {
 
 		bool Pop(T& element) {
 			if (m_stack.size > 0) {
-				element = m_stack[m_last_item];
-				m_last_item = function::Select(m_last_item == 0, m_stack.capacity - 1, m_last_item - 1);
 				m_stack.size--;
+				element = m_stack[m_stack.size];
 				return true;
 			}
 			return false;
 		}
 
 		void Push(T element) {
-			if (m_stack.size == m_stack.capacity) {
-				unsigned int old_capacity = m_stack.capacity;
-				const T* old_buffer = m_stack.buffer;
-
-				m_stack.FreeBuffer();
-				m_stack.ResizeNoCopy(static_cast<size_t>((m_stack.capacity + 1) * ECS_CIRCULAR_STACK_RESIZE_FACTOR));
-
-				memcpy(m_stack.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
-				memcpy(m_stack.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
-				m_first_item = 0;
-				m_stack.Add(element);
-				m_last_item = m_stack.size;
-			}
-			else {
-				m_stack[m_last_item] = element;
-				m_last_item = function::Select(m_last_item == m_stack.capacity, 0, m_last_item + 1);
-				m_stack.size++;
-			}
+			m_stack.Add(element);
 		}
 
 		void Push(const T* element) {
-			if (m_stack.size == m_stack.capacity) {
-				unsigned int old_capacity = m_stack.capacity;
-				const T* old_buffer = m_stack.buffer;
-
-				m_stack.FreeBuffer();
-				m_stack.ResizeNoCopy(static_cast<size_t>((m_stack.capacity + 1) * ECS_CIRCULAR_STACK_RESIZE_FACTOR));
-
-				memcpy(m_stack.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
-				memcpy(m_stack.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
-				m_first_item = 0;
-				m_stack.Add(element);
-				m_last_item = m_stack.size;
-			}
-			else {
-				m_stack[m_last_item] = *element;
-				m_last_item = function::Select(m_last_item == m_stack.capacity, 0, m_last_item + 1);
-				m_stack.size++;
-			}
+			m_stack.Add(element);
 		}
 
 		void Reset() {
-			m_first_item = 0;
-			m_last_item = 0;
 			m_stack.Reset();
 		}
 
-	//private:
 		ResizableStream<T> m_stack;
-		unsigned int m_first_item;
-		unsigned int m_last_item;
 	};
 
 }

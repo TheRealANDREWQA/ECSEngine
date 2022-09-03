@@ -805,7 +805,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, unsigned int misc_flags)
+	Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, ECS_GRAPHICS_MISC_FLAGS misc_flags)
 	{
 		Mesh mesh;
 
@@ -816,52 +816,54 @@ namespace ECSEngine {
 			mesh.name = nullptr;
 		}
 
-		D3D11_USAGE buffer_usage = D3D11_USAGE_IMMUTABLE;
+		const ECS_GRAPHICS_USAGE buffer_usage = ECS_GRAPHICS_USAGE_IMMUTABLE;
+		const ECS_GRAPHICS_CPU_ACCESS cpu_access = ECS_GRAPHICS_CPU_ACCESS_NONE;
+
 		// Positions
 		if (gltf_mesh.positions.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_POSITION;
 			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.positions.size, gltf_mesh.positions.buffer, 
-				false, buffer_usage, 0, misc_flags);
+				false, buffer_usage, cpu_access, misc_flags);
 		}
 
 		// Normals
 		if (gltf_mesh.normals.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_NORMAL;
 			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float3), gltf_mesh.normals.size, gltf_mesh.normals.buffer,
-				false, buffer_usage, 0, misc_flags);
+				false, buffer_usage, cpu_access, misc_flags);
 		}
 
 		// UVs
 		if (gltf_mesh.uvs.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_UV;
 			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float2), gltf_mesh.uvs.size, gltf_mesh.uvs.buffer,
-				false, buffer_usage, 0, misc_flags);
+				false, buffer_usage, cpu_access, misc_flags);
 		}
 
 		// Vertex Colors
 		if (gltf_mesh.colors.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_COLOR;
 			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(Color), gltf_mesh.colors.size, gltf_mesh.colors.buffer,
-				false, buffer_usage, 0, misc_flags);
+				false, buffer_usage, cpu_access, misc_flags);
 		}
 
 		// Bone weights
 		if (gltf_mesh.skin_weights.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_WEIGHT;
 			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(float4), gltf_mesh.skin_weights.size, gltf_mesh.skin_weights.buffer,
-				false, buffer_usage, 0, misc_flags);
+				false, buffer_usage, cpu_access, misc_flags);
 		}
 
 		// Bone influences
 		if (gltf_mesh.skin_influences.buffer != nullptr) {
 			mesh.mapping[mesh.mapping_count] = ECS_MESH_BONE_INFLUENCE;
 			mesh.vertex_buffers[mesh.mapping_count++] = graphics->CreateVertexBuffer(sizeof(uint4), gltf_mesh.skin_influences.size, gltf_mesh.skin_influences.buffer,
-				false, buffer_usage, 0, misc_flags);
+				false, buffer_usage, cpu_access, misc_flags);
 		}
 
 		// Indices
 		if (gltf_mesh.indices.buffer != nullptr) {
-			mesh.index_buffer = graphics->CreateIndexBuffer(sizeof(unsigned int), gltf_mesh.indices.size, gltf_mesh.indices.buffer, false, D3D11_USAGE_DEFAULT, 0, misc_flags);
+			mesh.index_buffer = graphics->CreateIndexBuffer(sizeof(unsigned int), gltf_mesh.indices.size, gltf_mesh.indices.buffer, false, ECS_GRAPHICS_USAGE_DEFAULT, cpu_access, misc_flags);
 		}
 
 		return mesh;
@@ -869,7 +871,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, unsigned int misc_flags) {
+	void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, ECS_GRAPHICS_MISC_FLAGS misc_flags) {
 		for (size_t index = 0; index < count; index++) {
 			meshes[index] = GLTFMeshToMesh(graphics, gltf_meshes[index], misc_flags);
 		}
@@ -884,7 +886,7 @@ namespace ECSEngine {
 		unsigned int* submesh_material_index, 
 		size_t material_count, 
 		size_t count,
-		unsigned int misc_flags
+		ECS_GRAPHICS_MISC_FLAGS misc_flags
 	) {
 		constexpr size_t COUNT_MAX = 2048;
 
@@ -928,7 +930,14 @@ namespace ECSEngine {
 		auto create_vertex_type = [&](unsigned int sizeof_type, ECS_MESH_INDEX mapping_index, unsigned char stream_byte_offset) {
 			mesh.mapping[mesh.mapping_count] = mapping_index;
 			// Create a main vertex buffer that is DEFAULT usage and then copy into it smaller vertex buffers
-			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(sizeof_type, total_vertex_buffer_count, {}, D3D11_USAGE_DEFAULT, 0, misc_flags);
+			VertexBuffer vertex_buffer = graphics->CreateVertexBuffer(
+				sizeof_type,
+				total_vertex_buffer_count,
+				{}, 
+				ECS_GRAPHICS_USAGE_DEFAULT, 
+				ECS_GRAPHICS_CPU_ACCESS_NONE,
+				misc_flags
+			);
 			size_t vertex_buffer_offset = 0;
 
 			for (size_t index = 0; index < count; index++) {
@@ -983,7 +992,7 @@ namespace ECSEngine {
 		// Indices
 		if (gltf_meshes[0].indices.buffer != nullptr) {
 			// Create a main index buffer that is DEFAULT usage and then copy into it the smaller index buffers
-			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count, false, D3D11_USAGE_DEFAULT, 0, misc_flags);
+			mesh.index_buffer = graphics->CreateIndexBuffer(4, total_index_buffer_count, false, ECS_GRAPHICS_USAGE_DEFAULT, ECS_GRAPHICS_CPU_ACCESS_NONE, misc_flags);
 			size_t index_buffer_offset = 0;
 
 			for (size_t index = 0; index < count; index++) {

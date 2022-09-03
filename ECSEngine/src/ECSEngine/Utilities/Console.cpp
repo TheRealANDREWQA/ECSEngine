@@ -32,8 +32,7 @@ namespace ECSEngine {
 
 #pragma region Header
 
-		SYSTEMTIME system_time;
-		GetLocalTime(&system_time);
+		Date current_date = OS::GetLocalTime();
 
 		bool success = true;
 		const char header_annotation[] = "**********************************************\n";
@@ -42,19 +41,19 @@ namespace ECSEngine {
 
 		char time_characters[256];
 		Stream<char> time_stream = Stream<char>(time_characters, 0);
-		function::ConvertIntToChars(time_stream, system_time.wHour);
+		function::ConvertIntToChars(time_stream, current_date.hour);
 		time_stream.Add(':');
-		function::ConvertIntToChars(time_stream, system_time.wMinute);
+		function::ConvertIntToChars(time_stream, current_date.minute);
 		time_stream.Add(':');
-		function::ConvertIntToChars(time_stream, system_time.wSecond);
+		function::ConvertIntToChars(time_stream, current_date.seconds);
 		time_stream.Add(':');
-		function::ConvertIntToChars(time_stream, system_time.wMilliseconds);
+		function::ConvertIntToChars(time_stream, current_date.milliseconds);
 		time_stream.Add(' ');
-		function::ConvertIntToChars(time_stream, system_time.wDay);
+		function::ConvertIntToChars(time_stream, current_date.day);
 		time_stream.Add('-');
-		function::ConvertIntToChars(time_stream, system_time.wMonth);
+		function::ConvertIntToChars(time_stream, current_date.month);
 		time_stream.Add('-');
-		function::ConvertIntToChars(time_stream, system_time.wYear);
+		function::ConvertIntToChars(time_stream, current_date.year);
 		time_stream.Add(' ');
 		const char description[] = "Console output\n";
 		time_stream.AddStream(Stream<char>(description, std::size(description) - 1));

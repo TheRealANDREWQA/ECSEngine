@@ -36,11 +36,11 @@ namespace ECSEngine {
 
 #endif
 
-#define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_TEMP_ASCII_STRING(string_name, 512); \
+#define ECS_FORMAT_TEMP_STRING(string_name, base_characters, ...) ECS_TEMP_ASCII_STRING(string_name, 2048); \
 string_name.size = function::FormatString(string_name.buffer, base_characters, __VA_ARGS__); \
 string_name.AssertCapacity();
 
-#define ECS_FORMAT_STRING(string, base_characters, ...) (string).size = function::FormatString((string).buffer, base_characters, __VA_ARGS__); \
+#define ECS_FORMAT_STRING(string, base_characters, ...) (string).size += function::FormatString((string).buffer + (string).size, base_characters, __VA_ARGS__); \
 (string).AssertCapacity();
 
 #define ECS_FORMAT_ERROR_MESSAGE(error_message, base_characters, ...) if (error_message != nullptr) { \
@@ -599,10 +599,9 @@ string_name.AssertCapacity();
 		ulong2 FormatStringInternal(
 			char* end_characters,
 			const char* base_characters,
-			Parameter parameter,
-			const char* string_to_replace
+			Parameter parameter
 		) {
-			const char* string_ptr = strstr(base_characters, string_to_replace);
+			const char* string_ptr = strstr(base_characters, "{#}");
 			if (string_ptr != nullptr) {
 				size_t copy_count = (uintptr_t)string_ptr - (uintptr_t)base_characters;
 				memcpy(end_characters, base_characters, copy_count);
@@ -651,132 +650,132 @@ string_name.AssertCapacity();
 			return { 0, 0 };
 		}
 
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float, const char*);
-		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<const char*>(char*, const char*, const char*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<const wchar_t*>(char*, const char*, const wchar_t*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<char>>(char*, const char*, Stream<char>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<Stream<wchar_t>>(char*, const char*, Stream<wchar_t>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<char>>(char*, const char*, CapacityStream<char>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<CapacityStream<wchar_t>>(char*, const char*, CapacityStream<wchar_t>);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<unsigned int>(char*, const char*, unsigned int);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<void*>(char*, const char*, void*);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<float>(char*, const char*, float);
+		extern template ECSENGINE_API ulong2 FormatStringInternal<double>(char*, const char*, double);
+
+#define FORMAT_STRING_START ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1); \
+							characters_written.y += 3;
+#define FORMAT_STRING_HELPER(index) characters_written += FormatStringInternal(destination +  characters_written.x, base_characters + characters_written.y, parameter##index); \
+									characters_written.y += 3;
+
+#define FORMAT_STRING_END	size_t base_character_count = strlen(base_characters); \
+							memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y); \
+							characters_written.x += base_character_count - characters_written.y; \
+							destination[characters_written.x] = '\0'; \
+							return characters_written.x;
 
 		// returns the count of the characters written;
-		template<typename Parameter>
-		size_t FormatString(char* destination, const char* base_characters, Parameter parameter) {
-			size_t base_character_count = strlen(base_characters);
-
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter, "{#}");
-			characters_written.y += 3;
-
-			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
-			characters_written.x += base_character_count - characters_written.y;
-			destination[characters_written.x] = '\0';
-			return characters_written.x;
+		template<typename Parameter1>
+		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1) {
+			FORMAT_STRING_START;
+			FORMAT_STRING_END;
 		}
 
 		// returns the count of the characters written
 		template<typename Parameter1, typename Parameter2>
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2) {
-			size_t base_character_count = strlen(base_characters);
-
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
-			characters_written.y += 3;
-
-			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
-			characters_written.x += base_character_count - characters_written.y;
-			destination[characters_written.x] = '\0';
-			return characters_written.x;
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_END;
 		}
 
 		// returns the count of the characters written
 		template<typename Parameter1, typename Parameter2, typename Parameter3>
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3) {
-			size_t base_character_count = strlen(base_characters);
-
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
-			characters_written.y += 3;
-
-			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
-			characters_written.x += base_character_count - characters_written.y;
-			destination[characters_written.x] = '\0';
-			return characters_written.x;
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_END;
 		}
 
 		// returns the count of the characters written
 		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4>
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4) {
-			size_t base_character_count = strlen(base_characters);
-
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{#}");
-			characters_written.y += 3;
-
-			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
-			characters_written.x += base_character_count - characters_written.y;
-			destination[characters_written.x] = '\0';
-			return characters_written.x;
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(4);
+			FORMAT_STRING_END;
 		}
 
 		// returns the count of the characters written
 		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5>
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5) {
-			size_t base_character_count = strlen(base_characters);
-
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter5, "{#}");
-			characters_written.y += 3;
-
-			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
-			characters_written.x += base_character_count - characters_written.y;
-			destination[characters_written.x] = '\0';
-			return characters_written.x;
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(5);
+			FORMAT_STRING_END;
 		}
 
 		// returns the count of the characters written
 		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6>
 		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6) {
-			size_t base_character_count = strlen(base_characters);
-
-			ulong2 characters_written = FormatStringInternal(destination, base_characters, parameter1, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter2, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter3, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter4, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter5, "{#}");
-			characters_written.y += 3;
-			characters_written += FormatStringInternal(destination + characters_written.x, base_characters + characters_written.y, parameter6, "{#}");
-			characters_written.y += 3;
-
-			memcpy(destination + characters_written.x, base_characters + characters_written.y, base_character_count - characters_written.y);
-			characters_written.x += base_character_count - characters_written.y;
-			destination[characters_written.x] = '\0';
-			return characters_written.x;
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(4);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(6);
+			FORMAT_STRING_END;
 		}
 
-		// Idiot C++ bug, char and int8_t does not equal to the same according to the compiler, only signed char
+		// returns the count of the characters written
+		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6, typename Parameter7>
+		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6, Parameter7 parameter7) {
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(4);
+			FORMAT_STRING_HELPER(5);
+			FORMAT_STRING_HELPER(6);
+			FORMAT_STRING_HELPER(7);
+			FORMAT_STRING_END;
+		}
+
+		// returns the count of the characters written
+		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6, typename Parameter7, typename Parameter8>
+		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6, Parameter7 parameter7, Parameter8 parameter8) {
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(4);
+			FORMAT_STRING_HELPER(5);
+			FORMAT_STRING_HELPER(6);
+			FORMAT_STRING_HELPER(7);
+			FORMAT_STRING_HELPER(8);
+			FORMAT_STRING_END;
+		}
+
+		// returns the count of the characters written
+		template<typename Parameter1, typename Parameter2, typename Parameter3, typename Parameter4, typename Parameter5, typename Parameter6, typename Parameter7, typename Parameter8, typename Parameter9>
+		size_t FormatString(char* destination, const char* base_characters, Parameter1 parameter1, Parameter2 parameter2, Parameter3 parameter3, Parameter4 parameter4, Parameter5 parameter5, Parameter6 parameter6, Parameter7 parameter7, Parameter8 parameter8, Parameter9 parameter9) {
+			FORMAT_STRING_START;
+			FORMAT_STRING_HELPER(2);
+			FORMAT_STRING_HELPER(3);
+			FORMAT_STRING_HELPER(4);
+			FORMAT_STRING_HELPER(5);
+			FORMAT_STRING_HELPER(6);
+			FORMAT_STRING_HELPER(7);
+			FORMAT_STRING_HELPER(8);
+			FORMAT_STRING_HELPER(9);
+			FORMAT_STRING_END;
+		}
+
+#undef FORMAT_STRING_HELPER
+#undef FORMAT_STRING_START
+#undef FORMAT_STRING_END
+
+		// Idiot C++ thingy, char and int8_t does not equal to the same according to the compiler, only signed char
 		// and int8_t; So make all the signed version separately
 		template<typename Integer>
 		void IntegerRange(Integer& min, Integer& max) {
@@ -949,11 +948,6 @@ string_name.AssertCapacity();
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------
-
-		// Uses a fast SIMD compare, in this way you don't need to rely on the
-		// compiler to generate for you the SIMD search. Returns -1 if it doesn't
-		// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
-		ECSENGINE_API size_t SearchBytes(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
 
 	}
 

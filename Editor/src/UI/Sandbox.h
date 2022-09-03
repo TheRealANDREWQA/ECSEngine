@@ -1,7 +1,8 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-constexpr const char* SANDBOX_UI_WINDOW_NAME = "Sandbox ";
+#define SANDBOX_UI_WINDOW_NAME "Sandbox "
+#define MAX_SANDBOX_UI_WINDOWS 8
 
 struct EditorState;
 

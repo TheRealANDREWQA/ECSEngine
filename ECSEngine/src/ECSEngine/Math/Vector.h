@@ -24,7 +24,7 @@ namespace ECSEngine {
 		ECS_INLINE Vector4(int x, int y, int z, int w) {
 			value = _mm_castsi128_ps(_mm_setr_epi32(x, y, z, w));
 		}
-		ECS_INLINE ECS_VECTORCALL Vector4(Vec4f _value) : value(_value) {}
+		ECS_INLINE Vector4(Vec4f _value) : value(_value) {}
 		ECS_INLINE Vector4(const float* values) {
 			value.load(values);
 		}
@@ -183,7 +183,7 @@ namespace ECSEngine {
 		ECS_INLINE Vector8(int x0, int y0, int z0, int w0, int x1, int y1, int z1, int w1) {
 			value = _mm256_castsi256_ps(_mm256_setr_epi32(x0, y0, z0, w0, x1, y1, z1, w1));
 		}
-		ECS_INLINE ECS_VECTORCALL Vector8(Vec8f _value) : value(_value) {}
+		ECS_INLINE Vector8(Vec8f _value) : value(_value) {}
 		ECS_INLINE Vector8(const float* values) {
 			value.load(values);
 		}

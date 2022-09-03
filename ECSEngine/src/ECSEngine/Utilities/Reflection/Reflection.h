@@ -24,41 +24,45 @@ namespace ECSEngine {
 
 #pragma region Reflection Container Type functions
 
-		extern ReflectionContainerType ECS_REFLECTION_CONTAINER_TYPES[];
+		enum ECS_REFLECTION_CUSTOM_TYPE_INDEX : unsigned char {
+			ECS_REFLECTION_CUSTOM_TYPE_STREAM,
+			ECS_REFLECTION_CUSTOM_TYPE_REFERENCE_COUNTED,
+			ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET,
+			ECS_REFLECTION_CUSTOM_TYPE_COLOR,
+			ECS_REFLECTION_CUSTOM_TYPE_COLOR_FLOAT,
+			ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET,
+			ECS_REFLECTION_CUSTOM_TYPE_COUNT
+		};
 
-		ECSENGINE_API void ReflectionContainerTypeDependentTypes_SingleTemplate(ReflectionContainerTypeDependentTypesData* data);
+		extern ReflectionCustomType ECS_REFLECTION_CUSTOM_TYPES[];
+
+		ECSENGINE_API void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data);
 
 		// E.g. for Template<Type> string should be Template
-		ECSENGINE_API bool ReflectionContainerTypeMatchTemplate(ReflectionContainerTypeMatchData* data, const char* string);
+		ECSENGINE_API bool ReflectionCustomTypeMatchTemplate(ReflectionCustomTypeMatchData* data, const char* string);
 
-		ECSENGINE_API Stream<char> ReflectionContainerTypeGetTemplateArgument(Stream<char> definition);
-
-#define ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(name) ECSENGINE_API bool ReflectionContainerTypeMatch_##name(Reflection::ReflectionContainerTypeMatchData* data); \
-															ECSENGINE_API ulong2 ReflectionContainerTypeByteSize_##name(Reflection::ReflectionContainerTypeByteSizeData* data); \
-															ECSENGINE_API void ReflectionContainerTypeDependentTypes_##name(Reflection::ReflectionContainerTypeDependentTypesData* data);
-
-#define ECS_REFLECTION_CONTAINER_TYPE_STRUCT(name) { ReflectionContainerTypeMatch_##name, ReflectionContainerTypeDependentTypes_##name, ReflectionContainerTypeByteSize_##name }
+		ECSENGINE_API Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 
-		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(Streams);
+		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(Stream);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 
-		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(SparseSet);
+		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(SparseSet);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 
-		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(Color);
+		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(Color);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 		
-		ECS_REFLECTION_CONTAINER_TYPE_FUNCTION_HEADER(ColorFloat);
+		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(ColorFloat);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 		
 		// Returns -1 if it is not matched
-		ECSENGINE_API unsigned int FindReflectionContainerType(Stream<char> definition);
+		ECSENGINE_API unsigned int FindReflectionCustomType(Stream<char> definition);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 
@@ -133,7 +137,13 @@ namespace ECSEngine {
 			unsigned int GetHierarchyIndex(Stream<wchar_t> hierarchy) const;
 			
 			// If the tag is specified it will include only those types that have at least one tag
-			void GetHierarchyTypes(unsigned int hierarchy_index, ReflectionManagerGetQuery options);
+			void GetHierarchyTypes(unsigned int hierarchy_index, ReflectionManagerGetQuery options) const;
+
+			unsigned int GetHierarchyCount() const;
+			unsigned int GetTypeCount() const;
+
+			// Make a helper for components and shared components
+			void GetHierarchyComponentTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>* component_indices, CapacityStream<unsigned int>* shared_indices) const;
 
 			void* GetTypeInstancePointer(Stream<char> name, void* instance, unsigned int pointer_index = 0) const;
 			void* GetTypeInstancePointer(const ReflectionType* type, void* instance, unsigned int pointer_index = 0) const;
@@ -306,6 +316,10 @@ namespace ECSEngine {
 		// Returns -1 if no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet.
 		ECSENGINE_API size_t SearchReflectionUserDefinedTypeByteSize(const ReflectionManager* reflection_manager, Stream<char> definition);
+
+		// Returns -1 if no match was found. It can return 0 for container types
+		// which have not had their dependencies met yet.
+		ECSENGINE_API ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(const ReflectionManager* reflection_manager, Stream<char> definition);
 
 		// Returns -1 if the no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet. 

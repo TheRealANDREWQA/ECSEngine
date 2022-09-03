@@ -1,7 +1,7 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-constexpr const char* FILE_EXPLORER_WINDOW_NAME = "File Explorer";
+#define FILE_EXPLORER_WINDOW_NAME "File Explorer"
 
 struct EditorState;
 

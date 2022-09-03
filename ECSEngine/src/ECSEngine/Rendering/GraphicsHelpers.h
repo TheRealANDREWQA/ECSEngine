@@ -13,7 +13,7 @@ namespace ECSEngine {
 		Stream<void> data;
 		size_t width;
 		size_t height;
-		DXGI_FORMAT format;
+		ECS_GRAPHICS_FORMAT format;
 	};
 
 	inline Matrix ProjectionMatrixTextureCube() {
@@ -171,7 +171,7 @@ namespace ECSEngine {
 		void* texture_data,
 		size_t current_width,
 		size_t current_height,
-		DXGI_FORMAT format,
+		ECS_GRAPHICS_FORMAT format,
 		size_t new_width,
 		size_t new_height,
 		AllocatorPolymorphic allocator = { nullptr },
@@ -191,13 +191,28 @@ namespace ECSEngine {
 	// It will invert the mesh on the Z axis
 	ECSENGINE_API void InvertMeshZAxis(Graphics* graphics, Mesh& mesh);
 
-	// Convert a texture from DXGI_FORMAT_R8_UNROM to DXGI_FORMAT_R8G8B8A8_UNORM texture
-	// Allocator nullptr means use malloc
+	// Convert a texture from ECS_GRAPHICS_FORMAT_R8_UNORM to ECS_GRAPHICS_FORMAT_RGBA8_UNORM texture
+	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// the buffer of the stream of streams.
 	ECSENGINE_API Stream<Stream<void>> ConvertSingleChannelTextureToGrayscale(
 		Stream<Stream<void>> mip_data,
 		size_t width,
 		size_t height,
 		AllocatorPolymorphic allocator = {nullptr}
+	);
+
+	// Convert a texture from 2, 3 or 4 8 bit channels into a single 8 bit channel texture
+	// If the channel to copy is specified, only the selected channel is used to copy into the new
+	// texture. Otherwise it will asume the red channel.
+	// Allocator nullptr means use malloc. In order to deallocate the data, just deallocate
+	// the buffer of the return.
+	ECSENGINE_API Stream<Stream<void>> ConvertTextureToGrayscale(
+		Stream<Stream<void>> mip_data,
+		size_t width,
+		size_t height,
+		size_t channel_count = 4,
+		size_t channel_to_copy = 0,
+		AllocatorPolymorphic allocator = { nullptr }
 	);
 
 	// It will use the immediate context if none specified. If a deffered context is specified, the copy calls
@@ -226,7 +241,7 @@ namespace ECSEngine {
 	ECSENGINE_API TextureCube ConvertTextureToCube(
 		Graphics* graphics,
 		ResourceView texture_view,
-		DXGI_FORMAT cube_format,
+		ECS_GRAPHICS_FORMAT cube_format,
 		uint2 face_size,
 		bool temporary = false
 	);

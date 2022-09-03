@@ -21,7 +21,7 @@ namespace ECSEngine {
 		ECS_ASSERT(input.size == input_is_text_file.size);
 
 		PackFilesLookupTable lookup_table;
-		size_t table_capacity = function::PowerOfTwoGreater((size_t)((float)input.size * (100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR))).x;
+		size_t table_capacity = function::PowerOfTwoGreater((size_t)((float)input.size * (100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR)));
 		size_t table_size = lookup_table.MemoryOf(table_capacity);
 
 		// Open a file handle to the output file

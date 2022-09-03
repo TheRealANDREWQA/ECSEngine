@@ -9,6 +9,38 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void EntityToString(Entity entity, CapacityStream<char>& string, bool extended_string)
+	{
+		string.AddStream("Entity ");
+		function::ConvertIntToChars(string, entity.value);
+
+		if (extended_string) {
+			string.AddStream(" (Index - ");
+			function::ConvertIntToChars(string, entity.index);
+			string.AddStream(", generation - ");
+			function::ConvertIntToChars(string, entity.generation_count);
+			string.Add(')');
+		}
+
+		string.AssertCapacity();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Entity StringToEntity(Stream<char> string)
+	{
+		Stream<char> parenthese = function::FindFirstCharacter(string, '(');
+
+		Stream<char> string_to_parse = string;
+		if (parenthese.buffer != nullptr) {
+			string_to_parse = { string.buffer, function::PointerDifference(string_to_parse.buffer, string.buffer) };
+		}
+
+		return Entity((unsigned int)function::ConvertCharactersToInt(string_to_parse));
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	EntityPool::EntityPool(
 		MemoryManager* memory_manager,
 		unsigned int pool_power_of_two
@@ -102,7 +134,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Entity EntityPool::AllocateEx(unsigned short archetype, unsigned short base_archetype, unsigned int stream_index)
+	Entity EntityPool::AllocateEx(unsigned int archetype, unsigned int base_archetype, unsigned int stream_index)
 	{
 		return EntityPoolAllocateImplementation(this, archetype, base_archetype, stream_index);
 	}
@@ -110,10 +142,8 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	struct EntityPoolAllocateAdditionalData {
-		const unsigned short* archetypes;
-		const unsigned short* base_archetypes;
 		const unsigned int* stream_indices;
-		ushort2 archetype_indices;
+		uint2 archetype_indices;
 		unsigned int copy_position;
 	};
 
@@ -136,8 +166,9 @@ namespace ECSEngine {
 
 					info->tags = 0;
 					info->layer = 0;
-					info->base_archetype = additional_data.base_archetypes[entity_index];
-					info->main_archetype = additional_data.archetypes[entity_index];
+					info->hierarchy = 0;
+					info->base_archetype = additional_data.archetype_indices.y;
+					info->main_archetype = additional_data.archetype_indices.x;
 					info->stream_index = additional_data.stream_indices[entity_index];
 
 					// Set the appropriate entity now
@@ -156,6 +187,8 @@ namespace ECSEngine {
 
 					current_info->tags = 0;
 					current_info->layer = 0;
+					current_info->hierarchy = 0;
+
 					current_info->generation_count++;
 					current_info->generation_count = current_info->generation_count == 0 ? 1 : current_info->generation_count;
 					// This will be a handle that can be used to index into this specific chunk of the entity pool
@@ -173,6 +206,8 @@ namespace ECSEngine {
 
 					info->tags = 0;
 					info->layer = 0;
+					info->hierarchy = 0;
+
 					info->base_archetype = -1;
 					info->main_archetype = -1;
 					info->stream_index = -1;
@@ -204,16 +239,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::AllocateEx(Stream<Entity> entities, const unsigned short* archetypes, const unsigned short* base_archetypes, const unsigned int* stream_indices)
+	void EntityPool::AllocateEx(Stream<Entity> entities, unsigned int archetype, unsigned int base_archetype, const unsigned int* stream_indices)
 	{
-		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_INFOS>(this, entities, {archetypes, base_archetypes, stream_indices});
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_INFOS>(this, entities, { stream_indices, { archetype, base_archetype } });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, unsigned int copy_position)
+	void EntityPool::AllocateEx(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position)
 	{
-		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_POSITION>(this, entities, { nullptr, nullptr, nullptr, archetype_indices, copy_position });
+		EntityPoolAllocateImplementation<ENTITY_POOL_ALLOCATE_WITH_POSITION>(this, entities, { nullptr, archetype_indices, copy_position });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -320,9 +355,7 @@ namespace ECSEngine {
 		EntityInfo* info = GetInfoCrashCheck(
 			this, 
 			entity, 
-			__FILE__,
-			__FUNCTION__,
-			__LINE__
+			ECS_LOCATION
 		);
 		info->tags &= ~(1 << tag);
 	}
@@ -333,7 +366,7 @@ namespace ECSEngine {
 	{
 		uint2 entity_indices = GetPoolAndEntityIndex(this, entity);
 		ECS_CRASH_RETURN(
-			entity_indices.x < m_entity_infos.size&& m_entity_infos[entity_indices.x].is_in_use,
+			entity_indices.x < m_entity_infos.size && m_entity_infos[entity_indices.x].is_in_use,
 			"Incorrect entity {2} when trying to delete it.",
 			entity.index
 		);
@@ -367,11 +400,7 @@ namespace ECSEngine {
 		m_memory_manager->Deallocate(m_entity_infos[pool_index].stream.buffer);
 		// When iterating for an allocation, since the size and the capacity are both set to 0
 		// The iteration will just skip this block - as it should
-		m_entity_infos[pool_index].stream.buffer = nullptr;
-		m_entity_infos[pool_index].stream.free_list = nullptr;
-		m_entity_infos[pool_index].stream.size = 0;
-		m_entity_infos[pool_index].stream.capacity = 0;
-		m_entity_infos[pool_index].is_in_use = false;
+		memset(m_entity_infos.buffer + pool_index, 0, sizeof(TaggedStableReferenceStream));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -389,13 +418,10 @@ namespace ECSEngine {
 
 	bool EntityPool::HasTag(Entity entity, unsigned char tag) const
 	{
-
 		EntityInfo info = GetInfoCrashCheck(
 			this, 
 			entity, 
-			__FILE__,
-			__FUNCTION__,
-			__LINE__
+			ECS_LOCATION
 		);
 
 		return (info.tags & tag) != 0;
@@ -414,9 +440,7 @@ namespace ECSEngine {
 		return GetInfoCrashCheck(
 			this,
 			entity,
-			__FILE__,
-			__FUNCTION__,
-			__LINE__
+			ECS_LOCATION
 		);
 	}
 
@@ -435,9 +459,7 @@ namespace ECSEngine {
 		return GetInfoCrashCheck(
 			this,
 			entity,
-			__FILE__,
-			__FUNCTION__,
-			__LINE__
+			ECS_LOCATION
 		);
 	}
 
@@ -451,8 +473,41 @@ namespace ECSEngine {
 	
 	// ------------------------------------------------------------------------------------------------------------
 
-	void EntityPool::SetEntityInfo(Entity entity, unsigned short archetype, unsigned short base_archetype, unsigned int stream_index) {
-		EntityInfo* info = GetInfoCrashCheck(this, entity, __FILE__, __FUNCTION__, __LINE__);
+	unsigned int EntityPool::GetCount() const
+	{
+		unsigned int total = 0;
+		for (unsigned int index = 0; index < m_entity_infos.size; index++) {
+			if (m_entity_infos[index].is_in_use) {
+				total += m_entity_infos[index].stream.size;
+			}
+		}
+
+		return total;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityPool::IsEntityAt(unsigned int stream_index) const
+	{
+		Entity entity;
+		entity.index = stream_index;
+		uint2 indices = GetPoolAndEntityIndex(this, entity);
+
+		if (indices.x < m_entity_infos.size) {
+			if (m_entity_infos[indices.x].is_in_use) {
+				if (m_entity_infos[indices.x].stream[indices.y].generation_count != 0) {
+					// It exists, return its generation count
+					return m_entity_infos[indices.x].stream[indices.y].generation_count;
+				}
+			}
+		}
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void EntityPool::SetEntityInfo(Entity entity, unsigned int archetype, unsigned int base_archetype, unsigned int stream_index) {
+		EntityInfo* info = GetInfoCrashCheck(this, entity, ECS_LOCATION);
 
 		info->base_archetype = base_archetype;
 		info->main_archetype = archetype;
@@ -462,14 +517,14 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	void EntityPool::SetTag(Entity entity, unsigned char tag) {
-		EntityInfo* info = GetInfoCrashCheck(this, entity, __FILE__, __FUNCTION__, __LINE__);
+		EntityInfo* info = GetInfoCrashCheck(this, entity, ECS_LOCATION);
 		info->tags |= 1 << tag;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	void EntityPool::SetLayer(Entity entity, unsigned int layer) {
-		EntityInfo* info = GetInfoCrashCheck(this, entity, __FILE__, __FUNCTION__, __LINE__);
+		EntityInfo* info = GetInfoCrashCheck(this, entity, ECS_LOCATION);
 		info->layer = layer;
 	}
 
@@ -486,7 +541,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-#define ENTITY_POOL_SERIALIZE_VERSION 1
+#define ENTITY_POOL_SERIALIZE_VERSION 0
 
 	struct SerializeEntityInfo {
 		EntityInfo info;
@@ -557,42 +612,6 @@ namespace ECSEngine {
 		//return success;
 
 		return false;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool HasComponents(ComponentSignature query, ComponentSignature archetype_component)
-	{
-		for (size_t index = 0; index < query.count; index++) {
-			unsigned char subindex = 0;
-			for (; subindex < archetype_component.count; subindex++) {
-				if (archetype_component.indices[subindex] == query.indices[index]) {
-					// Exit the loop
-					break;
-				}
-			}
-			if (subindex == archetype_component.count) {
-				return false;
-			}
-		}
-		sizeof(ComponentSignature);
-		return true;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	bool ExcludesComponents(ComponentSignature query, ComponentSignature archetype_component)
-	{
-		for (size_t index = 0; index < query.count; index++) {
-			unsigned char subindex = 0;
-			for (; subindex < archetype_component.count; subindex++) {
-				if (archetype_component.indices[subindex] == query.indices[index]) {
-					// Exit the loop
-					return false;
-				}
-			}
-		}
-		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

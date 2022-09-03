@@ -7,7 +7,7 @@
 #include "../../Utilities/Path.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
 
-#define SERIALIZE_VERSION 1
+#include "AssetMetadataSerialize.h"
 
 #define MESH_FOLDER L"Mesh"
 #define TEXTURE_FOLDER L"Texture"
@@ -21,11 +21,10 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	AssetDatabase::AssetDatabase(Stream<wchar_t> _file_location, AllocatorPolymorphic allocator, Reflection::ReflectionManager* _reflection_manager)
-		: reflection_manager(_reflection_manager) 
+	AssetDatabase::AssetDatabase(AllocatorPolymorphic allocator,  const Reflection::ReflectionManager* _reflection_manager)
+		: reflection_manager(_reflection_manager), file_location(nullptr, 0)
 	{
 		SetAllocator(allocator);
-		SetFileLocation(_file_location);
 	}
 	
 	// --------------------------------------------------------------------------------------
@@ -37,17 +36,32 @@ namespace ECSEngine {
 		if (handle == -1) {
 			AssetType metadata;
 
-			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
-			database->FileLocationAsset(path, type);
+			name = function::StringCopy(database->Allocator(), name);
+			metadata.Default(name);
 
-			DeserializeOptions options;
-			options.field_allocator = set.allocator;
-			ECS_DESERIALIZE_CODE code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(serialize_string), &metadata, path, &options);
-			if (code == ECS_DESERIALIZE_OK) {
-				return set.Add({ metadata, 1 });
+			if (database->file_location.size > 0) {
+				ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
+				database->FileLocationAsset(path, type);
+
+				if (ExistsFileOrFolder(path)) {
+					DeserializeOptions options;
+					options.field_allocator = set.allocator;
+					ECS_DESERIALIZE_CODE code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(serialize_string), &metadata, path, &options);
+					if (code == ECS_DESERIALIZE_OK) {
+						return set.Add({ metadata, 1 });
+					}
+					else {
+						// Also deallocate the name
+						Deallocate(database->Allocator(), name.buffer);
+						return -1;
+					}
+				}
+				else {
+					return set.Add({ metadata, 1 });
+				}
 			}
 			else {
-				return -1;
+				return set.Add({ metadata, 1 });
 			}
 		}
 		else {
@@ -56,9 +70,18 @@ namespace ECSEngine {
 		}
 	}
 
+	// --------------------------------------------------------------------------------------
+
 	unsigned int AssetDatabase::AddMesh(Stream<char> name)
 	{
 		return AddAssetDefault<MeshMetadata>(this, mesh_metadata, name, STRING(MeshMetadata), ECS_ASSET_MESH);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddMeshInternal(const MeshMetadata* metadata)
+	{
+		return mesh_metadata.Add({ *metadata, 1 });
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -70,9 +93,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabase::AddTextureInternal(const TextureMetadata* metadata)
+	{
+		return texture_metadata.Add({ *metadata, 1 });
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	unsigned int AssetDatabase::AddGPUBuffer(Stream<char> name)
 	{
 		return AddAssetDefault<GPUBufferMetadata>(this, gpu_buffer_metadata, name, STRING(GPUBufferMetadata), ECS_ASSET_GPU_BUFFER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddGPUBufferInternal(const GPUBufferMetadata* metadata)
+	{
+		return gpu_buffer_metadata.Add({ *metadata, 1 });
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -84,9 +121,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabase::AddGPUSamplerInternal(const GPUSamplerMetadata* metadata)
+	{
+		return gpu_sampler_metadata.Add({ *metadata, 1 });
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	unsigned int AssetDatabase::AddShader(Stream<char> name)
 	{
 		return AddAssetDefault<ShaderMetadata>(this, shader_metadata, name, STRING(ShaderMetadata), ECS_ASSET_SHADER);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddShaderInternal(const ShaderMetadata* metadata)
+	{
+		return shader_metadata.Add({ *metadata, 1 });
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -128,9 +179,23 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabase::AddMaterialInternal(const MaterialAsset* metadata)
+	{
+		return material_asset.Add({ *metadata, 1 });
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	unsigned int AssetDatabase::AddMisc(Stream<wchar_t> path)
 	{
 		return AddAssetDefault<MiscAsset>(this, misc_asset, Stream<char>(path.buffer, path.size), STRING(MiscAsset), ECS_ASSET_MISC);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::AddMiscInternal(const MiscAsset* metadata)
+	{
+		return misc_asset.Add({ *metadata, 1 });
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -152,6 +217,25 @@ namespace ECSEngine {
 			return AddMisc(Stream<wchar_t>(name.buffer, name.size));
 		}
 		return (this->*ADD_ASSET_FUNCTION[type])(name);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef unsigned int (AssetDatabase::* AddAssetInternalFunction)(const void* buffer);
+
+	AddAssetInternalFunction ADD_ASSET_INTERNAL_FUNCTION[] = {
+		(AddAssetInternalFunction)&AssetDatabase::AddMeshInternal,
+		(AddAssetInternalFunction)&AssetDatabase::AddTextureInternal,
+		(AddAssetInternalFunction)&AssetDatabase::AddGPUBufferInternal,
+		(AddAssetInternalFunction)&AssetDatabase::AddGPUSamplerInternal,
+		(AddAssetInternalFunction)&AssetDatabase::AddShaderInternal,
+		(AddAssetInternalFunction)&AssetDatabase::AddMaterialInternal,
+		(AddAssetInternalFunction)&AssetDatabase::AddMiscInternal
+	};
+
+	unsigned int AssetDatabase::AddAssetInternal(const void* asset, ECS_ASSET_TYPE type)
+	{
+		return (this->*ADD_ASSET_INTERNAL_FUNCTION[type])(asset);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -273,8 +357,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindMesh(Stream<char> name) const
 	{
-		return mesh_metadata.FindFunctor([&](const ReferenceCountedAsset<MeshMetadata>& compare) {
-			return function::CompareStrings(compare.asset.name, name);
+		return mesh_metadata.FindFunctor([&](const ReferenceCounted<MeshMetadata>& compare) {
+			return function::CompareStrings(compare.value.name, name);
 		});
 	}
 
@@ -282,8 +366,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindTexture(Stream<char> name) const
 	{
-		return texture_metadata.FindFunctor([&](const ReferenceCountedAsset<TextureMetadata>& compare) {
-			return function::CompareStrings(compare.asset.name, name);
+		return texture_metadata.FindFunctor([&](const ReferenceCounted<TextureMetadata>& compare) {
+			return function::CompareStrings(compare.value.name, name);
 		});
 	}
 
@@ -291,8 +375,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindGPUBuffer(Stream<char> name) const
 	{
-		return gpu_buffer_metadata.FindFunctor([&](const ReferenceCountedAsset<GPUBufferMetadata>& compare) {
-			return function::CompareStrings(compare.asset.name, name);
+		return gpu_buffer_metadata.FindFunctor([&](const ReferenceCounted<GPUBufferMetadata>& compare) {
+			return function::CompareStrings(compare.value.name, name);
 		});
 	}
 
@@ -300,8 +384,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindGPUSampler(Stream<char> name) const
 	{
-		return gpu_sampler_metadata.FindFunctor([&](const ReferenceCountedAsset<GPUSamplerMetadata>& compare) {
-			return function::CompareStrings(compare.asset.name, name);
+		return gpu_sampler_metadata.FindFunctor([&](const ReferenceCounted<GPUSamplerMetadata>& compare) {
+			return function::CompareStrings(compare.value.name, name);
 		});
 	}
 
@@ -309,8 +393,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindShader(Stream<char> name) const
 	{
-		return shader_metadata.FindFunctor([&](const ReferenceCountedAsset<ShaderMetadata>& compare) {
-			return function::CompareStrings(compare.asset.name, name);
+		return shader_metadata.FindFunctor([&](const ReferenceCounted<ShaderMetadata>& compare) {
+			return function::CompareStrings(compare.value.name, name);
 		});
 	}
 
@@ -318,8 +402,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindMaterial(Stream<char> name) const
 	{
-		return material_asset.FindFunctor([&](const ReferenceCountedAsset<MaterialAsset>& compare) {
-			return function::CompareStrings(compare.asset.name, name);
+		return material_asset.FindFunctor([&](const ReferenceCounted<MaterialAsset>& compare) {
+			return function::CompareStrings(compare.value.name, name);
 		});
 	}
 
@@ -327,8 +411,8 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::FindMisc(Stream<wchar_t> path) const
 	{
-		return misc_asset.FindFunctor([&](const ReferenceCountedAsset<MiscAsset>& compare) {
-			return function::CompareStrings(compare.asset.path, path);
+		return misc_asset.FindFunctor([&](const ReferenceCounted<MiscAsset>& compare) {
+			return function::CompareStrings(compare.value.path, path);
 		});
 	}
 
@@ -432,66 +516,122 @@ namespace ECSEngine {
 
 	MeshMetadata* AssetDatabase::GetMesh(unsigned int handle)
 	{
-		return &mesh_metadata[handle].asset;
+		return (MeshMetadata*)GetMeshConst(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	const MeshMetadata* AssetDatabase::GetMeshConst(unsigned int handle) const
+	{
+		return &mesh_metadata[handle].value;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	TextureMetadata* AssetDatabase::GetTexture(unsigned int handle)
 	{
-		return &texture_metadata[handle].asset;
+		return (TextureMetadata*)GetTextureConst(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	const TextureMetadata* AssetDatabase::GetTextureConst(unsigned int handle) const
+	{
+		return &texture_metadata[handle].value;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	GPUBufferMetadata* AssetDatabase::GetGPUBuffer(unsigned int handle)
 	{
-		return &gpu_buffer_metadata[handle].asset;
+		return (GPUBufferMetadata*)GetGPUBufferConst(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	const GPUBufferMetadata* AssetDatabase::GetGPUBufferConst(unsigned int handle) const
+	{
+		return &gpu_buffer_metadata[handle].value;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	GPUSamplerMetadata* AssetDatabase::GetGPUSampler(unsigned int handle)
 	{
-		return &gpu_sampler_metadata[handle].asset;
+		return (GPUSamplerMetadata*)GetGPUSamplerConst(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	const GPUSamplerMetadata* AssetDatabase::GetGPUSamplerConst(unsigned int handle) const
+	{
+		return &gpu_sampler_metadata[handle].value;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	ShaderMetadata* AssetDatabase::GetShader(unsigned int handle)
 	{
-		return &shader_metadata[handle].asset;
+		return (ShaderMetadata*)GetShaderConst(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	const ShaderMetadata* AssetDatabase::GetShaderConst(unsigned int handle) const
+	{
+		return &shader_metadata[handle].value;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	MaterialAsset* AssetDatabase::GetMaterial(unsigned int handle)
 	{
-		return &material_asset[handle].asset;
+		return (MaterialAsset*)GetMaterialConst(handle);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	const MaterialAsset* AssetDatabase::GetMaterialConst(unsigned int handle) const
+	{
+		return &material_asset[handle].value;
 	}
 
 	// --------------------------------------------------------------------------------------
 
 	MiscAsset* AssetDatabase::GetMisc(unsigned int handle)
 	{
-		return &misc_asset[handle].asset;
+		return (MiscAsset*)GetMiscConst(handle);
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	typedef void* (AssetDatabase::* GetAssetFunction)(unsigned int handle);
+	const MiscAsset* AssetDatabase::GetMiscConst(unsigned int handle) const
+	{
+		return &misc_asset[handle].value;
+	}
 
-	GetAssetFunction GET_FUNCTIONS[] = {
-		(GetAssetFunction)&AssetDatabase::GetMesh,
-		(GetAssetFunction)&AssetDatabase::GetTexture,
-		(GetAssetFunction)&AssetDatabase::GetGPUBuffer,
-		(GetAssetFunction)&AssetDatabase::GetGPUSampler,
-		(GetAssetFunction)&AssetDatabase::GetShader,
-		(GetAssetFunction)&AssetDatabase::GetMaterial,
-		(GetAssetFunction)&AssetDatabase::GetMisc
-	};
+	// --------------------------------------------------------------------------------------
 
 	void* AssetDatabase::GetAsset(unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		return (void*)GetAssetConst(handle, type);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	typedef const void* (AssetDatabase::* GetAssetFunction)(unsigned int handle) const;
+
+	GetAssetFunction GET_FUNCTIONS[] = {
+		(GetAssetFunction)&AssetDatabase::GetMeshConst,
+		(GetAssetFunction)&AssetDatabase::GetTextureConst,
+		(GetAssetFunction)&AssetDatabase::GetGPUBufferConst,
+		(GetAssetFunction)&AssetDatabase::GetGPUSamplerConst,
+		(GetAssetFunction)&AssetDatabase::GetShaderConst,
+		(GetAssetFunction)&AssetDatabase::GetMaterialConst,
+		(GetAssetFunction)&AssetDatabase::GetMiscConst
+	};
+
+	const void* AssetDatabase::GetAssetConst(unsigned int handle, ECS_ASSET_TYPE type) const
 	{
 		return (this->*GET_FUNCTIONS[type])(handle);
 	}
@@ -505,7 +645,7 @@ namespace ECSEngine {
 
 		if (metadata.reference_count == 0) {
 			// Deallocate the memory
-			metadata.asset.DeallocateMemory(type.allocator);
+			metadata.value.DeallocateMemory(type.allocator);
 			type.RemoveSwapBack(handle);
 			return true;
 		}
@@ -703,30 +843,87 @@ namespace ECSEngine {
 			Deallocate(mesh_metadata.allocator, file_location.buffer);
 		}
 
-		size_t size_to_allocate = sizeof(wchar_t) * (_file_location.size + 2);
-		void* allocation = Allocate(mesh_metadata.allocator, size_to_allocate);
-		memcpy(allocation, _file_location.buffer, _file_location.size * sizeof(wchar_t));
-		file_location.buffer = (wchar_t*)allocation;
-		file_location.size = _file_location.size + 1;
+		if (_file_location.size > 0) {
+			size_t size_to_allocate = sizeof(wchar_t) * (_file_location.size + 2);
+			void* allocation = Allocate(mesh_metadata.allocator, size_to_allocate);
+			memcpy(allocation, _file_location.buffer, _file_location.size * sizeof(wchar_t));
+			file_location.buffer = (wchar_t*)allocation;
+			file_location.size = _file_location.size + 1;
 
-		if (function::PathIsAbsolute(_file_location)) {
-			if (file_location[file_location.size - 1] != ECS_OS_PATH_SEPARATOR) {
-				file_location[file_location.size - 1] = ECS_OS_PATH_SEPARATOR;
+			if (function::PathIsAbsolute(_file_location)) {
+				if (file_location[file_location.size - 1] != ECS_OS_PATH_SEPARATOR) {
+					file_location[file_location.size - 1] = ECS_OS_PATH_SEPARATOR;
+				}
 			}
+			else {
+				if (file_location[file_location.size - 1] != ECS_OS_PATH_SEPARATOR_REL) {
+					file_location[file_location.size - 1] = ECS_OS_PATH_SEPARATOR_REL;
+				}
+			}
+
+			file_location[file_location.size] = L'\0';
 		}
 		else {
-			if (file_location[file_location.size - 1] != ECS_OS_PATH_SEPARATOR_REL) {
-				file_location[file_location.size - 1] = ECS_OS_PATH_SEPARATOR_REL;
-			}
+			file_location = { nullptr, 0 };
 		}
-
-		file_location[file_location.size] = L'\0';
 	}
 
 	// --------------------------------------------------------------------------------------
 
-	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file)
+	template<typename Functor>
+	size_t SerializeAssetDatabaseImpl(const AssetDatabase* database, Functor&& functor) {
+		ECS_STACK_CAPACITY_STREAM(SerializeOmitField, omit_fields, 64);
+		Stream<char> fields_to_keep[] = {
+			STRING(name),
+			STRING(path)
+		};
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MeshMetadata), { fields_to_keep, std::size(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(TextureMetadata), { fields_to_keep, std::size(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(GPUBufferMetadata), { fields_to_keep, std::size(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(GPUSamplerMetadata), { fields_to_keep, std::size(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(ShaderMetadata), { fields_to_keep, std::size(fields_to_keep) });
+
+		SerializeOptions options;
+		options.omit_fields = omit_fields;
+
+		SetSerializeCustomMaterialAssetDatabase(database);
+		size_t return_value = functor(&options);
+		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET);
+
+		return return_value;
+	}
+
+	ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file)
 	{
+		return (ECS_SERIALIZE_CODE)SerializeAssetDatabaseImpl(database, [&](SerializeOptions* options) {
+			return (size_t)Serialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, options);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, uintptr_t& ptr)
+	{
+		return (ECS_SERIALIZE_CODE)SerializeAssetDatabaseImpl(database, [&](SerializeOptions* options) {
+			return (size_t)Serialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, ptr, options);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	size_t SerializeAssetDatabaseSize(const AssetDatabase* database)
+	{
+		return SerializeAssetDatabaseImpl(database, [&](SerializeOptions* options) {
+			return SerializeSize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, options);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	template<typename Functor>
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabaseImpl(AssetDatabase* database, bool reference_count_zero, Functor&& functor) {
+		reference_count_zero = !reference_count_zero;
+
 		const size_t STACK_CAPACITY = ECS_KB * 128;
 		void* stack_allocation = ECS_STACK_ALLOC(STACK_CAPACITY);
 
@@ -738,7 +935,11 @@ namespace ECSEngine {
 		options.file_allocator = allocator;
 		options.field_allocator = allocator;
 
-		ECS_DESERIALIZE_CODE code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, &options);
+		SetSerializeCustomMaterialAssetDatabase(database);
+
+		ECS_DESERIALIZE_CODE code = functor(&options);
+
+		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET);
 		// If it failed, just exit
 		if (code != ECS_DESERIALIZE_OK) {
 			_allocator.ClearBackup();
@@ -746,14 +947,15 @@ namespace ECSEngine {
 		}
 
 		// Allocate all the fields now
-		// Make the reference count 0 for all asset types. The database references will update the reference count
+		// Make the reference count 0/1 for all asset types. Either the database references will update the reference count
+		// or through some other way these are kept alive
 
 		AllocatorPolymorphic database_allocator = database->Allocator();
 
-		auto update_asset_type = [database_allocator](auto stream_type) {
+		auto update_asset_type = [database_allocator, reference_count_zero](auto stream_type) {
 			for (size_t index = 0; index < stream_type.size; index++) {
-				stream_type[index].reference_count = 0;
-				stream_type[index].asset = stream_type[index].asset.Copy(database_allocator);
+				stream_type[index].reference_count = reference_count_zero;
+				stream_type[index].value = stream_type[index].value.Copy(database_allocator);
 			}
 		};
 
@@ -767,6 +969,29 @@ namespace ECSEngine {
 
 		_allocator.ClearBackup();
 		return code;
+	}
+
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, bool reference_count_zero)
+	{
+		return DeserializeAssetDatabaseImpl(database, reference_count_zero, [&](DeserializeOptions* options) {
+			return Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, file, options);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, bool reference_count_zero)
+	{
+		return DeserializeAssetDatabaseImpl(database, reference_count_zero, [&](DeserializeOptions* options) {
+			return Deserialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, ptr, options);
+		});
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	size_t DeserializeAssetDatabaseSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr)
+	{
+		return DeserializeSize(reflection_manager, reflection_manager->GetType(STRING(AssetDatabase)), ptr);
 	}
 
 	// --------------------------------------------------------------------------------------

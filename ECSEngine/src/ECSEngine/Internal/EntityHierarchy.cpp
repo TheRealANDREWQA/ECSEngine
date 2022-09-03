@@ -274,10 +274,48 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
+    BFSEntityHierarchyIterator EntityHierarchy::GetBFSIterator(AllocatorPolymorphic _allocator) const
+    {
+        if (_allocator.allocator == nullptr) {
+            _allocator = GetAllocatorPolymorphic(allocator);
+        }
+
+        // Use a default capacity of the number of entries in the children table
+        return BFSEntityHierarchyIterator(_allocator, { this }, children_table.GetCount());
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    DFSEntityHierarchyIterator EntityHierarchy::GetDFSIterator(AllocatorPolymorphic _allocator) const
+    {
+        if (_allocator.allocator == nullptr) {
+            _allocator = GetAllocatorPolymorphic(allocator);
+        }
+
+        // Use a default capacity of the number of entries in the children table
+        return DFSEntityHierarchyIterator(_allocator, { this }, children_table.GetCount());
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    unsigned int EntityHierarchy::GetEntityCount() const
+    {
+        unsigned int count = 0;
+        // Go through the children table and add the children counts in it
+        // At the end add the root count
+        children_table.ForEachConst([&](const Children& children, Entity parent) {
+            count += children.count;
+        });
+
+        return count + roots.size;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
     Stream<Entity> EntityHierarchy::GetChildren(Entity parent) const {
         Children children;
         if (children_table.TryGetValue<false>(parent, children)) {
-            return { children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, children.count };
+            return { children.IsPointer() ? children.entities : children.static_children, children.count };
         }
         return { nullptr, 0 };
     }
@@ -487,8 +525,8 @@ namespace ECSEngine {
         }
 
         if (header.children_count > 0 || header.parent_count > 0) {
-            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
-            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
+            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
+            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
             size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
             size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
 
@@ -572,8 +610,8 @@ namespace ECSEngine {
         }
 
         if (header.children_count > 0 || header.parent_count > 0) {
-            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
-            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1).x;
+            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
+            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
             size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
             size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
 
@@ -652,4 +690,32 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
+    Stream<EntityHierarchyIteratorImpl::storage_type> EntityHierarchyIteratorImpl::GetChildren(storage_type value, AllocatorPolymorphic allocator) const
+    {
+        return hierarchy->GetChildren(value);
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    bool EntityHierarchyIteratorImpl::HasChildren(storage_type value) const
+    {
+        return hierarchy->GetChildren(value).size > 0;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    Stream<EntityHierarchyIteratorImpl::storage_type> EntityHierarchyIteratorImpl::GetRoots(AllocatorPolymorphic allocator) const
+    {
+        return hierarchy->roots;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    EntityHierarchyIteratorImpl::return_type EntityHierarchyIteratorImpl::GetReturnValue(storage_type value, AllocatorPolymorphic allocator) const
+    {
+        return value;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+   
 }

@@ -71,22 +71,22 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleSerializeExtractComponent {
-		SerializeEntityManagerExtractComponent function;
+		SerializeEntityManagerComponentInfo function;
 		Component component;
 	};
 
 	struct ModuleSerializeExtractSharedComponent {
-		DeserializeEntityManagerExtractSharedComponent function;
+		SerializeEntityManagerSharedComponentInfo function;
 		Component component;
 	};
 
 	struct ModuleDeserializeExtractComponent {
-		DeserializeEntityManagerExtractComponent function;
+		DeserializeEntityManagerComponentInfo function;
 		Component component;
 	};
 
 	struct ModuleDeserializeExtractSharedComponent {
-		DeserializeEntityManagerExtractSharedComponent function;
+		DeserializeEntityManagerSharedComponentInfo function;
 		Component component;
 	};
 
@@ -110,8 +110,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator;
 	};
 
-	// With this function the module can override the default serialization (bit blitting) of the components
-	// into a custom serialization.
+	// With this function the module can override the default serialization (bit blitting) of the components into a custom serialization.
 	typedef void (*ModuleSerializeComponentFunction)(
 		ModuleSerializeComponentFunctionData* data
 	);
@@ -211,8 +210,7 @@ namespace ECSEngine {
 		const char* asset_metadata_name = nullptr;
 
 		// This is an optional field. If the type can be understood by the reflection system,
-		// then the serialization and deserialization can be done in automatic way. (using the
-		// binary version since for this type of assets speed is important)
+		// then the serialization and deserialization can be done in automatic way. (using the binary version)
 		const char* asset_type_name = nullptr;
 
 		// This is the name that will be displayed in the Editor
@@ -234,8 +232,7 @@ namespace ECSEngine {
 		// Same as above, if the name is specified it will be written using the binary serializer
 		ModuleWriteAssetFunction write_function = nullptr;
 
-		// If this function is nullptr and the asset metadata name is specified, it will use the
-		// text deserialize function in order to write it.
+		// If this function is nullptr and the asset metadata name is specified it will use the binary serializer
 		ModuleLoadAssetFunction metadata_load_function = nullptr;
 		// Same as above.
 		ModuleWriteAssetFunction metadata_write_function = nullptr;
@@ -263,7 +260,6 @@ namespace ECSEngine {
 	struct ModuleLinkComponentFunctionData {
 		const void* link_component;
 		void* component;
-		void* component_metadata;
 		ModuleLinkComponentEntityArchetype entity_archetype;
 		World* world;
 	};
@@ -274,14 +270,7 @@ namespace ECSEngine {
 
 	struct ModuleLinkComponentTarget {
 		ModuleLinkComponentFunction build_function;
-		// This is the name of the source code structure
-		// For linking a normal component (that is not being built from dependencies), this is the only
-		// name that is being considered
 		const char* component_name;
-		// This is the name of the metadata source code structure. If linking an editor component
-		// with a structure that is being built as an asset, this can be specified such that you can 
-		// modify the metadata instead of the actual asset
-		const char* component_metadata_name = nullptr;
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData {

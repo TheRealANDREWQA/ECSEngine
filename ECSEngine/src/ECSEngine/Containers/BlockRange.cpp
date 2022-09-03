@@ -26,7 +26,7 @@ namespace ECSEngine {
 		for (i = m_free_block_count; flag == -1 && i < m_used_block_count + m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + i));
 			match = section == temp;
-			flag = horizontal_find_first(match);
+			flag = HorizontalFindFirst(match);
 		}
 
 		if constexpr (assert_if_not_found) {
@@ -53,7 +53,7 @@ namespace ECSEngine {
 		for (i = 0; flag == -1 && i < m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + i));
 			match = section == temp;
-			flag = horizontal_find_first(match);
+			flag = HorizontalFindFirst(match);
 		}
 
 		size_t next_block_index = i + flag - temp.size();
@@ -64,7 +64,7 @@ namespace ECSEngine {
 		for (i = 0; flag2 == -1 && i < m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + m_capacity + i));
 			match = section == temp;
-			flag2 = horizontal_find_first(match);
+			flag2 = HorizontalFindFirst(match);
 		}
 
 		// previous block 
@@ -119,7 +119,7 @@ namespace ECSEngine {
 				section.load((const void*)(m_buffer + i));
 				temp.load((const void*)(m_buffer + i + m_capacity));
 				match = (temp - section + one) >= sizes;
-				flag = horizontal_find_first(match);
+				flag = HorizontalFindFirst(match);
 			}
 			size_t index = flag + i - temp.size();
 			if (flag != -1 && index < m_free_block_count) {	

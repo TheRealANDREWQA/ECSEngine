@@ -3,3 +3,5 @@
 bin
 bin-int
 ECSEngine/Dependencies
+Modules/*/bin-int
+Modules/*/bin

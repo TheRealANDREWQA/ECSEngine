@@ -5,7 +5,7 @@
 #include "../Utilities/Crash.h"
 #include "ArchetypeQueryCache.h"
 
-#define ENTITY_MANAGER_DEFAULT_UNIQUE_COMPONENTS (1 << 10)
+#define ENTITY_MANAGER_DEFAULT_UNIQUE_COMPONENTS (1 << 8)
 #define ENTITY_MANAGER_DEFAULT_SHARED_COMPONENTS (1 << 8)
 #define ENTITY_MANAGER_DEFAULT_ARCHETYPE_COUNT (1 << 7)
 
@@ -16,6 +16,10 @@
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_SIZE ECS_KB * 256
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_CHUNKS ECS_KB * 2
 #define ENTITY_MANAGER_SMALL_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
+
+// A default of 4 is a good start
+#define COMPONENT_ALLOCATOR_ARENA_COUNT 4
+#define COMPONENT_ALLOCATOR_BLOCK_COUNT 2048
 
 namespace ECSEngine {
 
@@ -78,7 +82,7 @@ namespace ECSEngine {
 	struct DeferredDestroyArchetype {
 		ComponentSignature unique_components;
 		ComponentSignature shared_components;
-		unsigned short archetype_index;
+		unsigned int archetype_index;
 	};
 
 	struct DeferredCreateArchetypeBase {
@@ -90,12 +94,13 @@ namespace ECSEngine {
 	struct DeferredDestroyArchetypeBase {
 		ComponentSignature unique_components;
 		SharedComponentSignature shared_components;
-		ushort2 indices;
+		uint2 indices;
 	};
 
 	struct DeferredCreateComponent {
 		Component component;
 		unsigned short size;
+		size_t allocator_size;
 	};
 
 	struct DeferredDestroyComponent {
@@ -105,6 +110,7 @@ namespace ECSEngine {
 	struct DeferredCreateSharedComponent {
 		Component component;
 		unsigned short size;
+		size_t allocator_size;
 	};
 
 	struct DeferredDestroySharedComponent {
@@ -130,7 +136,7 @@ namespace ECSEngine {
 
 	struct DeferredDestroySharedInstance {
 		Component component;
-		const void* data;
+		SharedInstance instance;
 	};
 
 	struct DeferredDestroyNamedSharedInstance {
@@ -150,23 +156,23 @@ namespace ECSEngine {
 
 	struct DeferredAddEntitiesToHierarchy {
 		Stream<EntityPair> pairs;
-		unsigned short hierarchy_index;
+		unsigned int hierarchy_index;
 	};
 
 	struct DeferredRemoveEntitiesFromHierarchy {
 		Stream<Entity> entities;
-		unsigned short hierarchy_index;
-		bool destroy_children;
+		unsigned int hierarchy_index;
+		bool default_destroy_children;
 	};
 
 	struct DeferredChangeEntityParentHierarchy {
 		Stream<EntityPair> pairs;
-		unsigned short hierarchy_index;
+		unsigned int hierarchy_index;
 	};
 
 	struct DeferredChangeOrSetEntityParentHierarchy {
 		Stream<EntityPair> pairs;
-		unsigned short hierarchy_index;
+		unsigned int hierarchy_index;
 	};
 	
 	enum DeferredActionType : unsigned char {
@@ -290,6 +296,19 @@ namespace ECSEngine {
 		}
 	}
 
+	void CreateAllocatorForComponent(EntityManager* entity_manager, ComponentInfo& info, size_t allocator_size) {
+		if (allocator_size > 0) {
+			// Allocate the allocator
+			size_t total_allocation_size = sizeof(MemoryArena) + MemoryArena::MemoryOf(allocator_size, COMPONENT_ALLOCATOR_ARENA_COUNT, COMPONENT_ALLOCATOR_BLOCK_COUNT);
+			void* allocation = entity_manager->m_memory_manager->Allocate(total_allocation_size);
+			info.allocator = (MemoryArena*)allocation;
+			*info.allocator = MemoryArena(function::OffsetPointer(allocation, sizeof(MemoryArena)), allocator_size, COMPONENT_ALLOCATOR_ARENA_COUNT, COMPONENT_ALLOCATOR_BLOCK_COUNT);
+		}
+		else {
+			info.allocator = nullptr;
+		}
+	}
+
 	const void** GetDeferredCallData(
 		ComponentSignature components,
 		const void** component_data,
@@ -387,8 +406,8 @@ namespace ECSEngine {
 		Stream<Entity> entities, 
 		unsigned int copy_position,
 		EntityPool* entity_pool,
-		unsigned short main_archetype_index,
-		unsigned short base_archetype_index
+		unsigned int main_archetype_index,
+		unsigned int base_archetype_index
 	) {
 		for (size_t entity_index = 0; entity_index < entities.size; entity_index++) {
 			EntityInfo* entity_info = entity_pool->GetInfoPtr(entities[entity_index]);
@@ -542,7 +561,7 @@ namespace ECSEngine {
 #pragma region Add component
 
 	struct CommitEntityAddComponentAdditionalData {
-		ushort2 archetype_indices;
+		uint2 archetype_indices;
 		unsigned int copy_position;
 	};
 
@@ -561,7 +580,7 @@ namespace ECSEngine {
 		memcpy(unique_components + unique_signature.count, data->components.indices, data->components.count * sizeof(Component));
 		unique_signature.count += data->components.count;
 
-		ushort2 archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
+		uint2 archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
 		ArchetypeBase* base_archetype = manager->GetBase(archetype_indices.x, archetype_indices.y);
 
 		EntityInfo entity_info = manager->GetEntityInfo(data->entities[0]);
@@ -745,7 +764,7 @@ namespace ECSEngine {
 			);
 		}
 
-		ushort2 archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
+		uint2 archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
 		ArchetypeBase* base_archetype = manager->GetBase(archetype_indices.x, archetype_indices.y);
 
 		EntityInfo entity_info = manager->GetEntityInfo(data->entities[0]);
@@ -793,7 +812,7 @@ namespace ECSEngine {
 #pragma region Create Entities
 
 	struct CommitCreateEntitiesAdditionalData {
-		ushort2 archetype_indices;
+		uint2 archetype_indices;
 		unsigned int copy_position;
 		Stream<Entity> entities;
 	};
@@ -810,10 +829,10 @@ namespace ECSEngine {
 		DeferredCreateEntities* data = (DeferredCreateEntities*)_data;
 		CommitCreateEntitiesAdditionalData* additional_data = (CommitCreateEntitiesAdditionalData*)_additional_data;
 
-		ushort2 archetype_indices = manager->FindOrCreateArchetypeBase(data->unique_components, data->shared_components);
+		uint2 archetype_indices = manager->FindOrCreateArchetypeBase(data->unique_components, data->shared_components);
 		ArchetypeBase* base_archetype = manager->GetBase(archetype_indices.x, archetype_indices.y);
 
-		const size_t MAX_ENTITY_INFOS_ON_STACK = ECS_KB * 4;
+		const size_t MAX_ENTITY_INFOS_ON_STACK = ECS_KB * 32;
 
 		Entity* entities = nullptr;
 
@@ -823,7 +842,7 @@ namespace ECSEngine {
 				entities = (Entity*)ECS_STACK_ALLOC(sizeof(Entity) * data->count);
 			}
 			else {
-				entities = (Entity*)ECS_MALLOCA(sizeof(Entity) * data->count);
+				entities = (Entity*)manager->m_small_memory_manager.Allocate(sizeof(Entity) * data->count);
 			}
 		}
 		else {
@@ -844,7 +863,7 @@ namespace ECSEngine {
 		additional_data->archetype_indices = archetype_indices;
 		if constexpr (type != CREATE_ENTITIES_TEMPLATE_GET_ENTITIES) {
 			if (data->count >= MAX_ENTITY_INFOS_ON_STACK) {
-				ECS_FREEA(entities);
+				manager->m_small_memory_manager.Deallocate(entities);
 			}
 		}
 	}
@@ -976,12 +995,20 @@ namespace ECSEngine {
 
 	void CommitDeleteEntities(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDeleteEntities* data = (DeferredDeleteEntities*)_data;
-		
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, hierarchy_indices, ECS_ENTITY_HIERARCHY_MAX_COUNT);
 		for (size_t index = 0; index < data->entities.size; index++) {
 			EntityInfo info = manager->GetEntityInfo(data->entities[index]);
 			ArchetypeBase* base_archetype = manager->GetBase(info.main_archetype, info.base_archetype);
 			// Remove the entities from the archetype
 			base_archetype->RemoveEntity(info.stream_index, manager->m_entity_pool);
+			
+			// Remove the entity from its corresponding hierarchies
+			hierarchy_indices.size = 0;
+			manager->GetEntityHierarchies(info, hierarchy_indices);
+			for (unsigned int subindex = 0; subindex < hierarchy_indices.size; subindex++) {
+				manager->RemoveEntityFromHierarchyCommit(hierarchy_indices[subindex], { data->entities.buffer + index, 1 });
+			}
 		}
 		manager->m_entity_pool->Deallocate(data->entities);
 	}
@@ -1024,7 +1051,7 @@ namespace ECSEngine {
 		memcpy(shared_signature.instances + shared_signature.count, data->components.instances, sizeof(SharedInstance) * data->components.count);
 		shared_signature.count += data->components.count;
 
-		ushort2 new_archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
+		uint2 new_archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
 		ArchetypeBase* new_archetype = manager->GetBase(new_archetype_indices.x, new_archetype_indices.y);
 
 		unsigned int copy_position = new_archetype->AddEntities(data->entities);
@@ -1107,7 +1134,7 @@ namespace ECSEngine {
 				"The first entity is {#}. The component is {#}.", data->entities[0].value, data->components.indices[index].value);
 		}
 
-		ushort2 new_archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
+		uint2 new_archetype_indices = manager->FindOrCreateArchetypeBase(unique_signature, shared_signature);
 		ArchetypeBase* new_archetype = manager->GetBase(new_archetype_indices.x, new_archetype_indices.y);
 
 		unsigned int copy_position = new_archetype->AddEntities(data->entities);
@@ -1155,7 +1182,7 @@ namespace ECSEngine {
 		DeferredCreateArchetype* data = (DeferredCreateArchetype*)_data;
 
 		size_t old_capacity = manager->m_archetypes.capacity;
-		unsigned short archetype_index = manager->m_archetypes.Add(
+		unsigned int archetype_index = manager->m_archetypes.Add(
 			Archetype(
 				&manager->m_small_memory_manager,
 				manager->m_memory_manager,
@@ -1194,7 +1221,7 @@ namespace ECSEngine {
 		*manager->GetArchetypeSharedComponentsPtr(archetype_index) = VectorComponentSignature(data->shared_components);
 
 		if (_additional_data != nullptr) {
-			unsigned short* additional_data = (unsigned short*)_additional_data;
+			unsigned int* additional_data = (unsigned int*)_additional_data;
 			*additional_data = archetype_index;
 		}
 	}
@@ -1333,15 +1360,15 @@ namespace ECSEngine {
 
 		VectorComponentSignature vector_shared;
 		vector_shared.InitializeSharedComponent(data->shared_components);
-		unsigned short main_archetype_index = manager->FindArchetype({ data->unique_components, vector_shared });
+		unsigned int main_archetype_index = manager->FindArchetype({ data->unique_components, vector_shared });
 		ECS_CRASH_RETURN(main_archetype_index != -1, "Could not find main archetype when trying to create base archetype.");
 
 		Archetype* archetype = manager->GetArchetype(main_archetype_index);
 
-		unsigned short base_index = archetype->CreateBaseArchetype(data->shared_components, data->starting_size);
+		unsigned int base_index = archetype->CreateBaseArchetype(data->shared_components, data->starting_size);
 
 		if (_additional_data != nullptr) {
-			ushort2* additional_data = (ushort2*)_additional_data;
+			uint2* additional_data = (uint2*)_additional_data;
 			*additional_data = { main_archetype_index, base_index };
 		}
 	}
@@ -1470,6 +1497,7 @@ namespace ECSEngine {
 		// If the size is different from -1, it means there is a component actually allocated to this slot
 		ECS_CRASH_RETURN(!manager->ExistsComponent(data->component), "Creating component at position {#} failed. It already exists.", data->component.value);
 		manager->m_unique_components[data->component.value].size = data->size;
+		CreateAllocatorForComponent(manager, manager->m_unique_components[data->component.value], data->allocator_size);
 	}
 
 	void RegisterCreateComponent(
@@ -1499,7 +1527,13 @@ namespace ECSEngine {
 
 		ECS_CRASH_RETURN(data->component.value < manager->m_unique_components.size, "Incorrect component index {#} when trying to delete it.", data->component.value);
 		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].info.size != -1, "Trying to destroy component {#} when it doesn't exist.", data->component.value);
+		ECS_CRASH_RETURN(manager->m_unique_components[data->component.value].size != -1, "Trying to destroy component {#} when it doesn't exist.", data->component.value);
+
+		// If it has an allocator, deallocate it
+		if (manager->m_unique_components[data->component.value].allocator != nullptr) {
+			manager->m_memory_manager->Deallocate(manager->m_unique_components[data->component.value].allocator);
+			manager->m_unique_components[data->component.value].allocator = nullptr;
+		}
 
 		manager->m_unique_components[data->component.value].size = -1;
 	}
@@ -1537,14 +1571,16 @@ namespace ECSEngine {
 			manager->m_shared_components.InitializeFromBuffer(allocation, data->component.value);
 			for (size_t index = old_capacity; index < manager->m_shared_components.size; index++) {
 				manager->m_shared_components[index].info.size = -1;
-				manager->m_shared_components[index].instances.size = 0;
+				manager->m_shared_components[index].instances.Initialize(GetAllocatorPolymorphic(&manager->m_small_memory_manager), 0);
 				manager->m_shared_components[index].named_instances.InitializeFromBuffer(nullptr, 0);
 			}
 		}
 		// If the size is different from -1, it means there is a component actually allocated to this slot
 		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].info.size == -1, "Trying to create shared component {#} when it already exists a shared component at that slot.", data->component.value);
 		manager->m_shared_components[data->component.value].info.size = data->size;
-		manager->m_shared_components[data->component.value].instances.size = 0;
+		manager->m_shared_components[data->component.value].instances.Initialize(GetAllocatorPolymorphic(&manager->m_small_memory_manager), 0);
+		
+		CreateAllocatorForComponent(manager, manager->m_shared_components[data->component.value].info, data->allocator_size);
 		// The named instances table should start with size 0 and only create it when actually needing the tags
 	}
 
@@ -1552,6 +1588,7 @@ namespace ECSEngine {
 		EntityManager* manager,
 		Component component,
 		unsigned short size,
+		size_t allocator_size,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -1561,6 +1598,7 @@ namespace ECSEngine {
 		DeferredCreateSharedComponent* data = (DeferredCreateSharedComponent*)allocation;
 		data->component = component;
 		data->size = size;
+		data->allocator_size = allocator_size;
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_CREATE_SHARED_COMPONENT), debug_info });
@@ -1577,7 +1615,14 @@ namespace ECSEngine {
 		// -1 Signals it's empty - a component was never associated to this slot
 		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].info.size == -1, "Trying to destroy shared component {#} when it doesn't exist.", data->component.value);
 
-		manager->m_small_memory_manager.Deallocate(manager->m_shared_components[data->component.value].instances.buffer);
+		// If it has an allocator deallocate it
+		MemoryArena** allocator = &manager->m_shared_components[data->component.value].info.allocator;
+		if (*allocator != nullptr) {
+			manager->m_memory_manager->Deallocate(*allocator);
+			*allocator = nullptr;
+		}
+
+		manager->m_shared_components[data->component.value].instances.FreeBuffer();
 		manager->m_shared_components[data->component.value].info.size = -1;
 		const void* table_buffer = manager->m_shared_components[data->component.value].named_instances.GetAllocatedBuffer();
 		if (table_buffer != nullptr) {
@@ -1618,24 +1663,13 @@ namespace ECSEngine {
 		void* allocation = manager->m_small_memory_manager.Allocate(component_size);
 		memcpy(allocation, data->data, component_size);
 
-		unsigned int instance_capacity = manager->m_shared_components[data->component.value].instances.capacity;
-		if (manager->m_shared_components[data->component.value].instances.size == instance_capacity) {
-			void* old_buffer = manager->m_shared_components[data->component.value].instances.buffer;
-
-			// Allocate a new buffer
-			// Allocate space for another 10 instances
-			void** new_buffer = (void**)manager->m_small_memory_manager.Allocate(sizeof(void*) * (instance_capacity + 10));
-			memcpy(new_buffer, old_buffer, sizeof(void*) * instance_capacity);
-			if (manager->m_shared_components[data->component.value].instances.size > 0) {
-				manager->m_small_memory_manager.Deallocate(old_buffer);
-			}
-		}
-
-		unsigned short instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
+		unsigned int instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
+		ECS_CRASH_RETURN(instance_index > USHORT_MAX, "Too many shared instances created for component {#}.", data->component.value);
+		
 		// Assert that the maximal amount of shared instance is not reached
 		if (_additional_data != nullptr) {
 			SharedInstance* instance = (SharedInstance*)_additional_data;
-			instance->value = instance_index;
+			instance->value = (unsigned short)instance_index;
 		}
 	}
 
@@ -1731,84 +1765,15 @@ namespace ECSEngine {
 
 #pragma region Destroy Shared Instance
 
-	struct CommitDestroySharedInstanceAdditionalData {
-		SharedInstance instance;
-		Component component;
-	};
-
 	void CommitDestroySharedInstance(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredDestroySharedInstance* data = (DeferredDestroySharedInstance*)_data;
 
-		auto delete_instance = [manager](Component component, unsigned short index) {
-			manager->m_small_memory_manager.Deallocate(manager->m_shared_components[component.value].instances[index]);
-			manager->m_shared_components[component.value].instances.RemoveSwapBack(index);
-
-			// If the index is different from the last index, then update the new shared instance reference inside the archetypes
-			// And update the named instance reference if any
-			unsigned short value_to_look_after = manager->m_shared_components[component.value].instances.size;
-			if (index != value_to_look_after) {
-				Component shared_component = component;
-				VectorComponentSignature shared_signature(ComponentSignature(&shared_component, 1));
-				for (size_t archetype_index = 0; archetype_index < manager->m_archetypes.size; archetype_index++) {
-					VectorComponentSignature current_shared_signature = manager->m_archetypes[archetype_index].GetSharedSignature();
-					if (current_shared_signature.HasComponents(shared_signature)) {
-						// Check now the instance
-						unsigned short in_archetype_component_index = manager->m_archetypes[archetype_index].FindSharedComponentIndex(shared_component);
-						for (size_t base_index = 0; base_index < manager->m_archetypes[archetype_index].GetBaseCount(); base_index++) {
-							SharedInstance* archetype_instances = manager->m_archetypes[archetype_index].GetBaseInstances(base_index);
-							if (archetype_instances[in_archetype_component_index].value == value_to_look_after) {
-								archetype_instances[in_archetype_component_index].value = index;
-							}
-						}
-					}
-				}
-
-				// Update the named instance reference for the one that got swapped if such a reference exists
-				// If the capacity is 0, skip
-				if (manager->m_shared_components[component.value].named_instances.GetCapacity() != 0) {
-					unsigned int extended_capacity = manager->m_shared_components[component.value].named_instances.GetExtendedCapacity();
-					unsigned int table_index = 0;
-					for (; table_index < extended_capacity; table_index++) {
-						if (manager->m_shared_components[component.value].named_instances.IsItemAt(table_index)) {
-							SharedInstance* named_instance_value = manager->m_shared_components[component.value].named_instances.GetValuePtrFromIndex(table_index);
-							if (named_instance_value->value == value_to_look_after) {
-								named_instance_value->value = index;
-								
-								// Exit the loop
-								table_index = extended_capacity;
-							}
-						}
-					}
-				}
-			}
-		};
-
 		size_t index = 0;
-		// Additional data can be used by the named variant to tell us directly which index to delete
-		if (_additional_data != nullptr) {
-			CommitDestroySharedInstanceAdditionalData* instance_to_delete = (CommitDestroySharedInstanceAdditionalData*)_additional_data;
-			delete_instance(instance_to_delete->component, instance_to_delete->instance.value);
+		ECS_CRASH_RETURN(manager->ExistsSharedInstance(data->component, data->instance), "There is no shared instance {#} for component {#}.", 
+			data->instance.value, data->component.value);
 
-			index = -1;
-		}
-		else {
-			// If no component is allocated at that slot, fail
-			unsigned short component_size = manager->m_shared_components[data->component.value].info.size;
-			ECS_CRASH_RETURN(component_size != -1, "There is no shared component {#} when trying to destroy shared instance.", data->component.value);
-
-			// Do a linear search and do a bitwise test
-			for (; index < manager->m_shared_components[data->component.value].instances.size; index++) {
-				if (memcmp(manager->m_shared_components[data->component.value].instances[index], data->data, component_size) == 0) {
-					delete_instance(data->component, index);
-
-					// Exit the loop
-					index = -2;
-				}
-			}
-		}
-
-		// Fail if the instance was not found
-		ECS_CRASH_RETURN(index == -1, "There is no shared instance when trying to delete it. Shared component {#}.", data->component.value);
+		manager->m_small_memory_manager.Deallocate(manager->m_shared_components[data->component.value].instances[data->instance.value]);
+		manager->m_shared_components[data->component.value].instances.Remove(data->instance.value);
 	}
 
 	void RegisterDestroySharedInstance(
@@ -1824,13 +1789,12 @@ namespace ECSEngine {
 		ECS_CRASH_RETURN(manager->m_shared_components[component.value].info.size != -1, "Incorrect shared component {#} when trying to destroy shared instance {#}. "
 			"The shared component is not allocated at that position.", component.value, instance.value);
 
-		size_t allocation_size = sizeof(DeferredDestroySharedInstance) + manager->m_shared_components[component.value].info.size;
+		size_t allocation_size = sizeof(DeferredDestroySharedInstance);
 
 		void* allocation = manager->AllocateTemporaryBuffer(allocation_size);
 		DeferredDestroySharedInstance* data = (DeferredDestroySharedInstance*)allocation;
 		data->component = component;
-		data->data = function::OffsetPointer(allocation, sizeof(*data));
-		memcpy((void*)data->data, manager->m_shared_components[component.value].instances[instance.value], manager->m_shared_components[component.value].info.size);
+		data->instance = instance;
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_DESTROY_SHARED_INSTANCE), debug_info });
@@ -1854,10 +1818,10 @@ namespace ECSEngine {
 		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].named_instances.TryGetValue(data->identifier, instance), "There is no shared instance "
 			"{#} at shared component {#}.", identifier_string, data->component.value);
 
-		CommitDestroySharedInstanceAdditionalData additional_data;
-		additional_data.component = data->component;
-		additional_data.instance = instance;
-		CommitDestroySharedInstance(manager, nullptr, &additional_data);
+		DeferredDestroySharedInstance commit_data;
+		commit_data.component = data->component;
+		commit_data.instance = instance;
+		CommitDestroySharedInstance(manager, &commit_data, nullptr);
 	}
 
 	void RegisterDestroyNamedSharedInstance(
@@ -1955,9 +1919,11 @@ namespace ECSEngine {
 	void CommitAddEntitiesToHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredAddEntitiesToHierarchy* data = (DeferredAddEntitiesToHierarchy*)_data;
 		
-
 		for (size_t index = 0; index < data->pairs.size; index++) {
 			manager->m_hierarchies[data->hierarchy_index].hierarchy.AddEntry(data->pairs[index].parent, data->pairs[index].child);
+			// Must also update the entity info's
+			EntityInfo* info = manager->m_entity_pool->GetInfoPtr(data->pairs[index].child);
+			info->hierarchy |= 1 << data->hierarchy_index;
 		}
 	}
 
@@ -1991,9 +1957,20 @@ namespace ECSEngine {
 	void CommitRemoveEntitiesFromHierarchy(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredRemoveEntitiesFromHierarchy* data = (DeferredRemoveEntitiesFromHierarchy*)_data;
 
-		if (!data->destroy_children) {
+		bool destroy_children = manager->m_hierarchies[data->hierarchy_index].owning_children;
+		if (!data->default_destroy_children) {
+			destroy_children = !destroy_children;
+		}
+
+		auto remove_entry = [&](Entity entity) {
+			manager->m_hierarchies[data->hierarchy_index].hierarchy.RemoveEntry(entity);
+			EntityInfo* info = manager->m_entity_pool->GetInfoPtr(entity);
+			info->hierarchy &= ~(1 << data->hierarchy_index);
+		};
+
+		if (!destroy_children) {
 			for (size_t index = 0; index < data->entities.size; index++) {
-				manager->m_hierarchies[index].hierarchy.RemoveEntry(data->entities[index]);
+				remove_entry(data->entities[index]);
 			}
 		}
 		else {
@@ -2003,11 +1980,14 @@ namespace ECSEngine {
 			for (size_t index = 0; index < data->entities.size; index++) {
 				// Get the children first
 				temp_children.size = 0;
-				manager->m_hierarchies[index].hierarchy.GetAllChildrenFromEntity(data->entities[index], temp_children);
+				manager->m_hierarchies[data->hierarchy_index].hierarchy.GetAllChildrenFromEntity(data->entities[index], temp_children);
 
-				DeferredDeleteEntities delete_data;
-				delete_data.entities = temp_children;
-				CommitDeleteEntities(manager, &delete_data, nullptr);
+				if (temp_children.size > 0) {
+					DeferredDeleteEntities delete_data;
+					delete_data.entities = temp_children;
+					CommitDeleteEntities(manager, &delete_data, nullptr);
+				}
+				remove_entry(data->entities[index]);
 			}
 		}
 	}
@@ -2016,8 +1996,8 @@ namespace ECSEngine {
 		EntityManager* manager, 
 		Stream<Entity> entities, 
 		unsigned short hierarchy_index, 
-		bool destroy_children,
 		DeferredActionParameters parameters,
+		bool default_destroy_children,
 		DebugInfo debug_info
 	) {
 		DeferredRemoveEntitiesFromHierarchy* data = nullptr;
@@ -2033,7 +2013,7 @@ namespace ECSEngine {
 		}
 
 		data->hierarchy_index = hierarchy_index;
-		data->destroy_children = destroy_children;
+		data->default_destroy_children = default_destroy_children;
 		WriteCommandStream(manager, parameters, { DataPointer(data, DEFERRED_REMOVE_ENTITIES_FROM_HIERARCHY), debug_info });
 	}
 
@@ -2181,8 +2161,9 @@ namespace ECSEngine {
 		// Allocate the atomic streams - the deferred actions, clear tags and set tags
 		m_deferred_actions.Initialize(m_memory_manager, descriptor.deferred_action_capacity);
 
-		m_hierarchies.buffer = nullptr;
-		m_hierarchies.size = 0;
+		m_hierarchies.Initialize(GetAllocatorPolymorphic(&m_small_memory_manager), ECS_ENTITY_HIERARCHY_MAX_COUNT);
+		memset(m_hierarchies.buffer, 0, m_hierarchies.MemoryOf(m_hierarchies.size));
+		CreateHierarchy(ECS_ENTITY_MANAGER_TRANSFORM_HIERARCHY, true, "Transform");
 
 		// Allocate the query cache now
 		// Get a default allocator for it for the moment
@@ -2426,7 +2407,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::AddEntryToHierarchyCommit(unsigned short hierarchy_index, Stream<EntityPair> pairs)
+	void EntityManager::AddEntityToHierarchyCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs)
 	{
 		DeferredAddEntitiesToHierarchy data;
 		data.hierarchy_index = hierarchy_index;
@@ -2434,8 +2415,8 @@ namespace ECSEngine {
 		CommitAddEntitiesToHierarchy(this, &data, nullptr);
 	}
 
-	void EntityManager::AddEntryToHierarchy(
-		unsigned short hierarchy_index, 
+	void EntityManager::AddEntityToHierarchy(
+		unsigned int hierarchy_index, 
 		Stream<EntityPair> pairs,
 		DeferredActionParameters parameters, 
 		DebugInfo debug_info
@@ -2462,7 +2443,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::ChangeEntityParentCommit(unsigned short hierarchy_index, Stream<EntityPair> pairs)
+	void EntityManager::ChangeEntityParentCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs)
 	{
 		DeferredChangeEntityParentHierarchy data;
 		data.pairs = pairs;
@@ -2470,14 +2451,14 @@ namespace ECSEngine {
 		CommitChangeEntityParentHierarchy(this, &data, nullptr);
 	}
 
-	void EntityManager::ChangeEntityParent(unsigned short hierarchy_index, Stream<EntityPair> pairs, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::ChangeEntityParent(unsigned int hierarchy_index, Stream<EntityPair> pairs, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
 		RegisterChangeEntityParentHierarchy(this, pairs, hierarchy_index, parameters, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::ChangeOrSetEntityParentCommit(unsigned short hierarchy_index, Stream<EntityPair> pairs)
+	void EntityManager::ChangeOrSetEntityParentCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs)
 	{
 		DeferredChangeOrSetEntityParentHierarchy data;
 		data.hierarchy_index = hierarchy_index;
@@ -2485,7 +2466,7 @@ namespace ECSEngine {
 		CommitChangeOrSetEntityParentHierarchy(this, &data, nullptr);
 	}
 
-	void EntityManager::ChangeOrSetEntityParent(unsigned short hierarchy_index, Stream<EntityPair> pairs, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::ChangeOrSetEntityParent(unsigned int hierarchy_index, Stream<EntityPair> pairs, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
 		RegisterChangeEntityParentHierarchy(this, pairs, hierarchy_index, parameters, debug_info);
 	}
@@ -2509,6 +2490,15 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::ClearFrame()
+	{
+		m_temporary_allocator.Clear();
+		m_pending_command_streams.Reset();
+		m_deferred_actions.Reset();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::CopyOther(const EntityManager* entity_manager)
 	{
 		// Copy the entities first using the entity pool
@@ -2521,6 +2511,19 @@ namespace ECSEngine {
 		}
 		m_unique_components.Initialize(&m_small_memory_manager, entity_manager->m_unique_components.size);
 		entity_manager->m_unique_components.CopyTo(m_unique_components.buffer);
+
+		// Allocate the allocators for the unique components
+		for (size_t index = 0; index < m_unique_components.size; index++) {
+			if (ExistsComponent({ (unsigned short)index })) {
+				if (entity_manager->m_unique_components[index].allocator != nullptr) {
+					size_t capacity = entity_manager->m_unique_components[index].allocator->m_size_per_allocator * COMPONENT_ALLOCATOR_ARENA_COUNT;
+					CreateAllocatorForComponent(this, m_unique_components[index], capacity);
+				}
+				else {
+					m_unique_components[index].allocator = nullptr;
+				}
+			}
+		}
 
 		// Copy the shared components
 		if (m_shared_components.buffer != nullptr) {
@@ -2537,11 +2540,15 @@ namespace ECSEngine {
 			unsigned short component_size = m_shared_components[index].info.size;
 			if (component_size != -1) {
 				// Allocate separetely the instances buffer
-				if (entity_manager->m_shared_components[index].instances.size > 0) {
-					m_shared_components[index].instances.Initialize(&m_small_memory_manager, entity_manager->m_shared_components[index].instances.size, entity_manager->m_shared_components[index].instances.capacity);
+
+				unsigned int other_capacity = entity_manager->m_shared_components[index].instances.stream.capacity;
+				m_shared_components[index].instances.Initialize(GetAllocatorPolymorphic(&m_small_memory_manager), other_capacity);
+
+				if (entity_manager->m_shared_components[index].instances.stream.size > 0) {
+					m_shared_components[index].instances.stream.Copy(entity_manager->m_shared_components[index].instances.stream);
 					
 					// For every value allocate the data
-					for (size_t subindex = 0; subindex < m_shared_components[index].instances.size; subindex++) {
+					for (size_t subindex = 0; subindex < m_shared_components[index].instances.stream.size; subindex++) {
 						void* new_data = function::Copy(GetAllocatorPolymorphic(&m_small_memory_manager), entity_manager->m_shared_components[index].instances[subindex], component_size);
 						m_shared_components[index].instances[subindex] = new_data;
 					}
@@ -2566,6 +2573,12 @@ namespace ECSEngine {
 						);
 						*m_shared_components[index].named_instances.GetIdentifierPtrFromIndex(subindex) = identifier;
 					});
+				}
+
+				// Allocate the allocator
+				if (entity_manager->m_shared_components[index].info.allocator != nullptr) {
+					size_t capacity = entity_manager->m_shared_components[index].info.allocator->m_size_per_allocator * COMPONENT_ALLOCATOR_ARENA_COUNT;
+					CreateAllocatorForComponent(this, m_shared_components[index].info, capacity);
 				}
 			}
 		}
@@ -2622,9 +2635,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned short EntityManager::CreateArchetypeCommit(ComponentSignature unique, ComponentSignature shared)
+	unsigned int EntityManager::CreateArchetypeCommit(ComponentSignature unique, ComponentSignature shared)
 	{
-		unsigned short index = 0;
+		unsigned int index = 0;
 
 		DeferredCreateArchetype commit_data;
 		commit_data.shared_components = shared;
@@ -2643,7 +2656,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ushort2 EntityManager::CreateArchetypeBaseCommit(
+	uint2 EntityManager::CreateArchetypeBaseCommit(
 		ComponentSignature unique_signature,
 		SharedComponentSignature shared_signature,
 		unsigned int starting_size
@@ -2654,7 +2667,7 @@ namespace ECSEngine {
 		commit_data.starting_size = starting_size;
 		commit_data.shared_components = shared_signature;
 
-		ushort2 indices;
+		uint2 indices;
 		CommitCreateArchetypeBase(this, &commit_data, &indices);
 		return indices;
 	}
@@ -2675,8 +2688,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	// It will commit the archetype addition
-	unsigned short EntityManager::CreateArchetypeBaseCommit(
-		unsigned short archetype_index,
+	unsigned int EntityManager::CreateArchetypeBaseCommit(
+		unsigned int archetype_index,
 		SharedComponentSignature shared_signature,
 		unsigned int starting_size
 	) {
@@ -2688,7 +2701,7 @@ namespace ECSEngine {
 
 	// Deferred Call
 	void EntityManager::CreateArchetypeBase(
-		unsigned short archetype_index,
+		unsigned int archetype_index,
 		SharedComponentSignature shared_signature,
 		EntityManagerCommandStream* command_stream,
 		unsigned int starting_size,
@@ -2829,37 +2842,28 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::CreateHierarchy(
-		unsigned short hierarchy_index, 
+		unsigned int hierarchy_index,
+		bool owning_children,
+		Stream<char> name,
 		unsigned int starting_root_count,
 		unsigned int starting_children_table_capacity,
 		unsigned int starting_parent_table_capacity
 	)
 	{
-		// Assert that the hierarchy was not previously allocated
-		if (hierarchy_index < m_hierarchies.size) {
-			ECS_CRASH_RETURN(m_hierarchies[hierarchy_index].hierarchy.allocator == nullptr, "The hierarchy {#} already is allocated. Cannot create a new one at"
-				" that slot.", hierarchy_index);
-		}
+		// Assert that the hierarchy is valid
+		ECS_CRASH_RETURN(hierarchy_index < ECS_ENTITY_HIERARCHY_MAX_COUNT, "The hierarchy index {#} is too big. At max {#} hierarchies are supported.", hierarchy_index, ECS_ENTITY_HIERARCHY_MAX_COUNT);
+		ECS_CRASH_RETURN(!ExistsHierarchy(hierarchy_index), "The hierarchy {#} already is allocated. Cannot create a new one at that position.", hierarchy_index);
 
-		if (hierarchy_index >= m_hierarchies.size) {
-			void* old_buffer = m_hierarchies.buffer;
-			void* new_buffer = m_small_memory_manager.Allocate(m_hierarchies.MemoryOf(hierarchy_index + 1));
-			memcpy(new_buffer, old_buffer, sizeof(InternalEntityHierarchy) * m_hierarchies.size);
-
-			m_hierarchies.buffer = (InternalEntityHierarchy*)new_buffer;
-
-			// Set all the new hierarchies with their allocator to nullptr to signal that they are not in use yet
-			for (size_t index = m_hierarchies.size; index < hierarchy_index + 1; index++) {
-				m_hierarchies[index].hierarchy.allocator = nullptr;
-			}
-			m_hierarchies.size = hierarchy_index + 1;
-
-			if (old_buffer != nullptr) {
-				m_small_memory_manager.Deallocate(old_buffer);
-			}
-		}
 		m_hierarchies[hierarchy_index].allocator = DefaultEntityHierarchyAllocator(m_memory_manager->m_backup);
 		m_hierarchies[hierarchy_index].hierarchy = EntityHierarchy(&m_hierarchies[hierarchy_index].allocator, starting_root_count, starting_children_table_capacity, starting_parent_table_capacity);
+		m_hierarchies[hierarchy_index].owning_children = owning_children;
+
+		if (name.size > 0) {
+			m_hierarchies[hierarchy_index].name.InitializeAndCopy(GetAllocatorPolymorphic(&m_small_memory_manager), name);
+		}
+		else {
+			m_hierarchies[hierarchy_index].name = { nullptr, 0 };
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2901,7 +2905,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::DestroyArchetypeCommit(unsigned short archetype_index)
+	void EntityManager::DestroyArchetypeCommit(unsigned int archetype_index)
 	{
 		DeferredDestroyArchetype commit_data;
 		commit_data.archetype_index = archetype_index;
@@ -2910,7 +2914,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::DestroyArchetype(unsigned short archetype_index, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
+	void EntityManager::DestroyArchetype(unsigned int archetype_index, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
 	{
 		const Archetype* archetype = GetArchetype(archetype_index);
 		RegisterDestroyArchetype(this, archetype->GetUniqueSignature(), archetype->GetSharedSignature(), command_stream, debug_info);
@@ -2940,7 +2944,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::DestroyArchetypeBaseCommit(unsigned short archetype_index, unsigned short archetype_subindex)
+	void EntityManager::DestroyArchetypeBaseCommit(unsigned int archetype_index, unsigned int archetype_subindex)
 	{
 		DeferredDestroyArchetypeBase commit_data;
 		commit_data.indices.x = archetype_index;
@@ -2951,8 +2955,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::DestroyArchetypeBase(
-		unsigned short archetype_index, 
-		unsigned short archetype_subindex,
+		unsigned int archetype_index, 
+		unsigned int archetype_subindex,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	)
@@ -2988,22 +2992,25 @@ namespace ECSEngine {
 	void EntityManager::DestroyHierarchy(unsigned int hierarchy_index)
 	{
 		m_hierarchies[hierarchy_index].allocator.Free();
+		m_hierarchies[hierarchy_index].hierarchy.allocator = nullptr;
+		if (m_hierarchies[hierarchy_index].name.size > 0) {
+			m_small_memory_manager.Deallocate(m_hierarchies[hierarchy_index].name.buffer);
+			m_hierarchies[hierarchy_index].name.size = 0;
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::EndFrame()
 	{
-		m_temporary_allocator.Clear();
-		m_pending_command_streams.Reset();
-		m_deferred_actions.Reset();
+		Flush();
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<typename Query>
-	unsigned short ECS_VECTORCALL FindArchetypeImplementation(const EntityManager* manager, Query query) {
-		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
+	unsigned int ECS_VECTORCALL FindArchetypeImplementation(const EntityManager* manager, Query query) {
+		for (unsigned int index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->GetArchetypeUniqueComponents(index))) {
 				if (query.VerifiesShared(manager->GetArchetypeSharedComponents(index))) {
 					// Matches both signatures - return it
@@ -3016,12 +3023,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned char EntityManager::FindArchetypeUniqueComponent(unsigned short archetype_index, Component component) const
+	unsigned char EntityManager::FindArchetypeUniqueComponent(unsigned int archetype_index, Component component) const
 	{
 		return m_archetypes[archetype_index].FindUniqueComponentIndex(component);
 	}
 
-	void EntityManager::FindArchetypeUniqueComponent(unsigned short archetype_index, ComponentSignature components, unsigned char* indices) const
+	void EntityManager::FindArchetypeUniqueComponent(unsigned int archetype_index, ComponentSignature components, unsigned char* indices) const
 	{
 		// Use the archetype call. Converting to a vector component signature is not worth
 		for (size_t index = 0; index < components.count; index++) {
@@ -3029,7 +3036,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void ECS_VECTORCALL EntityManager::FindArchetypeUniqueComponentVector(unsigned short archetype_index, VectorComponentSignature components, unsigned char* indices) const
+	void ECS_VECTORCALL EntityManager::FindArchetypeUniqueComponentVector(unsigned int archetype_index, VectorComponentSignature components, unsigned char* indices) const
 	{
 		// Use the fast SIMD compare
 		GetArchetypeUniqueComponents(archetype_index).Find(components, indices);
@@ -3037,25 +3044,25 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned char EntityManager::FindArchetypeSharedComponent(unsigned short archetype_index, Component component) const {
+	unsigned char EntityManager::FindArchetypeSharedComponent(unsigned int archetype_index, Component component) const {
 		return m_archetypes[archetype_index].FindSharedComponentIndex(component);
 	}
 
-	void EntityManager::FindArchetypeSharedComponent(unsigned short archetype_index, ComponentSignature components, unsigned char* indices) const {
+	void EntityManager::FindArchetypeSharedComponent(unsigned int archetype_index, ComponentSignature components, unsigned char* indices) const {
 		// Use th archetype call. Converting to a vector component signature is not worth
 		for (size_t index = 0; index < components.count; index++) {
 			indices[index] = FindArchetypeSharedComponent(archetype_index, components.indices[index]);
 		}
 	}
 
-	void ECS_VECTORCALL EntityManager::FindArchetypeSharedComponentVector(unsigned short archetype_index, VectorComponentSignature components, unsigned char* indices) const {
+	void ECS_VECTORCALL EntityManager::FindArchetypeSharedComponentVector(unsigned int archetype_index, VectorComponentSignature components, unsigned char* indices) const {
 		// Use the fast SIMD compare
 		GetArchetypeSharedComponents(archetype_index).Find(components, indices);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned short EntityManager::FindArchetype(ArchetypeQuery query) const
+	unsigned int EntityManager::FindArchetype(ArchetypeQuery query) const
 	{
 		return FindArchetypeImplementation(this, query);
 	}
@@ -3064,7 +3071,7 @@ namespace ECSEngine {
 
 	Archetype* EntityManager::FindArchetypePtr(ArchetypeQuery query)
 	{
-		unsigned short archetype_index = FindArchetype(query);
+		unsigned int archetype_index = FindArchetype(query);
 		if (archetype_index != -1) {
 			return GetArchetype(archetype_index);
 		}
@@ -3073,14 +3080,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	unsigned short EntityManager::FindArchetypeExclude(ArchetypeQueryExclude query) const {
+	unsigned int EntityManager::FindArchetypeExclude(ArchetypeQueryExclude query) const {
 		return FindArchetypeImplementation(this, query);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	Archetype* EntityManager::FindArchetypeExcludePtr(ArchetypeQueryExclude query) {
-		unsigned short archetype_index = FindArchetypeExclude(query);
+		unsigned int archetype_index = FindArchetypeExclude(query);
 		if (archetype_index != -1) {
 			return GetArchetype(archetype_index);
 		}
@@ -3090,8 +3097,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<typename Query>
-	ushort2 ECS_VECTORCALL FindArchetypeBaseImplementation(const EntityManager* manager, Query query, VectorComponentSignature shared_instances) {
-		unsigned short main_archetype_index = 0;
+	uint2 ECS_VECTORCALL FindArchetypeBaseImplementation(const EntityManager* manager, Query query, VectorComponentSignature shared_instances) {
+		unsigned int main_archetype_index = 0;
 		if constexpr (std::is_same_v<Query, ArchetypeQuery>) {
 			main_archetype_index = manager->FindArchetype(query);
 		}
@@ -3115,12 +3122,12 @@ namespace ECSEngine {
 					return { main_archetype_index, (unsigned short)base_index };
 				}
 			}
-			return { main_archetype_index, (unsigned short)-1 };
+			return { main_archetype_index, (unsigned int)-1 };
 		}
-		return { (unsigned short)-1, (unsigned short)-1 };
+		return { (unsigned int)-1, (unsigned int)-1 };
 	}
 
-	ushort2 EntityManager::FindBase(ArchetypeQuery query, VectorComponentSignature shared_instances) const
+	uint2 EntityManager::FindBase(ArchetypeQuery query, VectorComponentSignature shared_instances) const
 	{
 		return FindArchetypeBaseImplementation(this, query, shared_instances);
 	}
@@ -3129,7 +3136,7 @@ namespace ECSEngine {
 
 	ArchetypeBase* EntityManager::FindArchetypeBasePtr(ArchetypeQuery query, VectorComponentSignature shared_instances)
 	{
-		ushort2 indices = FindBase(query, shared_instances);
+		uint2 indices = FindBase(query, shared_instances);
 		if (indices.y == -1) {
 			return nullptr;
 		}
@@ -3138,7 +3145,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ushort2 EntityManager::FindArchetypeBaseExclude(
+	uint2 EntityManager::FindArchetypeBaseExclude(
 		ArchetypeQueryExclude query,
 		VectorComponentSignature shared_instances
 	) const {
@@ -3151,7 +3158,7 @@ namespace ECSEngine {
 		ArchetypeQueryExclude query,
 		VectorComponentSignature shared_instances
 	) {
-		ushort2 indices = FindArchetypeBaseExclude(query, shared_instances);
+		uint2 indices = FindArchetypeBaseExclude(query, shared_instances);
 		if (indices.y == -1) {
 			return nullptr;
 		}
@@ -3205,46 +3212,46 @@ namespace ECSEngine {
 
 	bool EntityManager::ExistsSharedComponent(Component component) const
 	{
-		return component.value < m_shared_components.size&& m_shared_components[component.value].info.size != -1;
+		return component.value < m_shared_components.size && m_shared_components[component.value].info.size != -1;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	bool EntityManager::ExistsSharedInstance(Component component, SharedInstance instance) const
 	{
-		return ExistsSharedComponent(component) && instance.value < m_shared_components[component.value].instances.size;
+		return ExistsSharedComponent(component) && m_shared_components[component.value].instances.stream.ExistsItem(instance.value);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	bool EntityManager::ExistsHierarchy(unsigned short hierarchy_index) const {
+	bool EntityManager::ExistsHierarchy(unsigned int hierarchy_index) const {
 		return m_hierarchies[hierarchy_index].hierarchy.allocator != nullptr;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	Archetype* EntityManager::GetArchetype(unsigned short index) {
+	Archetype* EntityManager::GetArchetype(unsigned int index) {
 		//ECS_ASSERT(index < m_archetypes.size);
 		return &m_archetypes[index];
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	const Archetype* EntityManager::GetArchetype(unsigned short index) const {
+	const Archetype* EntityManager::GetArchetype(unsigned int index) const {
 		//ECS_ASSERT(index < m_archetypes.size);
 		return &m_archetypes[index];
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ArchetypeBase* EntityManager::GetBase(unsigned short main_index, unsigned short base_index) {
+	ArchetypeBase* EntityManager::GetBase(unsigned int main_index, unsigned int base_index) {
 		Archetype* archetype = GetArchetype(main_index);
 		return archetype->GetBase(base_index);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	const ArchetypeBase* EntityManager::GetBase(unsigned short main_index, unsigned short base_index) const {
+	const ArchetypeBase* EntityManager::GetBase(unsigned int main_index, unsigned int base_index) const {
 		const Archetype* archetype = GetArchetype(main_index);
 		return archetype->GetBase(base_index);
 	}
@@ -3252,8 +3259,8 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
-	unsigned short EntityManager::FindOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature) {
-		unsigned short archetype_index = FindArchetype({unique_signature, shared_signature});
+	unsigned int EntityManager::FindOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature) {
+		unsigned int archetype_index = FindArchetype({unique_signature, shared_signature});
 		if (archetype_index != -1) {
 			return archetype_index;
 		}
@@ -3263,14 +3270,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	ushort2 EntityManager::FindOrCreateArchetypeBase(
+	uint2 EntityManager::FindOrCreateArchetypeBase(
 		ComponentSignature unique_signature,
 		SharedComponentSignature shared_signature,
 		unsigned int starting_size
 	) {
-		unsigned short main_archetype_index = FindOrCreateArchetype(unique_signature, { shared_signature.indices, shared_signature.count });
+		unsigned int main_archetype_index = FindOrCreateArchetype(unique_signature, { shared_signature.indices, shared_signature.count });
 		Archetype* main_archetype = GetArchetype(main_archetype_index);
-		unsigned short base = main_archetype->FindBaseIndex(shared_signature);
+		unsigned int base = main_archetype->FindBaseIndex(shared_signature);
 		if (base == -1) {
 			// It doesn't exist, a new one must be created
 			base = main_archetype->CreateBaseArchetype(shared_signature, starting_size);
@@ -3292,14 +3299,14 @@ namespace ECSEngine {
 		SharedComponentSignature shared_signature,
 		unsigned int starting_size
 	) {
-		ushort2 indices = FindOrCreateArchetypeBase(unique_signature, shared_signature, starting_size);
+		uint2 indices = FindOrCreateArchetypeBase(unique_signature, shared_signature, starting_size);
 		return GetBase(indices.x, indices.y);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	template<typename Query>
-	void ECS_VECTORCALL GetArchetypeImplementation(const EntityManager* manager, Query query, CapacityStream<unsigned short>& archetypes) {
+	void ECS_VECTORCALL GetArchetypeImplementation(const EntityManager* manager, Query query, CapacityStream<unsigned int>& archetypes) {
 		for (size_t index = 0; index < manager->m_archetypes.size; index++) {
 			if (query.VerifiesUnique(manager->m_archetypes[index].GetUniqueSignature())) {
 				if (query.VerifiesShared(manager->m_archetypes[index].GetSharedSignature())) {
@@ -3320,7 +3327,7 @@ namespace ECSEngine {
 		}
 	}
 
-	void EntityManager::GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned short>& archetypes) const
+	void EntityManager::GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
@@ -3334,7 +3341,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypesExclude(ArchetypeQueryExclude query, CapacityStream<unsigned short>& archetypes) const
+	void EntityManager::GetArchetypesExclude(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
@@ -3386,6 +3393,39 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	MemoryArena* EntityManager::GetComponentAllocator(Component component)
+	{
+		ECS_CRASH_RETURN_VALUE(ExistsComponent(component), nullptr, "The component {#} doesn't exist when retrieving its allocator.", component.value);
+		return m_unique_components[component.value].allocator;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	MemoryArena* EntityManager::GetSharedComponentAllocator(Component component)
+	{
+		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), nullptr, "The shared component {#} doesn't exist when retrieving its allocator.", component.value);
+		return m_shared_components[component.value].info.allocator;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int EntityManager::GetEntityCount() const
+	{
+		return m_entity_pool->GetCount();
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	Entity EntityManager::GetEntityFromIndex(unsigned int stream_index) const
+	{
+		Entity entity;
+		entity.index = stream_index;
+		EntityInfo info = m_entity_pool->GetInfoNoChecks(entity);
+		return { stream_index, info.generation_count };
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	EntityInfo EntityManager::GetEntityInfo(Entity entity) const
 	{
 		return m_entity_pool->GetInfo(entity);
@@ -3409,7 +3449,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	SharedComponentSignature EntityManager::GetEntitySharedSignature(Entity entity, Component* shared, SharedInstance* instances) {
+	SharedComponentSignature EntityManager::GetEntitySharedSignature(Entity entity, Component* shared, SharedInstance* instances) const {
 		SharedComponentSignature signature = GetEntitySharedSignatureStable(entity);
 		memcpy(shared, signature.indices, sizeof(Component) * signature.count);
 		memcpy(instances, signature.instances, sizeof(SharedInstance) * signature.count);
@@ -3418,16 +3458,16 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 	
-	SharedComponentSignature EntityManager::GetEntitySharedSignatureStable(Entity entity) {
+	SharedComponentSignature EntityManager::GetEntitySharedSignatureStable(Entity entity) const {
 		EntityInfo info = GetEntityInfo(entity);
 		ComponentSignature shared_signature = m_archetypes[info.main_archetype].GetSharedSignature();
-		SharedInstance* instances = m_archetypes[info.main_archetype].GetBaseInstances(info.base_archetype);
-		return { shared_signature.indices, instances, shared_signature.count };
+		const SharedInstance* instances = m_archetypes[info.main_archetype].GetBaseInstances(info.base_archetype);
+		return { shared_signature.indices, (SharedInstance*)instances, shared_signature.count };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetEntityCompleteSignature(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) {
+	void EntityManager::GetEntityCompleteSignature(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const {
 		ComponentSignature stable_unique = GetEntitySignatureStable(entity);
 		SharedComponentSignature stable_shared = GetEntitySharedSignatureStable(entity);
 
@@ -3441,7 +3481,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetEntityCompleteSignatureStable(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) {
+	void EntityManager::GetEntityCompleteSignatureStable(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const {
 		*unique = GetEntitySignatureStable(entity);
 		*shared = GetEntitySharedSignatureStable(entity);
 	}
@@ -3531,13 +3571,16 @@ namespace ECSEngine {
 		// If the component size is -1, it means no actual component lives at that index
 		ECS_CRASH_RETURN_VALUE(component_size != -1, { (unsigned short) - 1},  "There is no shared component allocated at {#}. Cannot retrieve shared instance data.",
 			component.value);
-		for (size_t index = 0; index < m_shared_components[component.value].instances.size; index++) {
-			if (memcmp(m_shared_components[component.value].instances[index], data, component_size) == 0) {
-				return { (unsigned short)index };
-			}
-		}
 
-		return { (unsigned short)-1 };
+		unsigned short instance_index = -1;
+		m_shared_components[component.value].instances.stream.ForEachIndex<true>([&](unsigned int index) {
+			if (memcmp(m_shared_components[component.value].instances[index], data, component_size) == 0) {
+				instance_index = (unsigned short)index;
+				return true;
+			}
+		});
+
+		return { instance_index };
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3587,10 +3630,66 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	EntityHierarchy* EntityManager::GetHierarchy(unsigned int hierarchy_index)
+	{
+		ECS_CRASH_RETURN_VALUE(hierarchy_index < ECS_ENTITY_HIERARCHY_MAX_COUNT, nullptr, "Invalid hierarchy index {#}.", hierarchy_index);
+		ECS_CRASH_RETURN_VALUE(ExistsHierarchy(hierarchy_index), nullptr, "The hierarchy {#} doesn't exist.", hierarchy_index);
+		return &m_hierarchies[hierarchy_index].hierarchy;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const EntityHierarchy* EntityManager::GetHierarchy(unsigned int hierarchy_index) const
+	{
+		ECS_CRASH_RETURN_VALUE(hierarchy_index < ECS_ENTITY_HIERARCHY_MAX_COUNT, nullptr, "Invalid hierarchy index {#}.", hierarchy_index);
+		ECS_CRASH_RETURN_VALUE(ExistsHierarchy(hierarchy_index), nullptr, "The hierarchy {#} doesn't exist.", hierarchy_index);
+		return &m_hierarchies[hierarchy_index].hierarchy;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	Stream<char> EntityManager::GetHierarchyName(unsigned int hierarchy_index) const
+	{
+		ECS_CRASH_RETURN_VALUE(hierarchy_index < ECS_ENTITY_HIERARCHY_MAX_COUNT, {}, "Invalid hierarchy index {#} when retrieving the name.", hierarchy_index);
+		ECS_CRASH_RETURN_VALUE(ExistsHierarchy(hierarchy_index), {}, "The hierarchy {#} doesn't exist when retrieving the name.", hierarchy_index);
+		return m_hierarchies[hierarchy_index].name;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetEntityHierarchies(Entity entity, CapacityStream<unsigned int>& hierarchy_indices) const
+	{
+		EntityInfo info = GetEntityInfo(entity);
+		GetEntityHierarchies(info, hierarchy_indices);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::GetEntityHierarchies(EntityInfo info, CapacityStream<unsigned int>& hierarchy_indices) const
+	{
+		unsigned int indices = info.hierarchy;
+		unsigned int bit = 1;
+		for (size_t index = 0; index < ECS_ENTITY_HIERARCHY_MAX_COUNT; index++) {
+			if (function::HasFlag(indices, bit)) {
+				hierarchy_indices.Add(index);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	Entity EntityManager::GetEntityParent(unsigned int hierarchy_index, Entity child) const
+	{
+		const EntityHierarchy* hierarchy = GetHierarchy(hierarchy_index);
+		return hierarchy->GetParent(child);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	Stream<Entity> EntityManager::GetHierarchyChildren(unsigned int hierarchy_index, Entity parent) const
 	{
-		
-		return m_hierarchies[hierarchy_index].hierarchy.GetChildren(parent);
+		const EntityHierarchy* hierarchy = GetHierarchy(hierarchy_index);
+		return hierarchy != nullptr ? hierarchy->GetChildren(parent) : Stream<Entity>(nullptr, 0);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3605,12 +3704,15 @@ namespace ECSEngine {
 			children.capacity,
 			parent_children.size
 		);
-		children.Copy(parent_children);
+
+		if (parent_children.size > 0) {
+			children.AddStream(parent_children);
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	Stream<unsigned short> EntityManager::GetQueryResults(unsigned int handle) const
+	Stream<unsigned int> EntityManager::GetQueryResults(unsigned int handle) const
 	{
 		return m_query_cache->GetResults(handle);
 	}
@@ -3624,7 +3726,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const
+	void EntityManager::GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned int>& results, ArchetypeQuery& query) const
 	{
 		m_query_cache->GetResultsAndComponents(handle, results, query);
 	}
@@ -3706,29 +3808,79 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RemoveEntityFromHierarchyCommit(unsigned short hierarchy_index, Stream<Entity> entities, bool destroy_children)
+	void EntityManager::RemoveEntityFromHierarchyCommit(unsigned int hierarchy_index, Stream<Entity> entities, bool default_child_destroy)
 	{
 		DeferredRemoveEntitiesFromHierarchy data;
-		data.destroy_children = destroy_children;
+		data.default_destroy_children = default_child_destroy;
 		data.entities = entities;
 		data.hierarchy_index = hierarchy_index;
 		CommitRemoveEntitiesFromHierarchy(this, &data, nullptr);
 	}
 
 	void EntityManager::RemoveEntityFromHierarchy(
-		unsigned short hierarchy_index, 
+		unsigned int hierarchy_index, 
 		Stream<Entity> entities, 
-		bool destroy_children,
 		DeferredActionParameters parameters, 
+		bool default_child_destroy,
 		DebugInfo debug_info
 	)
 	{
-		RegisterRemoveEntitiesFromHierarchy(this, entities, hierarchy_index, destroy_children, parameters, debug_info);
+		RegisterRemoveEntitiesFromHierarchy(this, entities, hierarchy_index, parameters, default_child_destroy, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterComponentCommit(Component component, unsigned short size) {
+	void EntityManager::RemoveComponentCommit(Entity entity, ComponentSignature components)
+	{
+		RemoveComponentCommit({ &entity, 1 }, components);
+	}
+
+	void EntityManager::RemoveComponentCommit(Stream<Entity> entities, ComponentSignature components)
+	{
+		DeferredRemoveComponentEntities commit_data;
+		commit_data.components = components;
+		commit_data.entities = entities;
+		CommitEntityRemoveComponent(this, &commit_data, nullptr);
+	}
+
+	void EntityManager::RemoveComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
+	{
+		RemoveComponent({ &entity, 1 }, components, { command_stream }, debug_info);
+	}
+
+	void EntityManager::RemoveComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
+	{
+		RegisterEntityRemoveComponents(this, entities, components, parameters, debug_info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::RemoveSharedComponentCommit(Entity entity, ComponentSignature components)
+	{
+		RemoveSharedComponentCommit({ &entity, 1 }, components);
+	}
+
+	void EntityManager::RemoveSharedComponentCommit(Stream<Entity> entities, ComponentSignature components)
+	{
+		DeferredRemoveSharedComponentEntities commit_data;
+		commit_data.components = components;
+		commit_data.entities = entities;
+		CommitEntityRemoveSharedComponent(this, &commit_data, nullptr);
+	}
+
+	void EntityManager::RemoveSharedComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
+	{
+		RemoveSharedComponent({ &entity, 1 }, components, { command_stream }, debug_info);
+	}
+
+	void EntityManager::RemoveSharedComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
+	{
+		RegisterEntityRemoveSharedComponent(this, entities, components, parameters, debug_info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::RegisterComponentCommit(Component component, unsigned short size, size_t allocator_size) {
 		DeferredCreateComponent commit_data;
 		commit_data.component = component;
 		commit_data.size = size;
@@ -3737,13 +3889,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterComponent(Component component, unsigned short size, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
+	void EntityManager::RegisterComponent(Component component, unsigned short size, size_t allocator_size, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
 		RegisterCreateComponent(this, component, size, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterSharedComponentCommit(Component component, unsigned short size) {
+	void EntityManager::RegisterSharedComponentCommit(Component component, unsigned short size, size_t allocator_size) {
 		DeferredCreateSharedComponent commit_data;
 		commit_data.component = component;
 		commit_data.size = size;
@@ -3752,8 +3904,8 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterSharedComponent(Component component, unsigned short size, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
-		RegisterCreateSharedComponent(this, component, size, command_stream, debug_info);
+	void EntityManager::RegisterSharedComponent(Component component, unsigned short size, size_t allocator_size, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
+		RegisterCreateSharedComponent(this, component, size, allocator_size, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3843,9 +3995,8 @@ namespace ECSEngine {
 
 	void EntityManager::SetSharedComponentData(Component component, SharedInstance instance, const void* data)
 	{
-		ECS_CRASH_RETURN(component.value < m_shared_components.size, "Shared component {#} is out of bounds when trying to set shared instance {#}.", component.value, instance.value);
-		ECS_CRASH_RETURN(instance.value < m_shared_components[component.value].instances.size, "Shared instance {#} is out of bounds for shared "
-			"component{#}.", instance.value, component.value);
+		ECS_CRASH_RETURN(ExistsSharedInstance(component, instance), "The component {#} or instance {#} doesn't exist when trying to set shared component data.",
+			component.value, instance.value);
 
 		unsigned short component_size = m_shared_components[component.value].info.size;
 		memcpy(m_shared_components[component.value].instances[instance.value], data, component_size);

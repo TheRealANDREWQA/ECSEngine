@@ -765,7 +765,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			// Name and type
 			size_t current_index = buffers.size;
 			buffers[current_index].name = SetName(name_start, cbuffer_ptr, name_pool);
-			buffers[current_index].type = ShaderBufferType::Constant;
+			buffers[current_index].type = ECS_SHADER_BUFFER_CONSTANT;
 
 			// Register index
 			char* end_bracket = strchr(cbuffer_ptr, '}');
@@ -816,7 +816,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				// Byte size is zero - ignore for buffer types different from the constant buffer
 				// The type is associated with the iteration index
 				buffers[current_index].byte_size = 0;
-				buffers[current_index].type = (ShaderBufferType)index;
+				buffers[current_index].type = (ECS_SHADER_BUFFER_TYPE)index;
 
 				Stream<char> name;
 				unsigned short register_index;
@@ -861,7 +861,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 				size_t current_index = textures.size;
 				textures[current_index].name = name;
-				textures[current_index].type = (ShaderTextureType)index;
+				textures[current_index].type = (ECS_SHADER_TEXTURE_TYPE)index;
 				textures[current_index].register_index = default_value ? current_index : register_index;
 
 				*end_line = '\n';

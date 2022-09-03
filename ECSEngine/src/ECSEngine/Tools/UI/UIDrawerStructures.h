@@ -104,6 +104,16 @@ namespace ECSEngine {
 			Color color = ECS_TOOLS_UI_THEME_COLOR;
 		};
 
+		struct ECSENGINE_API UIConfigDoNotAdvance {
+			static inline size_t GetAssociatedBit() {
+				return UI_CONFIG_DO_NOT_ADVANCE;
+			}
+
+			bool update_render_bounds = true;
+			bool update_current_scale = true;
+			bool handle_draw_mode = true;
+		};
+
 		struct ECSENGINE_API UIConfigButtonHoverable {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_BUTTON_HOVERABLE;
@@ -336,7 +346,7 @@ namespace ECSEngine {
 		};
 
 		// can be drawer or initializer
-		using UINodeDraw = void (*)(void* drawer_ptr, void* window_data, void* other_ptr);
+		typedef void (*UINodeDraw)(void* drawer_ptr, void* window_data, void* other_ptr);
 
 		struct UIDrawerHierarchyNode {
 			UIDrawerTextElement name_element;
@@ -403,10 +413,9 @@ namespace ECSEngine {
 						name,
 						float2(0.0f, 0.0f),
 						(UISpriteVertex*)allocation,
-						name_length,
 						text_color,
 						0,
-						{ system->m_descriptors.font.size * ECS_TOOLS_UI_FONT_X_FACTOR, system->m_descriptors.font.size },
+						system->m_descriptors.font.size,
 						system->m_descriptors.font.character_spacing
 					);
 					buffer += sizeof(UISpriteVertex) * name_length * 6;
@@ -902,16 +911,24 @@ namespace ECSEngine {
 			Stream<char> prefix;
 		};
 
-		struct UIDrawerLabelHierarchyLabelData {
+		struct UIDrawerFilesystemHierarchyLabelData {
 			bool state;
 			unsigned char activation_count;
 		};
 
-		struct UIDrawerLabelHierarchy {
+		struct ECSENGINE_API UIConfigFilesystemHierarchyHashTableCapacity {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_FILESYSTEM_HIERARCHY_HASH_TABLE_CAPACITY;
+			}
+
+			unsigned int capacity;
+		};
+
+		struct UIDrawerFilesystemHierarchy {
 			Stream<char> active_label;
 			Stream<char> selected_label_temporary;
 			Stream<char> right_click_label_temporary;
-			HashTableDefault<UIDrawerLabelHierarchyLabelData> label_states;
+			HashTableDefault<UIDrawerFilesystemHierarchyLabelData> label_states;
 			Action selectable_callback;
 			void* selectable_callback_data;
 			Action right_click_callback;
@@ -935,6 +952,8 @@ namespace ECSEngine {
 			bool keep_triangle = true;
 		};
 
+		typedef UIConfigLabelHierarchySpriteTexture UIConfigFilesystemHierarchySpriteTexture;
+
 		// The callback receives the label char* in the additional action data member; if copy_on_initialization is set,
 		//  then the data parameter will be copied only in the initializer pass
 		struct ECSENGINE_API UIConfigLabelHierarchySelectableCallback {
@@ -943,19 +962,13 @@ namespace ECSEngine {
 			}
 
 			Action callback;
-			void* callback_data;
-			unsigned int callback_data_size = 0;
+			void* data;
+			unsigned int data_size = 0;
 			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
 			bool copy_on_initialization = false;
 		};
 
-		struct ECSENGINE_API UIConfigLabelHierarchyHashTableCapacity {
-			inline static size_t GetAssociatedBit() {
-				return UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY;
-			}
-
-			unsigned int capacity;
-		};
+		typedef UIConfigLabelHierarchySelectableCallback UIConfigFilesystemHierarchySelectableCallback;
 
 		// The callback must cast to UIDrawerLabelHierarchyRightClickData the _data pointer in order to get access to the 
 		// label stream; if copy_on_initialization is set, then the data parameter will be copied only in the initializer
@@ -972,49 +985,63 @@ namespace ECSEngine {
 			bool copy_on_initialization = false;
 		};
 
-		// Must be specified for each row of the sentence, nullptr action means skip
-		// Count must be filled in order to be double checked with the drawer count
-		// In order to prevent out of bounds accesses
-		struct ECSENGINE_API UIConfigSentenceHoverableHandlers {
+		typedef UIConfigLabelHierarchyRightClick UIConfigFilesystemHierarchyRightClick;
+
+		struct ECSENGINE_API UIConfigLabelHierarchyDragCallback {
 			inline static size_t GetAssociatedBit() {
-				return UI_CONFIG_SENTENCE_HOVERABLE_HANDLERS;
+				return UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL;
 			}
 
-			Action* callback;
-			void** data;
-			unsigned int* data_size;
-			ECS_UI_DRAW_PHASE* phase;
-			unsigned int count;
+			Action callback;
+			void* data;
+			unsigned int data_size = 0;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
+			bool copy_on_initialization = false;
+			bool reject_same_label_drag = true;
 		};
 
-		// Must be specified for each row of the sentence, nullptr action means skip
-		// Count must be filled in order to be double checked with the drawer count
-		// In order to prevent out of bounds accesses
-		struct ECSENGINE_API UIConfigSentenceClickableHandlers {
+		struct ECSENGINE_API UIConfigLabelHierarchyRenameCallback {
 			inline static size_t GetAssociatedBit() {
-				return UI_CONFIG_SENTENCE_CLICKABLE_HANDLERS;
+				return UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL;
 			}
 
-			Action* callback;
-			void** data;
-			unsigned int* data_size;
-			ECS_UI_DRAW_PHASE* phase;
-			unsigned int count;
+			Action callback;
+			void* data;
+			unsigned int data_size = 0;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
+			bool copy_on_initialization = false;
 		};
 
-		// Must be specified for each row of the sentence, nullptr action means skip
-		// Count must be filled in order to be double checked with the drawer count
-		// In order to prevent out of bounds accesses
-		struct ECSENGINE_API UIConfigSentenceGeneralHandlers {
+		// Needs to take as data parameter a UIDrawerLabelHierarchyDoubleClickData
+		struct ECSENGINE_API UIConfigLabelHierarchyDoubleClickCallback {
 			inline static size_t GetAssociatedBit() {
-				return UI_CONFIG_SENTENCE_GENERAL_HANDLERS;
+				return UI_CONFIG_LABEL_HIERARCHY_DOUBLE_CLICK_ACTION;
 			}
 
-			Action* callback;
-			void** data;
-			unsigned int* data_size;
-			ECS_UI_DRAW_PHASE* phase;
-			unsigned int count;
+			Action callback;
+			void* data;
+			unsigned int data_size = 0;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
+			bool copy_on_initialization = false;
+		};
+
+		struct UIConfigLabelHierarchyFilter {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_LABEL_HIERARCHY_FILTER;
+			}
+
+			Stream<char> filter;
+		};
+
+		// Any handler can be omitted
+		struct UIConfigLabelHierarchyBasicOperations {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS;
+			}
+
+			UIActionHandler copy_handler = { nullptr };
+			UIActionHandler cut_handler = { nullptr };
+			UIActionHandler delete_handler = { nullptr };
 		};
 
 		struct ECSENGINE_API UIConfigMenuButtonSprite {
@@ -1073,7 +1100,7 @@ namespace ECSEngine {
 			Stream<char> name;
 		};
 
-		struct UIDrawerInitializeLabelHierarchy {
+		struct UIDrawerInitializeFilesystemHierarchy {
 			UIDrawConfig* config;
 			Stream<char> identifier;
 			Stream<Stream<char>> labels;
@@ -1212,6 +1239,11 @@ namespace ECSEngine {
 				};
 			};
 			Stream<Stream<wchar_t>> extensions;
+		};
+
+		struct UIDrawerInitializeLabelHierarchy {
+			const UIDrawConfig* config;
+			Stream<char> name;
 		};
 
 		struct UIDrawerLabelList {
@@ -1439,6 +1471,127 @@ namespace ECSEngine {
 
 			ECS_UI_ALIGN horizontal;
 			ECS_UI_ALIGN vertical;
+		};
+
+		// Keeps a list with all the opened labels and any user callbacks
+		struct ECSENGINE_API UIDrawerLabelHierarchyData {
+			// If the action_data is nullptr, then it will skip the callback
+			void AddSelection(Stream<char> label, ActionData* action_data);
+
+			// If the action_data is nullptr, then it will skip the callback
+			void ChangeSelection(Stream<char> label, ActionData* action_data);
+
+			// If the action_data is nullptr, then it will skip the callback
+			void RemoveSelection(Stream<char> label, ActionData* action_data);
+
+			void ClearSelection(ActionData* action_data);
+
+			// For copy/cut
+			void RecordSelection(ActionData* action_data);
+
+			Stream<Stream<char>> opened_labels;
+			CapacityStream<char> hovered_label;
+			// Filled in by the text input
+			CapacityStream<char> rename_label;
+
+			CapacityStream<char> first_selected;
+			CapacityStream<char> last_selected;
+			Stream<Stream<char>> selected_labels;
+
+			// These are coallesced into a single allocation
+			Stream<Stream<char>> copied_labels;
+
+			bool is_rename_label;
+			bool is_dragging;
+			bool reject_same_label_drag;
+			bool determine_selection;
+			bool is_selection_cut;
+
+			// Used for the dynamic identifier
+			Stream<char> identifier;
+
+			Action selectable_action;
+			void* selectable_data;
+
+			Action right_click_action;
+			void* right_click_data;
+
+			Action drag_action;
+			void* drag_data;
+
+			Action rename_action;
+			void* rename_data;
+
+			Action double_click_action;
+			void* double_click_data;
+
+			// Basic operations - the next 3 handlers
+			Action copy_action;
+			void* copy_data;
+
+			Action cut_action;
+			void* cut_data;
+
+			Action delete_action;
+			void* delete_data;
+		};
+
+		// The label is embedded in it
+		struct UIDrawerLabelHierarchyRightClickData {
+			inline Stream<char> GetLabel() const {
+				return { function::OffsetPointer(this, sizeof(*this)), label_size };
+			}
+
+			inline unsigned int WriteLabel(Stream<char> label) {
+				memcpy(function::OffsetPointer(this, sizeof(*this)), label.buffer, label.size);
+				label_size = label.size;
+				return sizeof(*this) + label_size;
+			}
+
+			UIDrawerLabelHierarchyData* hierarchy;
+			void* data;
+			unsigned int label_size;
+		};
+
+		struct UIDrawerLabelHierarchyDragData {
+			void* data;
+			Stream<Stream<char>> source_label; // The ones being dragged
+			Stream<char> destination_label; // The one where it is being dragged
+		};
+
+		struct UIDrawerLabelHierarchyDoubleClickData {
+			void* data;
+			Stream<char> label;
+		};
+
+		struct UIDrawerLabelHierarchySelectableData {
+			void* data;
+			Stream<Stream<char>> labels;
+		};
+
+		struct UIDrawerLabelHierarchyRenameData {
+			void* data;
+			Stream<char> previous_label;
+			Stream<char> new_label;
+		};
+
+		// If the destination label is empty, it means that the labels are copied as roots
+		struct UIDrawerLabelHierarchyCopyData {
+			void* data;
+			Stream<Stream<char>> source_labels;
+			Stream<char> destination_label;
+		};
+
+		// If the destination label is empty, it means that the labels are cut as roots
+		struct UIDrawerLabelHierarchyCutData {
+			void* data;
+			Stream<Stream<char>> source_labels;
+			Stream<char> destination_label;
+		};
+
+		struct UIDrawerLabelHierarchyDeleteData {
+			void* data;
+			Stream<Stream<char>> source_labels;
 		};
 
 	}

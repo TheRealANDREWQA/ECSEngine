@@ -4,7 +4,9 @@
 #include "../../Containers/Stream.h"
 #include "../../Rendering/RenderingStructures.h"
 #include "../../Utilities/FunctionInterfaces.h"
+#include "../../Rendering/ShaderReflection.h"
 #include "../../Utilities/Reflection/ReflectionMacros.h"
+#include "../../Rendering/Compression/TextureCompressionTypes.h"
 
 namespace ECSEngine {
 
@@ -19,12 +21,10 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE_COUNT
 	};
 
-	enum ECS_ASSET_METADATA_CODE : unsigned char {
-		ECS_ASSET_METADATA_OK,
-		ECS_ASSET_METADATA_FAILED_TO_READ,
-		ECS_ASSET_METADATA_VERSION_MISMATCH,
-		ECS_ASSET_METADATA_VERSION_OLD,
-		ECS_ASSET_METADATA_VERSION_INVALID_DATA
+	enum ECS_REFLECT ECS_ASSET_MESH_OPTIMIZE_LEVEL : unsigned char {
+		ECS_ASSET_MESH_OPTIMIZE_NONE,
+		ECS_ASSET_MESH_OPTIMIZE_BASIC,
+		ECS_ASSET_MESH_OPTIMIZE_ADVANCED
 	};
 
 	// ------------------------------------------------------------------------------------------------------
@@ -34,11 +34,14 @@ namespace ECSEngine {
 
 		MeshMetadata Copy(AllocatorPolymorphic allocator) const;
 
+		// Sets default values and aliases the name
+		void Default(Stream<char> name);
+
 		Stream<char> name;
 		float scale_factor;
 		bool coallesced_mesh;
 		bool invert_z_axis;
-		unsigned char optimize_level;
+		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT TextureMetadata {
@@ -46,20 +49,26 @@ namespace ECSEngine {
 		
 		TextureMetadata Copy(AllocatorPolymorphic allocator) const;
 
+		// Sets default values and aliases the name
+		void Default(Stream<char> name);
+
 		Stream<char> name;
-		bool srgb;
+		bool sRGB;
 		bool convert_to_nearest_power_of_two;
 		bool generate_mip_maps;
-		unsigned char compression_type;
+		ECS_TEXTURE_COMPRESSION compression_type;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT GPUBufferMetadata {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
 		GPUBufferMetadata Copy(AllocatorPolymorphic allocator) const;
+		
+		// Sets default values and aliases the name
+		void Default(Stream<char> name);
 
 		Stream<char> name;
-		unsigned char buffer_type;
+		ECS_SHADER_BUFFER_TYPE buffer_type;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT GPUSamplerMetadata {
@@ -67,9 +76,11 @@ namespace ECSEngine {
 
 		GPUSamplerMetadata Copy(AllocatorPolymorphic allocator) const;
 
+		void Default(Stream<char> name);
+
 		Stream<char> name;
-		unsigned char wrap_mode;
-		unsigned char filter_mode;
+		ECS_SAMPLER_ADDRESS_TYPE address_mode;
+		ECS_SAMPLER_FILTER_TYPE filter_mode;
 		unsigned char anisotropic_level;
 	};
 
@@ -84,6 +95,9 @@ namespace ECSEngine {
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
+		// Sets default values and aliases the name
+		void Default(Stream<char> name);
+
 		void RemoveMacro(size_t index, AllocatorPolymorphic allocator);
 
 		void RemoveMacro(const char* name, AllocatorPolymorphic allocator);
@@ -97,17 +111,17 @@ namespace ECSEngine {
 
 		Stream<char> name;
 		Stream<ShaderMacro> macros;
+		ECS_SHADER_TYPE shader_type;
 	};
 
-	struct ECS_REFLECT MaterialAssetResource {
-		unsigned char shader_type;
-		unsigned char slot;
+	struct MaterialAssetResource {
 		unsigned int metadata_handle;
+		unsigned char slot;
 	};
 
 	// The name is separately allocated from the other buffers
 	// The MaterialAssetResource buffers are maintained as a single coallesced buffer
-	struct ECSENGINE_API ECS_REFLECT MaterialAsset {
+	struct ECSENGINE_API MaterialAsset {
 		MaterialAsset() = default;
 		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
 
@@ -117,7 +131,7 @@ namespace ECSEngine {
 
 		void AddSampler(MaterialAssetResource sampler, AllocatorPolymorphic allocator);
 
-		void AddShader(MaterialAssetResource shader, AllocatorPolymorphic allocator);
+		void AddShader(unsigned int shader, AllocatorPolymorphic allocator);
 
 		MaterialAsset Copy(void* buffer) const;
 
@@ -126,6 +140,9 @@ namespace ECSEngine {
 		size_t CopySize() const;
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
+
+		// Sets default values and aliases the name
+		void Default(Stream<char> name);
 
 		void RemoveTexture(unsigned int index, AllocatorPolymorphic allocator);
 
@@ -140,13 +157,20 @@ namespace ECSEngine {
 		Stream<MaterialAssetResource> textures;
 		Stream<MaterialAssetResource> buffers;
 		Stream<MaterialAssetResource> samplers;
-		Stream<MaterialAssetResource> shaders;
+		Stream<unsigned int> shaders;
 	};
 
 	struct ECS_REFLECT MiscAsset {
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
 
 		MiscAsset Copy(AllocatorPolymorphic allocator) const;
+
+		// It it will treat it as a Stream<wchar_t>, it exists to allow treatment of the misc asset
+		// the same as the other assets which have a name
+		void Default(Stream<char> name);
+
+		// It will alias the name
+		void Default(Stream<wchar_t> path);
 
 		Stream<wchar_t> path;
 	};

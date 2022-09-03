@@ -37,12 +37,12 @@ namespace ECSEngine {
 	// The allocator can be provided for multithreaded loading of the textures
 	struct ECSENGINE_API ResourceManagerTextureDesc {
 		GraphicsContext* context = nullptr;
-		D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
-		unsigned int bind_flags = D3D11_BIND_SHADER_RESOURCE;
-		unsigned int cpu_flags = 0;
-		unsigned int misc_flags = 0;
+		ECS_GRAPHICS_USAGE usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		ECS_GRAPHICS_BIND_TYPE bind_flags = ECS_GRAPHICS_BIND_SHADER_RESOURCE;
+		ECS_GRAPHICS_CPU_ACCESS cpu_flags = ECS_GRAPHICS_CPU_ACCESS_NONE;
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
 		AllocatorPolymorphic allocator = { nullptr };
-		TextureCompressionExplicit compression = (TextureCompressionExplicit)-1;
+		ECS_TEXTURE_COMPRESSION_EX compression = (ECS_TEXTURE_COMPRESSION_EX)-1;
 	};
 
 	ECSENGINE_API MemoryManager DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator);
@@ -93,9 +93,6 @@ namespace ECSEngine {
 
 		template<bool delete_if_zero = true>
 		void DecrementReferenceCount(ResourceType type, unsigned int amount);
-
-		// Pops it off the stack
-		void DeleteResourcePath(unsigned int thread_index = 0);
 
 		// Checks to see if the resource exists
 		bool Exists(ResourceIdentifier identifier, ResourceType type) const;

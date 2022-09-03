@@ -26,13 +26,13 @@ namespace ECSEngine {
 		unsigned int AddQuery(ArchetypeQueryExclude query);
 
 		// It asserts that the handle is valid
-		Stream<unsigned short> GetResults(unsigned int handle) const;
+		Stream<unsigned int> GetResults(unsigned int handle) const;
 
 		// Returns the components stored for that handle
 		ArchetypeQuery ECS_VECTORCALL GetComponents(unsigned int handle) const;
 
 		// TODO: Investigate if the assembly generated involves many copies and not passing things by registers
-		void GetResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const;
+		void GetResultsAndComponents(unsigned int handle, Stream<unsigned int>& results, ArchetypeQuery& query) const;
 
 		// Resizes the non exclude results to the new capacity (the SoA structure)
 		void Resize(unsigned int new_capacity);
@@ -40,11 +40,11 @@ namespace ECSEngine {
 		// Resizes the exclude results to the new capacity (the SoA structure)
 		void ResizeExclude(unsigned int new_capacity);
 
-		void UpdateAdd(unsigned short new_archetype_index);
+		void UpdateAdd(unsigned int new_archetype_index);
 
-		void UpdateRemove(unsigned short archetype_index);
+		void UpdateRemove(unsigned int archetype_index);
 
-		void Update(Stream<unsigned short> new_archetypes, Stream<unsigned short> remove_archetypes);
+		void Update(Stream<unsigned int> new_archetypes, Stream<unsigned int> remove_archetypes);
 
 		// Returns an appropriately sized allocator for a default use case.
 		// It is the same as calling DetermineAllocator with a size of 512
@@ -56,7 +56,7 @@ namespace ECSEngine {
 		// SoA split of a resizable stream in order
 		// to have better cache utilization when updating the query_results
 		struct QueryResults {
-			Stream<unsigned short>* results;
+			Stream<unsigned int>* results;
 			ArchetypeQuery* components;
 			unsigned int count;
 			unsigned int capacity;
@@ -64,7 +64,7 @@ namespace ECSEngine {
 		};
 
 		struct ExcludeQueryResults {
-			Stream<unsigned short>* results;
+			Stream<unsigned int>* results;
 			ArchetypeQueryExclude* components;
 			unsigned int count;
 			unsigned int capacity;

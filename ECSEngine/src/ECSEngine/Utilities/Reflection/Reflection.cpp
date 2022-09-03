@@ -5,8 +5,10 @@
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../ForEachFiles.h"
 #include "ReflectionStringFunctions.h"
-#include "../../Internal/Resources/AssetDatabaseSerializeFunctions.h"
+#include "../ReferenceCountSerialize.h"
 #include "../../Containers/SparseSet.h"
+
+#include "../../Internal/Resources/AssetMetadataSerialize.h"
 
 namespace ECSEngine {
 
@@ -16,7 +18,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionContainerTypeDependentTypes_SingleTemplate(ReflectionContainerTypeDependentTypesData* data)
+		void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data)
 		{
 			const char* opened_bracket = strchr(data->definition.buffer, '<');
 			ECS_ASSERT(opened_bracket != nullptr);
@@ -29,7 +31,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionContainerTypeMatchTemplate(ReflectionContainerTypeMatchData* data, const char* string)
+		bool ReflectionCustomTypeMatchTemplate(ReflectionCustomTypeMatchData* data, const char* string)
 		{
 			size_t string_size = strlen(string);
 
@@ -49,20 +51,19 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		Stream<char> ReflectionContainerTypeGetTemplateArgument(Stream<char> definition)
+		Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition)
 		{
-			const char* opened_bracket = strchr(definition.buffer, '<');
-			const char* closed_bracket = strchr(definition.buffer, '>');
-			ECS_ASSERT(opened_bracket != nullptr && closed_bracket != nullptr);
+			Stream<char> opened_bracket = function::FindFirstCharacter(definition, '<');
+			Stream<char> closed_bracket = function::FindFirstCharacter(definition, '>');
+			ECS_ASSERT(opened_bracket.buffer != nullptr && closed_bracket.buffer != nullptr);
 
-			Stream<char> type = { opened_bracket + 1, function::PointerDifference(closed_bracket, opened_bracket) - 1 };
-
+			Stream<char> type = { opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
 			return type;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionContainerTypeMatch_Streams(ReflectionContainerTypeMatchData* data) {
+		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(Stream) {
 			if (data->definition.size < sizeof("Stream<")) {
 				return false;
 			}
@@ -88,7 +89,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ulong2 ReflectionContainerTypeByteSize_Streams(ReflectionContainerTypeByteSizeData* data) {
+		ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(Stream) {
 			if (memcmp(data->definition.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
 				return { sizeof(Stream<void>), alignof(Stream<void>) };
 			}
@@ -105,21 +106,19 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionContainerTypeDependentTypes_Streams(ReflectionContainerTypeDependentTypesData* data) {
-			ReflectionContainerTypeDependentTypes_SingleTemplate(data);
+		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(Stream) {
+			ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionContainerTypeMatch_SparseSet(ReflectionContainerTypeMatchData* data)
-		{
-			return ReflectionContainerTypeMatchTemplate(data, "SparseSet") || ReflectionContainerTypeMatchTemplate(data, "ResizableSparseSet");
+		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(SparseSet) {
+			return ReflectionCustomTypeMatchTemplate(data, "SparseSet") || ReflectionCustomTypeMatchTemplate(data, "ResizableSparseSet");
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ulong2 ReflectionContainerTypeByteSize_SparseSet(ReflectionContainerTypeByteSizeData* data)
-		{
+		ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(SparseSet) {
 			if (memcmp(data->definition.buffer, "SparseSet<", sizeof("SparseSet<") - 1) == 0) {
 				return { sizeof(SparseSet<char>), alignof(SparseSet<char>) };
 			}
@@ -130,65 +129,62 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionContainerTypeDependentTypes_SparseSet(ReflectionContainerTypeDependentTypesData* data)
-		{
-			ReflectionContainerTypeDependentTypes_SingleTemplate(data);
+		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(SparseSet) {
+			ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionContainerTypeMatch_Color(ReflectionContainerTypeMatchData* data)
-		{
+		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(Color) {
 			return function::CompareStrings(("Color"), data->definition);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ulong2 ReflectionContainerTypeByteSize_Color(ReflectionContainerTypeByteSizeData* data)
-		{
-			return { sizeof(char) * 4, alignof(char) };
+		ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(Color) {
+			return { sizeof(unsigned char) * 4, alignof(unsigned char) };
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionContainerTypeDependentTypes_Color(ReflectionContainerTypeDependentTypesData* data) {}
+		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(Color) {}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool ReflectionContainerTypeMatch_ColorFloat(ReflectionContainerTypeMatchData* data)
-		{
+		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(ColorFloat) {
 			return function::CompareStrings(("ColorFloat"), data->definition);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ulong2 ReflectionContainerTypeByteSize_ColorFloat(ReflectionContainerTypeByteSizeData* data)
-		{
+		ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(ColorFloat) {
 			return { sizeof(float) * 4, alignof(float) };
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionContainerTypeDependentTypes_ColorFloat(ReflectionContainerTypeDependentTypesData* data) {}
+		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(ColorFloat) {}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionContainerType ECS_REFLECTION_CONTAINER_TYPES[] = {
-			ECS_REFLECTION_CONTAINER_TYPE_STRUCT(Streams),
-			ECS_REFLECTION_CONTAINER_TYPE_REFERENCE_COUNTED_ASSET,
-			ECS_REFLECTION_CONTAINER_TYPE_STRUCT(SparseSet),
-			ECS_REFLECTION_CONTAINER_TYPE_STRUCT(Color),
-			ECS_REFLECTION_CONTAINER_TYPE_STRUCT(ColorFloat)
+		// TODO: move this to another file
+		ReflectionCustomType ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_COUNT] = {
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(Stream),
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(ReferenceCounted),
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(SparseSet),
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(Color),
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(ColorFloat),
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(MaterialAsset)
 		};
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int FindReflectionContainerType(Stream<char> definition)
+		unsigned int FindReflectionCustomType(Stream<char> definition)
 		{
-			ReflectionContainerTypeMatchData match_data = { definition };
+			ReflectionCustomTypeMatchData match_data = { definition };
 
-			for (unsigned int index = 0; index < std::size(ECS_REFLECTION_CONTAINER_TYPES); index++) {
-				if (ECS_REFLECTION_CONTAINER_TYPES[index].match(&match_data)) {
+			for (unsigned int index = 0; index < std::size(ECS_REFLECTION_CUSTOM_TYPES); index++) {
+				if (ECS_REFLECTION_CUSTOM_TYPES[index].match(&match_data)) {
 					return index;
 				}
 			}
@@ -226,6 +222,8 @@ namespace ECSEngine {
 
 		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data);
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data);
+
+		void ReflectionManagerStylizeEnum(ReflectionEnum enum_);
 
 		// These are pending expressions to be evaluated
 		struct ReflectionExpression {
@@ -312,10 +310,14 @@ namespace ECSEngine {
 					ECS_ASSERT(!type_definitions.Insert(type, identifier));
 				}
 
+				// TODO: Do we need a disable for the stylized labels?
 				for (size_t index = 0; index < data[data_index].enums.size; index++) {
 					const ReflectionEnum* data_enum = &data[data_index].enums[index];
+					ReflectionEnum temp_copy = *data_enum;
+					// Stylized the labels such that they don't appear excessively long
+					ReflectionManagerStylizeEnum(temp_copy);
 
-					ReflectionEnum enum_ = data_enum->Copy(ptr);
+					ReflectionEnum enum_ = temp_copy.Copy(ptr);
 					enum_.folder_hierarchy_index = folder_index;
 					ResourceIdentifier identifier(enum_.name);
 					if (enum_definitions.Find(identifier) != -1) {
@@ -419,16 +421,16 @@ namespace ECSEngine {
 					}
 				}
 
-				unsigned int container_type_index = FindReflectionContainerType(definition);
+				unsigned int container_type_index = FindReflectionCustomType(definition);
 
 				size_t byte_size = -1;
 				size_t alignment = -1;
 				if (container_type_index != -1) {
 					// Get its byte size
-					ReflectionContainerTypeByteSizeData byte_size_data;
+					ReflectionCustomTypeByteSizeData byte_size_data;
 					byte_size_data.definition = definition;
 					byte_size_data.reflection_manager = this;
-					ulong2 byte_size_alignment = ECS_REFLECTION_CONTAINER_TYPES[container_type_index].byte_size(&byte_size_data);
+					ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_type_index].byte_size(&byte_size_data);
 					byte_size = byte_size_alignment.x;
 					alignment = byte_size_alignment.y;
 
@@ -660,7 +662,7 @@ namespace ECSEngine {
 				}
 				else {
 					// Try to see if it a container type
-					unsigned int container_type = FindReflectionContainerType(name);
+					unsigned int container_type = FindReflectionCustomType(name);
 					if (container_type == -1) {
 						// Try to see if it is an enum, if it is not then error
 						ReflectionEnum enum_;
@@ -675,10 +677,10 @@ namespace ECSEngine {
 					}
 					else {
 						// Get the byte size
-						ReflectionContainerTypeByteSizeData byte_size_data;
+						ReflectionCustomTypeByteSizeData byte_size_data;
 						byte_size_data.reflection_manager = this;
 						byte_size_data.definition = name;
-						ulong2 byte_size_alignment = ECS_REFLECTION_CONTAINER_TYPES[container_type].byte_size(&byte_size_data);
+						ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_type].byte_size(&byte_size_data);
 						// If byte size is 0, then fail
 
 						if (sizeof_) {
@@ -860,7 +862,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::GetHierarchyTypes(unsigned int hierarchy_index, ReflectionManagerGetQuery options) {
+		void ReflectionManager::GetHierarchyTypes(unsigned int hierarchy_index, ReflectionManagerGetQuery options) const {
 			if (options.tags.size == 0) {
 				type_definitions.ForEachIndexConst([&](unsigned int index) {
 					const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
@@ -898,6 +900,46 @@ namespace ECSEngine {
 					}
 				});
 			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int ReflectionManager::GetHierarchyCount() const
+		{
+			return folders.size;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int ReflectionManager::GetTypeCount() const
+		{
+			return type_definitions.GetCount();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::GetHierarchyComponentTypes(unsigned int hierarchy_index, CapacityStream<unsigned int>* component_indices, CapacityStream<unsigned int>* shared_indices) const
+		{
+			ECS_STACK_CAPACITY_STREAM(CapacityStream<unsigned int>, stream_of_indices, 2);
+			stream_of_indices[0] = *component_indices;
+			stream_of_indices[1] = *shared_indices;
+			stream_of_indices.size = 2;
+
+			Stream<char> tags[] = {
+				ECS_COMPONENT_TAG,
+				ECS_SHARED_COMPONENT_TAG
+			};
+
+			ReflectionManagerGetQuery query_options;
+			query_options.tags = { tags, std::size(tags) };
+			query_options.stream_indices = stream_of_indices;
+			query_options.strict_compare = true;
+			query_options.use_stream_indices = true;
+
+			GetHierarchyTypes(hierarchy_index, query_options);
+
+			component_indices->size = stream_of_indices[0].size;
+			shared_indices->size = stream_of_indices[1].size;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1624,9 +1666,15 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 								}
 
 								const char* opened_parenthese = strchr(ecs_constant_macro_start, '(');
-								ECS_ASSERT(opened_parenthese != nullptr);
+								if (opened_parenthese == nullptr) {
+									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT is missing opened parenthese. Faulty path: ", index);
+									return;
+								}
 								const char* closed_parenthese = strchr(opened_parenthese, ')');
-								ECS_ASSERT(closed_parenthese != nullptr);
+								if (closed_parenthese == nullptr) {
+									WriteErrorMessage(data, "ECS_CONSTANT_REFLECT is missing closed parenthese. Faulty path: ", index);
+									return;
+								}
 
 								opened_parenthese = function::SkipWhitespace(opened_parenthese + 1);
 								closed_parenthese = function::SkipWhitespace(closed_parenthese - 1, -1);
@@ -1662,9 +1710,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						for (size_t word_index = 0; word_index < words.size; word_index++) {
 							tag_name = nullptr;
 
+							unsigned int word_offset = words[word_index];
+
 #pragma region Skip macro definitions
 							// Skip macro definitions - that define tags
-							const char* verify_define_char = file_contents + words[word_index] - 1;
+							const char* verify_define_char = file_contents + word_offset - 1;
 							verify_define_char = function::SkipWhitespace(verify_define_char, -1);
 							verify_define_char = function::SkipCodeIdentifier(verify_define_char, -1);
 							// If it is a pound, it must be a definition - skip it
@@ -1675,7 +1725,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 #pragma region Skip Comments
 							// Skip comments that contain ECS_REFLECT
-							const char* verify_comment_char = file_contents + words[word_index] - 1;
+							const char* verify_comment_char = file_contents + word_offset - 1;
 							verify_comment_char = function::SkipWhitespace(verify_comment_char, -1);
 
 							Stream<char> comment_space = { file_contents, function::PointerDifference(verify_comment_char, file_contents) + 1 };
@@ -1698,7 +1748,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 #pragma endregion
 
-							const char* ecs_reflect_end_position = file_contents + words[word_index] + ecs_reflect_size;
+							const char* ecs_reflect_end_position = file_contents + word_offset + ecs_reflect_size;
 
 							// get the type name
 							const char* space = strchr(ecs_reflect_end_position, ' ');
@@ -1727,7 +1777,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							*second_space_mutable = '\0';
 							data->total_memory += PtrDifference(space, second_space_mutable) + 1;
 
-							file_contents[words[index]] = '\0';
+							file_contents[word_offset] = '\0';
 							// find the last new line character in order to speed up processing
 							const char* last_new_line = strrchr(file_contents + last_position, '\n');
 
@@ -1854,6 +1904,53 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManagerStylizeEnum(ReflectionEnum enum_) {
+			ECS_STACK_CAPACITY_STREAM(unsigned int, underscores, 128);
+			function::FindToken(enum_.fields[0], '_', underscores);
+
+			for (int64_t index = underscores.size - 1; index >= 0; index--) {
+				size_t is_the_same_count = 0;
+				for (; is_the_same_count < enum_.fields.size; is_the_same_count++) {
+					if (memcmp(enum_.fields[is_the_same_count].buffer, enum_.fields[0].buffer, underscores[index] - 1) != 0) {
+						break;
+					}
+				}
+
+				if (is_the_same_count == enum_.fields.size) {
+					// This is a prefix - eliminate it
+					for (size_t subindex = 0; subindex < enum_.fields.size; subindex++) {
+						enum_.fields[subindex].buffer += underscores[index] + 1;
+						enum_.fields[subindex].size -= underscores[index] + 1;
+					}
+					break;
+				}
+			}
+
+			// If the values are in caps, keep capitalized only the first letter
+			size_t index = 0;
+			for (; index < enum_.fields.size; index++) {
+				size_t subindex = 0;
+				for (; subindex < enum_.fields[index].size; subindex++) {
+					if (enum_.fields[index][subindex] >= 'a' && enum_.fields[index][subindex] <= 'z') {
+						break;
+					}
+				}
+
+				if (subindex != enum_.fields[index].size) {
+					break;
+				}
+			}
+
+			if (index == enum_.fields.size) {
+				// All are with caps. Capitalize them
+				for (index = 0; index < enum_.fields.size; index++) {
+					for (size_t subindex = 1; subindex < enum_.fields[index].size; subindex++) {
+						function::Uncapitalize(enum_.fields[index].buffer + subindex);
+					}
+				}
+			}
+		}
 
 		void AddEnumDefinition(
 			ReflectionManagerParseStructuresThreadTaskData* data,
@@ -2004,6 +2101,79 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Get all the semicolons
 				function::FindToken({ start, start_size }, ';', semicolon_positions);
 
+				// Process the inline function declarations such that they get rejected.
+				// Do this by removing the semicolons inside them
+				const char* function_body_start = strchr(start, '{');
+				while (function_body_start != nullptr) {
+					// Get the first character before the bracket. If it is ), then we have a function declaration
+					const char* first_character_before = function_body_start - 1;
+					while (first_character_before >= start && (*first_character_before == ' ' || *first_character_before == '\t' || *first_character_before == '\n')) {
+						first_character_before--;
+					}
+
+					if (*first_character_before == ')') {
+						// Remove all the semicolons in between the two declarations
+						unsigned int opened_bracket_count = 0;
+						const char* opened_bracket = function_body_start;
+						const char* closed_bracket = strchr(opened_bracket + 1, '}');
+
+						if (closed_bracket == nullptr) {
+							// Fail. Invalid match of brackets
+							WriteErrorMessage(data, "Determining inline function declaration body failed. Invalid mismatch of brackets.", file_index);
+							return false;
+						}
+
+						auto get_opened_bracket_count = [&opened_bracket_count](Stream<char> search_space) {
+							Stream<char> new_opened_bracket = function::FindFirstCharacter(search_space, '{');
+							while (new_opened_bracket.buffer != nullptr) {
+								opened_bracket_count++;
+								new_opened_bracket.buffer += 1;
+								new_opened_bracket.size -= 1;
+								new_opened_bracket = function::FindFirstCharacter(new_opened_bracket, '{');
+							}
+						};
+
+						Stream<char> search_space = { opened_bracket + 1, function::PointerDifference(closed_bracket, opened_bracket) - 1 };
+						get_opened_bracket_count(search_space);
+
+						// Now search for more '}'
+						while (opened_bracket_count > 0) {
+							opened_bracket_count--;
+
+							const char* old_closed_bracket = closed_bracket;
+							opened_bracket = strchr(closed_bracket + 1, '{');
+							closed_bracket = strchr(closed_bracket + 1, '}');
+							if (closed_bracket == nullptr) {
+								// Fail. Invalid match of brackets
+								WriteErrorMessage(data, "Determining inline function declaration body failed. Invalid mismatch of brackets.", file_index);
+								return false;
+							}
+							
+							if (old_closed_bracket < opened_bracket && opened_bracket < closed_bracket) {
+								search_space = { opened_bracket + 1, function::PointerDifference(closed_bracket, opened_bracket) - 1 };
+								get_opened_bracket_count(search_space);
+							}
+						}
+
+						// Now remove the semicolons in between
+						unsigned int body_start_offset = function_body_start - start;
+						unsigned int body_end_offset = closed_bracket - start;
+						for (unsigned int index = 0; index < semicolon_positions.size; index++) {
+							if (body_start_offset < semicolon_positions[index] && semicolon_positions[index] < body_end_offset) {
+								semicolon_positions.Remove(index);
+								index--;
+							}
+						}
+
+						function_body_start = strchr(closed_bracket + 1, '{');
+					}
+					else {
+						// Error. Unidentified meaning of {
+						WriteErrorMessage(data, "Unrecognized meaning of { inside type definition.", file_index);
+						return false;
+					}
+				}
+
 				// assigning the field stream
 				uintptr_t ptr = (uintptr_t)data->thread_memory.buffer + data->thread_memory.size;
 				uintptr_t ptr_before = ptr;
@@ -2025,11 +2195,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					for (size_t index = 0; index < next_line_positions.size - 1 && current_semicolon_index < semicolon_positions.size; index++) {
 						// Check to see if a semicolon is in between the two new lines - if it is, then a definition might exist
 						// for a data member or for a member function
-						if (semicolon_positions[current_semicolon_index] < last_new_line) {
+						while (current_semicolon_index < semicolon_positions.size && semicolon_positions[current_semicolon_index] < last_new_line) {
 							current_semicolon_index++;
-							if (current_semicolon_index >= semicolon_positions.size) {
-								break;
-							}
+						}
+						// Exit if we have no more semicolons that fit the blocks
+						if (current_semicolon_index >= semicolon_positions.size) {
+							break;
 						}
 
 						unsigned int current_new_line = next_line_positions[index + 1];
@@ -2703,12 +2874,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						Stream<char> definition = type->fields[index].definition;
 
 						// The type is not found, look for container types
-						unsigned int container_index = FindReflectionContainerType(definition);
+						unsigned int container_index = FindReflectionCustomType(definition);
 						if (container_index != -1) {
-							ReflectionContainerTypeByteSizeData byte_size_data;
+							ReflectionCustomTypeByteSizeData byte_size_data;
 							byte_size_data.reflection_manager = reflection_manager;
 							byte_size_data.definition = definition;
-							ulong2 byte_size_alignment = ECS_REFLECTION_CONTAINER_TYPES[container_index].byte_size(&byte_size_data);
+							ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_index].byte_size(&byte_size_data);
 
 							alignment = std::max(alignment, byte_size_alignment.y);
 						}
@@ -2751,26 +2922,33 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		size_t SearchReflectionUserDefinedTypeByteSize(const ReflectionManager* reflection_manager, Stream<char> definition)
 		{
+			return SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, definition).x;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(const ReflectionManager* reflection_manager, Stream<char> definition)
+		{
 			ReflectionType type;
 			ReflectionEnum enum_;
 			unsigned int container_index = -1;
 
 			SearchReflectionUserDefinedType(reflection_manager, definition, type, container_index, enum_);
 			if (type.name.size > 0) {
-				return GetReflectionTypeByteSize(&type);
+				return { GetReflectionTypeByteSize(&type), GetReflectionTypeAlignment(&type) };
 			}
 			else if (container_index != -1) {
-				ReflectionContainerTypeByteSizeData byte_size_data;
+				ReflectionCustomTypeByteSizeData byte_size_data;
 				byte_size_data.reflection_manager = reflection_manager;
 				byte_size_data.definition = definition;
-				return ECS_REFLECTION_CONTAINER_TYPES[container_index].byte_size(&byte_size_data).x;
+				return ECS_REFLECTION_CUSTOM_TYPES[container_index].byte_size(&byte_size_data);
 			}
 			else if (enum_.name.size > 0) {
-				return sizeof(unsigned char);
+				return { sizeof(unsigned char), alignof(unsigned char) };
 			}
 
 			// Signal an error
-			return -1;
+			return { (size_t)-1, (size_t)-1 };
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2786,10 +2964,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return GetReflectionTypeAlignment(&type);
 			}
 			else if (container_index != -1) {
-				ReflectionContainerTypeByteSizeData byte_size_data;
+				ReflectionCustomTypeByteSizeData byte_size_data;
 				byte_size_data.reflection_manager = reflection_manager;
 				byte_size_data.definition = definition;
-				return ECS_REFLECTION_CONTAINER_TYPES[container_index].byte_size(&byte_size_data).y;
+				return ECS_REFLECTION_CUSTOM_TYPES[container_index].byte_size(&byte_size_data).y;
 			}
 			else if (enum_.name.size > 0) {
 				return alignof(unsigned char);
@@ -2809,7 +2987,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return;
 			}
 			else {
-				container_index = FindReflectionContainerType(definition);
+				container_index = FindReflectionCustomType(definition);
 				if (container_index != -1) {
 					type.name = { nullptr, 0 };
 					enum_.name = { nullptr, 0 };
@@ -3002,6 +3180,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			ECS_ASSERT(info.stream_type == ReflectionStreamFieldType::Pointer);
 			return info.basic_type_count;
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type)
 		{

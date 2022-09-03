@@ -47,6 +47,7 @@ constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_COPIED_FILE_CAPACITY = 16;
 constexpr size_t FILE_EXPLORER_FILTER_CAPACITY = 256;
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT = 16;
+constexpr size_t FILE_EXPLORER_STAGING_PRELOAD_TEXTURE_COUNT = 512;
 constexpr size_t FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE = 128;
 
 constexpr uint2 FILE_EXPLORER_MESH_THUMBNAIL_TEXTURE_SIZE = { 256, 256 };
@@ -1126,26 +1127,29 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 
 			// If this is a single channel texture, transform it into a 4 channel wide
 			bool was_widened = false;
-			if (decoded_texture.format == DXGI_FORMAT_R8_UNORM) {
-				decoded_texture.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-				Stream<Stream<void>> widened_texture = ConvertSingleChannelTextureToGrayscale({ &resized_texture, 1 }, TEXTURE_WIDTH, TEXTURE_WIDTH, current_allocator);
+			if (decoded_texture.format == ECS_GRAPHICS_FORMAT_R8_UNORM) {
+				decoded_texture.format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+				CompressTextureDescriptor compress_descriptor;
+				compress_descriptor.allocator = current_allocator;
+
+				Stream<Stream<void>> converted_texture = ConvertSingleChannelTextureToGrayscale({ &resized_texture, 1 }, TEXTURE_WIDTH, TEXTURE_WIDTH, current_allocator);
 
 				// Deallocate the resized data
 				allocator.Deallocate(resized_texture.buffer);
 				
 				// Change the resized texture buffer to this new one
-				resized_texture = widened_texture[0];
+				resized_texture = converted_texture[0];
 
 				// The widened data will "leak" - cannot be reused inside the allocator but it will be released at the end
 				// when the whole allocator is released
 				was_widened = true;
 			}
 
-			auto create_texture = [&](Stream<Stream<void>> mip_data, DXGI_FORMAT format, void* deallocate_buffer) {
+			auto create_texture = [&](Stream<void> mip_data, ECS_GRAPHICS_FORMAT format, void* deallocate_buffer) {
 				// Create a D3D11 texture from the resized texture
 				GraphicsTexture2DDescriptor texture_descriptor;
-				texture_descriptor.mip_data = mip_data;
-				texture_descriptor.usage = D3D11_USAGE_IMMUTABLE;
+				texture_descriptor.mip_data = { &mip_data, 1 };
+				texture_descriptor.usage = ECS_GRAPHICS_USAGE_IMMUTABLE;
 				texture_descriptor.size = { (unsigned int)TEXTURE_WIDTH, (unsigned int)TEXTURE_WIDTH };
 				texture_descriptor.format = format;
 				texture_descriptor.mip_levels = 1;
@@ -1159,12 +1163,15 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 			};
 
 			// Determine if the texture can be compressed
-			TextureCompressionExplicit compression_type = GetTextureCompressionType(decoded_texture.format);
+			ECS_TEXTURE_COMPRESSION_EX compression_type = GetTextureCompressionType(decoded_texture.format);
 			if (IsTextureCompressionTypeValid(compression_type)) {
 				// Apply compression - only if not HDR compression
-				if (compression_type != TextureCompressionExplicit::HDRMap) {
-					Stream<Stream<void>> compressed_texture = CompressTexture({ &resized_texture, 1 }, TEXTURE_WIDTH, TEXTURE_WIDTH, compression_type, current_allocator, ECS_TEXTURE_COMPRESS_DISABLE_MULTICORE);
-					if (compressed_texture.buffer != nullptr) {
+				if (compression_type != ECS_TEXTURE_COMPRESSION_HDR) {
+					CompressTextureDescriptor compress_descriptor;
+					compress_descriptor.allocator = current_allocator;
+
+					Stream<void> compressed_texture;
+					if (CompressTexture({ &resized_texture, 1 }, &compressed_texture, TEXTURE_WIDTH, TEXTURE_WIDTH, compression_type, compress_descriptor)) {
 						// Release the resized texture - only if it wasn't widened
 						if (!was_widened) {
 							allocator.Deallocate(resized_texture.buffer);
@@ -1174,11 +1181,11 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 					}
 				}
 				else {
-					create_texture({ &resized_texture, 1 }, decoded_texture.format, resized_texture.buffer);
+					create_texture(resized_texture, decoded_texture.format, resized_texture.buffer);
 				}
 			}
 			else {
-				create_texture({ &resized_texture, 1 }, decoded_texture.format, resized_texture.buffer);
+				create_texture(resized_texture, decoded_texture.format, resized_texture.buffer);
 			}
 		}
 	}
@@ -1226,7 +1233,7 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 	}
 
 	// Free the buffer
-	data->staging_preloaded_textures.FreeBuffer();
+	data->staging_preloaded_textures.Reset();
 
 	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
 	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
@@ -1237,8 +1244,6 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 	FileExplorerData* data = editor_state->file_explorer_data;
 	ResourceManager* resource_manager = ui_system->m_resource_manager;
 
-	// Reserve space for some preloads
-	data->staging_preloaded_textures.ReserveNewElements(8);
 	bool* was_verified = (bool*)ECS_STACK_ALLOC(sizeof(bool) * data->preloaded_textures.size);
 	memset(was_verified, 0, sizeof(bool) * data->preloaded_textures.size);
 
@@ -1280,11 +1285,13 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 
 			// Add this texture to further processing only if it should not be kept alive and there is enough space in the new preloads stream
 			if (!is_alive && data->new_preloads->size < data->new_preloads->capacity) {
-				FileExplorerPreloadTexture preload_texture;
-				preload_texture.last_write_time = file_last_write;
-				preload_texture.path = function::StringCopy(GetAllocatorPolymorphic(editor_allocator), stream_path);
-				preload_texture.texture = nullptr;
-				data->explorer_data->staging_preloaded_textures.Add(preload_texture);
+				if (data->explorer_data->staging_preloaded_textures.size < data->explorer_data->staging_preloaded_textures.capacity) {
+					FileExplorerPreloadTexture preload_texture;
+					preload_texture.last_write_time = file_last_write;
+					preload_texture.path = function::StringCopy(GetAllocatorPolymorphic(editor_allocator), stream_path);
+					preload_texture.texture = nullptr;
+					data->explorer_data->staging_preloaded_textures.Add(preload_texture);
+				}
 			}
 		}
 		return true;
@@ -2168,7 +2175,7 @@ void InitializeFileExplorer(EditorState* editor_state)
 	data->selected_files.Initialize(polymorphic_allocator, FILE_EXPLORER_CURRENT_SELECTED_CAPACITY);
 	data->filter_stream.Initialize(editor_allocator, 0, FILE_EXPLORER_FILTER_CAPACITY);
 	data->preloaded_textures.Initialize(polymorphic_allocator, FILE_EXPLORER_PRELOAD_TEXTURE_INITIAL_COUNT);
-	data->staging_preloaded_textures.Initialize(polymorphic_allocator, 0);
+	data->staging_preloaded_textures.Initialize(polymorphic_allocator, 0, FILE_EXPLORER_STAGING_PRELOAD_TEXTURE_COUNT);
 
 	data->mesh_thumbnails.Initialize(editor_allocator, FILE_EXPLORER_MESH_THUMBNAILS_INITIAL_SIZE);
 

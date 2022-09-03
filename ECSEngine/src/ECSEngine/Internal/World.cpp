@@ -225,21 +225,32 @@ namespace ECSEngine {
 		// Set the task manager tasks now
 		world->task_scheduler->SetTaskManagerTasks(world->task_manager);
 		world->task_scheduler->SetTaskManagerWrapper(world->task_manager);
+		world->task_scheduler->InitializeSchedulerInfo(world);
 
 		world->task_manager->SetWorld(world);
+		// Allow the threads now to steal tasks and spin wait when finishing their dynamic tasks
 		world->task_manager->SetWaitType(ECS_TASK_MANAGER_WAIT_STEAL | ECS_TASK_MANAGER_WAIT_SPIN);
+
+		// Finish the static task registration
+		world->task_manager->FinishStaticTasks();
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
 	void DoFrame(World* world) {
+		// Clear any temporary resources here
+		world->task_manager->ClearFrame();
+		world->task_scheduler->ClearFrame();
+		world->entity_manager->ClearFrame();
+		world->system_manager->ClearFrame();
 
+		world->task_manager->DoFrame();
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
 	void PauseWorld(World* world) {
-
+		world->task_manager->SleepThreads(true);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

@@ -9,42 +9,69 @@
 
 namespace ECSEngine {
 
-	template<typename Asset>
-	struct ReferenceCountedAsset {
-		Asset asset;
-		unsigned int reference_count;
-	};
-
+	// If the file location is not set, when adding the resources, no file is generated
 	struct ECSENGINE_API ECS_REFLECT AssetDatabase {		
 		AssetDatabase() = default;
-		AssetDatabase(Stream<wchar_t> file_location, AllocatorPolymorphic allocator, Reflection::ReflectionManager* reflection_manager);
+		AssetDatabase(AllocatorPolymorphic allocator, const Reflection::ReflectionManager* reflection_manager);
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(AssetDatabase);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddMesh(Stream<char> name);
 
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddMeshInternal(const MeshMetadata* metadata);
+
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddTexture(Stream<char> name);
+
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddTextureInternal(const TextureMetadata* metadata);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddGPUBuffer(Stream<char> name);
 
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddGPUBufferInternal(const GPUBufferMetadata* metadata);
+
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddGPUSampler(Stream<char> name);
+
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddGPUSamplerInternal(const GPUSamplerMetadata* metadata);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddShader(Stream<char> name);
 
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddShaderInternal(const ShaderMetadata* metadata);
+
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddMaterial(Stream<char> name);
+
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddMaterialInternal(const MaterialAsset* metadata);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddMisc(Stream<wchar_t> path);
 
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddMiscInternal(const MiscAsset* metadata);
+
 		// It returns the handle to that asset. If it fails it returns -1
 		// For a misc asset, the path needs to be casted to a char type
 		unsigned int AddAsset(Stream<char> name, ECS_ASSET_TYPE type);
+
+		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
+		// Returns a handle to that asset. Does not verify it it already exists
+		unsigned int AddAssetInternal(const void* asset, ECS_ASSET_TYPE type);
 
 		// It increments by one the reference count for that asset.
 		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
@@ -111,21 +138,37 @@ namespace ECSEngine {
 
 		MeshMetadata* GetMesh(unsigned int handle);
 
+		const MeshMetadata* GetMeshConst(unsigned int handle) const;
+
 		TextureMetadata* GetTexture(unsigned int handle);
+
+		const TextureMetadata* GetTextureConst(unsigned int handle) const;
 
 		GPUBufferMetadata* GetGPUBuffer(unsigned int handle);
 
+		const GPUBufferMetadata* GetGPUBufferConst(unsigned int handle) const;
+ 
 		GPUSamplerMetadata* GetGPUSampler(unsigned int handle);
+
+		const GPUSamplerMetadata* GetGPUSamplerConst(unsigned int handle) const;
 
 		// Can operate on it afterwards, like adding, removing or updating macros
 		ShaderMetadata* GetShader(unsigned int handle);
 
+		const ShaderMetadata* GetShaderConst(unsigned int handle) const;
+
 		// Can operate on it afterwards, like adding or removing resources
 		MaterialAsset* GetMaterial(unsigned int handle);
 
+		const MaterialAsset* GetMaterialConst(unsigned int handle) const;
+
 		MiscAsset* GetMisc(unsigned int handle);
 
+		const MiscAsset* GetMiscConst(unsigned int handle) const;
+
 		void* GetAsset(unsigned int handle, ECS_ASSET_TYPE type);
+		
+		const void* GetAssetConst(unsigned int handle, ECS_ASSET_TYPE type) const;
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
@@ -191,33 +234,46 @@ namespace ECSEngine {
 		// Does not destroy the file
 		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type);
 
+		// Only sets the allocator for the streams, it does not copy the already existing data
+		// (it should not be used for that purpose)
 		void SetAllocator(AllocatorPolymorphic allocator);
 
 		void SetFileLocation(Stream<wchar_t> file_location);
 
 		ECS_FIELDS_START_REFLECT;
 
-		ResizableSparseSet<ReferenceCountedAsset<MeshMetadata>> mesh_metadata;
-		ResizableSparseSet<ReferenceCountedAsset<TextureMetadata>> texture_metadata;
-		ResizableSparseSet<ReferenceCountedAsset<GPUBufferMetadata>> gpu_buffer_metadata;
-		ResizableSparseSet<ReferenceCountedAsset<GPUSamplerMetadata>> gpu_sampler_metadata;
-		ResizableSparseSet<ReferenceCountedAsset<ShaderMetadata>> shader_metadata;
-		ResizableSparseSet<ReferenceCountedAsset<MaterialAsset>> material_asset;
-		ResizableSparseSet<ReferenceCountedAsset<MiscAsset>> misc_asset;
+		ResizableSparseSet<ReferenceCounted<MeshMetadata>> mesh_metadata;
+		ResizableSparseSet<ReferenceCounted<TextureMetadata>> texture_metadata;
+		ResizableSparseSet<ReferenceCounted<GPUBufferMetadata>> gpu_buffer_metadata;
+		ResizableSparseSet<ReferenceCounted<GPUSamplerMetadata>> gpu_sampler_metadata;
+		ResizableSparseSet<ReferenceCounted<ShaderMetadata>> shader_metadata;
+		ResizableSparseSet<ReferenceCounted<MaterialAsset>> material_asset;
+		ResizableSparseSet<ReferenceCounted<MiscAsset>> misc_asset;
 		Stream<wchar_t> file_location;
 
 		ECS_FIELDS_END_REFLECT;
-		Reflection::ReflectionManager* reflection_manager;
+		const Reflection::ReflectionManager* reflection_manager;
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
-
-	// The serialize functions are not needed since they can be called directly upon the database
-	// For the deserialization, some buffer management needs to be made
 	
+	enum ECS_SERIALIZE_CODE : unsigned char;
+
 	enum ECS_DESERIALIZE_CODE : unsigned char;
 
-	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file);
+	// It writes only the names and the paths of the resources that need to be written
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, Stream<wchar_t> file);
+
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, uintptr_t& ptr);
+
+	ECSENGINE_API size_t SerializeAssetDatabaseSize(const AssetDatabase* database);
+
+	// The corresponding metadata files are not loaded
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, Stream<wchar_t> file, bool reference_count_zero = false);
+
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, uintptr_t& ptr, bool reference_count_zero = false);
+
+	ECSENGINE_API size_t DeserializeAssetDatabaseSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr);
 
 	// ------------------------------------------------------------------------------------------------------------
 

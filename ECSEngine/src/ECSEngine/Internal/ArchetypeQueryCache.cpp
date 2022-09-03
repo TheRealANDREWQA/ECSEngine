@@ -35,7 +35,7 @@ namespace ECSEngine {
 		unsigned int index = query_results.count;
 		query_results.components[index] = query;
 
-		ECS_STACK_CAPACITY_STREAM(unsigned short, results, ECS_KB * 8);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, results, ECS_KB * 8);
 		entity_manager->GetArchetypes(query, results);
 		// Allocate a new chunk
 		query_results.results->InitializeAndCopy(allocator, results);
@@ -60,7 +60,7 @@ namespace ECSEngine {
 		unsigned int index = exclude_query_results.count;
 		exclude_query_results.components[index] = query;
 
-		ECS_STACK_CAPACITY_STREAM(unsigned short, results, ECS_KB * 8);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, results, ECS_KB * 8);
 		entity_manager->GetArchetypesExclude(query, results);
 		// Allocate a new chunk
 		exclude_query_results.results->InitializeAndCopy(allocator, results);
@@ -72,10 +72,10 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	Stream<unsigned short> ArchetypeQueryCache::GetResults(unsigned int handle) const
+	Stream<unsigned int> ArchetypeQueryCache::GetResults(unsigned int handle) const
 	{
 		// This stream is used by the crash functions to "return" a value.
-		Stream<unsigned short> result = { nullptr, 0 };
+		Stream<unsigned int> result = { nullptr, 0 };
 		ECS_CRASH_RETURN_VALUE(handle != -1, result, "Handle is empty for archetype query cache.");
 
 		if (handle >= EXCLUDE_HANDLE_OFFSET) {
@@ -140,7 +140,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	void ArchetypeQueryCache::GetResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const
+	void ArchetypeQueryCache::GetResultsAndComponents(unsigned int handle, Stream<unsigned int>& results, ArchetypeQuery& query) const
 	{
 		ECS_CRASH_RETURN(handle != -1, "Handle is empty for archetype query cache.");
 
@@ -199,19 +199,19 @@ namespace ECSEngine {
 
 	void ArchetypeQueryCache::Resize(unsigned int new_capacity)
 	{
-		Stream<unsigned short>* old_results = query_results.results;
+		Stream<unsigned int>* old_results = query_results.results;
 		ArchetypeQuery* old_components = query_results.components;
 
-		size_t allocation_size = (sizeof(Stream<unsigned short>) + sizeof(ArchetypeQuery)) * new_capacity;
+		size_t allocation_size = (sizeof(Stream<unsigned int>) + sizeof(ArchetypeQuery)) * new_capacity;
 		void* allocation = Allocate(allocator, allocation_size);
 
-		query_results.results = (Stream<unsigned short>*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(Stream<unsigned short>) * new_capacity);
+		query_results.results = (Stream<unsigned int>*)allocation;
+		allocation = function::OffsetPointer(allocation, sizeof(Stream<unsigned int>) * new_capacity);
 
 		query_results.components = (ArchetypeQuery*)allocation;
 
 		if (query_results.count > 0) {
-			memcpy(query_results.results, old_results, sizeof(Stream<unsigned short>) * query_results.count);
+			memcpy(query_results.results, old_results, sizeof(Stream<unsigned int>) * query_results.count);
 			memcpy(query_results.components, old_components, sizeof(ArchetypeQuery) * query_results.count);
 
 			Deallocate(allocator, old_results);
@@ -224,19 +224,19 @@ namespace ECSEngine {
 
 	void ArchetypeQueryCache::ResizeExclude(unsigned int new_capacity)
 	{
-		Stream<unsigned short>* old_results = exclude_query_results.results;
+		Stream<unsigned int>* old_results = exclude_query_results.results;
 		ArchetypeQueryExclude* old_components = exclude_query_results.components;
 
-		size_t allocation_size = (sizeof(Stream<unsigned short>) + sizeof(ArchetypeQueryExclude)) * new_capacity;
+		size_t allocation_size = (sizeof(Stream<unsigned int>) + sizeof(ArchetypeQueryExclude)) * new_capacity;
 		void* allocation = Allocate(allocator, allocation_size);
 
-		exclude_query_results.results = (Stream<unsigned short>*)allocation;
-		allocation = function::OffsetPointer(allocation, sizeof(Stream<unsigned short>) * new_capacity);
+		exclude_query_results.results = (Stream<unsigned int>*)allocation;
+		allocation = function::OffsetPointer(allocation, sizeof(Stream<unsigned int>) * new_capacity);
 
 		exclude_query_results.components = (ArchetypeQueryExclude*)allocation;
 
 		if (exclude_query_results.count > 0) {
-			memcpy(exclude_query_results.results, old_results, sizeof(Stream<unsigned short>) * exclude_query_results.count);
+			memcpy(exclude_query_results.results, old_results, sizeof(Stream<unsigned int>) * exclude_query_results.count);
 			memcpy(exclude_query_results.components, old_components, sizeof(ArchetypeQuery) * exclude_query_results.count);
 
 			Deallocate(allocator, old_results);
@@ -247,15 +247,15 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	void ArchetypeQueryCache::UpdateAdd(unsigned short new_archetype_index)
+	void ArchetypeQueryCache::UpdateAdd(unsigned int new_archetype_index)
 	{
 		// Get the query
 		ArchetypeQuery query(entity_manager->GetArchetypeUniqueComponents(new_archetype_index), entity_manager->GetArchetypeSharedComponents(new_archetype_index));
 
 		const size_t STACK_CAPACITY = ECS_KB * 8;
-		ECS_STACK_CAPACITY_STREAM(unsigned short, temporary_values, STACK_CAPACITY);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, temporary_values, STACK_CAPACITY);
 
-		auto allocate_new_value = [&](Stream<unsigned short>& results) {
+		auto allocate_new_value = [&](Stream<unsigned int>& results) {
 			// Add it to the stream
 			// Copy first into a stack stream in order to deallocate first and then allocate
 			// It will help with fragmentation
@@ -284,14 +284,14 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	void ArchetypeQueryCache::UpdateRemove(unsigned short archetype_index)
+	void ArchetypeQueryCache::UpdateRemove(unsigned int archetype_index)
 	{
 		// Can use a simd search for this
 		const size_t STACK_CAPACITY = ECS_KB * 8;
-		ECS_STACK_CAPACITY_STREAM(unsigned short, temporary_values, STACK_CAPACITY);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, temporary_values, STACK_CAPACITY);
 
-		auto loop_iteration = [&](Stream<unsigned short>& values) {
-			size_t result_index = function::SearchBytes(values.buffer, values.size, &archetype_index, sizeof(unsigned short));
+		auto loop_iteration = [&](Stream<unsigned int>& values) {
+			size_t result_index = function::SearchBytes(values.buffer, values.size, archetype_index, sizeof(unsigned int));
 			if (result_index != -1) {
 				values.RemoveSwapBack(result_index);
 
@@ -315,13 +315,13 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	void ArchetypeQueryCache::Update(Stream<unsigned short> new_archetypes, Stream<unsigned short> remove_archetypes)
+	void ArchetypeQueryCache::Update(Stream<unsigned int> new_archetypes, Stream<unsigned int> remove_archetypes)
 	{
 		// The checks can be coallesced
-		ECS_STACK_CAPACITY_STREAM(unsigned short, new_additions_for_query, ECS_KB);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, new_additions_for_query, ECS_KB);
 
 		const size_t STACK_CAPACITY = ECS_KB * 8;
-		ECS_STACK_CAPACITY_STREAM(unsigned short, temporary_values, STACK_CAPACITY);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, temporary_values, STACK_CAPACITY);
 
 		auto loop = [&](auto& query_results) {
 			for (unsigned int index = 0; index < query_results.count; index++) {
@@ -333,8 +333,8 @@ namespace ECSEngine {
 					size_t result_index = function::SearchBytes(
 						query_results.results[index].buffer,
 						query_results.results[index].size,
-						remove_archetypes.buffer + removal_index,
-						sizeof(unsigned short)
+						remove_archetypes[removal_index],
+						sizeof(unsigned int)
 					);
 					if (result_index != -1) {
 						query_results.results[index].RemoveSwapBack(result_index);

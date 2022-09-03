@@ -52,7 +52,7 @@ namespace ECSEngine {
 			v[1] = _v2;
 		}
 
-		ECS_INLINE ECS_VECTORCALL Matrix(const Matrix& other) = default;
+		ECS_INLINE Matrix(const Matrix& other) = default;
 		ECS_INLINE Matrix& ECS_VECTORCALL operator = (const Matrix& other) = default;
 
 		ECS_INLINE bool ECS_VECTORCALL operator == (Matrix other) {

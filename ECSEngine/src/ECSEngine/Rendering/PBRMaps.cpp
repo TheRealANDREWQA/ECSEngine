@@ -24,10 +24,10 @@ namespace ECSEngine {
 
 		// The format of the cube texture is RGBA16F
 		GraphicsTextureCubeDescriptor cube_descriptor;
-		cube_descriptor.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		cube_descriptor.format = ECS_GRAPHICS_FORMAT_RGBA16_FLOAT;
 		cube_descriptor.size = dimensions;
 		cube_descriptor.mip_levels = 1;
-		cube_descriptor.bind_flag = (D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		cube_descriptor.bind_flag = GetGraphicsBindFromNative(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
 		cube = graphics->CreateTexture(&cube_descriptor);
 
 		RenderTargetView previous_target = graphics->GetBoundRenderTarget();
@@ -39,13 +39,8 @@ namespace ECSEngine {
 			target_views[index] = graphics->CreateRenderTargetView(cube, (TextureCubeFace)index, 0, true);
 		}
 
-		D3D11_SAMPLER_DESC sampler_descriptor = {};
-		sampler_descriptor.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-		sampler_descriptor.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-		sampler_descriptor.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-		sampler_descriptor.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler_descriptor.MinLOD = 0;
-		sampler_descriptor.MaxLOD = D3D11_FLOAT32_MAX;
+		SamplerDescriptor sampler_descriptor;
+		sampler_descriptor.SetAddressType(ECS_SAMPLER_ADDRESS_CLAMP);
 		SamplerState sampler = graphics->CreateSamplerState(sampler_descriptor, true);
 
 		graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_CREATE_DIFFUSE_ENVIRONMENT);
@@ -116,20 +111,15 @@ namespace ECSEngine {
 		float face_resolution = (float)environment_descriptor.Width;
 		ConstantBuffer resolution_buffer = graphics->CreateConstantBuffer(sizeof(float), &face_resolution, true);
 
-		D3D11_SAMPLER_DESC sampler_desc = {};
-		sampler_desc.MinLOD = 0;
-		sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
-		sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-		sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-		sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+		SamplerDescriptor sampler_desc;
+		sampler_desc.SetAddressType(ECS_SAMPLER_ADDRESS_CLAMP);
 		SamplerState sampler_state = graphics->CreateSamplerState(sampler_desc, true);
 
 		// The format of the cube texture is RGBA16F
 		GraphicsTextureCubeDescriptor cube_descriptor;
-		cube_descriptor.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		cube_descriptor.format = ECS_GRAPHICS_FORMAT_RGBA16_FLOAT;
 		cube_descriptor.size = dimensions;
-		cube_descriptor.bind_flag = (D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		cube_descriptor.bind_flag = GetGraphicsBindFromNative(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
 		cube = graphics->CreateTexture(&cube_descriptor);
 
 		RenderTargetView previous_target = graphics->GetBoundRenderTarget();
@@ -219,9 +209,9 @@ namespace ECSEngine {
 
 		GraphicsTexture2DDescriptor descriptor;
 		descriptor.size = dimensions;
-		descriptor.format = DXGI_FORMAT_R16G16_FLOAT;
-		descriptor.bind_flag = (D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
-		descriptor.misc_flag = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+		descriptor.format = ECS_GRAPHICS_FORMAT_RG16_FLOAT;
+		descriptor.bind_flag = GetGraphicsBindFromNative(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		descriptor.misc_flag = ECS_GRAPHICS_MISC_GENERATE_MIPS;
 		descriptor.mip_levels = 0;
 		texture = graphics->CreateTexture(&descriptor);
 

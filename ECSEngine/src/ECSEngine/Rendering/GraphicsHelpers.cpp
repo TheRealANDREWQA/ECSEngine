@@ -171,7 +171,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		buffer_descriptor.Usage = D3D11_USAGE_STAGING;
 		buffer_descriptor.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 		buffer_descriptor.BindFlags = 0;
-		buffer_descriptor.MiscFlags = function::ClearFlag(buffer_descriptor.MiscFlags, D3D11_RESOURCE_MISC_SHARED);
+		buffer_descriptor.MiscFlags = function::ClearFlag(buffer_descriptor.MiscFlags, ECS_GRAPHICS_MISC_SHARED);
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, nullptr, &_new_buffer);
@@ -219,7 +219,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, graphics->GetContext(), D3D11_MAP_READ, index, 0);
+			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ, index, 0);
 			subresource_data[index].pSysMem = resource.pData;
 			subresource_data[index].SysMemPitch = resource.RowPitch;
 			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
@@ -259,7 +259,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		}
 
 		D3D11_SUBRESOURCE_DATA subresource_data;
-		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(staging_buffer.buffer, graphics->GetContext(), D3D11_MAP_READ);
+		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(staging_buffer.buffer, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
 		subresource_data.pSysMem = resource.pData;
 		subresource_data.SysMemPitch = resource.RowPitch;
 		subresource_data.SysMemSlicePitch = resource.DepthPitch;
@@ -299,7 +299,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		D3D11_SUBRESOURCE_DATA subresource_data[MAX_SUBRESOURCES];
 		for (size_t index = 0; index < texture_descriptor.MipLevels; index++) {
-			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, graphics->GetContext(), D3D11_MAP_READ, index, 0);
+			D3D11_MAPPED_SUBRESOURCE resource = MapTextureEx(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ, index, 0);
 			subresource_data[index].pSysMem = resource.pData;
 			subresource_data[index].SysMemPitch = resource.RowPitch;
 			subresource_data[index].SysMemSlicePitch = resource.DepthPitch;
@@ -332,7 +332,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	
 
 		D3D11_SUBRESOURCE_DATA subresource_data;
-		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(buffer.buffer, graphics->GetContext(), D3D11_MAP_READ);
+		D3D11_MAPPED_SUBRESOURCE resource = MapBufferEx(buffer.buffer, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
 		subresource_data.pSysMem = resource.pData;
 		subresource_data.SysMemPitch = resource.RowPitch;
 		subresource_data.SysMemSlicePitch = resource.DepthPitch;
@@ -361,7 +361,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	Texture2D ResizeTextureWithStaging(Graphics* graphics, Texture2D texture, size_t new_width, size_t new_height, size_t resize_flag, bool temporary)
 	{
 		Texture2D staging_texture = TextureToStaging(graphics, texture);
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, graphics->GetContext(), D3D11_MAP_READ);
+		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(staging_texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
 		Texture2D new_texture = ResizeTexture(graphics, first_mip.pData, texture, new_width, new_height, { nullptr }, resize_flag, temporary);
 		UnmapTexture(staging_texture, graphics->GetContext());
 		staging_texture.Release();
@@ -374,7 +374,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	{
 		Texture2D result;
 
-		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, graphics->GetContext(), D3D11_MAP_READ);
+		D3D11_MAPPED_SUBRESOURCE first_mip = MapTextureEx(texture, graphics->GetContext(), ECS_GRAPHICS_MAP_READ);
 		result = ResizeTexture(graphics, first_mip.pData, texture, new_width, new_height, {nullptr}, resize_flag, temporary);
 		UnmapTexture(texture, graphics->GetContext());
 		return result;
@@ -482,13 +482,13 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	Stream<void> ResizeTexture(void* texture_data, size_t current_width, size_t current_height, DXGI_FORMAT format, size_t new_width, size_t new_height, AllocatorPolymorphic allocator, size_t resize_flags)
+	Stream<void> ResizeTexture(void* texture_data, size_t current_width, size_t current_height, ECS_GRAPHICS_FORMAT format, size_t new_width, size_t new_height, AllocatorPolymorphic allocator, size_t resize_flags)
 	{
 		Stream<void> data = { nullptr, 0 };
 
 		DirectX::Image dx_image;
 		dx_image.pixels = (uint8_t*)texture_data;
-		dx_image.format = format;
+		dx_image.format = GetGraphicsNativeFormat(format);
 		dx_image.width = current_width;
 		dx_image.height = current_height;
 		HRESULT result = DirectX::ComputePitch(dx_image.format, dx_image.width, dx_image.height, dx_image.rowPitch, dx_image.slicePitch);
@@ -527,7 +527,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags)
 	{
-		DecodedTexture new_data = { { nullptr, 0 }, 0, 0, DXGI_FORMAT_FORCE_UINT };
+		DecodedTexture new_data = { { nullptr, 0 }, 0, 0, ECS_GRAPHICS_FORMAT_UNKNOWN };
 
 		DirectX::ScratchImage image;
 		SetInternalImageAllocator(&image, allocator);
@@ -550,7 +550,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		}
 
 		new_data.data = { image.GetPixels(), image.GetPixelsSize() };
-		new_data.format = metadata.format;
+		new_data.format = GetGraphicsFormatFromNative(metadata.format);
 		new_data.height = metadata.height;
 		new_data.width = metadata.width;
 		image.DetachPixels();
@@ -588,7 +588,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 			VertexBuffer staging = BufferToStaging(graphics, buffer);
 
 			// Map the buffer
-			float3* data = (float3*)graphics->MapBuffer(staging.buffer, D3D11_MAP_READ_WRITE);
+			float3* data = (float3*)graphics->MapBuffer(staging.buffer, ECS_GRAPHICS_MAP_READ_WRITE);
 
 			// Modify the data
 			for (size_t index = 0; index < staging.size; index++) {
@@ -604,9 +604,9 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 				buffer.size,
 				data, 
 				false, 
-				buffer_descriptor.Usage,
-				buffer_descriptor.CPUAccessFlags, 
-				buffer_descriptor.MiscFlags
+				GetGraphicsUsageFromNative(buffer_descriptor.Usage),
+				GetGraphicsCPUAccessFromNative(buffer_descriptor.CPUAccessFlags), 
+				GetGraphicsMiscFlagsFromNative(buffer_descriptor.MiscFlags)
 			);
 
 			// Unmap the buffer
@@ -629,7 +629,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		// Invert the winding order
 		IndexBuffer staging_index = BufferToStaging(graphics, mesh.index_buffer);
 
-		void* _indices = graphics->MapBuffer(staging_index.buffer, D3D11_MAP_READ_WRITE);
+		void* _indices = graphics->MapBuffer(staging_index.buffer, ECS_GRAPHICS_MAP_READ_WRITE);
 
 		// Create an index buffer with the same specification
 		D3D11_BUFFER_DESC index_descriptor;
@@ -665,7 +665,13 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 			}
 		}
 
-		IndexBuffer new_indices = graphics->CreateIndexBuffer(staging_index.int_size, staging_index.count, false, index_descriptor.Usage, index_descriptor.CPUAccessFlags);
+		IndexBuffer new_indices = graphics->CreateIndexBuffer(
+			staging_index.int_size, 
+			staging_index.count, 
+			false, 
+			GetGraphicsUsageFromNative(index_descriptor.Usage), 
+			GetGraphicsCPUAccessFromNative(index_descriptor.CPUAccessFlags)
+		);
 
 		// Release the old buffers
 		staging_index.Release();
@@ -676,17 +682,24 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	//ECS_OPTIMIZE_START;
+
 	template<int index>
-	Vec32uc ECS_VECTORCALL ConvertSingleChannelTextureToGrayscaleSplat(Vec32uc samples) {
+	ECS_INLINE Vec32uc ECS_VECTORCALL ConvertSingleChannelTextureToGrayscaleSplat(Vec32uc samples) {
 		return permute32<index, index, index, V_DC, index + 1, index + 1, index + 1, V_DC, index + 2, index + 2, index + 2, V_DC, index + 3, index + 3, index + 3, V_DC,
 			index + 4, index + 4, index + 4, V_DC, index + 5, index + 5, index + 5, V_DC, index + 6, index + 6, index + 6, V_DC, index + 7, index + 7, index + 7, V_DC>(samples);
 	}
 
-	Vec32uc ECS_VECTORCALL ConvertSingleChannelTextureToGrayscaleBlend(Vec32uc values, Vec32uc alpha) {
+	ECS_INLINE Vec32uc ECS_VECTORCALL ConvertSingleChannelTextureToGrayscaleBlend(Vec32uc values, Vec32uc alpha) {
 		return blend32<0, 1, 2, 35, 4, 5, 6, 39, 8, 9, 10, 43, 12, 13, 14, 47, 16, 17, 18, 51, 20, 21, 22, 55, 24, 25, 26, 59, 28, 29, 30, 63>(values, alpha);
 	}
 
-	Stream<Stream<void>> ConvertSingleChannelTextureToGrayscale(Stream<Stream<void>> mip_data, size_t width, size_t height, AllocatorPolymorphic allocator)
+	Stream<Stream<void>> ConvertSingleChannelTextureToGrayscale(
+		Stream<Stream<void>> mip_data,
+		size_t width, 
+		size_t height, 
+		AllocatorPolymorphic allocator
+	)
 	{
 		// First determine the total amount of memory needed to transform the mip maps
 		size_t total_data_size = 0;
@@ -759,6 +772,48 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	Stream<Stream<void>> ConvertTextureToGrayscale(
+		Stream<Stream<void>> mip_data,
+		size_t width,
+		size_t height,
+		size_t channel_count,
+		size_t channel_to_copy, 
+		AllocatorPolymorphic allocator
+	)
+	{
+		// First determine the total amount of memory needed to transform the mip maps
+		size_t total_data_size = 0;
+		for (size_t index = 0; index < mip_data.size; index++) {
+			total_data_size += mip_data[index].size / channel_count;
+		}
+
+		// Add the streams necessary to the allocation
+		total_data_size += sizeof(Stream<void>) * mip_data.size;
+
+		Stream<void>* streams = (Stream<void>*)AllocateEx(allocator, total_data_size);
+
+		uintptr_t buffer = (uintptr_t)streams;
+		buffer += sizeof(Stream<void>) * mip_data.size;
+
+		// Initialize the streams
+		for (size_t index = 0; index < mip_data.size; index++) {
+			streams[index].InitializeFromBuffer(buffer, mip_data[index].size / channel_count);
+		}
+
+		// At the moment use just a scalar version. If needed add a SIMD version
+		for (size_t index = 0; index < mip_data.size; index++) {
+			unsigned char* values = (unsigned char*)streams[index].buffer;
+			unsigned char* copy_values = (unsigned char*)mip_data[index].buffer;
+			for (size_t pixel_index = 0; pixel_index < streams[index].size; pixel_index++) {
+				values[pixel_index] = copy_values[pixel_index * channel_count + channel_to_copy];
+			}
+		}
+
+		return { streams, mip_data.size };
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	TextureCube ConvertTexturesToCube(
 		Graphics* graphics,
 		Texture2D x_positive,
@@ -806,14 +861,14 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	TextureCube ConvertTextureToCube(Graphics* graphics, ResourceView texture_view, DXGI_FORMAT cube_format, uint2 face_size, bool temporary)
+	TextureCube ConvertTextureToCube(Graphics* graphics, ResourceView texture_view, ECS_GRAPHICS_FORMAT cube_format, uint2 face_size, bool temporary)
 	{
 		TextureCube cube;
 		
 		// Create the 6 faces as render targets
 		GraphicsTexture2DDescriptor texture_descriptor;
 		texture_descriptor.format = cube_format;
-		texture_descriptor.bind_flag = static_cast<D3D11_BIND_FLAG>(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
+		texture_descriptor.bind_flag = GetGraphicsBindFromNative((D3D11_BIND_FLAG)(D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE));
 		texture_descriptor.size = face_size;
 		texture_descriptor.mip_levels = 0;
 

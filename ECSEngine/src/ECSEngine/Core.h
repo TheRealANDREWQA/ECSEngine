@@ -45,13 +45,15 @@ namespace ECSEngine {
 
 #define STRING(s) #s
 // Places the type followed by a comma with the stringified name
-#define WITH_NAME(type) type, ##type
+#define WITH_NAME(type) type, STRING(type)
 #define ECS_CACHE_LINE_SIZE 64
 #define ECS_MICROSOFT_WRL using namespace Microsoft::WRL
 #define ECS_VECTORCALL __vectorcall
 #define ECS_INLINE __forceinline
 #define ECS_NOINLINE __declspec(noinline)
 #define ECS_RESTRICT __restrict
+#define ECS_OPTIMIZE_START _Pragma("optimize(\"\", on )")
+#define ECS_OPTIMIZE_END _Pragma("optimize(\"\", off )")
 
 #define ECS_BIT(bit_index) (1 << bit_index)
 

@@ -139,6 +139,10 @@ namespace ECSEngine {
 
 		void CreateThreads();
 
+		// Clears any temporary resources and returns the static task index 
+		// to the beginning of the stream
+		void ClearFrame();
+
 		// It will call ExitThread to kill the thread. It does so by adding a dynamic task and waking the thread
 		// This helps eliminate dangerous state changes that are not fully commited, like writing files, modifying global state,
 		// locks or allocations
@@ -154,8 +158,9 @@ namespace ECSEngine {
 		// Invokes the wrapper first
 		void ExecuteDynamicTask(ThreadTask task, unsigned int thread_id);
 
-		// Resets any temporary resources that were used during the frame
-		void EndFrame();
+		// Inserts a guard task at the end which will anounce the main thread
+		// when all the tasks have been finished
+		void FinishStaticTasks();
 
 		void IncrementThreadTaskIndex();
 
@@ -187,6 +192,11 @@ namespace ECSEngine {
 		void SetThreadTaskIndex(int value);
 
 		void SleepThread(unsigned int thread_id);
+
+		// This function puts all threads into sleep even when the wait type is set to
+		// spin wait. You can choose to sleep until all threads have gone to sleep
+		// or just push the dynamic tasks
+		void SleepThreads(bool wait_until_all_sleep = true);
 
 		// Max period is expressed as the amount of milliseconds that the thread waits at most
 		void SleepUntilDynamicTasksFinish(size_t max_period = ULLONG_MAX);
@@ -240,7 +250,7 @@ namespace ECSEngine {
 		ECS_TASK_MANAGER_WAIT_TYPE m_wait_type;
 
 		// When all the static tasks and their spawned dynamic tasks are finished, it will set this variable to 0
-		std::atomic<unsigned char> m_is_frame_done;
+		ConditionVariable m_is_frame_done;
 
 		ConditionVariable* m_sleep_wait;
 

@@ -53,6 +53,8 @@ namespace ECSEngine {
 
 		void Copy(Stream<TaskSchedulerElement> stream, bool copy_data = false);
 
+		void ClearFrame();
+
 		unsigned int GetCurrentQueryIndex() const;
 
 		const TaskSchedulerInfo* GetCurrentQueryInfo() const;

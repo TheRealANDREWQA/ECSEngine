@@ -1,7 +1,7 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-constexpr const char* SANDBOX_EXPLORER_WINDOW_NAME = "Sandbox Explorer";
+#define SANDBOX_EXPLORER_WINDOW_NAME "Sandbox Explorer"
 
 struct EditorState;
 

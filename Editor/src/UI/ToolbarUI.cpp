@@ -16,6 +16,7 @@
 #include "Inspector.h"
 #include "Backups.h"
 #include "Sandbox.h"
+#include "EntitiesUI.h"
 
 #endif
 
@@ -110,8 +111,6 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 #pragma region Windows
 
 		// The action data is the inject data + the window name
-		data->window_actions[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { CreateInjectValuesAction, &editor_state->inject_data, 0, ECS_UI_DRAW_SYSTEM };
-		data->window_actions[TOOLBAR_WINDOW_MENU_GAME] = { CreateGameAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_CONSOLE] = { CreateConsoleAction, GetConsole(), 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { CreateDirectoryExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
@@ -119,8 +118,11 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		data->window_actions[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { CreateSandboxExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { CreateEntitiesUIAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+
 		data->sandbox_ui_handlers.size = 0;
 		
+		// The sandbox UI needs to be handled separately
 		for (size_t index = 0; index < TOOLBAR_WINDOW_MENU_COUNT; index++) {
 			data->window_has_submenu[index] = false;
 			data->window_submenu_unavailable[index] = false;

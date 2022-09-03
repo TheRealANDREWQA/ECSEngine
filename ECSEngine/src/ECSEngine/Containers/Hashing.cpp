@@ -60,4 +60,20 @@ namespace ECSEngine {
 		return sum * (unsigned int)size;
 	}
 
+	Vec32cb ECS_VECTORCALL HashTableFindSIMDKernel(unsigned int index, unsigned char* m_metadata, unsigned char key_hash_bits, unsigned char hash_bits_mask) {
+		// The SIMD registers are way slower in non optimized builds
+		Vec32uc key_bits(key_hash_bits), elements, ignore_distance(hash_bits_mask);
+		// Only elements that hashed to this slot should be checked
+		Vec32uc corresponding_distance(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
+
+		// Exclude elements that have distance different from the distance to the current slot
+		elements.load(m_metadata + index);
+		Vec32uc element_hash_bits = elements & ignore_distance;
+		auto are_hashed_to_same_slot = (elements >> 3) == corresponding_distance;
+		auto match = element_hash_bits == key_bits;
+		match &= are_hashed_to_same_slot;
+
+		return match;
+	}
+
 }

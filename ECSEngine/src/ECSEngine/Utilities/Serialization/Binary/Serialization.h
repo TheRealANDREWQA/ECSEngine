@@ -35,15 +35,36 @@ namespace ECSEngine {
 
 		unsigned int FieldIndex(unsigned int type_index, Stream<char> field_name) const;
 
+		// Returns true if the reflected type is the same as the one in the file
+		bool IsUnchanged(unsigned int type_index, const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type) const;
+
 		Stream<Type> types;
 		// Each serializer has the version written at the beginning
 		Stream<unsigned int> custom_serializers;
 	};
 
+	struct SerializeOmitField {
+		Stream<char> type;
+		Stream<char> name;
+	};
+
+	ECSENGINE_API bool SerializeShouldOmitField(Stream<char> type, Stream<char> name, Stream<SerializeOmitField> omit_fields);
+
+	ECSENGINE_API bool AssetSerializeOmitFieldsExist(const Reflection::ReflectionManager* reflection_manager, Stream<SerializeOmitField> omit_fields);
+
+	// Based on which fields to keep, it will populate all the omit fields such that only the given fields will be selected
+	ECSENGINE_API void GetSerializeOmitFieldsFromExclude(
+		const Reflection::ReflectionManager* reflection_manager, 
+		CapacityStream<SerializeOmitField>& omit_fields,
+		Stream<char> type_name,
+		Stream<Stream<char>> fields_to_keep
+	);
+
 	// Header: optionally write a header into the serialization
 	// Write_Type_Table: write at the beginning of the section the field names and the corresponding types
 	// Verify_Dependent_Types: if you want to skip the check, set this to false
 	// Allocator: an allocator to be used for writing the whole data in memory for commiting then into a file
+	// OmitFields: optionally tell the serializer to omit fields of certain types
 	// Error_Message: a stream where the error message will be written if an error occurs
 	struct SerializeOptions {
 		Stream<void> header = { nullptr, 0 };
@@ -51,6 +72,7 @@ namespace ECSEngine {
 		bool verify_dependent_types = true;
 
 		AllocatorPolymorphic allocator = { nullptr };
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
 
 		CapacityStream<char>* error_message = nullptr;
 	};
@@ -64,6 +86,7 @@ namespace ECSEngine {
 	// Use_Resizable_Stream_Allocator: use the allocator set for that stream instead of the given field_allocator
 	// Validate_Header: a function that can reject the data if the header is not valid
 	// Validate_Header_Data: data transmitted to the function
+	// OmitFields: optionally tell the deserializer to ignore certain fields
 	// File_Allocator: an allocator to be used to read the whole file into memory
 	// Field_Allocator: an allocator to be used to read off streams of data into the fields
 	// Backup Allocator: an allocator to be used if there are incompatible user defined types
@@ -83,6 +106,8 @@ namespace ECSEngine {
 
 		DeserializeValidateHeader validate_header = nullptr;
 		void* validate_header_data = nullptr;
+
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
 		
 		AllocatorPolymorphic file_allocator = { nullptr };
 		AllocatorPolymorphic field_allocator = { nullptr };
@@ -107,7 +132,11 @@ namespace ECSEngine {
 	};
 
 	// Takes into consideration the custom serializer aswell
-	ECSENGINE_API bool SerializeHasDependentTypes(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type);
+	ECSENGINE_API bool SerializeHasDependentTypes(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type, 
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
+	);
 
 	// Serializes into a temporary memory buffer, then commits to the file
 	// Allocator nullptr means use malloc
@@ -140,12 +169,14 @@ namespace ECSEngine {
 	ECSENGINE_API void SerializeFieldTable(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
-		uintptr_t& stream
-	);
+		uintptr_t& stream,
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
+	); 
 
 	ECSENGINE_API size_t SerializeFieldTableSize(
 		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type
+		const Reflection::ReflectionType* type,
+		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
 	);
 
 	// It reads the whole file into a temporary buffer and then deserializes from memory

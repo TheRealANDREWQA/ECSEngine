@@ -6,6 +6,12 @@
 
 namespace ECSEngine {
 
+	template<typename T>
+	struct ReferenceCounted {
+		T value;
+		unsigned int reference_count;
+	};
+
 	struct Date {
 		unsigned char month;
 		unsigned char day;

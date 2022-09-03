@@ -2,6 +2,13 @@
 #include "AssetDatabaseReference.h"
 #include "AssetDatabase.h"
 
+#include "../../Allocators/ResizableLinearAllocator.h"
+#include "../../Utilities/File.h"
+#include "../../Utilities/Reflection/Reflection.h"
+#include "../../Utilities/Serialization/Binary/Serialization.h"
+#include "../../Utilities/Serialization/SerializationHelpers.h"
+#include "AssetMetadataSerialize.h"
+
 namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
@@ -241,6 +248,159 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------
+
+	void AssetDatabaseReference::ToStandalone(AllocatorPolymorphic allocator, AssetDatabase* out_database) const {
+		out_database->SetAllocator(allocator);
+
+		out_database->SetFileLocation({ nullptr, 0 });
+		out_database->mesh_metadata.ResizeNoCopy(mesh_metadata.size);
+		out_database->texture_metadata.ResizeNoCopy(texture_metadata.size);
+		out_database->gpu_buffer_metadata.ResizeNoCopy(gpu_buffer_metadata.size);
+		out_database->gpu_sampler_metadata.ResizeNoCopy(gpu_sampler_metadata.size);
+		out_database->shader_metadata.ResizeNoCopy(shader_metadata.size);
+		out_database->material_asset.ResizeNoCopy(material_asset.size);
+		out_database->misc_asset.ResizeNoCopy(misc_asset.size);
+
+		auto set_value = [&](auto stream, ECS_ASSET_TYPE type) {
+			for (unsigned int index = 0; index < stream.size; index++) {
+				out_database->AddAssetInternal(database->GetAsset(stream[index], type), type);
+			}
+		};
+
+		set_value(mesh_metadata, ECS_ASSET_MESH);
+		set_value(texture_metadata, ECS_ASSET_TEXTURE);
+		set_value(gpu_buffer_metadata, ECS_ASSET_GPU_BUFFER);
+		set_value(gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
+		set_value(shader_metadata, ECS_ASSET_SHADER);
+		set_value(material_asset, ECS_ASSET_MATERIAL);
+		set_value(misc_asset, ECS_ASSET_MISC);
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	void AssetDatabaseReference::FromStandalone(const AssetDatabase* standalone_database) {
+		mesh_metadata.ResizeNoCopy(standalone_database->mesh_metadata.set.size);
+		texture_metadata.ResizeNoCopy(standalone_database->texture_metadata.set.size);
+		gpu_buffer_metadata.ResizeNoCopy(standalone_database->gpu_buffer_metadata.set.size);
+		gpu_sampler_metadata.ResizeNoCopy(standalone_database->gpu_sampler_metadata.set.size);
+		shader_metadata.ResizeNoCopy(standalone_database->shader_metadata.set.size);
+		material_asset.ResizeNoCopy(standalone_database->material_asset.set.size);
+		misc_asset.ResizeNoCopy(standalone_database->misc_asset.set.size);
+
+		auto set_values = [&](const auto& metadata, auto& stream_metadata, ECS_ASSET_TYPE asset_type) {
+			auto stream = metadata.set.ToStream();
+			for (size_t index = 0; index < stream.size; index++) {
+				stream_metadata[index] = database->AddAsset(stream[index].value.name, asset_type);
+			}
+		};
+
+		set_values(standalone_database->mesh_metadata, mesh_metadata, ECS_ASSET_MESH);
+		set_values(standalone_database->texture_metadata, texture_metadata, ECS_ASSET_TEXTURE);
+		set_values(standalone_database->gpu_buffer_metadata, gpu_buffer_metadata, ECS_ASSET_GPU_BUFFER);
+		set_values(standalone_database->gpu_sampler_metadata, gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
+		set_values(standalone_database->shader_metadata, shader_metadata, ECS_ASSET_SHADER);
+		set_values(standalone_database->material_asset, material_asset, ECS_ASSET_MATERIAL);
+
+		// The misc asset needs to be handled separately because the member name is path
+		auto misc_stream = standalone_database->misc_asset.set.ToStream();
+		for (size_t index = 0; index < misc_stream.size; index++) {
+			misc_asset[index] = database->AddMisc(misc_stream[index].value.path);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	template<typename Functor>
+	size_t SerializeStandalone(
+		const AssetDatabaseReference* reference,
+		const Reflection::ReflectionManager* reflection_manager, 
+		Functor&& functor
+	) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 256, ECS_MB);
+		AssetDatabase temp_database;
+
+		temp_database.reflection_manager = reflection_manager;
+		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
+		reference->ToStandalone(allocator_polymorphic, &temp_database);
+
+		SetSerializeCustomSparsetSet();
+		size_t return_value = functor(&temp_database);
+		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET);
+
+		temp_allocator.ClearBackup();
+		return return_value;
+	}
+
+	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) const {
+		return (bool)ECSEngine::SerializeStandalone(this, reflection_manager, [&](const AssetDatabase* out_database) {
+			return SerializeAssetDatabase(out_database, file);
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) const {
+		return (bool)ECSEngine::SerializeStandalone(this, reflection_manager, [&](const AssetDatabase* out_database) {
+			return SerializeAssetDatabase(out_database, ptr);
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	size_t AssetDatabaseReference::SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const {
+		return ECSEngine::SerializeStandalone(this, reflection_manager, [&](const AssetDatabase* out_database) {
+			return SerializeAssetDatabaseSize(out_database);
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	template<typename Functor>
+	size_t DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Functor&& functor) {
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 256, ECS_MB * 4);
+		AssetDatabase temp_database;
+		temp_database.reflection_manager = reflection_manager;
+
+		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
+		temp_database.SetAllocator(allocator_polymorphic);
+
+		SetSerializeCustomSparsetSet();
+		size_t return_value = functor(&temp_database);
+		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET);
+
+		temp_allocator.ClearBackup();
+		return return_value;
+	}
+
+	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) {
+		return (bool)ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
+			bool success = DeserializeAssetDatabase(database, file) == ECS_DESERIALIZE_OK;
+			if (success) {
+				FromStandalone(database);
+			}
+			return success;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) {
+		return (bool)ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
+			bool success = DeserializeAssetDatabase(database, ptr) == ECS_DESERIALIZE_OK;
+			if (success) {
+				FromStandalone(database);
+			}
+			return success;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	size_t AssetDatabaseReference::DeserializeSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr) {
+		return ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
+			return DeserializeAssetDatabaseSize(reflection_manager, ptr);
+		});
+	}
 
 	// ------------------------------------------------------------------------------------------------
 

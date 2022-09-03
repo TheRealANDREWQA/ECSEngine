@@ -3,6 +3,9 @@
 #include "../../Rendering/ColorMacros.h"
 #include "../../Utilities/Function.h"
 #include "../../Utilities/FunctionInterfaces.h"
+#include "../../Rendering/Graphics.h"
+
+#include "UIHelpers.h"
 
 namespace ECSEngine {
 
@@ -96,16 +99,18 @@ namespace ECSEngine {
 		}
 
 		float2 UIVisibleDockspaceRegion::GetPosition() {
+			float dockspace_mask = GetDockspaceMaskFromType(type);
 			return float2(
-				dockspace->transform.position.x + offset_mask * dockspace->borders[border_index].position,
-				dockspace->transform.position.y + (1.0f - offset_mask) * dockspace->borders[border_index].position
+				dockspace->transform.position.x + dockspace_mask * dockspace->borders[border_index].position,
+				dockspace->transform.position.y + (1.0f - dockspace_mask) * dockspace->borders[border_index].position
 			);
 		}
 
 		float2 UIVisibleDockspaceRegion::GetScale() {
+			float dockspace_mask = GetDockspaceMaskFromType(type);
 			return float2(
-				dockspace->transform.scale.x * (1.0f - offset_mask) + (dockspace->borders[border_index + 1].position - dockspace->borders[border_index].position) * offset_mask,
-				dockspace->transform.scale.y * offset_mask + (dockspace->borders[border_index + 1].position - dockspace->borders[border_index].position) * (1.0f - offset_mask)
+				dockspace->transform.scale.x * (1.0f - dockspace_mask) + (dockspace->borders[border_index + 1].position - dockspace->borders[border_index].position) * dockspace_mask,
+				dockspace->transform.scale.y * dockspace_mask + (dockspace->borders[border_index + 1].position - dockspace->borders[border_index].position) * (1.0f - dockspace_mask)
 			);
 		}
 
@@ -135,6 +140,12 @@ namespace ECSEngine {
 			action[action_index].action(action_data);
 		}
 
+		UIActionHandler* UIHandler::GetLastHandler() const
+		{
+			unsigned int index = position_x.size - 1;
+			return action + index;
+		}
+
 		void UIHandler::Reset() {
 			position_x.size = 0;
 		}
@@ -155,18 +166,6 @@ namespace ECSEngine {
 
 		size_t UIHandler::MemoryOf(size_t count) {
 			return (sizeof(float) * 4 + sizeof(UIActionHandler) + sizeof(bool)) * count + 8;
-		}
-
-		void UIDefaultClickableData::WriteExtraArgument(void* data, size_t data_size)
-		{
-			if (hoverable_handler.data != nullptr) {
-				click_handler.data = data;
-				click_handler.data_size = data_size;
-			}
-			else {
-				hoverable_handler.data = data;
-				hoverable_handler.data_size = data_size;
-			}
 		}
 
 		bool UIFocusedWindowData::ExecuteHoverableHandler(ActionData* action_data)
@@ -212,7 +211,7 @@ namespace ECSEngine {
 			hoverable_handler.action = nullptr;
 			hoverable_handler.data = nullptr;
 			hoverable_handler.data_size = 0;
-			hoverable_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			hoverable_handler.phase = ECS_UI_DRAW_NORMAL;
 			clean_up_call_hoverable = false;
 			always_hoverable = false;
 		}
@@ -222,7 +221,7 @@ namespace ECSEngine {
 			clickable_handler.action = nullptr;
 			clickable_handler.data = nullptr;
 			clickable_handler.data_size = 0;
-			clickable_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			clickable_handler.phase = ECS_UI_DRAW_NORMAL;
 		}
 
 		void UIFocusedWindowData::ResetGeneralHandler()
@@ -230,7 +229,7 @@ namespace ECSEngine {
 			general_handler.action = nullptr;
 			general_handler.data = nullptr;
 			general_handler.data_size = 0;
-			general_handler.phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			general_handler.phase = ECS_UI_DRAW_NORMAL;
 			clean_up_call_general = false;
 		}
 
@@ -458,7 +457,7 @@ namespace ECSEngine {
 			deallocate_data.handler.action = nullptr;
 			deallocate_data.handler.data = nullptr;
 			if (revert_commands.GetSize() == revert_commands.GetCapacity()) {
-				const HandlerCommand* deallocate_command = revert_commands.PeekLastItem();
+				const HandlerCommand* deallocate_command = revert_commands.PeekIntrusive();
 				deallocate_data = *deallocate_command;
 			}
 			revert_commands.Push(command);
@@ -556,17 +555,6 @@ namespace ECSEngine {
 			ptr += sizeof(unsigned short) * window_indices.size;
 		
 			return ptr - (uintptr_t)buffer;
-		}
-
-		void UIDoubleClickData::WriteExtraArgument(void* data, size_t data_size) {
-			if (first_click_handler.data == nullptr) {
-				first_click_handler.data = data;
-				first_click_handler.data_size = data_size;
-			}
-			else {
-				double_click_handler.data = data;
-				double_click_handler.data_size = data_size;
-			}
 		}
 
 		bool UIDoubleClickData::IsTheSameData(const UIDoubleClickData* other) const

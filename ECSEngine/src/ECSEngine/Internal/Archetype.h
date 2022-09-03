@@ -22,7 +22,7 @@ namespace ECSEngine {
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(Archetype);
 
 		// The shared component order is needed in order to assign in the correct order the instances indices
-		unsigned short CreateBaseArchetype(
+		unsigned int CreateBaseArchetype(
 			SharedComponentSignature shared_signature, 
 			unsigned int archetype_starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
@@ -32,13 +32,13 @@ namespace ECSEngine {
 		// It will deallocate all of its base archetypes and then itself
 		void Deallocate();
 
-		void DeallocateBase(unsigned short archetype_index);
+		void DeallocateBase(unsigned int archetype_index);
 
 		// Deallocates that archetype and the removes swap back in the base archetype stream
 		// The entities that are moved into the slot of the base inside the base stream
 		// Need to have their infos updated. Prefer paying this cost instead of a stable reference stream
 		// Which makes expensive the iteration - which all this architecture is about
-		void DestroyBase(unsigned short archetype_index, EntityPool* pool);
+		void DestroyBase(unsigned int archetype_index, EntityPool* pool);
 
 		// Prefer using the EntityManager function instead of this one - it will use the 
 		unsigned char FindUniqueComponentIndex(Component component) const;
@@ -56,7 +56,7 @@ namespace ECSEngine {
 		// It will replace the values inside the signature.instances with the corresponding instance index
 		// The signature must contain initially the shared index in order to identify the correct component
 		// If a component cannot be found, a shared instance of -1 is returned
-		void FindSharedInstances(unsigned short archetype_index, SharedComponentSignature signature) const;
+		void FindSharedInstances(unsigned int archetype_index, SharedComponentSignature signature) const;
 
 		// If it fails it returns nullptr
 		ArchetypeBase* FindBase(SharedComponentSignature shared_signature);
@@ -65,27 +65,27 @@ namespace ECSEngine {
 		ArchetypeBase* ECS_VECTORCALL FindBase(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
 
 		// If it fails it returns -1
-		unsigned short FindBaseIndex(SharedComponentSignature shared_signature) const;
+		unsigned int FindBaseIndex(SharedComponentSignature shared_signature) const;
 
-		unsigned short ECS_VECTORCALL FindBaseIndex(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
+		unsigned int ECS_VECTORCALL FindBaseIndex(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances);
 
-		SharedInstance* GetBaseInstances(unsigned short index);
+		SharedInstance* GetBaseInstances(unsigned int index);
 
-		const SharedInstance* GetBaseInstances(unsigned short index) const;
+		const SharedInstance* GetBaseInstances(unsigned int index) const;
 
-		ArchetypeBase* GetBase(unsigned short index);
+		ArchetypeBase* GetBase(unsigned int index);
 
-		const ArchetypeBase* GetBase(unsigned short index) const;
+		const ArchetypeBase* GetBase(unsigned int index) const;
 		
 		ComponentSignature GetUniqueSignature() const;
 
 		ComponentSignature GetSharedSignature() const;
 
-		SharedComponentSignature GetSharedSignature(unsigned short base_index) const;
+		SharedComponentSignature GetSharedSignature(unsigned int base_index) const;
 
-		unsigned short GetBaseCount() const;
+		unsigned int GetBaseCount() const;
 
-		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned short base_index) const;
+		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned int base_index) const;
 
 	//private:
 		struct InternalBase {

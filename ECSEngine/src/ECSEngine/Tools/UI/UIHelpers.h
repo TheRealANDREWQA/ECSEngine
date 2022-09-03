@@ -28,6 +28,8 @@ namespace ECSEngine {
 
 		ECSENGINE_API void SetLine(float2 position1, float2 position2, Color color, size_t* counts, void** buffers, unsigned int material_offset = 0);
 
+		ECSENGINE_API float GetDockspaceMaskFromType(DockspaceType type);
+
 		template<typename Element>
 		void SetVertexColorForRectangle(
 			Color top_left,

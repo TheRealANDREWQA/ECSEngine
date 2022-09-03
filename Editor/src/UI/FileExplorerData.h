@@ -34,7 +34,7 @@ struct FileExplorerData {
 	ECSEngine::ResizableStream<FileExplorerPreloadTexture> preloaded_textures;
 	// Each thread will commit its results into this staging textures that will be moved into the main pool
 	// By the main thread back in the next frame
-	ECSEngine::ResizableStream<FileExplorerPreloadTexture> staging_preloaded_textures;
+	ECSEngine::CapacityStream<FileExplorerPreloadTexture> staging_preloaded_textures;
 
 	// Here we will keep the mesh thumbnails. If a mesh cannot be read record that so that we won't keep
 	// retrying.

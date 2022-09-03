@@ -33,7 +33,7 @@ namespace ECSEngine {
 		const TaskSchedulerInfo* scheduler_info = world->task_scheduler->GetCurrentQueryInfo();
 		unsigned int batch_size = scheduler_info->batch_size;
 		
-		Stream<unsigned short> archetypes;
+		Stream<unsigned int> archetypes;
 		ArchetypeQuery query_components;
 
 		world->entity_manager->GetQueryResultsAndComponents(scheduler_info->query_handle, archetypes, query_components);
@@ -52,7 +52,7 @@ namespace ECSEngine {
 
 			for (size_t index = 0; index < archetypes.size; index++) {
 				Archetype* archetype = world->entity_manager->GetArchetype(archetypes[index]);
-				unsigned short base_count = archetype->GetBaseCount();
+				unsigned int base_count = archetype->GetBaseCount();
 
 				// Get the component and shared component map
 				world->entity_manager->FindArchetypeUniqueComponentVector(archetypes[index], query_components.unique, task_data.component_map);
@@ -79,7 +79,7 @@ namespace ECSEngine {
 					);
 				}
 
-				for (unsigned short base_index = 0; base_index < base_count; base_index++) {
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 					ArchetypeBase* base = archetype->GetBase(base_index);
 					unsigned int entity_count = base->EntityCount();
 					task_data.archetype_indices.y = base_index;

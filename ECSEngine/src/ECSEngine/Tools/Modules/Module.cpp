@@ -308,7 +308,6 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < valid_links.size; index++) {
 			targets[index].component_name = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name);
-			targets[index].component_metadata_name = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_metadata_name);
 		}
 
 		return { targets, valid_links.size };
@@ -318,7 +317,7 @@ namespace ECSEngine {
 
 	void ReleaseModule(Module* module) {
 		BOOL success = FreeLibrary(module->os_module_handle);
-		module->code = ECS_MODULE_STATUS::ECS_GET_MODULE_FAULTY_PATH;
+		module->code = ECS_GET_MODULE_FAULTY_PATH;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

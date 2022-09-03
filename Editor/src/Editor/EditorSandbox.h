@@ -10,6 +10,12 @@
 
 struct EditorState;
 
+enum EDITOR_SANDBOX_STATE {
+	EDITOR_SANDBOX_SCENE,
+	EDITOR_SANDBOX_RUNNING,
+	EDITOR_SANDBOX_PAUSED
+};
+
 // -------------------------------------------------------------------------------------------------------------
 
 struct ECS_REFLECT EditorSandboxModule {
@@ -45,12 +51,22 @@ struct ECS_REFLECT EditorSandbox {
 
 	// The settings used for creating the ECS world
 	ECSEngine::CapacityStream<wchar_t> runtime_settings;
-	ECSEngine::AssetDatabaseReference database;
+
+	// When the play button is clicked, if this sandbox should run
+	bool should_play;
+	
+	// When the pause button is clicked, if this sandbox should pause
+	bool should_pause;
+
+	// When the step button is clicked, if this sandbox should step
+	bool should_step;
 
 	ECS_FIELDS_END_REFLECT;
 
+	EDITOR_SANDBOX_STATE run_state;
 	size_t runtime_settings_last_write;
 	ECSEngine::WorldDescriptor runtime_descriptor;
+	ECSEngine::AssetDatabaseReference database;
 
 	ECSEngine::ResourceView viewport_texture;
 	ECSEngine::DepthStencilView viewport_texture_depth;
@@ -157,6 +173,13 @@ EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index)
 // -------------------------------------------------------------------------------------------------------------
 
 const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns in which state the sandbox is currently in
+EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
 
 // Returns -1 if it doesn't find the module
 unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);

@@ -121,7 +121,7 @@ namespace ECSEngine {
 
 		VertexBuffer staging_buffer = BufferToStaging(graphics, position_buffer);
 		// Now copy the content of the buffer into the CPU side
-		float3* positions = (float3*)graphics->MapBuffer(staging_buffer.buffer, D3D11_MAP_READ);
+		float3* positions = (float3*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ);
 
 		// Now get the min and max bounds. Initialize the min with a huge value and the max with a small value
 
@@ -176,10 +176,10 @@ namespace ECSEngine {
 		// Create a cleared depth stencil view
 		GraphicsTexture2DDescriptor depth_stencil_descriptor;
 		depth_stencil_descriptor.size = texture_size;
-		depth_stencil_descriptor.bind_flag = D3D11_BIND_DEPTH_STENCIL;
+		depth_stencil_descriptor.bind_flag = ECS_GRAPHICS_BIND_DEPTH_STENCIL;
 		depth_stencil_descriptor.mip_levels = 1;
-		depth_stencil_descriptor.usage = D3D11_USAGE_DEFAULT;
-		depth_stencil_descriptor.format = DXGI_FORMAT_D32_FLOAT;
+		depth_stencil_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;
+		depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
 		Texture2D depth_stencil = graphics->CreateTexture(&depth_stencil_descriptor, true);
 		DepthStencilView depth_stencil_view = graphics->CreateDepthStencilView(depth_stencil, true);
 
@@ -198,11 +198,11 @@ namespace ECSEngine {
 
 		// Create the texture
 		GraphicsTexture2DDescriptor texture_desc;
-		texture_desc.bind_flag = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-		texture_desc.usage = D3D11_USAGE_DEFAULT;
+		texture_desc.bind_flag = GetGraphicsBindFromNative((D3D11_BIND_FLAG)(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET));
+		texture_desc.usage = ECS_GRAPHICS_USAGE_DEFAULT;
 		texture_desc.mip_levels = 1;
 		texture_desc.size = data->texture_size;
-		texture_desc.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		texture_desc.format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
 
 		Texture2D texture = data->graphics->CreateTexture(&texture_desc);
 		ResourceView resource_view = data->graphics->CreateTextureShaderViewResource(texture);

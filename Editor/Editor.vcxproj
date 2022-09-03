@@ -109,20 +109,20 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\Debug-windows-x86_64\Editor\</OutDir>
-    <IntDir>..\bin-int\Debug-windows-x86_64\Editor\</IntDir>
+    <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
     <TargetName>Editor</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\Release-windows-x86_64\Editor\</OutDir>
-    <IntDir>..\bin-int\Release-windows-x86_64\Editor\</IntDir>
+    <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
     <TargetName>Editor</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\Distribution-windows-x86_64\Editor\</OutDir>
-    <IntDir>..\bin-int\Distribution-windows-x86_64\Editor\</IntDir>
+    <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
     <TargetName>Editor</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -186,6 +186,7 @@
       <PrecompiledHeaderFile>editorpch.h</PrecompiledHeaderFile>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -216,6 +217,7 @@
       <ExceptionHandling>false</ExceptionHandling>
       <Optimization>Disabled</Optimization>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <AssemblerOutput>NoListing</AssemblerOutput>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -247,6 +249,7 @@
       <Optimization>MaxSpeed</Optimization>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <AdditionalOptions>/Zo %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -272,7 +275,10 @@
     <ClInclude Include="src\Editor\EditorParameters.h" />
     <ClInclude Include="src\editorpch.h" />
     <ClInclude Include="src\Editor\EditorSandbox.h" />
+    <ClInclude Include="src\Editor\EditorSandboxEntityOperations.h" />
+    <ClInclude Include="src\Editor\EditorScene.h" />
     <ClInclude Include="src\Editor\EditorState.h" />
+    <ClInclude Include="src\Editor\EditorComponents.h" />
     <ClInclude Include="src\Metafiles\Metafiles.h" />
     <ClInclude Include="src\Modules\Module.h" />
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
@@ -287,6 +293,7 @@
     <ClInclude Include="src\HelperWindows.h" />
     <ClInclude Include="src\UI\Backups.h" />
     <ClInclude Include="src\UI\DirectoryExplorer.h" />
+    <ClInclude Include="src\UI\EntitiesUI.h" />
     <ClInclude Include="src\UI\FileExplorer.h" />
     <ClInclude Include="src\UI\FileExplorerData.h" />
     <ClInclude Include="src\UI\Game.h" />
@@ -303,7 +310,9 @@
     <ClInclude Include="src\UI\ToolbarUI.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Editor\Editor.cpp" />
+    <ClCompile Include="src\Editor\Editor.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">MaxSpeed</Optimization>
+    </ClCompile>
     <ClCompile Include="src\Editor\EditorEvent.cpp" />
     <ClCompile Include="src\Editor\EditorFile.cpp" />
     <ClCompile Include="src\editorpch.cpp">
@@ -312,7 +321,10 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Editor\EditorSandbox.cpp" />
+    <ClCompile Include="src\Editor\EditorSandboxEntityOperations.cpp" />
+    <ClCompile Include="src\Editor\EditorScene.cpp" />
     <ClCompile Include="src\Editor\EditorState.cpp" />
+    <ClCompile Include="src\Editor\EditorComponents.cpp" />
     <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Modules\Module.cpp" />
     <ClCompile Include="src\Modules\ModuleDefinition.cpp" />
@@ -326,6 +338,7 @@
     <ClCompile Include="src\HelperWindows.cpp" />
     <ClCompile Include="src\UI\Backups.cpp" />
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
+    <ClCompile Include="src\UI\EntitiesUI.cpp" />
     <ClCompile Include="src\UI\FileExplorer.cpp" />
     <ClCompile Include="src\UI\Game.cpp" />
     <ClCompile Include="src\UI\Hub.cpp" />

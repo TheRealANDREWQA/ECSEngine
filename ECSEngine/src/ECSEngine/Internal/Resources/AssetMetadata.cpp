@@ -19,30 +19,27 @@ namespace ECSEngine {
 	) 
 	{
 		// Allocate a new buffer
-		unsigned int total_count = new_texture_count + new_buffer_count + new_sampler_count + new_shader_count;
-		void* allocation = AllocateEx(allocator, sizeof(MaterialAssetResource) * total_count);
+		size_t total_count = sizeof(MaterialAssetResource) * (new_texture_count + new_buffer_count + new_sampler_count) + sizeof(unsigned int) * new_shader_count;
+		void* allocation = AllocateEx(allocator, total_count);
 
 		// Copy into it
 		MaterialAssetResource* resources = (MaterialAssetResource*)allocation;
-		material->textures.CopyTo(resources);
-		material->buffers.CopyTo(resources + new_texture_count);
-		material->samplers.CopyTo(resources + new_texture_count + new_buffer_count);
-		material->shaders.CopyTo(resources + total_count - new_shader_count);
+		uintptr_t ptr = (uintptr_t)resources;
+		material->textures.CopyTo(ptr);
+		material->buffers.CopyTo(ptr);
+		material->samplers.CopyTo(ptr);
+		material->shaders.CopyTo(ptr);
 
 		// Release the old buffer
 		if (material->textures.buffer != nullptr) {
 			DeallocateEx(allocator, material->textures.buffer);
 		}
 
-		material->textures.buffer = resources;
-		material->buffers.buffer = resources + new_texture_count;
-		material->samplers.buffer = resources + new_texture_count + new_buffer_count;
-		material->shaders.buffer = resources + total_count - new_buffer_count;
-
-		material->textures.size = new_texture_count;
-		material->buffers.size = new_buffer_count;
-		material->samplers.size = new_sampler_count;
-		material->shaders.size = new_shader_count;
+		ptr = (uintptr_t)resources;
+		material->textures.InitializeFromBuffer(ptr, new_texture_count);
+		material->buffers.InitializeFromBuffer(ptr, new_buffer_count);
+		material->samplers.InitializeFromBuffer(ptr, new_sampler_count);
+		material->shaders.InitializeFromBuffer(ptr, new_shader_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -78,7 +75,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::AddShader(MaterialAssetResource shader, AllocatorPolymorphic allocator)
+	void MaterialAsset::AddShader(unsigned int shader, AllocatorPolymorphic allocator)
 	{
 		MaterialAssetRelocate(this, textures.size, buffers.size, samplers.size, shaders.size + 1, allocator);
 		shaders[shaders.size - 1] = shader;
@@ -90,18 +87,12 @@ namespace ECSEngine {
 	{
 		MaterialAsset material;
 
-		MaterialAssetResource* resources = (MaterialAssetResource*)buffer;
-		material.textures.buffer = resources;
-		material.textures.Copy(textures);
+		uintptr_t ptr = (uintptr_t)buffer;
+		material.textures.InitializeAndCopy(ptr, textures);
+		material.buffers.InitializeAndCopy(ptr, buffers);
+		material.samplers.InitializeAndCopy(ptr, samplers);
+		material.shaders.InitializeAndCopy(ptr, shaders);
 
-		material.buffers.buffer = resources + textures.size;
-		material.buffers.Copy(buffers);
-
-		material.samplers.buffer = material.buffers.buffer + buffers.size;
-		material.samplers.Copy(samplers);
-
-		material.shaders.buffer = material.samplers.buffer + samplers.size;
-		material.shaders.Copy(shaders);
 		return material;
 	}
 
@@ -116,7 +107,7 @@ namespace ECSEngine {
 
 	size_t MaterialAsset::CopySize() const
 	{
-		return sizeof(MaterialAssetResource) * (textures.size + buffers.size + samplers.size + shaders.size);
+		return sizeof(MaterialAssetResource) * (textures.size + buffers.size + samplers.size) + sizeof(unsigned int) * shaders.size;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -130,6 +121,14 @@ namespace ECSEngine {
 		if (BelongsToAllocator(allocator, textures.buffer)) {
 			Deallocate(allocator, textures.buffer);
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::Default(Stream<char> _name)
+	{
+		memset(this, 0, sizeof(*this));
+		name = _name;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -236,6 +235,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void ShaderMetadata::Default(Stream<char> _name)
+	{
+		memset(this, 0, sizeof(*this));
+		name = _name;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void ShaderMetadata::RemoveMacro(size_t index, AllocatorPolymorphic allocator)
 	{
 		DeallocateEx(allocator, (void*)macros[index].name);
@@ -305,6 +312,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void MiscAsset::Default(Stream<char> name) {
+		Default(Stream<wchar_t>(name.buffer, name.size));
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MiscAsset::Default(Stream<wchar_t> _path) {
+		path = _path;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void GPUSamplerMetadata::DeallocateMemory(AllocatorPolymorphic allocator) const
 	{
 		DeallocateIfBelongs(allocator, name.buffer);
@@ -318,6 +337,15 @@ namespace ECSEngine {
 		memcpy(&metadata, this, sizeof(metadata));
 		metadata.name = function::StringCopy(allocator, name);
 		return metadata;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void GPUSamplerMetadata::Default(Stream<char> _name) {
+		name = _name;
+		filter_mode = ECS_SAMPLER_FILTER_ANISOTROPIC;
+		address_mode = ECS_SAMPLER_ADDRESS_WRAP;
+		anisotropic_level = 8;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -339,6 +367,12 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void GPUBufferMetadata::Default(Stream<char> _name) {
+		name = _name;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void TextureMetadata::DeallocateMemory(AllocatorPolymorphic allocator) const
 	{
 		DeallocateIfBelongs(allocator, name.buffer);
@@ -356,6 +390,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	void TextureMetadata::Default(Stream<char> _name)
+	{
+		name = _name;
+		convert_to_nearest_power_of_two = false;
+		sRGB = false;
+		generate_mip_maps = true;
+
+		compression_type = ECS_TEXTURE_COMPRESSION_NONE;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	void MeshMetadata::DeallocateMemory(AllocatorPolymorphic allocator) const
 	{
 		DeallocateIfBelongs(allocator, name.buffer);
@@ -369,6 +415,17 @@ namespace ECSEngine {
 		memcpy(&metadata, this, sizeof(metadata));
 		metadata.name = function::StringCopy(allocator, name);
 		return metadata;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MeshMetadata::Default(Stream<char> _name)
+	{
+		name = _name;
+		scale_factor = 1.0f;
+		coallesced_mesh = false;
+		invert_z_axis = true;
+		optimize_level = ECS_ASSET_MESH_OPTIMIZE_NONE;
 	}
 
 	// ------------------------------------------------------------------------------------------------------

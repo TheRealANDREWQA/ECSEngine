@@ -1,7 +1,7 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-constexpr const char* DIRECTORY_EXPLORER_WINDOW_NAME = "Directory Explorer";
+#define DIRECTORY_EXPLORER_WINDOW_NAME "Directory Explorer"
 
 struct EditorState;
 

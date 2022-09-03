@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
@@ -5,6 +6,7 @@
 #include "../Internal/InternalStructures.h"
 #include "RenderingStructures.h"
 #include "ecspch.h"
+#include "../Utilities/Reflection/ReflectionMacros.h"
 
 namespace ECSEngine {
 
@@ -42,44 +44,43 @@ namespace ECSEngine {
 	using ShaderReflectionFloatFormatTable = HashTableDefault<ShaderReflectionFloatExtendedFormat>;
 	using ShaderReflectionIntegerFormatTable = HashTableDefault<ShaderReflectionIntegerExtendedFormat>;
 
-	enum class ShaderBufferType {
-		Constant,
-		Texture,
-		Read,
-		ReadWrite,
-		ByteAddress,
-		ReadWriteByteAddress,
-		Structured,
-		ReadWriteStructured,
-		Append,
-		Consume
+	enum ECS_REFLECT ECS_SHADER_BUFFER_TYPE : unsigned char {
+		ECS_SHADER_BUFFER_CONSTANT,
+		ECS_SHADER_BUFFER_TEXTURE,
+		ECS_SHADER_BUFFER_READ,
+		ECS_SHADER_BUFFER_READ_WRITE,
+		ECS_SHADER_BUFFER_READ_WRITE_BYTE_ADDRESS,
+		ECS_SHADER_BUFFER_STRUCTURED,
+		ECS_SHADER_BUFFER_READ_WRITE_STRUCTURED,
+		ECS_SHADER_BUFFER_APPEND,
+		ECS_SHADER_BUFFER_CONSUME
 	};
 
 	// Byte size is useful only for constant buffers in order to create them directly
 	// on the Graphics object
-	struct ECSENGINE_API ShaderReflectedBuffer {
+	struct ShaderReflectedBuffer {
 		Stream<char> name;
 		unsigned int byte_size;
-		ShaderBufferType type;
+		ECS_SHADER_BUFFER_TYPE type;
 		unsigned short register_index;
 	};
 
-	enum class ShaderTextureType {
-		Read1D,
-		Read2D,
-		Read3D,
-		ReadWrite1D,
-		ReadWrite2D,
-		ReadWrite3D,
-		Array1D,
-		Array2D,
-		Array3D,
-		Cube
+	enum ECS_REFLECT ECS_SHADER_TEXTURE_TYPE : unsigned char {
+		ECS_SHADER_TEXTURE_READ_1D,
+		ECS_SHADER_TEXTURE_READ_2D,
+		ECS_SHADER_TEXTURE_READ_3D,
+		ECS_SHADER_TEXTURE_READ_WRITE_1D,
+		ECS_SHADER_TEXTURE_READ_WRITE_2D,
+		ECS_SHADER_TEXTURE_READ_WRITE_3D,
+		ECS_SHADER_TEXTURE_ARRAY_1D,
+		ECS_SHADER_TEXTURE_ARRAY_2D,
+		ECS_SHADER_TEXTURE_ARRAY_3D,
+		ECS_SHADER_TEXTURE_CUBE
 	};
 
-	struct ECSENGINE_API ShaderReflectedTexture {
+	struct ShaderReflectedTexture {
 		Stream<char> name;
-		ShaderTextureType type;
+		ECS_SHADER_TEXTURE_TYPE type;
 		unsigned short register_index;
 	};
 
