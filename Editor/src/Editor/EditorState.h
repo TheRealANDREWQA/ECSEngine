@@ -7,6 +7,7 @@
 #include "../UI/HubData.h"
 #include "../Modules/ModuleDefinition.h"
 #include "EditorSandbox.h"
+#include "EditorComponents.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
 
@@ -93,13 +94,14 @@ struct EditorState {
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation[EDITOR_MODULE_CONFIGURATION_COUNT];
 	// Needed to syncronize the threads when removing the launched module compilation
 	ECSEngine::SpinLock launched_module_compilation_lock;
-	
+
 	ProjectModules* project_modules;
 	FileExplorerData* file_explorer_data;
 	HubData* hub_data;
 	ProjectFile* project_file;
 
 	InspectorManager inspector_manager;
+	EditorComponents editor_components;
 
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function
@@ -111,9 +113,6 @@ struct EditorState {
 
 	// A queue onto which GPU tasks can be placed in order to be consumed on the immediate context
 	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> gpu_tasks;
-	
-	ECSEngine::Tools::InjectWindowData inject_data;
-	const char* inject_window_name;
 	
 	unsigned short* lazy_evaluation_counters;
 	ECSEngine::Timer lazy_evalution_timer;
@@ -139,7 +138,7 @@ void EditorStateSetFlag(EditorState* editor_state, size_t flag);
 
 void EditorStateClearFlag(EditorState* editor_state, size_t flag);
 
-bool EditorStateHasFlag(EditorState* editor_state, size_t flag);
+bool EditorStateHasFlag(const EditorState* editor_state, size_t flag);
 
 void EditorStateProjectTick(EditorState* editor_state);
 

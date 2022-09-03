@@ -970,8 +970,8 @@ namespace ECSEngine {
 		VertexBuffer staging_normals = BufferToStaging(graphics, attribute);
 		VertexBuffer staging_positions = BufferToStaging(graphics, model_position);
 
-		float* attribute_data = (float*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
-		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		float* attribute_data = (float*)graphics->MapBuffer(staging_normals.buffer, ECS_GRAPHICS_MAP_READ);
+		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, ECS_GRAPHICS_MAP_READ);
 		void* constant_data = graphics->MapBuffer(constant_buffer.buffer);
 		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
 
@@ -1033,8 +1033,8 @@ namespace ECSEngine {
 		VertexBuffer staging_normals = BufferToStaging(graphics, attribute);
 		VertexBuffer staging_positions = BufferToStaging(graphics, model_position);
 
-		float* attribute_data = (float*)graphics->MapBuffer(staging_normals.buffer, D3D11_MAP_READ);
-		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, D3D11_MAP_READ);
+		float* attribute_data = (float*)graphics->MapBuffer(staging_normals.buffer, ECS_GRAPHICS_MAP_READ);
+		float3* model_positions = (float3*)graphics->MapBuffer(staging_positions.buffer, ECS_GRAPHICS_MAP_READ);
 		void* instanced_data = graphics->MapBuffer(instanced_buffer.buffer);
 		float3* line_positions = (float3*)graphics->MapBuffer(line_position_buffer.buffer);
 
@@ -3020,7 +3020,7 @@ namespace ECSEngine {
 		VertexBuffer staging_buffer = BufferToStaging(graphics, GetMeshVertexBuffer(string_mesh->mesh, ECS_MESH_POSITION));
 
 		// Map the buffer
-		float3* values = (float3*)graphics->MapBuffer(staging_buffer.buffer, D3D11_MAP_READ);
+		float3* values = (float3*)graphics->MapBuffer(staging_buffer.buffer, ECS_GRAPHICS_MAP_READ);
 
 		// Determine the string character spans
 		for (size_t index = 0; index < submesh_count; index++) {

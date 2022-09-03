@@ -4,7 +4,8 @@
 using namespace ECSEngine;
 ECS_TOOLS;
 
-constexpr const char* INSPECTOR_WINDOW_NAME = "Inspector ";
+#define INSPECTOR_WINDOW_NAME "Inspector "
+#define MAX_INSPECTOR_WINDOWS 8
 
 struct EditorState;
 
@@ -35,6 +36,8 @@ void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsi
 // If inspector index is different from -1, it will change that inspector into the settings for the bound sandbox
 // If sandbox index is different from -1, it will find an inspector suitable or create one if it doesn't exist
 void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int inspector_index = -1, unsigned int sandbox_index = -1);
+
+void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index = -1);
 
 // Returns the index of the sandbox that is being referenced by the inspector
 unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index);

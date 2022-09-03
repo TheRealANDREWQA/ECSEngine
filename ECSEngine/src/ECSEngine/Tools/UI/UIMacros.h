@@ -1,9 +1,8 @@
 ﻿#pragma once
 
-#define UI_UNPACK_ACTION_DATA	ECSEngine::Tools::UIDockspace* dockspace = (ECSEngine::Tools::UIDockspace*)action_data->dockspace; \
+#define UI_UNPACK_ACTION_DATA	ECSEngine::Tools::UIDockspace* dockspace = action_data->dockspace; \
 								unsigned int border_index = action_data->border_index; \
-								ECSEngine::Tools::UISystem* system = (ECSEngine::Tools::UISystem*)action_data->system; \
-								float dockspace_mask = action_data->dockspace_mask; \
+								ECSEngine::Tools::UISystem* system = action_data->system; \
 								ECSEngine::Tools::DockspaceType dockspace_type = action_data->type; \
 								ECSEngine::float2 mouse_position = action_data->mouse_position; \
 								ECSEngine::float2 position = action_data->position; \
@@ -25,8 +24,6 @@
 								initializer \
 							); 
 
-#define UI_DRAWER_ELEMENT_DRAW  ECSEngine::Tools::UIDrawer<false>* drawer = (ECSEngine::Tools::UIDrawer<false>*)drawer_ptr; 
-
 #define UI_ACTION_IS_THE_SAME_AS_PREVIOUS data->IsTheSameData(additional_data)
 #define UI_ACTION_IS_NOT_CLEAN_UP_CALL (buffers != nullptr && counts != nullptr)
 
@@ -45,8 +42,6 @@
 
 #define ECS_TOOLS_UI_SINGLE_THREADED
 
-#define ECS_TOOLS_UI_SYSTEM_ACTION_ALLOCATOR_MEMORY 20'000
-
 #define ECS_TOOLS_UI_DESIGNED_WIDTH 2560.0f
 #define ECS_TOOLS_UI_DESIGNED_HEIGHT 1600.0f
 
@@ -59,7 +54,7 @@
 #define ECS_TOOLS_UI_ONE_PIXEL_X 0.0010626f
 #define ECS_TOOLS_UI_ONE_PIXEL_Y 0.00175536f
 
-#define ECS_TOOLS_UI_THREAD_TEMP_ALLOCATOR_MEMORY 5'000'000
+#define ECS_TOOLS_UI_THREAD_TEMP_ALLOCATOR_MEMORY 1'000'000
 
 #define ECS_TOOLS_UI_MISC_DRAWER_IDENTIFIER 250
 #define ECS_TOOLS_UI_MISC_DRAWER_TEMP 250
@@ -97,8 +92,8 @@
 #define ECS_TOOLS_UI_DOCKSPACE_CLOSE_X_SCALE_Y 0.03f
 #define ECS_TOOLS_UI_DOCKSPACE_CLOSE_X_TOTAL_X_PADDING 0.02f
 
-#define ECS_TOOLS_UI_FONT_SIZE 0.00078f
-#define ECS_TOOLS_UI_FONT_CHARACTER_SPACING 0.00105f
+#define ECS_TOOLS_UI_FONT_SIZE 0.00075f
+#define ECS_TOOLS_UI_FONT_CHARACTER_SPACING 0.0009f
 #define ECS_TOOLS_UI_FONT_SYMBOL_COUNT 105
 #define ECS_TOOLS_UI_FONT_TEXTURE_DIMENSIONS 201
 #define ECS_TOOLS_UI_FONT_X_FACTOR 0.52f
@@ -152,11 +147,11 @@
 #define ECS_TOOLS_UI_ANISOTROPIC_SAMPLER 0
 
 #define ECS_TOOLS_UI_WINDOW_LAYOUT_ELEMENT_INDENTATION 0.01f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW 0.02f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW_PADDING 0.017f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_X 0.1f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_Y 0.04f
-#define ECS_TOOLS_UI_WINDOW_LAYOUT_NODE_INDENTATION 0.017f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW 0.018f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_NEXT_ROW_PADDING 0.015f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_X 0.09f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_Y 0.037f
+#define ECS_TOOLS_UI_WINDOW_LAYOUT_NODE_INDENTATION 0.015f
 
 #define ECS_TOOLS_UI_REVERT_HANDLER_COMMAND_COUNT 256
 

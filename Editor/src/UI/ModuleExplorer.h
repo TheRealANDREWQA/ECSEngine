@@ -3,7 +3,7 @@
 
 using namespace ECSEngine;
 
-constexpr const char* MODULE_EXPLORER_WINDOW_NAME = "Module Explorer";
+#define MODULE_EXPLORER_WINDOW_NAME "Module Explorer"
 
 struct EditorState;
 

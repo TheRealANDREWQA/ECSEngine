@@ -324,42 +324,42 @@ void ModuleExplorerPrintConsoleMessageAfterBuildCommand(ModuleExplorerRunModuleB
 void ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(EditorState* editor_state, EDITOR_LAUNCH_BUILD_COMMAND_STATUS* command_statuses) {
 	ECS_TEMP_ASCII_STRING(console_message, 8192);
 
-	unsigned int counts_for_status_type[EDITOR_LAUNCH_BUILD_COMMAND_COUNT];
-	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
+	const ProjectModules* modules = editor_state->project_modules;
+	unsigned int counts_for_status_type[EDITOR_LAUNCH_BUILD_COMMAND_COUNT] = { 0 };
+	for (unsigned int index = 0; index < modules->size; index++) {
 		counts_for_status_type[command_statuses[index]]++;
 	}
 
-	auto add_same_type_module_status_to_listing = [&console_message, editor_state, command_statuses](EDITOR_LAUNCH_BUILD_COMMAND_STATUS status_type) {
-		for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
+	auto add_same_type_module_status_to_listing = [&console_message, modules, command_statuses, counts_for_status_type](EDITOR_LAUNCH_BUILD_COMMAND_STATUS status_type) {
+		for (unsigned int index = 0; index < modules->size; index++) {
 			if (command_statuses[index]) {
-				function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[index].library_name, console_message);
-				console_message.Add('\n');
+				function::ConvertWideCharsToASCII(modules->buffer[index].library_name, console_message);
+				console_message.Add(',');
+				console_message.Add(' ');
 			}
 		}
 	};
 
 	auto append_string_message_for_type = [&](EDITOR_LAUNCH_BUILD_COMMAND_STATUS status_type, const char* message) {
-		if (counts_for_status_type[status_type]) {
+		if (counts_for_status_type[status_type] > 0) {
 			ECS_FORMAT_TEMP_STRING(append_message, message, counts_for_status_type[status_type]);
 			console_message.AddStreamSafe(append_message);
 			add_same_type_module_status_to_listing(status_type);
+
+			EditorSetConsoleInfo(console_message);
 		}
 	};
 
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING, "{#} modules have launched successfully their command. These are:\n");
-	EditorSetConsoleInfo(console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING, "{#} modules have launched successfully their command. These are: ");
 	console_message.size = 0;
 	
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED, "{#} modules have been skipped (they are up to date). These are:\n");
-	EditorSetConsoleInfo(console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED, "{#} modules have been skipped (they are up to date). These are: ");
 	console_message.size = 0;
 
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING, "{#} modules have failed to launch their command line prompt. These are:\n");
-	EditorSetConsoleError(console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING, "{#} modules have failed to launch their command line prompt. These are: ");
 	console_message.size = 0;
 
-	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING, "{#} modules are already running. The current command will be ignored. These are:\n");
-	EditorSetConsoleError(console_message);
+	append_string_message_for_type(EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING, "{#} modules are already running. The current command will be ignored. These are: ");
 }
 
 // --------------------------------------------------------------------------------------------------------
@@ -407,15 +407,28 @@ void ModuleExplorerCommandAll(ActionData* action_data, void (*function)
 
 	ModuleExplorerData* data = (ModuleExplorerData*)_data;
 
+	unsigned int module_count = data->editor_state->project_modules->size;
+	unsigned int total_count = module_count * EDITOR_MODULE_CONFIGURATION_COUNT;
 	EDITOR_LAUNCH_BUILD_COMMAND_STATUS* statuses = (EDITOR_LAUNCH_BUILD_COMMAND_STATUS*)ECS_STACK_ALLOC(
-		sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * data->editor_state->project_modules->size
+		sizeof(EDITOR_LAUNCH_BUILD_COMMAND_STATUS) * total_count
 	);
 
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, data->editor_state->project_modules->size);
-	function::MakeSequence(indices);
+	EDITOR_MODULE_CONFIGURATION* configurations = (EDITOR_MODULE_CONFIGURATION*)ECS_STACK_ALLOC(
+		sizeof(EDITOR_MODULE_CONFIGURATION) * total_count
+	);
 
-	function(data->editor_state, indices, data->configurations, statuses, nullptr);
-	ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data->editor_state, statuses);
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, total_count);
+	indices.size = total_count;
+	for (unsigned int index = 0; index < module_count; index++) {
+		unsigned int offset = index * EDITOR_MODULE_CONFIGURATION_COUNT;
+		for (unsigned int subindex = 0; subindex < EDITOR_MODULE_CONFIGURATION_COUNT; subindex++) {
+			indices[offset + subindex] = index;
+			configurations[offset + subindex] = (EDITOR_MODULE_CONFIGURATION)subindex;
+		}
+	}
+
+	function(data->editor_state, indices, configurations, statuses, nullptr);
+	//ModuleExplorerPrintAllConsoleMessageAfterBuildCommand(data->editor_state, statuses);
 }
 
 void ModuleExplorerBuildAll(ActionData* action_data) {
@@ -557,6 +570,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 
 	UIConfigBorder border;
 	border.color = drawer.color_theme.borders;
+	border.is_interior = true;
 	config.AddFlag(border);
 
 	float next_row_padding = drawer.layout.next_row_padding;
@@ -566,7 +580,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 
 	drawer.SetDrawMode(ECS_UI_DRAWER_NOTHING);
 	UIConfigAbsoluteTransform header_transform;
-	header_transform.position.x = drawer.region_position.x + drawer.region_render_offset.x + border.thickness;
+	header_transform.position.x = drawer.region_position.x + drawer.region_render_offset.x;
 	header_transform.position.y = drawer.current_y;
 	header_transform.scale = drawer.GetLabelScale(HEADER_ADD_MODULE);
 	config.AddFlag(header_transform);
@@ -578,14 +592,14 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	is_selected_state.state = explorer_data->selected_module != -1;
 	config.AddFlag(is_selected_state);
 
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_REMOVE_MODULE);
 	config.AddFlag(header_transform);
 
 	drawer.Button(HEADER_BUTTON_CONFIGURATION | UI_CONFIG_ACTIVE_STATE,config, HEADER_REMOVE_MODULE, {ModuleExplorerRemoveModule, explorer_data, 0});
 
 	config.flag_count = HEADER_BASE_CONFIGS;
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_SET_MODULE_CONFIGURATIONS);
 	config.AddFlag(header_transform);
 
@@ -611,42 +625,42 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	drawer.Menu(HEADER_BUTTON_CONFIGURATION | UI_CONFIG_MENU_COPY_STATES, config, HEADER_SET_MODULE_CONFIGURATIONS, &menu_state);
 
 	config.flag_count--;
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_OPEN_MODULE_FOLDER);
 	config.AddFlag(header_transform);
 
 	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_OPEN_MODULE_FOLDER, { ModuleExplorerOpenModuleFolder, editor_state, 0, ECS_UI_DRAW_SYSTEM });
 	config.flag_count--;
 
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_OPEN_BUILD_LOG);
 	config.AddFlag(header_transform);
 	
 	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_OPEN_BUILD_LOG, { ModuleExplorerOpenBuildLog, editor_state, 0, ECS_UI_DRAW_SYSTEM });
 
 	config.flag_count--;
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_BUILD_ALL);
 	config.AddFlag(header_transform);
 
 	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_BUILD_ALL, { ModuleExplorerBuildAll, explorer_data, 0 });
 
 	config.flag_count--;
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_CLEAN_ALL);
 	config.AddFlag(header_transform);
 
 	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_CLEAN_ALL, { ModuleExplorerCleanAll, explorer_data, 0 });
 
 	config.flag_count--;
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_REBUILD_ALL);
 	config.AddFlag(header_transform);
 
 	drawer.Button(HEADER_BUTTON_CONFIGURATION, config, HEADER_REBUILD_ALL, { ModuleExplorerRebuildAll, explorer_data, 0 });
 
 	config.flag_count--;
-	header_transform.position.x += header_transform.scale.x + border.thickness;
+	header_transform.position.x += header_transform.scale.x;
 	header_transform.scale = drawer.GetLabelScale(HEADER_RESET_ALL);
 	config.AddFlag(header_transform);
 
@@ -668,34 +682,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 	float clean_label_scale = drawer.GetLabelScale(HEADER_CLEAN_MODULE).x;
 	float rebuild_label_scale = drawer.GetLabelScale(HEADER_REBUILD_MODULE).x;
 
-	// Draw once the combo box to get the scale and then revert the buffer and count states
-	UIDrawerBufferState buffer_state = drawer.GetBufferState(0);
-	UIDrawerHandlerState handler_state = drawer.GetHandlerState();
-
-	float2 combo_position = drawer.GetCurrentPosition();
-	float2 combo_scale = { 0.0f, 0.0f };
-	UIConfigGetTransform get_transform;
-	get_transform.position = &combo_position;
-	get_transform.scale = &combo_scale;
-	config.AddFlag(get_transform);
-
-	UIConfigComboBoxPrefix prefix;
-	prefix.prefix = "Configuration: ";
-	config.AddFlag(prefix);
-
 	Stream<Stream<char>> combo_labels = Stream<Stream<char>>(MODULE_CONFIGURATIONS, EDITOR_MODULE_CONFIGURATION_COUNT);
-	unsigned char dummy_combo_value = 0;
-	drawer.ComboBox(
-		UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_GET_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
-		config,
-		"Scale combo box",
-		combo_labels,
-		combo_labels.size,
-		&dummy_combo_value
-	);
-
-	drawer.RestoreBufferState(0, buffer_state);
-	drawer.RestoreHandlerState(handler_state);
 
 	auto module_draw_base = [&](EDITOR_MODULE_LOAD_STATUS load_status, unsigned int index) {
 		const size_t MODULE_SPRITE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE;
@@ -704,8 +691,8 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		const size_t SECONDARY_BUTTON_CONFIGURATION = 0;
 		const size_t COMBO_CONFIGURATION = UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX;
 
-		Stream<wchar_t> module_name = editor_state->project_modules->buffer[index].library_name;
-		bool* is_graphics_module = &editor_state->project_modules->buffer[index].is_graphics_module;
+		Stream<wchar_t> module_name = project_modules->buffer[index].library_name;
+		bool* is_graphics_module = &project_modules->buffer[index].is_graphics_module;
 
 		config.flag_count = 0;
 		UIConfigRelativeTransform transform;
@@ -778,8 +765,10 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 		select_data.explorer_data = explorer_data;
 
 		config.flag_count = 0;
+		
+		float combo_scale = drawer.ComboBoxDefaultSize(combo_labels, { }, "Configuration: ");
 		UIConfigWindowDependentSize main_button_size;
-		float main_button_x_scale = drawer.GetXScaleUntilBorder(drawer.current_x) - build_label_scale - clean_label_scale - rebuild_label_scale - combo_scale.x
+		float main_button_x_scale = drawer.GetXScaleUntilBorder(drawer.current_x) - build_label_scale - clean_label_scale - rebuild_label_scale - combo_scale
 			- 4 * drawer.layout.element_indentation;
 		main_button_size.scale_factor.x = drawer.GetWindowSizeFactors(main_button_size.type, { main_button_x_scale, 0.0f }).x;
 		config.AddFlag(main_button_size);

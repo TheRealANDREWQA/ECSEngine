@@ -584,7 +584,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void ComboBoxDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data, unsigned char* active_label, float2 position, float2 scale);
+			void ComboBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerComboBox* data, unsigned char* active_label, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1008,10 +1008,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// If the copy_states is set
 			size_t MenuCalculateStateMemory(const UIDrawerMenuState* state, bool copy_states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// If the copy_states is set
 			size_t MenuWalkStatesMemory(const UIDrawerMenuState* state, bool copy_states);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1335,6 +1337,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// Uses the scale and the padding to return the size
+			float2 GetLabelScale(const UIDrawerTextElement* element) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void GetTextLabelAlignment(size_t configuration, const UIDrawConfig& config, ECS_UI_ALIGN& horizontal, ECS_UI_ALIGN& vertical) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1524,6 +1531,17 @@ namespace ECSEngine {
 				size_t duration_between_clicks,
 				UIActionHandler first_click_handler,
 				UIActionHandler second_click_handler
+			);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// This will always have the system phase
+			void AddRightClickAction(
+				float2 position,
+				float2 scale,
+				Stream<char> name,
+				UIDrawerMenuState* menu_state,
+				UIActionHandler custom_handler = { nullptr }
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3122,6 +3140,34 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Filesystem hierarchy
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void FilesystemHierarchy(Stream<char> identifier, Stream<Stream<char>> labels);
+
+			// Parent index 0 means root
+			UIDrawerFilesystemHierarchy* FilesystemHierarchy(size_t configuration, UIDrawConfig& config, Stream<char> identifier, Stream<Stream<char>> labels);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			UIDrawerFilesystemHierarchy* FilesystemHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> identifier);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void FilesystemHierarchyDrawer(
+				size_t configuration,
+				UIDrawConfig& config,
+				UIDrawerFilesystemHierarchy* data,
+				Stream<Stream<char>> labels,
+				float2 position,
+				float2 scale
+			);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
 #pragma region Filter Menu
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3246,10 +3292,6 @@ namespace ECSEngine {
 #pragma endregion
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
-			
-			Stream<char> GetElementName(unsigned int index) const;
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			float GetDefaultBorderThickness() const;
 
@@ -3284,12 +3326,16 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// It returns the factor for ECS_UI_WINDOW_DEPENDENT_SIZE
-			float2 GetWindowSizeScaleUntilBorder() const;
+			// If the until border flag is specified, it will return the scale until the actual region border
+			// Not the region limit
+			float2 GetWindowSizeScaleUntilBorder(bool until_border = false) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// It returns the actual size until the border
-			float GetWindowScaleUntilBorder() const;
+			// If the until border flag is specified, it will return the scale until the actual region border
+			// Not the region limit
+			float GetWindowScaleUntilBorder(bool until_border = false) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3301,16 +3347,16 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void* GetTempBuffer(size_t size, size_t alignment = 8);
+			void* GetTempBuffer(size_t size, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL, size_t alignment = 8);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Can be used to release some temp memory - cannot be used when handlers are used
-			void ReturnTempAllocator(size_t marker);
+			void ReturnTempAllocator(size_t marker, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			size_t GetTempAllocatorMarker();
+			size_t GetTempAllocatorMarker(ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3491,8 +3537,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+
+
+			// TODO: Deprecate this (eliminate)
 			UIDrawerHierarchy* Hierarchy(Stream<char> name);
 
+			// TODO: Deprecate this (eliminate)
 			UIDrawerHierarchy* Hierarchy(size_t configuration, const UIDrawConfig& config, Stream<char> name);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3550,34 +3600,6 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-#pragma region Label hierarchy
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			void LabelHierarchy(Stream<char> identifier, Stream<Stream<char>> labels);
-
-			// Parent index 0 means root
-			UIDrawerLabelHierarchy* LabelHierarchy(size_t configuration, UIDrawConfig& config, Stream<char> identifier, Stream<Stream<char>> labels);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			UIDrawerLabelHierarchy* LabelHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> identifier);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-			void LabelHierarchyDrawer(
-				size_t configuration,
-				UIDrawConfig& config,
-				UIDrawerLabelHierarchy* data,
-				Stream<Stream<char>> labels,
-				float2 position,
-				float2 scale
-			);
-
-			// ------------------------------------------------------------------------------------------------------------------------------------
-
-#pragma endregion
-
 #pragma region List
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -3591,6 +3613,424 @@ namespace ECSEngine {
 			void ListFinalizeNode(UIDrawerList* list);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Label Hierarchy
+
+			// The name is not displayed, is used only for the resource storage
+			// Functions needed for the iterator (the one from the TreeIterator):	bool Valid();
+			//																		Stream<char> Next(unsigned int* level);
+			//																		Stream<char> Peek(unsigned int* level, bool* has_children);
+			//																		void Skip();
+			template<typename Iterator>
+			void LabelHierarchy(Stream<char> name, Iterator&& iterator) {
+				UIDrawConfig config;
+				LabelHierarchy(0, config, name, iterator)
+			}
+
+			// The name is not displayed, is used only for the resource storage
+			// Functions needed for the iterator (the one from the TreeIterator):	bool Valid();
+			//																		Stream<char> Next(unsigned int* level);
+			//																		Stream<char> Peek(unsigned int* level, bool* has_children);
+			//																		void Skip();
+			template<typename Iterator>
+			void LabelHierarchy(size_t configuration, const UIDrawConfig& config, Stream<char> name, Iterator&& iterator) {
+				float2 position;
+				float2 scale;
+				HandleTransformFlags(configuration, config, position, scale);
+
+				if (!initializer) {
+					if (configuration & UI_CONFIG_DO_CACHE) {
+						UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)GetResource(name);
+
+						unsigned int dynamic_resource_index = -1;
+						if (configuration & UI_CONFIG_DYNAMIC_RESOURCE) {
+							Stream<char> identifier = HandleResourceIdentifier(name);
+							dynamic_resource_index = system->GetWindowDynamicElement(window_index, identifier);
+							ECS_ASSERT(dynamic_resource_index != -1);
+							system->IncrementWindowDynamicResource(window_index, identifier);
+						}
+						LabelHierarchyDrawer(configuration, config, data, position, scale, dynamic_resource_index, iterator);
+					}
+					else {
+						bool exists = ExistsResource(name);
+						if (!exists) {
+							UIDrawerInitializeLabelHierarchy initialize_data;
+							initialize_data.config = &config;
+							ECS_FORWARD_STRUCT_MEMBERS_1(initialize_data, name);
+							InitializeDrawerElement(
+								*this,
+								&initialize_data,
+								name,
+								InitializeLabelHierarchyElement,
+								DynamicConfiguration(configuration)
+							);
+						}
+						LabelHierarchy(DynamicConfiguration(configuration), config, name, iterator);
+					}
+				}
+				else {
+					if (configuration & UI_CONFIG_DO_CACHE) {
+						LabelHierarchyInitializer(configuration, config, name);
+					}
+				}
+			}
+
+			template<typename Iterator>
+			void LabelHierarchyDrawer(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				UIDrawerLabelHierarchyData* data,
+				float2 position,
+				float2 scale, 
+				unsigned int dynamic_resource_index, 
+				Iterator&& iterator
+			) {
+				float2 square_scale = GetSquareScale(scale.y);
+
+				// aliases for sprite texture info
+				float2 opened_top_left_uv, closed_top_left_uv, opened_bottom_right_uv, closed_bottom_right_uv;
+				Color opened_color, closed_color;
+				const wchar_t* opened_texture;
+				const wchar_t* closed_texture;
+				float2 expand_factor;
+				float horizontal_bound = region_limit.x;
+
+				float horizontal_texture_offset = square_scale.x;
+				bool keep_triangle = true;
+
+				// copy the information into aliases
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE) {
+					const UIConfigLabelHierarchySpriteTexture* texture_info = (const UIConfigLabelHierarchySpriteTexture*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE);
+					opened_top_left_uv = texture_info->opened_texture_top_left_uv;
+					opened_bottom_right_uv = texture_info->opened_texture_bottom_right_uv;
+					closed_top_left_uv = texture_info->closed_texture_top_left_uv;
+					closed_bottom_right_uv = texture_info->closed_texture_bottom_right_uv;
+
+					opened_color = texture_info->opened_color;
+					closed_color = texture_info->closed_color;
+
+					opened_texture = texture_info->opened_texture;
+					closed_texture = texture_info->closed_texture;
+
+					expand_factor = texture_info->expand_factor;
+					horizontal_texture_offset *= (1.0f + texture_info->keep_triangle);
+					keep_triangle = texture_info->keep_triangle;
+				}
+
+				auto get_callback_info = [&](const auto* callback, size_t config_flag, void* ptr_to_write) {
+					if (configuration & config_flag) {
+						callback = (decltype(callback))config.GetParameter(config_flag);
+						if (!callback->copy_on_initialization && callback->data_size > 0) {
+							memcpy(ptr_to_write, callback->data, callback->data_size);
+						}
+						return callback->phase;
+					}
+					return ECS_UI_DRAW_NORMAL;
+				};
+
+				const UIConfigLabelHierarchySelectableCallback* selectable;
+				ECS_UI_DRAW_PHASE selectable_callback_phase = get_callback_info(selectable, UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK, data->selectable_data);
+				
+				const UIConfigLabelHierarchyRightClick* right_click;
+				ECS_UI_DRAW_PHASE right_click_phase = get_callback_info(right_click, UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK, data->right_click_data);
+
+				const UIConfigLabelHierarchyDragCallback* drag_callback;
+				ECS_UI_DRAW_PHASE drag_phase = get_callback_info(drag_callback, UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL, data->drag_data);
+
+				const UIConfigLabelHierarchyRenameCallback* rename_callback;
+				ECS_UI_DRAW_PHASE rename_phase = get_callback_info(rename_callback, UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL, data->rename_data);
+				
+				const UIConfigLabelHierarchyDoubleClickCallback* double_click_callback;
+				ECS_UI_DRAW_PHASE double_click_phase = get_callback_info(double_click_callback, UI_CONFIG_LABEL_HIERARCHY_DOUBLE_CLICK_ACTION, data->double_click_data);
+
+				Stream<char> filter = { nullptr, 0 };
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_FILTER) {
+					const UIConfigLabelHierarchyFilter* filter_config = (const UIConfigLabelHierarchyFilter*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_FILTER);
+					filter = filter_config->filter;
+				}
+
+				// The aggregate phase - the "latest" phase of them all. Can't satisfy different phases
+				ECS_UI_DRAW_PHASE click_action_phase = std::max(selectable_callback_phase, drag_phase);
+				click_action_phase = std::max(click_action_phase, double_click_phase);
+				
+				// font size and character spacing are dummies, text color is the one that's needed for
+				// drop down triangle color
+				float2 font_size;
+				float character_spacing;
+				Color text_color;
+				HandleText(configuration, config, text_color, font_size, character_spacing);
+
+				UIDrawConfig internal_config;
+				memcpy(&internal_config, &config, sizeof(internal_config));
+
+				Color label_color = HandleColor(configuration, config);
+				Color drag_highlight_color = label_color;
+				drag_highlight_color.alpha = 100;
+
+				UIConfigTextAlignment text_alignment;
+				text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
+				text_alignment.vertical = ECS_UI_ALIGN_MIDDLE;
+				internal_config.AddFlag(text_alignment);
+
+				size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X 
+					| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE;
+
+				unsigned int selection_first = -1;
+				unsigned int selection_last = -1;
+
+				// Used by the determine selection
+				ActionData action_data = GetDummyActionData();
+
+				// While the determine count is 1, add the labels to the selection
+				unsigned char determine_count = 0;
+				if (data->determine_selection) {
+					ECS_STACK_CAPACITY_STREAM(char, temp_first, 512);
+					temp_first.Copy(data->first_selected);
+					data->ChangeSelection(data->last_selected, &action_data);
+					data->first_selected.Copy(temp_first);
+				}
+
+				while (iterator.Valid()) {
+					// Peek the value
+					unsigned int depth = 0;
+					bool has_children = false;
+					Stream<char> current_label = iterator.Peek(&depth, &has_children);
+					
+					// TODO: At the moment, use the names directly. If a case where multiple nodes can have the same
+					// label happens, then make a flag for that case and write it (when that does happen)
+
+					/*size_t opened_index = 0;
+					for (; opened_index < data->opened_labels.size; opened_index++) {
+						Stream<char> last_name = function::PathFilename(data->opened_labels[index]);
+						if (function::CompareStrings(last_name, current_label)) {
+							break;
+						}
+					}*/
+
+					unsigned int opened_index = function::FindString(current_label, data->opened_labels);
+					if (opened_index == -1) {
+						// Not opened, skip the node
+						iterator.Skip();
+					}
+					else {
+						iterator.Next();
+					}
+
+					// Verify if it passes the filter
+					if (filter.size == 0 || function::FindFirstToken(current_label, filter).buffer != nullptr) {
+						float current_gain = depth * layout.node_indentation;
+						float2 current_position = { position.x + current_gain, position.y };
+						float2 current_scale = { horizontal_bound - current_position.x, scale.y };
+
+						if (data->determine_selection) {
+							if (selection_first == -1 && function::CompareStrings(current_label, data->first_selected)) {
+								selection_first = 0;
+								determine_count++;
+							}
+							else if (selection_last == -1 && function::CompareStrings(current_label, data->last_selected)) {
+								selection_last = 0;
+								determine_count++;
+							}
+						}
+
+						if (data->determine_selection && determine_count == 1) {
+							data->AddSelection(current_label, &action_data);
+						}
+
+						if (ValidatePosition(configuration, current_position, current_scale)) {
+							Color current_color = label_color;
+
+							float2 label_position = { current_position.x + horizontal_texture_offset, current_position.y };
+							float2 label_scale = { current_scale.x - horizontal_texture_offset, current_scale.y };
+							bool is_active = false;
+							float active_label_scale = 0.0f;
+
+							if (function::FindString(current_label, data->selected_labels) != -1) {
+								current_color = ToneColor(label_color, 1.25f);
+								is_active = true;
+								active_label_scale = GetLabelScale(current_label).x;
+							}
+
+							if (data->is_rename_label && is_active) {
+								UIConfigTextInputCallback text_callback;
+								text_callback.handler = { LabelHierarchyRenameLabel, data, 0, rename_phase };
+								internal_config.AddFlag(text_callback);
+
+								UIConfigAbsoluteTransform transform;
+								transform.position = label_position;
+								transform.scale = label_scale;
+								internal_config.AddFlag(transform);
+
+								UIConfigBorder border;
+								UIDrawerTextInput* text_input = TextInput(
+									configuration | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_NO_NAME,
+									internal_config,
+									"LabelHierarchyInput",
+									&data->rename_label
+								);
+								text_input->is_currently_selected = true;
+							}
+							else {
+								TextLabel(
+									function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | label_configuration | UI_CONFIG_LABEL_TRANSPARENT,
+									internal_config,
+									current_label,
+									label_position,
+									label_scale
+								);
+							}
+
+							bool is_dragging = data->is_dragging;
+							if (is_dragging) {
+								// Record the hovered label
+								if (IsMouseInRectangle(current_position, current_scale)) {
+									data->hovered_label.Copy(current_label);
+									// Display a hovered highlight
+									SpriteRectangle(configuration, current_position, current_scale, ECS_TOOLS_UI_TEXTURE_MASK, drag_highlight_color);
+								}
+							}
+
+							// Embedd the string into the data
+							size_t _click_data[64];
+							LabelHierarchyClickActionData* click_data = (LabelHierarchyClickActionData*)_click_data;
+							click_data->hierarchy_data = data;
+							unsigned int click_data_size = click_data->WriteString(current_label);
+
+							AddGeneral(current_position, current_scale, { LabelHierarchyClickAction, click_data, click_data_size, click_action_phase });
+							AddDefaultHoverable(current_position, current_scale, current_color);
+
+							// Embedd the string into the data
+							size_t _change_state_data[64];
+							LabelHierarchyChangeStateData* change_state_data = (LabelHierarchyChangeStateData*)_change_state_data;
+							change_state_data->hierarchy_data = data;
+							unsigned int change_data_size = change_state_data->WriteString(current_label);
+
+							if (keep_triangle && has_children) {
+								if (opened_index != -1) {
+									SpriteRectangle(configuration, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, text_color);
+								}
+								else {
+									SpriteRectangle(configuration, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, text_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
+								}
+								AddClickable(current_position, square_scale, { LabelHierarchyChangeState, change_state_data, change_data_size, ECS_UI_DRAW_NORMAL });
+							}
+
+							float2 user_sprite_texture_position = current_position;
+							user_sprite_texture_position.x += square_scale.x;
+							if (configuration & UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE) {
+								if (opened_index != -1) {
+									SpriteRectangle(configuration, user_sprite_texture_position, square_scale, opened_texture, opened_color, opened_top_left_uv, opened_bottom_right_uv);
+								}
+								else {
+									SpriteRectangle(configuration, user_sprite_texture_position, square_scale, closed_texture, closed_color, closed_top_left_uv, closed_bottom_right_uv);
+								}
+								if (!keep_triangle && has_children) {
+									AddClickable(user_sprite_texture_position, square_scale, { LabelHierarchyChangeState, change_state_data, change_data_size, ECS_UI_DRAW_NORMAL });
+								}
+							}
+
+							if (configuration & UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK) {
+								// Embedd the string into the data
+								size_t _right_click_data[64];
+								UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_right_click_data;
+								right_click_data->data = data;
+								unsigned int write_size = right_click_data->WriteLabel(current_label);
+
+								AddHoverable(label_position, label_scale, { LabelHierarchyRightClickAction, right_click_data, write_size, right_click_phase });
+							}
+
+							if (is_active) {
+								current_scale.x = function::ClampMin(current_scale.x, active_label_scale + square_scale.x * 2.0f);
+								SolidColorRectangle(configuration, current_position, current_scale, current_color);
+							}
+						}
+
+						FinalizeRectangle(configuration, current_position, current_scale);
+						NextRow(0.0f);
+						position.y += current_scale.y;
+					}
+					
+					// Deallocate the node
+					if (configuration & UI_CONFIG_LABEL_HIERARCHY_DEALLOCATE_LABEL) {
+						iterator.Deallocate(current_label.buffer);
+					}
+				}
+
+				if (data->determine_selection) {
+					// Can happen that the first label is ommited when doing for example selecting 12 to 1
+					// Also the first label gets added 2 times, so remove it
+					unsigned int first_idx = function::FindString(data->first_selected, data->selected_labels);
+					if (first_idx == -1) {
+						data->selected_labels.RemoveSwapBack(0);
+						data->AddSelection(data->first_selected, &action_data);
+					}
+
+					data->determine_selection = false;
+					// Call the selection callback
+					if (data->selectable_action != nullptr) {
+						UIDrawerLabelHierarchySelectableData select_data;
+						select_data.data = data->selectable_data;
+						select_data.labels = data->selected_labels;
+						action_data.data = &select_data;
+						data->selectable_action(&action_data);
+					}
+				}
+
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS) {
+					// Check if the window is focused
+					if (system->GetActiveWindow() == window_index) {
+						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
+						if (system->m_keyboard->IsKeyDown(HID::Key::LeftControl)) {
+							if (system->m_keyboard->IsKeyPressed(HID::Key::C)) {
+								data->is_selection_cut = false;
+								data->RecordSelection(&action_data);
+							}
+							else if (system->m_keyboard->IsKeyPressed(HID::Key::X)) {
+								data->is_selection_cut = true;
+								data->RecordSelection(&action_data);
+							}
+							else if (system->m_keyboard->IsKeyPressed(HID::Key::V)) {
+								// Call the appropriate callback
+								// Only if there is no selection or just a single selection
+								if (data->copied_labels.size > 0 && (data->selected_labels.size == 0 || data->selected_labels.size == 1)) {
+									if (data->is_selection_cut && data->cut_action != nullptr) {
+										UIDrawerLabelHierarchyCutData cut_data;
+										cut_data.data = data->cut_data;
+										cut_data.destination_label = data->selected_labels.size == 0 ? Stream<char>(nullptr, 0) : data->selected_labels[0];
+										cut_data.source_labels = data->copied_labels;
+										action_data.data = &cut_data;
+
+										data->cut_action(&action_data);
+									}
+									else if (data->copy_action != nullptr) {
+										UIDrawerLabelHierarchyCopyData copy_data;
+										copy_data.data = data->copy_data;
+										copy_data.destination_label = data->selected_labels.size == 0 ? Stream<char>(nullptr, 0) : data->selected_labels[0];
+										copy_data.source_labels = data->copied_labels;
+										action_data.data = &copy_data;
+
+										data->copy_action(&action_data);
+									}
+								}
+							}
+						}
+						else if (system->m_keyboard_tracker->IsKeyPressed(HID::Key::Delete)) {
+							if (data->selected_labels.size > 0) {
+								UIDrawerLabelHierarchyDeleteData delete_data;
+								delete_data.data = data->delete_data;
+								delete_data.source_labels = data->selected_labels;
+								action_data.data = &delete_data;
+
+								data->delete_action(&action_data);
+							}
+						}
+					}
+				}
+			}
+
+			UIDrawerLabelHierarchyData* LabelHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name);
 
 #pragma endregion
 
@@ -3829,6 +4269,16 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void SetCurrentY(float value);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Sets the current x and y to be the region position
+			void SetCurrentPositionToHeader();
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Sets the current x and y to the beginning of the normal render space
+			void SetCurrentPositionToStart();
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4157,10 +4607,13 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// An offset added to the already in place padding
+			// Useful for node indentation
 			void SetRowHorizontalOffset(float value);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// The default row horizontal padding
 			void SetRowPadding(float value);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4637,11 +5090,15 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void InitializeLabelHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
+		ECSENGINE_API void InitializeFilesystemHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		ECSENGINE_API void InitializeListElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void InitializeLabelHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
 		

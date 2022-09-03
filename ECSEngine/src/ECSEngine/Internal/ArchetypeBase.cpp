@@ -326,7 +326,7 @@ namespace ECSEngine {
 		void* copy_buffer = m_entities;
 		Entity* old_entities = m_entities;
 
-		if (current_total_byte_size < STACK_LIMIT) {
+		if (current_total_byte_size < STACK_LIMIT && m_size > 0) {
 			copy_buffer = stack_buffer;
 			memcpy(stack_buffer, m_entities, current_total_byte_size);
 
@@ -369,7 +369,7 @@ namespace ECSEngine {
 	unsigned int ArchetypeBase::Reserve(unsigned int count)
 	{
 		if (m_size + count > m_capacity) {
-			Resize((unsigned int)((float)m_capacity * GROW_FACTOR));
+			Resize((unsigned int)((float)m_capacity * GROW_FACTOR + 3));
 		}
 		return m_size;
 	}
@@ -396,6 +396,7 @@ namespace ECSEngine {
 
 	void ArchetypeBase::RemoveEntity(unsigned int stream_index, EntityPool* pool)
 	{
+		m_size--;
 		// If it is the last entity, skip the update of the components and that of the entity info
 		if (stream_index == m_size) {
 			return;

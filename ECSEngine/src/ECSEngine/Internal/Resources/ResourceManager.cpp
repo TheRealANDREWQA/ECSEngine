@@ -915,39 +915,63 @@ namespace ECSEngine {
 		}
 		else {
 			result = DirectX::LoadFromWICFile(filename.buffer, DirectX::WIC_FLAGS_FORCE_RGB | DirectX::WIC_FLAGS_IGNORE_SRGB, nullptr, image);
+
 		}
 		if (FAILED(result)) {
 			return nullptr;
 		}
 
-		descriptor->misc_flags |= function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? D3D11_RESOURCE_MISC_SHARED : 0;
-
-		DXTexCreateTextureEx(
-			m_graphics->GetDevice(),
-			&image,
-			descriptor->bind_flags,
-			descriptor->usage,
-			descriptor->misc_flags,
-			descriptor->cpu_flags,
-			&texture.tex,
-			&texture_view,
-			descriptor->context
-		);
+		descriptor->misc_flags |= function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? ECS_GRAPHICS_MISC_SHARED : ECS_GRAPHICS_MISC_NONE;
 
 		if (is_compression) {
-			// Release the old view
-			unsigned int count = texture_view->Release();
-			bool success = CompressTexture(m_graphics, texture, descriptor->compression);
-			if (!success) {
+			DirectX::Image new_image = *image.GetImage(0, 0, 0);
+			void* new_allocation = malloc(new_image.slicePitch);
+			memcpy(new_allocation, new_image.pixels, new_image.slicePitch);
+			new_image.pixels = (uint8_t*)new_allocation;
+			HRESULT result = DirectX::GenerateMipMaps(new_image, DirectX::TEX_FILTER_LINEAR, 0, image);
+			free(new_allocation);
+			if (FAILED(result)) {
 				return nullptr;
 			}
 
+			Stream<void> data[64];
+			const auto* images = image.GetImages();
+			for (size_t index = 0; index < image.GetImageCount(); index++) {
+				data[index] = { images[index].pixels, images[index].slicePitch };
+			}
+
+			texture = CompressTexture(m_graphics, Stream<Stream<void>>(data, image.GetImageCount()), images[0].width, images[0].height, descriptor->compression, true);
+			if (texture.Interface() == nullptr) {
+				return nullptr;
+			}
 			texture_view = m_graphics->CreateTextureShaderViewResource(texture, true).view;
+
+			//// Release the old view
+			//unsigned int count = texture_view->Release();
+			//bool success = CompressTexture(m_graphics, texture, descriptor->compression);
+			//if (!success) {
+			//	return nullptr;
+			//}
+
+			//texture_view = m_graphics->CreateTextureShaderViewResource(texture, true).view;
+		}
+		else {
+			DXTexCreateTextureEx(
+				m_graphics->GetDevice(),
+				&image,
+				GetGraphicsNativeBind(descriptor->bind_flags),
+				GetGraphicsNativeUsage(descriptor->usage),
+				GetGraphicsNativeMiscFlags(descriptor->misc_flags),
+				GetGraphicsNativeCPUAccess(descriptor->cpu_flags),
+				&texture.tex,
+				&texture_view,
+				descriptor->context
+			);
 		}
 
 		if (!temporary) {
-			m_graphics->AddInternalResource(ResourceView(texture_view), ECS_DEBUG_INFO);
-			m_graphics->AddInternalResource(texture, ECS_DEBUG_INFO);
+			m_graphics->AddInternalResource(ResourceView(texture_view));
+			m_graphics->AddInternalResource(texture);
 		}
 
 		return texture_view;
@@ -1013,7 +1037,7 @@ namespace ECSEngine {
 		buffer += sizeof(Stream<Mesh>);
 		meshes->InitializeFromBuffer(buffer, data.mesh_count);
 
-		unsigned int misc_flags = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? D3D11_RESOURCE_MISC_SHARED : 0;
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? ECS_GRAPHICS_MISC_SHARED : ECS_GRAPHICS_MISC_NONE;
 		// Convert the gltf meshes into multiple meshes
 		GLTFMeshesToMeshes(m_graphics, gltf_meshes, meshes->buffer, meshes->size, misc_flags);
 
@@ -1089,7 +1113,7 @@ namespace ECSEngine {
 		buffer += sizeof(CoallescedMesh);
 		mesh->submeshes.InitializeFromBuffer(buffer, data.mesh_count);
 		
-		unsigned int misc_flags = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? D3D11_RESOURCE_MISC_SHARED : 0;
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? ECS_GRAPHICS_MISC_SHARED : ECS_GRAPHICS_MISC_NONE;
 		// Convert the gltf meshes into multiple meshes and then convert these to an aggregated mesh
 		GLTFMeshesToMeshes(m_graphics, gltf_meshes, temporary_meshes, data.mesh_count);
 
@@ -1233,7 +1257,7 @@ namespace ECSEngine {
 
 		mesh->materials = (PBRMaterial*)buffer;
 
-		unsigned int misc_flags = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? D3D11_RESOURCE_MISC_SHARED : 0;
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_SHARED_RESOURCE) ? ECS_GRAPHICS_MISC_SHARED : ECS_GRAPHICS_MISC_NONE;
 		mesh->mesh.mesh = GLTFMeshesToMergedMesh(m_graphics, gltf_meshes, mesh->mesh.submeshes.buffer, material_masks, pbr_materials.size, data.mesh_count, misc_flags);
 		mesh->mesh.submeshes.size = pbr_materials.size;
 
@@ -1260,7 +1284,7 @@ namespace ECSEngine {
 		bool is_byte_code = function::CompareStrings(path_extension, L".cso");
 
 		Stream<void> contents = { nullptr, 0 };
-		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(manager->m_memory, ECS_ALLOCATION_TYPE::ECS_ALLOCATION_MULTI);
+		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(manager->m_memory, ECS_ALLOCATION_MULTI);
 
 		if (is_byte_code) {
 			contents = ReadWholeFileBinary(filename.buffer, allocator_polymorphic);
@@ -1950,7 +1974,7 @@ namespace ECSEngine {
 		struct Mapping {
 			Stream<wchar_t> texture;
 			PBRMaterialTextureIndex index;
-			TextureCompressionExplicit compression;
+			ECS_TEXTURE_COMPRESSION_EX compression;
 		};
 
 		Mapping _mapping[ECS_PBR_MATERIAL_MAPPING_COUNT];
@@ -1962,42 +1986,42 @@ namespace ECSEngine {
 			shader_macros.Add({ "COLOR_TEXTURE", "" });
 
 			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.color_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_COLOR, TextureCompressionExplicit::ColorMap });
+			mappings.Add({ texture, ECS_PBR_MATERIAL_COLOR, ECS_TEXTURE_COMPRESSION_COLOR });
 		}
 
 		if (pbr.emissive_texture.buffer != nullptr && pbr.emissive_texture.size > 0) {
 			shader_macros.Add({ "EMISSIVE_TEXTURE", "" });
 			
 			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.emissive_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_EMISSIVE, TextureCompressionExplicit::ColorMap });
+			mappings.Add({ texture, ECS_PBR_MATERIAL_EMISSIVE, ECS_TEXTURE_COMPRESSION_COLOR });
 		}
 
 		if (pbr.metallic_texture.buffer != nullptr && pbr.metallic_texture.size > 0) {
 			shader_macros.Add({ "METALLIC_TEXTURE", "" });
 
 			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.metallic_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_METALLIC, TextureCompressionExplicit::GrayscaleMap });
+			mappings.Add({ texture, ECS_PBR_MATERIAL_METALLIC, ECS_TEXTURE_COMPRESSION_GRAYSCALE });
 		}
 
 		if (pbr.normal_texture.buffer != nullptr && pbr.normal_texture.size > 0) {
 			shader_macros.Add({ "NORMAL_TEXTURE", "" });
 
 			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.normal_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_NORMAL, TextureCompressionExplicit::NormalMapLowQuality });
+			mappings.Add({ texture, ECS_PBR_MATERIAL_NORMAL, ECS_TEXTURE_COMPRESSION_TANGENT_SPACE_NORMAL });
 		}
 
 		if (pbr.occlusion_texture.buffer != nullptr && pbr.occlusion_texture.size > 0) {
 			shader_macros.Add({ "OCCLUSION_TEXTURE", "" });
 
 			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.occlusion_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_OCCLUSION, TextureCompressionExplicit::GrayscaleMap });
+			mappings.Add({ texture, ECS_PBR_MATERIAL_OCCLUSION, ECS_TEXTURE_COMPRESSION_GRAYSCALE });
 		}
 
 		if (pbr.roughness_texture.buffer != nullptr && pbr.roughness_texture.size > 0) {
 			shader_macros.Add({ "ROUGHNESS_TEXTURE", "" });
 
 			Stream<wchar_t> texture = function::StringCopy(temporary_allocator, pbr.roughness_texture);
-			mappings.Add({ texture, ECS_PBR_MATERIAL_ROUGHNESS, TextureCompressionExplicit::GrayscaleMap });
+			mappings.Add({ texture, ECS_PBR_MATERIAL_ROUGHNESS, ECS_TEXTURE_COMPRESSION_GRAYSCALE });
 		}
 
 		struct FunctorData {
@@ -2035,7 +2059,7 @@ namespace ECSEngine {
 
 		ResourceManagerTextureDesc texture_descriptor;
 		texture_descriptor.context = context;
-		texture_descriptor.usage = D3D11_USAGE_DEFAULT;
+		texture_descriptor.usage = ECS_GRAPHICS_USAGE_DEFAULT;
 
 		for (size_t index = 0; index < texture_count; index++) {
 			texture_descriptor.compression = mappings[index].compression;

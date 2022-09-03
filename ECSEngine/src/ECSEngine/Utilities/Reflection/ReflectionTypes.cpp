@@ -114,7 +114,7 @@ namespace ECSEngine {
 			return function::CompareStrings(string, tag);
 		}
 
-		double ReflectionType::HasEvaluation(Stream<char> name) const
+		double ReflectionType::GetEvaluation(Stream<char> name) const
 		{
 			for (size_t index = 0; index < evaluations.size; index++) {
 				if (function::CompareStrings(evaluations[index].name, name)) {

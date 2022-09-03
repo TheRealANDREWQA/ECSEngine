@@ -4,7 +4,6 @@
 #include "../Editor/EditorState.h"
 #include "../UI/ToolbarUI.h"
 #include "../UI/MiscellaneousBar.h"
-#include "../UI/Game.h"
 #include "../UI/DirectoryExplorer.h"
 #include "../UI/FileExplorer.h"
 #include "../Editor/EditorParameters.h"
@@ -16,6 +15,7 @@
 #include "../UI/NotificationBar.h"
 #include "../UI/Backups.h"
 #include "../UI/Sandbox.h"
+#include "../UI/EntitiesUI.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -273,22 +273,19 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 
 		PlaceholderDockspaceActionData* action_data = (PlaceholderDockspaceActionData*)allocation;
 
-		action_data[TOOLBAR_WINDOW_MENU_INJECT_WINDOW] = { data->editor_state, data->editor_state->inject_window_name, {1.0f, 0.5f} };
 		action_data[TOOLBAR_WINDOW_MENU_CONSOLE] = { data->editor_state, CONSOLE_WINDOW_NAME, {1.0f, 0.5f} };
-		action_data[TOOLBAR_WINDOW_MENU_GAME] = { data->editor_state, GAME_WINDOW_NAME, {1.0f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER] = { data->editor_state, DIRECTORY_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { data->editor_state, SANDBOX_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, INSPECTOR_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = { data->editor_state, SANDBOX_UI_WINDOW_NAME, { 0.6f, 1.0f } };
+		action_data[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { data->editor_state, ENTITIES_UI_WINDOW_NAME, { 0.7f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
 
 #define SET_HANDLER(index) data->handlers[index] = {CreatePlaceholderDockspaceAction, action_data + index, 0, ECS_UI_DRAW_SYSTEM}
 
-		SET_HANDLER(TOOLBAR_WINDOW_MENU_INJECT_WINDOW);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_CONSOLE);
-		SET_HANDLER(TOOLBAR_WINDOW_MENU_GAME);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_FILE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_MODULE_EXPLORER);
@@ -296,6 +293,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INSPECTOR);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_SANDBOX_UI);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_BACKUPS);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_ENTITIES_UI);
 
 #undef SET_HANDLER
 	}
@@ -353,7 +351,7 @@ void CreateProjectUITemplatePreview(EditorState* editor_state) {
 	CreateMiscellaneousBarNoActions(editor_state);
 	CreateNotificationBar(editor_state);
 	UIDockspace* main_dockspace = CreateProjectBackgroundDockspace(ui_system);
-	unsigned int viewport_window_index = CreatePlaceholderWindow(editor_state, GAME_WINDOW_NAME, {1.0f, 1.0f});
+	unsigned int viewport_window_index = CreatePlaceholderWindow(editor_state, SANDBOX_EXPLORER_WINDOW_NAME, {1.0f, 1.0f});
 	ui_system->AddWindowToDockspaceRegion(viewport_window_index, main_dockspace, 0);
 	
 	CreateSaveLayoutWindow(editor_state);

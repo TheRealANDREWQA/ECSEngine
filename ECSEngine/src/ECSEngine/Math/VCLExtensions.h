@@ -1,5 +1,5 @@
 #pragma once
-#include "ecspch.h"
+#include "../../Dependencies/VCL-version2/vectorclass.h"
 #include "../Core.h"
 
 namespace ECSEngine {
@@ -269,7 +269,19 @@ namespace ECSEngine {
 
 #pragma endregion
 
-#pragma region
+#pragma region HorizontalFindFirst
+
+	template<typename VectorType>
+	ECS_INLINE int ECS_VECTORCALL HorizontalFindFirst(VectorType vector) {
+		if (horizontal_or(vector)) {
+			return horizontal_find_first(vector);
+		}
+		return -1;
+	}
+
+#pragma endregion
+
+#pragma region For Each Bit
 
 	// The functor can return true in order to early exit from the function
 	// Can toggle reverse search, which will start from the high positions of
@@ -278,19 +290,18 @@ namespace ECSEngine {
 	void ECS_VECTORCALL ForEachBit(BitMaskVector bit_mask, Functor&& functor) {
 		if (horizontal_or(bit_mask)) {
 			unsigned int match_bits = to_bits(bit_mask);
-			unsigned long vector_index = 0;
 			unsigned long offset = 0;
 
 			// Keep an offset because when a false positive is detected, that bit must be eliminated and in order to avoid
 			// using masks, shift to the right to make that bit 0
-			unsigned char result = 0;
+			unsigned int vector_index = 0;
 			if  constexpr (reverse_search) {
-				result = _BitScanReverse(&vector_index, match_bits);
+				vector_index = function::FirstMSB(match_bits);
 			}
 			else {
-				result = _BitScanForward(&vector_index, match_bits);
+				vector_index = function::FirstLSB(match_bits);
 			}
-			while (result) {
+			while (vector_index != -1) {
 				unsigned int bit_index = 0;
 				if constexpr (reverse_search) {
 					bit_index = vector_index - offset;
@@ -328,11 +339,11 @@ namespace ECSEngine {
 					offset += vector_index + 1;
 				}
 
-				if constexpr (reverse_search) {
-					result = _BitScanReverse(&vector_index, match_bits);
+				if  constexpr (reverse_search) {
+					vector_index = function::FirstMSB(match_bits);
 				}
 				else {
-					result = _BitScanForward(&vector_index, match_bits);
+					vector_index = function::FirstLSB(match_bits);
 				}
 			}
 		}

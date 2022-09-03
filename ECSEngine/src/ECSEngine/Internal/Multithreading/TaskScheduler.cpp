@@ -44,6 +44,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void TaskScheduler::ClearFrame()
+	{
+		query_index = 0;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void TaskScheduler::InitializeSchedulerInfo(World* world)
 	{
 		size_t current_query_index = 0;

@@ -6,7 +6,6 @@
 #include "../../Allocators/MemoryArena.h"
 #include "../../Allocators/MemoryManager.h"
 #include "../../Allocators/LinearAllocator.h"
-#include "../../Rendering/Graphics.h"
 #include "../../Rendering/RenderingStructures.h"
 #include "../../Internal/InternalStructures.h"
 #include "UIMacros.h"
@@ -14,10 +13,14 @@
 #include "../../Utilities/Timer.h"
 #include "../../Utilities/Mouse.h"
 #include "../../Utilities/Keyboard.h"
+#include "../../Rendering/Graphics.h"
 
 namespace ECSEngine {
 
 	namespace Tools {
+
+		struct UISystem;
+		struct UIDockspace;
 
 		using UIToolsAllocator = ECSEngine::ResizableMemoryArena;
 
@@ -44,10 +47,9 @@ namespace ECSEngine {
 
 		// additional data is primarly intended for general actions which depend on previous information or next one
 		struct ActionData {
-			void* system;
-			void* dockspace;
+			UISystem* system;
+			UIDockspace* dockspace;
 			unsigned int border_index;
-			float dockspace_mask;
 			DockspaceType type;
 			float2 mouse_position;
 			float2 position;
@@ -187,14 +189,14 @@ namespace ECSEngine {
 			float alpha_inactive_item;
 		};
 
-		struct ECSENGINE_API UIFontDescriptor {
+		struct UIFontDescriptor {
 			float size;
 			float character_spacing;
 			unsigned int texture_dimensions;
 			unsigned int symbol_count;
 		};
 
-		struct ECSENGINE_API UIDockspaceDescriptor {
+		struct UIDockspaceDescriptor {
 			unsigned int count;
 			unsigned int max_border_count;
 			unsigned int max_windows_border;
@@ -219,7 +221,7 @@ namespace ECSEngine {
 			float close_x_total_x_padding;
 		};
 
-		struct ECSENGINE_API UILayoutDescriptor {
+		struct UILayoutDescriptor {
 			float default_element_x;
 			float default_element_y;
 			float element_indentation;
@@ -228,7 +230,7 @@ namespace ECSEngine {
 			float node_indentation;
 		};
 
-		struct ECSENGINE_API UIMiscellaneousDescriptor {
+		struct UIMiscellaneousDescriptor {
 			unsigned short window_count;
 			float title_y_scale;
 			unsigned short window_table_default_count;
@@ -263,7 +265,7 @@ namespace ECSEngine {
 			float menu_x_padd;
 		};
 
-		struct ECSENGINE_API UIElementDescriptor {
+		struct UIElementDescriptor {
 			float2 label_padd;
 			float2 slider_shrink;
 			float2 slider_length;
@@ -302,7 +304,7 @@ namespace ECSEngine {
 			UIElementDescriptor element_descriptor;
 		};
 
-		struct ECSENGINE_API UISystemDescriptors {
+		struct UISystemDescriptors {
 			UIMaterialDescriptor materials;
 			UIColorThemeDescriptor color_theme;
 			UIFontDescriptor font;
@@ -336,13 +338,17 @@ namespace ECSEngine {
 			UIDynamicStream<unsigned int> sprite_cluster_subtreams;
 		};
 
-		struct ECSENGINE_API UIRenderThreadResources {
+		struct UIRenderThreadResources {
 			GraphicsContext* deferred_context;
+			// Used by the normal and late phase handler allocations
+			// such that it can be reset in between window renders
 			LinearAllocator temp_allocator;
+			// System phase allocation are made from this allocator
+			LinearAllocator system_temp_allocator;
 			ECS_UI_DRAW_PHASE phase;
 		};
 
-		struct ECSENGINE_API UIRenderResources
+		struct UIRenderResources
 		{
 			Stream<UIRenderThreadResources> thread_resources;
 			CapacityStream<VertexShader> vertex_shaders;
@@ -364,25 +370,11 @@ namespace ECSEngine {
 			// position, scale, data and late_update are set inside the call
 			void Execute(unsigned int action_index, ActionData* data) const;
 
+			UIActionHandler* GetLastHandler() const;
+
 			void Reset();
 
 			void SetBuffer(void* buffer, size_t count);
-
-			template<typename DataToExpand>
-			void WriteExtraArguments(const void** data, const size_t* data_size, size_t count) {
-				unsigned int index = position_x.size - 1;
-				void* old_data = action[index].data;
-				uintptr_t ptr = (uintptr_t)old_data;
-				ptr += sizeof(DataToExpand);
-				DataToExpand* reinterpretation = (DataToExpand*)old_data;
-				for (size_t index = 0; index < count; index++) {
-					if (data_size[index] != 0) {
-						memcpy((void*)ptr, data[index], data_size[index]);
-						reinterpretation->WriteExtraArgument((void*)ptr, data_size[index]);
-						ptr += data_size[index];
-					}
-				}
-			}
 
 			static size_t MemoryOf(size_t count);
 
@@ -440,7 +432,6 @@ namespace ECSEngine {
 
 			UIDockspace* dockspace;
 			DockspaceType type;
-			float offset_mask;
 			unsigned short border_index;
 			unsigned short layer;
 		};
@@ -455,7 +446,6 @@ namespace ECSEngine {
 			void* system;
 			UIDockspace* dockspace;
 			unsigned int border_index;
-			float offset_mask;
 			DockspaceType type;
 			bool is_fixed_default_when_border_zero;
 			unsigned int draw_index;
@@ -516,6 +506,8 @@ namespace ECSEngine {
 		struct ECSENGINE_API UIWindowDynamicResource {
 			Stream<void*> element_allocations;
 			Stream<ResourceIdentifier> table_resources;
+			// The resource can add allocations without changing the coallesced allocation
+			Stream<void*> added_allocations;
 			unsigned int reference_count;
 		};
 
@@ -538,7 +530,6 @@ namespace ECSEngine {
 			void* window_data;
 			size_t window_data_size;
 			Stream<UISpriteVertex> name_vertex_buffer;
-			UIDynamicStream<Stream<char>> draw_element_names;
 			UIDynamicStream<void*> memory_resources;
 			HashTableDefault<UIWindowDynamicResource> dynamic_resources;
 			WindowDraw draw;
@@ -551,7 +542,7 @@ namespace ECSEngine {
 			unsigned char pin_vertical_slider_count;
 		};
 
-		struct ECSENGINE_API UIWindowSerializedMissingData {
+		struct UIWindowSerializedMissingData {
 			WindowDraw draw;
 			Action private_action = nullptr;
 			void* private_action_data = nullptr;
@@ -563,7 +554,7 @@ namespace ECSEngine {
 
 		// window data size 0 means it does not need to allocate memory, just take the pointer
 		// The destroy callback receives the window data in the additional data parameter
-		struct ECSENGINE_API UIWindowDescriptor {
+		struct UIWindowDescriptor {
 			unsigned short resource_count = 0;
 			float initial_position_x;
 			float initial_position_y;
@@ -586,7 +577,6 @@ namespace ECSEngine {
 #pragma region Event data
 
 		struct ECSENGINE_API UIFocusedWindowData {
-
 			void ChangeHoverableHandler(float2 position, float2 scale, const UIActionHandler* handler);
 			void ChangeHoverableHandler(UIElementTransform transform, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
 			void ChangeHoverableHandler(float2 position, float2 scale, Action action, void* data, size_t data_size, ECS_UI_DRAW_PHASE phase);
@@ -608,22 +598,29 @@ namespace ECSEngine {
 			void ResetClickableHandler();
 			void ResetGeneralHandler();
 
-			UIDockspace* dockspace;
-			UIDockspace* hovered_dockspace;
-			unsigned short hovered_border_index;
-			unsigned short border_index;
+			struct Location {
+				UIDockspace* dockspace;
+				unsigned int border_index;
+				DockspaceType type;
+			};
+
+			Location active_location;
+			Location hovered_location;
+
+			Location cleanup_general_location;
+			Location cleanup_hoverable_location;
+
 			bool always_hoverable;
 			bool clean_up_call_general;
 			bool clean_up_call_hoverable;
 			unsigned char locked_window;
-			DockspaceType type;
-			DockspaceType hovered_type;
-			float mask;
-			float hovered_mask;
+
 			void** buffers;
 			size_t* counts;
+
 			void* additional_general_data;
 			void* additional_hoverable_data;
+
 			UIActionHandler hoverable_handler;
 			UIElementTransform hoverable_transform;
 			UIActionHandler clickable_handler;
@@ -632,7 +629,7 @@ namespace ECSEngine {
 			UIElementTransform general_transform;
 		};
 
-		struct ECSENGINE_API UIMoveDockspaceBorderEventData {
+		struct UIMoveDockspaceBorderEventData {
 			UIDockspace* dockspace;
 			unsigned short border_index;
 			DockspaceType type;
@@ -640,7 +637,7 @@ namespace ECSEngine {
 			bool move_y;
 		};
 
-		struct ECSENGINE_API UIResizeEventData {
+		struct UIResizeEventData {
 			unsigned int dockspace_index;
 			BorderHover border_hover;
 			DockspaceType dockspace_type;
@@ -650,7 +647,7 @@ namespace ECSEngine {
 
 #pragma region Action Data Blocks
 
-		struct ECSENGINE_API UIPopUpWindowData {
+		struct UIPopUpWindowData {
 			bool is_initialized = false;
 			bool is_fixed = false;
 			bool destroy_at_first_click = false;
@@ -661,7 +658,7 @@ namespace ECSEngine {
 			bool* flag_destruction = nullptr;
 		};
 
-		struct ECSENGINE_API UIDefaultHoverableData {
+		struct UIDefaultHoverableData {
 			Color colors[ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT];
 			float percentages[ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT] = { 1.25f };
 			float2 positions[ECS_TOOLS_UI_DEFAULT_HOVERABLE_DATA_COUNT];
@@ -670,7 +667,7 @@ namespace ECSEngine {
 			bool is_single_action_parameter_draw = true;
 		};
 
-		struct ECSENGINE_API UIDefaultTextHoverableData {
+		struct UIDefaultTextHoverableData {
 			Color color;
 			float percentage = 1.25f;
 			UISpriteVertex* vertices = nullptr;
@@ -687,7 +684,7 @@ namespace ECSEngine {
 			float vertical_cull_bound;
 		};
 
-		struct ECSENGINE_API UIDefaultVertexColorHoverableData {
+		struct UIDefaultVertexColorHoverableData {
 			Color top_left;
 			Color top_right;
 			Color bottom_left;
@@ -695,10 +692,7 @@ namespace ECSEngine {
 			float percentage = 1.25f;
 		};
 
-		struct ECSENGINE_API UIDefaultClickableData {
-
-			void WriteExtraArgument(void* data, size_t data_size);
-
+		struct UIDefaultClickableData {
 			UIActionHandler hoverable_handler;
 			UIActionHandler click_handler;
 			ECS_UI_DRAW_PHASE initial_clickable_phase;
@@ -706,7 +700,6 @@ namespace ECSEngine {
 
 		// duration is interpreted as milliseconds
 		struct ECSENGINE_API UIDoubleClickData {
-			void WriteExtraArgument(void* data, size_t data_size);
 			bool IsTheSameData(const UIDoubleClickData* other) const;
 			
 			UIActionHandler double_click_handler;
@@ -716,21 +709,21 @@ namespace ECSEngine {
 			unsigned int identifier;
 		};
 
-		struct ECSENGINE_API UICloseXClickData {
+		struct UICloseXClickData {
 			unsigned int window_in_border_index;
 		};
 
-		struct ECSENGINE_API UIRenderRegionActionData {
+		struct UIRenderRegionActionData {
 			float2 position;
 			float2 scale;
 		};
 
-		struct ECSENGINE_API UITooltipPerRowData {
+		struct UITooltipPerRowData {
 			UIActionHandler* handlers = nullptr;
 			bool is_uniform = false;
 		};
 
-		struct ECSENGINE_API UITooltipBaseData {
+		struct UITooltipBaseData {
 			bool default_background = true;
 			bool default_border = true;
 			bool default_font = true;
@@ -775,24 +768,24 @@ namespace ECSEngine {
 
 		using TooltipDrawFunction = void (*)(void* data, UITooltipDrawData& draw_data);
 
-		struct ECSENGINE_API UITooltipHoverableData {
+		struct UITooltipHoverableData {
 			UITooltipBaseData base;
 			TooltipDrawFunction drawer;
 			void* data;
 			unsigned int data_size;
 		};
 
-		struct ECSENGINE_API UIConvertASCIIToWideData {
+		struct UIConvertASCIIToWideData {
 			const char* ascii;
 			wchar_t* wide;
 		};
 
-		struct ECSENGINE_API UIConvertASCIIToWideStreamData {
+		struct UIConvertASCIIToWideStreamData {
 			const char* ascii;
 			CapacityStream<wchar_t>* wide;
 		};
 
-		struct ECSENGINE_API UIDefaultHoverableWithTooltipData {
+		struct UIDefaultHoverableWithTooltipData {
 			Color color;
 			float percentage = { 1.25f };
 			UITextTooltipHoverableData tool_tip_data;
@@ -802,17 +795,17 @@ namespace ECSEngine {
 
 #pragma region Function Structs
 
-		struct ECSENGINE_API UISystemDefaultHoverableData {
+		struct UISystemDefaultHoverableData {
 			unsigned int border_index;
 			unsigned int thread_id;
 			UIDockspace* dockspace;
 			float2 position;
 			float2 scale;
 			UIDefaultHoverableData data;
-			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL;
 		};
 
-		struct ECSENGINE_API UISystemDefaultClickableData {
+		struct UISystemDefaultClickableData {
 			unsigned int border_index;
 			unsigned int thread_id;
 			UIDockspace* dockspace;
@@ -823,7 +816,7 @@ namespace ECSEngine {
 			bool disable_system_phase_retarget = false;
 		};
 
-		struct ECSENGINE_API UISystemDefaultHoverableClickableData {
+		struct UISystemDefaultHoverableClickableData {
 			unsigned int thread_id;
 			unsigned int border_index;
 			UIDockspace* dockspace;
@@ -843,7 +836,7 @@ namespace ECSEngine {
 			ECS_UI_HANDLER_COMMAND_TEXT_REPLACE
 		};
 
-		struct ECSENGINE_API HandlerCommand {
+		struct HandlerCommand {
 			std::chrono::high_resolution_clock::time_point time;
 			UIActionHandler handler;
 			ECS_UI_HANDLER_COMMAND_TYPE type;
@@ -874,12 +867,12 @@ namespace ECSEngine {
 			Stack<HandlerCommand> revert_commands;
 		};
 
-		struct ECSENGINE_API UIDragDockspaceData {
+		struct UIDragDockspaceData {
 			UIDockspace* floating_dockspace;
 			DockspaceType type;
 		};
 
-		struct ECSENGINE_API UIRegionHeaderData {
+		struct UIRegionHeaderData {
 			float2 initial_window_positions[16];
 			unsigned int window_index;
 			UIDefaultHoverableData hoverable_data;
@@ -888,7 +881,7 @@ namespace ECSEngine {
 			DockspaceType type;
 		};
 
-		struct ECSENGINE_API DestroyWindowCallbackSystemHandlerData {
+		struct DestroyWindowCallbackSystemHandlerData {
 			UIActionHandler callback;
 			unsigned int window_index;
 		};

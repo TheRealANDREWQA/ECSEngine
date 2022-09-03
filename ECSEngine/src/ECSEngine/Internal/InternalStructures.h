@@ -2,11 +2,13 @@
 #include "../Core.h"
 #include "../Utilities/BasicTypes.h"
 #include "../Allocators/MemoryManager.h"
+#include "../Allocators/MemoryArena.h"
 #include "../Allocators/LinearAllocator.h"
 #include "../Containers/Stream.h"
 #include "../Containers/HashTable.h"
 #include "ecspch.h"
 #include "../Containers/StableReferenceStream.h"
+#include "../Containers/ResizableStableReferenceStream.h"
 #include "../Utilities/File.h"
 #include "../Containers/DataPointer.h"
 
@@ -38,9 +40,17 @@ namespace ECSEngine {
 		};
 	};
 
+	// If the extended string is specified, it will write the value and in parentheses the index and generation count
+	// Else just the value
+	ECSENGINE_API void EntityToString(Entity entity, CapacityStream<char>& string, bool extended_string = false);
+
+	// Returns the entity from that string
+	ECSENGINE_API Entity StringToEntity(Stream<char> string);
+
 #define ECS_MAIN_ARCHETYPE_MAX_COUNT (1 << 10)
 #define ECS_BASE_ARCHETYPE_MAX_COUNT (1 << 10)
 #define ECS_STREAM_ARCHETYPE_MAX_COUNT (1 << 24)
+#define ECS_ENTITY_HIERARCHY_MAX_COUNT (4)
 
 	struct ECSENGINE_API EntityInfo {
 		EntityInfo() : main_archetype(0), base_archetype(0), stream_index(0) {}
@@ -55,9 +65,10 @@ namespace ECSEngine {
 		unsigned int generation_count : 6;
 		unsigned int tags : 6;
 
-		// 32 bits for these 2 fields
+		// 32 bits for these 3 fields
 		unsigned int stream_index : 24;
-		unsigned int layer : 8;
+		unsigned int layer : 4;
+		unsigned int hierarchy : 4;
 	};
 
 	struct Component {
@@ -88,20 +99,6 @@ namespace ECSEngine {
 		return !(lhs == rhs);
 	}
 
-	// Sequences should not overlapp
-	struct ECSENGINE_API Sequence {
-		Sequence() : first(0), last(0), buffer_start(0), size(0) {}
-		Sequence(unsigned int _first, unsigned int _last, unsigned int _buffer_start, unsigned int _size)
-			: first(_first), last(_last), buffer_start(_buffer_start), size(_size) {}
-
-		Sequence& operator = (const Sequence& other) = default;
-
-		unsigned int first;
-		unsigned int last;
-		unsigned int buffer_start;
-		unsigned int size;
-	};
-
 	struct ECSENGINE_API ComponentInfo {
 		ComponentInfo() : size(0) {}
 		ComponentInfo(unsigned short _size) : size(_size) {}
@@ -109,11 +106,12 @@ namespace ECSEngine {
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentInfo);
 
 		unsigned short size;
+		MemoryArena* allocator;
 	};
 
 	struct ECSENGINE_API SharedComponentInfo {
 		ComponentInfo info;
-		CapacityStream<void*> instances;
+		ResizableStableReferenceStream<void*> instances;
 		HashTableDefault<SharedInstance> named_instances;
 	};
 
@@ -163,15 +161,11 @@ namespace ECSEngine {
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(EntityPool);
 
-		void CreatePool();
-
-		void CopyEntities(const EntityPool* entity_pool);
-
 		// Allocates a single Entity
 		Entity Allocate();
 
 		// Allocates a single Entity and assigns the info to that entity
-		Entity AllocateEx(unsigned short archetype, unsigned short base_archetype, unsigned int stream_index);
+		Entity AllocateEx(unsigned int archetype, unsigned int base_archetype, unsigned int stream_index);
 
 		// Allocates multiple entities
 		// It will fill in the buffer with the entities generated
@@ -179,10 +173,14 @@ namespace ECSEngine {
 
 		// Allocates multiple entities and it will assign to them the values from infos
 		// It will fill in the buffer with entities generated
-		void AllocateEx(Stream<Entity> entities,  const unsigned short* archetypes, const unsigned short* base_archetypes, const unsigned int* stream_indices);
+		void AllocateEx(Stream<Entity> entities, unsigned int archetype, unsigned int base_archetype, const unsigned int* stream_indices);
 
 		// It will set the infos according to the archetype indices and chunk positions
-		void AllocateEx(Stream<Entity> entities, ushort2 archetype_indices, unsigned int copy_position);
+		void AllocateEx(Stream<Entity> entities, uint2 archetype_indices, unsigned int copy_position);
+
+		void CreatePool();
+
+		void CopyEntities(const EntityPool* entity_pool);
 
 		// The tag should be the bit position, not the actual value
 		void ClearTag(Entity entity, unsigned char tag);
@@ -192,12 +190,32 @@ namespace ECSEngine {
 		void Deallocate(Stream<Entity> entities);
 
 		void DeallocatePool(unsigned int pool_index);
-
-		// Checks to see if the given entity is valid in the current context
-		bool IsValid(Entity entity) const;
-
-		// The tag should be the bit position, not the actual value
-		bool HasTag(Entity entity, unsigned char tag) const;
+		
+		// Receives as parameter the entity and its entity info
+		template<bool early_exit = false, typename Functor>
+		void ForEach(Functor&& functor) {
+			bool should_continue = true;
+			for (unsigned int index = 0; index < m_entity_infos.size && should_continue; index++) {
+				if (m_entity_infos[index].is_in_use) {
+					m_entity_infos[index].stream.ForEachIndex<early_exit>([&](unsigned int stream_index) {
+						Entity entity = GetEntityFromPosition(index, stream_index);
+						EntityInfo info = m_entity_infos[index].stream[stream_index];
+						if constexpr (early_exit) {
+							if (functor(entity, info)) {
+								should_continue = false;
+								return true;
+							}
+							else {
+								return false;
+							}
+						}
+						else {
+							functor(entity, info);
+						}
+					});
+				}
+			}
+		}
 
 		Entity GetEntityFromPosition(unsigned int chunk_index, unsigned int stream_index) const;
 
@@ -209,7 +227,19 @@ namespace ECSEngine {
 
 		EntityInfo* GetInfoPtrNoChecks(Entity entity);
 
-		void SetEntityInfo(Entity entity, unsigned short archetype, unsigned short base_archetype, unsigned int stream_index);
+		// Returns how many entities are alive
+		unsigned int GetCount() const;
+
+		// The tag should be the bit position, not the actual value
+		bool HasTag(Entity entity, unsigned char tag) const;
+
+		// Checks to see if the given entity is valid in the current context
+		bool IsValid(Entity entity) const;
+
+		// Returns the generation count of the index at that index or -1 if it doesn't exist
+		unsigned int IsEntityAt(unsigned int stream_index) const;
+
+		void SetEntityInfo(Entity entity, unsigned int archetype, unsigned int base_archetype, unsigned int stream_index);
 
 		// The tag should be the bit position, not the actual value
 		void SetTag(Entity entity, unsigned char tag);

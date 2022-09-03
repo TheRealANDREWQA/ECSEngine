@@ -28,19 +28,20 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_ALIGN_TO_ROW_Y = (size_t)1 << 20;
 		constexpr size_t UI_CONFIG_ACTIVE_STATE = (size_t)1 << 21;
 
-		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 22;
-		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 23;
-		constexpr size_t UI_CONFIG_RECTANGLE_CLICKABLE_ACTION = (size_t)1 << 24;
-		constexpr size_t UI_CONFIG_RECTANGLE_GENERAL_ACTION = (size_t)1 << 25;
-		constexpr size_t UI_CONFIG_RECTANGLE_TOOL_TIP = (size_t)1 << 26;
+		// Slots 23 and 24 could be available, at the moment these are just aliases for UI_CONFIG_ALIGN_ELEMENT values
 
-		constexpr size_t UI_CONFIG_ALIGN_ELEMENT = (size_t)1 << 27;
-		constexpr size_t UI_CONFIG_ALIGN_ELEMENT_RIGHT = (size_t)1 << 28;
-		constexpr size_t UI_CONFIG_ALIGN_ELEMENT_BOTTOM = (size_t)1 << 29;
-
-		// Slots 28 and 29 could be available, at the moment these are just aliases for 
-		// UI_CONFIG_ALIGN_ELEMENT values
-		// No other slot is available
+		constexpr size_t UI_CONFIG_ALIGN_ELEMENT = (size_t)1 << 22;
+		constexpr size_t UI_CONFIG_ALIGN_ELEMENT_RIGHT = (size_t)1 << 23;
+		constexpr size_t UI_CONFIG_ALIGN_ELEMENT_BOTTOM = (size_t)1 << 24;
+		
+		// Slots available 26, 27, 28, 29
+		constexpr size_t UI_CONFIG_DO_NOT_UPDATE_RENDER_BOUNDS = (size_t)1 << 25;
+		
+		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 55;
+		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 56;
+		constexpr size_t UI_CONFIG_RECTANGLE_CLICKABLE_ACTION = (size_t)1 << 57;
+		constexpr size_t UI_CONFIG_RECTANGLE_GENERAL_ACTION = (size_t)1 << 58;
+		constexpr size_t UI_CONFIG_RECTANGLE_TOOL_TIP = (size_t)1 << 59;
 		
 		constexpr size_t UI_CONFIG_NAME_PADDING = (size_t)1 << 60;
 		constexpr size_t UI_CONFIG_DYNAMIC_RESOURCE = (size_t)1 << 61;
@@ -125,6 +126,8 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_MENU_SPRITE = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_MENU_COPY_STATES = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_MENU_COPY_ALL = (size_t)1 << 47;
+
 		constexpr size_t UI_CONFIG_MENU_BUTTON_SPRITE = (size_t)1 << 45;
 
 		constexpr size_t UI_CONFIG_SENTENCE_FIT_SPACE = (size_t)1 << 45;
@@ -178,11 +181,21 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_FILTER_MENU_ALL = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE = (size_t)1 << 48;
 
-		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE = (size_t)1 << 45;
-		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY = (size_t)1 << 47;
-		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK = (size_t)1 << 48;
-		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DO_NOT_INFER_X = (size_t)1 << 49;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK = (size_t)1 << 47;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE = (size_t)1 << 49;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DOUBLE_CLICK_ACTION = (size_t)1 << 50;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_FILTER = (size_t)1 << 51;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_DEALLOCATE_LABEL = (size_t)1 << 52;
+		constexpr size_t UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS = (size_t)1 << 54;
+
+		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_DO_NOT_INFER_X = (size_t)1 << 45;
+		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_HASH_TABLE_CAPACITY = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK = UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
+		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK = UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK;
+		constexpr size_t UI_CONFIG_FILESYSTEM_HIERARCHY_SPRITE_TEXTURE = UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE;
 
 		constexpr size_t UI_CONFIG_SPRITE_BUTTON_BACKGROUND = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_SPRITE_BUTTON_CENTER_SPRITE_TO_BACKGROUND = (size_t)1 << 46;

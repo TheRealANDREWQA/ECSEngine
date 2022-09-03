@@ -55,25 +55,25 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\Debug-windows-x86_64\ECSEngine\</OutDir>
-    <IntDir>..\bin-int\Debug-windows-x86_64\ECSEngine\</IntDir>
-    <TargetName>ECSEngine</TargetName>
+    <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
+    <TargetName>$(ProjectName)</TargetName>
     <TargetExt>.dll</TargetExt>
     <MultiProcFXC>true</MultiProcFXC>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\Release-windows-x86_64\ECSEngine\</OutDir>
-    <IntDir>..\bin-int\Release-windows-x86_64\ECSEngine\</IntDir>
-    <TargetName>ECSEngine</TargetName>
+    <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
+    <TargetName>$(ProjectName)</TargetName>
     <TargetExt>.dll</TargetExt>
     <MultiProcFXC>true</MultiProcFXC>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\Distribution-windows-x86_64\ECSEngine\</OutDir>
-    <IntDir>..\bin-int\Distribution-windows-x86_64\ECSEngine\</IntDir>
-    <TargetName>ECSEngine</TargetName>
+    <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
+    <TargetName>$(ProjectName)</TargetName>
     <TargetExt>.dll</TargetExt>
     <MultiProcFXC>true</MultiProcFXC>
   </PropertyGroup>
@@ -105,12 +105,12 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ImportLibrary>..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
+      <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>IF EXIST ..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Debug-windows-x86_64\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\Debug-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Debug-windows-x86_64\Editor &gt; nul)</Command>
+      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
@@ -149,12 +149,12 @@
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <OptimizeReferences>false</OptimizeReferences>
-      <ImportLibrary>..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
+      <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>IF EXIST ..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Release-windows-x86_64\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\Release-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Release-windows-x86_64\Editor &gt; nul)</Command>
+      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
@@ -176,7 +176,7 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -185,17 +185,18 @@
       <SDLCheck>false</SDLCheck>
       <ExceptionHandling>false</ExceptionHandling>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <AdditionalOptions>/Zo %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <OptimizeReferences>false</OptimizeReferences>
-      <ImportLibrary>..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.lib</ImportLibrary>
+      <ImportLibrary>..\bin\$(Configuration)\ECSEngine\ECSEngine.lib</ImportLibrary>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AdditionalDependencies>synchronization.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>IF EXIST ..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Distribution-windows-x86_64\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\Distribution-windows-x86_64\ECSEngine\ECSEngine.dll ..\bin\Distribution-windows-x86_64\Editor &gt; nul)</Command>
+      <Command>IF EXIST ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll\ (xcopy /Q /E /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul) ELSE (xcopy /Q /Y /I ..\bin\$(Configuration)\ECSEngine\ECSEngine.dll ..\bin\$(Configuration)\Editor &gt; nul)</Command>
     </PostBuildEvent>
     <FxCompile>
       <ObjectFileOutput>$(SolutionDir)\Editor\Resources\CompiledShaders\%(ShaderType)\%(Filename).cso</ObjectFileOutput>
@@ -217,7 +218,10 @@
     <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTable.h" />
     <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTableSmall.h" />
     <ClInclude Include="src\ECSEngine\Containers\Deck.h" />
-    <ClInclude Include="src\ECSEngine\Containers\Hashing.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Hashing.h">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
+    </ClInclude>
     <ClInclude Include="src\ECSEngine\Containers\ResizableAtomicStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\ResizableStableReferenceStream.h" />
     <ClInclude Include="src\ECSEngine\Containers\SparseSet.h" />
@@ -225,6 +229,7 @@
     <ClInclude Include="src\ECSEngine\GLTF\GLTFThumbnail.h" />
     <ClInclude Include="src\ECSEngine\GLTF\GLTFLoader.h" />
     <ClInclude Include="src\ECSEngine\Internal\ArchetypeQueryCache.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Components.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityHierarchy.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
@@ -235,9 +240,9 @@
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabase.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.h" />
-    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseSerializeFunctions.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetLoading.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadata.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\Scene.h" />
     <ClInclude Include="src\ECSEngine\Internal\SystemManager.h" />
@@ -255,6 +260,7 @@
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderInclude.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Benchmark.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleDefinition.h" />
@@ -276,6 +282,8 @@
     <ClInclude Include="src\ECSEngine\Utilities\Assert.h" />
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\TreeIterator.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Encryption.h" />
@@ -300,9 +308,13 @@
     <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
+    <ClInclude Include="src\Includes\ECSEngineBasics.h" />
+    <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
     <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
+    <ClInclude Include="src\Includes\ECSEngineEntities.h" />
+    <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineInternal.h" />
     <ClInclude Include="src\Includes\ECSEngineMath.h" />
     <ClInclude Include="src\Includes\ECSEngineModule.h" />
@@ -363,7 +375,15 @@
     <ClCompile Include="src\ECSEngine\Allocators\StackAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\ApplicationUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\DataPointer.cpp" />
-    <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </AdditionalOptions>
+      <SupportJustMyCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</SupportJustMyCode>
+      <DebugInformationFormat Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ProgramDatabase</DebugInformationFormat>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">NotUsing</PrecompiledHeader>
@@ -383,9 +403,9 @@
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ThreadTask.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.cpp" />
-    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseSerializeFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetLoading.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadata.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\ResourceManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\Scene.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\SystemManager.cpp" />
@@ -403,7 +423,12 @@
     <ClCompile Include="src\ECSEngine\Internal\World.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\DirectXTexHelpers.cpp" />
-    <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/Zo %(AdditionalOptions)</AdditionalOptions>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Rendering\PBRMaps.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\Lighting.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.cpp" />
@@ -428,10 +453,15 @@
     <ClCompile Include="src\ECSEngine\Application.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\RenderingStructures.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\ConcurrentPrimitives.cpp" />
-    <ClCompile Include="src\ECSEngine\Containers\BlockRange.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\BlockRange.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Containers\BooleanBitField.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityManager.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Benchmark.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
@@ -439,12 +469,18 @@
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ForEachFiles.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\Function.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Function.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/Zo %(AdditionalOptions)</AdditionalOptions>
+      <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Default</InlineFunctionExpansion>
+    </ClCompile>
     <ClCompile Include="src\ECSEngine\Utilities\FunctionInterfaces.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Keyboard.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Mouse.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\OSFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ReferenceCountSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\Reflection.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.cpp" />

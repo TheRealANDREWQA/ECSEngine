@@ -16,6 +16,8 @@
 #define ECS_ENTITY_MANAGER_DEFERRED_ACTION_CAPACITY (1 << 16)
 #endif
 
+#define ECS_ENTITY_MANAGER_TRANSFORM_HIERARCHY 0
+
 namespace ECSEngine {
 
 	struct EntityManager;
@@ -210,12 +212,14 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// Sets the child to have as parent the given entity. The child must not be previously found in the hierarchy
-		void AddEntryToHierarchyCommit(unsigned short hierarchy_index, Stream<EntityPair> pairs);
+		// If the parent is set to -1, then the child will be inserted as a root
+		void AddEntityToHierarchyCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs);
 
 		// Deferred Call
 		// Sets the child to have as parent the given entity. The child must not be previously found in the hierarchy
-		void AddEntryToHierarchy(
-			unsigned short hierarchy_index,
+		// If the parent is set to -1, then the child will be inserted as a root
+		void AddEntityToHierarchy(
+			unsigned int hierarchy_index,
 			Stream<EntityPair> pairs,
 			DeferredActionParameters parameters,
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -237,10 +241,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void ChangeEntityParentCommit(unsigned short hierarchy_index, Stream<EntityPair> pairs);
+		void ChangeEntityParentCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs);
 
 		void ChangeEntityParent(
-			unsigned short hierarchy_index,
+			unsigned int hierarchy_index,
 			Stream<EntityPair> pairs,
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -248,10 +252,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void ChangeOrSetEntityParentCommit(unsigned short hierarchy_index, Stream<EntityPair> pairs);
+		void ChangeOrSetEntityParentCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs);
 
 		void ChangeOrSetEntityParent(
-			unsigned short hierarchy_index,
+			unsigned int hierarchy_index,
 			Stream<EntityPair> pairs, 
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -266,11 +270,17 @@ namespace ECSEngine {
 		// The tag should be only the bit index, not the actual value
 		void ClearEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
+		// ---------------------------------------------------------------------------------------------------
+
+		void ClearFrame();
+
 		// It will copy everything. The components, the shared components, the archetypes, the entities inside the entity pool
 		void CopyOther(const EntityManager* entity_manager);
 
+		// ---------------------------------------------------------------------------------------------------
+
 		// It will commit the archetype addition
-		unsigned short CreateArchetypeCommit(ComponentSignature unique_signature, ComponentSignature shared_signature);
+		unsigned int CreateArchetypeCommit(ComponentSignature unique_signature, ComponentSignature shared_signature);
 
 		// Deferred Call
 		void CreateArchetype(
@@ -284,7 +294,7 @@ namespace ECSEngine {
 
 		// It will commit the archetype addition
 		// If the main archetype does not exist, it will create it
-		ushort2 CreateArchetypeBaseCommit(
+		uint2 CreateArchetypeBaseCommit(
 			ComponentSignature unique_signature,
 			SharedComponentSignature shared_signature,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
@@ -303,15 +313,15 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// It will commit the archetype addition
-		unsigned short CreateArchetypeBaseCommit(
-			unsigned short archetype_index,
+		unsigned int CreateArchetypeBaseCommit(
+			unsigned int archetype_index,
 			SharedComponentSignature shared_signature,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
 
 		// Deferred Call
 		void CreateArchetypeBase(
-			unsigned short archetype_index,
+			unsigned int archetype_index,
 			SharedComponentSignature shared_signature,
 			EntityManagerCommandStream* command_stream = nullptr,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT,
@@ -386,10 +396,13 @@ namespace ECSEngine {
 		);
 
 		// Creates a new hierarchy. Must be called from a single threaded environment. The hierarchy index needs to be specified
-		// and can be used to index directly into the stream when the hierarchy is needed
-		// Leave the last 2 parameters unchanged if the default values are desired. Starting table capacity must be a power of two if specified.
+		// and can be used to index directly into the stream when the hierarchy is needed (must be at most as index ECS_ENTITY_HIERARCHY_MAX_COUNT)
+		// Leave the last 4 parameters unchanged if the default values are desired. Starting table capacity must be a power of two if specified.
+		// The name is used only for debugging purposes
 		void CreateHierarchy(
-			unsigned short hierarchy_index,
+			unsigned int hierarchy_index,
+			bool owning_children,
+			Stream<char> name = { nullptr, 0 },
 			unsigned int starting_root_count = -1,
 			unsigned int starting_children_table_capacity = -1,
 			unsigned int starting_parent_table_capacity = -1
@@ -414,10 +427,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void DestroyArchetypeCommit(unsigned short archetype_index);
+		void DestroyArchetypeCommit(unsigned int archetype_index);
 
 		// Deferred Call
-		void DestroyArchetype(unsigned short archetype_index, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void DestroyArchetype(unsigned int archetype_index, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -433,12 +446,12 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void DestroyArchetypeBaseCommit(unsigned short archetype_index, unsigned short archetype_subindex);
+		void DestroyArchetypeBaseCommit(unsigned int archetype_index, unsigned int archetype_subindex);
 
 		// Deferred Call
 		void DestroyArchetypeBase(
-			unsigned short archetype_index,
-			unsigned short archetype_subindex,
+			unsigned int archetype_index,
+			unsigned int archetype_subindex,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
@@ -466,27 +479,27 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// Returns the index of the component inside the archetype component list
-		unsigned char FindArchetypeUniqueComponent(unsigned short archetype_index, Component component) const;
+		unsigned char FindArchetypeUniqueComponent(unsigned int archetype_index, Component component) const;
 
 		// Returns the indices of the components inside the archetype component list
-		void FindArchetypeUniqueComponent(unsigned short archetype_index, ComponentSignature components, unsigned char* indices) const;
+		void FindArchetypeUniqueComponent(unsigned int archetype_index, ComponentSignature components, unsigned char* indices) const;
 
 		// Returns the indices of the components inside the archetype component list
-		void ECS_VECTORCALL FindArchetypeUniqueComponentVector(unsigned short archetype_index, VectorComponentSignature components, unsigned char* indices) const;
+		void ECS_VECTORCALL FindArchetypeUniqueComponentVector(unsigned int archetype_index, VectorComponentSignature components, unsigned char* indices) const;
 
 		// ---------------------------------------------------------------------------------------------------
 
-		unsigned char FindArchetypeSharedComponent(unsigned short archetype_index, Component component) const;
+		unsigned char FindArchetypeSharedComponent(unsigned int archetype_index, Component component) const;
 
-		void FindArchetypeSharedComponent(unsigned short archetype_index, ComponentSignature components, unsigned char* indices) const;
+		void FindArchetypeSharedComponent(unsigned int archetype_index, ComponentSignature components, unsigned char* indices) const;
 
-		void ECS_VECTORCALL FindArchetypeSharedComponentVector(unsigned short archetype_index, VectorComponentSignature components, unsigned char* indices) const;
+		void ECS_VECTORCALL FindArchetypeSharedComponentVector(unsigned int archetype_index, VectorComponentSignature components, unsigned char* indices) const;
 
 		// ---------------------------------------------------------------------------------------------------
 
 		// It will look for an exact match
 		// Returns -1 if it doesn't exist
-		unsigned short ECS_VECTORCALL FindArchetype(ArchetypeQuery query) const;
+		unsigned int ECS_VECTORCALL FindArchetype(ArchetypeQuery query) const;
 
 		// It will look for an exact match
 		// Returns nullptr if it doesn't exist
@@ -496,7 +509,7 @@ namespace ECSEngine {
 
 		// It will look for an exact match
 		// Returns -1 if it doesn't exist
-		unsigned short ECS_VECTORCALL FindArchetypeExclude(ArchetypeQueryExclude query) const;
+		unsigned int ECS_VECTORCALL FindArchetypeExclude(ArchetypeQueryExclude query) const;
 
 		// It will look for an exact match
 		// Returns nullptr if it doesn't exist
@@ -507,7 +520,7 @@ namespace ECSEngine {
 		// It will look for an exact match
 		// Returns -1, -1 if the main archetype cannot be found
 		// Returns main_index, -1 if the main archetype is found but the base is not
-		ushort2 ECS_VECTORCALL FindBase(
+		uint2 ECS_VECTORCALL FindBase(
 			ArchetypeQuery query,
 			VectorComponentSignature shared_instances
 		) const;
@@ -524,7 +537,7 @@ namespace ECSEngine {
 		// It will look for an exact match
 		// Returns -1, -1 if the main archetype cannot be found
 		// Returns main_index, -1 if the main archetype is found but the base is not
-		ushort2 ECS_VECTORCALL FindArchetypeBaseExclude(
+		uint2 ECS_VECTORCALL FindArchetypeBaseExclude(
 			ArchetypeQueryExclude query,
 			VectorComponentSignature shared_instances
 		) const;
@@ -539,9 +552,9 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
-		unsigned short FindOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
+		unsigned int FindOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
 
-		ushort2 FindOrCreateArchetypeBase(
+		uint2 FindOrCreateArchetypeBase(
 			ComponentSignature unique_signature,
 			SharedComponentSignature shared_signature,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
@@ -566,15 +579,15 @@ namespace ECSEngine {
 		bool ExistsSharedInstance(Component component, SharedInstance instance) const;
 
 		// Verifies if the hierarchy is already allocated
-		bool ExistsHierarchy(unsigned short hierarchy_index) const;
+		bool ExistsHierarchy(unsigned int hierarchy_index) const;
 
-		Archetype* GetArchetype(unsigned short index);
+		Archetype* GetArchetype(unsigned int index);
 
-		const Archetype* GetArchetype(unsigned short index) const;
+		const Archetype* GetArchetype(unsigned int index) const;
 
-		ArchetypeBase* GetBase(unsigned short main_index, unsigned short base_index);
+		ArchetypeBase* GetBase(unsigned int main_index, unsigned int base_index);
 
-		const ArchetypeBase* GetBase(unsigned short main_index, unsigned short base_index) const;
+		const ArchetypeBase* GetBase(unsigned int main_index, unsigned int base_index) const;
 
 		// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
 		Archetype* GetOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
@@ -586,13 +599,13 @@ namespace ECSEngine {
 		);
 
 		// It will fill in the indices of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned short>& archetypes) const;
+		void ECS_VECTORCALL GetArchetypes(ArchetypeQuery query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the pointers of the archetypes that verify the query
 		void ECS_VECTORCALL GetArchetypesPtrs(ArchetypeQuery query, CapacityStream<Archetype*>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypesExclude(ArchetypeQueryExclude query, CapacityStream<unsigned short>& archetypes) const;
+		void ECS_VECTORCALL GetArchetypesExclude(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the pointers of the archetypes that verify the query
 		void ECS_VECTORCALL GetArchetypesExcludePtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const;
@@ -607,6 +620,16 @@ namespace ECSEngine {
 		// Data must have components.count pointers
 		void GetComponentWithIndex(Entity entity, ComponentSignature components, void** data);
 
+		MemoryArena* GetComponentAllocator(Component component);
+
+		MemoryArena* GetSharedComponentAllocator(Component component);
+
+		// Returns how many entities exist
+		unsigned int GetEntityCount() const;
+
+		// Returns the entity which is alive at the indicated stream index, or an invalid entity if it doesn't exist
+		Entity GetEntityFromIndex(unsigned int stream_index) const;
+
 		EntityInfo GetEntityInfo(Entity entity) const;
 
 		ComponentSignature GetEntitySignature(Entity entity, Component* components) const;
@@ -614,15 +637,15 @@ namespace ECSEngine {
 		// It will point to the archetype's signature - Do not modify!!
 		ComponentSignature GetEntitySignatureStable(Entity entity) const;
 
-		SharedComponentSignature GetEntitySharedSignature(Entity entity, Component* shared, SharedInstance* instances);
+		SharedComponentSignature GetEntitySharedSignature(Entity entity, Component* shared, SharedInstance* instances) const;
 
 		// It will point to the archetypes' signature (the base and the main) - Do not modify!!
-		SharedComponentSignature GetEntitySharedSignatureStable(Entity entity);
+		SharedComponentSignature GetEntitySharedSignatureStable(Entity entity) const;
 
-		void GetEntityCompleteSignature(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared);
+		void GetEntityCompleteSignature(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const;
 
 		// It will point to the archetypes' signature (the base and the main) - Do not modify!!
-		void GetEntityCompleteSignatureStable(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared);
+		void GetEntityCompleteSignatureStable(Entity entity, ComponentSignature* unique, SharedComponentSignature* shared) const;
 
 		// It will fill in the entities stream
 		// Consider the other variant that only aliases the buffers so no copies are needed
@@ -665,6 +688,20 @@ namespace ECSEngine {
 		// These are vector components which are much faster to use than normal components
 		VectorComponentSignature* GetArchetypeSharedComponentsPtr(unsigned int archetype_index);
 
+		EntityHierarchy* GetHierarchy(unsigned int hierarchy_index);
+
+		const EntityHierarchy* GetHierarchy(unsigned int hierarchy_index) const;
+
+		Stream<char> GetHierarchyName(unsigned int hierarchy_index) const;
+
+		// Fills in the hierarchies in which this entity is present
+		void GetEntityHierarchies(Entity entity, CapacityStream<unsigned int>& hierarchy_indices) const;
+
+		void GetEntityHierarchies(EntityInfo info, CapacityStream<unsigned int>& hierarchy_indices) const;
+
+		// Returns -1 if the entity doesn't have a parent (it is a root or doesn't exist)
+		Entity GetEntityParent(unsigned int hierarchy_index, Entity child) const;
+
 		// Aliases the internal structures. Do not modify, readonly
 		// If the parent does not exist in the hierarchy, { nullptr, 0 } is returned
 		Stream<Entity> GetHierarchyChildren(unsigned int hierarchy_index, Entity parent) const;
@@ -673,13 +710,13 @@ namespace ECSEngine {
 		void GetHierarchyChildrenCopy(unsigned int hierarchy_index, Entity parent, CapacityStream<Entity>& children) const;
 
 		// Returns the indices of the archetypes that match the given query
-		Stream<unsigned short> GetQueryResults(unsigned int handle) const;
+		Stream<unsigned int> GetQueryResults(unsigned int handle) const;
 
 		// It will return the components of that query
 		ArchetypeQuery ECS_VECTORCALL GetQueryComponents(unsigned int handle) const;
 
 		// It does both at the same time to avoid some checks
-		void GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned short>& results, ArchetypeQuery& query) const;
+		void GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned int>& results, ArchetypeQuery& query) const;
 
 		// Tag should only be the bit index, not the actual value
 		bool HasEntityTag(Entity entity, unsigned char tag) const;
@@ -698,44 +735,84 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void RemoveEntityFromHierarchyCommit(unsigned short hierarchy_index, Stream<Entity> entities, bool destroy_children = true);
+		void RemoveEntityFromHierarchyCommit(unsigned int hierarchy_index, Stream<Entity> entities, bool default_child_destroy = true);
 
+		// If the destroy children flag is set to false, it will flip the behaviour of the state stored in the hierarchy
+		// Such that you can choose which behaviour to use
 		void RemoveEntityFromHierarchy(
-			unsigned short hierarchy_index,
+			unsigned int hierarchy_index,
 			Stream<Entity> entities,
-			bool destroy_children = true,
 			DeferredActionParameters parameters = {},
+			bool default_child_destroy = true,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void RegisterComponentCommit(Component component, unsigned short size);
+		void RemoveComponentCommit(Entity entity, ComponentSignature components);
+
+		void RemoveComponentCommit(Stream<Entity> entities, ComponentSignature components);
 
 		// Deferred call
+		void RemoveComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// Deferred call
+		void RemoveComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });	
+
+		// ---------------------------------------------------------------------------------------------------
+
+		void RemoveSharedComponentCommit(Entity entity, ComponentSignature components);
+
+		void RemoveSharedComponentCommit(Stream<Entity> entity, ComponentSignature components);
+
+		void RemoveSharedComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		void RemoveSharedComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Each component gets an allocator that can be used to keep the data together
+		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
+		// use because all the allocations will happen from this allocator
+		void RegisterComponentCommit(Component component, unsigned short size, size_t allocator_size = 0);
+
+		// Deferred call
+		// Each component gets an allocator that can be used to keep the data together
+		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
+		// use because all the allocations will happen from this allocator
 		void RegisterComponent(
 			Component component, 
-			unsigned short size, 
+			unsigned short size,
+			size_t allocator_size = 0,
 			EntityManagerCommandStream* command_stream = nullptr, 
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void RegisterSharedComponentCommit(Component component, unsigned short size);
+		// Each component gets an allocator that can be used to keep the data together
+		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
+		// use because all the allocations will happen from this allocator
+		void RegisterSharedComponentCommit(Component component, unsigned short size, size_t allocator_size = 0);
 
 		// Deferred call
+		// Each component gets an allocator that can be used to keep the data together
+		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
+		// use because all the allocations will happen from this allocator
 		void RegisterSharedComponent(
 			Component component, 
-			unsigned short size, 
+			unsigned short size,
+			size_t allocator_size = 0,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// The value is stable
 		SharedInstance RegisterSharedInstanceCommit(Component component, const void* data);
 
+		// The value is stable
 		// Deferred call
 		void RegisterSharedInstance(
 			Component component, 
@@ -746,8 +823,10 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// The value is stable
 		SharedInstance RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, const void* data);
 		
+		// The value is stable
 		// Deferred call
 		void RegisterNamedSharedInstance(
 			Component component, 
@@ -805,6 +884,11 @@ namespace ECSEngine {
 		struct InternalEntityHierarchy {
 			MemoryManager allocator;
 			EntityHierarchy hierarchy;
+			Stream<char> name;
+
+			// When this is set to true, when removing a parent from the hierarchy
+			// its children are automatically destroyed
+			bool owning_children;
 		};
 
 		MemoryManager m_small_memory_manager;

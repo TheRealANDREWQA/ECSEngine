@@ -87,6 +87,7 @@ namespace ECSEngine {
 
 	ECSENGINE_API void DoFrame(World* world);
 
+	// It will wait to finish all the current dynamic tasks in flight
 	ECSENGINE_API void PauseWorld(World* world);
 
 }

@@ -18,6 +18,7 @@
 #include "../UI/InspectorData.h"
 #include "../UI/Inspector.h"
 #include <DbgHelp.h>
+#include "ECSEngineBenchmark.h"
 
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
@@ -29,6 +30,8 @@ using namespace ECSEngine::Tools;
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "Shcore.lib")
+
+//ECS_OPTIMIZE_START;
 
 class Editor : public ECSEngine::Application {
 public:
@@ -92,21 +95,6 @@ public:
 	int Run() override {
 		using namespace ECSEngine;
 		using namespace ECSEngine::Tools;
-
-		unsigned int ecs_runtime_index = 0;
-#ifdef ECSENGINE_RELEASE
-		ecs_runtime_index = 2;
-#endif
-
-#ifdef ECSENGINE_DISTRIBUTION
-		ecs_runtime_index = 4;
-#endif
-
-		Stream<wchar_t> pdb_paths[2] = {
-			 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index],
-			 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index + 1]
-		};
-		OS::InitializeSymbolicLinksPaths({ pdb_paths, std::size(pdb_paths) });
 		
 		EditorState editor_state;
 		EditorStateInitialize(this, &editor_state, hWnd, mouse, keyboard);
@@ -265,6 +253,24 @@ public:
 		//function::ConvertIntToChars(CHARACTERS, duration);
 		//OutputDebugStringA(CHARACTERS.buffer);
 
+		//ECS_STACK_CAPACITY_STREAM(char, console_message, 512);
+		//console_message.Copy("Duration: ");
+
+		//timer.SetMarker();
+
+		//ResourceManagerTextureDesc descriptor;
+		//descriptor.context = graphics->GetContext();
+		//descriptor.compression = ECS_TEXTURE_COMPRESSION_EX::ColorMap;
+		////ResourceView view = editor_state.resource_manager->LoadTextureImplementation(L"Resources/4k2.jpg", &descriptor);
+
+		////Stream<void> buffer = ReadWholeFileBinary(L"Resources/comp_BC7.dds");
+		//
+		//size_t duration = timer.GetDurationSinceMarker_ms();
+		//function::ConvertIntToChars(console_message, duration);
+		//console_message.Add('\n');
+		//console_message.Add('\0');
+		//OutputDebugStringA(console_message.buffer);
+
 		Camera camera;
 		camera.translation = { 0.0f, 0.0f, 0.0f };
 		//ResourceManagerTextureDesc plank_descriptor;
@@ -295,98 +301,6 @@ public:
 		static Stream<wchar_t> WIDE_CHAR_STREAM(WIDE_CHARS, 0);
 
 		ConstantBuffer normal_strength_buffer = graphics->CreateConstantBuffer(sizeof(float));
-
-		InjectWindowElement inject_elements[16];
-		InjectWindowSection section[1];
-		section[0].elements = Stream<InjectWindowElement>(inject_elements, std::size(inject_elements));
-		section[0].name = "Directional Light";
-
-		inject_elements[0].name = "Direction";
-		inject_elements[0].basic_type_string = STRING(float3);
-		inject_elements[0].data = &LIGHT_DIRECTION;
-		inject_elements[0].stream_type = Reflection::ReflectionStreamFieldType::Basic;
-
-		inject_elements[1].name = "Color";
-		inject_elements[1].basic_type_string = STRING(ColorFloat);
-		inject_elements[1].data = &LIGHT_INTENSITY;
-		inject_elements[1].stream_type = Reflection::ReflectionStreamFieldType::Basic;
-
-		inject_elements[2].name = "Normal map";
-		inject_elements[2].basic_type_string = STRING(bool);
-		inject_elements[2].data = &normal_map;
-
-		inject_elements[3].name = "Normal strength";
-		inject_elements[3].basic_type_string = STRING(float);
-		inject_elements[3].data = &normal_strength;
-
-		inject_elements[4].name = "Metallic";
-		inject_elements[4].basic_type_string = STRING(float);
-		inject_elements[4].data = &metallic;
-
-		inject_elements[5].name = "Wide chars";
-		inject_elements[5].basic_type_string = STRING(wchar_t);
-		inject_elements[5].stream_type = Reflection::ReflectionStreamFieldType::Stream;
-		inject_elements[5].data = &WIDE_CHAR_STREAM;
-
-		inject_elements[6].name = "PBR light positions";
-		inject_elements[6].basic_type_string = STRING(float3);
-		inject_elements[6].data = pbr_light_pos;
-		inject_elements[6].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
-		inject_elements[6].stream_size = 4;
-
-		inject_elements[7].name = "PBR light colors";
-		inject_elements[7].basic_type_string = STRING(ColorFloat);
-		inject_elements[7].data = pbr_light_color;
-		inject_elements[7].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
-		inject_elements[7].stream_size = 4;
-
-		inject_elements[8].name = "PBR light ranges";
-		inject_elements[8].basic_type_string = STRING(float);
-		inject_elements[8].data = pbr_light_range;
-		inject_elements[8].stream_type = Reflection::ReflectionStreamFieldType::Pointer;
-		inject_elements[8].stream_size = 4;
-
-		static bool diffuse_cube = false;
-		static bool specular_cube = false;
-		static float2 uv_tiling = { 10.0f, 10.0f };
-		static float2 uv_offsets = { 0.0f, 0.0f };
-
-		inject_elements[9].name = "Diffuse Cube";
-		inject_elements[9].basic_type_string = STRING(bool);
-		inject_elements[9].data = &diffuse_cube;
-
-		inject_elements[10].name = "Specular Cube";
-		inject_elements[10].basic_type_string = STRING(bool);
-		inject_elements[10].data = &specular_cube;
-
-		inject_elements[11].name = "UV tiling";
-		inject_elements[11].basic_type_string = STRING(float2);
-		inject_elements[11].data = &uv_tiling;
-
-		inject_elements[12].name = "UV offsets";
-		inject_elements[12].basic_type_string = STRING(float2);
-		inject_elements[12].data = &uv_offsets;
-
-		static Color tint = Color((unsigned char)255, 255, 255, 255);
-
-		inject_elements[13].name = "Tint";
-		inject_elements[13].basic_type_string = STRING(Color);
-		inject_elements[13].data = &tint;
-
-		static float environment_diffuse_factor = 1.0f;
-		static float environment_specular_factor = 1.0f;
-		
-		inject_elements[14].name = "Environment diffuse";
-		inject_elements[14].basic_type_string = STRING(float);
-		inject_elements[14].data = &environment_diffuse_factor;
-
-		inject_elements[15].name = "Environment specular";
-		inject_elements[15].basic_type_string = STRING(float);
-		inject_elements[15].data = &environment_specular_factor;
-
-		editor_state.inject_data.ui_reflection = editor_state.ui_reflection;
-		editor_state.inject_data.sections = Stream<InjectWindowSection>(section, std::size(section));
-		editor_state.inject_window_name = "Inject Window";
 
 		//MyStruct my_struct;
 		//my_struct.boolean = false;
@@ -661,6 +575,87 @@ public:
 		Deallocate(linear_allocator, deserialized_metadata.macros[0].definition);
 		Deallocate(linear_allocator, deserialized_metadata.macros[1].name);
 		Deallocate(linear_allocator, deserialized_metadata.macros[1].definition);*/
+
+		//Stream<char> names[] = {
+		//	"SearchBytes",
+		//	"FindFirstToken",
+		//	"Std",
+		//	"CString",
+		//	"Loop"
+		//};
+
+		//typedef unsigned short t;
+		//BenchmarkState benchmark_state(editor_state.EditorAllocator(), 5, nullptr, names);
+		//benchmark_state.options.element_size = sizeof(t);
+		//benchmark_state.options.max_step_count = 18;
+		////benchmark_state.options.timed_run = 50;
+
+		//while (benchmark_state.KeepRunning()) {
+		//	Stream<void> iteration_buffer = benchmark_state.GetIterationBuffer();
+
+		//	Stream<t> ts = { iteration_buffer.buffer, iteration_buffer.size / sizeof(t) };
+		//	//function::MakeSequence(ts);
+		//	char* it = (char*)iteration_buffer.buffer;
+		//	it[iteration_buffer.size - 1] = '\0';
+		//	for (size_t index = 0; index < iteration_buffer.size - 1; index++) {
+		//		if (it[index] > 1) {
+		//			it[index] = 'a';
+		//		}
+		//		else {
+		//			it[index] = 'b';
+		//		}
+		//	}
+		//	//t ptr = (t)ts.buffer;
+		//	t ptr = -1;
+
+		//	while (benchmark_state.Run()) {
+		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+		//		size_t indexu = function::SearchBytes(current_buffer.buffer, current_buffer.size / sizeof(ptr), (size_t)ptr, sizeof(ptr));
+		//		benchmark_state.DoNotOptimize(indexu);
+		//	}
+
+		//	while (benchmark_state.Run()) {
+		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+		//		auto resultu = function::FindFirstToken(Stream<char>(current_buffer.buffer, current_buffer.size), { &ptr, sizeof(ptr) });
+		//		benchmark_state.DoNotOptimize(resultu.buffer == nullptr ? -1 : resultu.size);
+		//	}
+
+		//	while (benchmark_state.Run()) {
+		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+		//		std::string_view view = { (const char*)current_buffer.buffer, current_buffer.size };
+		//		auto resultuu = view.find((const char*)&ptr, sizeof(ptr));
+		//		benchmark_state.DoNotOptimize(resultuu);
+		//	}
+
+		//	char null_terminated[16];
+		//	memcpy(null_terminated, &ptr, sizeof(ptr));
+		//	null_terminated[sizeof(ptr)] = '\0';
+		//	while (benchmark_state.Run()) {
+		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+		//		const char* c_string = (const char*)current_buffer.buffer;
+		//		const char* result = strstr(c_string, null_terminated);
+		//		benchmark_state.DoNotOptimize((size_t)result);
+		//	}
+
+		//	while (benchmark_state.Run()) {
+		//		Stream<void> current_buffer = benchmark_state.GetCurrentBuffer();
+
+		//		Stream<t> ts = { current_buffer.buffer, current_buffer.size / sizeof(t) };
+		//		size_t subindex = 0;
+		//		for (size_t i = 0; i < ts.size; i++) {
+		//			if (ts[i] == ptr) {
+		//				subindex = i;
+		//				break;
+		//			}
+		//		}
+		//		benchmark_state.DoNotOptimize(subindex);
+		//	}
+		//}
+
+		//ECS_STACK_CAPACITY_STREAM(char, bench_string, ECS_KB * 64);
+		//benchmark_state.GetString(bench_string, false);
+		//bench_string[bench_string.size] = '\0';
+		//OutputDebugStringA(bench_string.buffer);
 
 		while (result == 0) {
 			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -953,6 +948,8 @@ public:
 		};
 }; // Editor
 
+//ECS_OPTIMIZE_END;
+
 Editor::EditorClass Editor::EditorClass::editorInstance;
 Editor::EditorClass::EditorClass() noexcept : hInstance( GetModuleHandle(nullptr))  {
 	WNDCLASSEX editor_class = { 0 };
@@ -999,21 +996,21 @@ Editor::Editor(int _width, int _height, LPCWSTR name) noexcept : timer("Editor")
 	HCURSOR* cursor_stream = new HCURSOR[ECS_CURSOR_COUNT];
 
 	// hInstance is null because these are predefined cursors
-	cursors = ECSEngine::Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_APP_STARTING] = LoadCursor(NULL, IDC_APPSTARTING);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_CROSS] = LoadCursor(NULL, IDC_CROSS);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT] = LoadCursor(NULL, IDC_ARROW);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_HAND] = LoadCursor(NULL, IDC_HAND);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_HELP] = LoadCursor(NULL, IDC_HELP);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_IBEAM] = LoadCursor(NULL, IDC_IBEAM);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_ALL] = LoadCursor(NULL, IDC_SIZEALL);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_EW] = LoadCursor(NULL, IDC_SIZEWE);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_NESW] = LoadCursor(NULL, IDC_SIZENESW);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_NS] = LoadCursor(NULL, IDC_SIZENS);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_SIZE_NWSE] = LoadCursor(NULL, IDC_SIZENWSE);
-	cursors[(unsigned int)ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_WAIT] = LoadCursor(NULL, IDC_WAIT);
+	cursors = Stream<HCURSOR>(cursor_stream, ECS_CURSOR_COUNT);
+	cursors[(unsigned int)ECS_CURSOR_APP_STARTING] = LoadCursor(NULL, IDC_APPSTARTING);
+	cursors[(unsigned int)ECS_CURSOR_CROSS] = LoadCursor(NULL, IDC_CROSS);
+	cursors[(unsigned int)ECS_CURSOR_DEFAULT] = LoadCursor(NULL, IDC_ARROW);
+	cursors[(unsigned int)ECS_CURSOR_HAND] = LoadCursor(NULL, IDC_HAND);
+	cursors[(unsigned int)ECS_CURSOR_HELP] = LoadCursor(NULL, IDC_HELP);
+	cursors[(unsigned int)ECS_CURSOR_IBEAM] = LoadCursor(NULL, IDC_IBEAM);
+	cursors[(unsigned int)ECS_CURSOR_SIZE_ALL] = LoadCursor(NULL, IDC_SIZEALL);
+	cursors[(unsigned int)ECS_CURSOR_SIZE_EW] = LoadCursor(NULL, IDC_SIZEWE);
+	cursors[(unsigned int)ECS_CURSOR_SIZE_NESW] = LoadCursor(NULL, IDC_SIZENESW);
+	cursors[(unsigned int)ECS_CURSOR_SIZE_NS] = LoadCursor(NULL, IDC_SIZENS);
+	cursors[(unsigned int)ECS_CURSOR_SIZE_NWSE] = LoadCursor(NULL, IDC_SIZENWSE);
+	cursors[(unsigned int)ECS_CURSOR_WAIT] = LoadCursor(NULL, IDC_WAIT);
 
-	ChangeCursor(ECSEngine::ECS_CURSOR_TYPE::ECS_CURSOR_DEFAULT);
+	ChangeCursor(ECS_CURSOR_DEFAULT);
 
 	// create window and get Handle
 	hWnd = CreateWindow(
@@ -1049,13 +1046,6 @@ Editor::Editor(int _width, int _height, LPCWSTR name) noexcept : timer("Editor")
 	UpdateWindow(hWnd);
 	RECT rect;
 	GetClientRect(hWnd, &rect);
-
-	timer.SetMarker();
-	HANDLE thread_handle = GetCurrentThread();
-	SetThreadPriority(thread_handle, THREAD_PRIORITY_HIGHEST);
-	size_t duration = timer.GetDurationSinceMarker_ns();
-	ECS_FORMAT_TEMP_STRING(duration_string, "Time: {#}.\n", duration);
-	OutputDebugStringA(duration_string.buffer);
 }
 Editor::~Editor() {
 	delete[] cursors.buffer;

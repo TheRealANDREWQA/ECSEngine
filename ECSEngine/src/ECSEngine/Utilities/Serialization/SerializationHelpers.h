@@ -24,7 +24,9 @@ namespace ECSEngine {
 	};
 
 	// If write data is false, just determine how many buffer bytes are needed
-	typedef size_t(*SerializeCustomTypeWriteFunction)(SerializeCustomTypeWriteFunctionData* data);
+	typedef size_t (*SerializeCustomTypeWriteFunction)(SerializeCustomTypeWriteFunctionData* data);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name) size_t SerializeCustomTypeWrite_##name(SerializeCustomTypeWriteFunctionData* data)
 
 	struct DeserializeOptions;
 
@@ -43,70 +45,149 @@ namespace ECSEngine {
 	// If read_data is false, just determine how many buffer bytes are needed
 	typedef size_t (*SerializeCustomTypeReadFunction)(SerializeCustomTypeReadFunctionData* data);
 
+#define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) size_t SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)
+
+	struct SerializeCustomTypeIsTriviallyCopyableData {
+		Stream<char> definition;
+		const Reflection::ReflectionManager* reflection_manager;
+	};
+
+	typedef bool (*SerializeCustomTypeIsTriviallyCopyable)(SerializeCustomTypeIsTriviallyCopyableData* data);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name) bool SerializeCustomTypeIsTriviallyCopyable_##name(SerializeCustomTypeIsTriviallyCopyableData* data)
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
+														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name); \
+														ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, SerializeCustomTypeIsTriviallyCopyable_##name, version, nullptr } 
+
 	struct SerializeCustomType {
-		Reflection::ReflectionContainerType container_type;
+		Reflection::ReflectionCustomType container_type;
 		SerializeCustomTypeWriteFunction write;
 		SerializeCustomTypeReadFunction read;
+		SerializeCustomTypeIsTriviallyCopyable is_trivially_copyable;
 		unsigned int version;
+
+		// Can modify the behaviour of the serializer
+		void* user_data;
 	};
 
 	extern SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[];
 
+	struct SerializeCustomTypeDeduceTypeHelperData {
+		Stream<char>* template_type;
+		const Reflection::ReflectionManager* reflection_manager;		
+	};
+
+	struct SerializeCustomTypeDeduceTypeHelperResult {
+		Reflection::ReflectionType type;
+		unsigned int custom_serializer_index;
+		Reflection::ReflectionBasicFieldType basic_type;
+		Reflection::ReflectionStreamFieldType stream_type;
+		size_t byte_size;
+	};
+
 	// Returns the byte size of the element in between the template parenthesis.
 	// It also finds out if the template parameter is a user defined type, it has a serialize functor
 	// or it is just a basic type
-	// At the moment, pointers can be detected
-	ECSENGINE_API size_t SerializeCustomTypeBasicTypeHelper(
-		Stream<char>& template_type,
-		const Reflection::ReflectionManager* reflection_manager,
-		Reflection::ReflectionType* type,
-		unsigned int& custom_serializer_index,
-		Reflection::ReflectionBasicFieldType& basic_type,
-		Reflection::ReflectionStreamFieldType& stream_type
-	);
+	// At the moment, pointers cannot be detected (is that a case for someone?)
+	ECSENGINE_API SerializeCustomTypeDeduceTypeHelperResult SerializeCustomTypeDeduceTypeHelper(SerializeCustomTypeDeduceTypeHelperData* data);
+
+	struct SerializeCustomWriteHelperData {
+		Reflection::ReflectionBasicFieldType basic_type;
+		Reflection::ReflectionStreamFieldType stream_type;
+		const Reflection::ReflectionType* reflection_type;
+		unsigned int custom_serializer_index;
+		SerializeCustomTypeWriteFunctionData* write_data;
+		Stream<void> data_to_write;
+		size_t element_byte_size;
+		Stream<size_t> indices = { nullptr, 0 };
+	};
 
 	// Element_byte_size should be for stream_type different from basic
 	// the byte size of the target, not of the stream's
-	// It does not prefix the stream with its size - should be done outside
-	ECSENGINE_API size_t SerializeCustomWriteHelper(
-		Reflection::ReflectionBasicFieldType basic_type,
-		Reflection::ReflectionStreamFieldType stream_type,
-		const Reflection::ReflectionType* reflection_type,
-		unsigned int custom_serializer_index,
-		SerializeCustomTypeWriteFunctionData* write_data,
-		Stream<void> data_to_write,
-		size_t element_byte_size,
-		Stream<size_t> indices = { nullptr, 0 }
-	);
+	// It does not prefix the stream with its size - should be done outside. Returns the number of bytes written
+	ECSENGINE_API size_t SerializeCustomWriteHelper(SerializeCustomWriteHelperData* data);
+
+	// All the fields that can be filled in from the result will be filled
+	ECSENGINE_API SerializeCustomWriteHelperData FillSerializeCustomWriteHelper(const SerializeCustomTypeDeduceTypeHelperResult* result);
+
+	struct SerializeCustomWriteHelperExData {
+		Stream<char> template_type;
+		SerializeCustomTypeWriteFunctionData* write_data;
+		Stream<void> data_to_write;
+		size_t element_byte_size = -1; // -1 Means use the return value of the deduce type helper
+	};
+
+	// Combines SerializeCustomTypeDeduceTypeHelper with a SerializeCustomWriteHelper call
+	// into a single step. Returns what SerializeCustomWriteHelper would return, the number of bytes written
+	ECSENGINE_API size_t SerializeCustomWriteHelperEx(SerializeCustomWriteHelperExData* data);
+
+	struct DeserializeCustomReadHelperData {
+		Reflection::ReflectionBasicFieldType basic_type;
+		Reflection::ReflectionStreamFieldType stream_type;
+		const Reflection::ReflectionType* reflection_type;
+		unsigned int custom_serializer_index;
+		SerializeCustomTypeReadFunctionData* read_data;
+		size_t element_count;
+		size_t elements_to_allocate;
+		size_t element_byte_size;
+		void** allocated_buffer;
+		AllocatorPolymorphic override_allocator = { nullptr };
+		Stream<size_t> indices = { nullptr, 0 };
+	};
 
 	// The element_byte_size should be the size of the target for streams.
 	// Field data should be initialized with the element count to be read
 	// Can provide an allocator such that it will allocate from it instead 
 	// of the backup allocator. Can be useful for resizable containers
-	ECSENGINE_API size_t DeserializeCustomReadHelper(
-		Reflection::ReflectionBasicFieldType basic_type,
-		Reflection::ReflectionStreamFieldType stream_type,
-		const Reflection::ReflectionType* reflection_type,
-		unsigned int custom_serializer_index,
-		SerializeCustomTypeReadFunctionData* read_data,
-		size_t element_count,
-		size_t elements_to_allocate,
-		size_t element_byte_size,
-		void** allocated_buffer,
-		AllocatorPolymorphic override_allocator = { nullptr },
-		Stream<size_t> indices = { nullptr, 0 }
-	);
+	ECSENGINE_API size_t DeserializeCustomReadHelper(DeserializeCustomReadHelperData* data);
+
+	// All the fields that can be filled in from the result will be filled
+	ECSENGINE_API DeserializeCustomReadHelperData FillDeserializeCustomReadHelper(const SerializeCustomTypeDeduceTypeHelperResult* result);
+
+	struct DeserializeCustomReadHelperExData {
+		Stream<char> definition;
+		SerializeCustomTypeReadFunctionData* data;
+		size_t element_count;
+		size_t elements_to_allocate = -1; // -1 means the same as the element count
+		void** allocated_buffer;
+	};
+
+	// Combines SerializeCustomTypeDeduceTypeHelper with a DeserializeCustomReadHelper call
+	// into a single step. Returns what DeserializeCustomReadHelper would return, the number of buffer bytes
+	ECSENGINE_API size_t DeserializeCustomReadHelperEx(DeserializeCustomReadHelperExData* data);
 
 	// Returns -1 if it doesn't exist
 	ECSENGINE_API unsigned int FindSerializeCustomType(Stream<char> definition);
 
-	// Returns std::size(ECS_SERIALIZE_CUSTOM_TYPES);
 	ECSENGINE_API unsigned int SerializeCustomTypeCount();
+
+	ECSENGINE_API bool IsTriviallyCopyable(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type);
+
+	// Returns true if it can be copied with memcpy, else false
+	// It returns true when all fields are fundamental types non pointer
+	ECSENGINE_API bool IsTriviallyCopyable(const Reflection::ReflectionManager* reflection_manager, Stream<char> definition);
+
+#pragma region User defined influence
+
+	// Activates the mode for the sparse set where it writes only the T data
+	// without the indirection buffer
+	ECSENGINE_API void SetSerializeCustomSparsetSet();
+
+	// Only references it, needs to be stable for the duration it is being used.
+	// After the data is no longer needed, clear using the ClearSerializeCustomTypeUserData
+	ECSENGINE_API void SetSerializeCustomTypeUserData(unsigned int index, void* buffer);
+
+	ECSENGINE_API void ClearSerializeCustomTypeUserData(unsigned int index);
+
+#pragma endregion
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
-	size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size) {
+	inline size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size) {
 		if constexpr (write_data) {
 			memcpy((void*)((uintptr_t)stream.buffer + stream.size), data, data_size);
 			stream.size += data_size;
@@ -117,10 +198,14 @@ namespace ECSEngine {
 		}
 	}
 
+	inline size_t Write(CapacityStream<void>& stream, const void* data, size_t data_size, bool write_data) {
+		return write_data ? Write<true>(stream, data, data_size) : Write<false>(stream, data, data_size);
+	}
+
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
-	size_t Write(uintptr_t* stream, const void* data, size_t data_size) {
+	inline size_t Write(uintptr_t* stream, const void* data, size_t data_size) {
 		if constexpr (write_data) {
 			memcpy((void*)*stream, data, data_size);
 			*stream += data_size;
@@ -132,39 +217,55 @@ namespace ECSEngine {
 		}
 	}
 
+	inline size_t Write(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
+		return write_data ? Write<true>(stream, data, data_size) : Write<false>(stream, data, data_size);
+	}
+
 	// -----------------------------------------------------------------------------------------
 
 	template<bool write_data>
-	size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size) {
+	inline size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size) {
 		return Write<write_data>(stream, &data_size, sizeof(data_size)) + Write<write_data>(stream, data, data_size);
+	}
+
+	inline size_t WriteWithSize(uintptr_t* stream, const void* data, size_t data_size, bool write_data) {
+		return write_data ? WriteWithSize<true>(stream, data, data_size) : WriteWithSize<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 	
 	template<bool write_data>
-	size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size) {
+	inline size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size) {
 		return Write<write_data>(stream, &data_size, sizeof(data_size)) + Write<write_data>(stream, data, data_size);
+	}
+
+	inline size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size, bool write_data) {
+		return write_data ? WriteWithSizeShort<true>(stream, data, data_size) : WriteWithSizeShort<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t Read(CapacityStream<void>& stream, void* data, size_t data_size) {
+	inline size_t Read(CapacityStream<void>& stream, void* data, size_t data_size) {
 		if constexpr (read_data) {
 			memcpy(data, (const void*)((uintptr_t)stream.buffer + stream.size), data_size);
 			stream.size += data_size;
 			return 0;
 		}
 		else {
-			*stream += data_size;
+			stream.size += data_size;
 			return data_size;
 		}
+	}
+
+	inline size_t Read(CapacityStream<void>& stream, void* data, size_t data_size, bool read_data) {
+		return read_data ? Read<true>(stream, data, data_size) : Read<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t Read(uintptr_t* stream, void* data, size_t data_size) {
+	inline size_t Read(uintptr_t* stream, void* data, size_t data_size) {
 		if constexpr (read_data) {
 			memcpy(data, (const void*)*stream, data_size);
 			*stream += data_size;
@@ -176,26 +277,38 @@ namespace ECSEngine {
 		}
 	}
 
-	// -----------------------------------------------------------------------------------------
-
-	template<bool read_data>
-	size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size) {
-		Read<true>(stream, &data_size, sizeof(data_size));
-		return Read<read_data>(stream, data_size, data_size);
+	inline size_t Read(uintptr_t* stream, void* data, size_t data_size, bool read_data) {
+		return read_data ? Read<true>(stream, data, data_size) : Read<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size) {
+	inline size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size) {
 		Read<true>(stream, &data_size, sizeof(data_size));
-		return Read<read_data>(stream, data_size, data_size);
+		return Read<read_data>(stream, data, data_size);
+	}
+
+	inline size_t ReadWithSize(uintptr_t* stream, void* data, size_t& data_size, bool read_data) {
+		return read_data ? ReadWithSize<true>(stream, data, data_size) : ReadWithSize<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t ReferenceData(uintptr_t* stream, void** pointer, size_t data_size) {
+	inline size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size) {
+		Read<true>(stream, &data_size, sizeof(data_size));
+		return Read<read_data>(stream, data, data_size);
+	}
+
+	inline size_t ReadWithSizeShort(uintptr_t* stream, void* data, unsigned short& data_size, bool read_data) {
+		return read_data ? ReadWithSizeShort<true>(stream, data, data_size) : ReadWithSizeShort<false>(stream, data, data_size);
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	template<bool read_data>
+	inline size_t ReferenceData(uintptr_t* stream, void** pointer, size_t data_size) {
 		if constexpr (read_data) {
 			*pointer = (void*)*stream;
 			*stream += data_size;
@@ -207,26 +320,38 @@ namespace ECSEngine {
 		}
 	}
 
-	// -----------------------------------------------------------------------------------------
-
-	template<bool read_data>
-	size_t ReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size) {
-		Read<true>(stream, &data_size, sizeof(data_size));
-		return ReferenceData<read_data>(stream, pointer, data_size);
+	inline size_t ReferenceData(uintptr_t* stream, void** data, size_t data_size, bool read_data) {
+		return read_data ? ReferenceData<true>(stream, data, data_size) : ReferenceData<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size) {
+	inline size_t ReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size) {
 		Read<true>(stream, &data_size, sizeof(data_size));
 		return ReferenceData<read_data>(stream, pointer, data_size);
+	}
+
+	inline size_t ReferenceDataWithSize(uintptr_t* stream, void** data, size_t& data_size, bool read_data) {
+		return read_data ? ReferenceDataWithSize<true>(stream, data, data_size) : ReferenceDataWithSize<false>(stream, data, data_size);
 	}
 
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t ReadOrReferenceData(uintptr_t* stream, void** pointer, size_t data_size, bool reference_data) {
+	inline size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size) {
+		Read<true>(stream, &data_size, sizeof(data_size));
+		return ReferenceData<read_data>(stream, pointer, data_size);
+	}
+
+	inline size_t ReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool read_data) {
+		return read_data ? ReferenceDataWithSizeShort<true>(stream, data, data_size) : ReferenceDataWithSizeShort<false>(stream, data, data_size);
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	template<bool read_data>
+	inline size_t ReadOrReferenceData(uintptr_t* stream, void** pointer, size_t data_size, bool reference_data) {
 		if (reference_data) {
 			return ReferenceData<read_data>(stream, pointer, data_size);
 		}
@@ -235,10 +360,14 @@ namespace ECSEngine {
 		}
 	}
 
+	inline size_t ReadOrReferenceData(uintptr_t* stream, void** data, size_t data_size, bool reference_data, bool read_data) {
+		return read_data ? ReadOrReferenceData<true>(stream, data, data_size, reference_data) : ReadOrReferenceData<false>(stream, data, data_size, reference_data);
+	}
+
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size, bool reference_data) {
+	inline size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** pointer, size_t& data_size, bool reference_data) {
 		if (reference_data) {
 			return ReferenceDataWithSize<read_data>(stream, pointer, data_size);
 		}
@@ -247,16 +376,24 @@ namespace ECSEngine {
 		}
 	}
 
+	inline size_t ReadOrReferenceDataWithSize(uintptr_t* stream, void** data, size_t& data_size, bool reference_data, bool read_data) {
+		return read_data ? ReadOrReferenceDataWithSize<true>(stream, data, data_size, reference_data) : ReadOrReferenceDataWithSize<false>(stream, data, data_size, reference_data);
+	}
+
 	// -----------------------------------------------------------------------------------------
 
 	template<bool read_data>
-	size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size, bool reference_data) {
+	inline size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** pointer, unsigned short& data_size, bool reference_data) {
 		if (reference_data) {
 			return ReferenceDataWithSizeShort<read_data>(stream, pointer, data_size);
 		}
 		else {
 			return ReadWithSizeShort<read_data>(stream, *pointer, data_size);
 		}
+	}
+
+	inline size_t ReadOrReferenceDataWithSizeShort(uintptr_t* stream, void** data, unsigned short& data_size, bool reference_data, bool read_data) {
+		return read_data ? ReadOrReferenceDataWithSizeShort<true>(stream, data, data_size, reference_data) : ReadOrReferenceDataWithSizeShort<false>(stream, data, data_size, reference_data);
 	}
 
 	// -----------------------------------------------------------------------------------------

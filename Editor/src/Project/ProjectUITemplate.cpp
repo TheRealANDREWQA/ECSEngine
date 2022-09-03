@@ -8,13 +8,13 @@
 #include "../UI/DirectoryExplorer.h"
 #include "../UI/ToolbarUI.h"
 #include "../UI/MiscellaneousBar.h"
-#include "../UI/Game.h"
 #include "../UI/ModuleExplorer.h"
 #include "../UI/Inspector.h"
 #include "../UI/NotificationBar.h"
 #include "../UI/Backups.h"
 #include "../UI/SandboxExplorer.h"
 #include "../UI/Sandbox.h"
+#include "../UI/EntitiesUI.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -30,7 +30,7 @@ void CreateProjectDefaultUI(EditorState* editor_state) {
 	CreateMiscellaneousBar(editor_state);
 	CreateNotificationBar(editor_state);
 	UIDockspace* main_dockspace = CreateProjectBackgroundDockspace(ui_system);
-	unsigned int viewport_window_index = CreateGameWindow(editor_state);
+	unsigned int viewport_window_index = CreateSandboxExplorerWindow(editor_state);
 	ui_system->AddWindowToDockspaceRegion(viewport_window_index, main_dockspace, 0);
 	CreateDirectoryExplorer(editor_state);
 	CreateFileExplorer(editor_state);
@@ -98,19 +98,45 @@ void SaveCurrentProjectUIAction(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------
 
-void InjectWindowSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory) {
-	descriptor.draw = InjectValuesWindowDraw;
+typedef void (*SetDescriptorFunction)(UIWindowDescriptor&, EditorState*, void*);
 
-	descriptor.destroy_action = InjectWindowDestroyAction;
-	descriptor.window_data = &editor_state->inject_data;
-	descriptor.window_data_size = sizeof(editor_state->inject_data);
+unsigned int VerifyIndexedWindowIndexOnly(
+	Stream<char> file_window_name,
+	const char* base_name,
+	unsigned int max_search
+) {
+	ECS_STACK_CAPACITY_STREAM(char, window_name, 256);
+	Stream<char> base_name_stream = base_name;
 
-	descriptor.window_name = editor_state->inject_window_name;
+	if (memcmp(file_window_name.buffer, base_name, base_name_stream.size) == 0) {
+		// At the moment check for at max 
+		for (unsigned int index = 0; index < max_search; index++) {
+			window_name.size = 0;
+			window_name.Copy(base_name_stream);
+			function::ConvertIntToChars(window_name, index);
+
+			if (function::CompareStrings(window_name, file_window_name)) {
+				return index;
+			}
+		}
+	}
+
+	return -1;
 }
 
-// -------------------------------------------------------------------------------------------------------
-
-typedef void (*SetDescriptorFunction)(UIWindowDescriptor&, EditorState*, void*);
+void CreateIndexedWindow(
+	unsigned int index,
+	Stream<char> window_name,
+	UIWindowDescriptor& descriptor,
+	EditorState* editor_state,
+	void* stack_memory,
+	SetDescriptorFunction set_descriptor
+) {
+	unsigned int* window_index = (unsigned int*)stack_memory;
+	*window_index = index;
+	set_descriptor(descriptor, editor_state, stack_memory);
+	editor_state->ui_system->RestoreWindow(window_name, descriptor);
+}
 
 // Returns the index that matched, or -1 if no index matched
 unsigned int VerifyIndexedWindow(
@@ -133,10 +159,7 @@ unsigned int VerifyIndexedWindow(
 			function::ConvertIntToChars(window_name, index);
 
 			if (function::CompareStrings(window_name, file_window_name)) {
-				unsigned int* window_index = (unsigned int*)stack_memory;
-				*window_index = index;
-				set_descriptor(descriptor, editor_state, stack_memory);
-				editor_state->ui_system->RestoreWindow(window_name, descriptor);
+				CreateIndexedWindow(index, window_name, descriptor, editor_state, stack_memory, set_descriptor);
 				return index;
 			}
 		}
@@ -162,39 +185,35 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 	else {
 		// The inspector is handled separately - because multiple instances can be instanced
 		Stream<char> _window_names[] = {
-			editor_state->inject_window_name,
 			TOOLBAR_WINDOW_NAME,
 			MISCELLANEOUS_BAR_WINDOW_NAME,
 			NOTIFICATION_BAR_WINDOW_NAME,
 			CONSOLE_WINDOW_NAME,
 			DIRECTORY_EXPLORER_WINDOW_NAME,
 			FILE_EXPLORER_WINDOW_NAME,
-			GAME_WINDOW_NAME,
 			MODULE_EXPLORER_WINDOW_NAME,
 			SANDBOX_EXPLORER_WINDOW_NAME,
 			SANDBOX_UI_WINDOW_NAME,
-			BACKUPS_WINDOW_NAME
+			BACKUPS_WINDOW_NAME,
+			ENTITIES_UI_WINDOW_NAME
 		};
 
 		Stream<Stream<char>> window_names(_window_names, std::size(_window_names));
 		// The inspector is handled separately - because multiple instances can be instanced
 		SetDescriptorFunction set_functions[] = {
-			InjectWindowSetDescriptor,
 			ToolbarSetDescriptor,
 			MiscellaneousBarSetDescriptor,
 			NotificationBarSetDescriptor,
 			ConsoleSetDescriptor,
 			DirectoryExplorerSetDescriptor,
 			FileExplorerSetDescriptor,
-			GameSetDecriptor,
 			ModuleExplorerSetDescriptor,
 			SandboxExplorerSetDescriptor,
 			SandboxUISetDescriptor,
-			BackupsWindowSetDescriptor
+			BackupsWindowSetDescriptor,
+			EntitiesUISetDescriptor,
 		};
 
-		const size_t MAX_INSPECTOR_INDEX = 20;
-		const size_t MAX_SANDBOX_INDEX = 20;
 		for (size_t index = 0; index < file_window_names.size; index++) {
 			UIWindowDescriptor descriptor;
 			unsigned int in_index = function::FindString(file_window_names[index], window_names);
@@ -211,7 +230,8 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				// Check for the indexed windows
 
 				// Start with the inspector
-				unsigned int matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], INSPECTOR_WINDOW_NAME, MAX_INSPECTOR_INDEX, stack_memory, InspectorSetDescriptor);
+				//unsigned int matched_index = VerifyIndexedWindowIndexOnly(file_window_names[index], INSPECTOR_WINDOW_NAME, MAX_INSPECTOR_WINDOWS);
+				unsigned int matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], INSPECTOR_WINDOW_NAME, MAX_INSPECTOR_WINDOWS, stack_memory, InspectorSetDescriptor);
 				if (matched_index != -1) {
 					while (editor_state->inspector_manager.data.size <= matched_index) {
 						CreateInspectorInstance(editor_state);
@@ -219,7 +239,11 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 				}
 				else {
 					// Now the sandboxes
-					matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], SANDBOX_UI_WINDOW_NAME, MAX_SANDBOX_INDEX, stack_memory, SandboxUISetDescriptor);
+					matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], SANDBOX_UI_WINDOW_NAME, MAX_SANDBOX_UI_WINDOWS, stack_memory, SandboxUISetDescriptor);
+					// If this fails as well, then check for entitites UI
+					if (matched_index == -1) {
+						matched_index = VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], ENTITIES_UI_WINDOW_NAME, MAX_ENTITIES_UI_WINDOWS, stack_memory, EntitiesUISetDescriptor);
+					}
 				}
 			}
 		}

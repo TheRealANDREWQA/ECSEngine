@@ -76,20 +76,25 @@ namespace ECSEngine {
 				temp_string.AddStreamSafe("\n[Line] ");
 				function::ConvertIntToChars(temp_string, line);
 				temp_string.Add('\n');
-				temp_string.AddSafe('\0');
-				wchar_t* converted_filename = function::ConvertASCIIToWide(temp_string.buffer);
+				temp_string.AssertCapacity();
+
+				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_string, ECS_KB * 4);
+				function::ConvertASCIIToWide(wide_string, temp_string);
+				wide_string.AddStream(error.ErrorMessage());
+				wide_string[wide_string.size] = L'\0';
+				wide_string.AssertCapacity();
+
 #ifdef ECSENGINE_DEBUG
 				__debugbreak();
 #endif
 				if (do_exit) {
-					MessageBox(nullptr, (std::wstring(converted_filename) + error.ErrorMessage()).c_str(), box_name, MB_OK | MB_ICONERROR);
+					MessageBox(nullptr, wide_string.buffer, box_name, MB_OK | MB_ICONERROR);
 					__debugbreak();
 					exit(0);
 				}
 				else {
-					MessageBox(nullptr, (std::wstring(converted_filename) + error.ErrorMessage()).c_str(), box_name, MB_OK | MB_ICONWARNING);
+					MessageBox(nullptr, wide_string.buffer, box_name, MB_OK | MB_ICONWARNING);
 					__debugbreak();
-					delete[] converted_filename;
 				}
 			}
 		}
@@ -194,77 +199,96 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void ConvertDurationToChars(size_t duration, char* characters)
+		size_t ConvertDurationToChars(size_t duration, char* characters)
 		{
 			auto append_lambda = [characters](size_t integer) {
 				size_t character_count = strlen(characters);
 				Stream<char> stream = Stream<char>(characters, character_count);
-				function::ConvertIntToCharsFormatted(stream, (int64_t)integer);
+				return function::ConvertIntToCharsFormatted(stream, (int64_t)integer);
 			};
+
+			size_t write_size = 0;
+			const char* string = nullptr;
 
 			// less than 10 seconds
 			if (duration < 10000) {
-				strcat(characters, "Just now");
+				string = "Just now";
+				strcat(characters, string);
 			}
 			// less than 60 seconds - 1 minute
 			else if (duration < 60'000) {
-				strcat(characters, "Less than a minute ago");
+				string = "Less than a minute ago";
+				strcat(characters, string);
 			}
 			// less than 60 minutes - 1 hour
 			else if (duration < 3'600'000) {
 				size_t minutes = duration / 60'000;
+
 				if (minutes > 1) {
-					append_lambda(minutes);
-					strcat(characters, " minutes ago");
+					string = " minutes ago";
+
+					write_size = append_lambda(minutes);
+					strcat(characters, string);
 				}
 				else {
-					strcat(characters, "A minute ago");
+					string = "A minute ago";
+					strcat(characters, string);
 				}
 			}
 			// less than a 24 hours - 1 day
 			else if (duration < 24 * 3'600'000) {
 				size_t hours = duration / 3'600'000;
 				if (hours > 1) {
-					append_lambda(hours);
-					strcat(characters, " hours ago");
+					string = " hours ago";
+					write_size = append_lambda(hours);
+					strcat(characters, string);
 				}
 				else {
-					strcat(characters, "An hour ago");
+					string = "An hour ago";
+					strcat(characters, string);
 				}
 			}
 			// less than a 30 days - 1 months
 			else if (duration < (size_t)30 * 24 * 3'600'000) {
 				size_t days = duration / (24 * 3'600'000);
 				if (days > 1) {
-					append_lambda(days);
-					strcat(characters, " days ago");
+					string = " days ago";
+					write_size = append_lambda(days);
+					strcat(characters, string);
 				}
 				else {
-					strcat(characters, "A day ago");
+					string = "A day ago";
+					strcat(characters, string);
 				}
 			}
 			// less than 12 months - 1 year
 			else if (duration < (size_t)12 * 30 * 24 * 3'600'000) {
 				size_t months = duration / ((size_t)30 * (size_t)24 * (size_t)3'600'000);
 				if (months > 1) {
-					append_lambda(months);
-					strcat(characters, " months ago");
+					string = " months ago";
+					write_size = append_lambda(months);
+					strcat(characters, string);
 				}
 				else {
-					strcat(characters, "A month ago");
+					string = "A month ago";
+					strcat(characters, string);
 				}
 			}
 			// years
 			else {
 				size_t years = duration / ((size_t)12 * (size_t)30 * (size_t)24 * (size_t)3'600'000);
 				if (years > 1) {
-					append_lambda(years);
-					strcat(characters, " years ago");
+					string = " years ago";
+					write_size = append_lambda(years);
+					strcat(characters, string);
 				}
 				else {
-					strcat(characters, "A year ago");
+					string = "A year ago";
+					strcat(characters, string);
 				}
 			}
+
+			return write_size + strlen(string);
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -425,100 +449,48 @@ namespace ECSEngine {
 		
 		// --------------------------------------------------------------------------------------------------
 
+		// Unfortunately, cannot set the template to optimization, since probably it won't be taken into account
+		// correctly. Must put the optimization pragmas at the instantiation
 		template<bool reverse, typename VectorType, typename CharacterType>
 		Stream<CharacterType> FindFirstTokenImpl(Stream<CharacterType> characters, Stream<CharacterType> token)
 		{
-			// If the token size is greater than 256 (i.e. 8 32 byte element SIMD registers)
-			// The check should be done manually with memcmp
-
-			VectorType simd_token[8];
-			VectorType first_char(token[0]);
-
 			if (characters.size < token.size) {
 				return { nullptr, 0 };
 			}
 
-			size_t simd_token_count = 0;
-			size_t iteration_count = characters.size - token.size + 1;
-			size_t simd_count = GetSimdCount(iteration_count, first_char.size());
-			size_t simd_remainder = 0;
+			VectorType first_character;
+			size_t last_character_to_check = characters.size - token.size + 1;
+			size_t simd_count = GetSimdCount(last_character_to_check, first_character.size());
 
-			int64_t increment = reverse ? -1 : 1;
-			if (token.size <= 256 / sizeof(CharacterType)) {
-				while (token.size > first_char.size()) {
-					size_t offset = simd_token_count * first_char.size();
-					simd_token[simd_token_count++].load(token.buffer + offset);
-					token.size -= first_char.size();
-				}
-				if (token.size > 0) {
-					size_t offset = simd_token_count * first_char.size();
-					simd_token[simd_token_count].load_partial(token.size * sizeof(CharacterType), token.buffer + offset);
-					simd_remainder = token.size;
-				}
-
-				for (size_t index = 0; index < simd_count; index += first_char.size()) {
-					const CharacterType* load_position = characters.buffer + index;
-					if constexpr (reverse) {
-						load_position = characters.buffer + iteration_count - index;
-					}
-
-					VectorType current_chars = VectorType().load(load_position);
-					auto match = current_chars == first_char;
-
-					unsigned int found_match = -1;
-					ForEachBit<reverse>(match, [&](unsigned int bit_index) {
-						size_t subindex = 0;
-						const CharacterType* current_characters = load_position + bit_index;
-						VectorType simd_current_characters;
-
-						for (; subindex < simd_token_count; subindex++) {
-							simd_current_characters.load(current_characters);
-							if (!horizontal_and(simd_token[subindex] == simd_current_characters)) {
-								// They are different quit
-								break;
-							}
-							current_characters += simd_current_characters.size();
+			// The scalar loop must be done before the 
+			if constexpr (reverse) {
+				// Use a scalar loop
+				for (size_t index = simd_count; index < last_character_to_check; index++) {
+					const CharacterType* character = characters.buffer + last_character_to_check - index + simd_count;
+					if (*character == token[0]) {
+						if (memcmp(character, token.buffer, token.size * sizeof(CharacterType)) == 0) {
+							return { character, characters.size - function::PointerDifference(character, characters.buffer) };
 						}
-
-						// If they subindex is simd_token_count, they might be equal
-						if (subindex == simd_token_count) {
-							if (simd_remainder > 0) {
-								simd_current_characters.load_partial(simd_remainder, current_characters);
-								if (horizontal_and(simd_token[simd_token_count] == simd_current_characters)) {
-									// Found a match
-									found_match = bit_index;
-									return true;
-								}
-							}
-							else {
-								// Found a match
-								found_match = bit_index;
-								return true;
-							}
-						}
-
-						return false;
-					});
-
-					if (found_match != -1) {
-						const CharacterType* string = load_position + found_match;
-						return { string, PointerDifference(characters.buffer + characters.size, string) / sizeof(CharacterType) };
 					}
 				}
 			}
-			else {
-				for (size_t index = 0; index < simd_count; index += first_char.size()) {
-					const CharacterType* load_position = characters.buffer + index;
+
+			if (simd_count > 0) {
+				first_character = VectorType(token[0]);
+				size_t simd_width = first_character.size();
+
+				VectorType simd_chars;
+				for (size_t index = 0; index < simd_count; index += simd_width) {
+					const CharacterType* character = characters.buffer + index;
 					if constexpr (reverse) {
-						load_position = characters.buffer + iteration_count - index;
+						character = characters.buffer + simd_count - simd_width - index;
 					}
-
-					VectorType current_chars = VectorType().load(load_position);
-					auto match = current_chars == first_char;
-
+					simd_chars.load(character);
+					auto compare = simd_chars == first_character;
+					// For each bit do the precull
 					unsigned int found_match = -1;
-					ForEachBit<reverse>(match, [&](unsigned int bit_index) {
-						if (memcmp(load_position + bit_index, token.buffer, token.size * sizeof(CharacterType)) == 0) {
+					ForEachBit<reverse>(compare, [&](unsigned int bit_index) {
+						if (memcmp(character + bit_index, token.buffer, sizeof(CharacterType) * token.size) == 0) {
 							found_match = bit_index;
 							return true;
 						}
@@ -526,23 +498,20 @@ namespace ECSEngine {
 					});
 
 					if (found_match != -1) {
-						const CharacterType* string = load_position + found_match;
-						return { string, PointerDifference(characters.buffer + characters.size, string) / sizeof(CharacterType) };
+						return { character + found_match, characters.size - function::PointerDifference(character + found_match, characters.buffer) };
 					}
 				}
+
 			}
 
-			// For the remaining slots, just call memcmp for each index
-			for (size_t index = simd_count; index < iteration_count; index++) {
-				const CharacterType* compare_position = characters.buffer + index;
-				if constexpr (reverse) {
-					compare_position = characters.buffer + iteration_count - index;
-				}
-
-				// Do a precull with the first character
-				if (*compare_position == token[0]) {
-					if (memcmp(compare_position, token.buffer, sizeof(CharacterType) * token.size) == 0) {
-						return { compare_position, PointerDifference(characters.buffer + characters.size, compare_position) / sizeof(CharacterType) };
+			// Use a scalar loop
+			if constexpr (!reverse) {
+				for (size_t index = simd_count; index < characters.size - token.size + 1; index++) {
+					const CharacterType* character = characters.buffer + index;
+					if (*character == token[0]) {
+						if (memcmp(character, token.buffer, token.size * sizeof(CharacterType)) == 0) {
+							return { character, characters.size - function::PointerDifference(character, characters.buffer) };
+						}
 					}
 				}
 			}
@@ -564,44 +533,22 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		template<typename VectorType, typename CharacterType>
-		Stream<CharacterType> FindFirstCharacterImpl(Stream<CharacterType> characters, CharacterType token)
-		{
-			VectorType simd_token(token);
-
-			size_t simd_count = GetSimdCount(characters.size, simd_token.size());
-			for (size_t index = 0; index < simd_count; index += simd_token.size()) {
-				VectorType current_chars = VectorType().load(characters.buffer + index);
-				auto match = current_chars == simd_token;
-				if (horizontal_or(match)) {
-					unsigned int mask = to_bits(match);
-					unsigned long bit_index = 0;
-					_BitScanForward(&bit_index, mask);
-
-					index += bit_index;
-					return { characters.buffer + index, characters.size - index };
-				}
-			}
-
-			for (size_t index = simd_count; index < characters.size; index++) {
-				if (characters[index] == token) {
-					return { characters.buffer + index, characters.size - index };
-				}
-			}
-
-			return { nullptr, 0 };
-		}
-
-		// --------------------------------------------------------------------------------------------------
-
 		Stream<char> FindFirstCharacter(Stream<char> characters, char token) {
-			return FindFirstCharacterImpl<Vec32c>(characters, token);
+			size_t index = SearchBytes(characters.buffer, characters.size, token, sizeof(token));
+			if (index == -1) {
+				return { nullptr, 0 };
+			}
+			return { characters.buffer + index, characters.size - index };
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
 		Stream<wchar_t> FindFirstCharacter(Stream<wchar_t> characters, wchar_t token) {
-			return FindFirstCharacterImpl<Vec16s>(characters, token);
+			size_t index = SearchBytes(characters.buffer, characters.size, (size_t)token, sizeof(token));
+			if (index == -1) {
+				return { nullptr, 0 };
+			}
+			return { characters.buffer + index, characters.size - index };
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -622,39 +569,56 @@ namespace ECSEngine {
 
 		Stream<char> FindCharacterReverse(Stream<char> characters, char character)
 		{
-			size_t index = 0;
-			size_t simd_bound = characters.size >= 32 ? characters.size - 31 : 0;
+			//size_t index = 0;
+			//size_t simd_bound = characters.size >= 32 ? characters.size - 31 : 0;
 
-			const char* last_character = characters.buffer + characters.size;
-			if (simd_bound > 0) {
-				Vec32c simd_vector(character);
+			//const char* last_character = characters.buffer + characters.size;
+			//if (simd_bound > 0) {
+			//	Vec32c simd_vector(character);
 
-				for (; index < simd_bound; index++) {
-					const char* data_to_load = last_character - simd_vector.size() - index + 1;
-					Vec32c string_chars = Vec32c().load(data_to_load);
-					auto is_match = simd_vector == string_chars;
+			//	for (; index < simd_bound; index++) {
+			//		const char* data_to_load = last_character - simd_vector.size() - index + 1;
+			//		Vec32c string_chars = Vec32c().load(data_to_load);
+			//		auto is_match = simd_vector == string_chars;
 
-					// At least one character was found
-					if (horizontal_or(is_match)) {
-						unsigned int bit_mask = to_bits(is_match);
-						unsigned long highest_bit = -1;
-						if (_BitScanReverse(&highest_bit, bit_mask)) {
-							const char* position = data_to_load + highest_bit;
-							return { position, function::PointerDifference(last_character, position) + 1 };
-						}
-					}
-				}
+			//		// At least one character was found
+			//		if (horizontal_or(is_match)) {
+			//			unsigned int bit_mask = to_bits(is_match);
+			//			unsigned long highest_bit = -1;
+			//			if (_BitScanReverse(&highest_bit, bit_mask)) {
+			//				const char* position = data_to_load + highest_bit;
+			//				return { position, function::PointerDifference(last_character, position) + 1 };
+			//			}
+			//		}
+			//	}
+			//}
+			//
+			//// Do a bytewise check
+			//for (; index < characters.size; index++) {
+			//	if (last_character[-index] == character) {
+			//		const char* position = last_character - index;
+			//		return { position, function::PointerDifference(last_character, position) + 1 };
+			//	}
+			//}
+
+			//return { nullptr, 0 };
+
+			size_t index = SearchBytesReversed(characters.buffer, characters.size, character, sizeof(character));
+			if (index == -1) {
+				return { nullptr, 0 };
 			}
-			
-			// Do a bytewise check
-			for (; index < characters.size; index++) {
-				if (last_character[-index] == character) {
-					const char* position = last_character - index;
-					return { position, function::PointerDifference(last_character, position) + 1 };
-				}
-			}
+			return { characters.buffer + index, characters.size - index };
+		}
 
-			return { nullptr, 0 };
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character)
+		{
+			size_t index = SearchBytesReversed(characters.buffer, characters.size, (size_t)character, sizeof(character));
+			if (index == -1) {
+				return { nullptr, 0 };
+			}
+			return { characters.buffer + index, characters.size - index };
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -1921,6 +1885,120 @@ namespace ECSEngine {
 
 		double EvaluateExpression(Stream<wchar_t> characters) {
 			return EvaluateExpressionImpl<wchar_t>(characters);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<bool reverse>
+		size_t SearchBytesImpl(const void* data, size_t element_count, size_t value_to_search, size_t byte_size) {
+			auto loop = [](const void* data, size_t element_count, auto values, auto simd_value_to_search, auto constant_byte_size) {
+				constexpr size_t byte_size = constant_byte_size();
+				size_t simd_width = simd_value_to_search.size();
+				size_t simd_count = GetSimdCount(element_count, simd_width);
+				for (size_t index = 0; index < simd_count; index += simd_width) {
+					const void* ptr = function::OffsetPointer(data, byte_size * index);
+					if constexpr (reverse) {
+						ptr = function::OffsetPointer(data, byte_size * (element_count - simd_width - index));
+					}
+
+					values.load(ptr);
+
+					auto compare = values == simd_value_to_search;
+					if (horizontal_or(compare)) {
+						unsigned int bits = to_bits(compare);
+						unsigned int first = 0;
+						if constexpr (reverse) {
+							first = FirstMSB(bits);
+						}
+						else {
+							first = FirstLSB(bits);
+						}
+						
+						if (first != -1) {
+							if constexpr (reverse) {
+								return element_count - simd_width - index + first;
+							}
+							else {
+								// We have a match
+								return index + first;
+							}
+						}
+					}
+				}
+
+				// The last elements
+				int last_element_count = element_count - simd_count;
+				const void* ptr = function::OffsetPointer(data, byte_size * simd_count);
+				if constexpr (reverse) {
+					ptr = data;
+				}
+
+				values.load(ptr);
+				auto compare = values == simd_value_to_search;
+				if (horizontal_or(compare)) {
+					unsigned int bits = to_bits(compare);
+					unsigned int first = 0;
+					if constexpr (reverse) {
+						first = FirstMSB(bits);
+					}
+					else {
+						first = FirstLSB(bits);
+					}
+
+					if (first != -1 && first < last_element_count) {
+						if constexpr (reverse) {
+							return (size_t)first;
+						}
+						else {
+							return simd_count + first;
+						}
+					}
+				}
+				return (size_t)-1;
+			};
+
+
+			if (byte_size == 1) {
+				Vec32uc values;
+				Vec32uc simd_value_to_search((unsigned char)value_to_search);
+
+				return loop(data, element_count, values, simd_value_to_search, std::integral_constant<size_t, 1>());
+			}
+			else if (byte_size == 2) {
+				Vec16us values;
+				Vec16us simd_value_to_search((unsigned short)value_to_search);
+
+				return loop(data, element_count, values, simd_value_to_search, std::integral_constant<size_t, 2>());
+			}
+			else if (byte_size == 4) {
+				Vec8ui values;
+				Vec8ui simd_value_to_search((unsigned int)value_to_search);
+
+				return loop(data, element_count, values, simd_value_to_search, std::integral_constant<size_t, 4>());
+			}
+			else if (byte_size == 8) {
+				Vec4uq values;
+				Vec4uq simd_value_to_search(value_to_search);
+
+				return loop(data, element_count, values, simd_value_to_search, std::integral_constant<size_t, 8>());
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			return -1;
+		}
+
+		size_t SearchBytes(const void* data, size_t element_count, size_t value_to_search, size_t byte_size)
+		{
+			return SearchBytesImpl<false>(data, element_count, value_to_search, byte_size);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		size_t SearchBytesReversed(const void* data, size_t element_count, size_t value_to_search, size_t byte_size)
+		{
+			return SearchBytesImpl<true>(data, element_count, value_to_search, byte_size);
 		}
 
 		// --------------------------------------------------------------------------------------------------

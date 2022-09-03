@@ -22,6 +22,9 @@ namespace ECSEngine {
 
 		// If the byte_sizes pointer is nullptr, it will only reference this data. The names will be allocated anyway
 		void BindSystemSettings(Stream<char> system_name, Stream<void*> data, Stream<char>* names, size_t* byte_sizes = nullptr);
+		
+		// Clears any temporary tables
+		void ClearFrame();
 
 		// It crashes if it doesn't exist
 		void* GetSystemData(Stream<char> system_name) const;
@@ -31,8 +34,6 @@ namespace ECSEngine {
 
 		// It crashes if it doesn't exist
 		void* GetTemporaryTable(Stream<char> table_name) const;
-
-		void ResetTemporaryTable();
 
 		MemoryManager* allocator;
 		HashTableDefault<void*> system_data;

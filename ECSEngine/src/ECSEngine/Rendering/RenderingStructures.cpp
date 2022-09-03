@@ -1064,4 +1064,151 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	bool IsGraphicsFormatUINT(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_R8_UINT || format == ECS_GRAPHICS_FORMAT_RG8_UINT
+			|| format == ECS_GRAPHICS_FORMAT_RGBA8_UINT || format == ECS_GRAPHICS_FORMAT_R16_UINT || format == ECS_GRAPHICS_FORMAT_RG16_UINT
+			|| format == ECS_GRAPHICS_FORMAT_RGBA16_UINT || format == ECS_GRAPHICS_FORMAT_R32_UINT || format == ECS_GRAPHICS_FORMAT_RG32_UINT
+			|| format == ECS_GRAPHICS_FORMAT_RGB32_UINT || format == ECS_GRAPHICS_FORMAT_RGBA32_UINT;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatSINT(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_R8_SINT || format == ECS_GRAPHICS_FORMAT_R8_SINT || format == ECS_GRAPHICS_FORMAT_RG8_SINT
+			|| format == ECS_GRAPHICS_FORMAT_RGBA8_SINT || format == ECS_GRAPHICS_FORMAT_R16_SINT || format == ECS_GRAPHICS_FORMAT_RG16_SINT
+			|| format == ECS_GRAPHICS_FORMAT_RGBA16_SINT || format == ECS_GRAPHICS_FORMAT_R32_SINT || format == ECS_GRAPHICS_FORMAT_RG32_SINT
+			|| format == ECS_GRAPHICS_FORMAT_RGB32_SINT || format == ECS_GRAPHICS_FORMAT_RGBA32_SINT;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatUNORM(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_R8_UNORM || format == ECS_GRAPHICS_FORMAT_RG8_UNORM || format == ECS_GRAPHICS_FORMAT_RGBA8_UNORM
+			|| format == ECS_GRAPHICS_FORMAT_R16_UNORM || format == ECS_GRAPHICS_FORMAT_RG16_UNORM || format == ECS_GRAPHICS_FORMAT_RGBA16_UNORM;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatSNORM(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_R8_SNORM || format == ECS_GRAPHICS_FORMAT_RG8_SNORM || format == ECS_GRAPHICS_FORMAT_RGBA8_SNORM
+			|| format == ECS_GRAPHICS_FORMAT_R16_SNORM || format == ECS_GRAPHICS_FORMAT_RG16_SNORM || format == ECS_GRAPHICS_FORMAT_RGBA16_SNORM;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatFloat(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_R16_FLOAT || format == ECS_GRAPHICS_FORMAT_RG16_FLOAT || format == ECS_GRAPHICS_FORMAT_RGBA16_FLOAT
+			|| format == ECS_GRAPHICS_FORMAT_R32_FLOAT || format == ECS_GRAPHICS_FORMAT_RG32_FLOAT || format == ECS_GRAPHICS_FORMAT_RGB32_FLOAT
+			|| format == ECS_GRAPHICS_FORMAT_RGBA32_FLOAT || format == ECS_GRAPHICS_FORMAT_R11G11B10_FLOAT;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatDepth(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_D16_UNORM || format == ECS_GRAPHICS_FORMAT_D24_UNORM_S8_UINT || format == ECS_GRAPHICS_FORMAT_D32_FLOAT;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatTypeless(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_R8_TYPELESS || format == ECS_GRAPHICS_FORMAT_RG8_TYPELESS || format == ECS_GRAPHICS_FORMAT_RGBA8_TYPELESS
+			|| format == ECS_GRAPHICS_FORMAT_R16_TYPELESS || format == ECS_GRAPHICS_FORMAT_RG16_TYPELESS || format == ECS_GRAPHICS_FORMAT_RGBA16_TYPELESS
+			|| format == ECS_GRAPHICS_FORMAT_R32_TYPELESS || format == ECS_GRAPHICS_FORMAT_RG32_TYPELESS || format == ECS_GRAPHICS_FORMAT_RGB32_TYPELESS
+			|| format == ECS_GRAPHICS_FORMAT_RGBA32_TYPELESS;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatBC(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_BC1 || format == ECS_GRAPHICS_FORMAT_BC1_SRGB || format == ECS_GRAPHICS_FORMAT_BC3
+			|| format == ECS_GRAPHICS_FORMAT_BC3_SRGB || format == ECS_GRAPHICS_FORMAT_BC4 || format == ECS_GRAPHICS_FORMAT_BC5
+			|| format == ECS_GRAPHICS_FORMAT_BC6 || format == ECS_GRAPHICS_FORMAT_BC7 || format == ECS_GRAPHICS_FORMAT_BC7_SRGB;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool IsGraphicsFormatSRGB(ECS_GRAPHICS_FORMAT format)
+	{
+		return format == ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB || format == ECS_GRAPHICS_FORMAT_BC1_SRGB || format == ECS_GRAPHICS_FORMAT_BC3_SRGB
+			|| format == ECS_GRAPHICS_FORMAT_BC7_SRGB;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_FILTER GetGraphicsNativeFilter(ECS_SAMPLER_FILTER_TYPE filter) {
+		switch (filter) {
+		case ECS_SAMPLER_FILTER_POINT:
+			return D3D11_FILTER_MIN_MAG_MIP_POINT;
+		case ECS_SAMPLER_FILTER_LINEAR:
+			return D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		case ECS_SAMPLER_FILTER_ANISOTROPIC:
+			return D3D11_FILTER_ANISOTROPIC;
+		}
+
+		ECS_ASSERT(false);
+		return D3D11_FILTER_MIN_MAG_MIP_POINT;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_SAMPLER_FILTER_TYPE GetGraphicsFilterFromNative(D3D11_FILTER filter) {
+		switch (filter) {
+		case D3D11_FILTER_MIN_MAG_MIP_POINT:
+			return ECS_SAMPLER_FILTER_POINT;
+		case D3D11_FILTER_MIN_MAG_MIP_LINEAR:
+			return ECS_SAMPLER_FILTER_LINEAR;
+		case D3D11_FILTER_ANISOTROPIC:
+			return ECS_SAMPLER_FILTER_ANISOTROPIC;
+		}
+
+		ECS_ASSERT(false);
+		return ECS_SAMPLER_FILTER_POINT;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	D3D11_TEXTURE_ADDRESS_MODE GetGraphicsNativeAddressMode(ECS_SAMPLER_ADDRESS_TYPE address_type) {
+		switch (address_type) {
+		case ECS_SAMPLER_ADDRESS_WRAP:
+			return D3D11_TEXTURE_ADDRESS_WRAP;
+		case ECS_SAMPLER_ADDRESS_BORDER:
+			return D3D11_TEXTURE_ADDRESS_BORDER;
+		case ECS_SAMPLER_ADDRESS_CLAMP:
+			return D3D11_TEXTURE_ADDRESS_CLAMP;
+		case ECS_SAMPLER_ADDRESS_MIRROR:
+			return D3D11_TEXTURE_ADDRESS_MIRROR;
+		}
+
+		ECS_ASSERT(false);
+		return D3D11_TEXTURE_ADDRESS_WRAP;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	ECS_SAMPLER_ADDRESS_TYPE GetGraphicsAddressModeFromNative(D3D11_TEXTURE_ADDRESS_MODE address_mode) {
+		switch (address_mode) {
+		case D3D11_TEXTURE_ADDRESS_WRAP:
+			return ECS_SAMPLER_ADDRESS_WRAP;
+		case D3D11_TEXTURE_ADDRESS_BORDER:
+			return ECS_SAMPLER_ADDRESS_BORDER;
+		case D3D11_TEXTURE_ADDRESS_CLAMP:
+			return ECS_SAMPLER_ADDRESS_CLAMP;
+		case D3D11_TEXTURE_ADDRESS_MIRROR:
+			return ECS_SAMPLER_ADDRESS_MIRROR;
+		}
+
+		ECS_ASSERT(false);
+		return ECS_SAMPLER_ADDRESS_WRAP;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 }

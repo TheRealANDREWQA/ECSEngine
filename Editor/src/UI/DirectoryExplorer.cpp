@@ -25,7 +25,7 @@ struct DirectoryExplorerData {
 	CapacityStream<UIActionHandler> right_click_menu_handlers;
 	bool* right_click_menu_has_submenu;
 	UIDrawerMenuState* right_click_submenu_states;
-	UIDrawerLabelHierarchy* drawer_hierarchy;
+	UIDrawerFilesystemHierarchy* drawer_hierarchy;
 	CapacityStream<Stream<char>> directories_ptrs;
 	bool is_right_click_window_opened;
 };
@@ -76,7 +76,7 @@ void DirectoryExplorerRightClick(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	if (mouse_tracker->RightButton() == MBRELEASED) {
-		UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_data;
+		UIDrawerFilesystemHierarchyRightClickData* right_click_data = (UIDrawerFilesystemHierarchyRightClickData*)_data;
 		DirectoryExplorerData* data = (DirectoryExplorerData*)right_click_data->data;
 
 		UIDrawerMenuRightClickData menu_call_data;
@@ -242,8 +242,8 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 
 	DirectoryExplorerData* data = (DirectoryExplorerData*)window_data;
 
-	const size_t HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK
-		| UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK | UI_CONFIG_DO_CACHE;
+	const size_t HIERARCHY_CONFIGURATION = UI_CONFIG_FILESYSTEM_HIERARCHY_SPRITE_TEXTURE | UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK
+		| UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK | UI_CONFIG_DO_CACHE;
 
 	if (initialize) {
 		drawer.layout.next_row_y_offset *= 0.5f;
@@ -267,9 +267,9 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		}
 
 		data->right_click_menu_handlers[0] = { DirectoryExplorerLaunchFileExplorer, data, 0 };
-		data->right_click_menu_handlers[1] = { DirectoryExplorerCreateFolder, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->right_click_menu_handlers[2] = { DirectoryExplorerDeleteFolder, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
-		data->right_click_menu_handlers[3] = { DirectoryExplorerRenameFolder, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+		data->right_click_menu_handlers[1] = { DirectoryExplorerCreateFolder, data, 0, ECS_UI_DRAW_SYSTEM };
+		data->right_click_menu_handlers[2] = { DirectoryExplorerDeleteFolder, data, 0, ECS_UI_DRAW_SYSTEM };
+		data->right_click_menu_handlers[3] = { DirectoryExplorerRenameFolder, data, 0, ECS_UI_DRAW_SYSTEM };
 		data->right_click_menu_handlers[4] = { DirectoryExplorerCopyPath, data, 0 };
 
 		data->right_click_menu_has_submenu = (bool*)right_click_ptr;
@@ -286,25 +286,25 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 		
 		UIDrawConfig config;
 
-		UIConfigLabelHierarchySpriteTexture folder_texture;
+		UIConfigFilesystemHierarchySpriteTexture folder_texture;
 		folder_texture.closed_texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
 		folder_texture.opened_texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
 		config.AddFlag(folder_texture);
 
-		UIConfigLabelHierarchySelectableCallback selectable_callback;
+		UIConfigFilesystemHierarchySelectableCallback selectable_callback;
 		selectable_callback.callback = DirectoryExplorerHierarchySelectableCallback;
-		selectable_callback.callback_data = window_data;
-		selectable_callback.callback_data_size = 0;
+		selectable_callback.data = window_data;
+		selectable_callback.data_size = 0;
 		config.AddFlag(selectable_callback);
 
-		UIConfigLabelHierarchyRightClick right_click;
+		UIConfigFilesystemHierarchyRightClick right_click;
 		right_click.callback = DirectoryExplorerRightClick;
 		right_click.data = data;
 		right_click.data_size = 0;
 		right_click.phase = ECS_UI_DRAW_SYSTEM;
 		config.AddFlag(right_click);
 
-		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<Stream<char>>(nullptr, 0));
+		data->drawer_hierarchy = drawer.FilesystemHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", Stream<Stream<char>>(nullptr, 0));
 		EditorStateLazyEvaluationSetMax(editor_state, EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER);
 	}
 
@@ -313,18 +313,18 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 
 	UIDrawConfig config;
 
-	UIConfigLabelHierarchySpriteTexture folder_texture;
+	UIConfigFilesystemHierarchySpriteTexture folder_texture;
 	folder_texture.closed_texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
 	folder_texture.opened_texture = ECS_TOOLS_UI_TEXTURE_FOLDER;
 	config.AddFlag(folder_texture);
 
-	UIConfigLabelHierarchySelectableCallback selectable_callback;
+	UIConfigFilesystemHierarchySelectableCallback selectable_callback;
 	selectable_callback.callback = DirectoryExplorerHierarchySelectableCallback;
-	selectable_callback.callback_data = window_data;
-	selectable_callback.callback_data_size = 0;
+	selectable_callback.data = window_data;
+	selectable_callback.data_size = 0;
 	config.AddFlag(selectable_callback);
 
-	UIConfigLabelHierarchyRightClick right_click;
+	UIConfigFilesystemHierarchyRightClick right_click;
 	right_click.callback = DirectoryExplorerRightClick;
 	right_click.data = data;
 	right_click.data_size = 0;
@@ -332,7 +332,7 @@ void DirectoryExplorerDraw(void* window_data, void* drawer_descriptor, bool init
 	config.AddFlag(right_click);
 
 	if (!initialize) {
-		data->drawer_hierarchy = drawer.LabelHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", data->directories_ptrs);
+		data->drawer_hierarchy = drawer.FilesystemHierarchy(HIERARCHY_CONFIGURATION, config, "Hierarchy", data->directories_ptrs);
 	}
 }
 
@@ -452,7 +452,7 @@ void DirectoryExplorerTick(EditorState* editor_state)
 			ASCIIPath parent_path = function::PathParent(ascii_stream);
 			ResourceIdentifier identifier(parent_path.buffer, parent_path.size);
 
-			UIDrawerLabelHierarchyLabelData* label_data;
+			UIDrawerFilesystemHierarchyLabelData* label_data;
 			if (data->drawer_hierarchy->label_states.TryGetValuePtr(identifier, label_data)) {
 				label_data->state = true;
 			}

@@ -119,10 +119,8 @@
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Includes\ECSEngineResources.h" />
-    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseSerializeFunctions.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.h" />
     <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTableSmall.h" />
-    <ClInclude Include="src\ECSEngine\Containers\Hashing.h" />
     <ClInclude Include="src\ECSEngine\Containers\ConcurrentHashTable.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskStealing.h" />
@@ -172,6 +170,16 @@
     <ClInclude Include="src\Includes\ECSEngineSerializationHelpers.h" />
     <ClInclude Include="src\ECSEngine\Utilities\StackScope.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\RingBuffer.h" />
+    <ClInclude Include="src\Includes\ECSEngineBasics.h" />
+    <ClInclude Include="src\Includes\ECSEngineEntities.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Components.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\TreeIterator.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Benchmark.h" />
+    <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
+    <ClInclude Include="src\ECSEngine\Containers\Hashing.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.h" />
+    <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -221,7 +229,6 @@
     <ClCompile Include="src\ECSEngine\Rendering\DirectXTexHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionStringFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Serialization\Text\TextSerializeFields.cpp" />
-    <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\GLTFThumbnail.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ForEach.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityManagerSerialize.cpp" />
@@ -234,7 +241,6 @@
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadata.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabase.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Reflection\ReflectionTypes.cpp" />
-    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseSerializeFunctions.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ArchetypeQueryCache.cpp" />
@@ -273,6 +279,10 @@
     <ClCompile Include="src\ECSEngine\Utilities\Path.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Timer.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\RingBuffer.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\Benchmark.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\ReferenceCountSerialize.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

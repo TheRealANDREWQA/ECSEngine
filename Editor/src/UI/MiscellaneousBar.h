@@ -1,8 +1,8 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-constexpr float MISCELLANEOUS_BAR_SIZE_Y = ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_Y * 2.0f;
-constexpr const char* MISCELLANEOUS_BAR_WINDOW_NAME = "MiscellaneousBar";
+#define MISCELLANEOUS_BAR_SIZE_Y (ECS_TOOLS_UI_WINDOW_LAYOUT_DEFAULT_ELEMENT_Y * 2.0f)
+#define MISCELLANEOUS_BAR_WINDOW_NAME "MiscellaneousBar"
 
 struct EditorState;
 

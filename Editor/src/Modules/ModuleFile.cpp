@@ -46,7 +46,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 			ResetModules(editor_state);
 
 			unsigned int valid_projects = 0;
-			ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
+			ProjectModules* project_modules = editor_state->project_modules;
 
 			for (size_t index = 0; index < serialize_data.size; index++) {
 				Stream<wchar_t> solution_path(serialize_data[index].data[SERIALIZE_SOLUTION_PATH].buffer, serialize_data[index].data[SERIALIZE_SOLUTION_PATH].size / sizeof(wchar_t));
@@ -54,8 +54,6 @@ bool LoadModuleFile(EditorState* editor_state) {
 				bool* is_graphics_module = (bool*)serialize_data[index].data[SERIALIZE_TYPE].buffer;
 
 				if (AddModule(editor_state, solution_path, library_name, *is_graphics_module)) {
-					valid_projects++;
-
 					UpdateModuleLastWrite(editor_state, valid_projects);
 
 					for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
@@ -72,6 +70,8 @@ bool LoadModuleFile(EditorState* editor_state) {
 							}
 						}
 					}
+
+					valid_projects++;
 				}
 			}
 			if (valid_projects < serialize_data.size - 1) {
@@ -98,7 +98,7 @@ bool LoadModuleFile(EditorState* editor_state) {
 bool SaveModuleFile(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
-	ProjectModules* project_modules = (ProjectModules*)editor_state->project_modules;
+	ProjectModules* project_modules = editor_state->project_modules;
 
 	ECS_ASSERT(project_modules->size < 64);
 	unsigned int total_module_count = project_modules->size;

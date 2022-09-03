@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "Stream.h"
+#include "../Math/VCLExtensions.h"
 #include "../Utilities/Function.h"
 
 namespace ECSEngine {
@@ -8,6 +9,8 @@ namespace ECSEngine {
 #ifndef ECS_HASHTABLE_DYNAMIC_GROW_FACTOR
 #define ECS_HASHTABLE_DYNAMIC_GROW_FACTOR 1.5f
 #endif
+
+	ECSENGINE_API Vec32cb ECS_VECTORCALL HashTableFindSIMDKernel(unsigned int index, unsigned char* m_metadata, unsigned char key_hash_bits, unsigned char hash_bits_mask);
 
 	// filename can be used as a general purpose pointer if other identifier than the filename is used
 	// Compare function uses AVX2 32 byte SIMD char compare
@@ -47,7 +50,7 @@ namespace ECSEngine {
 			if (capacity < 16) {
 				return 16;
 			}
-			return function::PowerOfTwoGreater(capacity).x;
+			return function::PowerOfTwoGreater(capacity);
 		}
 	};
 
@@ -412,7 +415,6 @@ namespace ECSEngine {
 			return (unsigned int)((float)capacity * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 2);
 		}
 
-		//private:
 		size_t m_shift_amount;
 	};
 
@@ -429,7 +431,6 @@ namespace ECSEngine {
 			return (unsigned int)((float)capacity * ECS_HASHTABLE_DYNAMIC_GROW_FACTOR + 2);
 		}
 
-		//private:
 		size_t m_shift_amount;
 	};
 
@@ -446,7 +447,7 @@ namespace ECSEngine {
 			if (capacity < 16) {
 				return 16;
 			}
-			return function::PowerOfTwoGreater(capacity).x;
+			return function::PowerOfTwoGreater(capacity);
 		}
 	};
 

@@ -384,6 +384,14 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	void TaskManager::ClearFrame()
+	{
+		ClearThreadAllocators();
+		ClearTaskIndex();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 	void TaskManager::CreateThreads() {
 		size_t thread_count = m_thread_queue.size;
 		for (size_t index = 0; index < thread_count; index++) {
@@ -418,8 +426,11 @@ namespace ECSEngine {
 
 	void TaskManager::DoFrame()
 	{
-		// Set the flag and wait on it
-		BitLock(m_is_frame_done, 0);
+		// Wake the threads
+		WakeThreads();
+
+		unsigned int thread_count = GetThreadCount();
+		m_is_frame_done.Wait(thread_count);
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -441,10 +452,19 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::EndFrame()
+	ECS_THREAD_TASK(FinishFrameTaskDynamic) {
+		world->task_manager->m_is_frame_done.Notify();
+	}
+
+	ECS_THREAD_TASK(FinishFrameTask) {
+		// Flush the entity manager as well
+		world->entity_manager->EndFrame();
+		world->task_manager->AddDynamicTaskGroup(WITH_NAME(FinishFrameTaskDynamic), { nullptr, 0 }, 0);
+	}
+
+	void TaskManager::FinishStaticTasks()
 	{
-		ClearTaskIndex();
-		ClearTemporaryAllocators();
+		AddTask(ECS_THREAD_TASK_NAME(FinishFrameTask, nullptr, 0));
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -548,6 +568,29 @@ namespace ECSEngine {
 
 	void TaskManager::SleepThread(unsigned int thread_id) {
 		m_sleep_wait[thread_id].Wait();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	ECS_THREAD_TASK(SleepTask) {
+		ConditionVariable* data = (ConditionVariable*)_data;
+		data->Notify();
+		world->task_manager->SleepThread(thread_id);
+	}
+
+	void TaskManager::SleepThreads(bool wait_until_all_sleep) {
+		unsigned int thread_count = GetThreadCount();
+		ConditionVariable* condition_variable = (ConditionVariable*)m_dynamic_task_allocators[0]->Allocate(sizeof(ConditionVariable));
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(void*, task_data, thread_count);
+		for (unsigned int thread_index = 0; thread_index < thread_count; thread_index++) {
+			task_data[thread_index] = condition_variable;
+		}
+		task_data.size = thread_count;
+
+		AddDynamicTaskGroup(WITH_NAME(SleepTask), task_data, 0, false);
+		if (wait_until_all_sleep) {
+			condition_variable->Wait(thread_count);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -724,7 +767,7 @@ namespace ECSEngine {
 		}
 		thread_data.size = thread_count;
 
-		AddDynamicTaskGroup(WaitThreadsTask, STRING(WaitThreadsTask), thread_data, 0, false);
+		AddDynamicTaskGroup(WITH_NAME(WaitThreadsTask), thread_data, 0, false);
 		semaphore->SpinWait(thread_count);
 	}
 

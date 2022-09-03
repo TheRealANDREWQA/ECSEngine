@@ -36,7 +36,7 @@ namespace ECSEngine {
 
 		void* final_data = function::CopyNonZero(allocator, data, data_size);
 		if (index == -1) {
-			//InsertIntoDynamicTable(system_data, allocator, final_data, system_name);
+			InsertIntoDynamicTable(system_data, allocator, final_data, system_name);
 		}
 		else {
 			void** ptr = system_data.GetValuePtrFromIndex(index);
@@ -125,6 +125,13 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------------------
 
+	void SystemManager::ClearFrame()
+	{
+		temporary_table.Clear();
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------------
+
 	void* SystemManager::GetSystemData(Stream<char> system_name) const
 	{
 		void* data = nullptr;
@@ -151,7 +158,7 @@ namespace ECSEngine {
 			ECS_CRASH_RETURN_VALUE(false, nullptr, "System manager error: failed to find setting {#} for system {#}.", setting_name, system_name);
 		}
 
-		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there is are no settings for system {#}.", system_name);
+		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there are no settings for system {#}.", system_name);
 		return nullptr;
 	}
 
@@ -166,13 +173,6 @@ namespace ECSEngine {
 
 		ECS_CRASH_RETURN_VALUE(false, nullptr, "System Manager error: there is no temporary table with name {#}.", table_name);
 		return nullptr;
-	}
-
-	// ----------------------------------------------------------------------------------------------------------------------------------
-
-	void SystemManager::ResetTemporaryTable()
-	{
-		temporary_table.Clear();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------------------

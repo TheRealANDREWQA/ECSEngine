@@ -69,7 +69,7 @@ namespace ECSEngine {
 				float2 scale,
 				const T* data,
 				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			) {
 				AddActionHandler(
 					allocator,
@@ -114,7 +114,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			) {
 				AddHoverableToDockspaceRegion(
 					thread_id,
@@ -133,21 +133,7 @@ namespace ECSEngine {
 
 			void AddDefaultClickable(const UISystemDefaultClickableData& data);
 
-			void AddDefaultClickable(
-				const UISystemDefaultClickableData& data, 
-				LinearAllocator* allocator, 
-				UIHandler* hoverable,
-				UIHandler* clickable
-			);
-
 			void AddDefaultHoverableClickable(UISystemDefaultHoverableClickableData& data);
-
-			void AddDefaultHoverableClickable(
-				UISystemDefaultHoverableClickableData& data,
-				LinearAllocator* allocator,
-				UIHandler* hoverable,
-				UIHandler* clickable
-			);
 
 			void AddClickableToDockspaceRegion(
 				unsigned int thread_id,
@@ -176,7 +162,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			) {
 				AddClickableToDockspaceRegion(
 					thread_id,
@@ -233,7 +219,7 @@ namespace ECSEngine {
 				float2 scale,
 				T* data,
 				Action action,
-				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			) {
 				AddGeneralActionToDockspaceRegion(
 					thread_id,
@@ -248,63 +234,6 @@ namespace ECSEngine {
 						phase
 					}
 				);
-			}
-
-			template<typename Function>
-			void AddMultipleActionHandlers(
-				unsigned int thread_id,
-				UIDockspace* dockspace,
-				unsigned int border_index,
-				const float2* position,
-				const float2* scale,
-				const size_t* data_size,
-				const void** data,
-				const Action* action,
-				const ECS_UI_DRAW_PHASE* phase,
-				size_t count,
-				Function&& function
-			) {
-				for (size_t index = 0; index < count; index++) {
-					function(
-						thread_id,
-						dockspace,
-						border_index,
-						position[index],
-						scale[index],
-						{
-							action[index],
-							data[index],
-							data_size[index],
-							phase[index]
-						}
-					);
-				}
-			}
-
-			template<typename FunctionData, typename Function>
-			void AddMultipleDefaultActionHandlers(const FunctionData* data, size_t count, Function&& function) {
-				for (size_t index = 0; index < count; index++) {
-					function(data[index]);
-				}
-			}
-
-			template<typename FunctionData, typename Function>
-			void AddMultipleDefaultActionHandlers(FunctionData& data, size_t count, Function&& function, float2* transforms) {
-				for (size_t index = 0; index < count; index++) {
-					data.position = transforms[index * 2];
-					data.scale = transforms[index * 2 + 1];
-					function(data);
-				}
-			}
-
-			template<typename FunctionData, typename Function>
-			void AddMultipleDefaultActionHandlers(const Stream<FunctionData>& data, Function&& function) {
-				AddMultipleDefaultActionHandlers(data.buffer, data.size, function);
-			}
-
-			template<typename FunctionData, typename Function>
-			void AddMultipleDefaultActionHandlers(FunctionData& data, const Stream<float2>& transforms, Function&& function) {
-				AddMultipleDefaultActionHandlers(data.buffer, data.size, function, transforms.buffer);
 			}
 			
 			// this is triggered when the element is placed over the center of the Docking gizmo
@@ -421,7 +350,9 @@ namespace ECSEngine {
 				DockspaceType type
 			);
 
-			void AddWindowDrawerElement(unsigned int window_index, Stream<char> name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
+			void AddWindowDynamicElement(unsigned int window_index, Stream<char> name, Stream<void*> allocations, Stream<ResourceIdentifier> table_resources);
+
+			void AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, void* allocation);
 
 			void AddFrameHandler(UIActionHandler handler);
 
@@ -724,7 +655,6 @@ namespace ECSEngine {
 				void** buffers,
 				UIDockspace* dockspace, 
 				unsigned int border_index, 
-				float dockspace_mask,
 				DockspaceType type,
 				float2 mouse_position,
 				unsigned int offset
@@ -735,7 +665,6 @@ namespace ECSEngine {
 				void** buffers,
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				float dockspace_mask,
 				DockspaceType type,
 				float2 mouse_position,
 				unsigned int thread_id,
@@ -747,7 +676,6 @@ namespace ECSEngine {
 				void** buffers,
 				UIDockspace* dockspace,
 				unsigned int border_index,
-				float dockspace_mask,
 				DockspaceType type,
 				float2 mouse_position,
 				unsigned int thread_id,
@@ -804,9 +732,9 @@ namespace ECSEngine {
 				GraphicsContext* context
 			);
 
-			ID3D11CommandList* DrawDockspaceRegion(const UIDrawDockspaceRegionData* draw_data);
+			void DrawDockspaceRegion(const UIDrawDockspaceRegionData* draw_data);
 
-			void DrawDockspaceRegion(const UIDrawDockspaceRegionData* draw_data, bool active);
+			void DrawDockspaceRegionActive(const UIDrawDockspaceRegionData* draw_data);
 
 			void DrawDockspaceRegionHeader(
 				unsigned int thread_id,
@@ -942,8 +870,6 @@ namespace ECSEngine {
 				UIDockspace* dockspace_to_search,
 				DockspaceType type_to_search
 			) const;
-
-			float GetDockspaceMaskFromType(DockspaceType type) const;
 
 			unsigned int GetDockspaceIndex(const UIDockspace* dockspace, DockspaceType type) const;
 
@@ -1137,8 +1063,6 @@ namespace ECSEngine {
 				unsigned int& count
 			) const;
 
-			Stream<char> GetDrawElementName(unsigned int window_index, unsigned int index) const;
-
 			ActionData GetFilledActionData(unsigned int window_index);
 
 			size_t GetFrameIndex() const;
@@ -1167,6 +1091,9 @@ namespace ECSEngine {
 
 			unsigned int GetActiveWindowIndexInBorder(const UIDockspace* dockspace, unsigned int border_index) const;
 
+			// Returns the index of the active window
+			unsigned int GetActiveWindow() const;
+
 			unsigned int GetWindowIndexFromBorder(const UIDockspace* dockspace, unsigned int border_index) const;
 
 			float2 GetWindowPosition(unsigned int window_index);
@@ -1181,9 +1108,9 @@ namespace ECSEngine {
 			UISpriteTexture* GetNextSpriteTextureToDraw(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type);
 
 			// Returns the index of the dynamic element, -1 if it doesn't find it
-			unsigned int GetWindowDrawerElement(unsigned int window_index, Stream<char> identifier) const;
+			unsigned int GetWindowDynamicElement(unsigned int window_index, Stream<char> identifier) const;
 
-			UIWindowDynamicResource* GetWindowDrawerElement(unsigned int window_index, unsigned int index);
+			UIWindowDynamicResource* GetWindowDynamicElement(unsigned int window_index, unsigned int index);
 
 			void HandleFocusedWindowClickable(float2 mouse_position, unsigned int thread_id);
 
@@ -1336,13 +1263,23 @@ namespace ECSEngine {
 
 			void RemoveWindowDynamicResource(unsigned int window_index, unsigned int index);
 
+			// If the dynamic index is -1 it does nothing. If it is different from -1, it will remove it from the dynamic resource
+			// It also deallocates the buffer
+			void RemoveWindowBufferFromAll(unsigned int window_index, const void* buffer, unsigned int dynamic_index = -1);
+
 			// Returns true if it found it, else false
 			bool RemoveWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* buffer);
 
 			// Return true if it found it, else false
 			bool RemoveWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier identifier);
 
+			void ReplaceWindowMemoryResource(unsigned int window_index, const void* old_buffer, const void* new_buffer);
+
 			void ReplaceWindowDynamicResourceAllocation(unsigned int window_index, unsigned int index, const void* old_buffer, void* new_buffer);
+
+			// If the dynamic index is -1 it does nothing. If it is different from -1, it will remove it from the dynamic resource
+			// It also deallocates the old buffer
+			void ReplaceWindowBufferFromAll(unsigned int window_index, const void* old_buffer, const void* new_buffer, unsigned int dynamic_index = -1);
 
 			void ReplaceWindowDynamicResourceTableResource(unsigned int window_index, unsigned int index, ResourceIdentifier old_identifier, ResourceIdentifier new_identifier);
 
@@ -1577,6 +1514,8 @@ namespace ECSEngine {
 
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 
+			LinearAllocator* TemporaryAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase);
+
 			template<size_t flags = 0>
 			void TrimPopUpWindow(
 				unsigned int window_index,
@@ -1650,7 +1589,7 @@ namespace ECSEngine {
 						float difference = position.x + scale.x - right_border;
 						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
 						if (type == DockspaceType::FloatingHorizontal) {
-							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_RIGHT, type);
 						}
 						else {
 							dockspace->transform.scale.x -= difference;
@@ -1672,7 +1611,7 @@ namespace ECSEngine {
 							dockspace->transform.scale.y -= difference;
 						}
 						else {
-							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_BOTTOM, type);
 						}
 					}
 				}
@@ -1699,6 +1638,8 @@ namespace ECSEngine {
 			void UpdateDockspaceHierarchy();
 
 			void UpdateDockspace(unsigned int dockspace_index, DockspaceType dockspace_type);
+
+			void UpdateFocusedWindowCleanupLocation();
 
 			bool WriteDescriptorsFile(Stream<wchar_t> filename) const;
 

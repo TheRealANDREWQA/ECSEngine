@@ -326,12 +326,8 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerComboBox {
-			bool is_opened;
-			bool has_been_destroyed;
-			bool initial_click_state;
 			unsigned char* active_label;
 			unsigned int label_display_count;
-			unsigned int window_index;
 			unsigned int biggest_label_x_index;
 			float label_y_scale;
 			UIDrawerTextElement name;
@@ -395,13 +391,19 @@ namespace ECSEngine {
 
 		// Name needs to be a stable reference; this does not allocate memory for it
 		// Action can be used to do additional stuff on right click; There can be
-		// 32 bytes of action data embedded into this structure
+		// 64 bytes of action data embedded into this structure
 		struct UIDrawerMenuRightClickData {
 			Stream<char> name;
-			unsigned int window_index;
 			UIDrawerMenuState state;
 			Action action = nullptr;
-			char action_data[64];
+
+			unsigned int window_index;
+			bool is_action_data_ptr = true;
+
+			union {
+				char action_data[64];
+				void* action_data_ptr;
+			};
 		};
 
 		struct UIDrawerRightClickMenuSystemHandlerData {
@@ -514,13 +516,13 @@ namespace ECSEngine {
 			bool* notifier;
 		};
 
-		struct UIDrawerLabelHierarchyRightClickData {
+		struct UIDrawerFilesystemHierarchyRightClickData {
 			void* data;
 			Stream<char> label;
 		};
 
-		struct UIDrawerLabelHierarchyChangeStateData {
-			UIDrawerLabelHierarchy* hierarchy;
+		struct UIDrawerFilesystemHierarchyChangeStateData {
+			UIDrawerFilesystemHierarchy* hierarchy;
 			Stream<char> label;
 		};
 
@@ -589,6 +591,45 @@ namespace ECSEngine {
 		struct SliderMouseDraggableData {
 			UIDrawerSlider* slider;
 			bool interpolate_bounds;
+		};
+
+		struct LabelHierarchyChangeStateData {
+			inline Stream<char> GetCurrentLabel() const {
+				return { function::OffsetPointer(this, sizeof(*this)), current_label_size };
+			}
+
+			// Returns the total size of the structure with the string embedded
+			inline unsigned int WriteString(Stream<char> string) {
+				memcpy(function::OffsetPointer(this, sizeof(*this)), string.buffer, string.size * sizeof(char));
+				current_label_size = string.size;
+				return string.size * sizeof(char) + sizeof(*this);
+			}
+
+			UIDrawerLabelHierarchyData* hierarchy_data;
+			unsigned int current_label_size;
+		};
+
+		struct LabelHierarchyClickActionData {
+			inline Stream<char> GetCurrentLabel() const {
+				return { function::OffsetPointer(this, sizeof(*this)), current_label_size };
+			}
+
+			// Returns the total size of the structure with the string embedded
+			inline unsigned int WriteString(Stream<char> string) {
+				memcpy(function::OffsetPointer(this, sizeof(*this)), string.buffer, string.size * sizeof(char));
+				current_label_size = string.size;
+				return string.size * sizeof(char) + sizeof(*this);
+			}
+
+			inline bool IsTheSameData(const LabelHierarchyClickActionData* other) const {
+				return other != nullptr && hierarchy_data == other->hierarchy_data;
+			}
+
+			UIDrawerLabelHierarchyData* hierarchy_data;
+			// The characters are written at the end
+			unsigned int current_label_size;
+			unsigned char click_count;
+			Timer timer;
 		};
 
 	}

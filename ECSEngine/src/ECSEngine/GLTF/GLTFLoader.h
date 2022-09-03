@@ -107,12 +107,12 @@ namespace ECSEngine {
 	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
 	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
-	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, unsigned int misc_flags = 0);
+	ECSENGINE_API Mesh GLTFMeshToMesh(Graphics* graphics, const GLTFMesh& gltf_mesh, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
 
 	// Can run on multiple threads
 	// Creates the appropriate vertex and index buffers
 	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
-	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, unsigned int misc_flags = 0);
+	ECSENGINE_API void GLTFMeshesToMeshes(Graphics* graphics, const GLTFMesh* gltf_meshes, Mesh* meshes, size_t count, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
 
 	// SINGLE THREADED - relies on the context to copy the resources
 	// Merges the submeshes that have the same material into the same buffer
@@ -127,7 +127,7 @@ namespace ECSEngine {
 		unsigned int* submesh_material_index, 
 		size_t material_count,
 		size_t count,
-		unsigned int misc_flags = 0
+		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
 	);
 
 	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);

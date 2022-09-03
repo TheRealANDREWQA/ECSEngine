@@ -1,8 +1,8 @@
 #pragma once
 #include "ECSEngineUI.h"
 
-constexpr const char* NOTIFICATION_BAR_WINDOW_NAME = "Notification Bar";
-constexpr float NOTIFICATION_BAR_WINDOW_SIZE = 0.05f;
+#define NOTIFICATION_BAR_WINDOW_NAME "Notification Bar"
+#define NOTIFICATION_BAR_WINDOW_SIZE 0.05f
 
 struct EditorState;
 

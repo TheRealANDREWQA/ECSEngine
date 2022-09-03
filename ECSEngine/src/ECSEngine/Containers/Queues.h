@@ -44,6 +44,13 @@ namespace ECSEngine {
 			}
 		}
 
+		// Returns a pointer to the first element from the queue
+		// Such that it can be modified inside the queue
+		// Make sure that the size is greater than 0
+		ECS_INLINE T* PeekIntrusive() const {
+			return m_queue.buffer + m_first_item;
+		}
+
 		bool Pop(T& element) {
 			if (m_queue.size > 0) {
 				unsigned int element_index = m_first_item;
@@ -143,6 +150,23 @@ namespace ECSEngine {
 
 		ECS_INLINE ResizableStream<T>* GetQueue() const {
 			return &m_queue;
+		}
+
+		ECS_INLINE bool Peek(T& element) const {
+			if (m_queue.size > 0) {
+				element = m_queue[m_first_item];
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+
+		// Returns a pointer to the first element from the queue
+		// Such that it can be modified inside the queue
+		// Make sure that the size is greater than 0
+		ECS_INLINE T* PeekIntrusive() {
+			return m_queue.buffer + m_first_item;
 		}
 
 		bool Pop(T& element) {

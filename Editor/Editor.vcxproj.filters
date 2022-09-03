@@ -39,6 +39,10 @@
     <ClInclude Include="src\Modules\ModuleDefinition.h" />
     <ClInclude Include="src\Modules\ModuleFile.h" />
     <ClInclude Include="src\Modules\ModuleSettings.h" />
+    <ClInclude Include="src\UI\EntitiesUI.h" />
+    <ClInclude Include="src\Editor\EditorSandboxEntityOperations.h" />
+    <ClInclude Include="src\Editor\EditorComponents.h" />
+    <ClInclude Include="src\Editor\EditorScene.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -71,6 +75,10 @@
     <ClCompile Include="src\Modules\ModuleFile.cpp" />
     <ClCompile Include="src\Modules\ModuleSettings.cpp" />
     <ClCompile Include="src\Modules\ModuleDefinition.cpp" />
+    <ClCompile Include="src\UI\EntitiesUI.cpp" />
+    <ClCompile Include="src\Editor\EditorSandboxEntityOperations.cpp" />
+    <ClCompile Include="src\Editor\EditorComponents.cpp" />
+    <ClCompile Include="src\Editor\EditorScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

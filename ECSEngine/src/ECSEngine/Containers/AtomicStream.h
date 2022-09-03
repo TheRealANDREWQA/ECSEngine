@@ -143,7 +143,7 @@ namespace ECSEngine {
 		// (i.e. size becomes equal to write index)
 		void SpinWaitWrites() const {
 			unsigned int write_count = write_index.load(ECS_RELAXED);
-			SpinWait<'!'>(size, write_count);
+			SpinWait<'<'>(size, write_count);
 		}
 
 		void Swap(unsigned int first, unsigned int second) {

@@ -221,11 +221,11 @@ namespace ECSEngine {
 		 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void LabelHierarchySelectable(ActionData* action_data);
+		ECSENGINE_API void FilesystemHierarchySelectable(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		ECSENGINE_API void LabelHierarchyChangeState(ActionData* action_data);
+		ECSENGINE_API void FilesystemHierarchyChangeState(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -301,6 +301,7 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		// Takes a UIDrawerMenuRightClickData* as data parameter 
 		ECSENGINE_API void RightClickMenu(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -327,6 +328,22 @@ namespace ECSEngine {
 
 		// This corresponds to the UI_CONFIG_PATH_INPUT_GIVE_FILES flag
 		ECSENGINE_API void PathInputFolderWithInputsAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void LabelHierarchyChangeState(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void LabelHierarchyRenameLabel(ActionData* action_data);
+		
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void LabelHierarchyClickAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		ECSENGINE_API void LabelHierarchyRightClickAction(ActionData* action_data);
 
 		// --------------------------------------------------------------------------------------------------------------
 

@@ -25,3 +25,5 @@
 #define ECS_COMPONENT_TAG "COMPONENT"
 // Used by the HasTag function of the ReflectionType
 #define ECS_SHARED_COMPONENT_TAG "SHARED_COMPONENT"
+
+#define ECS_COMPONENT_ID_FUNCTION "ID"

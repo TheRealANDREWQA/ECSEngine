@@ -43,6 +43,34 @@ namespace ECSEngine {
 			size_t mask = alignment - 1;
 			return (pointer + mask) & ~mask;
 		}
+		
+		// Returns the index of the first most significant bit set, -1 if no bit is set
+		// (it is like a reverse search inside the bits)
+		inline unsigned int FirstMSB64(size_t number) {
+			unsigned long value = 0;
+			return _BitScanReverse64(&value, number) == 0 ? -1 : value;
+		}
+
+		// Returns the index of the first most significant bit set, -1 if no bit is set
+		// (it is like a reverse search inside the bits)
+		inline unsigned int FirstMSB(unsigned int number) {
+			unsigned long value = 0;
+			return _BitScanReverse(&value, number) == 0 ? -1 : value;
+		}
+
+		// Returns the index of the first least significant bit set, -1 if no bit is set
+		// (it is like a forward search inside bits)
+		inline unsigned int FirstLSB64(size_t number) {
+			unsigned long value = 0;
+			return _BitScanForward64(&value, number) == 0 ? -1 : value;
+		}
+
+		// Returns the index of the first least significant bit set, -1 if no bit is set
+		// (it is like a forward search inside bits)
+		inline unsigned int FirstLSB(unsigned int number) {
+			unsigned long value = 0;
+			return _BitScanForward(&value, number) == 0 ? -1 : value;
+		}
 
 		/* Supports alignments up to 256 bytes */
 		inline uintptr_t AlignPointerStack(uintptr_t pointer, size_t alignment) {
@@ -50,15 +78,13 @@ namespace ECSEngine {
 			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
 		}
 
-		// The x component contains the actual value and the y component the power
-		inline ulong2 PowerOfTwoGreater(size_t number) {
-			size_t count = 0;
-			size_t value = 1;
-			while (value <= number) {
-				value <<= 1;
-				count++;
-			}
-			return {value, count};
+		inline size_t PowerOfTwoGreater(size_t number) {
+			// Use bitscan to quickly find this out
+			// Example 00011010 -> 00100000
+
+			unsigned int index = FirstMSB(number);
+			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
+			return (size_t)1 << (index + 1);
 		}
 
 		// Extends the 47th bit into the 48-63 range
@@ -176,8 +202,9 @@ namespace ECSEngine {
 			return value;
 		}
 		
-		// duration should be expressed as milliseconds
-		ECSENGINE_API void ConvertDurationToChars(size_t duration, char* characters);
+		// Duration should be expressed as milliseconds
+		// Returns how many characters were written
+		ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, char* characters);
 
 		// finds the tokens that appear in the current string
 		ECSENGINE_API void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens);
@@ -215,12 +242,21 @@ namespace ECSEngine {
 		// It uses SIMD to speed up the find
 		ECSENGINE_API Stream<wchar_t> FindTokenReverse(Stream<wchar_t> characters, Stream<wchar_t> token);
 
-		// It will search the string from ending character until lower bound
+		// It will search the string from the last character until the starting one
 		ECSENGINE_API Stream<char> FindCharacterReverse(Stream<char> characters, char character);
+
+		// It will search the string from the last character until the starting one
+		ECSENGINE_API Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character);
 
 		inline void Capitalize(char* character) {
 			if (*character >= 'a' && *character <= 'z') {
 				*character = *character - 32;
+			}
+		}
+
+		inline void Uncapitalize(char* character) {
+			if (*character >= 'A' && *character <= 'Z') {
+				*character += 'a' - 'A';
 			}
 		}
 
@@ -640,6 +676,16 @@ namespace ECSEngine {
 
 		// Returns the value of the constant expression
 		ECSENGINE_API double EvaluateExpression(Stream<wchar_t> characters);
+
+		// Uses a fast SIMD compare, in this way you don't need to rely on the
+		// compiler to generate for you the SIMD search. Returns -1 if it doesn't
+		// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
+		ECSENGINE_API size_t SearchBytes(const void* data, size_t element_count, size_t value_to_search, size_t byte_size);
+
+		// Uses a fast SIMD compare, in this way you don't need to rely on the
+		// compiler to generate for you the SIMD search. Returns -1 if it doesn't
+		// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
+		ECSENGINE_API size_t SearchBytesReversed(const void* data, size_t element_count, size_t value_to_search, size_t byte_size);
 
 	}
 

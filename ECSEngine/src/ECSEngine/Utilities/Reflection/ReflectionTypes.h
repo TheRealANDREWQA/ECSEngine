@@ -159,7 +159,7 @@ namespace ECSEngine {
 			bool IsTag(Stream<char> string) const;
 
 			// Returns DBL_MAX if it doesn't exist
-			double HasEvaluation(Stream<char> name) const;
+			double GetEvaluation(Stream<char> name) const;
 
 			// Copies everything that needs to be copied into this buffer
 			ReflectionType Copy(uintptr_t& ptr) const;
@@ -188,41 +188,53 @@ namespace ECSEngine {
 			unsigned int folder_hierarchy;
 		};
 
-		struct ReflectionContainerTypeMatchData {
+		struct ReflectionCustomTypeMatchData {
 			Stream<char> definition;
 		};
 
-		typedef bool (*ReflectionContainerTypeMatch)(ReflectionContainerTypeMatchData* data);
+		typedef bool (*ReflectionCustomTypeMatch)(ReflectionCustomTypeMatchData* data);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(name) bool ReflectionCustomTypeMatch_##name(Reflection::ReflectionCustomTypeMatchData* data)
 
 		struct ReflectionManager;
 
-		struct ReflectionContainerTypeByteSizeData {
+		struct ReflectionCustomTypeByteSizeData {
 			Stream<char> definition;
 			const Reflection::ReflectionManager* reflection_manager;
 		};
 
 		// Return 0 if you cannot determine right now the byte size (e.g. you are template<typename T> struct { T data; ... })
 		// The x component is the byte size, the y component is the alignment
-		typedef ulong2 (*ReflectionContainerTypeByteSize)(ReflectionContainerTypeByteSizeData* data);
+		typedef ulong2 (*ReflectionCustomTypeByteSize)(ReflectionCustomTypeByteSizeData* data);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(name) ulong2 ReflectionCustomTypeByteSize_##name(Reflection::ReflectionCustomTypeByteSizeData* data)
 
 		// No need to allocate the strings, they can be referenced inside the definition since it is stable
-		struct ReflectionContainerTypeDependentTypesData {
+		struct ReflectionCustomTypeDependentTypesData {
 			Stream<char> definition;
 			CapacityStream<Stream<char>> dependent_types;
 		};
 
-		typedef void (*ReflectionContainerTypeDependentTypes)(ReflectionContainerTypeDependentTypesData* data);
+		typedef void (*ReflectionCustomTypeDependentTypes)(ReflectionCustomTypeDependentTypesData* data);
 
-		struct ReflectionContainerType {
-			ReflectionContainerTypeMatch match;
-			ReflectionContainerTypeDependentTypes dependent_types;
-			ReflectionContainerTypeByteSize byte_size;
+#define ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(name) void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data)
+
+		struct ReflectionCustomType {
+			ReflectionCustomTypeMatch match;
+			ReflectionCustomTypeDependentTypes dependent_types;
+			ReflectionCustomTypeByteSize byte_size;
 		};
 
 		// Works only for non user-defined_types
 		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
 
 		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(name) ECSENGINE_API bool ReflectionCustomTypeMatch_##name(Reflection::ReflectionCustomTypeMatchData* data); \
+															ECSENGINE_API ulong2 ReflectionCustomTypeByteSize_##name(Reflection::ReflectionCustomTypeByteSizeData* data); \
+															ECSENGINE_API void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name) { ReflectionCustomTypeMatch_##name, ReflectionCustomTypeDependentTypes_##name, ReflectionCustomTypeByteSize_##name }
 
 	}
 

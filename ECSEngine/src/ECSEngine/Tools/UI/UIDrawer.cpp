@@ -293,6 +293,7 @@ namespace ECSEngine {
 				region_position.x + region_scale.x - layout.next_row_padding - system->m_descriptors.misc.render_slider_vertical_size,
 				region_position.y + region_scale.y - layout.next_row_y_offset - system->m_descriptors.misc.render_slider_horizontal_size
 			};
+
 			region_render_offset = *render_offset;
 			max_region_render_limit.x = region_position.x + region_scale.x;
 			max_region_render_limit.y = region_position.y + scale.y;
@@ -853,7 +854,7 @@ namespace ECSEngine {
 		Stream<char> UIDrawer::HandleResourceIdentifier(Stream<char> input, bool permanent_buffer) {
 			if (!permanent_buffer) {
 				if (identifier_stack.size > 0) {
-					char* temp_memory = (char*)GetTempBuffer((input.size + current_identifier.size) * sizeof(char), alignof(char));
+					char* temp_memory = (char*)GetTempBuffer((input.size + current_identifier.size) * sizeof(char), ECS_UI_DRAW_NORMAL, alignof(char));
 					input.CopyTo(temp_memory);
 					memcpy(temp_memory + input.size, current_identifier.buffer, current_identifier.size);
 					return { temp_memory, input.size + current_identifier.size };
@@ -3204,7 +3205,6 @@ namespace ECSEngine {
 
 				data = GetMainAllocatorBuffer<UIDrawerComboBox>();
 
-				data->is_opened = false;
 				data->active_label = active_label;
 				data->label_display_count = label_display_count;
 
@@ -3384,7 +3384,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::ComboBoxDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data, unsigned char* active_label, float2 position, float2 scale) {
+		void UIDrawer::ComboBoxDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerComboBox* data, unsigned char* active_label, float2 position, float2 scale) {
+			// Determine the minimum size
+			data->active_label = active_label;
+			float biggest_label_scale = TextSpan(data->labels[data->biggest_label_x_index]).x;
+			float min_value = biggest_label_scale + GetSquareScale(layout.default_element_y).x + element_descriptor.label_padd.x * 2.0f;
+			min_value += data->prefix_x_scale * zoom_ptr->x;
+			
 			bool is_active = true;
 			if (configuration & UI_CONFIG_ACTIVE_STATE) {
 				const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
@@ -3392,10 +3398,17 @@ namespace ECSEngine {
 			}
 
 			float2 element_scale = scale;
-			if (~configuration & UI_CONFIG_COMBO_BOX_NO_NAME) {
+			if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+				// Reduce the scale
+				if (~configuration & UI_CONFIG_COMBO_BOX_NO_NAME) {
+					scale.x -= ElementNameSize(configuration, config, &data->name, scale);
+				}
+			}
+			else if (~configuration & UI_CONFIG_COMBO_BOX_NO_NAME) {
 				element_scale.x += layout.element_indentation + data->name.scale.x;
 			}
 
+			scale.x = std::max(scale.x, min_value);
 			GetElementAlignedPosition(configuration, config, position, element_scale);
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
@@ -3409,13 +3422,6 @@ namespace ECSEngine {
 			if (IsElementNameFirst(configuration, UI_CONFIG_COMBO_BOX_NO_NAME)) {
 				ElementName(configuration, config, &data->name, position, scale);
 			}
-
-			UIConfigTextAlignment previous_alignment;
-			UIConfigTextAlignment alignment;
-			alignment.horizontal = ECS_UI_ALIGN_LEFT;
-			alignment.vertical = ECS_UI_ALIGN_MIDDLE;
-
-			SetConfigParameter(configuration, UI_CONFIG_TEXT_ALIGNMENT, config, alignment, previous_alignment);
 
 			float2 border_position = position;
 			float2 border_scale = scale;
@@ -3433,14 +3439,24 @@ namespace ECSEngine {
 
 				new_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 
+				UIConfigTextAlignment previous_alignment;
+				UIConfigTextAlignment alignment;
+				alignment.horizontal = ECS_UI_ALIGN_LEFT;
+				alignment.vertical = ECS_UI_ALIGN_MIDDLE;
+
+
+				UIDrawConfig internal_config;
+				memcpy(&internal_config, &config, sizeof(config));
+				SetConfigParameter(configuration, UI_CONFIG_TEXT_ALIGNMENT, internal_config, alignment, previous_alignment);
+
 				// Use the position.x += scale.x instead of relying on finalizing because
 				// if the user doesn't want finalizing then it will incorrectly appear one
 				// over the other
 				if (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
-					TextLabel(new_configuration, config, data->prefix, position, scale);	
+					TextLabel(new_configuration, internal_config, data->prefix, position, scale);
 					position.x += scale.x - element_descriptor.label_padd.x * 2.0f;
 				}
-				TextLabel(new_configuration, config, data->labels[*data->active_label], position, scale);
+				TextLabel(new_configuration, internal_config, data->labels[*data->active_label], position, scale);
 
 				float2 positions[2];
 				float2 scales[2];
@@ -3473,46 +3489,22 @@ namespace ECSEngine {
 					SpriteRectangle(no_get_transform_configuration, triangle_position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE);
 
 					UIDrawerComboBoxClickable clickable_data;
-					clickable_data.config = config;
+					clickable_data.config = internal_config;
 					clickable_data.box = data;
 					clickable_data.configuration = configuration;
 					data->label_y_scale = scale.y;
 
 					AddDefaultHoverable(border_position, border_scale, positions, scales, colors, percentages, 2);
-					AddClickable(border_position, border_scale, { ComboBoxClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
-
-					if (data->is_opened) {
-						if (data->window_index != -1) {
-							if (!data->has_been_destroyed) {
-								float2 window_position = { position.x, position.y + scale.y + element_descriptor.combo_box_padding };
-
-								// only y axis needs to be handled since to move on the x axis
-								// the left mouse button must be pressed
-								float2 window_scale = { scale.x, scale.y * data->label_display_count };
-								//system->TrimPopUpWindow(data->window_index, window_position, window_scale, window_index, region_position, region_scale);
-							}
-							else {
-								data->has_been_destroyed = false;
-								data->window_index = -1;
-								data->is_opened = false;
-							}
-						}
-					}
-					else {
-						data->window_index = -1;
-					}
+					AddClickable(border_position, border_scale, { ComboBoxClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_SYSTEM });
 				}
 				else {
 					SpriteRectangle(no_get_transform_configuration, triangle_position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, color_theme.unavailable_text);
 				}
+				
+				HandleBorder(configuration, config, border_position, border_scale);
 
-				if (configuration & UI_CONFIG_COMBO_BOX_PREFIX) {
-					HandleBorder(configuration, config, border_position, border_scale);
-				}
-
+				RemoveConfigParameter(configuration, UI_CONFIG_TEXT_ALIGNMENT, internal_config, previous_alignment);
 			}
-
-			RemoveConfigParameter(configuration, UI_CONFIG_TEXT_ALIGNMENT, config, previous_alignment);
 
 			FinalizeRectangle(configuration, border_position, border_scale);
 
@@ -4120,8 +4112,8 @@ namespace ECSEngine {
 				if (~configuration & UI_CONFIG_COLLAPSING_HEADER_NO_NAME) {
 					UIConfigTextAlignment previous_alignment;
 					UIConfigTextAlignment alignment;
-					alignment.horizontal = ECS_UI_ALIGN::ECS_UI_ALIGN_LEFT;
-					alignment.vertical = ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE;
+					alignment.horizontal = ECS_UI_ALIGN_LEFT;
+					alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 
 					SetConfigParameter(configuration, UI_CONFIG_TEXT_ALIGNMENT, config, alignment, previous_alignment);
 
@@ -5306,6 +5298,10 @@ namespace ECSEngine {
 				}
 
 				total_memory += sizeof(UIActionHandler) * state->row_count;
+				// Copy their data as well
+				for (unsigned int index = 0; index < state->row_count; index++) {
+					total_memory += state->click_handlers[index].data_size;
+				}
 			}
 			size_t left_character_count = state->left_characters.size;
 			total_memory += left_character_count;
@@ -5411,6 +5407,15 @@ namespace ECSEngine {
 				memcpy((void*)buffer, state->click_handlers, sizeof(UIActionHandler) * state->row_count);
 				state->click_handlers = (UIActionHandler*)buffer;
 				buffer += sizeof(UIActionHandler) * state->row_count;
+
+				// Copy the handler data as well
+				for (unsigned int index = 0; index < state->row_count; index++) {
+					if (state->click_handlers[index].data_size > 0) {
+						void* current_buffer = (void*)buffer;
+						memcpy(current_buffer, state->click_handlers[index].data, state->click_handlers[index].data_size);
+						state->click_handlers[index].data = current_buffer;
+					}
+				}
 			}
 
 			state->windows = stream;
@@ -5462,7 +5467,7 @@ namespace ECSEngine {
 			InitializeMenuState(drawer, menu_to_fill_in, menu_state_to_copy, true);
 
 			// Need to update the dynamic allocation
-			unsigned int dynamic_index = drawer->system->GetWindowDrawerElement(drawer->window_index, drawer->HandleResourceIdentifier(name));
+			unsigned int dynamic_index = drawer->system->GetWindowDynamicElement(drawer->window_index, drawer->HandleResourceIdentifier(name));
 			drawer->system->ReplaceWindowDynamicResourceAllocation(drawer->window_index, dynamic_index, previous_buffer, menu_to_fill_in->state.left_characters.buffer);
 		}
 
@@ -5853,7 +5858,9 @@ namespace ECSEngine {
 
 		void UIDrawer::SentenceDrawer(size_t configuration, const UIDrawConfig& config, Stream<char> text, void* resource, float2 position) {
 			char separator_token = SentenceToken(configuration, config);
-			bool keep_token = SentenceKeepToken(configuration, config);
+
+			// the token might be needed to be kept always
+			bool keep_token = true; //SentenceKeepToken(configuration, config);
 
 			// If keeping the token, make the next character after the end of string with '\0' such that it will be rendered as a space and 
 			// will not disturb the final string that much
@@ -6011,12 +6018,7 @@ namespace ECSEngine {
 						if (word_end_index >= word_start_index) {
 							unsigned int last_character_index = word_end_index + 1 + keep_token;
 							last_character_index -= last_character_index >= text.size;
-							float2 text_span;
 
-							Stream<UISpriteVertex> current_vertices;
-							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-								current_vertices = GetTextStream(configuration, (last_character_index - word_start_index) * 6);
-							}
 							Text(text_configuration, config, { text.buffer + word_start_index, last_character_index - word_start_index });
 							Indent(-1.0f);
 						}
@@ -7710,6 +7712,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		float2 UIDrawer::GetLabelScale(const UIDrawerTextElement* element) const
+		{
+			return { element->scale.x + element_descriptor.label_padd.x * 2.0f, element->scale.y + element_descriptor.label_padd.y * 2.0f };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::GetTextLabelAlignment(size_t configuration, const UIDrawConfig& config, ECS_UI_ALIGN& horizontal, ECS_UI_ALIGN& vertical) const {
 			if (configuration & UI_CONFIG_TEXT_ALIGNMENT) {
 				const float* params = (const float*)config.GetParameter(UI_CONFIG_TEXT_ALIGNMENT);
@@ -7940,7 +7949,9 @@ namespace ECSEngine {
 
 		void UIDrawer::FinalizeRectangle(size_t configuration, float2 position, float2 scale) {
 			if (~configuration & UI_CONFIG_DO_NOT_ADVANCE) {
-				UpdateRenderBoundsRectangle(position, scale);
+				if (~configuration & UI_CONFIG_DO_NOT_UPDATE_RENDER_BOUNDS) {
+					UpdateRenderBoundsRectangle(position, scale);
+				}
 				UpdateCurrentScale(position, scale);
 				HandleDrawMode(configuration);
 			}
@@ -8046,7 +8057,19 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				drawer->TextLabel(label_configuration, label_config, text, position, scale);
+				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
+					drawer->TextLabel(label_configuration, label_config, text, position, scale);
+					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
+						position.x += text->scale.x + drawer->element_descriptor.label_padd.x * 2.0f;
+					}
+				}
+				else {
+					Stream<UISpriteVertex> text_vertices = drawer->GetTextStream(label_configuration, text.size * 6);
+					drawer->TextLabel(label_configuration, label_config, text, position, scale);
+					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
+						position.x += GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
+					}
+				}
 			}
 		}
 
@@ -8128,7 +8151,7 @@ namespace ECSEngine {
 			//SetLayoutFromZoomYFactor<true>(zoom_ptr->y);
 
 			if (!initializer) {
-				float mask = system->GetDockspaceMaskFromType(dockspace_type);
+				float mask = GetDockspaceMaskFromType(dockspace_type);
 				region_position = system->GetDockspaceRegionPosition(dockspace, border_index, mask);
 				region_scale = system->GetDockspaceRegionScale(dockspace, border_index, mask);
 			}
@@ -8383,6 +8406,46 @@ namespace ECSEngine {
 					second_click_handler
 				);
 			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::AddRightClickAction(float2 position, float2 scale, Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
+		{
+			UIDrawerMenuRightClickData right_click;
+
+			menu_state->submenu_index = 0;
+			size_t menu_data_size = MenuWalkStatesMemory(menu_state, true);
+			size_t total_size = menu_data_size + name.size + sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT + sizeof(CapacityStream<UIDrawerMenuWindow>);
+			ECS_ASSERT(custom_handler.data_size <= sizeof(right_click.action_data), "The handler data is too large");
+
+			void* temp_buffer = GetTempBuffer(total_size, ECS_UI_DRAW_SYSTEM);
+			uintptr_t ptr = (uintptr_t)temp_buffer;
+			name.InitializeAndCopy(ptr, name);
+			
+			UIDrawerMenuWindow* menu_windows = (UIDrawerMenuWindow*)ptr;
+			ptr += sizeof(UIDrawerMenuWindow) * ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT;
+			CapacityStream<UIDrawerMenuWindow>* menu_windows_stream = (CapacityStream<UIDrawerMenuWindow>*)ptr;
+			ptr += sizeof(CapacityStream<UIDrawerMenuWindow>);
+			menu_windows_stream->InitializeFromBuffer(menu_windows, 0, ECS_TOOLS_UI_MENU_SUBMENUES_MAX_COUNT);
+
+			MenuSetStateBuffers(menu_state, ptr, menu_windows_stream, true);
+
+			right_click.name = name;
+			right_click.action = custom_handler.action;
+			if (custom_handler.data_size > 0) {
+				memcpy(right_click.action_data, custom_handler.data, custom_handler.data_size);
+				right_click.is_action_data_ptr = false;
+			}
+			else {
+				right_click.is_action_data_ptr = true;
+				right_click.action_data_ptr = custom_handler.data;
+			}
+			
+			right_click.state = *menu_state;
+			right_click.window_index = window_index;
+
+			AddHoverable(position, scale, { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -9039,12 +9102,6 @@ namespace ECSEngine {
 				if (configuration & UI_CONFIG_DO_CACHE) {
 					UIDrawerComboBox* data = (UIDrawerComboBox*)GetResource(name);
 
-					data->active_label = active_label;
-					float biggest_label_scale = TextSpan(data->labels[data->biggest_label_x_index]).x;
-					float min_value = biggest_label_scale + GetSquareScale(layout.default_element_y).x + element_descriptor.label_padd.x * 2.0f;
-					min_value += data->prefix_x_scale * zoom_ptr->x;
-					scale.x = std::max(scale.x, min_value);
-
 					ComboBoxDrawer(configuration | UI_CONFIG_DO_NOT_VALIDATE_POSITION, config, data, active_label, position, scale);
 					HandleDynamicResource(configuration, name);
 				}
@@ -9063,7 +9120,7 @@ namespace ECSEngine {
 						size_t allocation_size = StreamDeepCopySize(labels);
 						void* allocation = GetMainAllocatorBuffer(allocation_size);
 						// Notify the dynamic element that the allocation has changed
-						unsigned int dynamic_index = system->GetWindowDrawerElement(window_index, HandleResourceIdentifier(name));
+						unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, HandleResourceIdentifier(name));
 						ECS_ASSERT(dynamic_index != -1);
 						system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, data->labels.buffer, allocation);
 						RemoveAllocation(data->labels.buffer);
@@ -10485,12 +10542,6 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		Stream<char> UIDrawer::GetElementName(unsigned int index) const {
-			return system->GetDrawElementName(window_index, index);
-		}
-
-		// ------------------------------------------------------------------------------------------------------------------------------------
-
 		float UIDrawer::GetDefaultBorderThickness() const {
 			return system->m_descriptors.dockspaces.border_size;
 		}
@@ -10584,15 +10635,15 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		float2 UIDrawer::GetWindowSizeScaleUntilBorder() const {
-			return { (region_limit.x - current_x) / (region_limit.x - region_fit_space_horizontal_offset), 1.0f };
+		float2 UIDrawer::GetWindowSizeScaleUntilBorder(bool until_border) const {
+			return { GetWindowScaleUntilBorder(until_border) / (region_limit.x - region_fit_space_horizontal_offset), 1.0f };
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		float UIDrawer::GetWindowScaleUntilBorder() const
+		float UIDrawer::GetWindowScaleUntilBorder(bool until_border) const
 		{
-			return region_limit.x - current_x;
+			return until_border ? region_position.x + region_scale.x - current_x : region_limit.x - current_x;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -10611,21 +10662,21 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void* UIDrawer::GetTempBuffer(size_t size, size_t alignment) {
-			return system->m_resources.thread_resources[thread_id].temp_allocator.Allocate(size, alignment);
+		void* UIDrawer::GetTempBuffer(size_t size, ECS_UI_DRAW_PHASE phase, size_t alignment) {
+			return system->TemporaryAllocator(thread_id, phase)->Allocate(size, alignment);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// Can be used to release some temp memory - cannot be used when handlers are used
-		void UIDrawer::ReturnTempAllocator(size_t marker) {
-			system->m_resources.thread_resources[thread_id].temp_allocator.ReturnToMarker(marker);
+		void UIDrawer::ReturnTempAllocator(size_t marker, ECS_UI_DRAW_PHASE phase) {
+			system->TemporaryAllocator(thread_id, phase)->ReturnToMarker(marker);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		size_t UIDrawer::GetTempAllocatorMarker() {
-			return system->m_resources.thread_resources[thread_id].temp_allocator.m_top;
+		size_t UIDrawer::GetTempAllocatorMarker(ECS_UI_DRAW_PHASE phase) {
+			return system->TemporaryAllocator(thread_id, phase)->m_top;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -11111,27 +11162,27 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::LabelHierarchy(Stream<char> identifier, Stream<Stream<char>> labels) {
+		void UIDrawer::FilesystemHierarchy(Stream<char> identifier, Stream<Stream<char>> labels) {
 			UIDrawConfig config;
-			LabelHierarchy(0, config, identifier, labels);
+			FilesystemHierarchy(0, config, identifier, labels);
 		}
 
 		// Parent index 0 means root
-		UIDrawerLabelHierarchy* UIDrawer::LabelHierarchy(size_t configuration, UIDrawConfig& config, Stream<char> identifier, Stream<Stream<char>> labels) {
+		UIDrawerFilesystemHierarchy* UIDrawer::FilesystemHierarchy(size_t configuration, UIDrawConfig& config, Stream<char> identifier, Stream<Stream<char>> labels) {
 			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
 
 			if (!initializer) {
 				if (configuration & UI_CONFIG_DO_CACHE) {
-					UIDrawerLabelHierarchy* data = (UIDrawerLabelHierarchy*)GetResource(identifier);
+					UIDrawerFilesystemHierarchy* data = (UIDrawerFilesystemHierarchy*)GetResource(identifier);
 
-					LabelHierarchyDrawer(configuration, config, data, labels, position, scale);
+					FilesystemHierarchyDrawer(configuration, config, data, labels, position, scale);
 					HandleDynamicResource(configuration, identifier);
 					return data;
 				}
 				else {
 					bool exists = ExistsResource(identifier);
 					if (!exists) {
-						UIDrawerInitializeLabelHierarchy initialize_data;
+						UIDrawerInitializeFilesystemHierarchy initialize_data;
 						initialize_data.config = &config;
 						ECS_FORWARD_STRUCT_MEMBERS_2(initialize_data, identifier, labels);
 						InitializeDrawerElement(
@@ -11142,20 +11193,20 @@ namespace ECSEngine {
 							DynamicConfiguration(configuration)
 						);
 					}
-					return LabelHierarchy(DynamicConfiguration(configuration), config, identifier, labels);
+					return FilesystemHierarchy(DynamicConfiguration(configuration), config, identifier, labels);
 				}
 			}
 			else {
 				if (configuration & UI_CONFIG_DO_CACHE) {
-					return LabelHierarchyInitializer(configuration, config, identifier);
+					return FilesystemHierarchyInitializer(configuration, config, identifier);
 				}
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIDrawerLabelHierarchy* UIDrawer::LabelHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> text) {
-			UIDrawerLabelHierarchy* data = nullptr;
+		UIDrawerFilesystemHierarchy* UIDrawer::FilesystemHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> text) {
+			UIDrawerFilesystemHierarchy* data = nullptr;
 
 			// Begin recording allocations and table resources for dynamic resources
 			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
@@ -11163,13 +11214,13 @@ namespace ECSEngine {
 				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 			}
 			AddWindowResource(text, [&](Stream<char> identifier) {
-				data = GetMainAllocatorBuffer<UIDrawerLabelHierarchy>();
+				data = GetMainAllocatorBuffer<UIDrawerFilesystemHierarchy>();
 
 				size_t max_characters = 256;
 
 				unsigned int hash_table_capacity = 256;
-				if (configuration & UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY) {
-					const UIConfigLabelHierarchyHashTableCapacity* capacity = (const UIConfigLabelHierarchyHashTableCapacity*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_HASH_TABLE_CAPACITY);
+				if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_HASH_TABLE_CAPACITY) {
+					const UIConfigFilesystemHierarchyHashTableCapacity* capacity = (const UIConfigFilesystemHierarchyHashTableCapacity*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_HASH_TABLE_CAPACITY);
 					hash_table_capacity = capacity->capacity;
 				}
 
@@ -11182,13 +11233,13 @@ namespace ECSEngine {
 				data->selected_label_temporary.InitializeFromBuffer(allocation_ptr, max_characters);
 				data->right_click_label_temporary.InitializeFromBuffer(allocation_ptr, max_characters);
 
-				if (configuration & UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK) {
-					const UIConfigLabelHierarchySelectableCallback* callback = (const UIConfigLabelHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK);
+				if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK) {
+					const UIConfigFilesystemHierarchySelectableCallback* callback = (const UIConfigFilesystemHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK);
 
-					void* callback_data = callback->callback_data;
-					if (callback->callback_data_size > 0) {
-						void* allocation = GetMainAllocatorBuffer(callback->callback_data_size);
-						memcpy(allocation, callback->callback_data, callback->callback_data_size);
+					void* callback_data = callback->data;
+					if (callback->data_size > 0) {
+						void* allocation = GetMainAllocatorBuffer(callback->data_size);
+						memcpy(allocation, callback->data, callback->data_size);
 						callback_data = allocation;
 					}
 					data->selectable_callback = callback->callback;
@@ -11199,8 +11250,8 @@ namespace ECSEngine {
 					data->selectable_callback_data = nullptr;
 				}
 
-				if (configuration & UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK) {
-					const UIConfigLabelHierarchyRightClick* callback = (const UIConfigLabelHierarchyRightClick*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK);
+				if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK) {
+					const UIConfigFilesystemHierarchyRightClick* callback = (const UIConfigFilesystemHierarchyRightClick*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK);
 
 					void* callback_data = callback->data;
 					if (callback->data_size > 0) {
@@ -11224,10 +11275,10 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::LabelHierarchyDrawer(
+		void UIDrawer::FilesystemHierarchyDrawer(
 			size_t configuration,
 			UIDrawConfig& config,
-			UIDrawerLabelHierarchy* data,
+			UIDrawerFilesystemHierarchy* data,
 			Stream<Stream<char>> labels,
 			float2 position,
 			float2 scale
@@ -11238,9 +11289,9 @@ namespace ECSEngine {
 			};
 
 			// keep a stack of current parent indices
-			StackElement* stack_buffer = (StackElement*)GetTempBuffer(sizeof(StackElement) * labels.size, alignof(StackElement));
+			StackElement* stack_buffer = (StackElement*)GetTempBuffer(sizeof(StackElement) * labels.size, ECS_UI_DRAW_NORMAL, alignof(StackElement));
 			Stack<StackElement> stack(stack_buffer, labels.size);
-			bool* label_states = (bool*)GetTempBuffer(sizeof(bool) * labels.size, alignof(bool));
+			bool* label_states = (bool*)GetTempBuffer(sizeof(bool) * labels.size, ECS_UI_DRAW_NORMAL, alignof(bool));
 
 			float2 current_position = position;
 			float2 square_scale = GetSquareScale(scale.y);
@@ -11252,7 +11303,7 @@ namespace ECSEngine {
 			const wchar_t* closed_texture;
 			float2 expand_factor;
 			float horizontal_bound = position.x + scale.x;
-			if (~configuration & UI_CONFIG_LABEL_HIERARCHY_DO_NOT_INFER_X) {
+			if (~configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_DO_NOT_INFER_X) {
 				horizontal_bound = region_limit.x;
 			}
 
@@ -11260,8 +11311,8 @@ namespace ECSEngine {
 			bool keep_triangle = true;
 
 			// copy the information into aliases
-			if (configuration & UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE) {
-				const UIConfigLabelHierarchySpriteTexture* texture_info = (const UIConfigLabelHierarchySpriteTexture*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE);
+			if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_SPRITE_TEXTURE) {
+				const UIConfigFilesystemHierarchySpriteTexture* texture_info = (const UIConfigFilesystemHierarchySpriteTexture*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_SPRITE_TEXTURE);
 				opened_top_left_uv = texture_info->opened_texture_top_left_uv;
 				opened_bottom_right_uv = texture_info->opened_texture_bottom_right_uv;
 				closed_top_left_uv = texture_info->closed_texture_top_left_uv;
@@ -11278,20 +11329,20 @@ namespace ECSEngine {
 				keep_triangle = texture_info->keep_triangle;
 			}
 
-			ECS_UI_DRAW_PHASE selectable_callback_phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			ECS_UI_DRAW_PHASE selectable_callback_phase = ECS_UI_DRAW_NORMAL;
 			// check selectable update of data
-			if (configuration & UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK) {
-				const UIConfigLabelHierarchySelectableCallback* selectable = (const UIConfigLabelHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK);
-				if (!selectable->copy_on_initialization && selectable->callback_data_size > 0) {
-					memcpy(data->selectable_callback_data, selectable->callback_data, selectable->callback_data_size);
+			if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK) {
+				const UIConfigFilesystemHierarchySelectableCallback* selectable = (const UIConfigFilesystemHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_SELECTABLE_CALLBACK);
+				if (!selectable->copy_on_initialization && selectable->data_size > 0) {
+					memcpy(data->selectable_callback_data, selectable->data, selectable->data_size);
 				}
 				selectable_callback_phase = selectable->phase;
 			}
 
-			ECS_UI_DRAW_PHASE right_click_phase = ECS_UI_DRAW_PHASE::ECS_UI_DRAW_NORMAL;
+			ECS_UI_DRAW_PHASE right_click_phase = ECS_UI_DRAW_NORMAL;
 			// check right click update of data
-			if (configuration & UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK) {
-				const UIConfigLabelHierarchyRightClick* right_click = (const UIConfigLabelHierarchyRightClick*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK);
+			if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK) {
+				const UIConfigFilesystemHierarchyRightClick* right_click = (const UIConfigFilesystemHierarchyRightClick*)config.GetParameter(UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK);
 				if (!right_click->copy_on_initialization && right_click->data_size > 0) {
 					memcpy(data->right_click_callback_data, right_click->data, right_click->data_size);
 				}
@@ -11307,12 +11358,12 @@ namespace ECSEngine {
 
 			Color label_color = HandleColor(configuration, config);
 			UIConfigTextAlignment text_alignment;
-			text_alignment.horizontal = ECS_UI_ALIGN::ECS_UI_ALIGN_LEFT;
-			text_alignment.vertical = ECS_UI_ALIGN::ECS_UI_ALIGN_MIDDLE;
+			text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
+			text_alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 			config.AddFlag(text_alignment);
 
 			HashTableDefault<unsigned int> parent_hash_table;
-			size_t table_count = function::PowerOfTwoGreater(labels.size).x * 2;
+			size_t table_count = function::PowerOfTwoGreater(labels.size) * 2;
 			parent_hash_table.InitializeFromBuffer(GetTempBuffer(parent_hash_table.MemoryOf(table_count)), table_count);
 
 			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_DO_NOT_FIT_SPACE |
@@ -11349,14 +11400,14 @@ namespace ECSEngine {
 					table_char_stream.buffer = (char*)allocation;
 					table_char_stream.size = label_stream.size;
 
-					UIDrawerLabelHierarchyLabelData current_data;
+					UIDrawerFilesystemHierarchyLabelData current_data;
 					current_data.activation_count = 5;
 					current_data.state = false;
 					label_states[index] = false;
 					ECS_ASSERT(!data->label_states.Insert(current_data, identifier));
 				}
 				else {
-					UIDrawerLabelHierarchyLabelData* current_data = data->label_states.GetValuePtrFromIndex(table_index);
+					UIDrawerFilesystemHierarchyLabelData* current_data = data->label_states.GetValuePtrFromIndex(table_index);
 					current_data->activation_count++;
 					label_state = current_data->state;
 
@@ -11443,10 +11494,10 @@ namespace ECSEngine {
 							data->selected_label_temporary.Copy(label_stream);
 						}
 
-						AddClickable(initial_label_position, action_scale, { LabelHierarchySelectable, data, 0, selectable_callback_phase });
+						AddClickable(initial_label_position, action_scale, { FilesystemHierarchySelectable, data, 0, selectable_callback_phase });
 						AddDefaultHoverable(initial_label_position, action_scale, current_color);
 
-						UIDrawerLabelHierarchyChangeStateData change_state_data;
+						UIDrawerFilesystemHierarchyChangeStateData change_state_data;
 						change_state_data.hierarchy = data;
 						change_state_data.label = table_char_stream;
 						if (keep_triangle && has_children) {
@@ -11456,10 +11507,10 @@ namespace ECSEngine {
 							else {
 								SpriteRectangle(configuration, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, text_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
 							}
-							AddClickable(current_position, square_scale, { LabelHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
+							AddClickable(current_position, square_scale, { FilesystemHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
 						}
 						current_position.x += square_scale.x;
-						if (configuration & UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE) {
+						if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_SPRITE_TEXTURE) {
 							if (label_state) {
 								SpriteRectangle(configuration, current_position, square_scale, opened_texture, opened_color, opened_top_left_uv, opened_bottom_right_uv);
 							}
@@ -11467,18 +11518,18 @@ namespace ECSEngine {
 								SpriteRectangle(configuration, current_position, square_scale, closed_texture, closed_color, closed_top_left_uv, closed_bottom_right_uv);
 							}
 							if (!keep_triangle && has_children) {
-								AddClickable(current_position, square_scale, { LabelHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
+								AddClickable(current_position, square_scale, { FilesystemHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
 							}
 						}
 
-						if (configuration & UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK) {
+						if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_RIGHT_CLICK) {
 							bool trigger = IsMouseInRectangle(initial_label_position, action_scale) && system->m_mouse_tracker->RightButton() == MBRELEASED;
 							if (trigger) {
 								data->right_click_label_temporary.Copy(label_stream);
 								data->selected_label_temporary.Copy(label_stream);
 							}
 
-							UIDrawerLabelHierarchyRightClickData right_click;
+							UIDrawerFilesystemHierarchyRightClickData right_click;
 							right_click.data = data->right_click_callback_data;
 							right_click.label = data->right_click_label_temporary;
 							AddHoverable(initial_label_position, action_scale, { data->right_click_callback, &right_click, sizeof(right_click), right_click_phase });
@@ -11514,14 +11565,6 @@ namespace ECSEngine {
 				}
 
 			}
-
-			/*size_t milliseconds = stack_timer.GetDuration_ms();
-			ECS_STACK_CAPACITY_STREAM(char, milliseconds_duration, 64);
-			function::ConvertIntToChars(milliseconds_duration, milliseconds);
-			milliseconds_duration[milliseconds_duration.size] = '\n';
-			milliseconds_duration[milliseconds_duration.size + 1] = '\0';
-			OutputDebugStringA(milliseconds_duration.buffer);*/
-
 
 			data->label_states.ForEachIndex([&](unsigned int index) {
 				auto* value_ptr = data->label_states.GetValuePtrFromIndex(index);
@@ -11595,6 +11638,119 @@ namespace ECSEngine {
 
 		void UIDrawer::ListFinalizeNode(UIDrawerList* list) {
 			list->FinalizeNodeYscale((const void**)buffers, counts);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region Label Hierarchy
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		UIDrawerLabelHierarchyData* UIDrawer::LabelHierarchyInitializer(size_t configuration, const UIDrawConfig& config, Stream<char> name)
+		{
+			UIDrawerLabelHierarchyData* data = nullptr;
+
+			// Begin recording allocations and table resources for dynamic resources
+			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
+				BeginElement();
+				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
+			}
+			AddWindowResource(name, [&](Stream<char> identifier) {
+				data = GetMainAllocatorBuffer<UIDrawerLabelHierarchyData>();
+				
+				// Everything will be nullptr or 0
+				memset(data, 0, sizeof(*data));
+
+				auto set_callback = [this](Action& action, void*& data, const auto* callback) {
+					data = callback->data;
+					if (callback->data_size > 0) {
+						data = GetMainAllocatorBuffer(callback->data_size);
+						memcpy(data, callback->data, callback->data_size);
+					}
+					action = callback->callback;
+				};
+
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK) {
+					const UIConfigLabelHierarchySelectableCallback* callback = (const UIConfigLabelHierarchySelectableCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK);
+					set_callback(data->selectable_action, data->selectable_data, callback);
+				}
+
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK) {
+					const UIConfigLabelHierarchyRightClick* callback = (const UIConfigLabelHierarchyRightClick*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK);
+					set_callback(data->right_click_action, data->right_click_data, callback);
+				}
+				
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL) {
+					const UIConfigLabelHierarchyDragCallback* callback = (const UIConfigLabelHierarchyDragCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL);
+					set_callback(data->drag_action, data->drag_data, callback);
+					data->reject_same_label_drag = callback->reject_same_label_drag;
+				}
+
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL) {
+					const UIConfigLabelHierarchyRenameCallback* callback = (const UIConfigLabelHierarchyRenameCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL);
+					set_callback(data->rename_action, data->rename_data, callback);
+				}
+
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_DOUBLE_CLICK_ACTION) {
+					const UIConfigLabelHierarchyDoubleClickCallback* callback = (const UIConfigLabelHierarchyDoubleClickCallback*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_DOUBLE_CLICK_ACTION);
+					set_callback(data->double_click_action, data->double_click_data, callback);
+				}
+
+				if (configuration & UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS) {
+					const UIConfigLabelHierarchyBasicOperations* operations = (const UIConfigLabelHierarchyBasicOperations*)config.GetParameter(UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS);
+					
+					if (operations->copy_handler.action != nullptr) {
+						data->copy_action = operations->copy_handler.action;
+						data->copy_data = operations->copy_handler.data;
+						if (operations->copy_handler.data_size > 0) {
+							data->copy_data = GetMainAllocatorBuffer(operations->copy_handler.data_size);
+							memcpy(data->copy_data, operations->copy_handler.data, operations->copy_handler.data_size);
+						}
+					}
+
+					if (operations->cut_handler.action != nullptr) {
+						data->cut_action = operations->cut_handler.action;
+						data->cut_data = operations->cut_handler.data;
+						if (operations->cut_handler.data_size > 0) {
+							data->cut_data = GetMainAllocatorBuffer(operations->cut_handler.data_size);
+							memcpy(data->cut_data, operations->cut_handler.data, operations->cut_handler.data_size);
+						}
+					}
+
+					if (operations->delete_handler.action != nullptr) {
+						data->delete_action = operations->delete_handler.action;
+						data->delete_data = operations->delete_handler.data;
+						if (operations->delete_handler.data_size > 0) {
+							data->delete_data = GetMainAllocatorBuffer(operations->delete_handler.data_size);
+							memcpy(data->delete_data, operations->delete_handler.data, operations->delete_handler.data_size);
+						}
+					}
+				}
+
+				// For dynamic resources we need to record the identifier to update the allocations made
+				if (configuration & UI_CONFIG_DYNAMIC_RESOURCE) {
+					void* allocation = GetMainAllocatorBuffer(identifier.size * sizeof(char));
+					uintptr_t ptr = (uintptr_t)allocation;
+					data->identifier.InitializeAndCopy(ptr, identifier);
+				}
+				else {
+					data->identifier = { nullptr, 0 };
+				}
+
+				const size_t MAX_CAPACITY = 128;
+				void* allocation = GetMainAllocatorBuffer(sizeof(char) * MAX_CAPACITY * 4);
+				uintptr_t ptr = (uintptr_t)allocation;
+				data->first_selected.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
+				data->last_selected.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
+				data->hovered_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
+				data->rename_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
+
+				return data;
+			});
+
+			return data;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -12508,6 +12664,22 @@ namespace ECSEngine {
 
 		void UIDrawer::SetCurrentY(float value) {
 			current_y = value;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::SetCurrentPositionToHeader()
+		{
+			SetCurrentX(region_position.x);
+			SetCurrentY(region_fit_space_vertical_offset - layout.next_row_y_offset);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::SetCurrentPositionToStart()
+		{
+			SetCurrentX(region_fit_space_horizontal_offset);
+			SetCurrentY(region_fit_space_vertical_offset);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -13984,9 +14156,17 @@ namespace ECSEngine {
 				position.y = AlignMiddle(position.y, current_row_y_scale, text_y_scale);
 			}
 
+			ECS_UI_ALIGN text_horizontal_alignment, text_vertical_alignment;
+			GetElementAlignment(configuration, config, text_horizontal_alignment, text_vertical_alignment);
+			if (text_horizontal_alignment != ECS_UI_ALIGN_LEFT || text_vertical_alignment != ECS_UI_ALIGN_TOP) {
+				// Get the text span
+				text_span = TextSpan(characters, font_size, character_spacing);
+				GetElementAlignedPosition(configuration, config, position, text_span);
+			}
+
 			size_t before_count = *text_sprite_count;
 			bool did_draw = true;
-			if (ValidatePositionY(configuration, position, { 0.0f, text_y_scale * 10 })) {
+			if (ValidatePositionY(configuration, position, { 0.0f, text_y_scale })) {
 				if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					bool invert_order = (vertical_alignment == ECS_UI_ALIGN_BOTTOM) || (horizontal_alignment == ECS_UI_ALIGN_RIGHT);
 					if (configuration & UI_CONFIG_VERTICAL) {
@@ -14618,7 +14798,7 @@ namespace ECSEngine {
 
 			Stream<char> identifier = drawer.HandleResourceIdentifier(name);
 			initialize(drawer.window_data, additional_data, &drawer, configuration);
-			drawer.system->AddWindowDrawerElement(drawer.window_index, identifier, drawer.last_initialized_element_allocations, drawer.last_initialized_element_table_resources);
+			drawer.system->AddWindowDynamicElement(drawer.window_index, identifier, drawer.last_initialized_element_allocations, drawer.last_initialized_element_table_resources);
 
 			// The last element initializations buffers must be manually deallocated
 			drawer.system->m_memory->Deallocate(drawer.last_initialized_element_allocations.buffer);
@@ -14662,9 +14842,16 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void InitializeFilesystemHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
+			UIDrawerInitializeFilesystemHierarchy* data = (UIDrawerInitializeFilesystemHierarchy*)additional_data;
+			drawer_ptr->FilesystemHierarchy(configuration, *data->config, data->identifier, data->labels);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		void InitializeLabelHierarchyElement(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration) {
 			UIDrawerInitializeLabelHierarchy* data = (UIDrawerInitializeLabelHierarchy*)additional_data;
-			drawer_ptr->LabelHierarchy(configuration, *data->config, data->identifier, data->labels);
+			drawer_ptr->LabelHierarchyInitializer(configuration, *data->config, data->name);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

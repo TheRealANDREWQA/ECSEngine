@@ -576,19 +576,6 @@ namespace ECSEngine {
 				system->m_focused_window_data.always_hoverable = true;
 				UIDefaultWindowHandler* default_handler_data = system->GetDefaultWindowHandlerData(window_index);
 				default_handler_data->ChangeCursor(ECS_CURSOR_IBEAM);
-
-				/*if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-					if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
-						system->m_application->WriteTextToClipboard(data->text->buffer);
-					}
-					else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
-						char characters[256];
-						unsigned int count = system->m_application->CopyTextFromClipboard(characters, 256);
-						count = function::Select(count > data->text->capacity, data->text->capacity, count);
-						data->DeleteAllCharacters();
-						data->InsertCharacters(characters, count, 0, system);
-					}
-				}*/
 			}
 		}
 
@@ -664,8 +651,6 @@ namespace ECSEngine {
 
 			UIDrawerComboBoxLabelClickable* data = (UIDrawerComboBoxLabelClickable*)_data;
 			*data->box->active_label = data->index;
-			data->box->is_opened = false;
-			data->box->has_been_destroyed = true;
 
 			if (data->box->callback != nullptr) {
 				action_data->data = data->box->callback_data;
@@ -731,6 +716,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerHierarchyDragNode* data = (UIDrawerHierarchyDragNode*)_data;
+			float dockspace_mask = GetDockspaceMaskFromType(dockspace_type);
 			if (!data->has_been_cancelled) {
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					data->selectable_data.hierarchy->selectable.selected_index = data->selectable_data.node_index;
@@ -1504,11 +1490,11 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void LabelHierarchySelectable(ActionData* action_data)
+		void FilesystemHierarchySelectable(ActionData* action_data)
 		{
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerLabelHierarchy* data = (UIDrawerLabelHierarchy*)_data;
+			UIDrawerFilesystemHierarchy* data = (UIDrawerFilesystemHierarchy*)_data;
 
 			if (mouse_tracker->LeftButton() == MBRELEASED && IsPointInRectangle(mouse_position, position, scale)) {
 				data->active_label.Copy(data->selected_label_temporary);
@@ -1524,21 +1510,21 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
-		void LabelHierarchyChangeState(ActionData* action_data)
+		void FilesystemHierarchyChangeState(ActionData* action_data)
 		{
 			UI_UNPACK_ACTION_DATA;
 
 			if (IsClickableTrigger(action_data)) {
-				UIDrawerLabelHierarchyChangeStateData* data = (UIDrawerLabelHierarchyChangeStateData*)_data;
+				UIDrawerFilesystemHierarchyChangeStateData* data = (UIDrawerFilesystemHierarchyChangeStateData*)_data;
 				ResourceIdentifier identifier(data->label.buffer, data->label.size);
 
-				UIDrawerLabelHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(identifier);
+				UIDrawerFilesystemHierarchyLabelData* node = data->hierarchy->label_states.GetValuePtr(identifier);
 				node->state = !node->state;
 				
 				PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));
 
 				action_data->data = data->hierarchy;
-				LabelHierarchySelectable(action_data);
+				FilesystemHierarchySelectable(action_data);
 			}
 		}
 
@@ -1833,7 +1819,7 @@ namespace ECSEngine {
 						memcpy((void*)((uintptr_t)remove_info + sizeof(UIDrawerTextInputRemoveCommandInfo)), backspace_text, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
-						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
+						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 					}
 				}
 
@@ -2475,7 +2461,6 @@ namespace ECSEngine {
 					handler_data.is_fixed = true;
 					handler_data.is_initialized = true;
 					handler_data.destroy_at_first_click = false;
-					handler_data.flag_destruction = &data->has_been_destroyed;
 					handler_data.name = COMBO_BOX_WINDOW_NAME;
 
 					UIActionHandler handler;
@@ -3026,13 +3011,18 @@ namespace ECSEngine {
 			UIDrawerMenuRightClickData* data = (UIDrawerMenuRightClickData*)_data;
 			if (mouse_tracker->RightButton() == MBRELEASED) {
 				if (data->action != nullptr) {
-					action_data->data = data->action_data;
+					if (data->is_action_data_ptr) {
+						action_data->data = data->action_data_ptr;
+					}
+					else {
+						action_data->data = data->action_data;
+					}
 					data->action(action_data);
 				}
 
 				if (system->GetWindowFromName(data->state.left_characters) != -1) {
 					// mouse position -2.0f -2.0f ensures that it will not fall into an existing 
-					// window and avoid destroy the windows
+					// window and avoid destroying the windows
 					system->HandleFocusedWindowCleanupGeneral({ -2.0f, -2.0f }, 0);
 					system->DeallocateGeneralHandler();
 					system->m_focused_window_data.ResetGeneralHandler();
@@ -3516,6 +3506,218 @@ namespace ECSEngine {
 
 			// Add the allocation to the window allocation list
 			system->AddWindowMemoryResource(persistent_buffer, window_index);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void LabelHierarchyChangeState(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			if (IsClickableTrigger(action_data)) {
+				LabelHierarchyChangeStateData* data = (LabelHierarchyChangeStateData*)_data;
+				Stream<char> label = data->GetCurrentLabel();
+
+				data->hierarchy_data->ChangeSelection(label, action_data);
+
+				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
+				unsigned int dynamic_index = -1;
+				if (data->hierarchy_data->identifier.size > 0) {
+					dynamic_index = system->GetWindowDynamicElement(window_index, data->hierarchy_data->identifier);
+				}
+
+				// Look to see if we need to remove it or add it
+				unsigned int opened_index = function::FindString(label, data->hierarchy_data->opened_labels);
+
+				const void* old_buffer = data->hierarchy_data->opened_labels.buffer;
+				if (opened_index == -1) {
+					// Allocate the label into the opened stream
+					void* allocation = system->m_memory->Allocate(label.size * sizeof(char), alignof(char));
+					label.CopyTo(allocation);
+					data->hierarchy_data->opened_labels.size++;
+					void* new_buffer_allocation = system->m_memory->Allocate(sizeof(Stream<char>) * data->hierarchy_data->opened_labels.size);
+
+					if (data->hierarchy_data->opened_labels.size > 1) {
+						memcpy(new_buffer_allocation, old_buffer, sizeof(Stream<char>) * (data->hierarchy_data->opened_labels.size - 1));
+						// Replace the buffer
+						system->ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer_allocation);
+						if (dynamic_index != -1) {
+							system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, new_buffer_allocation);
+						}
+
+						data->hierarchy_data->opened_labels.buffer = (Stream<char>*)new_buffer_allocation;
+					}
+					else {
+						// Must add this allocation
+						system->AddWindowMemoryResource(new_buffer_allocation, window_index);
+						if (dynamic_index != -1) {
+							system->AddWindowDynamicElementAllocation(window_index, dynamic_index, new_buffer_allocation);
+						}
+					}
+				}
+				else {
+					// Remove it or replace it
+					data->hierarchy_data->opened_labels.RemoveSwapBack(opened_index);
+					if (data->hierarchy_data->opened_labels.size > 0) {
+						// Replace
+						void* new_buffer_allocation = system->m_memory->Allocate(sizeof(Stream<char>) * data->hierarchy_data->opened_labels.size);
+						data->hierarchy_data->opened_labels.CopyTo(new_buffer_allocation);
+						system->ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer_allocation);
+						if (dynamic_index != -1) {
+							system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, new_buffer_allocation);
+						}
+						data->hierarchy_data->opened_labels.buffer = (Stream<char>*)new_buffer_allocation;
+					}
+					else {
+						// Remove
+						system->RemoveWindowMemoryResource(window_index, data->hierarchy_data->opened_labels.buffer);
+						if (dynamic_index != -1) {
+							system->RemoveWindowDynamicResourceAllocation(window_index, dynamic_index, data->hierarchy_data->opened_labels.buffer);
+						}
+					}
+				}
+
+				system->m_memory->Deallocate(old_buffer);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void LabelHierarchyRenameLabel(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+		
+			UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
+			UIDrawerLabelHierarchyRenameData rename_data;
+			rename_data.data = data->rename_data;
+			rename_data.new_label = data->rename_label;
+			rename_data.previous_label = data->selected_labels[0];
+
+			action_data->data = &rename_data;
+			data->rename_action(action_data);
+
+			data->is_rename_label = false;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void LabelHierarchyClickAction(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			const size_t double_click_milliseconds = 50;
+			const size_t drag_milliseconds = 100;
+
+			LabelHierarchyClickActionData* data = (LabelHierarchyClickActionData*)_data;
+			LabelHierarchyClickActionData* additional_data = (LabelHierarchyClickActionData*)_additional_data;
+
+			system->SetCleanupGeneralHandler();
+
+			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
+				Stream<char> label = data->GetCurrentLabel();
+
+				if (mouse_tracker->LeftButton() == MBPRESSED) {
+					if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
+						// If it is the same selected label, proceed with the double click action
+						if (data->hierarchy_data->selected_labels.size == 1 && function::CompareStrings(data->hierarchy_data->selected_labels[0], label)) {
+							size_t duration = additional_data->timer.GetDuration_ms();
+							if (duration < double_click_milliseconds) {
+								if (additional_data->click_count == 0) {
+									if (data->hierarchy_data->double_click_action != nullptr) {
+										// Call the double click action - if any
+										UIDrawerLabelHierarchyDoubleClickData double_click_data;
+										double_click_data.data = data->hierarchy_data->double_click_data;
+										double_click_data.label = data->hierarchy_data->selected_labels[0];
+										action_data->data = &double_click_data;
+										data->hierarchy_data->double_click_action(action_data);
+									}
+									data->click_count = 1;
+								}
+								else if (additional_data->click_count == 1) {
+									// The rename handler can now be called
+									if (data->hierarchy_data->rename_action != nullptr) {
+										data->hierarchy_data->is_rename_label = true;
+									}
+									data->click_count = 0;
+								}
+							}
+							else {
+								data->click_count = 0;
+							}
+						}
+						else {
+							data->click_count = 0;
+						}
+					}
+
+					// If ctrl is pressed, then add/remove else change the selected label
+					// If shift is pressed, activate the determine_selection
+					if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
+						data->hierarchy_data->determine_selection = true;
+						data->hierarchy_data->last_selected.Copy(label);
+					}
+					else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+						unsigned int index = function::FindString(label, data->hierarchy_data->selected_labels);
+						if (index != -1) {
+							// Remove it
+							data->hierarchy_data->RemoveSelection(label, action_data);
+						}
+						else {
+							// Add it
+							data->hierarchy_data->AddSelection(label, action_data);
+						}
+					}
+					else {
+						data->hierarchy_data->ChangeSelection(label, action_data);
+					}
+				}
+				else {
+					if (data->hierarchy_data->drag_action != nullptr) {
+						if (data->timer.GetDuration_ms() >= drag_milliseconds && !IsPointInRectangle(mouse_position, position, scale)) {
+							if (mouse_tracker->LeftButton() == MBHELD) {
+								data->hierarchy_data->is_dragging = true;
+							}
+							else if (mouse_tracker->LeftButton() == MBRELEASED) {
+								data->hierarchy_data->is_dragging = false;
+								// Call the drag handler now, only if a label if hovered
+								if (data->hierarchy_data->hovered_label.size > 0) {
+									if (!data->hierarchy_data->reject_same_label_drag || function::FindString(label, data->hierarchy_data->selected_labels) == -1) {
+										UIDrawerLabelHierarchyDragData drag_data;
+										drag_data.data = data->hierarchy_data->drag_data;
+										drag_data.destination_label = data->hierarchy_data->hovered_label;
+										drag_data.source_label = data->hierarchy_data->selected_labels;
+
+										action_data->data = &drag_data;
+										data->hierarchy_data->drag_action(action_data);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			else {
+				data->hierarchy_data->ClearSelection(action_data);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void LabelHierarchyRightClickAction(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerLabelHierarchyRightClickData* data = (UIDrawerLabelHierarchyRightClickData*)_data;
+
+			// Change the selected label to this one
+			Stream<char> label = data->GetLabel();
+			unsigned int selected_index = function::FindString(label, data->hierarchy->selected_labels);
+			if (selected_index == -1) {
+				data->hierarchy->ChangeSelection(label, action_data);
+			}
+
+			data->data = data->hierarchy->right_click_data;
+			data->hierarchy->right_click_action(action_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

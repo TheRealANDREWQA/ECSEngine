@@ -180,7 +180,7 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ConsoleWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
-		constexpr const char* CONSOLE_WINDOW_NAME = "Console";	
+		#define CONSOLE_WINDOW_NAME "Console"	
 
 		struct ECSENGINE_API UniqueConsoleMessage {
 			ConsoleMessage message;

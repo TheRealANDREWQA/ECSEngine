@@ -1,22 +1,18 @@
 #pragma once
-
 #include <memory>
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
 #include <immintrin.h>
-#include <iostream>
-#include <execution>
-#include <string>
 #include <chrono>
 #include <comdef.h>
 #include <atomic>
-#include <condition_variable>
 #include <assert.h>
 #include <type_traits>
 #include <io.h>
 #include <direct.h>
 #include <fcntl.h>
+#include <thread>
 #include <sys/types.h>
 #include <sys/stat.h>
 

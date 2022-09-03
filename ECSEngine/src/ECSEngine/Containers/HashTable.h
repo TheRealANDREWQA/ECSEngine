@@ -1,11 +1,10 @@
 #pragma once
-#include "ecspch.h"
 #include "../Core.h"
 #include "../Math/VCLExtensions.h"
 #include "Hashing.h"
 
 #ifndef ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR
-#define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 90
+#define ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR 95
 #endif
 
 namespace ECSEngine {
@@ -61,16 +60,19 @@ namespace ECSEngine {
 			unsigned char key_hash_bits = key;
 			key_hash_bits &= ECS_HASH_TABLE_HASH_BITS_MASK;
 
-			Vec32uc key_bits(key_hash_bits), elements, ignore_distance(ECS_HASH_TABLE_HASH_BITS_MASK);
-			// Only elements that hashed to this slot should be checked
-			Vec32uc corresponding_distance(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
+			//
+			//  key_bits(key_hash_bits), elements, ignore_distance(ECS_HASH_TABLE_HASH_BITS_MASK);
+			//// Only elements that hashed to this slot should be checked
+			//Vec32uc corresponding_distance(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
 
-			// Exclude elements that have distance different from the distance to the current slot
-			elements.load(m_metadata + index);				
-			Vec32uc element_hash_bits = elements & ignore_distance;
-			auto are_hashed_to_same_slot = (elements >> 3) == corresponding_distance;
-			auto match = element_hash_bits == key_bits;
-			match &= are_hashed_to_same_slot;
+			//// Exclude elements that have distance different from the distance to the current slot
+			//elements.load(m_metadata + index);				
+			//Vec32uc element_hash_bits = elements & ignore_distance;
+			//auto are_hashed_to_same_slot = (elements >> 3) == corresponding_distance;
+			//auto match = element_hash_bits == key_bits;
+			//match &= are_hashed_to_same_slot;
+
+			Vec32cb match = HashTableFindSIMDKernel(index, m_metadata, key_hash_bits, ECS_HASH_TABLE_HASH_BITS_MASK);
 
 			unsigned int return_value = -1;
 			ForEachBit(match, [&](unsigned int bit_index) {
@@ -587,9 +589,9 @@ namespace ECSEngine {
 			memcpy(allocation, table->GetAllocatedBuffer(), table_size);
 		}
 
-		// It will set the buffers accordingly to the buffer. It does not modify anything
+		// It will set the internal hash buffers accordingly to the new hash buffer. It does not modify anything
 		// This function is used mostly for serialization, deserialization purposes
-		void SetBuffers(void* buffer, unsigned int capacity) {
+		void SetBuffers(void* buffer, const unsigned int capacity) {
 			unsigned int extended_capacity = capacity + 31;
 
 			uintptr_t ptr = (uintptr_t)buffer;

@@ -9,6 +9,7 @@
 
 // The UI needs to be included because we need to notify it when we destroy a sandbox
 #include "../UI/Sandbox.h"
+#include "../UI/EntitiesUI.h"
 
 using namespace ECSEngine;
 
@@ -29,13 +30,26 @@ struct SandboxFileHeader {
 	size_t count;
 };
 
+// -----------------------------------------------------------------------------------------------------------------------------
+
 EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	return editor_state->sandboxes.buffer + sandbox_index;
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------
+
 const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index) {
 	return editor_state->sandboxes.buffer + sandbox_index;
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->run_state;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
 
 bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
 	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
@@ -267,6 +281,12 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
 	editor_state->sandboxes.size++;
 
+	sandbox->should_pause = true;
+	sandbox->should_play = true;
+	sandbox->should_step = true;
+
+	sandbox->run_state = EDITOR_SANDBOX_SCENE;
+
 	// Initialize the runtime settings string
 	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
 	sandbox->runtime_descriptor.mouse = editor_state->Mouse();
@@ -347,6 +367,7 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	if (editor_state->sandboxes.size > 0) {
 		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
 		UpdateSandboxUIWindowIndex(editor_state, previous_count, sandbox_index);
+		UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
 	}
 
 	RegisterInspectorSandbox(editor_state);
@@ -712,8 +733,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				ChangeSandboxRuntimeSettings(editor_state, index, { nullptr, 0 });
 			}
 
-			sandbox->database = sandboxes[index].database.Copy(GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
-			sandbox->database.database = &editor_state->asset_database;
+			sandbox->database = AssetDatabaseReference(&editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
 
 			// Now the modules
 			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {

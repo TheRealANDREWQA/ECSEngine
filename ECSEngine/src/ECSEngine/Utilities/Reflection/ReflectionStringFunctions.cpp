@@ -637,17 +637,17 @@ namespace ECSEngine {
 			basic_type = ReflectionBasicFieldType::UserDefined;
 			stream_type = ReflectionStreamFieldType::Basic;
 
-			const char* opened_bracket = strchr(string.buffer, '<');
-			const char* closed_bracket = strchr(string.buffer, '>');
+			Stream<char> opened_bracket = function::FindFirstCharacter(string, '<');
+			Stream<char> closed_bracket = function::FindFirstCharacter(string, '>');
 
-			if (opened_bracket != nullptr) {
-				opened_bracket = function::SkipWhitespace(opened_bracket + 1);
-				closed_bracket = function::SkipWhitespace(closed_bracket - 1, -1);
+			if (opened_bracket.buffer != nullptr) {
+				opened_bracket.buffer = (char*)function::SkipWhitespace(opened_bracket.buffer + 1);
+				closed_bracket.buffer = (char*)function::SkipWhitespace(closed_bracket.buffer - 1, -1);
 
-				basic_type = ConvertStringToBasicFieldType({ opened_bracket, function::PointerDifference(closed_bracket, opened_bracket) - 1 });
+				basic_type = ConvertStringToBasicFieldType({ opened_bracket.buffer, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
 
-				const char* asterisk = strchr(opened_bracket, '*');
-				if (asterisk == nullptr) {
+				Stream<char> asterisk = function::FindFirstCharacter(opened_bracket, '*');
+				if (asterisk.buffer == nullptr) {
 					if (memcmp(string.buffer, "Stream<", sizeof("Stream<") - 1) == 0) {
 						stream_type = ReflectionStreamFieldType::Stream;
 					}
@@ -663,15 +663,15 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				const char* asterisk = strchr(string.buffer, '*');
-				if (asterisk == nullptr) {
+				Stream<char> asterisk = function::FindFirstCharacter(string.buffer, '*');
+				if (asterisk.buffer == nullptr) {
 					basic_type = ConvertStringToBasicFieldType(string);
 				}
 				else {
 					stream_type = ReflectionStreamFieldType::Pointer;
 
-					asterisk = function::SkipWhitespace(asterisk - 1, -1);
-					basic_type = ConvertStringToBasicFieldType({ string.buffer, function::PointerDifference(asterisk, string.buffer) });
+					asterisk.buffer = (char*)function::SkipWhitespace(asterisk.buffer - 1, -1);
+					basic_type = ConvertStringToBasicFieldType({ string.buffer, function::PointerDifference(asterisk.buffer, string.buffer) });
 				}
 			}
 

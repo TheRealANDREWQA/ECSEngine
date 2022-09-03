@@ -9,6 +9,10 @@ namespace ECSEngine {
 
 	struct AssetDatabase;
 
+	namespace Reflection {
+		struct ReflectionManager;
+	}
+
 	struct ECSENGINE_API ECS_REFLECT AssetDatabaseReference {
 		AssetDatabaseReference();
 		AssetDatabaseReference(AssetDatabase* database, AllocatorPolymorphic allocator);
@@ -78,6 +82,26 @@ namespace ECSEngine {
 
 		// Increases the reference count of all assets by one
 		void IncrementReferenceCounts();
+
+		// Converts a standalone database into a reference to the one being stored.
+		void FromStandalone(const AssetDatabase* database);
+
+		// Creates a standalone database from the referenced assets.
+		void ToStandalone(AllocatorPolymorphic allocator, AssetDatabase* database) const;
+
+		bool SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) const;
+
+		bool SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) const;
+
+		// Returns the amount of bytes needed to write the data. Returns -1 an error occurs
+		size_t SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const;
+
+		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file);
+
+		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr);
+
+		// Returns the amount of bytes needed for the buffers. Returns -1 in case an error occurs
+		static size_t DeserializeSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr);
 
 		ECS_FIELDS_START_REFLECT;
 
