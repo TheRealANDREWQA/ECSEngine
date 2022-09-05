@@ -21,9 +21,7 @@ struct EditorState;
 
 typedef void (*EditorStateTick)(EditorState*);
 
-#define EDITOR_SCENE_BUFFERING_COUNT 3
-
-enum EDITOR_LAZY_EVALUATION_COUNTERS {
+enum EDITOR_LAZY_EVALUATION_COUNTERS : unsigned char {
 	EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER,
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES,
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL,
@@ -33,6 +31,16 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS {
 	EDITOR_LAZY_EVALUATION_RESET_TASK_MANAGER,
 	EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS,
 	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT,
+};
+
+enum EDITOR_STATE_FLAGS : unsigned char {
+	EDITOR_STATE_DO_NOT_ADD_TASKS,
+	EDITOR_STATE_IS_PLAYING,
+	EDITOR_STATE_IS_PAUSED,
+	EDITOR_STATE_IS_STEP,
+	EDITOR_STATE_FREEZE_TICKS,
+	EDITOR_STATE_PREVENT_LAUNCH,
+	EDITOR_STATE_FLAG_COUNT
 };
 
 struct EditorState {
@@ -114,10 +122,13 @@ struct EditorState {
 	// A queue onto which GPU tasks can be placed in order to be consumed on the immediate context
 	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> gpu_tasks;
 	
+	// There is no cache line padding. So false sharing is at play here. But there shouldn't be much
+	// crossover between these flags (if one is activated the others most likely are not)
+	std::atomic<size_t> flags[EDITOR_STATE_FLAG_COUNT];
+
+	// Lazy evaluation counters
 	unsigned short* lazy_evaluation_counters;
 	ECSEngine::Timer lazy_evalution_timer;
-	std::atomic<size_t> flags = 0;
-	bool inject_window_is_pop_up_window = false;
 };
 
 void EditorSetConsoleError(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MEDIUM);
@@ -128,17 +139,13 @@ void EditorSetConsoleInfo(ECSEngine::Stream<char> error_message, ECSEngine::ECS_
 
 void EditorSetConsoleTrace(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MINIMAL);
 
-#define EDITOR_STATE_DO_NOT_ADD_TASKS (1 << 0)
-#define EDITOR_STATE_IS_PLAYING (1 << 1)
-#define EDITOR_STATE_IS_PAUSED (1 << 2)
-#define EDITOR_STATE_STEP (1 << 3)
-#define EDITOR_STATE_FREEZE_TICKS (1 << 4)
+// These are reference counted, can be called multiple times
+void EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
-void EditorStateSetFlag(EditorState* editor_state, size_t flag);
+// These are reference counted, can be called multiple times
+void EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
-void EditorStateClearFlag(EditorState* editor_state, size_t flag);
-
-bool EditorStateHasFlag(const EditorState* editor_state, size_t flag);
+bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
 void EditorStateProjectTick(EditorState* editor_state);
 
@@ -151,8 +158,6 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 
 // It will place the task into the GPU tasks queue. It will be consumed later on
 void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task);
-
-bool EditorStateDoNotAddBackgroundTasks(EditorState* editor_state);
 
 void EditorStateInitialize(ECSEngine::Application* application, EditorState* editor_state, HWND hWnd, ECSEngine::HID::Mouse& mouse, ECSEngine::HID::Keyboard& keyboard);
 

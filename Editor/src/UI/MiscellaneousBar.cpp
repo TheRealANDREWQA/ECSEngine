@@ -51,7 +51,7 @@ void StepProjectAction(ActionData* action_data) {
 
 	EditorState* editor_state = (EditorState*)_data;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
-		EditorStateSetFlag(editor_state, EDITOR_STATE_STEP);
+		EditorStateSetFlag(editor_state, EDITOR_STATE_IS_STEP);
 	}
 	else {
 		EditorSetConsoleWarn("Could not step the runtime - the runtime is not yet paused");
@@ -104,7 +104,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 
 	float2 scaled_scale;
 	float2 scaled_position;
-	if (function::HasFlag(editor_state->flags, EDITOR_STATE_IS_PLAYING)) {
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
 		scaled_position = ExpandRectangle(transform.position, transform.scale, { stop_scale_factor, stop_scale_factor }, scaled_scale);
 		drawer.SpriteRectangle(configuration, scaled_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
 		drawer.TextToolTip("Stop", transform.position, transform.scale, &base_tool_tip);
@@ -147,7 +147,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	float2 triangle_position = { scaled_position.x + transform.scale.x * 1.85f, scaled_position.y };
 
 	Color frame_color = drawer.color_theme.unavailable_text;
-	if (function::HasFlag(editor_state->flags, EDITOR_STATE_IS_PAUSED)) {
+	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		frame_color = EDITOR_GREEN_COLOR;
 		drawer.AddDefaultClickableHoverable(transform.position, action_scale, { StepProjectAction, nullptr, 0 });
 		drawer.TextToolTip("Frame", transform.position, transform.scale, &base_tool_tip);

@@ -211,10 +211,10 @@ namespace ECSEngine {
 		}
 
 		const size_t MAX_COMPONENTS = 32;
-		ECS_STACK_CAPACITY_STREAM(ModuleSerializeExtractComponent, serialize_components, MAX_COMPONENTS);
-		ECS_STACK_CAPACITY_STREAM(ModuleDeserializeExtractComponent, deserialize_components, MAX_COMPONENTS);
-		ECS_STACK_CAPACITY_STREAM(ModuleSerializeExtractSharedComponent, serialize_shared_components, MAX_COMPONENTS);
-		ECS_STACK_CAPACITY_STREAM(ModuleDeserializeExtractSharedComponent, deserialize_shared_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerComponentInfo, serialize_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(DeserializeEntityManagerComponentInfo, deserialize_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerSharedComponentInfo, serialize_shared_components, MAX_COMPONENTS);
+		ECS_STACK_CAPACITY_STREAM(DeserializeEntityManagerSharedComponentInfo, deserialize_shared_components, MAX_COMPONENTS);
 
 		const size_t TEMP_MEMORY_SIZE = ECS_KB * 8;
 		char _temp_memory[TEMP_MEMORY_SIZE];
@@ -236,21 +236,17 @@ namespace ECSEngine {
 		ECS_ASSERT(serialize_shared_components.size == deserialize_shared_components.size);
 
 		// Make a single coallesced allocation
-		size_t total_memory = sizeof(ModuleSerializeExtractComponent) * serialize_components.size
-			+ sizeof(ModuleDeserializeExtractComponent) * deserialize_components.size
-			+ sizeof(ModuleSerializeExtractSharedComponent) * serialize_shared_components.size
-			+ sizeof(ModuleDeserializeExtractSharedComponent) * deserialize_shared_components.size
-			+ temp_memory.m_top;
+		size_t total_memory = StreamDeepCopySize(serialize_components) + StreamDeepCopySize(deserialize_components) + StreamDeepCopySize(serialize_shared_components)
+			+ StreamDeepCopySize(deserialize_shared_components);
 
 		ModuleSerializeComponentStreams streams;
 		void* allocation = AllocateEx(allocator, total_memory);
 		uintptr_t buffer = (uintptr_t)allocation;
-		streams.serialize_components.InitializeAndCopy(buffer, serialize_components);
-		streams.deserialize_components.InitializeAndCopy(buffer, deserialize_components);
-		streams.serialize_shared_components.InitializeAndCopy(buffer, serialize_shared_components);
-		streams.deserialize_shared_components.InitializeAndCopy(buffer, deserialize_shared_components);
-		streams.extra_data.InitializeFromBuffer(buffer, temp_memory.m_top);
-		memcpy(streams.extra_data.buffer, temp_memory.m_buffer, temp_memory.m_top);
+
+		streams.serialize_components = StreamDeepCopy(serialize_components, buffer);
+		streams.deserialize_components = StreamDeepCopy(deserialize_components, buffer);
+		streams.serialize_shared_components = StreamDeepCopy(serialize_shared_components, buffer);
+		streams.deserialize_shared_components = StreamDeepCopy(deserialize_shared_components, buffer);
 
 		if (streams.serialize_components.size == 0) {
 			streams.serialize_components.buffer = nullptr;
@@ -266,10 +262,6 @@ namespace ECSEngine {
 
 		if (streams.deserialize_shared_components.size == 0) {
 			streams.deserialize_shared_components.buffer = nullptr;
-		}
-
-		if (streams.extra_data.size == 0) {
-			streams.extra_data.buffer = temp_memory.m_buffer;
 		}
 
 		return streams;

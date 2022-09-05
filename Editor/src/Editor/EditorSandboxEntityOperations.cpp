@@ -35,7 +35,7 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	Component component = FindComponentID(editor_state, component_name);
+	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			entity_manager->AddComponentCommit(entity, component);
@@ -52,7 +52,7 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	Component component = FindSharedComponentID(editor_state, component_name);
+	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			entity_manager->AddSharedComponentCommit(entity, component, SharedInstance{ 0 });
@@ -132,79 +132,6 @@ void DeleteSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-template<typename EngineFunctor>
-Component FindComponentIDImpl(const EditorState* editor_state, Stream<char> component_name, EngineFunctor&& functor) {
-	// Use the reflection manager from the modules to see if the component is from those modules
-	// Else check engine components
-	Reflection::ReflectionType reflection_type;
-	if (editor_state->module_reflection->reflection->TryGetType(component_name, reflection_type)) {
-		// Get the evaluation
-		double id_evaluation = reflection_type.GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
-		if (id_evaluation == DBL_MAX) {
-			// No evaluation, fail
-			return { (unsigned short)-1 };
-		}
-		else {
-			return { (unsigned short)id_evaluation };
-		}
-	}
-	else {
-		// Check engine components
-		unsigned short id = functor(editor_state, component_name);
-		return { id };
-	}
-}
-
-template<typename EngineFunctor>
-unsigned int FindComponentByteSizeImpl(const EditorState* editor_state, Stream<char> component_name, EngineFunctor&& functor) {
-	// Use the reflection manager from the modules to see if the component is from those modules
-	// Else check engine components
-	Reflection::ReflectionType reflection_type;
-	if (editor_state->module_reflection->reflection->TryGetType(component_name, reflection_type)) {
-		return (unsigned int)Reflection::GetReflectionTypeByteSize(&reflection_type);
-	}
-	else {
-		// Check engine components
-		return functor(editor_state, component_name);
-	}
-}
-
-Component FindComponentID(const EditorState* editor_state, Stream<char> component_name)
-{
-	return FindComponentIDImpl(editor_state, component_name, [](const EditorState* editor_state, Stream<char> component_name) {
-		return editor_state->editor_components.GetComponentID(component_name);
-	});
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-Component FindSharedComponentID(const EditorState* editor_state, Stream<char> component_name)
-{
-	return FindComponentIDImpl(editor_state, component_name, [](const EditorState* editor_state, Stream<char> component_name) {
-		return editor_state->editor_components.GetSharedComponentID(component_name);
-	});
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-unsigned int FindComponentByteSize(const EditorState* editor_state, Stream<char> component_name)
-{
-	return FindComponentByteSizeImpl(editor_state, component_name, [](const EditorState* editor_state, Stream<char> component_name) {
-		return editor_state->editor_components.GetComponentByteSize(component_name);
-	});
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-unsigned int FindSharedComponentByteSize(const EditorState* editor_state, Stream<char> component_name)
-{
-	return FindComponentByteSizeImpl(editor_state, component_name, [](const EditorState* editor_state, Stream<char> component_name) {
-		return editor_state->editor_components.GetSharedComponentByteSize(component_name);
-	});
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
 ComponentSignature EntityUniqueComponents(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -260,7 +187,7 @@ void RemoveSandboxEntityComponent(EditorState* editor_state, unsigned int sandbo
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 
 	if (entity_manager->ExistsEntity(entity)) {
-		Component component = FindComponentID(editor_state, component_name);
+		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasComponent(entity, component)) {
 			entity_manager->RemoveComponentCommit(entity, { &component, 1 });
 		}
@@ -274,7 +201,7 @@ void RemoveSandboxEntitySharedComponent(EditorState* editor_state, unsigned int 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 
 	if (entity_manager->ExistsEntity(entity)) {
-		Component component = FindSharedComponentID(editor_state, component_name);
+		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasSharedComponent(entity, component)) {
 			entity_manager->RemoveSharedComponentCommit(entity, { &component, 1 });
 		}

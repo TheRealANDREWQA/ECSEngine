@@ -26,10 +26,13 @@ namespace ECSEngine {
 
 		void* Allocate(size_t size, size_t alignment = 8);
 
+		bool Belongs(const void* buffer) const;
+
+		// Deallocates everything (as if nothing is allocated)
+		void Clear();
+
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate(const void* block);
-
-		bool Belongs(const void* buffer) const;
 
 		// ----------------------------------------  Thread safe --------------------------------------------------------
 

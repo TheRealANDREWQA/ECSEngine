@@ -70,47 +70,27 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	struct ModuleSerializeExtractComponent {
-		SerializeEntityManagerComponentInfo function;
-		Component component;
-	};
-
-	struct ModuleSerializeExtractSharedComponent {
-		SerializeEntityManagerSharedComponentInfo function;
-		Component component;
-	};
-
-	struct ModuleDeserializeExtractComponent {
-		DeserializeEntityManagerComponentInfo function;
-		Component component;
-	};
-
-	struct ModuleDeserializeExtractSharedComponent {
-		DeserializeEntityManagerSharedComponentInfo function;
-		Component component;
-	};
-
 	struct ModuleSerializeComponentStreams {
 		inline const void* GetAllocatedBuffer() const {
 			return serialize_components.buffer;
 		}
 
-		Stream<ModuleSerializeExtractComponent> serialize_components;
-		Stream<ModuleSerializeExtractSharedComponent> serialize_shared_components;
-		Stream<ModuleDeserializeExtractComponent> deserialize_components;
-		Stream<ModuleDeserializeExtractSharedComponent> deserialize_shared_components;
-		Stream<void> extra_data;
+		Stream<SerializeEntityManagerComponentInfo> serialize_components;
+		Stream<SerializeEntityManagerSharedComponentInfo> serialize_shared_components;
+		Stream<DeserializeEntityManagerComponentInfo> deserialize_components;
+		Stream<DeserializeEntityManagerSharedComponentInfo> deserialize_shared_components;
 	};
 
 	struct ModuleSerializeComponentFunctionData {
-		CapacityStream<ModuleSerializeExtractComponent>* serialize_components;
-		CapacityStream<ModuleSerializeExtractSharedComponent>* serialize_shared_components;
-		CapacityStream<ModuleDeserializeExtractComponent>* deserialize_components;
-		CapacityStream<ModuleDeserializeExtractSharedComponent>* deserialize_shared_components;
+		CapacityStream<SerializeEntityManagerComponentInfo>* serialize_components;
+		CapacityStream<SerializeEntityManagerSharedComponentInfo>* serialize_shared_components;
+		CapacityStream<DeserializeEntityManagerComponentInfo>* deserialize_components;
+		CapacityStream<DeserializeEntityManagerSharedComponentInfo>* deserialize_shared_components;
 		AllocatorPolymorphic allocator;
 	};
 
 	// With this function the module can override the default serialization (bit blitting) of the components into a custom serialization.
+	// The names must be used to refer to the component that is being overridden
 	typedef void (*ModuleSerializeComponentFunction)(
 		ModuleSerializeComponentFunctionData* data
 	);

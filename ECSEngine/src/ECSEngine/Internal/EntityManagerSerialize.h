@@ -53,6 +53,7 @@ namespace ECSEngine {
 	// If the indices are unspecified, it will go through all hierarchies
 	// Can specify overrides such that they get ignored when searching. Both overrides and override_components
 	// need to be specified in sync if the overrides don't contain the name of the type
+	// It doesn't add the overrides!
 	ECSENGINE_API void CreateSerializeEntityManagerComponentTable(
 		SerializeEntityManagerComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
@@ -68,6 +69,7 @@ namespace ECSEngine {
 	// If the indices are unspecified, it will go through all hierarchies
 	// Can specify overrides such that they get ignored when searching. Both overrides and override_components
 	// need to be specified in sync if the overrides don't contain the name of the type
+	// It doesn't add the overrides!
 	ECSENGINE_API void CreateSerializeEntityManagerSharedComponentTable(
 		SerializeEntityManagerSharedComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
@@ -83,6 +85,7 @@ namespace ECSEngine {
 	// If the indices are unspecified, it will go through all hierarchies
 	// Can specify overrides such that they get ignored when searching. Both overrides and override_components
 	// need to be specified in sync if the overrides don't contain the name of the type
+	// It doesn't add the overrides!
 	ECSENGINE_API void CreateDeserializeEntityManagerComponentTable(
 		DeserializeEntityManagerComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
@@ -98,6 +101,7 @@ namespace ECSEngine {
 	// If the indices are unspecified, it will go through all hierarchies
 	// Can specify overrides such that they get ignored when searching. Both overrides and override_components
 	// need to be specified in sync if the overrides don't contain the name of the type
+	// It doesn't add the overrides!
 	ECSENGINE_API void CreateDeserializeEntityManagerSharedComponentTable(
 		DeserializeEntityManagerSharedComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,

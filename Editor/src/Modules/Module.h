@@ -159,6 +159,11 @@ void GetModuleReflectionAllComponentIndices(
 	CapacityStream<unsigned int>* shared_indices
 );
 
+// Returns the most suitable configuration. The rules are like this. Find the first GOOD configuration (from distribution to debug).
+// If found return it. If none is found, find the first OUT_OF_DATE configuration (also from distribution to debug). If found, return it.
+// If all are not loaded, then return EDITOR_MODULE_CONFIGURATION_COUNT
+EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* editor_state, unsigned int module_index);
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);

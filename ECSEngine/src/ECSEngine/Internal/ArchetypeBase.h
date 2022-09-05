@@ -10,7 +10,8 @@ namespace ECSEngine {
 	struct MemoryManager;
 
 	struct ECSENGINE_API ArchetypeBase {
-	public:
+		ArchetypeBase();
+
 		// The small memory manager is used for the chunks resizable stream
 		// In order to not put pressure and fragment the main memory manager
 		ArchetypeBase(
@@ -138,7 +139,6 @@ namespace ECSEngine {
 		// It will index directly into the component and copy the data
 		void UpdateComponentByIndex(unsigned int stream_index, unsigned char component_index, const void* data);
 
-	//public:
 		MemoryManager* m_memory_manager;
 		Entity* m_entities;
 		void** m_buffers;

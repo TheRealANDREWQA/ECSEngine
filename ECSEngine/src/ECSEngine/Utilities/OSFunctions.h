@@ -204,6 +204,25 @@ namespace ECSEngine {
 		// Uses the console to print the message
 		ECSENGINE_API void OpenFileWithDefaultApplicationWithError(Stream<wchar_t> path);
 
+		// The path must be initialized
+		struct FileExplorerGetFileData {
+			CapacityStream<wchar_t> path;
+			CapacityStream<char> error_message = { nullptr, 0, 0 };
+			const wchar_t* initial_directory = nullptr;
+			Stream<Stream<wchar_t>> extensions = { nullptr, 0 };
+			HWND hWnd = NULL;
+		};
+
+		// The path must be initialized
+		struct FileExplorerGetDirectoryData {
+			CapacityStream<wchar_t> path;
+			CapacityStream<char> error_message = { nullptr, 0, 0 };
+		};
+
+		ECSENGINE_API bool FileExplorerGetFile(FileExplorerGetFileData* data);
+
+		ECSENGINE_API bool FileExplorerGetDirectory(FileExplorerGetDirectoryData* data);
+
 #pragma endregion
 
 	}

@@ -80,6 +80,11 @@ namespace ECSEngine {
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		bool RemoveAsset(unsigned int index, ECS_ASSET_TYPE type);
 
+		// Clears all the assets that are inside. It doesn't decrement the reference count of the assets
+		// that are alive inside.
+		// All of them should be evicted from memory before calling this function
+		void Reset();
+
 		// Increases the reference count of all assets by one
 		void IncrementReferenceCounts();
 
@@ -93,11 +98,16 @@ namespace ECSEngine {
 
 		bool SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) const;
 
+		// It will determine the serialization size and then allocate a buffer and write into it and returns it.
+		// It returns { nullptr, 0 } if it fails
+		Stream<void> SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const;
+
 		// Returns the amount of bytes needed to write the data. Returns -1 an error occurs
 		size_t SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const;
 
 		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file);
 
+		// Assumes a valid allocator was set before hand on this database
 		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr);
 
 		// Returns the amount of bytes needed for the buffers. Returns -1 in case an error occurs

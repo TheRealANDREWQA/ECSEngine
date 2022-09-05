@@ -1043,7 +1043,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 	// The template parameter of the stream must have as functions
 	// size_t CopySize() const;
-	// void CopyTo(uintptr_t& ptr);
+	// T CopyTo(uintptr_t& ptr);
 	// If copy size returns 0, it assumes it needs no buffers and does not call
 	// the copy function.
 	template<typename Stream>

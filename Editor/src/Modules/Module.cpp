@@ -1111,6 +1111,26 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* editor_state, unsigned int module_index)
+{
+	const EditorModule* module = editor_state->project_modules->buffer + module_index;
+	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
+		if (module->infos[EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index].load_status == EDITOR_MODULE_LOAD_GOOD) {
+			return (EDITOR_MODULE_CONFIGURATION)(EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index);
+		}
+	}
+
+	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
+		if (module->infos[EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index].load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
+			return (EDITOR_MODULE_CONFIGURATION)(EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index);
+		}
+	}
+
+	return EDITOR_MODULE_CONFIGURATION_COUNT;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	ECS_TEMP_STRING(library_path, 256);

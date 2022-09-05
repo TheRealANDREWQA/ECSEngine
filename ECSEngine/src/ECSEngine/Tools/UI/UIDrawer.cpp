@@ -10542,6 +10542,21 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		UIDrawerRowLayout UIDrawer::GenerateRowLayout()
+		{
+			UIDrawerRowLayout row_layout;
+			
+			row_layout.drawer = this;
+			row_layout.current_index = 0;
+			row_layout.element_count = 0;
+			row_layout.indentation = layout.element_indentation;
+			row_layout.row_scale = { GetXScaleUntilBorder(current_x), layout.default_element_y };
+
+			return row_layout;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		float UIDrawer::GetDefaultBorderThickness() const {
 			return system->m_descriptors.dockspaces.border_size;
 		}
@@ -15343,6 +15358,206 @@ namespace ECSEngine {
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::AddElement(size_t transform_type, float2 parameters)
+		{
+			if (current_index > 0) {
+				indentations[current_index - 1] = indentation;
+			}
+
+			if (transform_type & UI_CONFIG_ABSOLUTE_TRANSFORM) {
+				if (parameters.y == 0.0f) {
+					parameters.y = row_scale.y;
+				}
+				element_sizes[current_index] = parameters;
+				element_transform_types[current_index] = UI_CONFIG_ABSOLUTE_TRANSFORM;
+				UpdateRowYScale(parameters.y);
+			}
+			else if (transform_type & UI_CONFIG_RELATIVE_TRANSFORM) {
+				if (parameters.y == 0.0f) {
+					parameters.y = row_scale.y / drawer->layout.default_element_y;
+				}
+				element_sizes[current_index] = parameters * float2(drawer->layout.default_element_x, drawer->layout.default_element_y);
+				element_transform_types[current_index] = UI_CONFIG_RELATIVE_TRANSFORM;
+				float expanded_scale = parameters.y * drawer->layout.default_element_y;
+				UpdateRowYScale(expanded_scale);
+			}
+			else if (transform_type & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+				element_transform_types[current_index] = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+				if (parameters.y == 0.0f) {
+					parameters.y = row_scale.y / drawer->layout.default_element_y;
+				}
+				element_sizes[current_index].y = parameters.y * drawer->layout.default_element_y;
+			}
+			else if (transform_type & UI_CONFIG_MAKE_SQUARE) {
+				element_transform_types[current_index] = UI_CONFIG_MAKE_SQUARE;
+				parameters.y = parameters.y == 0.0f ? row_scale.y : parameters.y;
+				UpdateRowYScale(parameters.y);
+				element_sizes[current_index] = drawer->GetSquareScale(parameters.y < row_scale.y ? parameters.y : row_scale.y);
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+
+			current_index++;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::AddLabel(Stream<char> characters)
+		{
+			float2 scale = drawer->GetLabelScale(characters);
+			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM, scale);
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::AddSquareLabel(float label_size)
+		{
+			AddElement(UI_CONFIG_MAKE_SQUARE, { 0.0f, label_size });
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::AddComboBox(Stream<Stream<char>> labels, Stream<char> name, Stream<char> prefix)
+		{
+			float combo_scale = drawer->ComboBoxDefaultSize(labels, name, prefix);
+			AddElement(UI_CONFIG_ABSOLUTE_TRANSFORM, { combo_scale, row_scale.y });
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::CombineLastElements(unsigned int count)
+		{
+			ECS_ASSERT(count <= current_index);
+
+			for (unsigned int index = 0; index < count - 1; index++) {
+				indentations[current_index - 1 - index] = 0.0f;
+			}
+			UpdateWindowDependentElements();
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::GetTransform(UIDrawConfig& config, size_t& configuration)
+		{
+			if (element_count == 0) {
+				element_count = current_index;
+				current_index = 0;
+
+				UpdateWindowDependentElements();
+			}
+			else {
+				drawer->OffsetX(indentations[current_index - 1]);
+			}
+
+			ECS_ASSERT(current_index < element_count);
+			if (function::HasFlag(element_transform_types[current_index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[current_index], UI_CONFIG_MAKE_SQUARE)) {
+				UIConfigAbsoluteTransform transform;
+				transform.position = drawer->GetCurrentPositionNonOffset();
+				transform.scale = element_sizes[current_index];
+				config.AddFlag(transform);
+				configuration |= UI_CONFIG_ABSOLUTE_TRANSFORM;
+			}
+			else if (element_transform_types[current_index] & UI_CONFIG_RELATIVE_TRANSFORM) {
+				UIConfigRelativeTransform transform;
+				transform.offset = { 0.0f, 0.0f };
+				transform.scale = element_sizes[current_index];
+				config.AddFlag(transform);
+				configuration |= UI_CONFIG_RELATIVE_TRANSFORM;
+			}
+			else if (element_transform_types[current_index] & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+				UIConfigWindowDependentSize transform;
+				transform.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
+				transform.scale_factor = element_sizes[current_index];
+				config.AddFlag(transform);
+				configuration |= UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+			}
+			else {
+				ECS_ASSERT(false);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::SetRowYScale(float scale)
+		{
+			row_scale.y = scale;
+			UpdateSquareElements();
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::SetIndentation(float _indentation)
+		{
+			indentation = _indentation;
+			for (unsigned int index = 1; index < current_index; index++) {
+				if (indentations[index] > 0.0f) {
+					indentations[index] = _indentation;
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::UpdateRowYScale(float scale)
+		{
+			if (scale > row_scale.y) {
+				row_scale.y = scale;
+				UpdateSquareElements();
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::UpdateSquareElements()
+		{
+			for (unsigned int index = 0; index < current_index; index++) {
+				if (element_transform_types[index] & UI_CONFIG_MAKE_SQUARE) {
+					element_sizes[index] = drawer->GetSquareScale(row_scale.y);
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::UpdateWindowDependentElements()
+		{
+			float horizontal_scale_before = 0.0f;
+			float horizontal_scale_after = 0.0f;
+
+			for (unsigned int index = 0; index < element_count; index++) {
+				if (element_transform_types[index] & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+					// Calculate the after size
+					for (unsigned int subindex = index + 1; subindex < element_count; subindex++) {
+						if (function::HasFlag(element_transform_types[subindex], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[subindex], UI_CONFIG_MAKE_SQUARE)) {
+							horizontal_scale_after += element_sizes[subindex].x;
+						}
+						else {
+							horizontal_scale_after += element_sizes[subindex].x * drawer->layout.default_element_x;
+						}
+
+						if (subindex < element_count - 1) {
+							horizontal_scale_after += indentations[subindex];
+						}
+					}
+					float remaining_scale = row_scale.x - horizontal_scale_before - horizontal_scale_after;
+
+					element_sizes[index] = drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { remaining_scale, element_sizes[index].y });
+					break;
+				}
+				else {
+					if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+						horizontal_scale_before += element_sizes[index].x;
+					}
+					else {
+						horizontal_scale_before += element_sizes[index].x * drawer->layout.default_element_x;
+					}
+
+					horizontal_scale_before += indentations[index];
+				}
+			}
+		}
 
 		// --------------------------------------------------------------------------------------------------------------
 

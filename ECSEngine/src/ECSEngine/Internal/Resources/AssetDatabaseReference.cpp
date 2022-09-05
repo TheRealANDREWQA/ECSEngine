@@ -233,6 +233,19 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	void AssetDatabaseReference::Reset()
+	{
+		mesh_metadata.FreeBuffer();
+		texture_metadata.FreeBuffer();
+		gpu_buffer_metadata.FreeBuffer();
+		gpu_sampler_metadata.FreeBuffer();
+		shader_metadata.FreeBuffer();
+		material_asset.FreeBuffer();
+		misc_asset.FreeBuffer();
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	void AssetDatabaseReference::IncrementReferenceCounts()
 	{
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
@@ -310,8 +323,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	template<typename Functor>
-	size_t SerializeStandalone(
+	template<typename ReturnType, typename Functor>
+	ReturnType SerializeStandalone(
 		const AssetDatabaseReference* reference,
 		const Reflection::ReflectionManager* reflection_manager, 
 		Functor&& functor
@@ -324,7 +337,7 @@ namespace ECSEngine {
 		reference->ToStandalone(allocator_polymorphic, &temp_database);
 
 		SetSerializeCustomSparsetSet();
-		size_t return_value = functor(&temp_database);
+		ReturnType return_value = functor(&temp_database);
 		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET);
 
 		temp_allocator.ClearBackup();
@@ -332,23 +345,46 @@ namespace ECSEngine {
 	}
 
 	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) const {
-		return (bool)ECSEngine::SerializeStandalone(this, reflection_manager, [&](const AssetDatabase* out_database) {
-			return SerializeAssetDatabase(out_database, file);
+		return ECSEngine::SerializeStandalone<bool>(this, reflection_manager, [&](const AssetDatabase* out_database) {
+			return SerializeAssetDatabase(out_database, file) == ECS_SERIALIZE_OK;
 		});
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
 	bool AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) const {
-		return (bool)ECSEngine::SerializeStandalone(this, reflection_manager, [&](const AssetDatabase* out_database) {
-			return SerializeAssetDatabase(out_database, ptr);
+		return ECSEngine::SerializeStandalone<bool>(this, reflection_manager, [&](const AssetDatabase* out_database) {
+			return SerializeAssetDatabase(out_database, ptr) == ECS_SERIALIZE_OK;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	Stream<void> AssetDatabaseReference::SerializeStandalone(const Reflection::ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const {
+		return ECSEngine::SerializeStandalone<Stream<void>>(this, reflection_manager, [&](const AssetDatabase* out_database) {
+			size_t serialize_size = SerializeAssetDatabaseSize(out_database);
+			if (serialize_size == -1) {
+				return Stream<void>(nullptr, 0);
+			}
+
+			void* allocation = AllocateEx(allocator, serialize_size);
+			uintptr_t ptr = (uintptr_t)allocation;
+			ECS_SERIALIZE_CODE serialize_code = SerializeAssetDatabase(out_database, ptr);
+			if (serialize_code == ECS_SERIALIZE_OK) {
+				return Stream<void>(allocation, serialize_size);
+			}
+			else {
+				// Deallocate the buffer and return nullptr
+				DeallocateEx(allocator, allocation);
+				return Stream<void>(nullptr, 0);
+			}
 		});
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
 	size_t AssetDatabaseReference::SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const {
-		return ECSEngine::SerializeStandalone(this, reflection_manager, [&](const AssetDatabase* out_database) {
+		return ECSEngine::SerializeStandalone<size_t>(this, reflection_manager, [&](const AssetDatabase* out_database) {
 			return SerializeAssetDatabaseSize(out_database);
 		});
 	}

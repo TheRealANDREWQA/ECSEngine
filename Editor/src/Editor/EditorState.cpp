@@ -67,20 +67,20 @@ void EditorSetConsoleTrace(Stream<char> error_message, ECS_CONSOLE_VERBOSITY ver
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateSetFlag(EditorState* editor_state, size_t flag) {
-	function::SetFlagAtomic(editor_state->flags, flag);
+void EditorStateSetFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
+	editor_state->flags[flag].fetch_add(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateClearFlag(EditorState* editor_state, size_t flag) {
-	function::ClearFlagAtomic(editor_state->flags, flag);
+void EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
+	editor_state->flags[flag].fetch_sub(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
 
-bool EditorStateHasFlag(const EditorState* editor_state, size_t flag) {
-	return function::HasFlagAtomic(editor_state->flags, flag);
+bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag) {
+	return editor_state->flags[flag].load(ECS_RELAXED) != 0;
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -266,13 +266,6 @@ void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task
 	EDITOR_STATE(editor_state);
 	task.data = task.data_size > 0 ? function::Copy(GetAllocatorPolymorphic(multithreaded_editor_allocator, ECS_ALLOCATION_MULTI), task.data, task.data_size) : task.data;
 	editor_state->gpu_tasks.Push(task);
-}
-
-// -----------------------------------------------------------------------------------------------------------------
-
-bool EditorStateDoNotAddBackgroundTasks(EditorState* editor_state)
-{
-	return function::HasFlagAtomic(editor_state->flags, EDITOR_STATE_DO_NOT_ADD_TASKS);
 }
 
 // -----------------------------------------------------------------------------------------------------------------

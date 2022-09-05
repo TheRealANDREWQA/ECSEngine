@@ -103,6 +103,20 @@ namespace ECSEngine {
 
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct SerializeEntityManagerComponentInfo {
+		// The copy functions are used for stream deep copy
+		inline size_t CopySize() const {
+			return name.MemoryOf(name.size);
+		}
+
+		SerializeEntityManagerComponentInfo CopyTo(uintptr_t& ptr) {
+			SerializeEntityManagerComponentInfo info;
+
+			memcpy(&info, this, sizeof(info));
+			info.name.InitializeAndCopy(ptr, name);
+
+			return info;
+		}
+
 		SerializeEntityManagerComponent function;
 		SerializeEntityManagerHeaderComponent header_function = nullptr;
 		unsigned char version;
@@ -112,6 +126,20 @@ namespace ECSEngine {
 
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct SerializeEntityManagerSharedComponentInfo {
+		// The copy functions are used for stream deep copy
+		inline size_t CopySize() const {
+			return name.MemoryOf(name.size);
+		}
+
+		SerializeEntityManagerSharedComponentInfo CopyTo(uintptr_t& ptr) {
+			SerializeEntityManagerSharedComponentInfo info;
+
+			memcpy(&info, this, sizeof(info));
+			info.name.InitializeAndCopy(ptr, name);
+
+			return info;
+		}
+
 		SerializeEntityManagerSharedComponent function;
 		SerializeEntityManagerHeaderSharedComponent header_function = nullptr;
 		unsigned char version;
@@ -121,6 +149,20 @@ namespace ECSEngine {
 
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct DeserializeEntityManagerComponentInfo {
+		// The copy functions are used for stream deep copy
+		inline size_t CopySize() const {
+			return name.MemoryOf(name.size);
+		}
+
+		DeserializeEntityManagerComponentInfo CopyTo(uintptr_t& ptr) {
+			DeserializeEntityManagerComponentInfo info;
+
+			memcpy(&info, this, sizeof(info));
+			info.name.InitializeAndCopy(ptr, name);
+
+			return info;
+		}
+
 		DeserializeEntityManagerComponent function;
 		DeserializeEntityManagerHeaderComponent header_function = nullptr;
 		void* extra_data;
@@ -129,6 +171,20 @@ namespace ECSEngine {
 
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct DeserializeEntityManagerSharedComponentInfo {
+		// The copy functions are used for stream deep copy
+		inline size_t CopySize() const {
+			return name.MemoryOf(name.size);
+		}
+
+		DeserializeEntityManagerSharedComponentInfo CopyTo(uintptr_t& ptr) {
+			DeserializeEntityManagerSharedComponentInfo info;
+
+			memcpy(&info, this, sizeof(info));
+			info.name.InitializeAndCopy(ptr, name);
+
+			return info;
+		}
+
 		DeserializeEntityManagerSharedComponent function;
 		DeserializeEntityManagerHeaderSharedComponent header_function = nullptr;
 		void* extra_data;
