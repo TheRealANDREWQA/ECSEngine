@@ -640,9 +640,9 @@ namespace ECSEngine {
 		}
 
 		// The buffer given must be allocated with MemoryOf
-		const void* Grow(void* buffer, unsigned int new_capacity) {
+		void* Grow(void* buffer, unsigned int new_capacity) {
 			const unsigned char* old_metadata = m_metadata;
-			const void* old_buffer = m_buffer;
+			void* old_buffer = m_buffer;
 			const Identifier* old_identifiers = m_identifiers;
 			const TableHashFunction old_hash = m_function;
 			unsigned int old_capacity = m_capacity;
@@ -711,7 +711,7 @@ namespace ECSEngine {
 
 			unsigned int new_capacity = Table::NextCapacity(table.GetCapacity());
 			void* new_allocation = AllocateEx(allocator, table.MemoryOf(new_capacity));
-			const void* old_allocation = table.Grow(new_allocation, new_capacity);
+			void* old_allocation = table.Grow(new_allocation, new_capacity);
 			if (old_capacity > 0) {
 				DeallocateEx(allocator, old_allocation);
 			}

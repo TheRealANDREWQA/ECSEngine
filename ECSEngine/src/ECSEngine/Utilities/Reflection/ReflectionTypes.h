@@ -140,6 +140,11 @@ namespace ECSEngine {
 
 			bool Is(Stream<char> string) const;
 
+			ReflectionField Copy(uintptr_t& ptr) const;
+
+			// Only the buffer size is needed
+			size_t CopySize() const;
+
 			Stream<char> name;
 			Stream<char> definition;
 			Stream<char> tag;
@@ -147,6 +152,11 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionEvaluation {
+			ReflectionEvaluation Copy(uintptr_t& ptr) const;
+
+			// Only the buffer size is needed
+			size_t CopySize() const;
+
 			Stream<char> name;
 			double value;
 		};
@@ -163,6 +173,8 @@ namespace ECSEngine {
 
 			// Copies everything that needs to be copied into this buffer
 			ReflectionType Copy(uintptr_t& ptr) const;
+
+			size_t CopySize() const;
 
 			Stream<char> name;
 			Stream<char> tag;

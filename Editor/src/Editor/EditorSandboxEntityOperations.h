@@ -42,18 +42,6 @@ ComponentSignature EntitySharedComponents(const EditorState* editor_state, unsig
 // Does nothing if the entity doesn't exist
 SharedComponentSignature EntitySharedInstances(const EditorState* editor_state, unsigned int sandbox_index, Entity entity);
 
-// Returns -1 if it doesn't find it. Does not print an error message if it couldn't find the component
-Component FindComponentID(const EditorState* editor_state, Stream<char> component_name);
-
-// Returns -1 if it doesn't find it. Does not print an error message if it couldn't find the component
-Component FindSharedComponentID(const EditorState* editor_state, Stream<char> component_name);
-
-// Returns -1 if it doesn't find it
-unsigned int FindComponentByteSize(const EditorState* editor_state, Stream<char> component_name);
-
-// Returns -1 if it doesn't find it
-unsigned int FindSharedComponentByteSize(const EditorState* editor_state, Stream<char> component_name);
-
 // Returns -1 if it doesn't exist
 Entity GetSandboxEntity(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> name);
 

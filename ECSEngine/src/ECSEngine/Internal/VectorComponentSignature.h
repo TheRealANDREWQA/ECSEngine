@@ -38,6 +38,9 @@ namespace ECSEngine {
 
 		void InitializeSharedInstances(SharedComponentSignature shared_signature);
 
+		// When no components are desired
+		void Initialize();
+
 		Vec16us value;
 	};
 

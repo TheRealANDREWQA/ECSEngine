@@ -2264,14 +2264,14 @@ void FileExplorerTick(EditorState* editor_state)
 		if (!function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
 			FileExplorerRegisterPreloadTextures(editor_state);
 		}
-		if (!EditorStateDoNotAddBackgroundTasks(editor_state) && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)
+		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS) && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)
 			&& !function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_LAUNCHED_THREADS)) {
 			FileExplorerLaunchPreloadTextures(editor_state);
 		}
 	}
 
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL, FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION)) {
-		if (!EditorStateDoNotAddBackgroundTasks(editor_state)) {
+		if (!EditorStateHasFlag(editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS)) {
 			FileExplorerGenerateMeshThumbnails(editor_state);
 		}
 	}

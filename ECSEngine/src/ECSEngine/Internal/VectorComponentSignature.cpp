@@ -873,6 +873,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void VectorComponentSignature::Initialize()
+	{
+		value = Vec16us(0);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	bool ECS_VECTORCALL SharedComponentSignatureHasInstances(
 		VectorComponentSignature archetype_components,
 		VectorComponentSignature archetype_instances,

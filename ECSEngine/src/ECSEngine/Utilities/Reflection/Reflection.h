@@ -364,6 +364,21 @@ namespace ECSEngine {
 
 		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
 
+		// Returns true if both types are the same in their respective reflection managers
+		ECSENGINE_API bool CompareReflectionTypes(
+			const ReflectionManager* first_reflection_manager,
+			const ReflectionManager* second_reflection_manager,
+			const ReflectionType* first, 
+			const ReflectionType* second
+		);
+
+		ECSENGINE_API bool IsReflectionTypeComponent(const ReflectionType* type);
+
+		ECSENGINE_API bool IsReflectionTypeSharedComponent(const ReflectionType* type);
+
+		// Returns true if the type references in any of its fields the subtype
+		ECSENGINE_API bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype);
+
 		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;
 		}

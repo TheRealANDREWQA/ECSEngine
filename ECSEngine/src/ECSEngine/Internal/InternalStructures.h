@@ -239,6 +239,9 @@ namespace ECSEngine {
 		// Returns the generation count of the index at that index or -1 if it doesn't exist
 		unsigned int IsEntityAt(unsigned int stream_index) const;
 
+		// As if nothing is allocated
+		void Reset();
+
 		void SetEntityInfo(Entity entity, unsigned int archetype, unsigned int base_archetype, unsigned int stream_index);
 
 		// The tag should be the bit position, not the actual value

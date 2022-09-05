@@ -6,9 +6,9 @@
 #include "../Modules/ModuleDefinition.h"
 #include "ECSEngineReflectionMacros.h"
 
-#define MODULE_DEFAULT_SETTINGS_PATH L"Default.config"
-
 struct EditorState;
+
+#define EDITOR_SCENE_EXTENSION L".scene"
 
 enum EDITOR_SANDBOX_STATE {
 	EDITOR_SANDBOX_SCENE,
@@ -48,6 +48,9 @@ struct ECS_REFLECT EditorSandbox {
 	ECS_FIELDS_START_REFLECT;
 
 	ECSEngine::ResizableStream<EditorSandboxModule> modules_in_use;
+	
+	// Stored as relative path from the assets folder
+	ECSEngine::CapacityStream<wchar_t> scene_path;
 
 	// The settings used for creating the ECS world
 	ECSEngine::CapacityStream<wchar_t> runtime_settings;
@@ -116,6 +119,13 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 // Returns true if it succeded in changing the settings. It can fail if the file doesn't exist or couldn't be deserialized
 // If the settings_name is { nullptr, 0 }, it will use default values for the runtime descriptor and remove the settings name associated
 bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> settings_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// The new scene needs to be the relative path from the assets folder.
+// Returns true if the scene could be loaded with success. It will deserialize into a temporary entity manager and asset database
+// If that succeeds, then it will copy into the sandbox allocator
+bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> new_scene);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -220,6 +230,15 @@ void GetSandboxAvailableRuntimeSettings(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Fills in the absolute path of the sandbox scene path
+void GetSandboxScenePath(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ECSEngine::CapacityStream<wchar_t>& path
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 ECSEngine::WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -280,6 +299,11 @@ bool LoadRuntimeSettings(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if it managed to read the scene file and load everything required.
+bool LoadSandboxScene(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 bool LoadEditorSandboxFile(
 	EditorState* editor_state
 );
@@ -335,6 +359,11 @@ bool SaveRuntimeSettings(
 	const ECSEngine::WorldDescriptor* descriptor,
 	ECSEngine::CapacityStream<char>* error_message = nullptr
 );
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if it managed to save the sandbox scene, else false
+bool SaveSandboxScene(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -310,6 +310,7 @@
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
     <ClInclude Include="src\Includes\ECSEngineBasics.h" />
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
+    <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
     <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />

@@ -390,12 +390,13 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 	UIConfigRelativeTransform logo_transform;
 	logo_transform.scale.x = 0.7f;
+	logo_transform.scale.y = drawer.GetRelativeTransformFactors(drawer.GetRegionScale()).y;
 	float middle_position = drawer.GetAlignedToCenterX(logo_transform.scale.x * drawer.layout.default_element_x);
 	logo_transform.offset.x = middle_position - drawer.current_x;
 	config.flag_count = 0;
 	config.AddFlag(logo_transform);
 	config.AddFlag(border);
-	drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,config, ECS_TOOLS_UI_TEXTURE_ECS_LOGO);
+	drawer.SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, config, ECS_TOOLS_UI_TEXTURE_ECS_LOGO);
 	drawer.SolidColorRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_BORDER, config, drawer.color_theme.theme);
 
 	UIConfigAbsoluteTransform project_transform;

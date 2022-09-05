@@ -506,6 +506,14 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void EntityPool::Reset()
+	{
+		m_memory_manager->Clear();	
+		*this = EntityPool(m_memory_manager, m_pool_power_of_two);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void EntityPool::SetEntityInfo(Entity entity, unsigned int archetype, unsigned int base_archetype, unsigned int stream_index) {
 		EntityInfo* info = GetInfoCrashCheck(this, entity, ECS_LOCATION);
 

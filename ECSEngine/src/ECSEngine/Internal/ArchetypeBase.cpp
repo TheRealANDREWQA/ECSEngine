@@ -10,6 +10,8 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	ArchetypeBase::ArchetypeBase() {}
+
 	ArchetypeBase::ArchetypeBase(
 		MemoryManager* memory_manager,
 		unsigned int starting_size,
@@ -227,7 +229,7 @@ namespace ECSEngine {
 	// Only a single allocation is made
 	void ArchetypeBase::Deallocate() {
 		if (m_entities != nullptr && m_buffers != nullptr) {
-			m_memory_manager->Deallocate(m_entities);
+			m_memory_manager->Deallocate(m_buffers);
 		}
 		m_size = 0;
 		m_capacity = 0;
@@ -311,10 +313,10 @@ namespace ECSEngine {
 		// deallocate the allocation and reallocate. In this way, the fragmentation is reduced and 
 		// it will lower the pressure on the allocator		
 
-		size_t current_total_byte_size = sizeof(Entity) * m_size;
+		size_t current_total_byte_size = sizeof(Entity) * m_size + sizeof(void*) * m_components.count;
 		size_t per_entity_size = 0;
 
-		size_t new_total_byte_size = sizeof(Entity) * count;
+		size_t new_total_byte_size = sizeof(Entity) * count + sizeof(void*) * m_components.count;
 		for (size_t component_index = 0; component_index < m_components.count; component_index) {
 			per_entity_size += m_infos[m_components.indices[component_index].value].size;
 		}
@@ -323,20 +325,22 @@ namespace ECSEngine {
 		new_total_byte_size += per_entity_size * count + m_components.count * ECS_CACHE_LINE_SIZE;
 
 		void* stack_buffer = ECS_STACK_ALLOC(current_total_byte_size);
-		void* copy_buffer = m_entities;
-		Entity* old_entities = m_entities;
+		void* copy_buffer = m_buffers;
+		void** old_buffers = m_buffers;
 
 		if (current_total_byte_size < STACK_LIMIT && m_size > 0) {
 			copy_buffer = stack_buffer;
-			memcpy(stack_buffer, m_entities, current_total_byte_size);
+			memcpy(stack_buffer, m_buffers, current_total_byte_size);
 
-			m_memory_manager->Deallocate(m_entities);
+			m_memory_manager->Deallocate(m_buffers);
 		}
 
-		void* allocation = m_memory_manager->Allocate(new_total_byte_size, alignof(Entity));
-
+		void* allocation = m_memory_manager->Allocate(new_total_byte_size);
 		uintptr_t ptr = (uintptr_t)allocation;
+		m_buffers = (void**)ptr;
+		ptr += sizeof(void*) * m_components.count;
 		uintptr_t ptr_to_copy = (uintptr_t)copy_buffer;
+		ptr_to_copy += sizeof(void*) * m_components.count;
 
 		// Copy the entities first
 		m_entities = (Entity*)ptr;
@@ -362,7 +366,7 @@ namespace ECSEngine {
 
 		// If it is not the stack buffer, deallocate the buffer
 		if (current_total_byte_size >= STACK_LIMIT) {
-			m_memory_manager->Deallocate(old_entities);
+			m_memory_manager->Deallocate(old_buffers);
 		}
 	}
 

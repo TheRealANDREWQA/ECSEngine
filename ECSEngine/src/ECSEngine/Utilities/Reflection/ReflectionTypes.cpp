@@ -23,6 +23,42 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ReflectionField ReflectionField::Copy(uintptr_t& ptr) const {
+			ReflectionField copy;
+
+			copy.name.InitializeAndCopy(ptr, name);
+			copy.definition.InitializeAndCopy(ptr, definition);
+			copy.tag.InitializeAndCopy(ptr, tag);
+			copy.info = info;
+
+			return copy;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t ReflectionField::CopySize() const {
+			return name.CopySize() + definition.CopySize() + tag.CopySize();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionEvaluation ReflectionEvaluation::Copy(uintptr_t& ptr) const {
+			ReflectionEvaluation copy;
+
+			copy.name.InitializeAndCopy(ptr, name);
+			copy.value = value;
+
+			return copy;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t ReflectionEvaluation::CopySize() const {
+			return name.CopySize();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		unsigned char ECS_BASIC_FIELD_TYPE_ALIGNMENT[] = {
 			alignof(int8_t),
 			alignof(uint8_t),
@@ -101,6 +137,8 @@ namespace ECSEngine {
 			return ECS_STREAM_FIELD_TYPE_ALIGNMENT[(unsigned int)stream_type];
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionType::HasTag(Stream<char> string) const
 		{
 			if (tag.size == 0) {
@@ -109,10 +147,14 @@ namespace ECSEngine {
 			return function::FindFirstToken(tag, string).buffer != nullptr;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionType::IsTag(Stream<char> string) const
 		{
 			return function::CompareStrings(string, tag);
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		double ReflectionType::GetEvaluation(Stream<char> name) const
 		{
@@ -124,6 +166,8 @@ namespace ECSEngine {
 
 			return DBL_MAX;
 		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionType ReflectionType::Copy(uintptr_t& ptr) const
 		{
@@ -188,6 +232,15 @@ namespace ECSEngine {
 			return copy;
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t ReflectionType::CopySize() const
+		{
+			return name.CopySize() + tag.CopySize() + StreamDeepCopySize(fields) + StreamDeepCopySize(evaluations);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionEnum ReflectionEnum::Copy(uintptr_t& ptr) const
 		{
 			ReflectionEnum copy;
@@ -199,6 +252,8 @@ namespace ECSEngine {
 			return copy;
 		}
 
-}
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+	}
 
 }

@@ -1520,7 +1520,7 @@ namespace ECSEngine {
 			UI_PREPARE_DRAWER(initialize);
 
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
-			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_FIT_SPACE);
+			drawer.SetDrawMode(ECS_UI_DRAWER_FIT_SPACE);
 			drawer.layout.next_row_padding = 0.005f;
 
 			if (initialize) {
@@ -1665,6 +1665,8 @@ namespace ECSEngine {
 #pragma endregion
 
 #pragma region Messages
+			
+			drawer.NextRow();
 
 			UIConfigTextParameters parameters;
 			float2 icon_scale = drawer.GetSquareScale(drawer.layout.default_element_y);

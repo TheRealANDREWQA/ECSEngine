@@ -50,6 +50,19 @@ namespace ECSEngine {
 		return nullptr;
 	}
 
+	bool MemoryArena::Belongs(const void* buffer) const
+	{
+		uintptr_t ptr = (uintptr_t)buffer;
+		return ptr >= (uintptr_t)m_initial_buffer && ptr < (uintptr_t)m_initial_buffer + m_size_per_allocator * m_allocator_count;
+	}
+
+	void MemoryArena::Clear()
+	{
+		for (size_t index = 0; index < m_allocator_count; index++) {
+			m_allocators[index].Clear();
+		}
+	}
+
 	template<bool trigger_error_if_not_found>
 	void MemoryArena::Deallocate(const void* block)
 	{
@@ -60,12 +73,6 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryArena::Deallocate, const void*);
-
-	bool MemoryArena::Belongs(const void* buffer) const
-	{
-		uintptr_t ptr = (uintptr_t)buffer;
-		return ptr >= (uintptr_t)m_initial_buffer && ptr < (uintptr_t)m_initial_buffer + m_size_per_allocator * m_allocator_count;
-	}
 
 	// ---------------------------------------------- Thread safe variants ---------------------------------------------------
 

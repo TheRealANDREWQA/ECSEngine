@@ -5,6 +5,7 @@
 #include "../Project/ProjectFolders.h"
 #include "../Modules/ModuleSettings.h"
 
+#include "EditorScene.h"
 #include "ECSEngineSerializationHelpers.h"
 
 // The UI needs to be included because we need to notify it when we destroy a sandbox
@@ -21,6 +22,7 @@ using namespace ECSEngine;
 #define MODULE_ALLOCATOR_BACKUP_SIZE ECS_KB * 128
 
 #define RUNTIME_SETTINGS_STRING_CAPACITY (128)
+#define SCENE_PATH_STRING_CAPACITY (128)
 
 #define SANDBOX_FILE_HEADER_VERSION (0)
 #define SANDBOX_FILE_MAX_SANDBOXES (16)
@@ -29,6 +31,16 @@ struct SandboxFileHeader {
 	size_t version;
 	size_t count;
 };
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxScenePathImpl(const EditorState* editor_state, Stream<wchar_t> scene_path, CapacityStream<wchar_t>& absolute_path) {
+	GetProjectAssetsFolder(editor_state, absolute_path);
+	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
+	absolute_path.AddStream(scene_path);
+	absolute_path[absolute_path.size] = L'\0';
+	absolute_path.AssertCapacity();
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
@@ -187,6 +199,40 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> new_scene)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+	GetSandboxScenePathImpl(editor_state, new_scene, absolute_path);
+
+	GlobalMemoryManager global_manager = GlobalMemoryManager(sandbox->runtime_descriptor.global_memory_size, sandbox->runtime_descriptor.global_memory_pool_count, sandbox->runtime_descriptor.global_memory_new_allocation_size);
+	EntityManager entity_manager = CreateEntityManagerWithPool(sandbox->runtime_descriptor.entity_manager_memory_size, sandbox->runtime_descriptor.entity_manager_memory_pool_count, sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size, sandbox->runtime_descriptor.entity_pool_power_of_two, &global_manager);
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
+	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	AssetDatabaseReference database_reference(&editor_state->asset_database, stack_allocator);
+
+	bool success = LoadEditorSceneCore(editor_state, &entity_manager, &database_reference, absolute_path);
+	if (success) {
+		// Now need to reset the current contents and copy these ones instead
+		sandbox->scene_entities.Reset();
+		sandbox->database.Reset();
+
+		sandbox->scene_entities.CopyOther(&entity_manager);
+		sandbox->database = database_reference.Copy(sandbox->database.mesh_metadata.allocator);
+
+		sandbox->scene_path.Copy(new_scene);
+	}
+
+	// Now we can release the temporary objects
+	global_manager.ReleaseResources();
+	_stack_allocator.ClearBackup();
+	return success;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ChangeSandboxModuleConfiguration(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -294,6 +340,8 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 
 	sandbox->runtime_settings.Initialize(editor_state->EditorAllocator(), 0, RUNTIME_SETTINGS_STRING_CAPACITY);
 	sandbox->runtime_settings_last_write = 0;
+
+	sandbox->scene_path.Initialize(editor_state->EditorAllocator(), 0, SCENE_PATH_STRING_CAPACITY);
 
 	if (initialize_runtime) {
 		PreinitializeSandboxRuntime(editor_state, sandbox_index);
@@ -446,6 +494,13 @@ void GetSandboxAvailableRuntimeSettings(
 		data->paths->AddSafe(function::StringCopy(data->allocator, stem));
 		return true;
 	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetSandboxScenePath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
+{
+	GetSandboxScenePathImpl(editor_state, GetSandbox(editor_state, sandbox_index)->scene_path, path);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -622,6 +677,17 @@ bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 		return true;
 	}
 	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool LoadSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+
+	GetSandboxScenePath(editor_state, sandbox_index, absolute_path);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -949,6 +1015,17 @@ bool SaveRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 	}
 
 	return true;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+bool SaveSandboxScene(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	GetSandboxScenePath(editor_state, sandbox_index, absolute_path);
+	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

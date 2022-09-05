@@ -13,7 +13,7 @@
 #endif
 
 #ifndef ECS_ENTITY_MANAGER_DEFERRED_ACTION_CAPACITY
-#define ECS_ENTITY_MANAGER_DEFERRED_ACTION_CAPACITY (1 << 16)
+#define ECS_ENTITY_MANAGER_DEFERRED_ACTION_CAPACITY (1 << 12)
 #endif
 
 #define ECS_ENTITY_MANAGER_TRANSFORM_HIERARCHY 0
@@ -581,6 +581,8 @@ namespace ECSEngine {
 		// Verifies if the hierarchy is already allocated
 		bool ExistsHierarchy(unsigned int hierarchy_index) const;
 
+		unsigned int GetArchetypeCount() const;
+
 		Archetype* GetArchetype(unsigned int index);
 
 		const Archetype* GetArchetype(unsigned int index) const;
@@ -754,10 +756,10 @@ namespace ECSEngine {
 		void RemoveComponentCommit(Stream<Entity> entities, ComponentSignature components);
 
 		// Deferred call
-		void RemoveComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+		void RemoveType(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
 
 		// Deferred call
-		void RemoveComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });	
+		void RemoveType(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });	
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -864,6 +866,29 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Immediate call. It will deallocate the data used by the shared instances and reallocate
+		// the data but it will not copy any old data.
+		void ResizeSharedComponent(Component component, unsigned short new_size);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// It does not copy any data stored previously. If the new allocation size is 0,
+		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
+		// one and returns it
+		MemoryArena* ResizeComponentAllocator(Component component, size_t new_allocation_size);
+
+		// It does not copy any data stored previously. If the new allocation size is 0,
+		// then it will deallocate it and return nullptr. Else deallocates and reallocates a new
+		// one and returns it
+		MemoryArena* ResizeSharedComponentAllocator(Component component, size_t new_allocation_size);
+
+		// ---------------------------------------------------------------------------------------------------
+		
+		// It returns to the state where nothing is allocated. As if it is newly created
+		void Reset();
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// If the component or the instance doesn't exist, it will assert
 		void SetSharedComponentData(Component component, SharedInstance instance, const void* data);
 
@@ -879,7 +904,25 @@ namespace ECSEngine {
 		// The tag should only be the bit index, not the actual value
 		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
 
-	//private:
+		// ---------------------------------------------------------------------------------------------------
+
+		// Frees the slot used by that component.
+		void UnregisterComponentCommit(Component component);
+
+		// Deferred call
+		// Frees the slot used by that component.
+		void UnregisterComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Frees the slot used by that component.
+		void UnregisterSharedComponentCommit(Component component);
+
+		// Deferred call
+		// Frees the slot used by that component.
+		void UnregisterSharedComponent(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
 
 		struct InternalEntityHierarchy {
 			MemoryManager allocator;

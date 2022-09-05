@@ -1541,7 +1541,6 @@ namespace ECSEngine {
 	void RegisterDestroyComponent(
 		EntityManager* manager,
 		Component component,
-		unsigned short size,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -1634,7 +1633,6 @@ namespace ECSEngine {
 	void RegisterDestroySharedComponent(
 		EntityManager* manager,
 		Component component,
-		unsigned short size,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -3230,6 +3228,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	unsigned int EntityManager::GetArchetypeCount() const
+	{
+		return m_archetypes.size;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	Archetype* EntityManager::GetArchetype(unsigned int index) {
 		//ECS_ASSERT(index < m_archetypes.size);
 		return &m_archetypes[index];
@@ -3843,12 +3848,12 @@ namespace ECSEngine {
 		CommitEntityRemoveComponent(this, &commit_data, nullptr);
 	}
 
-	void EntityManager::RemoveComponent(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
+	void EntityManager::RemoveType(Entity entity, ComponentSignature components, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
 	{
-		RemoveComponent({ &entity, 1 }, components, { command_stream }, debug_info);
+		RemoveType({ &entity, 1 }, components, { command_stream }, debug_info);
 	}
 
-	void EntityManager::RemoveComponent(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
+	void EntityManager::RemoveType(Stream<Entity> entities, ComponentSignature components, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
 		RegisterEntityRemoveComponents(this, entities, components, parameters, debug_info);
 	}
@@ -3993,6 +3998,86 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::ResizeSharedComponent(Component component, unsigned short new_size)
+	{
+		ECS_CRASH_RETURN(ExistsSharedComponent(component), "There is no shared component {#} when trying to resize it.", component.value);
+
+		m_shared_components[component.value].info.size = new_size;
+		m_shared_components[component.value].instances.stream.ForEach([&](void*& data) {
+			m_small_memory_manager.Deallocate(data);
+			void* new_allocation = m_small_memory_manager.Allocate(new_size);
+			data = new_allocation;
+		});
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	template<bool shared = false>
+	MemoryArena* ResizeComponentAllocator(EntityManager* entity_manager, Component component, size_t new_allocation_size) {
+		bool exists;
+		if constexpr (shared) {
+			exists = entity_manager->ExistsSharedComponent(component);
+		}
+		else {
+			exists = entity_manager->ExistsComponent(component);
+		}
+
+		const char* crash_string = shared ? "There is no shared component {#} when trying to resize its allocator." : "There is no component {#} when trying to resize its allocator.";
+		ECS_CRASH_RETURN_VALUE(exists, nullptr, crash_string, component.value);
+
+		MemoryArena* previous_arena;
+		if constexpr (shared) {
+			previous_arena = entity_manager->GetSharedComponentAllocator(component);
+		}
+		else {
+			previous_arena = entity_manager->GetComponentAllocator(component);
+		}
+
+		if (previous_arena != nullptr) {
+			entity_manager->m_memory_manager->Deallocate(previous_arena);
+		}
+
+		MemoryArena* arena = nullptr;
+
+		ComponentInfo* info = nullptr;
+		if constexpr (shared) {
+			info = &entity_manager->m_shared_components[component.value].info;
+		}
+		else {
+			info = &entity_manager->m_unique_components[component.value];
+		}
+		CreateAllocatorForComponent(entity_manager, *info, new_allocation_size);
+		return info->allocator;
+	}
+
+	MemoryArena* EntityManager::ResizeComponentAllocator(Component component, size_t new_allocation_size)
+	{
+		return ECSEngine::ResizeComponentAllocator<false>(this, component, new_allocation_size);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	MemoryArena* EntityManager::ResizeSharedComponentAllocator(Component component, size_t new_allocation_size)
+	{
+		return ECSEngine::ResizeComponentAllocator<true>(this, component, new_allocation_size);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::Reset() {
+		// Clear the main allocator and reassign to it
+		m_memory_manager->Clear();
+		m_entity_pool->Reset();
+
+		EntityManagerDescriptor descriptor;
+		descriptor.memory_manager = m_memory_manager;
+		descriptor.entity_pool = m_entity_pool;
+		descriptor.deferred_action_capacity = m_deferred_actions.capacity;
+		*this = EntityManager(descriptor);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::SetSharedComponentData(Component component, SharedInstance instance, const void* data)
 	{
 		ECS_CRASH_RETURN(ExistsSharedInstance(component, instance), "The component {#} or instance {#} doesn't exist when trying to set shared component data.",
@@ -4031,6 +4116,34 @@ namespace ECSEngine {
 	void EntityManager::SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters, DebugInfo debug_info)
 	{
 		RegisterSetEntityTags(this, entities, tag, parameters, debug_info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::UnregisterComponentCommit(Component component)
+	{
+		DeferredDestroyComponent commit_data;
+		commit_data.component = component;
+		CommitDestroyComponent(this, &commit_data, nullptr);
+	}
+
+	void EntityManager::UnregisterComponent(Component component, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
+	{
+		RegisterDestroyComponent(this, component, command_stream, debug_info);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::UnregisterSharedComponentCommit(Component component)
+	{
+		DeferredDestroySharedComponent commit_data;
+		commit_data.component = component;
+		CommitDestroySharedComponent(this, &commit_data, nullptr);
+	}
+
+	void EntityManager::UnregisterSharedComponent(Component component, EntityManagerCommandStream* command_stream, DebugInfo debug_info)
+	{
+		RegisterDestroySharedComponent(this, component, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

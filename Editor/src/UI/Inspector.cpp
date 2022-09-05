@@ -1436,9 +1436,72 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, void* _data, UIDraw
 		drawer->NextRow();
 	}
 
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+
+	// Display a warning if no scene path is assigned
+	if (sandbox->scene_path.size == 0) {
+		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no scene assigned. The sandbox cannot run.");
+		drawer->NextRow();
+	}
+
+	config.flag_count = 0;
+	UIConfigActiveState active_state;
+	active_state.state = sandbox->scene_path.size > 0;
+	config.AddFlag(active_state);
+
+	float2 square_scale = drawer->GetSquareScale();
+	drawer->UpdateCurrentRowScale(square_scale.y);
+
+	drawer->Text(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "Scene: ");
+	if (sandbox->scene_path.size == 0) {
+		drawer->Text(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "No scene is assigned.");
+	}
+	else {
+		drawer->TextWide(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox->scene_path);
+	} 
+
+	struct SelectSceneData {
+		EditorState* editor_state;
+		unsigned int sandbox_index;
+	};
+
+	auto select_scene_action = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+		SelectSceneData* data = (SelectSceneData*)_data;
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_directory, 512);
+		GetProjectAssetsFolder(data->editor_state, assets_directory);
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, new_scene_path, 512);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+
+		OS::FileExplorerGetFileData get_file_data;
+		Stream<wchar_t> extensions[] = {
+			EDITOR_SCENE_EXTENSION
+		};
+		get_file_data.extensions = { extensions, std::size(extensions) };
+		get_file_data.initial_directory = assets_directory.buffer;
+		get_file_data.path = new_scene_path;
+		get_file_data.error_message = error_message;
+
+		bool success = OS::FileExplorerGetFile(&get_file_data);
+		if (!success) {
+			ECS_FORMAT_TEMP_STRING(console_message, "Failed to get new scene path. Reason: {#}.", get_file_data.error_message);
+			EditorSetConsoleError(console_message);
+		}
+		else {
+			// Try to change the scene
+			// Spawn a window to ask the user if he wants to save the current scene before loading the new one
+			// only if it is diry.
+		}
+	};
+
+	SelectSceneData select_data;
+	drawer->SpriteButton(UI_CONFIG_ALIGN_ELEMENT_RIGHT, config, { select_scene_action, &select_data, sizeof(select_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_FOLDER);
+
 	drawer->CollapsingHeader("Modules", &data->collapsing_module_state, [&]() {
 		// Display the count of modules in use
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 		ECS_STACK_CAPACITY_STREAM(char, in_use_stream, 256);
 		in_use_stream.Copy("In use: ");

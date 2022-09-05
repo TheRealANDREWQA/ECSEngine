@@ -67,6 +67,54 @@ namespace ECSEngine {
 
 		ECSENGINE_API void UIDrawerArrayIntInputAction(ActionData* action_data);
 
+		struct UIDrawer;
+
+		// It supports at max 12 elements
+		struct ECSENGINE_API UIDrawerRowLayout {
+			// If adding an absolute element, the parameters represents its size.
+			// When adding a relative element, the parameters are its relative size
+			// When adding a window dependent size, the parameter x is ignored and instead it is assumed
+			// that it stretches to accomodate the window. The y component is still used like in relative transform
+			// The y component is used just to change the row size if it isn't enough
+			// Make the y component 0.0f if you want to be the size of the row
+			void AddElement(size_t transform_type, float2 parameters);
+
+			void AddLabel(Stream<char> characters);
+
+			// If the label size is defaulted with 0.0f, then it will use the row scale
+			void AddSquareLabel(float label_size = 0.0f);
+
+			void AddComboBox(Stream<Stream<char>> labels, Stream<char> name = { nullptr, 0 }, Stream<char> prefix = { nullptr, 0 });
+
+			// It will place the elements one right after the other like there is no indentation applied
+			// But also takes into account window dependent elements
+			void CombineLastElements(unsigned int count = 2);
+
+			// Add the corresponding transform such that it gets rendered as it should be
+			void GetTransform(UIDrawConfig& config, size_t& configuration);
+
+			void SetRowYScale(float scale);
+
+			void SetIndentation(float indentation);
+
+			void UpdateRowYScale(float scale);
+
+			void UpdateSquareElements();
+
+			// At the moment just 1 window dependent scale element is accepted
+			void UpdateWindowDependentElements();
+
+			UIDrawer* drawer;
+			float2 row_scale; // This is the total scale
+			float indentation;
+			unsigned int current_index;
+			unsigned int element_count;
+
+			float2 element_sizes[12];
+			float indentations[12]; // The indentation between elements
+			unsigned char element_transform_types[12];
+		};
+
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		struct ECSENGINE_API UIDrawer
@@ -3290,6 +3338,10 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			UIDrawerRowLayout GenerateRowLayout();
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 

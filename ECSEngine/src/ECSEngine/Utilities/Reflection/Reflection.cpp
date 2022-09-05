@@ -223,7 +223,7 @@ namespace ECSEngine {
 		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data);
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data);
 
-		void ReflectionManagerStylizeEnum(ReflectionEnum enum_);
+		void ReflectionManagerStylizeEnum(ReflectionEnum& enum_);
 
 		// These are pending expressions to be evaluated
 		struct ReflectionExpression {
@@ -1905,7 +1905,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManagerStylizeEnum(ReflectionEnum enum_) {
+		void ReflectionManagerStylizeEnum(ReflectionEnum& enum_) {
 			ECS_STACK_CAPACITY_STREAM(unsigned int, underscores, 128);
 			function::FindToken(enum_.fields[0], '_', underscores);
 
@@ -1927,6 +1927,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
+			// If the last value is COUNT/MAX_COUNT
+			// discard it
+			if (function::CompareStrings(enum_.fields[enum_.fields.size - 1], "COUNT") || function::CompareStrings(enum_.fields[enum_.fields.size - 1], "MAX_COUNT")) {
+				enum_.fields.size--;
+			}
+
 			// If the values are in caps, keep capitalized only the first letter
 			size_t index = 0;
 			for (; index < enum_.fields.size; index++) {
@@ -1943,10 +1949,37 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			if (index == enum_.fields.size) {
-				// All are with caps. Capitalize them
+				// All are with caps.
+				// Get all the _ positions that are left. If it contains a digit (like in 3D)
+				// keep the letters capitalized in that section
 				for (index = 0; index < enum_.fields.size; index++) {
-					for (size_t subindex = 1; subindex < enum_.fields[index].size; subindex++) {
-						function::Uncapitalize(enum_.fields[index].buffer + subindex);
+					ECS_STACK_CAPACITY_STREAM(unsigned int, current_underscores, 32);
+					function::FindToken(enum_.fields[index], '_', current_underscores);
+
+					unsigned int last_underscore = -1;
+					ECS_STACK_CAPACITY_STREAM(Stream<char>, partitions, 32);
+					for (size_t subindex = 0; subindex < current_underscores.size; subindex++) {
+						last_underscore++;
+						partitions.Add({ enum_.fields[index].buffer + last_underscore, current_underscores[subindex] - last_underscore });
+						last_underscore = current_underscores[subindex];
+					}
+
+					last_underscore++;
+					partitions.Add({ enum_.fields[index].buffer + last_underscore, enum_.fields[index].size - last_underscore });
+
+					for (size_t partition_index = 0; partition_index < partitions.size; partition_index++) {
+						bool lacks_digits = true;
+						for (size_t subindex = 0; lacks_digits && subindex < partitions[partition_index].size; subindex++) {
+							if (function::IsNumberCharacter(partitions[partition_index][subindex])) {
+								lacks_digits = false;
+							}
+						}
+
+						if (lacks_digits) {
+							for (size_t subindex = 1; subindex < enum_.fields[index].size; subindex++) {
+								function::Uncapitalize(enum_.fields[index].buffer + subindex);
+							}
+						}
 					}
 				}
 			}
@@ -3211,6 +3244,136 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool CompareReflectionTypes(
+			const ReflectionManager* first_reflection_manager, 
+			const ReflectionManager* second_reflection_manager,
+			const ReflectionType* first, 
+			const ReflectionType* second
+		)
+		{
+			if (first->fields.size != second->fields.size) {
+				return false;
+			}
+
+			// If the basic or the stream type has changed or the definition
+			for (size_t index = 0; index < first->fields.size; index++) {
+				const ReflectionFieldInfo* first_info = &first->fields[index].info;
+				const ReflectionFieldInfo* second_info = &second->fields[index].info;
+
+				if (first_info->basic_type != second_info->basic_type) {
+					return false;
+				}
+
+				if (first_info->stream_type != second_info->stream_type) {
+					return false;
+				}
+
+				if (first_info->byte_size != second_info->byte_size) {
+					return false;
+				}
+
+				// Now compare the definitions. If they changed, the types have changed
+				if (!function::CompareStrings(first->fields[index].definition, second->fields[index].definition)) {
+					return false;
+				}
+
+				// If a user defined type is here, check that it too didn't change
+				// For custom types we shouldn't need to check (those are supposed to be fixed, like containers)
+				if (first_info->basic_type == ReflectionBasicFieldType::UserDefined) {
+					ReflectionType first_nested;
+					ReflectionType second_nested;
+
+					if (first_reflection_manager->TryGetType(first->fields[index].definition, first_nested)) {
+						if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
+							// Verify these as well
+							if (!CompareReflectionTypes(first_reflection_manager, second_reflection_manager, &first_nested, &second_nested)) {
+								return false;
+							}
+						}
+						else {
+							// The first one has it but the second one doesn't have it.
+							// An error must be somewhere
+							return false;
+						}
+					}
+					else {
+						// Assume that it is a container type. Only check that the second one doesn't have it either
+						if (second_reflection_manager->TryGetType(first->fields[index].definition, second_nested)) {
+							// The second one has it but the first one doesn't have it.
+							// An error must be somewhere
+							return false;
+						}
+						// Else both don't have it (most likely is a container type)
+					}
+				}
+			}
+
+			return true;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsReflectionTypeComponent(const ReflectionType* type)
+		{
+			return type->IsTag(ECS_COMPONENT_TAG);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsReflectionTypeSharedComponent(const ReflectionType* type)
+		{
+			return type->IsTag(ECS_SHARED_COMPONENT_TAG);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype)
+		{
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					if (type->fields[index].info.stream_type == ReflectionStreamFieldType::Basic) {
+						if (function::CompareStrings(type->fields[index].definition, subtype)) {
+							return true;
+						}
+
+						// Check to see if it is a nested type or a custom serializer
+						ReflectionType nested_type;
+						if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+							if (DependsUpon(reflection_manager, &nested_type, subtype)) {
+								return true;
+							}
+						}
+						else {
+							// check custom serializer
+							unsigned int custom_serializer_index = FindReflectionCustomType(type->fields[index].definition);
+							ECS_ASSERT(custom_serializer_index != -1);
+
+							ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 64);
+							ReflectionCustomTypeDependentTypesData dependent_data;
+							dependent_data.definition = type->fields[index].definition;
+							dependent_data.dependent_types = dependent_types;
+							ECS_REFLECTION_CUSTOM_TYPES[custom_serializer_index].dependent_types(&dependent_data);
+
+							for (unsigned int subindex = 0; subindex < dependent_data.dependent_types.size; subindex++) {
+								if (function::CompareStrings(subtype, dependent_data.dependent_types[subindex])) {
+									return true;
+								}
+							}
+						}
+					}
+					else {
+						// Pointer, stream or basic array type
+						// Must contain in the definition the subtype
+						if (function::FindFirstToken(type->fields[index].definition, subtype).buffer != nullptr) {
+							return true;
+						}
+					}
+				}
+			}
+
+			return false;
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 

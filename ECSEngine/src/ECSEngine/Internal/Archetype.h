@@ -40,7 +40,6 @@ namespace ECSEngine {
 		// Which makes expensive the iteration - which all this architecture is about
 		void DestroyBase(unsigned int archetype_index, EntityPool* pool);
 
-		// Prefer using the EntityManager function instead of this one - it will use the 
 		unsigned char FindUniqueComponentIndex(Component component) const;
 
 		unsigned char FindSharedComponentIndex(Component component) const;
