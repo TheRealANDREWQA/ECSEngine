@@ -181,6 +181,9 @@
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
+    <ClInclude Include="src\Includes\ECSEngineComponents.h" />
+    <ClInclude Include="src\Includes\ECSEngineForEach.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

@@ -73,6 +73,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < m_components.count; index++) {
 			memcpy(m_buffers[index], other->m_buffers[index], m_infos[m_components.indices[index].value].size * other_size);
 		}
+		m_size = other->m_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -81,7 +82,7 @@ namespace ECSEngine {
 	void CopyEntitiesInternal(ArchetypeBase* archetype, ComponentSignature components, unsigned int copy_position, Functor&& functor) {
 		for (size_t index = 0; index < components.count; index++) {
 			unsigned char component_index = archetype->FindComponentIndex(components.indices[index]);
-			ECS_CRASH_RETURN(component_index != -1, "Incorrect component {#} when trying to copy entities. The component is missing from the base archetype.", components.indices[index].value);
+			ECS_CRASH_RETURN(component_index != UCHAR_MAX, "Incorrect component {#} when trying to copy entities. The component is missing from the base archetype.", components.indices[index].value);
 
 			unsigned short component_size = archetype->m_infos[components.indices[index].value].size;
 
@@ -253,7 +254,7 @@ namespace ECSEngine {
 				return index;
 			}
 		}
-		return -1;
+		return UCHAR_MAX;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -286,6 +287,15 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	const void* ArchetypeBase::GetComponent(EntityInfo info, Component component) const
+	{
+		unsigned char component_index = FindComponentIndex(component);
+		ECS_CRASH_RETURN_VALUE(component_index != -1, nullptr, "The entity {#} does not have component {#} when trying to retrieve it.", m_entities[info.stream_index].value);
+		return GetComponentByIndex(info, component_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void* ArchetypeBase::GetComponentByIndex(EntityInfo info, unsigned char component_index)
 	{
 		return GetComponentByIndex(info.stream_index, component_index);
@@ -294,6 +304,20 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void* ArchetypeBase::GetComponentByIndex(unsigned int stream_index, unsigned char component_index)
+	{
+		return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const void* ArchetypeBase::GetComponentByIndex(EntityInfo info, unsigned char component_index) const
+	{
+		return GetComponentByIndex(info.stream_index, component_index);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const void* ArchetypeBase::GetComponentByIndex(unsigned int stream_index, unsigned char component_index) const
 	{
 		return function::OffsetPointer(m_buffers[component_index], stream_index * m_infos[m_components.indices[component_index].value].size);
 	}
@@ -373,7 +397,9 @@ namespace ECSEngine {
 	unsigned int ArchetypeBase::Reserve(unsigned int count)
 	{
 		if (m_size + count > m_capacity) {
-			Resize((unsigned int)((float)m_capacity * GROW_FACTOR + 3));
+			unsigned int default_reserve = (unsigned int)((float)m_capacity * GROW_FACTOR + 3);
+			// This can happen for small sizes
+			Resize(default_reserve < count ? count : default_reserve);
 		}
 		return m_size;
 	}

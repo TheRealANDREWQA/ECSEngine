@@ -398,7 +398,7 @@ namespace ECSEngine {
 			Action action = nullptr;
 
 			unsigned int window_index;
-			bool is_action_data_ptr = true;
+			bool is_action_data_ptr;
 
 			union {
 				char action_data[64];

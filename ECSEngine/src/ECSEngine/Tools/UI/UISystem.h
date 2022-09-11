@@ -1716,6 +1716,8 @@ namespace ECSEngine {
 
 		ECSENGINE_API void CloseXBorderHoverableAction(ActionData* action_data);
 
+		ECSENGINE_API void DestroyCurrentActionWindow(ActionData* action_data);
+
 		ECSENGINE_API void CollapseTriangleClickableAction(ActionData* action_data);
 
 		ECSENGINE_API void DefaultHoverableAction(ActionData* action_data);

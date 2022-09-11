@@ -126,7 +126,6 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_MENU_SPRITE = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_MENU_COPY_STATES = (size_t)1 << 46;
-		constexpr size_t UI_CONFIG_MENU_COPY_ALL = (size_t)1 << 47;
 
 		constexpr size_t UI_CONFIG_MENU_BUTTON_SPRITE = (size_t)1 << 45;
 

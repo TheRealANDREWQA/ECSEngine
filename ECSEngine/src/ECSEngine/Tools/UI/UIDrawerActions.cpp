@@ -2840,12 +2840,12 @@ namespace ECSEngine {
 					action_data->position.x += normalized_border_size;
 					action_data->scale.x -= normalized_border_size * 2.0f;
 
-					if (data->row_index == state->row_count - 1) {
-						action_data->scale.y -= system->m_descriptors.dockspaces.border_size * 1.5f;
-					}
-					else if (data->row_index == 0) {
+					if (data->row_index == 0) {
 						action_data->scale.y -= system->m_descriptors.dockspaces.border_size;
 						action_data->position.y += system->m_descriptors.dockspaces.border_size;
+					}
+					if (data->row_index == state->row_count - 1) {
+						action_data->scale.y -= system->m_descriptors.dockspaces.border_size;
 					}
 
 					DefaultHoverableAction(action_data);
@@ -3040,7 +3040,7 @@ namespace ECSEngine {
 				);
 
 				UIDrawConfig config;
-				drawer.Menu(UI_CONFIG_DO_CACHE, config, data->name, &data->state);
+				drawer.Menu(UI_CONFIG_DO_CACHE | UI_CONFIG_MENU_COPY_STATES, config, data->name, &data->state);
 
 				UIDrawerMenuGeneralData* general_data = (UIDrawerMenuGeneralData*)system->m_memory->Allocate(sizeof(UIDrawerMenuGeneralData));
 				general_data->menu_initializer_index = 255;
@@ -3195,7 +3195,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
-			OSFileExplorerGetFileData get_data;
+			OS::FileExplorerGetFileData get_data;
 
 			const unsigned int FOLDER_PATH_MAX_SIZE = 512;
 			wchar_t folder_path[FOLDER_PATH_MAX_SIZE];
@@ -3206,7 +3206,7 @@ namespace ECSEngine {
 			get_data.error_message.InitializeFromBuffer(error_message, 0, ERROR_MESSAGE_SIZE);
 			get_data.extensions = data->extensions;
 
-			if (!FileExplorerGetFile(&get_data)) {
+			if (!OS::FileExplorerGetFile(&get_data)) {
 				CreateErrorMessageWindow(system, get_data.error_message);
 			}
 			else {
@@ -3243,7 +3243,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerPathInputFolderActionData* data = (UIDrawerPathInputFolderActionData*)_data;
-			OSFileExplorerGetDirectoryData get_data;
+			OS::FileExplorerGetDirectoryData get_data;
 
 			const unsigned int FOLDER_PATH_MAX_SIZE = 512;
 			wchar_t folder_path[FOLDER_PATH_MAX_SIZE];
@@ -3254,7 +3254,7 @@ namespace ECSEngine {
 			get_data.path.size = 0;
 			get_data.error_message.InitializeFromBuffer(error_message, 0, ERROR_MESSAGE_SIZE);
 
-			if (!FileExplorerGetDirectory(&get_data)) {
+			if (!OS::FileExplorerGetDirectory(&get_data)) {
 				CreateErrorMessageWindow(system, get_data.error_message);
 			}
 			else {
@@ -3406,11 +3406,11 @@ namespace ECSEngine {
 						data->draw_data->path->buffer[data->draw_data->path->size] = L'\0';
 					}
 				}
-				CloseXBorderClickableAction(action_data);
+				DestroyCurrentActionWindow(action_data);
 			};
 
 			auto cancel_button_action = [](ActionData* action_data) {
-				CloseXBorderClickableAction(action_data);
+				DestroyCurrentActionWindow(action_data);
 			};
 
 			const char* OK_STRING = "OK";
@@ -3521,63 +3521,15 @@ namespace ECSEngine {
 				data->hierarchy_data->ChangeSelection(label, action_data);
 
 				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
-				unsigned int dynamic_index = -1;
-				if (data->hierarchy_data->identifier.size > 0) {
-					dynamic_index = system->GetWindowDynamicElement(window_index, data->hierarchy_data->identifier);
-				}
 
 				// Look to see if we need to remove it or add it
 				unsigned int opened_index = function::FindString(label, data->hierarchy_data->opened_labels);
-
-				const void* old_buffer = data->hierarchy_data->opened_labels.buffer;
 				if (opened_index == -1) {
-					// Allocate the label into the opened stream
-					void* allocation = system->m_memory->Allocate(label.size * sizeof(char), alignof(char));
-					label.CopyTo(allocation);
-					data->hierarchy_data->opened_labels.size++;
-					void* new_buffer_allocation = system->m_memory->Allocate(sizeof(Stream<char>) * data->hierarchy_data->opened_labels.size);
-
-					if (data->hierarchy_data->opened_labels.size > 1) {
-						memcpy(new_buffer_allocation, old_buffer, sizeof(Stream<char>) * (data->hierarchy_data->opened_labels.size - 1));
-						// Replace the buffer
-						system->ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer_allocation);
-						if (dynamic_index != -1) {
-							system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, new_buffer_allocation);
-						}
-
-						data->hierarchy_data->opened_labels.buffer = (Stream<char>*)new_buffer_allocation;
-					}
-					else {
-						// Must add this allocation
-						system->AddWindowMemoryResource(new_buffer_allocation, window_index);
-						if (dynamic_index != -1) {
-							system->AddWindowDynamicElementAllocation(window_index, dynamic_index, new_buffer_allocation);
-						}
-					}
+					data->hierarchy_data->AddOpenedLabel(system, window_index, label);
 				}
 				else {
-					// Remove it or replace it
-					data->hierarchy_data->opened_labels.RemoveSwapBack(opened_index);
-					if (data->hierarchy_data->opened_labels.size > 0) {
-						// Replace
-						void* new_buffer_allocation = system->m_memory->Allocate(sizeof(Stream<char>) * data->hierarchy_data->opened_labels.size);
-						data->hierarchy_data->opened_labels.CopyTo(new_buffer_allocation);
-						system->ReplaceWindowMemoryResource(window_index, old_buffer, new_buffer_allocation);
-						if (dynamic_index != -1) {
-							system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, old_buffer, new_buffer_allocation);
-						}
-						data->hierarchy_data->opened_labels.buffer = (Stream<char>*)new_buffer_allocation;
-					}
-					else {
-						// Remove
-						system->RemoveWindowMemoryResource(window_index, data->hierarchy_data->opened_labels.buffer);
-						if (dynamic_index != -1) {
-							system->RemoveWindowDynamicResourceAllocation(window_index, dynamic_index, data->hierarchy_data->opened_labels.buffer);
-						}
-					}
+					data->hierarchy_data->RemoveOpenedLabel(system, window_index, label);
 				}
-
-				system->m_memory->Deallocate(old_buffer);
 			}
 		}
 
@@ -3605,8 +3557,8 @@ namespace ECSEngine {
 		{
 			UI_UNPACK_ACTION_DATA;
 
-			const size_t double_click_milliseconds = 50;
-			const size_t drag_milliseconds = 100;
+			const size_t double_click_milliseconds = 300;
+			const size_t drag_milliseconds = 600;
 
 			LabelHierarchyClickActionData* data = (LabelHierarchyClickActionData*)_data;
 			LabelHierarchyClickActionData* additional_data = (LabelHierarchyClickActionData*)_additional_data;
@@ -3649,6 +3601,7 @@ namespace ECSEngine {
 							data->click_count = 0;
 						}
 					}
+					data->timer.SetNewStart();
 
 					// If ctrl is pressed, then add/remove else change the selected label
 					// If shift is pressed, activate the determine_selection
@@ -3679,25 +3632,23 @@ namespace ECSEngine {
 							}
 							else if (mouse_tracker->LeftButton() == MBRELEASED) {
 								data->hierarchy_data->is_dragging = false;
-								// Call the drag handler now, only if a label if hovered
-								if (data->hierarchy_data->hovered_label.size > 0) {
-									if (!data->hierarchy_data->reject_same_label_drag || function::FindString(label, data->hierarchy_data->selected_labels) == -1) {
-										UIDrawerLabelHierarchyDragData drag_data;
-										drag_data.data = data->hierarchy_data->drag_data;
-										drag_data.destination_label = data->hierarchy_data->hovered_label;
-										drag_data.source_label = data->hierarchy_data->selected_labels;
+								// Call the drag handler now
+								if (!data->hierarchy_data->reject_same_label_drag || function::FindString(data->hierarchy_data->hovered_label, data->hierarchy_data->selected_labels) == -1) {
+									UIDrawerLabelHierarchyDragData drag_data;
+									drag_data.data = data->hierarchy_data->drag_data;
+									drag_data.destination_label = data->hierarchy_data->hovered_label;
+									drag_data.source_labels = data->hierarchy_data->selected_labels;
 
-										action_data->data = &drag_data;
-										data->hierarchy_data->drag_action(action_data);
-									}
+									action_data->data = &drag_data;
+									data->hierarchy_data->drag_action(action_data);
+
+									// Add the label to the opened_labels
+									data->hierarchy_data->AddOpenedLabel(system, system->GetWindowIndexFromBorder(dockspace, border_index), data->hierarchy_data->hovered_label);
 								}
 							}
 						}
 					}
 				}
-			}
-			else {
-				data->hierarchy_data->ClearSelection(action_data);
 			}
 		}
 
@@ -3709,15 +3660,17 @@ namespace ECSEngine {
 
 			UIDrawerLabelHierarchyRightClickData* data = (UIDrawerLabelHierarchyRightClickData*)_data;
 
-			// Change the selected label to this one
-			Stream<char> label = data->GetLabel();
-			unsigned int selected_index = function::FindString(label, data->hierarchy->selected_labels);
-			if (selected_index == -1) {
-				data->hierarchy->ChangeSelection(label, action_data);
-			}
+			if (mouse_tracker->RightButton() == MBRELEASED) {
+				// Change the selected label to this one
+				Stream<char> label = data->GetLabel();
+				unsigned int selected_index = function::FindString(label, data->hierarchy->selected_labels);
+				if (selected_index == -1) {
+					data->hierarchy->ChangeSelection(label, action_data);
+				}
 
-			data->data = data->hierarchy->right_click_data;
-			data->hierarchy->right_click_action(action_data);
+				data->data = data->hierarchy->right_click_data;
+				data->hierarchy->right_click_action(action_data);
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

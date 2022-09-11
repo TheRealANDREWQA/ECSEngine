@@ -294,9 +294,6 @@ namespace ECSEngine {
 				// It is not a basic type - should look for it as a dependency
 				if (basic_field_type == ReflectionBasicFieldType::Unknown) {
 					ReflectionType nested_type;
-					char previous_char = dependent_data.dependent_types[subindex][dependent_data.dependent_types[subindex].size];
-					dependent_data.dependent_types[subindex][dependent_data.dependent_types[subindex].size] = '\0';
-
 					// It is a reflected type - make sure its dependencies are met
 					if (reflection_manager->TryGetType(dependent_data.dependent_types[subindex].buffer, nested_type)) {
 						if (!SerializeHasDependentTypes(reflection_manager, &nested_type, omit_fields)) {
@@ -311,8 +308,6 @@ namespace ECSEngine {
 							return true;
 						}
 					}
-
-					dependent_data.dependent_types[subindex][dependent_data.dependent_types[subindex].size] = previous_char;
 				}
 				// If it is a basic type, then these should not count as dependencies
 			}

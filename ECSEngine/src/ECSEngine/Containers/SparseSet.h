@@ -19,30 +19,23 @@ namespace ECSEngine {
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(SparseSet);
 
 		// Returns the handle to the element that was added
-		unsigned int Add(T element) {
-			ECS_ASSERT(size < capacity);
-
-			// Grab the next valid slot indicated by first empty slot
-			// This value should be greater or equal to the capacity in order to be free
-			// otherise it is occupied
-			unsigned int next_empty_slot = indirection_buffer[first_empty_slot].x;
-
-			// Now set the index to be the size of the array and that slot to point to this one
-			indirection_buffer[first_empty_slot].x = size;
-			indirection_buffer[size].y = first_empty_slot;
-	
-			unsigned int handle = first_empty_slot;
-			// Update the new head
-			first_empty_slot = next_empty_slot - capacity;
-
+		unsigned int Add(T element) {		
+			unsigned int handle = Allocate();
 			// Place the element now
-			buffer[size] = element;
-			size++;
+			buffer[GetIndexFromHandle(handle)] = element;
 			return handle;
 		}
 
 		// Returns the handle to the element that was added
 		unsigned int Add(const T* element) {
+			unsigned int handle = Allocate();
+			// Place the element now
+			buffer[GetIndexFromHandle(handle)] = *element;
+			return handle;
+		}
+
+		// Only allocates a handle, without setting the element
+		unsigned int Allocate() {
 			ECS_ASSERT(size < capacity);
 
 			// Grab the next valid slot indicated by first empty slot
@@ -57,10 +50,8 @@ namespace ECSEngine {
 			unsigned int handle = first_empty_slot;
 			// Update the new head
 			first_empty_slot = next_empty_slot - capacity;
-
-			// Place the element now
-			buffer[size] = *element;
 			size++;
+			
 			return handle;
 		}
 

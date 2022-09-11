@@ -62,7 +62,7 @@ void ChooseDirectoryOrFileNameButtonAction(ActionData* action_data) {
 		action_data->data = data->callback.data;
 		data->callback.action(action_data);
 	}
-	CloseXBorderClickableAction(action_data);
+	DestroyCurrentActionWindow(action_data);
 }
 
 void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool initialize) {
@@ -127,14 +127,14 @@ void ChooseDirectoryOrFileName(void* window_data, void* drawer_descriptor, bool 
 	absolute_transform.scale = label_size;
 
 	config.AddFlag(absolute_transform);
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Finish", { ChooseDirectoryOrFileNameButtonAction, data, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Finish", { ChooseDirectoryOrFileNameButtonAction, data, 0, ECS_UI_DRAW_SYSTEM });
 	config.flag_count--;
 	
 
 	absolute_transform.scale = drawer.GetLabelScale("Cancel");
 	absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
 	config.AddFlag(absolute_transform);
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM,config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM,config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 unsigned int CreateChooseDirectoryOrFileNameDockspace(UISystem* system, ChooseDirectoryOrFileNameData data)

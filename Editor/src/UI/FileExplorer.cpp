@@ -11,6 +11,8 @@
 #include "ECSEngineRendering.h"
 #include "ECSEngineRenderingCompression.h"
 
+#include "Scene.h"
+
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
@@ -33,8 +35,8 @@ char* FILE_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCop
 constexpr size_t FOLDER_RIGHT_CLICK_ROW_COUNT = 7;
 char* FOLDER_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy";
 
-constexpr size_t FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT = 2;
-char* FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS = "Paste\nReset Copied Files";
+constexpr size_t FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT = 3;
+char* FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS = "Create New Scene\nPaste\nReset Copied Files";
 
 constexpr const char* RENAME_LABEL_FILE_NAME = "Rename File";
 constexpr const char* RENAME_LABEL_FILE_INPUT_NAME = "New file name";
@@ -60,7 +62,6 @@ constexpr unsigned int FILE_EXPLORER_FLAGS_DRAG_SELECTED_FILES = 1 << 3;
 constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_STARTED = 1 << 1;
 constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_ENDED = 1 << 2;
 constexpr unsigned int FILE_EXPLORER_FLAGS_PRELOAD_LAUNCHED_THREADS = 1 << 3;
-
 
 constexpr int COLOR_CUT_ALPHA = 90;
 
@@ -91,6 +92,7 @@ enum FOLDER_RIGHT_CLICK_INDEX {
 };
 
 enum DESELECTION_RIGHT_CLICK_INDEX {
+	DESELECTION_RIGHT_CLICK_CREATE_NEW_SCENE,
 	DESELECTION_RIGHT_CLICK_PASTE,
 	DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES
 };
@@ -699,6 +701,10 @@ void FileMeshDraw(ActionData* action_data) {
 	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_MESH);
 }
 
+void FileSceneDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_SCENE);
+}
+
 void FileMeshThumbnailDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
@@ -827,6 +833,9 @@ void FileExplorerDrag(ActionData* action_data) {
 						else {
 							texture = ECS_TOOLS_UI_TEXTURE_FILE_MESH;
 						}
+					}
+					else if (action == FileSceneDraw) {
+						texture = ECS_TOOLS_UI_TEXTURE_FILE_SCENE;
 					}
 				}
 				else {
@@ -1033,7 +1042,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 			CreateErrorMessageWindow(system, error_message);
 		}
 
-		CloseXBorderClickableAction(action_data);
+		DestroyCurrentActionWindow(action_data);
 	};
 
 	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, OVERWRITE_TEXT, { overwrite_action, &internal_data, sizeof(internal_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
@@ -1048,7 +1057,7 @@ void FileExplorerSelectOverwriteFilesDraw(void* window_data, void* drawer_descri
 
 		FileExplorerSelectOverwriteFilesData* data = (FileExplorerSelectOverwriteFilesData*)_data;
 		FileExplorerResetSelectedFiles(data->explorer_data);
-		CloseXBorderClickableAction(action_data);
+		DestroyCurrentActionWindow(action_data);
 	};
 	config.AddFlag(transform);
 
@@ -1520,6 +1529,8 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
 			data->deselection_right_click_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
 
+			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_CREATE_NEW_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+
 			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
 
 			auto reset_copied_files = [](ActionData* action_data) {
@@ -1592,6 +1603,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			ADD_FUNCTOR(FileShaderDraw, L".hlsli");
 			ADD_FUNCTOR(FileMeshDraw, L".gltf");
 			ADD_FUNCTOR(FileMeshDraw, L".glb");
+			ADD_FUNCTOR(FileSceneDraw, L".scene");
 
 #undef ADD_FUNCTOR
 		}
@@ -1624,7 +1636,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	deselection_right_click_data.state.left_characters = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS;
 	deselection_right_click_data.state.row_count = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT;
 
-	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_right_click_data, sizeof(deselection_right_click_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_right_click_data, sizeof(deselection_right_click_data), ECS_UI_DRAW_SYSTEM };
 	drawer.SetWindowHoverable(&deselect_right_click_handler);
 
 #pragma endregion
@@ -2032,7 +2044,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				};
 				
 				right_click_data.action = OnRightClickAction;
-				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM };
+				right_click_data.is_action_data_ptr = false;
+				hoverable_action.handler = { RightClickMenu, &right_click_data, sizeof(right_click_data), ECS_UI_DRAW_SYSTEM };
 				config->AddFlag(hoverable_action);
 
 				float2 rectangle_position;

@@ -13,7 +13,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------
 
 	ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(MaterialAsset) {
-		return Reflection::ReflectionCustomTypeMatchTemplate(data, STRING(MaterialAsset));
+		return function::CompareStrings(data->definition, STRING(MaterialAsset));
 	}
 
 	// --------------------------------------------------------------------------------------------

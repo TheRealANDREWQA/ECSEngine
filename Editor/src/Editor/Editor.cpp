@@ -35,7 +35,7 @@ using namespace ECSEngine::Tools;
 
 class Editor : public ECSEngine::Application {
 public:
-	Editor(int width, int height, LPCWSTR name) noexcept;
+	Editor(int width, int height, LPCWSTR name);
 	Editor() : timer("Editor")/*, width(0), height(0)*/ {};
 	~Editor();
 	Editor(const Editor&) = delete;
@@ -657,251 +657,267 @@ public:
 		//bench_string[bench_string.size] = '\0';
 		//OutputDebugStringA(bench_string.buffer);
 
-		while (result == 0) {
-			while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
-				switch (message.message) {
-				case WM_QUIT:
-					result = -1;
-					break;
+		while (true) {
+
+			auto run_application = [&](char application_quit_value) {
+				while (result == 0 && application_quit == application_quit_value) {
+					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
+						switch (message.message) {
+						case WM_QUIT:
+							result = -1;
+							break;
+						}
+						TranslateMessage(&message);
+						DispatchMessage(&message);
+					}
+
+					unsigned int frame_pacing = 0;
+
+					static bool CAMERA_CHANGED = true;
+
+					if (!IsIconic(hWnd)) {
+						auto mouse_state = mouse.GetState();
+						auto keyboard_state = keyboard.GetState();
+						mouse.UpdateState();
+						mouse.UpdateTracker();
+						keyboard.UpdateState();
+						keyboard.UpdateTracker();
+
+						unsigned int VALUE = 0;
+
+						unsigned int window_index = editor_state.ui_system->GetWindowFromName("Game");
+						if (window_index == -1)
+							window_index = 0;
+						float aspect_ratio = editor_state.ui_system->m_windows[window_index].transform.scale.x / editor_state.ui_system->m_windows[window_index].transform.scale.y
+							* graphics->m_window_size.x / graphics->m_window_size.y;
+
+						//Shaders::SetPBRPixelEnvironmentConstant(environment_constants, graphics, { specular_max_mip, environment_diffuse_factor, environment_specular_factor });
+
+						graphics->ClearBackBuffer(0.0f, 0.0f, 0.0f);
+						const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
+
+						timer.SetMarker();
+
+						float horizontal_rotation = 0.0f;
+						float vertical_rotation = 0.0f;
+
+						if (mouse_state->MiddleButton()) {
+							float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
+							float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
+
+							float3 right_vector = GetRightVector(camera.rotation);
+							float3 up_vector = GetUpVector(camera.rotation);
+
+							float factor = 10.0f;
+
+							if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
+								factor = 2.5f;
+							}
+
+							VALUE = 4;
+
+							camera.translation -= right_vector * float3::Splat(delta.x * factor) - up_vector * float3::Splat(delta.y * factor);
+							CAMERA_CHANGED = true;
+						}
+						if (mouse_state->LeftButton()) {
+							float factor = 75.0f;
+							float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
+							float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
+
+							if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
+								factor = 10.0f;
+							}
+
+							VALUE = 4;
+
+							camera.rotation.x += delta.y * factor;
+							camera.rotation.y += delta.x * factor;
+							CAMERA_CHANGED = true;
+
+							horizontal_rotation -= delta.x * factor;
+							vertical_rotation -= delta.y * factor;
+						}
+
+						int scroll_delta = mouse_state->ScrollDelta();
+						if (scroll_delta != 0) {
+							float factor = 0.015f;
+
+							VALUE = 4;
+
+							if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
+								factor = 0.005f;
+							}
+
+							float3 forward_vector = GetForwardVector(camera.rotation);
+
+							camera.translation += forward_vector * float3::Splat(scroll_delta * factor);
+							CAMERA_CHANGED = true;
+						}
+
+						HID::MouseTracker* mouse_tracker = mouse.GetTracker();
+						if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED || mouse_tracker->LeftButton() == MBPRESSED) {
+							mouse.EnableRawInput();
+						}
+						else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED || mouse_tracker->LeftButton() == MBRELEASED) {
+							mouse.DisableRawInput();
+						}
+
+						//if (CAMERA_CHANGED) {
+							//graphics->m_context->ClearDepthStencilView(editor_state.viewport_texture_depth.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+							//graphics.m_context->ClearRenderTargetView(editor_state.viewport_render_target, colors);
+
+						//	Matrix cube_matrix = MatrixTranspose(camera.GetProjectionViewMatrix());
+
+						//	graphics->DisableDepth();
+						//	graphics->DisableCulling();
+						//	graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE);
+						//	graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+						//	graphics->BindVertexBuffer(cube_v_buffer);
+						//	graphics->BindIndexBuffer(cube_v_index);
+						//	if (diffuse_cube) {
+						//		graphics->BindPixelResourceView(diffuse_view);
+						//	}
+						//	else if (specular_cube) {
+						//		graphics->BindPixelResourceView(specular_view);
+						//	}
+						//	else {
+						//		graphics->BindPixelResourceView(converted_cube_view);
+						//	}
+						//	Shaders::SetPBRSkyboxVertexConstant(skybox_vertex_constant, graphics, camera.rotation, camera.projection);
+						//	graphics->BindVertexConstantBuffer(skybox_vertex_constant);
+						//	graphics->DrawIndexed(cube_v_index.count);
+						//	graphics->EnableDepth();
+						//	graphics->EnableCulling();
+
+						//	graphics->BindVertexShader(PBR_vertex_shader);
+						//	graphics->BindPixelShader(PBR_pixel_shader);
+						//	graphics->BindInputLayout(PBR_layout);
+
+						//	graphics->BindSamplerState(graphics->m_shader_helpers[0].pixel_sampler, 1);
+
+						//	graphics->BindPixelResourceView(plank_texture);
+						//	graphics->BindPixelResourceView(plank_normal_texture, 1);
+						//	//graphics.BindPixelResourceView(plank_metallic, 2);
+						//	graphics->BindPixelResourceView(plank_roughness, 3);
+						//	graphics->BindPixelResourceView(plank_ao, 4);
+						//	graphics->BindPixelResourceView(diffuse_view, 5);
+						//	graphics->BindPixelResourceView(specular_view, 6);
+						//	graphics->BindPixelResourceView(brdf_lut_view, 7);
+
+						//	Shaders::SetCameraPosition(camera_position_buffer, graphics, camera.translation);
+
+						//	ConstantBuffer vertex_constant_buffers[1];
+						//	vertex_constant_buffers[0] = pbr_vertex_values;
+						//	graphics->BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
+
+						//	Shaders::SetDirectionalLight(directional_light, graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
+
+						//	Shaders::SetPointLight(point_light, graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
+						//	ColorFloat spot_light_color = ColorFloat(3.0f, 3.0f, 3.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
+						//	Shaders::SetSpotLight(spot_light, graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
+
+						//	float* normal_strength_data = (float*)graphics->MapBuffer(normal_strength_buffer.buffer);
+						//	*normal_strength_data = normal_strength;
+						//	graphics->UnmapBuffer(normal_strength_buffer.buffer);
+
+						//	float2* _pbr_values = (float2*)graphics->MapBuffer(pbr_pixel_values.buffer);
+						//	*_pbr_values = { metallic, roughness };
+						//	graphics->UnmapBuffer(pbr_pixel_values.buffer);
+
+						//	float4* _pbr_lights = (float4*)graphics->MapBuffer(pbr_lights.buffer);
+						//	for (size_t index = 0; index < 4; index++) {
+						//		_pbr_lights[0] = { pbr_light_pos[index].x, pbr_light_pos[index].y, pbr_light_pos[index].z, 0.0f };
+						//		_pbr_lights++;
+						//	}
+						//	for (size_t index = 0; index < 4; index++) {
+						//		_pbr_lights[0] = { pbr_light_color[index].red, pbr_light_color[index].green, pbr_light_color[index].blue, pbr_light_color[index].alpha };
+						//		_pbr_lights++;
+						//	}
+						//	for (size_t index = 0; index < 4; index++) {
+						//		_pbr_lights[0].x = pbr_light_range[index];
+						//		_pbr_lights++;
+						//	}
+						//	graphics->UnmapBuffer(pbr_lights.buffer);
+
+						//	Shaders::PBRPixelConstants pixel_constants;
+						//	pixel_constants.tint = tint;
+						//	pixel_constants.normal_strength = normal_strength;
+						//	pixel_constants.metallic_factor = metallic;
+						//	pixel_constants.roughness_factor = roughness;
+						//	Shaders::SetPBRPixelConstants(pbr_pixel_values, graphics, pixel_constants);
+
+						//	ConstantBuffer pixel_constant_buffer[5];
+						//	pixel_constant_buffer[0] = camera_position_buffer;
+						//	pixel_constant_buffer[1] = environment_constants;
+						//	pixel_constant_buffer[2] = pbr_pixel_values;
+						//	pixel_constant_buffer[3] = pbr_lights;
+						//	pixel_constant_buffer[4] = directional_light;
+
+						//	graphics->BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
+
+						//	camera.SetPerspectiveProjectionFOV(60.0f, aspect_ratio, 0.05f, 1000.0f);
+
+						//	Matrix camera_matrix = camera.GetProjectionViewMatrix();
+
+						//	Matrix world_matrices[1];
+						//	for (size_t subindex = 0; subindex < 1; subindex++) {
+						//		void* obj_ptr = graphics->MapBuffer(obj_buffer.buffer);
+						//		float* reinter = (float*)obj_ptr;
+						//		DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
+
+						//		Matrix matrix = /*MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) **/ MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
+						//			* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
+						//		Matrix world_matrix = matrix;
+						//		world_matrices[subindex] = world_matrix;
+						//		Matrix transpose = MatrixTranspose(matrix);
+						//		transpose.Store(reinter);
+
+						//		Matrix MVP_matrix = matrix * camera_matrix;
+						//		matrix = MatrixTranspose(MVP_matrix);
+						//		matrix.Store(reinter + 16);
+
+						//		graphics->UnmapBuffer(obj_buffer.buffer);
+						//		graphics->BindSamplerState(sampler);
+
+						//		ECS_MESH_INDEX mapping[3];
+						//		mapping[0] = ECS_MESH_POSITION;
+						//		mapping[1] = ECS_MESH_NORMAL;
+						//		mapping[2] = ECS_MESH_UV;
+
+						//		Shaders::SetPBRVertexConstants(pbr_vertex_values, graphics, MatrixTranspose(world_matrices[subindex]), MatrixTranspose(MVP_matrix), uv_tiling, uv_offsets);
+
+						//		graphics->BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
+						//		graphics->DrawIndexed(normal_merged_mesh.index_buffer.count);
+						//	}
+						//}
+
+						graphics->BindRenderTargetViewFromInitialViews();
+
+						//CAMERA_CHANGED = false;
+
+						editor_state.Tick();
+
+						frame_pacing = editor_state.ui_system->DoFrame();
+						frame_pacing = std::max(frame_pacing, VALUE);
+
+						graphics->SwapBuffers(0);
+						mouse.SetPreviousPositionAndScroll();
+					}
+
+					std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
 				}
-				TranslateMessage(&message);
-				DispatchMessage(&message);
+			};
+
+			run_application(0);
+
+			EditorStateApplicationQuit(&editor_state, &application_quit);
+
+			run_application(-1);
+			if (application_quit == 1) {
+				break;
 			}
 
-			unsigned int frame_pacing = 0;
-
-			static bool CAMERA_CHANGED = true;
-
-			if (!IsIconic(hWnd)) {
-				auto mouse_state = mouse.GetState();
-				auto keyboard_state = keyboard.GetState();
-				mouse.UpdateState();
-				mouse.UpdateTracker();
-				keyboard.UpdateState();
-				keyboard.UpdateTracker();
-
-				unsigned int VALUE = 0;
-
-				unsigned int window_index = editor_state.ui_system->GetWindowFromName("Game");
-				if (window_index == -1)
-					window_index = 0;
-				float aspect_ratio = editor_state.ui_system->m_windows[window_index].transform.scale.x / editor_state.ui_system->m_windows[window_index].transform.scale.y
-					* graphics->m_window_size.x / graphics->m_window_size.y;
-
-				//Shaders::SetPBRPixelEnvironmentConstant(environment_constants, graphics, { specular_max_mip, environment_diffuse_factor, environment_specular_factor });
-
-				graphics->ClearBackBuffer(0.0f, 0.0f, 0.0f);
-				const float colors[4] = { 0.3f, 0.6f, 0.95f, 1.0f };
-
-				timer.SetMarker();
-
-				float horizontal_rotation = 0.0f;
-				float vertical_rotation = 0.0f;
-
-				if (mouse_state->MiddleButton()) {
-					float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
-					float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
-
-					float3 right_vector = GetRightVector(camera.rotation);
-					float3 up_vector = GetUpVector(camera.rotation);
-
-					float factor = 10.0f;
-
-					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-						factor = 2.5f;
-					}
-
-					VALUE = 4;
-
-					camera.translation -= right_vector * float3::Splat(delta.x * factor) - up_vector * float3::Splat(delta.y * factor);
-					CAMERA_CHANGED = true;
-				}
-				if (mouse_state->LeftButton()) {
-					float factor = 75.0f;
-					float2 mouse_position = editor_state.ui_system->GetNormalizeMousePosition();
-					float2 delta = editor_state.ui_system->GetMouseDelta(mouse_position);
-
-					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-						factor = 10.0f;
-					}
-
-					VALUE = 4;
-
-					camera.rotation.x += delta.y * factor;
-					camera.rotation.y += delta.x * factor;
-					CAMERA_CHANGED = true;
-
-					horizontal_rotation -= delta.x * factor;
-					vertical_rotation -= delta.y * factor;
-				}
-
-				int scroll_delta = mouse_state->ScrollDelta();
-				if (scroll_delta != 0) {
-					float factor = 0.015f;
-
-					VALUE = 4;
-
-					if (keyboard_state->IsKeyDown(HID::Key::LeftShift)) {
-						factor = 0.005f;
-					}
-
-					float3 forward_vector = GetForwardVector(camera.rotation);
-
-					camera.translation += forward_vector * float3::Splat(scroll_delta * factor);
-					CAMERA_CHANGED = true;
-				}
-
-				HID::MouseTracker* mouse_tracker = mouse.GetTracker();
-				if (mouse_tracker->RightButton() == MBPRESSED || mouse_tracker->MiddleButton() == MBPRESSED || mouse_tracker->LeftButton() == MBPRESSED) {
-					mouse.EnableRawInput();
-				}
-				else if (mouse_tracker->RightButton() == MBRELEASED || mouse_tracker->MiddleButton() == MBRELEASED || mouse_tracker->LeftButton() == MBRELEASED) {
-					mouse.DisableRawInput();
-				}
-
-				//if (CAMERA_CHANGED) {
-					//graphics->m_context->ClearDepthStencilView(editor_state.viewport_texture_depth.view, D3D11_CLEAR_DEPTH, 1.0f, 0);
-					//graphics.m_context->ClearRenderTargetView(editor_state.viewport_render_target, colors);
-
-				//	Matrix cube_matrix = MatrixTranspose(camera.GetProjectionViewMatrix());
-
-				//	graphics->DisableDepth();
-				//	graphics->DisableCulling();
-				//	graphics->BindHelperShader(ECS_GRAPHICS_SHADER_HELPER_VISUALIZE_TEXTURE_CUBE);
-				//	graphics->BindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				//	graphics->BindVertexBuffer(cube_v_buffer);
-				//	graphics->BindIndexBuffer(cube_v_index);
-				//	if (diffuse_cube) {
-				//		graphics->BindPixelResourceView(diffuse_view);
-				//	}
-				//	else if (specular_cube) {
-				//		graphics->BindPixelResourceView(specular_view);
-				//	}
-				//	else {
-				//		graphics->BindPixelResourceView(converted_cube_view);
-				//	}
-				//	Shaders::SetPBRSkyboxVertexConstant(skybox_vertex_constant, graphics, camera.rotation, camera.projection);
-				//	graphics->BindVertexConstantBuffer(skybox_vertex_constant);
-				//	graphics->DrawIndexed(cube_v_index.count);
-				//	graphics->EnableDepth();
-				//	graphics->EnableCulling();
-
-				//	graphics->BindVertexShader(PBR_vertex_shader);
-				//	graphics->BindPixelShader(PBR_pixel_shader);
-				//	graphics->BindInputLayout(PBR_layout);
-
-				//	graphics->BindSamplerState(graphics->m_shader_helpers[0].pixel_sampler, 1);
-
-				//	graphics->BindPixelResourceView(plank_texture);
-				//	graphics->BindPixelResourceView(plank_normal_texture, 1);
-				//	//graphics.BindPixelResourceView(plank_metallic, 2);
-				//	graphics->BindPixelResourceView(plank_roughness, 3);
-				//	graphics->BindPixelResourceView(plank_ao, 4);
-				//	graphics->BindPixelResourceView(diffuse_view, 5);
-				//	graphics->BindPixelResourceView(specular_view, 6);
-				//	graphics->BindPixelResourceView(brdf_lut_view, 7);
-
-				//	Shaders::SetCameraPosition(camera_position_buffer, graphics, camera.translation);
-
-				//	ConstantBuffer vertex_constant_buffers[1];
-				//	vertex_constant_buffers[0] = pbr_vertex_values;
-				//	graphics->BindVertexConstantBuffers(Stream<ConstantBuffer>(vertex_constant_buffers, std::size(vertex_constant_buffers)));
-
-				//	Shaders::SetDirectionalLight(directional_light, graphics, LIGHT_DIRECTION, LIGHT_INTENSITY);
-
-				//	Shaders::SetPointLight(point_light, graphics, float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 4.0f, 0.0f, 20.0f), 2.5f, 1.5f, ColorFloat(1.0f, 1.0f, 1.0f));
-				//	ColorFloat spot_light_color = ColorFloat(3.0f, 3.0f, 3.0f)/* * cos(timer.GetDurationSinceMarker_ms() * 0.000001f)*/;
-				//	Shaders::SetSpotLight(spot_light, graphics, float3(0.0f, 8.0f, 20.0f), float3(sin(timer.GetDurationSinceMarker_ms() * 0.0001f) * 0.5f, -1.0f, 0.0f), 15.0f, 22.0f, 15.0f, 2.0f, 2.0f, spot_light_color);
-
-				//	float* normal_strength_data = (float*)graphics->MapBuffer(normal_strength_buffer.buffer);
-				//	*normal_strength_data = normal_strength;
-				//	graphics->UnmapBuffer(normal_strength_buffer.buffer);
-
-				//	float2* _pbr_values = (float2*)graphics->MapBuffer(pbr_pixel_values.buffer);
-				//	*_pbr_values = { metallic, roughness };
-				//	graphics->UnmapBuffer(pbr_pixel_values.buffer);
-
-				//	float4* _pbr_lights = (float4*)graphics->MapBuffer(pbr_lights.buffer);
-				//	for (size_t index = 0; index < 4; index++) {
-				//		_pbr_lights[0] = { pbr_light_pos[index].x, pbr_light_pos[index].y, pbr_light_pos[index].z, 0.0f };
-				//		_pbr_lights++;
-				//	}
-				//	for (size_t index = 0; index < 4; index++) {
-				//		_pbr_lights[0] = { pbr_light_color[index].red, pbr_light_color[index].green, pbr_light_color[index].blue, pbr_light_color[index].alpha };
-				//		_pbr_lights++;
-				//	}
-				//	for (size_t index = 0; index < 4; index++) {
-				//		_pbr_lights[0].x = pbr_light_range[index];
-				//		_pbr_lights++;
-				//	}
-				//	graphics->UnmapBuffer(pbr_lights.buffer);
-
-				//	Shaders::PBRPixelConstants pixel_constants;
-				//	pixel_constants.tint = tint;
-				//	pixel_constants.normal_strength = normal_strength;
-				//	pixel_constants.metallic_factor = metallic;
-				//	pixel_constants.roughness_factor = roughness;
-				//	Shaders::SetPBRPixelConstants(pbr_pixel_values, graphics, pixel_constants);
-
-				//	ConstantBuffer pixel_constant_buffer[5];
-				//	pixel_constant_buffer[0] = camera_position_buffer;
-				//	pixel_constant_buffer[1] = environment_constants;
-				//	pixel_constant_buffer[2] = pbr_pixel_values;
-				//	pixel_constant_buffer[3] = pbr_lights;
-				//	pixel_constant_buffer[4] = directional_light;
-
-				//	graphics->BindPixelConstantBuffers({ pixel_constant_buffer, std::size(pixel_constant_buffer) });
-
-				//	camera.SetPerspectiveProjectionFOV(60.0f, aspect_ratio, 0.05f, 1000.0f);
-
-				//	Matrix camera_matrix = camera.GetProjectionViewMatrix();
-
-				//	Matrix world_matrices[1];
-				//	for (size_t subindex = 0; subindex < 1; subindex++) {
-				//		void* obj_ptr = graphics->MapBuffer(obj_buffer.buffer);
-				//		float* reinter = (float*)obj_ptr;
-				//		DirectX::XMMATRIX* reinterpretation = (DirectX::XMMATRIX*)obj_ptr;
-
-				//		Matrix matrix = /*MatrixRotationZ(sin(timer.GetDurationSinceMarker_ms() * 0.0005f) * 0.0f) **/ MatrixRotationY(0.0f) * MatrixRotationX(0.0f)
-				//			* MatrixTranslation(0.0f, 0.0f, 20.0f + subindex * 10.0f);
-				//		Matrix world_matrix = matrix;
-				//		world_matrices[subindex] = world_matrix;
-				//		Matrix transpose = MatrixTranspose(matrix);
-				//		transpose.Store(reinter);
-
-				//		Matrix MVP_matrix = matrix * camera_matrix;
-				//		matrix = MatrixTranspose(MVP_matrix);
-				//		matrix.Store(reinter + 16);
-
-				//		graphics->UnmapBuffer(obj_buffer.buffer);
-				//		graphics->BindSamplerState(sampler);
-
-				//		ECS_MESH_INDEX mapping[3];
-				//		mapping[0] = ECS_MESH_POSITION;
-				//		mapping[1] = ECS_MESH_NORMAL;
-				//		mapping[2] = ECS_MESH_UV;
-
-				//		Shaders::SetPBRVertexConstants(pbr_vertex_values, graphics, MatrixTranspose(world_matrices[subindex]), MatrixTranspose(MVP_matrix), uv_tiling, uv_offsets);
-
-				//		graphics->BindMesh(normal_merged_mesh, Stream<ECS_MESH_INDEX>(mapping, std::size(mapping)));
-				//		graphics->DrawIndexed(normal_merged_mesh.index_buffer.count);
-				//	}
-				//}
-
-				graphics->BindRenderTargetViewFromInitialViews();
-
-				//CAMERA_CHANGED = false;
-
-				editor_state.Tick();
-
-				frame_pacing = editor_state.ui_system->DoFrame();
-				frame_pacing = std::max(frame_pacing, VALUE);
-
-				graphics->SwapBuffers(0);
-				mouse.SetPreviousPositionAndScroll();
-			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_AMOUNT[frame_pacing]));
+			application_quit = 0;
 		}
 
 		editor_state.task_manager->SleepUntilDynamicTasksFinish();
@@ -931,6 +947,7 @@ public:
 		ECSEngine::HID::Keyboard keyboard;
 		ECSEngine::Stream<HCURSOR> cursors;
 		ECSEngine::ECS_CURSOR_TYPE current_cursor;
+		char application_quit;
 
 		// singleton that manages registering and unregistering the editor class
 		class EditorClass {
@@ -980,8 +997,10 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 	return editorClassName;
 }
 
-Editor::Editor(int _width, int _height, LPCWSTR name) noexcept : timer("Editor")
+Editor::Editor(int _width, int _height, LPCWSTR name) : timer("Editor")
 {
+	application_quit = 0;
+
 	// calculate window size based on desired client region
 	RECT windowRegion;
 	windowRegion.left = 0;
@@ -1094,7 +1113,7 @@ LRESULT Editor::HandleMessage(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 	switch (message) {
 	case WM_CLOSE:
-		PostQuitMessage(0);
+		application_quit = -1;
 		return 0;
 	case WM_ACTIVATEAPP:
 		keyboard.Procedure({ message, wParam, lParam });

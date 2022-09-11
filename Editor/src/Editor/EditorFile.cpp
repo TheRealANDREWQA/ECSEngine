@@ -48,7 +48,7 @@ void MissingProjectsDraw(void* window_data, void* drawer_descriptor, bool initia
 	transform.position.y = drawer.GetAlignedToBottom(transform.scale.y).y;
 	config.AddFlag(transform);
 	
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 void CreateMissingProjectWindow(EditorState* editor_state, Stream<Stream<char>> paths) {

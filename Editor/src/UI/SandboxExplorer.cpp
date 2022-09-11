@@ -350,7 +350,11 @@ void SandboxExplorerDraw(void* window_data, void* drawer_descriptor, bool initia
 
 		UIConfigWindowDependentSize dependent_size;
 		config.AddFlag(dependent_size);
-		editor_state->ui_reflection->DrawInstance(INSTANCE_NAME, drawer, config, UI_CONFIG_WINDOW_DEPENDENT_SIZE);
+		UIConfigNamePadding name_padding;
+		name_padding.alignment = ECS_UI_ALIGN_LEFT;
+		name_padding.total_length = 0.32f;
+		config.AddFlag(name_padding);
+		editor_state->ui_reflection->DrawInstance(INSTANCE_NAME, drawer, config, UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_NAME_PADDING | UI_CONFIG_ELEMENT_NAME_FIRST);
 
 		// Draw a save button and a default button
 		config.flag_count = 0;

@@ -173,7 +173,8 @@ namespace ECSEngine {
 
 	bool ReadFile(ECS_FILE_HANDLE handle, Stream<void> data)
 	{
-		return ReadFromFile(handle, data) != -1;
+		unsigned int val = ReadFromFile(handle, data) ;
+		return val != -1;
 	}
 
 	// --------------------------------------------------------------------------------------------------

@@ -417,7 +417,7 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 	bottom_button_transform.position.x = drawer.GetAlignedToRight(drawer.GetElementDefaultScale().x).x;
 	config.AddFlag(bottom_button_transform);
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 // -------------------------------------------------------------------------------------------------------------------

@@ -10,7 +10,7 @@
 
 #define ENTITY_MANAGER_SERIALIZE_VERSION 0
 
-#define ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY ECS_MB * 500
+#define ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY ECS_MB * 100
 
 namespace ECSEngine {
 
@@ -19,9 +19,6 @@ namespace ECSEngine {
 		unsigned int archetype_count;
 		unsigned short component_count;
 		unsigned short shared_component_count;
-
-		bool hierarchy_is_present[ECS_ENTITY_HIERARCHY_MAX_COUNT];
-		bool hierarchy_owning_children[ECS_ENTITY_HIERARCHY_MAX_COUNT];
 	};
 
 	struct ComponentPair {
@@ -127,29 +124,19 @@ namespace ECSEngine {
 		header->component_count = 0;
 		header->shared_component_count = 0;
 
-		memset(header->hierarchy_is_present, 0, sizeof(header->hierarchy_is_present));
-		memset(header->hierarchy_owning_children, 0, sizeof(header->hierarchy_owning_children));
-
-		for (unsigned short index = 0; index < ECS_ENTITY_HIERARCHY_MAX_COUNT; index++) {
-			if (entity_manager->ExistsHierarchy(index)) {
-				header->hierarchy_is_present[index] = true;
-				header->hierarchy_owning_children[index] = entity_manager->m_hierarchies[index].owning_children;
-			}
-		}
-
 		ComponentPair* component_pairs = (ComponentPair*)function::OffsetPointer(buffering, buffering_size);
 
 		// Determine the component count
 		ComponentPair* current_unique_pair = component_pairs;
 		for (unsigned int index = 0; index < entity_manager->m_unique_components.size; index++) {
-			Component component = { (unsigned short)index };
+			Component component = { (short)index };
 
 			bool exists = entity_manager->ExistsComponent(component);
 			header->component_count += exists;
 
 			if (exists) {
 				// Check to see if it has a name and get its version
-				SerializeEntityManagerComponentInfo component_info = component_table->GetValue<false>(component);
+				SerializeEntityManagerComponentInfo component_info = component_table->GetValue(component);
 
 				// Write the serialize version
 				current_unique_pair->serialize_version = component_info.version;
@@ -167,14 +154,14 @@ namespace ECSEngine {
 
 		SharedComponentPair* current_shared_pair = shared_component_pairs;
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
-			Component component = { (unsigned short)index };
+			Component component = { (short)index };
 
-			bool exists = entity_manager->ExistsSharedComponent({ (unsigned short)index });
+			bool exists = entity_manager->ExistsSharedComponent({ (short)index });
 			header->shared_component_count += exists;
 
 			if (exists) {
 				// Check to see if it has a name and get its version
-				SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue<false>(component);
+				SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue(component);
 
 				// Write the serialize version
 				current_shared_pair->serialize_version = component_info.version;
@@ -194,12 +181,12 @@ namespace ECSEngine {
 
 		// Write the names now - components and then shared components
 		for (unsigned int index = 0; index < entity_manager->m_unique_components.size; index++) {
-			Component component = { (unsigned short)index };
+			Component component = { (short)index };
 
 			bool exists = entity_manager->ExistsComponent(component);
 			if (exists) {
 				// Check to see if it has a name and get its version
-				SerializeEntityManagerComponentInfo component_info = component_table->GetValue<false>(component);
+				SerializeEntityManagerComponentInfo component_info = component_table->GetValue(component);
 
 				if (component_info.name.size > 0) {
 					memcpy(function::OffsetPointer(buffering, buffering_size), component_info.name.buffer, component_info.name.size);
@@ -209,12 +196,12 @@ namespace ECSEngine {
 		}
 
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
-			Component component = { (unsigned short)index };
+			Component component = { (short)index };
 
-			bool exists = entity_manager->ExistsSharedComponent({ (unsigned short)index });
+			bool exists = entity_manager->ExistsSharedComponent({ (short)index });
 			if (exists) {
 				// Check to see if it has a name and get its version
-				SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue<false>(component);
+				SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue(component);
 
 				if (component_info.name.size > 0) {
 					memcpy(function::OffsetPointer(buffering, buffering_size), component_info.name.buffer, component_info.name.size);
@@ -227,7 +214,7 @@ namespace ECSEngine {
 
 		void* header_component_data = function::OffsetPointer(buffering, buffering_size);
 		for (unsigned int index = 0; index < header->component_count; index++) {
-			SerializeEntityManagerComponentInfo component_info = component_table->GetValue<false>(component_pairs[index].component);
+			SerializeEntityManagerComponentInfo component_info = component_table->GetValue(component_pairs[index].component);
 			if (component_info.header_function != nullptr) {
 				SerializeEntityManagerHeaderComponentData header_data;
 				header_data.buffer = header_component_data;
@@ -246,7 +233,7 @@ namespace ECSEngine {
 		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 		void* header_shared_component_data = function::OffsetPointer(buffering, buffering_size);
 		for (unsigned int index = 0; index < header->shared_component_count; index++) {
-			SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue<false>(shared_component_pairs[index].component);
+			SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue(shared_component_pairs[index].component);
 			if (component_info.header_function != nullptr) {
 				SerializeEntityManagerHeaderSharedComponentData header_data;
 				header_data.buffer = header_shared_component_data;
@@ -267,7 +254,7 @@ namespace ECSEngine {
 
 		// Now write the named shared instances
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
-			Component current_component = { (unsigned short)index };
+			Component current_component = { (short)index };
 			if (entity_manager->ExistsSharedComponent(current_component)) {
 				// Write the pairs as shared instance, identifier size and at the end the buffers
 				// This is done like this in order to avoid on deserialization to read small chunks
@@ -277,20 +264,21 @@ namespace ECSEngine {
 					// It will make it easier to access them as a pair of unsigned shorts when deserializing
 					unsigned short short_size = (unsigned short)identifier.size;
 					Write<true>(&shared_component_buffering_instances_ptr, &short_size, sizeof(short_size));
+					buffering_size += sizeof(instance) + sizeof(short_size);
 					});
 			}
 		}
 
 		// Write the identifiers pointer data now
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
-			Component current_component = { (unsigned short)index };
+			Component current_component = { (short)index };
 			if (entity_manager->ExistsSharedComponent(current_component)) {
 				entity_manager->m_shared_components[index].named_instances.ForEachConst([&](SharedInstance instance, ResourceIdentifier identifier) {
 					Write<true>(&shared_component_buffering_instances_ptr, identifier.ptr, identifier.size);
-					});
+					buffering_size += identifier.size;
+				});
 			}
 		}
-		buffering_size = shared_component_buffering_instances_ptr - (uintptr_t)buffering - buffering_size;
 		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
 
 		bool success = WriteFile(file_handle, { buffering, buffering_size });
@@ -302,9 +290,9 @@ namespace ECSEngine {
 		// The instance data sizes for each shared component must be written before the actual data if the extract function is used
 		// Because otherwise the data cannot be recovered
 		for (unsigned int index = 0; index < entity_manager->m_shared_components.size; index++) {
-			Component current_component = { (unsigned short)index };
+			Component current_component = { (short)index };
 			if (entity_manager->ExistsSharedComponent(current_component)) {
-				SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue<false>(current_component);
+				SerializeEntityManagerSharedComponentInfo component_info = shared_component_table->GetValue(current_component);
 				unsigned int* instance_data_sizes = (unsigned int*)buffering;
 				buffering_size = sizeof(unsigned int) * entity_manager->m_shared_components[index].instances.stream.size;
 
@@ -314,7 +302,7 @@ namespace ECSEngine {
 					function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
 					function_data.component_data = entity_manager->m_shared_components[index].instances[instance_index];
 					function_data.extra_data = component_info.extra_data;
-					function_data.instance = { (unsigned short)instance_index };
+					function_data.instance = { (short)instance_index };
 
 					unsigned int write_count = component_info.function(&function_data);
 					// Assert that the buffering is enough - otherwise it complicates things a lot
@@ -345,7 +333,7 @@ namespace ECSEngine {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			ComponentSignature unique = archetype->GetUniqueSignature();
 			ComponentSignature shared = archetype->GetSharedSignature();
-			unsigned short base_count = archetype->GetBaseCount();
+			unsigned int base_count = archetype->GetBaseCount();
 
 			ArchetypeHeader* archetype_header = (ArchetypeHeader*)function::OffsetPointer(buffering, buffering_size);
 
@@ -361,7 +349,7 @@ namespace ECSEngine {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			ComponentSignature unique = archetype->GetUniqueSignature();
 			ComponentSignature shared = archetype->GetSharedSignature();
-			unsigned short base_count = archetype->GetBaseCount();
+			unsigned int base_count = archetype->GetBaseCount();
 
 			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
 
@@ -369,7 +357,7 @@ namespace ECSEngine {
 			Write<true>(&temp_ptr, shared.indices, sizeof(Component) * shared.count);
 
 			// Reset the size
-			buffering_size = temp_ptr - (uintptr_t)buffering;
+			buffering_size += sizeof(Component) * (unique.count + shared.count);
 		}
 
 		// The shared instances can be written now
@@ -377,33 +365,29 @@ namespace ECSEngine {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			ComponentSignature unique = archetype->GetUniqueSignature();
 			ComponentSignature shared = archetype->GetSharedSignature();
-			unsigned short base_count = archetype->GetBaseCount();
+			unsigned int base_count = archetype->GetBaseCount();
 
 			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
 
 			// Write the shared instances for each base archetype in a single stream
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				Write<true>(&temp_ptr, archetype->GetBaseInstances(base_index), sizeof(SharedInstance) * shared.count);
+				buffering_size += sizeof(SharedInstance) * shared.count;
 			}
-
-			// Reset the size
-			buffering_size = temp_ptr - (uintptr_t)buffering;
 		}
 
 		// The base archetype sizes can be written now
 		for (size_t index = 0; index < entity_manager->m_archetypes.size; index++) {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
-			unsigned short base_count = archetype->GetBaseCount();
+			unsigned int base_count = archetype->GetBaseCount();
 
 			uintptr_t temp_ptr = (uintptr_t)function::OffsetPointer(buffering, buffering_size);
 			// Write the size of each base archetype
 			for (size_t base_index = 0; base_index < base_count; base_index++) {
 				const ArchetypeBase* base = archetype->GetBase(base_index);
 				Write<true>(&temp_ptr, &base->m_size, sizeof(base->m_size));
+				buffering_size += sizeof(base->m_size);
 			}
-
-			// Reset the size
-			buffering_size = temp_ptr - (uintptr_t)buffering;
 		}
 
 		ECS_ASSERT(buffering_size <= ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY);
@@ -412,7 +396,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < entity_manager->m_archetypes.size; index++) {
 			const Archetype* archetype = entity_manager->GetArchetype(index);
 			ComponentSignature unique = archetype->GetUniqueSignature();
-			unsigned short base_count = archetype->GetBaseCount();
+			unsigned int base_count = archetype->GetBaseCount();
 
 			// The size of each archetype was previously written
 			// Now only the buffers must be flushed
@@ -422,7 +406,7 @@ namespace ECSEngine {
 					unsigned int* current_write_count = (unsigned int*)function::OffsetPointer(buffering, buffering_size);;
 					buffering_size += sizeof(unsigned int);
 
-					SerializeEntityManagerComponentInfo component_info = component_table->GetValue<false>(unique.indices[component_index]);
+					SerializeEntityManagerComponentInfo component_info = component_table->GetValue(unique.indices[component_index]);
 					SerializeEntityManagerComponentData function_data;
 					function_data.buffer = function::OffsetPointer(current_write_count, sizeof(unsigned int));
 					function_data.buffer_capacity = ENTITY_MANAGER_COMPONENT_BUFFERING_CAPACITY - buffering_size;
@@ -466,17 +450,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Write the hierarchies
-		for (unsigned short index = 0; index < entity_manager->m_hierarchies.size; index++) {
-			if (entity_manager->ExistsHierarchy(index)) {
-				success = SerializeEntityHierarchy(&entity_manager->m_hierarchies[index].hierarchy, file_handle);
-				if (!success) {
-					return false;
-				}
-			}
-		}
-
-		return true;
+		return SerializeEntityHierarchy(&entity_manager->m_hierarchy, file_handle);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -514,18 +488,16 @@ namespace ECSEngine {
 			void* component_buffering;
 		};
 
-		StackScope<Deallocator>({ buffering });
+		StackScope<Deallocator> scope_deallocator({ buffering });
 
 		// Read the header first
 		SerializeEntityManagerHeader header;
+		memset(&header, 0, sizeof(header));
+		header.archetype_count = 1;
+
 		bool success = ReadFile(file_handle, { &header, sizeof(header) });
 		if (!success) {
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
-		}
-
-		unsigned short hierarchy_count = 0;
-		for (size_t index = 0; index < ECS_ENTITY_HIERARCHY_MAX_COUNT; index++) {
-			hierarchy_count += header.hierarchy_is_present[index];
 		}
 
 		if (header.version != ENTITY_MANAGER_SERIALIZE_VERSION || header.archetype_count > ECS_MAIN_ARCHETYPE_MAX_COUNT) {
@@ -542,7 +514,7 @@ namespace ECSEngine {
 		unsigned int shared_component_pair_size = header.shared_component_count * sizeof(SharedComponentPair);
 
 		buffering_size = component_pair_size + shared_component_pair_size;
-		success = ReadFile(file_handle, { buffering, buffering_size });
+		success = ReadFile(file_handle, { buffering, buffering_size });;
 		if (!success) {
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
@@ -643,7 +615,7 @@ namespace ECSEngine {
 			};
 
 			if (stack_component_pairs[component_pair_index].name_size > 0) {
-				if (component_table->TryGetValue<false>(component, component_info)) {
+				if (component_table->TryGetValue(component, component_info)) {
 					if (component_info.name.size == 0) {
 						// Iterate through the table
 						component_info.function = nullptr;
@@ -666,7 +638,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				component_info = component_table->GetValue<false>(component);
+				component_info = component_table->GetValue(component);
 			}
 
 			return component_info;
@@ -690,7 +662,7 @@ namespace ECSEngine {
 			};
 
 			if (shared_component_pairs[index].name_size > 0) {
-				if (shared_component_table->TryGetValue<false>(shared_component_pairs[index].component, component_info)) {
+				if (shared_component_table->TryGetValue(shared_component_pairs[index].component, component_info)) {
 					if (component_info.name.size == 0) {
 						// Iterate through the table
 						component_info.function = nullptr;
@@ -713,7 +685,7 @@ namespace ECSEngine {
 				}
 			}
 			else {
-				component_info = shared_component_table->GetValue<false>(shared_component_pairs[index].component);
+				component_info = shared_component_table->GetValue(shared_component_pairs[index].component);
 			}
 
 			return component_info;
@@ -829,7 +801,7 @@ namespace ECSEngine {
 				function_data.component = write_data;
 				function_data.file_data = function::OffsetPointer(instances_data, current_instance_offset);
 				function_data.extra_data = component_info.extra_data;
-				function_data.instance = { (unsigned short)shared_instance };
+				function_data.instance = { (short)shared_instance };
 				function_data.version = shared_component_pairs[index].serialize_version;
 
 				// Now call the extract function
@@ -869,7 +841,7 @@ namespace ECSEngine {
 		ArchetypeHeader* archetype_headers = (ArchetypeHeader*)function::OffsetPointer(buffering, buffering_size);
 		buffering_size += sizeof(ArchetypeHeader) * header.archetype_count;
 
-		success = ReadFile(file_handle, { archetype_headers, sizeof(ArchetypeHeader) * header.archetype_count });
+		success = ReadFile(file_handle, { buffering, sizeof(ArchetypeHeader) * header.archetype_count });
 		if (!success) {
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
@@ -917,7 +889,7 @@ namespace ECSEngine {
 			ComponentSignature shared;
 			shared.indices = archetype_component_signatures + component_signature_offset + archetype_headers[index].unique_count;
 			shared.count = archetype_headers[index].shared_count;
-			unsigned short archetype_index = entity_manager->CreateArchetypeCommit(unique, shared);
+			unsigned int archetype_index = entity_manager->CreateArchetypeCommit(unique, shared);
 			SharedComponentSignature shared_signature;
 			shared_signature.indices = shared.indices;
 			shared_signature.count = shared.count;
@@ -976,7 +948,7 @@ namespace ECSEngine {
 
 					// Now call the extract function for each component
 					void* archetype_buffer = base->m_buffers[component_index];
-					unsigned short component_size = entity_manager->m_unique_components[unique.indices[component_index].value].size;
+					unsigned int component_size = entity_manager->m_unique_components[unique.indices[component_index].value].size;
 
 					DeserializeEntityManagerComponentData function_data;
 					function_data.count = base->m_size;
@@ -1014,20 +986,18 @@ namespace ECSEngine {
 					Archetype* archetype = entity_manager->GetArchetype(info.main_archetype);
 					ArchetypeBase* base = archetype->GetBase(info.base_archetype);
 					base->m_entities[info.stream_index] = entity;
-					});
+					base->m_size++;
+				});
 			}
 		}
 
-		for (unsigned int hierarchy_index = 0; hierarchy_index < ECS_ENTITY_HIERARCHY_MAX_COUNT; hierarchy_index++) {
-			if (header.hierarchy_is_present[hierarchy_index]) {
-				entity_manager->CreateHierarchy(hierarchy_index, header.hierarchy_owning_children[hierarchy_index]);
-				success = DeserializeEntityHierarchy(&entity_manager->m_hierarchies[hierarchy_index].hierarchy, file_handle);
-				if (!success) {
-					return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
-				}
-			}
+		entity_manager->m_hierarchy_allocator.Clear();
+		entity_manager->m_hierarchy = EntityHierarchy(&entity_manager->m_hierarchy_allocator);
+		success = DeserializeEntityHierarchy(&entity_manager->m_hierarchy, file_handle);
+		if (!success) {
+			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 		}
-
+		
 		// Everything should be reconstructed now
 		return ECS_DESERIALIZE_ENTITY_MANAGER_OK;
 	}
@@ -1276,11 +1246,10 @@ namespace ECSEngine {
 			Reflection::ReflectionManagerGetQuery query;
 			query.indices = &type_indices;
 			reflection_manager->GetHierarchyTypes(hierarchy_indices[index], query);
-			total_count += hierarchy_indices.size;
 		}
 
 		// Allocate a table of this capacity
-		total_count = (float)total_count * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR;
+		total_count = (float)type_indices.size * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR;
 		total_count = function::PowerOfTwoGreater(total_count);
 
 		if (table.GetCount() == 0) {
@@ -1300,7 +1269,7 @@ namespace ECSEngine {
 				// Check to see if it is overwritten
 				if (override_components != nullptr) {
 					// Check the component
-					Component type_component = { (unsigned short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+					Component type_component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 					if (function::SearchBytes(override_components, overrides.size, type_component.value, sizeof(type_component)) == -1) {
 						// There is no override
 						functor(type);
@@ -1353,7 +1322,7 @@ namespace ECSEngine {
 			// The version is not really needed
 			info.version = 0;
 
-			Component component = { (unsigned short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
 			ECS_ASSERT(!table.Insert(info, component));
 		});
@@ -1383,7 +1352,7 @@ namespace ECSEngine {
 			// The version is not really needed
 			info.version = 0;
 
-			Component component = { (unsigned short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
 			ECS_ASSERT(!table.Insert(info, component));
 		});
@@ -1411,7 +1380,7 @@ namespace ECSEngine {
 
 			info.extra_data = data;
 			info.name = type->name;
-			Component component = { (unsigned short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
 			ECS_ASSERT(!table.Insert(info, component));
 		});
@@ -1439,7 +1408,7 @@ namespace ECSEngine {
 
 			info.extra_data = data;
 			info.name = type->name;
-			Component component = { (unsigned short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
 			ECS_ASSERT(!table.Insert(info, component));
 		});

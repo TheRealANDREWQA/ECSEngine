@@ -27,7 +27,13 @@
 #define ECS_TOOLS_UI_TEXTURE_FILE_SHADER L"Resources/FileShader.png"
 #define ECS_TOOLS_UI_TEXTURE_FILE_TEXT L"Resources/FileText.png"
 #define ECS_TOOLS_UI_TEXTURE_FILE_EDITOR L"Resources/FileEditor.png"
-#define ECS_TOOLS_UI_TEXTURE_FILE_MESH L"Resources/FileMesh.png"
+#define ECS_TOOLS_UI_TEXTURE_WIREFRAME_CUBE L"Resources/WireframeCube.png"
+#define ECS_TOOLS_UI_TEXTURE_FILLED_CUBE L"Resources/FilledCube.png"
+#define ECS_TOOLS_UI_TEXTURE_MULTIPLE_CUBES L"Resources/MultipleCubes.png"
+
+#define ECS_TOOLS_UI_TEXTURE_FILE_MESH ECS_TOOLS_UI_TEXTURE_WIREFRAME_CUBE
+#define ECS_TOOLS_UI_TEXTURE_FILE_SCENE ECS_TOOLS_UI_TEXTURE_MULTIPLE_CUBES
+
 #define ECS_TOOLS_UI_TEXTURE_ECS_LOGO L"Resources/ECSLogo.png"
 #define ECS_TOOLS_UI_TEXTURE_CLOCK L"Resources/Clock.png"
 #define ECS_TOOLS_UI_TEXTURE_ARROW L"Resources/Arrow.png"

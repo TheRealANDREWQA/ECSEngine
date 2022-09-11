@@ -1024,7 +1024,7 @@ namespace ECSEngine {
 			transform.scale = label_size;
 
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------
@@ -1085,7 +1085,7 @@ namespace ECSEngine {
 					action_data->border_index = border_index;
 					action_data->type = dockspace_type;
 				}
-				CloseXBorderClickableAction(action_data);
+				DestroyCurrentActionWindow(action_data);
 			}
 		}
 
@@ -1112,7 +1112,7 @@ namespace ECSEngine {
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 
 			// If enter is pressed, confirm the action
 			if (drawer.system->m_keyboard_tracker->IsKeyPressed(HID::Key::Enter)) {
@@ -1214,7 +1214,7 @@ namespace ECSEngine {
 
 			descriptor.window_data = &data;
 			descriptor.window_data_size = sizeof(data);
-			descriptor.window_name = ECS_TOOLS_UI_CHOOSE_WINDOW_NAME;
+			descriptor.window_name =  data.window_name.size == 0 ? ECS_TOOLS_UI_CHOOSE_WINDOW_NAME : data.window_name;
 
 			descriptor.destroy_action = ReleaseLockedWindow;
 
@@ -1244,7 +1244,7 @@ namespace ECSEngine {
 			data->data->handlers[data->index].action(action_data);
 
 			if (function::CompareStrings(system->m_windows[window_index].name, ECS_TOOLS_UI_CHOOSE_WINDOW_NAME)) {
-				CloseXBorderClickableAction(action_data);
+				DestroyCurrentActionWindow(action_data);
 			}
 		}
 
@@ -1275,7 +1275,7 @@ namespace ECSEngine {
 			transform.scale = drawer.GetLabelScale("Cancel");
 			transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 			config.AddFlag(transform);
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -1315,11 +1315,10 @@ namespace ECSEngine {
 			}
 
 			UIDrawConfig config;
-			UIConfigRelativeTransform relative_transform;
-			relative_transform.scale.x = 5.0f;
-			config.AddFlag(relative_transform);
+			UIConfigWindowDependentSize transform;
+			config.AddFlag(transform);
 
-			drawer.TextInput(UI_CONFIG_RELATIVE_TRANSFORM, config, data->input_name, &data->input_stream);
+			drawer.TextInput(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, data->input_name, &data->input_stream);
 			drawer.NextRow();
 
 			UIConfigAbsoluteTransform absolute_transform;
@@ -1335,7 +1334,7 @@ namespace ECSEngine {
 			config.flag_count = 0;
 			config.AddFlag(absolute_transform);
 
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// Additional data is the window data that is TextInputWizardData*
@@ -1356,8 +1355,8 @@ namespace ECSEngine {
 			
 			descriptor.initial_position_x = 0.0f;
 			descriptor.initial_position_y = 0.0f;
-			descriptor.initial_size_x = 100.0f;
-			descriptor.initial_size_y = 100.0f;
+			descriptor.initial_size_x = 0.7f;
+			descriptor.initial_size_y = 0.7f;
 
 			descriptor.window_data = (void*)data;
 			descriptor.window_data_size = sizeof(*data);
@@ -1366,8 +1365,7 @@ namespace ECSEngine {
 			descriptor.private_action = TextInputWizardPrivateHandler;
 
 			system->PopUpFrameHandler(data->window_name, false, false, false);
-			return system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE
-				| UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_LOCK_WINDOW | UI_DOCKSPACE_NO_DOCKING);
+			return system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
 		}
 
 		void CreateTextInputWizardAction(ActionData* action_data) {

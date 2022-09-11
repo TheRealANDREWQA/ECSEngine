@@ -3,5 +3,6 @@
 bin
 bin-int
 ECSEngine/Dependencies
+Editor/Resources/CompiledShaders
 Modules/*/bin-int
 Modules/*/bin

@@ -11,7 +11,7 @@ namespace ECSEngine {
 		// initalizing the first block to be the whole range
 		if (buffer != nullptr) {
 			SetStart(0, 0);
-			SetEnd(0, max_index - 1);
+			SetEnd(0, max_index);
 		}
 	}
 
@@ -43,12 +43,10 @@ namespace ECSEngine {
 		unsigned int end = GetEnd(index);
 		SetStart(index, GetStart(m_free_block_count + m_used_block_count - 1));
 		SetEnd(index, GetEnd(m_free_block_count + m_used_block_count - 1));
-		unsigned int lul_start = GetStart(index);
-		unsigned int lul_end = GetEnd(index);
 		m_used_block_count--;
 
 		// linear SIMD search to find if there is a forward freed block
-		temp = end + 1;
+		temp = end;
 		flag = -1;
 		for (i = 0; flag == -1 && i < m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + i));
@@ -59,7 +57,7 @@ namespace ECSEngine {
 		size_t next_block_index = i + flag - temp.size();
 
 		// linear SIMD search to find if there is a previous freed block 
-		temp = start - 1;
+		temp = start;
 		int flag2 = -1;
 		for (i = 0; flag2 == -1 && i < m_free_block_count; i += temp.size()) {
 			section.load((const void*)(m_buffer + m_capacity + i));
@@ -111,14 +109,14 @@ namespace ECSEngine {
 	unsigned int BlockRange::Request(unsigned int size) {
 		ECS_ASSERT(size > 0, "Block range: zero allocation not allowed");
 		if (m_free_block_count + m_used_block_count < m_capacity) {
-			Vec8ui section, temp, sizes = size, one(1);
+			Vec8ui section, temp, sizes = size;
 			Vec8ib match;
 			int flag = -1;
 			size_t i = 0;
 			for (; flag == -1 && i < m_free_block_count; i += temp.size()) {
 				section.load((const void*)(m_buffer + i));
 				temp.load((const void*)(m_buffer + i + m_capacity));
-				match = (temp - section + one) >= sizes;
+				match = (temp - section) >= sizes;
 				flag = HorizontalFindFirst(match);
 			}
 			size_t index = flag + i - temp.size();
@@ -137,7 +135,7 @@ namespace ECSEngine {
 				else {
 					SetStart(index, block_start + size);
 					SetStart(m_free_block_count + m_used_block_count - 1, block_start);
-					SetEnd(m_free_block_count + m_used_block_count - 1, block_start + size - 1);
+					SetEnd(m_free_block_count + m_used_block_count - 1, block_start + size);
 				}
 				return block_start;
 			}
@@ -169,10 +167,19 @@ namespace ECSEngine {
 	}
 
 	void BlockRange::Clear() {
+		// Need to go through all blocks and calculate their maximum bound and keep it
+		unsigned int maximum_size = 0;
+		for (unsigned int index = 0; index < m_free_block_count + m_used_block_count; index++) {
+			unsigned int end = GetEnd(index);
+			maximum_size = std::max(end, maximum_size);
+		}
+
 		m_free_block_count = 1;
 		m_used_block_count = 0;
 		SetStart(0, 0);
-		SetEnd(0, m_capacity - 1);
+
+		// Capacity is the block capacity, not the max_size of the block range
+		SetEnd(0, maximum_size);
 	}
 
 	ECS_INLINE unsigned int BlockRange::GetStart(unsigned int index) const {

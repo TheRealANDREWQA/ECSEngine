@@ -19,35 +19,27 @@ namespace ECSEngine {
         unsigned int root_count;
         unsigned int children_count;
         unsigned int parent_count;
+
+        // The number of entities serialized contained in the children table
+        // such that on deserialization they can be read in bulk
+        unsigned int children_data_size;
     };
 
     void RemoveEntityFromParent(EntityHierarchy* hierarchy, Entity entity, Entity parent) {
         // Remove the entity from its parent and the entry from the parent table
-        unsigned int parent_children_index = hierarchy->children_table.Find<false>(parent);
-        ECS_CRASH_RETURN(parent_children_index != -1, "Could not the parent {#} children data when trying to remove entity {#} as its child.", parent.value, entity.value);
+        unsigned int parent_children_index = hierarchy->children_table.Find(parent);
+        ECS_CRASH_RETURN(parent_children_index != -1, "EntityHierarchy: Could not find the parent's {#} children data when trying to remove entity {#} as its child.", parent.value, entity.value);
         EntityHierarchy::Children* children = hierarchy->children_table.GetValuePtrFromIndex(parent_children_index);
         if (children->count == 1) {
             // The node becomes childless, can be removed from the children table
-            // Check to see if it is a root to remove it aswell from the root stream
-            if (children->is_root) {
-                unsigned int remove_index = children->root_index;
-                hierarchy->roots.RemoveSwapBack(remove_index);
-                if (remove_index != hierarchy->roots.size) {
-                    Entity replaced_root = hierarchy->roots[remove_index];
-                    EntityHierarchy::Children* replaced_root_children = hierarchy->children_table.GetValuePtr<false>(replaced_root);
-                    ECS_CRASH_RETURN(replaced_root_children->is_root, "The swapped back root {#} does not have as its children data the is_root flag set.", replaced_root.value);
-                    replaced_root_children->root_index = remove_index;
-                }
-            }
-
-            // Remove the entry now
             hierarchy->children_table.EraseFromIndex(parent_children_index);
         }
         else {
-            Entity* entities_to_search = children->count <= ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children->static_children : children->entities;
-            children->count--;
+            Entity* entities_to_search = children->Entities();
+            unsigned int before_count = children->count;
             for (size_t index = 0; index < children->count; index++) {
                 if (entities_to_search[index] == entity) {
+                    children->count--;
                     entities_to_search[index] = entities_to_search[children->count];
 
                     // Move from pointer to static storage
@@ -67,6 +59,7 @@ namespace ECSEngine {
                     break;
                 }
             }
+            ECS_CRASH_RETURN(before_count > children->count, "EntityHierarchy: Could not find the child {#} inside the parent's {#} children data. The hierarchy is corrupted.", parent.value, entity.value);
         }
     }
 
@@ -86,19 +79,24 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    // The only difference between this and the member function is that this one does not update the children table
-    // It can be used inside the ChangeParent for example
-    void AddEntryImplementation(EntityHierarchy* hierarchy, Entity parent, Entity child) {
-        unsigned int children_index = hierarchy->children_table.Find<false>(parent);
+    void EntityHierarchy::AddEntry(Entity parent, Entity child)
+    {
+        if (parent.value == -1) {
+            roots.Add(child);
+            InsertIntoDynamicTable(parent_table, allocator, parent, child);
+            return;
+        }
+
+        unsigned int children_index = children_table.Find(parent);
         if (children_index != -1) {
-            EntityHierarchy::Children* children = hierarchy->children_table.GetValuePtrFromIndex(children_index);
+            EntityHierarchy::Children* children = children_table.GetValuePtrFromIndex(children_index);
             if (children->count == ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
                 // Allocate a new buffer - from the allocator - the static storage has been exhausted
                 Entity temp_entities[ECS_ENTITY_HIERARCHY_STATIC_STORAGE];
                 for (size_t index = 0; index < ECS_ENTITY_HIERARCHY_STATIC_STORAGE; index++) {
                     temp_entities[index] = children->static_children[index];
                 }
-                children->entities = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * (ECS_ENTITY_HIERARCHY_STATIC_STORAGE + 1), alignof(Entity));
+                children->entities = (Entity*)allocator->Allocate(sizeof(Entity) * (ECS_ENTITY_HIERARCHY_STATIC_STORAGE + 1), alignof(Entity));
                 memcpy(children->entities, temp_entities, sizeof(Entity) * ECS_ENTITY_HIERARCHY_STATIC_STORAGE);
                 children->entities[ECS_ENTITY_HIERARCHY_STATIC_STORAGE] = child;
                 children->count = ECS_ENTITY_HIERARCHY_STATIC_STORAGE + 1;
@@ -109,41 +107,33 @@ namespace ECSEngine {
             else {
                 // Need to reallocate the buffer
                 children->count++;
-                Entity* new_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children->count);
+                Entity* new_allocation = (Entity*)allocator->Allocate(sizeof(Entity) * children->count);
                 memcpy(new_allocation, children->entities, sizeof(Entity) * (children->count - 1));
-                hierarchy->allocator->Deallocate(children->entities);
+                allocator->Deallocate(children->entities);
 
                 children->entities = new_allocation;
                 children->entities[children->count - 1] = child;
             }
         }
         else {
-            unsigned int parents_parent_index = hierarchy->parent_table.Find<false>(parent);
-            if (parents_parent_index != -1) {
-                EntityHierarchy::Children children;
-                children.is_root = 0;
-                children.root_index = 0;
-                children.count = 1;
-                children.static_children[0] = child;
-                InsertIntoDynamicTable(hierarchy->children_table, hierarchy->allocator, children, parent);
-            }
-            else {
-                unsigned int stream_index = hierarchy->roots.Add(parent);
-                EntityHierarchy::Children children;
-                children.is_root = 1;
-                children.root_index = stream_index;
-                children.count = 1;
-                children.static_children[0] = child;
-                InsertIntoDynamicTable(hierarchy->children_table, hierarchy->allocator, children, parent);
+            EntityHierarchy::Children children;
+            children.count = 1;
+            children.static_children[0] = child;
+
+            InsertIntoDynamicTable(children_table, allocator, children, parent);
+            unsigned int parent_index = parent_table.Find(parent);
+            if (parent_index == -1) {
+                // It doesn't exist, so add it to the parent table and root buffer
+                roots.Add(parent);
+                Entity root_parent = { (unsigned int)-1 };
+                InsertIntoDynamicTable(parent_table, allocator, root_parent, parent);
             }
         }
-    }
 
-    void EntityHierarchy::AddEntry(Entity parent, Entity child)
-    {
-        AddEntryImplementation(this, parent, child);
+        unsigned int child_parent_index = parent_table.Find(child);
+        ECS_CRASH_RETURN(child_parent_index == -1, "EntityHierarchy: Adding pair failed. Trying to add child {#} to parent {#} when the child already exists. "
+            "Use instead ChangeOrSetParent if trying to change or set the parent.", child.value, parent.value);
 
-        // Insert the child into the parent table aswell
         InsertIntoDynamicTable(parent_table, allocator, parent, child);
     }
 
@@ -155,14 +145,13 @@ namespace ECSEngine {
         roots.FreeBuffer();
         roots.Initialize(GetAllocatorPolymorphic(allocator), other->roots.size);
 
-        other->roots.CopyTo(roots.buffer);
+        roots.Copy(other->roots);
 
         // Copy the parent table - this can be blitted
         const void* allocated_buffer = parent_table.GetAllocatedBuffer();
         if (allocated_buffer != nullptr) {
             allocator->Deallocate(allocated_buffer);
         }
-
         parent_table.Copy(GetAllocatorPolymorphic(allocator), &other->parent_table);
 
         // The children cannot be memcpy'ed because of the children allocations
@@ -170,21 +159,13 @@ namespace ECSEngine {
         if (allocated_buffer != nullptr) {
             allocator->Deallocate(allocated_buffer);
         }
-
-        size_t blit_size = other->children_table.MemoryOf(other->children_table.GetCapacity());
-        void* allocation = allocator->Allocate(blit_size);
-        children_table.SetBuffers(allocation, other->children_table.GetCapacity());
-
-        // Blit the entire table, and then resolve the allocated pieces
-        memcpy(allocation, other->children_table.GetAllocatedBuffer(), blit_size);
+        children_table.Copy(GetAllocatorPolymorphic(allocator), &other->children_table);
 
         other->children_table.ForEachIndexConst([&](unsigned int index) {
             Children other_children = other->children_table.GetValueFromIndex(index);
 
             Children* current_children = children_table.GetValuePtrFromIndex(index);
             current_children->count = other_children.count;
-            current_children->is_root = other_children.is_root;
-            current_children->root_index = other_children.root_index;
             if (other_children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
                 // This is allocated from the allocator - must do the same
                 void* children_allocation = allocator->Allocate(sizeof(Entity) * other_children.count);
@@ -192,39 +173,48 @@ namespace ECSEngine {
 
                 current_children->entities = (Entity*)children_allocation;
             }
-            else {
-                current_children->entities = nullptr;
-                memcpy(current_children->static_children, other_children.static_children, sizeof(Entity) * other_children.count);
-            }
         });
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    void EntityHierarchy::ChangeParent(Entity new_parent, Entity child)
-    {
-        unsigned int parent_index = parent_table.Find<false>(child);
-        ECS_CRASH_RETURN(parent_index == -1, "Could not change the parent of entity {#}. It doesn't have a parent.", child.value);
-
-        Entity* current_parent = parent_table.GetValuePtrFromIndex(parent_index);
-        RemoveEntityFromParent(this, child, *current_parent);
-
-        *current_parent = child;
+    void ChangeParentImpl(EntityHierarchy* hierarchy, Entity new_parent, Entity child, unsigned int old_parent_table_index) {
+        // Can take a pointer to it since there are no modifications done on the parent table in the RemoveEntityFromParent function
+        Entity* current_parent = hierarchy->parent_table.GetValuePtrFromIndex(old_parent_table_index);
+        if (current_parent->value != -1) {
+            RemoveEntityFromParent(hierarchy, child, *current_parent);
+        }
+        else {
+            // It is a root. Need to remove it from the buffer
+            unsigned int root_index = function::SearchBytes(hierarchy->roots.buffer, hierarchy->roots.size, child.value, sizeof(child));
+            ECS_CRASH_RETURN(root_index != -1, "EntityHierarchy: Fatal internal error. Parent table says {#} is a root but the root buffer doesn't contain it.", child.value);
+            hierarchy->roots.RemoveSwapBack(root_index);
+        }
+        *current_parent = new_parent;
 
         // Add the child to the parent's list
-        AddEntryImplementation(this, new_parent, child);
+        hierarchy->AddEntry(new_parent, child);
+    }
+
+    void EntityHierarchy::ChangeParent(Entity new_parent, Entity child)
+    {
+        unsigned int parent_index = parent_table.Find(child);
+        ECS_CRASH_RETURN(parent_index == -1, "EntityHierarchy: Could not change the parent of entity {#}. It doesn't exist in the hierarchy.", child.value);
+
+        ChangeParentImpl(this, new_parent, child, parent_index);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
     void EntityHierarchy::ChangeOrSetParent(Entity parent, Entity child)
     {
-        unsigned int parent_index = parent_table.Find<false>(child);
+        unsigned int parent_index = parent_table.Find(child);
         if (parent_index == -1) {
+            // The entity doesn't exist yet, insert it
             AddEntry(parent, child);
         }
         else {
-            ChangeParent(parent, child);
+            ChangeParentImpl(this, parent, child, parent_index);
         }
     }
 
@@ -232,43 +222,39 @@ namespace ECSEngine {
 
     bool EntityHierarchy::Exists(Entity entity)
     {
-        return parent_table.Find<false>(entity) != -1 || children_table.Find<false>(entity) != -1;
+        return parent_table.Find(entity) != -1;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
     void EntityHierarchy::RemoveEntry(Entity entity)
     {
-        // Determine if it is a root or not
-        unsigned int children_index = children_table.Find<false>(entity);
-        Children children = {};
-        children.is_root = 0;
+        ECS_CRASH_RETURN(roots.size > 0, "EntityHierarchy: There are no entities inserted when trying to remove {#}.", entity.value);
+
+        // Determine if it has children or not
+        unsigned int children_index = children_table.Find(entity);
         if (children_index != -1) {
             // Destroy every children
-            children = children_table.GetValueFromIndex(children_index);
-            Stream<Entity> children_entities = { children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, children.count};
+            Children children = children_table.GetValueFromIndex(children_index);
+            Stream<Entity> children_entities = { children.Entities(), children.count};
 
             for (size_t index = 0; index < children_entities.size; index++) {
                 RemoveEntry(children_entities[index]);
             }
         }
 
-        unsigned int parent_index = parent_table.Find<false>(entity);
-        // Do this only if it is not a root. If it is a root, it must be eliminated from the root
-        if (parent_index != -1) {
-            Entity parent = parent_table.GetValueFromIndex(parent_index);
-            RemoveEntityFromParent(this, entity, parent);
+        unsigned int parent_index = parent_table.Find(entity);
+        ECS_CRASH_RETURN(parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the hierarchy when trying to remove it.", entity.value);
+        Entity parent = parent_table.GetValueFromIndex(parent_index);
+        if (parent.value == -1) {
+            // It is a root, it must be eliminated from the
+            unsigned int root_parent_index = function::SearchBytes(roots.buffer, roots.size, entity.value, sizeof(entity));
+            ECS_CRASH_RETURN(root_parent_index != -1, "EntityHierarchy: The entity {#} doesn't exist in the root buffer but the parent table says it's a root.", entity.value);
+            roots.RemoveSwapBack(root_parent_index);
+            parent_table.EraseFromIndex(parent_index);
         }
         else {
-            ECS_CRASH_RETURN(!children.is_root, "Trying to remove root {#} from an entity hierarchy but it doesn't have children data.", entity.value);
-            unsigned int swap_index = children.root_index;
-            roots.RemoveSwapBack(swap_index);
-            if (swap_index != roots.size) {
-                Entity replaced_root = roots[swap_index];
-                EntityHierarchy::Children* replaced_root_children = children_table.GetValuePtr<false>(replaced_root);
-                ECS_CRASH_RETURN(replaced_root_children->is_root, "The swapped back root {#} does not have as its children data the is_root flag set.", replaced_root.value);
-                replaced_root_children->root_index = swap_index;
-            }
+            RemoveEntityFromParent(this, entity, parent);
         }
     }
 
@@ -312,10 +298,21 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    Stream<Entity> EntityHierarchy::GetChildren(Entity parent) const {
-        Children children;
-        if (children_table.TryGetValue<false>(parent, children)) {
-            return { children.IsPointer() ? children.entities : children.static_children, children.count };
+    Stream<Entity> EntityHierarchy::GetChildren(Entity parent, Entity* static_storage) const {
+        const Children* children;
+        if (children_table.TryGetValuePtr(parent, children)) {
+            if (children->IsPointer()) {
+                return { children->entities, children->count };
+            }
+            else {
+                if (static_storage != nullptr) {
+                    memcpy(static_storage, children->static_children, children->count * sizeof(Entity));
+                    return { static_storage, children->count };
+                }
+                else {
+                    return { children->static_children, children->count };
+                }
+            }
         }
         return { nullptr, 0 };
     }
@@ -332,7 +329,7 @@ namespace ECSEngine {
 
     void EntityHierarchy::GetAllChildrenFromEntity(Entity entity, CapacityStream<Entity>& children) const
     {
-        unsigned int initial_children_index = children_table.Find<false>(entity);
+        unsigned int initial_children_index = children_table.Find(entity);
         if (initial_children_index == -1) {
             return;
         }
@@ -344,20 +341,20 @@ namespace ECSEngine {
         };
         
         size_t first_children_to_search = children.size;
-        ECS_CRASH_RETURN(initial_children_entities.size <= children.capacity - children.size, "The given capacity stream for retrieving entity's {#} children is too small.");
+        ECS_CRASH_RETURN(initial_children_entities.size <= children.capacity - children.size, "EntityHierarchy: The given capacity stream for retrieving entity's {#} children is too small.");
         children.AddStream(initial_children_entities);
 
         while (first_children_to_search != children.size) {
             size_t loop_children_size = children.size;
             for (size_t index = first_children_to_search; index < loop_children_size; index++) {
-                unsigned int current_index = children_table.Find<false>(children[index]);
+                unsigned int current_index = children_table.Find(children[index]);
                 if (current_index != -1) {
                     Children current_children = children_table.GetValueFromIndex(current_index);
                     Stream<Entity> current_children_entities = { 
                         current_children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? current_children.entities : current_children.static_children, 
                         current_children.count 
                     };
-                    ECS_CRASH_RETURN(current_children_entities.size <= children.capacity - children.size, "The given capacity stream for retrieving entity's {#} children is too small.");
+                    ECS_CRASH_RETURN(current_children_entities.size <= children.capacity - children.size, "EntityHierarchy: The given capacity stream for retrieving entity's {#} children is too small.");
                     children.AddStream(current_children_entities);
                 }
             }
@@ -372,7 +369,7 @@ namespace ECSEngine {
     {
         Entity parent;
         parent.value = -1;
-        parent_table.TryGetValue<false>(entity, parent);
+        parent_table.TryGetValue(entity, parent);
         return parent;
     }
 
@@ -381,23 +378,27 @@ namespace ECSEngine {
     Entity EntityHierarchy::GetRootFromChildren(Entity entity) const
     {
         Entity parent;
-        parent.value = -1;
-        while (parent_table.TryGetValue<false>(entity, parent)) {
+        parent.value = 0;
+        parent_table.TryGetValue(entity, parent);
+        while (parent.value != -1) {
             entity = parent;
-        }
-
-        // There was no parent, either it is already the root or it doesn't exist
-        if (parent.value == -1) {
-            // The entity does not have children - it doesn't exist at all
-            if (children_table.Find<false>(entity) == -1) {
-                return parent;
-            }
-            else {
-                return entity;
+            if (!parent_table.TryGetValue(entity, parent)) {
+                break;
             }
         }
 
-        return parent;
+        return entity;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------
+
+    bool EntityHierarchy::IsRoot(Entity entity) const
+    {
+        unsigned int entity_index = parent_table.Find(entity);
+        if (entity_index == -1) {
+            return false;
+        }
+        return parent_table.GetValueFromIndex(entity_index).value == -1;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -417,6 +418,11 @@ namespace ECSEngine {
         header.root_count = hierarchy->roots.size;
         header.parent_count = hierarchy->parent_table.GetCount();
         header.children_count = hierarchy->children_table.GetCount();
+        header.children_data_size = (sizeof(Entity) + sizeof(unsigned int)) * header.children_count;
+
+        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
+            header.children_data_size += children.count * sizeof(Entity);
+        });
 
         bool success = WriteFile(file, { &header, sizeof(header) });
         if (!success) {
@@ -424,7 +430,7 @@ namespace ECSEngine {
         }
 
         // Now write the roots
-        success = WriteFile(file, { hierarchy->roots.buffer, hierarchy->roots.size });
+        success = WriteFile(file, { hierarchy->roots.buffer, hierarchy->roots.size * sizeof(Entity) });
         if (!success) {
             return false;
         }
@@ -461,6 +467,11 @@ namespace ECSEngine {
         header.root_count = hierarchy->roots.size;
         header.parent_count = hierarchy->parent_table.GetCount();
         header.children_count = hierarchy->children_table.GetCount();
+        header.children_data_size = (sizeof(Entity) + sizeof(unsigned int)) * header.children_count;
+
+        hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
+            header.children_data_size += children.count * sizeof(Entity);
+        });
 
         Write<true>(ptr, &header, sizeof(header));
 
@@ -472,7 +483,7 @@ namespace ECSEngine {
         hierarchy->children_table.ForEachConst([&](const auto children, const auto parent) {
             Write<true>(ptr, &parent, sizeof(Entity));
             Write<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-            Write<true>(ptr, children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children, sizeof(Entity) * children.count);
+            Write<true>(ptr, children.Entities(), sizeof(Entity) * children.count);
         });
         // The parent table can be deduced from the children table
     }
@@ -499,20 +510,13 @@ namespace ECSEngine {
 
     // -----------------------------------------------------------------------------------------------------------------------------
 
-    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
-    {
-        // Firstly read the header
-        SerializeEntityHierarchyHeader header;
-        bool success = ReadFile(file, { &header, sizeof(header) });
-        if (!success) {
+    // Returns false if the header contains invalid values
+    bool DeserializeEntityHierarchyPostHeaderOps(EntityHierarchy* hierarchy, const SerializeEntityHierarchyHeader* header) {
+        if (header->version != SERIALIZE_VERSION) {
             return false;
         }
 
-        if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
-            return false;
-        }
-
-        if (header.root_count > ECS_MB_10 || header.children_count > ECS_MB_10 || header.parent_count > ECS_MB_10) {
+        if (header->root_count > ECS_MB_10 || header->children_count > ECS_MB_10 || header->parent_count > ECS_MB_10) {
             return false;
         }
 
@@ -524,9 +528,9 @@ namespace ECSEngine {
             hierarchy->allocator->Deallocate(hierarchy->parent_table.GetAllocatedBuffer());
         }
 
-        if (header.children_count > 0 || header.parent_count > 0) {
-            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
-            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
+        if (header->children_count > 0 || header->parent_count > 0) {
+            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater(HashTableCapacityForElements(header->children_count));
+            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater(HashTableCapacityForElements(header->parent_count));
             size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
             size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
 
@@ -542,47 +546,90 @@ namespace ECSEngine {
         }
 
         // Read the roots now
-        hierarchy->roots.Resize(header.root_count);
+        hierarchy->roots.Resize(header->root_count);
+        return true;
+    }
+
+    void DeserializeEntityHierarchyChildTable(EntityHierarchy* hierarchy, unsigned int children_count, uintptr_t& ptr) {
+        // Read the children table now
+        for (unsigned int index = 0; index < children_count; index++) {
+            EntityHierarchy::Children children;
+            Entity current_parent = *(Entity*)ptr;
+            ptr += sizeof(Entity);
+            unsigned int count = *(unsigned int*)ptr;
+            ptr += sizeof(unsigned int);
+
+            children.count = count;
+
+            if (count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
+                Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
+                children.entities = children_allocation;
+                memcpy(children.entities, (void*)ptr, sizeof(Entity) * children.count);
+            }
+            else {
+                memcpy(children.static_children, (void*)ptr, sizeof(Entity) * children.count);
+            }
+            ptr += sizeof(Entity) * children.count;
+
+            // Insert the value into the hash table now
+            hierarchy->children_table.Insert(children, current_parent);
+
+            // Iterate through the list of children and insert them into the parent table as well
+            const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
+            for (unsigned int child_index = 0; child_index < children.count; child_index++) {
+                hierarchy->parent_table.Insert(current_parent, children_entities[child_index]);
+            }
+        }
+
+        // Now go through the roots and insert them into the parent table with a parent of -1
+        Entity null_parent = { (unsigned int)-1 };
+        for (unsigned int index = 0; index < hierarchy->roots.size; index++) {
+            hierarchy->parent_table.Insert(null_parent, hierarchy->roots[index]);
+        }
+    }
+
+    bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
+    {
+        // Firstly read the header
+        SerializeEntityHierarchyHeader header;
+        bool success = ReadFile(file, { &header, sizeof(header) });
+        if (!success) {
+            return false;
+        }
+
+        if (!DeserializeEntityHierarchyPostHeaderOps(hierarchy, &header)) {
+            return false;
+        }
+        
         success = ReadFile(file, { hierarchy->roots.buffer, sizeof(Entity) * header.root_count });
         hierarchy->roots.size = header.root_count;
         if (!success) {
             return false;
         }
 
-        void* temp_buffer = ECS_STACK_ALLOC(sizeof(char) * ECS_KB * 64);
-        uintptr_t temp_ptr = (uintptr_t)temp_buffer;
-
-        // Read the children table now
-        for (unsigned int index = 0; index < header.children_count; index++) {
-            EntityHierarchy::Children children;
-            success = ReadFile(file, { &children.padding, sizeof(unsigned int) + sizeof(Entity) });
-            if (!success) {
-                return false;
-            }
-            Entity key_entity = { children.padding };
-
-            if (children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
-                Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
-                success = ReadFile(file, { children_allocation, sizeof(Entity) * children.count });
-                children.entities = children_allocation;
-            }
-            else {
-                success = ReadFile(file, { children.static_children, sizeof(Entity) * children.count });
-            }
-            if (!success) {
-                return false;
-            }
-
-            // Insert the value into the hash table now
-            hierarchy->children_table.Insert(children, key_entity);
-
-            // Iterate through the list of children and insert them into the parent table aswell
-            const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
-            for (unsigned int child_index = 0; child_index < children.count; child_index++) {
-                hierarchy->parent_table.Insert(key_entity, children_entities[child_index]);
-            }
+        void* temp_buffer = nullptr;
+        size_t STACK_LIMIT = ECS_KB * 256;
+        if (header.children_data_size > STACK_LIMIT) {
+            temp_buffer = malloc(header.children_data_size);
+        }
+        else {
+            temp_buffer = ECS_STACK_ALLOC(header.children_data_size);
         }
 
+        success = ReadFile(file, { temp_buffer, header.children_data_size });
+        if (!success) {
+            if (header.children_data_size > STACK_LIMIT) {
+                free(temp_buffer);
+            }
+            return false;
+        }
+        uintptr_t temp_ptr = (uintptr_t)temp_buffer;
+
+        DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, temp_ptr);
+
+        if (header.children_data_size > STACK_LIMIT) {
+            free(temp_buffer);
+        }
         return true;
     }
 
@@ -593,69 +640,15 @@ namespace ECSEngine {
         // Firstly read the header
         SerializeEntityHierarchyHeader header;
         Read<true>(ptr, &header, sizeof(header));
-        if (header.version != SERIALIZE_VERSION || header.root_count > header.children_count) {
+       
+        if (!DeserializeEntityHierarchyPostHeaderOps(hierarchy, &header)) {
             return false;
         }
 
-        if (header.root_count > ECS_MB_10 || header.children_count > ECS_MB_10 || header.parent_count > ECS_MB_10) {
-            return false;
-        }
-
-        if (hierarchy->children_table.GetCapacity() != 0) {
-            hierarchy->allocator->Deallocate(hierarchy->children_table.GetAllocatedBuffer());
-        }
-
-        if (hierarchy->parent_table.GetCapacity() != 0) {
-            hierarchy->allocator->Deallocate(hierarchy->parent_table.GetAllocatedBuffer());
-        }
-
-        if (header.children_count > 0 || header.parent_count > 0) {
-            unsigned int power_of_two_children_table_size = function::PowerOfTwoGreater((float)header.children_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
-            unsigned int power_of_two_parent_table_size = function::PowerOfTwoGreater((float)header.parent_count * 100.0f / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1);
-            size_t children_table_allocation_size = hierarchy->children_table.MemoryOf(power_of_two_children_table_size);
-            size_t parent_table_allocation_size = hierarchy->parent_table.MemoryOf(power_of_two_parent_table_size);
-
-            void* children_table_allocation = hierarchy->allocator->Allocate(children_table_allocation_size);
-            void* parent_table_allocation = hierarchy->allocator->Allocate(parent_table_allocation_size);
-
-            hierarchy->children_table.InitializeFromBuffer(children_table_allocation, power_of_two_children_table_size);
-            hierarchy->parent_table.InitializeFromBuffer(parent_table_allocation, power_of_two_parent_table_size);
-        }
-        else {
-            hierarchy->children_table.m_capacity = 0;
-            hierarchy->parent_table.m_capacity = 0;
-        }
-
-        // Read the roots now
-        hierarchy->roots.Resize(header.root_count);
         Read<true>(ptr, hierarchy->roots.buffer, sizeof(Entity) * header.root_count);
         hierarchy->roots.size = header.root_count;
 
-        // Read the children table now
-        for (unsigned int index = 0; index < header.children_count; index++) {
-            EntityHierarchy::Children children;
-            Read<true>(ptr, function::OffsetPointer(&children.padding, sizeof(unsigned int)), sizeof(unsigned int));
-            Entity key_entity;
-            Read<true>(ptr, &key_entity, sizeof(key_entity));
-
-            if (children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE) {
-                Entity* children_allocation = (Entity*)hierarchy->allocator->Allocate(sizeof(Entity) * children.count);
-                Read<true>(ptr, children_allocation, sizeof(Entity) * children.count);
-                children.entities = children_allocation;
-            }
-            else {
-                Read<true>(ptr, children.static_children, sizeof(Entity) * children.count);
-            }
-
-            // Insert the value into the hash table now
-            hierarchy->children_table.Insert(children, key_entity);
-
-            // Iterate through the list of children and insert them into the parent table aswell
-            const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
-            for (unsigned int child_index = 0; child_index < children.count; child_index++) {
-                hierarchy->parent_table.Insert(key_entity, children_entities[child_index]);
-            }
-        }
+        DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, *ptr);
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -672,20 +665,7 @@ namespace ECSEngine {
             return -1;
         }
 
-        ptr += sizeof(Entity) * header.root_count;
-        size_t size = 0;
-
-        for (unsigned int index = 0; index < header.children_count; index++) {
-            unsigned int data_int;
-            Read<true>(&ptr, &data_int, sizeof(data_int));
-
-            EntityHierarchy::Children child;
-            memcpy(function::OffsetPointer(&child.padding, sizeof(unsigned int)), &data_int, sizeof(data_int));
-            ptr += sizeof(Entity) * (child.count + 1);
-            size += sizeof(Entity) * child.count;
-        }
-
-        return size;
+        return header.children_data_size;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

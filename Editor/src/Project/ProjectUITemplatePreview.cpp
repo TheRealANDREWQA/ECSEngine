@@ -278,10 +278,19 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		action_data[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { data->editor_state, SANDBOX_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
-		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, INSPECTOR_WINDOW_NAME, {0.6f, 1.0f} };
-		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = { data->editor_state, SANDBOX_UI_WINDOW_NAME, { 0.6f, 1.0f } };
-		action_data[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { data->editor_state, ENTITIES_UI_WINDOW_NAME, { 0.7f, 1.0f } };
+
+#define CONCAT(a,b) a #b
+
+		const char* inspector_name = CONCAT(INSPECTOR_WINDOW_NAME, 0);
+		const char* sandbox_name = CONCAT(SANDBOX_UI_WINDOW_NAME, 0);
+		const char* entities_name = CONCAT(ENTITIES_UI_WINDOW_NAME, 0);
+
+		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, inspector_name, {0.6f, 1.0f} };
+		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = { data->editor_state, sandbox_name, { 0.6f, 1.0f } };
+		action_data[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { data->editor_state, entities_name, { 0.7f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
+
+#undef CONCAT
 
 #define SET_HANDLER(index) data->handlers[index] = {CreatePlaceholderDockspaceAction, action_data + index, 0, ECS_UI_DRAW_SYSTEM}
 

@@ -6,8 +6,8 @@
 
 #define ECS_TOOLS using namespace ECSEngine::Tools
 constexpr const char* ECS_TOOLS_UI_ERROR_MESSAGE_WINDOW_NAME = "Error Message";
-constexpr const char* ECS_TOOLS_UI_CONFIRM_WINDOW_NAME = "Confirm Window";
-constexpr const char* ECS_TOOLS_UI_CHOOSE_WINDOW_NAME = "Choose Window";
+constexpr const char* ECS_TOOLS_UI_CONFIRM_WINDOW_NAME = "Confirm Option";
+constexpr const char* ECS_TOOLS_UI_CHOOSE_WINDOW_NAME = "Choose Option";
 
 
 namespace ECSEngine {
@@ -127,6 +127,7 @@ namespace ECSEngine {
 			Stream<UIActionHandler> handlers;
 			const char** button_names;
 			Stream<char> description;
+			Stream<char> window_name = { nullptr, 0 };
 		};
 
 		ECSENGINE_API unsigned int CreateChooseOptionWindow(UISystem* system, ChooseOptionWindowData data);

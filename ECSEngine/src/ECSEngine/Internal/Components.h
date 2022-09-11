@@ -4,6 +4,7 @@
 // This file contains all the engine components
 
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "../Utilities/Reflection/ReflectionConstants.h"
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
 
@@ -12,11 +13,23 @@
 namespace ECSEngine {
 
 	struct ECS_REFLECT_COMPONENT Translation {
-		ECS_EVALUATE_FUNCTION_REFLECT static unsigned short ID() {
-			return ECS_COMPONENT_BASE + 1;
+		ECS_EVALUATE_FUNCTION_REFLECT static short ID() {
+			return ECS_COMPONENT_BASE + 0;
 		}
 
 		float3 value;
+	};
+
+	struct ECS_REFLECT_COMPONENT Name {
+		ECS_EVALUATE_FUNCTION_REFLECT static short ID() {
+			return ECS_COMPONENT_BASE + 1;
+		}
+
+		ECS_EVALUATE_FUNCTION_REFLECT static size_t AllocatorSize() {
+			return ECS_MB_R;
+		}
+
+		Stream<char> name;
 	};
 
 }

@@ -362,12 +362,35 @@ namespace ECSEngine {
 			}
 
 			selected_labels.size++;
-			if (selectable_action != nullptr) {
-				UIDrawerLabelHierarchySelectableData current_data;
-				current_data.data = selectable_data;
-				current_data.labels = selected_labels;
-				action_data->data = &current_data;
-				selectable_action(action_data);
+			TriggerSelectable(action_data);
+		}
+
+		void UIDrawerLabelHierarchyData::AddOpenedLabel(UISystem* system, unsigned int window_index, Stream<char> label)
+		{
+			// Allocate the label into the opened stream
+			void* new_buffer_allocation = system->m_memory->Allocate(sizeof(Stream<char>) * (opened_labels.size + 1));
+			unsigned int dynamic_index = DynamicIndex(system, window_index);
+
+			const void* old_buffer = opened_labels.buffer;
+			if (opened_labels.size > 0) {
+				memcpy(new_buffer_allocation, old_buffer, sizeof(Stream<char>) * opened_labels.size);
+				// Replace the buffer
+				system->ReplaceWindowBufferFromAll(window_index, old_buffer, new_buffer_allocation, dynamic_index);
+			}
+			else {
+				// Must add this allocation
+				system->AddWindowMemoryResource(new_buffer_allocation, window_index);
+				if (dynamic_index != -1) {
+					system->AddWindowDynamicElementAllocation(window_index, dynamic_index, new_buffer_allocation);
+				}
+			}
+
+			opened_labels.buffer = (Stream<char>*)new_buffer_allocation;
+			label = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), label);
+			opened_labels.Add(label);
+			system->AddWindowMemoryResource(label.buffer, window_index);
+			if (dynamic_index != -1) {
+				system->AddWindowDynamicElementAllocation(window_index, dynamic_index, label.buffer);
 			}
 		}
 
@@ -406,13 +429,45 @@ namespace ECSEngine {
 			selected_labels.size = 1;
 			first_selected.Copy(label);
 
-			if (selectable_action != nullptr) {
-				UIDrawerLabelHierarchySelectableData current_data;
-				current_data.data = selectable_data;
-				current_data.labels = selected_labels;
-				action_data->data = &current_data;
-				selectable_action(action_data);
+			TriggerSelectable(action_data);
+		}
+
+		void UIDrawerLabelHierarchyData::ChangeSelection(Stream<Stream<char>> labels, ActionData* action_data) {
+			UISystem* system = action_data->system;
+
+			unsigned int window_index = system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index);
+			// Change the selected label now
+			unsigned int dynamic_index = system->GetWindowDynamicElement(window_index, identifier);
+
+			if (selected_labels.size > 0) {
+				// Keep the buffer allocation, just deallocate all the others
+				for (size_t index = 0; index < selected_labels.size; index++) {
+					system->RemoveWindowBufferFromAll(window_index, selected_labels[index].buffer, dynamic_index);
+				}
+
+				// Replace the first one
+				system->RemoveWindowBufferFromAll(window_index, selected_labels.buffer, dynamic_index);
 			}
+
+			// Need to allocate the buffer first
+			selected_labels.buffer = (Stream<char>*)system->m_memory->Allocate(labels.MemoryOf(labels.size));
+			system->AddWindowMemoryResource(selected_labels.buffer, window_index);
+			if (dynamic_index != -1) {
+				system->AddWindowDynamicElementAllocation(window_index, dynamic_index, selected_labels.buffer);
+			}
+
+			for (size_t index = 0; index < labels.size; index++) {
+				selected_labels[index] = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), labels[index]);
+				system->AddWindowMemoryResource(selected_labels[index].buffer, window_index);
+				if (dynamic_index != -1) {
+					system->AddWindowDynamicElementAllocation(window_index, dynamic_index, selected_labels[index].buffer);
+				}
+			}
+
+			selected_labels.size = labels.size;
+			first_selected.Copy(labels[0]);
+
+			TriggerSelectable(action_data);
 		}
 
 		void UIDrawerLabelHierarchyData::RemoveSelection(Stream<char> label, ActionData* action_data)
@@ -438,12 +493,27 @@ namespace ECSEngine {
 				selected_labels.size = 0;
 			}
 
-			if (selectable_action != nullptr) {
-				UIDrawerLabelHierarchySelectableData current_data;
-				current_data.data = selectable_data;
-				current_data.labels = selected_labels;
-				action_data->data = &current_data;
-				selectable_action(action_data);
+			TriggerSelectable(action_data);
+		}
+
+		void UIDrawerLabelHierarchyData::RemoveOpenedLabel(UISystem* system, unsigned int window_index, Stream<char> label)
+		{
+			unsigned int opened_index = function::FindString(label, opened_labels);
+			unsigned int dynamic_index = DynamicIndex(system, window_index);
+
+			const void* old_buffer = opened_labels.buffer;
+			// Remove it or replace it
+			opened_labels.RemoveSwapBack(opened_index);
+			if (opened_labels.size > 0) {
+				// Replace
+				void* new_buffer_allocation = system->m_memory->Allocate(sizeof(Stream<char>) * opened_labels.size);
+				opened_labels.CopyTo(new_buffer_allocation);
+				system->ReplaceWindowBufferFromAll(window_index, old_buffer, new_buffer_allocation, dynamic_index);
+				opened_labels.buffer = (Stream<char>*)new_buffer_allocation;
+			}
+			else {
+				// Remove
+				system->RemoveWindowBufferFromAll(window_index, old_buffer, dynamic_index);
 			}
 		}
 
@@ -462,13 +532,16 @@ namespace ECSEngine {
 			system->RemoveWindowBufferFromAll(window_index, selected_labels.buffer, dynamic_index);
 			selected_labels.size = 0;
 
-			if (selectable_action != nullptr) {
-				UIDrawerLabelHierarchySelectableData current_data;
-				current_data.data = selectable_data;
-				current_data.labels = selected_labels;
-				action_data->data = &current_data;
-				selectable_action(action_data);
+			TriggerSelectable(action_data);
+		}
+
+		unsigned int UIDrawerLabelHierarchyData::DynamicIndex(const UISystem* system, unsigned int window_index) const
+		{
+			unsigned int index = -1;
+			if (identifier.size > 0) {
+				index = system->GetWindowDynamicElement(window_index, identifier);
 			}
+			return index;
 		}
 
 		void UIDrawerLabelHierarchyData::RecordSelection(ActionData* action_data)
@@ -487,6 +560,75 @@ namespace ECSEngine {
 			void* allocation = system->m_memory->Allocate(total_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 			copied_labels = StreamDeepCopy(selected_labels, ptr);
+			system->AddWindowMemoryResource(copied_labels.buffer, window_index);
+			if (dynamic_index != -1) {
+				system->AddWindowDynamicElementAllocation(window_index, dynamic_index, copied_labels.buffer);
+			}
+		}
+
+		void UIDrawerLabelHierarchyData::SetSelectionCut(bool is_cut) {
+			is_selection_cut = is_cut;
+		}
+
+		void UIDrawerLabelHierarchyData::TriggerSelectable(ActionData* action_data) {
+			if (selectable_action != nullptr) {
+				UIDrawerLabelHierarchySelectableData current_data;
+				current_data.data = selectable_data;
+				current_data.labels = selected_labels;
+				action_data->data = &current_data;
+				selectable_action(action_data);
+			}
+		}
+
+		void UIDrawerLabelHierarchyData::TriggerCopy(ActionData* action_data) {
+			if (copy_action != nullptr) {
+				UIDrawerLabelHierarchyCopyData action_copy_data;
+				action_copy_data.data = copy_data;
+				action_copy_data.destination_label = selected_labels.size == 0 ? Stream<char>(nullptr, 0) : selected_labels[0];
+				action_copy_data.source_labels = copied_labels;
+
+				// Check to see if the destination is included in the source labels
+				// If they are then set the destination to { nullptr, 0 }
+				unsigned int destination_index = function::FindString(action_copy_data.destination_label, copied_labels);
+				if (destination_index != -1) {
+					action_copy_data.destination_label = { nullptr, 0 };
+				}
+
+				action_data->data = &action_copy_data;
+
+				copy_action(action_data);
+			}
+		}
+
+		void UIDrawerLabelHierarchyData::TriggerCut(ActionData* action_data) {
+			if (cut_action != nullptr) {
+				UIDrawerLabelHierarchyCutData action_cut_data;
+				action_cut_data.data = cut_data;
+				action_cut_data.destination_label = selected_labels.size == 0 ? Stream<char>(nullptr, 0) : selected_labels[0];
+				action_cut_data.source_labels = copied_labels;
+				action_data->data = &action_cut_data;
+
+				// Check to see if the destination is included in the source labels
+				// If they are then set the destination to { nullptr, 0 }
+				unsigned int destination_index = function::FindString(action_cut_data.destination_label, copied_labels);
+				if (destination_index != -1) {
+					action_cut_data.destination_label = { nullptr, 0 };
+				}
+
+				cut_action(action_data);
+			}
+		}
+
+		void UIDrawerLabelHierarchyData::TriggerDelete(ActionData* action_data) {
+			if (delete_action != nullptr) {
+				UIDrawerLabelHierarchyDeleteData action_delete_data;
+				action_delete_data.data = delete_data;
+				action_delete_data.source_labels = selected_labels;
+				action_data->data = &action_delete_data;
+
+				delete_action(action_data);
+				ClearSelection(action_data);
+			}
 		}
 
 	}

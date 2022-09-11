@@ -20,13 +20,13 @@ namespace ECSEngine {
 
 		void ReflectionCustomTypeDependentTypes_SingleTemplate(ReflectionCustomTypeDependentTypesData* data)
 		{
-			const char* opened_bracket = strchr(data->definition.buffer, '<');
-			ECS_ASSERT(opened_bracket != nullptr);
+			Stream<char> opened_bracket = function::FindFirstCharacter(data->definition, '<');
+			ECS_ASSERT(opened_bracket.buffer != nullptr);
 
-			const char* closed_bracket = strchr(opened_bracket, '>');
-			ECS_ASSERT(closed_bracket != nullptr);
+			Stream<char> closed_bracket = function::FindCharacterReverse(opened_bracket, '>');
+			ECS_ASSERT(closed_bracket.buffer != nullptr);
 
-			data->dependent_types.AddSafe({ opened_bracket + 1, function::PointerDifference(closed_bracket, opened_bracket) - 1 });
+			data->dependent_types.AddSafe({ opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 });
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -220,6 +220,8 @@ namespace ECSEngine {
 			}
 		}
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManagerParseThreadTask(unsigned int thread_id, World* world, void* _data);
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data);
 
@@ -257,6 +259,21 @@ namespace ECSEngine {
 			Semaphore* semaphore;
 		};
 
+		// If the path index is -1 it won't write it
+		void WriteErrorMessage(ReflectionManagerParseStructuresThreadTaskData* data, const char* message, unsigned int path_index) {
+			data->success = false;
+			data->error_message_lock.lock();
+			data->error_message->AddStream(message);
+			if (path_index != -1) {
+				function::ConvertWideCharsToASCII((data->paths[path_index]), *data->error_message);
+			}
+			data->error_message->Add('\n');
+			data->error_message->AssertCapacity();
+			data->error_message_lock.unlock();
+
+			data->condition_variable->Notify();
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionManager::ReflectionManager(MemoryManager* allocator, size_t type_count, size_t enum_count) : folders(GetAllocatorPolymorphic(allocator), 0)
@@ -282,7 +299,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		bool ReflectionManager::BindApprovedData(
-			const ReflectionManagerParseStructuresThreadTaskData* data,
+			ReflectionManagerParseStructuresThreadTaskData* data,
 			unsigned int data_count,
 			unsigned int folder_index
 		)
@@ -554,6 +571,10 @@ namespace ECSEngine {
 							// Fail
 							FreeFolderHierarchy(folder_index);
 							evaluate_success = false;
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to parse function {#} for type {#}.", expressions[expression_index].name, type_ptr->name);
+							WriteErrorMessage(data, error_message.buffer, -1);
+
+							// Return true to exit the loop
 							return true;
 						}
 
@@ -1536,22 +1557,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void WriteErrorMessage(ReflectionManagerParseStructuresThreadTaskData* data, const char* message, unsigned int path_index) {
-			data->success = false;
-			data->error_message_lock.lock();
-			data->error_message->AddStream(message);
-			if (path_index != -1) {
-				function::ConvertWideCharsToASCII((data->paths[path_index]), *data->error_message);
-			}
-			data->error_message->Add('\n');
-			data->error_message->AssertCapacity();
-			data->error_message_lock.unlock();
-
-			data->condition_variable->Notify();
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		void ReflectionManagerHasReflectStructuresThreadTask(unsigned int thread_id, World* world, void* _data) {
 			ReflectionManagerHasReflectStructuresThreadTaskData* data = (ReflectionManagerHasReflectStructuresThreadTaskData*)_data;
 			for (unsigned int path_index = data->starting_path_index; path_index < data->ending_path_index; path_index++) {
@@ -1846,6 +1851,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									}
 
 									*mutable_closing_paranthese = '}';
+									previous_closed_paranthese = mutable_closing_paranthese;
 								}
 								
 								// Update the last position

@@ -50,7 +50,6 @@ namespace ECSEngine {
 			m_count = 0;
 		}
 
-		template<bool use_compare_function = true>
 		unsigned int Find(Identifier identifier) const {
 			unsigned int key = ObjectHashFunction::Hash(identifier);
 
@@ -60,36 +59,17 @@ namespace ECSEngine {
 			unsigned char key_hash_bits = key;
 			key_hash_bits &= ECS_HASH_TABLE_HASH_BITS_MASK;
 
-			//
-			//  key_bits(key_hash_bits), elements, ignore_distance(ECS_HASH_TABLE_HASH_BITS_MASK);
-			//// Only elements that hashed to this slot should be checked
-			//Vec32uc corresponding_distance(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32);
-
-			//// Exclude elements that have distance different from the distance to the current slot
-			//elements.load(m_metadata + index);				
-			//Vec32uc element_hash_bits = elements & ignore_distance;
-			//auto are_hashed_to_same_slot = (elements >> 3) == corresponding_distance;
-			//auto match = element_hash_bits == key_bits;
-			//match &= are_hashed_to_same_slot;
-
 			Vec32cb match = HashTableFindSIMDKernel(index, m_metadata, key_hash_bits, ECS_HASH_TABLE_HASH_BITS_MASK);
 
 			unsigned int return_value = -1;
 			ForEachBit(match, [&](unsigned int bit_index) {
 				Identifier current_identifier = GetIdentifierFromIndex(index + bit_index);
 
-				if constexpr (!use_compare_function) {
-					if (current_identifier == identifier) {
-						return_value = index + bit_index;
-						return true;
-					}
+				if (current_identifier == identifier) {
+					return_value = index + bit_index;
+					return true;
 				}
-				else {
-					if (current_identifier.Compare(identifier)) {
-						return_value = index + bit_index;
-						return true;
-					}
-				}
+
 				return false;
 			});
 
@@ -286,10 +266,9 @@ namespace ECSEngine {
 			return false;
 		}
 
-		template<bool use_compare_function = true>
 		void Erase(Identifier identifier) {
 			// determining the next index and clearing the current slot
-			int index = Find<use_compare_function>(identifier);
+			int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			EraseFromIndex(index);
 		}
@@ -465,23 +444,20 @@ namespace ECSEngine {
 			}
 		}
 
-		template<bool use_compare_function = true>
 		T GetValue(Identifier identifier) const {
-			unsigned int index = Find<use_compare_function>(identifier);
+			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValueFromIndex(index);
 		}
 
-		template<bool use_compare_function = true>
 		T* GetValuePtr(Identifier identifier) {
-			unsigned int index = Find<use_compare_function>(identifier);
+			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValuePtrFromIndex(index);
 		}
 
-		template<bool use_compare_function = true>
 		const T* GetValuePtr(Identifier identifier) const {
-			unsigned int index = Find<use_compare_function>(identifier);
+			unsigned int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			return GetValuePtrFromIndex(index);
 		}
@@ -526,9 +502,8 @@ namespace ECSEngine {
 			*GetIdentifierPtrFromIndex(index) = identifier;
 		}
 
-		template<bool use_compare_function = false>
 		void SetValue(T value, Identifier identifier) {
-			int index = Find<use_compare_function>(identifier);
+			int index = Find(identifier);
 			ECS_ASSERT(index != -1);
 			SetValue(index, value);
 		}
@@ -538,9 +513,8 @@ namespace ECSEngine {
 			*GetValuePtrFromIndex(index) = value;
 		}
 
-		template<bool use_compare_function = true>
 		bool TryGetValue(Identifier identifier, T& value) const {
-			unsigned int index = Find<use_compare_function>(identifier);
+			unsigned int index = Find(identifier);
 			if (index != -1) {
 				value = GetValueFromIndex(index);
 				return true;
@@ -550,9 +524,19 @@ namespace ECSEngine {
 			}
 		}
 
-		template<bool use_compare_function = true>
 		bool TryGetValuePtr(Identifier identifier, T*& pointer) {
-			unsigned int index = Find<use_compare_function>(identifier);
+			unsigned int index = Find(identifier);
+			if (index != -1) {
+				pointer = GetValuePtrFromIndex(index);
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+
+		bool TryGetValuePtr(Identifier identifier, const T*& pointer) const {
+			unsigned int index = Find(identifier);
 			if (index != -1) {
 				pointer = GetValuePtrFromIndex(index);
 				return true;
@@ -587,6 +571,7 @@ namespace ECSEngine {
 
 			// Now blit the data - it can just be memcpy'ed from the other
 			memcpy(allocation, table->GetAllocatedBuffer(), table_size);
+			m_count = table->m_count;
 		}
 
 		// It will set the internal hash buffers accordingly to the new hash buffer. It does not modify anything
@@ -680,6 +665,10 @@ namespace ECSEngine {
 #undef ECS_HASH_TABLE_DISTANCE_MASK
 #undef ECS_HASH_TABLE_HASH_BITS_MASK
 	};
+
+	inline size_t HashTableCapacityForElements(size_t count) {
+		return count * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR + 1;
+	}
 
 	// Helper function that eases the process of dynamic identifier hash tables; it takes care of allocating and
 	// deallocating when necessary

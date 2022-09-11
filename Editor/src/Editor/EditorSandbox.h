@@ -67,6 +67,8 @@ struct ECS_REFLECT EditorSandbox {
 	ECS_FIELDS_END_REFLECT;
 
 	EDITOR_SANDBOX_STATE run_state;
+	bool is_scene_dirty;
+
 	size_t runtime_settings_last_write;
 	ECSEngine::WorldDescriptor runtime_descriptor;
 	ECSEngine::AssetDatabaseReference database;
@@ -122,9 +124,9 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 
 // -------------------------------------------------------------------------------------------------------------
 
-// The new scene needs to be the relative path from the assets folder.
+// The new scene needs to be the relative path from the assets folder. A special case is new_scene { nullptr, 0 } which means reset
 // Returns true if the scene could be loaded with success. It will deserialize into a temporary entity manager and asset database
-// If that succeeds, then it will copy into the sandbox allocator
+// If that succeeds, then it will copy into the sandbox allocator.
 bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> new_scene);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -362,13 +364,18 @@ bool SaveRuntimeSettings(
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Returns true if it managed to save the sandbox scene, else false
-bool SaveSandboxScene(const EditorState* editor_state, unsigned int sandbox_index);
+// Returns true if it managed to save the sandbox scene, else false.
+// If it succeeds it updates the is_dirty flag to be false.
+bool SaveSandboxScene(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true if it succeded. On error it will print an error message
 bool SaveEditorSandboxFile(const EditorState* editor_state);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

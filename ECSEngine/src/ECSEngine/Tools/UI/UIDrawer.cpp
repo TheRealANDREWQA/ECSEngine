@@ -3456,7 +3456,8 @@ namespace ECSEngine {
 					TextLabel(new_configuration, internal_config, data->prefix, position, scale);
 					position.x += scale.x - element_descriptor.label_padd.x * 2.0f;
 				}
-				TextLabel(new_configuration, internal_config, data->labels[*data->active_label], position, scale);
+				unsigned char label_to_be_drawn = *data->active_label >= data->labels.size ? data->labels.size - 1 : *data->active_label;
+				TextLabel(new_configuration, internal_config, data->labels[label_to_be_drawn], position, scale);
 
 				float2 positions[2];
 				float2 scales[2];
@@ -7314,7 +7315,7 @@ namespace ECSEngine {
 			bool is_vertical = render_span.y > render_zone.y;
 
 			UIConfigAbsoluteTransform horizontal_transform;
-			if ((!is_vertical_extended && is_horizontal_extended && !is_vertical) || (is_horizontal && is_vertical)) {
+			if ((!is_vertical_extended && is_horizontal_extended && !is_vertical)|| (is_horizontal && is_vertical)) {
 				float difference = render_span.x - render_zone.x;
 				if (!is_vertical_extended && is_horizontal_extended && !is_vertical) {
 					difference -= system->m_descriptors.misc.render_slider_vertical_size;
@@ -8060,14 +8061,24 @@ namespace ECSEngine {
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
 					drawer->TextLabel(label_configuration, label_config, text, position, scale);
 					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
-						position.x += text->scale.x + drawer->element_descriptor.label_padd.x * 2.0f;
+						if (~configuration & UI_CONFIG_NAME_PADDING) {
+							position.x += text->scale.x + drawer->element_descriptor.label_padd.x * 2.0f;
+						}
+						else {
+							position.x += scale.x;
+						}
 					}
 				}
 				else {
 					Stream<UISpriteVertex> text_vertices = drawer->GetTextStream(label_configuration, text.size * 6);
 					drawer->TextLabel(label_configuration, label_config, text, position, scale);
 					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
-						position.x += GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
+						if (~configuration & UI_CONFIG_NAME_PADDING) {
+							position.x += GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
+						}
+						else {
+							position.x += scale.x;
+						}
 					}
 				}
 			}
@@ -10551,6 +10562,8 @@ namespace ECSEngine {
 			row_layout.element_count = 0;
 			row_layout.indentation = layout.element_indentation;
 			row_layout.row_scale = { GetXScaleUntilBorder(current_x), layout.default_element_y };
+			row_layout.horizontal_alignment = ECS_UI_ALIGN_LEFT;
+			row_layout.vertical_alignment = ECS_UI_ALIGN_TOP;
 
 			return row_layout;
 		}
@@ -12407,14 +12420,14 @@ namespace ECSEngine {
 
 		void UIDrawer::OffsetX(float value) {
 			current_x += value;
-			current_column_x_scale -= value;
+			//current_column_x_scale -= value;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::OffsetY(float value) {
 			current_y += value;
-			current_row_y_scale -= value;
+			//current_row_y_scale -= value;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -15362,7 +15375,7 @@ namespace ECSEngine {
 		void UIDrawerRowLayout::AddElement(size_t transform_type, float2 parameters)
 		{
 			if (current_index > 0) {
-				indentations[current_index - 1] = indentation;
+				indentations[current_index] = indentation;
 			}
 
 			if (transform_type & UI_CONFIG_ABSOLUTE_TRANSFORM) {
@@ -15434,7 +15447,6 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < count - 1; index++) {
 				indentations[current_index - 1 - index] = 0.0f;
 			}
-			UpdateWindowDependentElements();
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15446,9 +15458,19 @@ namespace ECSEngine {
 				current_index = 0;
 
 				UpdateWindowDependentElements();
+				UpdateElementsFromAlignment();
+
+				if (vertical_alignment == ECS_UI_ALIGN_MIDDLE) {
+					drawer->SetCurrentY(AlignMiddle(drawer->current_y, drawer->region_limit.y - drawer->current_y, row_scale.y));
+				}
+				else if (vertical_alignment == ECS_UI_ALIGN_BOTTOM) {
+					drawer->SetCurrentY(drawer->GetAlignedToBottom(row_scale.y).y);
+				}
 			}
-			else {
-				drawer->OffsetX(indentations[current_index - 1]);
+
+			drawer->OffsetX(indentations[current_index]);
+			if (current_index > 0) {
+				drawer->Indent(-1.0f);
 			}
 
 			ECS_ASSERT(current_index < element_count);
@@ -15476,6 +15498,7 @@ namespace ECSEngine {
 			else {
 				ECS_ASSERT(false);
 			}
+			current_index++;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15496,6 +15519,19 @@ namespace ECSEngine {
 					indentations[index] = _indentation;
 				}
 			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::SetHorizontalAlignment(ECS_UI_ALIGN _alignment) {
+			horizontal_alignment = _alignment;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::SetVerticalAlignment(ECS_UI_ALIGN alignment)
+		{
+			vertical_alignment = alignment;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -15556,6 +15592,37 @@ namespace ECSEngine {
 
 					horizontal_scale_before += indentations[index];
 				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::UpdateElementsFromAlignment()
+		{
+			if (horizontal_alignment == ECS_UI_ALIGN_LEFT) {
+				indentations[0] = 0.0f;
+				return;
+			}
+
+			// Calculate the total element size
+			float total_size = 0.0f;
+			for (unsigned int index = 0; index < element_count; index++) {
+				if (function::HasFlag(element_transform_types[index], UI_CONFIG_ABSOLUTE_TRANSFORM) || function::HasFlag(element_transform_types[index], UI_CONFIG_MAKE_SQUARE)) {
+					total_size += element_sizes[index].x;
+				}
+				else if (function::HasFlag(element_transform_types[index], UI_CONFIG_RELATIVE_TRANSFORM)) {
+					total_size += element_sizes[index].x * drawer->layout.default_element_x;
+				}
+				else {
+					total_size += drawer->GetWindowSizeScaleElement(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, element_sizes[index]).x;
+				}
+			}
+
+			if (horizontal_alignment == ECS_UI_ALIGN_MIDDLE) {
+				indentations[0] = AlignMiddle(0.0f, row_scale.x, total_size);
+			}
+			else if (horizontal_alignment == ECS_UI_ALIGN_RIGHT) {
+				indentations[0] = row_scale.x - total_size;
 			}
 		}
 

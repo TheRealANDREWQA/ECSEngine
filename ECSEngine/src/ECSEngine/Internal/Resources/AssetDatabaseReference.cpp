@@ -393,7 +393,7 @@ namespace ECSEngine {
 
 	template<typename Functor>
 	size_t DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Functor&& functor) {
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 256, ECS_MB * 4);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 128, ECS_MB * 4);
 		AssetDatabase temp_database;
 		temp_database.reflection_manager = reflection_manager;
 

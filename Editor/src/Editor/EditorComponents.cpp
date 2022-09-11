@@ -3,6 +3,7 @@
 #include "EditorComponents.h"
 #include "EditorState.h"
 
+#include "../Modules/Module.h"
 #include "ECSEngineSerialization.h"
 #include "ECSEngineSerializationHelpers.h"
 
@@ -23,11 +24,11 @@ Component EditorComponents::GetComponentID(Stream<char> name) const
 	if (internal_manager->type_definitions.TryGetValue(name, type)) {
 		double evaluation = type.GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
 		if (evaluation == DBL_MAX) {
-			return Component{ USHORT_MAX };
+			return Component{ -1 };
 		}
-		return Component{ (unsigned short)evaluation };
+		return Component{ (short)evaluation };
 	}
-	return Component{ USHORT_MAX };
+	return Component{ -1 };
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -65,6 +66,48 @@ unsigned int EditorComponents::IsModule(Stream<char> name) const
 		}
 	}
 	return -1;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::IsComponent(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		if (IsReflectionTypeComponent(&type) || IsReflectionTypeSharedComponent(&type)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::IsUniqueComponent(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		if (IsReflectionTypeComponent(&type)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::IsSharedComponent(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		if (IsReflectionTypeSharedComponent(&type)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -533,7 +576,29 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<char> component_name, unsigned short new_id)
+void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stream<char> component_name)
+{
+	const ReflectionType* internal_type = internal_manager->GetType(component_name);
+	bool is_component = IsReflectionTypeComponent(internal_type);
+	
+	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+	double allocator_size_d = internal_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+	size_t allocator_size = allocator_size_d == DBL_MAX ? 0 : (size_t)allocator_size_d;
+
+	// Lock the small memory manager in order to commit the type
+	entity_manager->m_small_memory_manager.Lock();
+	if (is_component) {
+		entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size);
+	}
+	else {
+		entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size);
+	}
+	entity_manager->m_small_memory_manager.Unlock();
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<char> component_name, short new_id)
 {
 	ReflectionType* type = internal_manager->type_definitions.GetValuePtr(component_name);
 	unsigned short byte_size = (unsigned short)GetReflectionTypeByteSize(type);
@@ -558,7 +623,6 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 		// We also need to lock the small memory manager
 		entity_manager->m_small_memory_manager.Lock();
 		entity_manager->RegisterComponentCommit(new_component, byte_size, 0);
-		entity_manager->m_small_memory_manager.Unlock();
 
 		if (arena != nullptr) {
 			entity_manager->m_unique_components[old_id].allocator = nullptr;
@@ -567,13 +631,13 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 
 		// Now destroy the old component
 		entity_manager->UnregisterComponentCommit(old_component);
+		entity_manager->m_small_memory_manager.Unlock();
 	}
 	else {
 		arena = entity_manager->GetSharedComponentAllocator(old_component);
 
 		entity_manager->m_small_memory_manager.Lock();
 		entity_manager->RegisterSharedComponentCommit(new_component, byte_size, 0);
-		entity_manager->m_small_memory_manager.Unlock();
 
 		if (arena != nullptr) {
 			entity_manager->m_shared_components[old_id].info.allocator = nullptr;
@@ -582,8 +646,15 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 
 		// Now destroy the old component
 		entity_manager->UnregisterSharedComponentCommit(old_component);
+		entity_manager->m_small_memory_manager.Unlock();
 	}
+}
 
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::EmptyEventStream()
+{
+	events.FreeBuffer();
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -684,12 +755,46 @@ void EditorComponents::RemoveType(Stream<char> name)
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ResolveEvent(EntityManager* entity_manager, const ReflectionManager* reflection_manager, EditorComponentEvent event, Stream<SpinLock> locks)
+void EditorComponents::RemoveTypeFromManager(EntityManager* entity_manager, Component component, bool shared) const
+{
+	// Lock the small memory manager
+	entity_manager->m_small_memory_manager.Lock();
+	if (shared) {
+		entity_manager->UnregisterSharedComponentCommit(component);
+	}
+	else {
+		entity_manager->UnregisterComponentCommit(component);
+	}
+	entity_manager->m_small_memory_manager.Unlock();
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::ResolveEvent(EntityManager* entity_manager, const ReflectionManager* reflection_manager, EditorComponentEvent event, Stream<SpinLock> locks)
 {
 	switch (event.type) {
+	case EDITOR_COMPONENT_EVENT_IS_ADDED:
+	{
+		if (IsComponent(event.name)) {
+			AddComponentToManager(entity_manager, event.name);
+			return true;
+		}
+	}
+		break;
+	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
+	{
+		RemoveTypeFromManager(entity_manager, { event.new_id }, event.is_shared);
+		return true;
+	}
+		break;
 	case EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED:
-		// This is the same as recovering the data with the same byte size
-		RecoverData(entity_manager, reflection_manager, event.name, locks);
+	{
+		// Only if the component exists
+		if (IsComponent(event.name)) {
+			RecoverData(entity_manager, reflection_manager, event.name, locks);
+			return true;
+		}
+	}
 		break;
 	case EDITOR_COMPONENT_EVENT_DEPENDENCY_CHANGED:
 	{
@@ -701,20 +806,105 @@ void EditorComponents::ResolveEvent(EntityManager* entity_manager, const Reflect
 				RecoverData(entity_manager, reflection_manager, type.name, locks);
 			}
 		});
+		return true;
 	}
 		break;
 	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
 	{
 		// Recover the data firstly and then update the component references
-		RecoverData(entity_manager, reflection_manager, event.name, locks);
+		if (IsComponent(event.name)) {
+			RecoverData(entity_manager, reflection_manager, event.name, locks);
+			ChangeComponentID(entity_manager, event.name, event.new_id);
+			return true;
+		}
 	}
 		break;
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
 		RecoverData(entity_manager, reflection_manager, event.name, locks);
+		return true;
 		break;
 	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
+		if (IsComponent(event.name)) {
+			ChangeComponentID(entity_manager, event.name, event.new_id);
+			return true;
+		}
 		break;
 	}
+
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
+{
+	struct FunctorData {
+		EntityManager* entity_manager;
+	};
+
+	FunctorData functor_data = { entity_manager };
+	auto functor = [](const ReflectionType* type, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
+		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+		if (!data->entity_manager->ExistsComponent(component_id)) {
+			double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size == DBL_MAX ? 0 : (size_t)allocator_size);
+		}
+	};
+
+	struct SharedFunctorData {
+		EntityManager* entity_manager;
+	};
+
+	SharedFunctorData shared_functor_data = { entity_manager };
+	auto shared_functor = [](const ReflectionType* type, void* _data) {
+		SharedFunctorData* data = (SharedFunctorData*)_data;
+		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
+			double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size == DBL_MAX ? 0 : (size_t)allocator_size);
+		}
+	};
+
+	ForEachComponent(functor, &functor_data);
+	ForEachSharedComponent(shared_functor, &shared_functor_data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::SetManagerComponentAllocators(EntityManager* entity_manager)
+{
+	struct FunctorData {
+		EntityManager* entity_manager;
+	};
+
+	auto functor = [](const Reflection::ReflectionType* type, void* _data) {
+		FunctorData* data = (FunctorData*)_data;
+		double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+		if (allocator_size != DBL_MAX) {
+			data->entity_manager->ResizeComponentAllocator(component_id, (size_t)allocator_size);
+		}
+	};
+	FunctorData functor_data;
+	functor_data.entity_manager = entity_manager;
+	ForEachComponent(functor, &functor_data);
+
+	struct SharedFunctorData {
+		EntityManager* entity_manager;
+	};
+
+	auto shared_functor = [](const Reflection::ReflectionType* type, void* _data) {
+		SharedFunctorData* data = (SharedFunctorData*)_data;
+		double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+		if (allocator_size != DBL_MAX) {
+			data->entity_manager->ResizeSharedComponentAllocator(component_id, (size_t)allocator_size);
+		}
+	};
+	SharedFunctorData shared_data;
+	shared_data.entity_manager = entity_manager;
+	ForEachSharedComponent(shared_functor, &shared_data);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -732,6 +922,7 @@ void EditorComponents::Initialize(AllocatorPolymorphic _allocator)
 {
 	allocator = _allocator;
 	loaded_modules.Initialize(allocator, 0);
+	events.Initialize(_allocator, 0);
 
 	internal_manager = (ReflectionManager*)Allocate(allocator, sizeof(ReflectionManager));
 	internal_manager->type_definitions.Initialize(allocator, 0);
@@ -870,10 +1061,10 @@ void EditorComponents::UpdateComponents(
 						}
 						else {
 							if (!CompareReflectionTypes(internal_manager, reflection_manager, old_type, type)) {
-								events.Add({ EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID, type->name, type->name });
+								events.Add({ EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID, type->name, type->name, (short)new_id });
 							}
 							else {
-								events.Add({ EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID, type->name, type->name });
+								events.Add({ EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID, type->name, type->name, (short)new_id });
 							}
 						}
 						continue;
@@ -917,21 +1108,20 @@ void EditorComponents::UpdateComponents(
 		register_existing_types(component_indices, std::true_type{});
 		register_existing_types(hierarchy_types, std::false_type{});
 
-		// Remove all the types that are not components. For these that are components, generate an event
 		for (unsigned int index = 0; index < temporary_module_types.size; index++) {
 			const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(temporary_module_types[index]);
-			if (type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) == DBL_MAX) {
-				// Not a component, deallocate it
+			if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
+				// Emit a removed event
+				events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, {(short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION)}, IsReflectionTypeSharedComponent(type) });
+			}
+			else {
+				// Not a component, deallocate it now
 				RemoveType(type->name);
 				unsigned int idx = function::FindString(type->name, loaded_modules[module_index].types);
 				loaded_modules[module_index].types.RemoveSwapBack(idx);
 			}
-			else {
-				events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name });
-			}
 		}
 
-		// The remaining types inside the temporary_module_types are components which generated an event
 		if (added_types.size > 0) {
 			size_t new_size = added_types.size + loaded_modules[module_index].types.size;
 			void* new_allocation = Allocate(allocator, loaded_modules[module_index].types.MemoryOf(new_size));
@@ -982,6 +1172,7 @@ bool IsEditorComponentHandledInternally(EDITOR_COMPONENT_EVENT event_type)
 {
 	switch (event_type)
 	{
+	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
 	case EDITOR_COMPONENT_EVENT_DEPENDENCY_CHANGED:
 	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
@@ -990,7 +1181,6 @@ bool IsEditorComponentHandledInternally(EDITOR_COMPONENT_EVENT event_type)
 		return true;
 	case EDITOR_COMPONENT_EVENT_IS_MISSING_ID:
 	case EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR:
-	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	case EDITOR_COMPONENT_EVENT_SAME_ID:
 		return false;
 	default:
@@ -1004,6 +1194,9 @@ bool IsEditorComponentHandledInternally(EDITOR_COMPONENT_EVENT event_type)
 
 struct ExecuteComponentEventData {
 	EditorState* editor_state;
+	// In case some events cannot be processed (like in the case that a component has not been registered yet)
+	// put these back to be reprocessed later on
+	AtomicStream<EditorComponentEvent>* unhandled_events;
 	EditorComponentEvent event_to_handle;
 	Stream<Stream<SpinLock>> scene_spin_locks;
 	Stream<Stream<SpinLock>> runtime_spin_locks;
@@ -1028,81 +1221,299 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		}
 
 		// Now handle the scene manager
-		data->editor_state->editor_components.ResolveEvent(
+		bool was_handled = data->editor_state->editor_components.ResolveEvent(
 			&data->editor_state->sandboxes[index].scene_entities,
 			data->editor_state->module_reflection->reflection,
 			data->event_to_handle,
 			data->scene_spin_locks[index]
 		);
+		if (!was_handled) {
+			data->unhandled_events->Add(data->event_to_handle);
+		}
 	}
 
 	unsigned int previous_count = data->semaphore->Exit();
 	if (previous_count == 1) {
+		// Add all the unhandled events back to the main buffer
+		data->editor_state->editor_components.events.AddStream(data->unhandled_events->ToStream());
+
 		// We are the final ones
 		data->editor_state->multithreaded_editor_allocator->Deallocate_ts(data->semaphore);
 	}
 	EditorStateClearFlag(data->editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 }
 
-void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream<EditorComponentEvent>& user_events)
-{
-	EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
-	
-	editor_state->editor_components.GetUserEvents(user_events);
+struct UserEventsWindowData {
+	EditorState* editor_state;
+	ResizableStream<EditorComponentEvent> user_events;
+};
 
-	// For each sandbox we must create its appropriate spin locks
-	size_t total_allocation_size = sizeof(Semaphore) + sizeof(Stream<SpinLock>) * editor_state->sandboxes.size * 2;
-	for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
-		if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
-			total_allocation_size += sizeof(SpinLock) * editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount();
-		}
-		total_allocation_size += sizeof(SpinLock) * editor_state->sandboxes[index].scene_entities.GetArchetypeCount();
+void UserEventsWindowDestroy(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	UserEventsWindowData* data = (UserEventsWindowData*)_additional_data;
+	data->user_events.FreeBuffer();
+
+	// Go through all modules and retry to add them in order to add the components that are missing
+	for (unsigned int index = 0; index < data->editor_state->project_modules->size; index++) {
+		const EditorModule* module = data->editor_state->project_modules->buffer + index;
+		ECS_STACK_CAPACITY_STREAM(char, library_name, 512);
+		function::ConvertWideCharsToASCII(module->library_name, library_name);
+
+		unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(data->editor_state, index);
+		data->editor_state->editor_components.UpdateComponents(data->editor_state->module_reflection->reflection, hierarchy_index, library_name);
 	}
 
-	void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(total_allocation_size);
-	Semaphore* semaphore = (Semaphore*)allocation;
-	uintptr_t ptr = (uintptr_t)allocation;
-	ptr += sizeof(*semaphore);
+	ReleaseLockedWindow(action_data);
+}
 
-	Stream<Stream<SpinLock>> runtime_locks;
-	runtime_locks.InitializeFromBuffer(ptr, editor_state->sandboxes.size);
+void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initialize) {
+	UI_PREPARE_DRAWER(initialize);
 
-	Stream<Stream<SpinLock>> scene_locks;
-	scene_locks.InitializeFromBuffer(ptr, editor_state->sandboxes.size);
+	UIDrawConfig config;
 
-	for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
-		if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
-			unsigned int archetype_count = editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount();
-			runtime_locks[index].InitializeFromBuffer(ptr, archetype_count);
-			memset(runtime_locks[index].buffer, 0, sizeof(SpinLock) * archetype_count);
+	UserEventsWindowData* data = (UserEventsWindowData*)window_data;
+	
+	EditorStateRemoveOutdatedEvents(data->editor_state, data->user_events);
+
+	drawer.Text("There are events that need to be handled. Instructions:");
+	drawer.NextRow();
+	Stream<char> label_lists[] = {
+		"SAME_ID: Modify the source file for the conflicting components such that they have different IDs.",
+		"MISSING_ID: Give the component an ID.",
+		"HAS_BUFFERS_NO_ALLOCATOR: Give the component an allocator size.",
+	};
+	drawer.LabelList(UI_CONFIG_LABEL_LIST_NO_NAME, config, "List", { label_lists, std::size(label_lists) });
+	drawer.NextRow();
+	drawer.CrossLine();
+
+	drawer.NextRow();
+	drawer.Text("Events:");
+	drawer.OffsetNextRow(drawer.layout.node_indentation);
+	drawer.NextRow();
+	for (int32_t index = 0; index < (int32_t)data->user_events.size; index++) {
+		EDITOR_COMPONENT_EVENT component_event = data->user_events[index].type;
+		const char* type_string = "";
+
+		// Verify if it has been satisfied
+		if (component_event == EDITOR_COMPONENT_EVENT_SAME_ID) {
+			type_string = " SAME_ID with ";
+		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_IS_MISSING_ID) {
+			type_string = " MISSING_ID";
+		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR) {
+			type_string = " HAS_BUFFERS_NO_ALLOCATOR";
+		}
+
+		drawer.Text(data->user_events[index].name);	
+		drawer.Text(type_string);
+
+		if (component_event == EDITOR_COMPONENT_EVENT_SAME_ID) {
+			drawer.Text(data->user_events[index].conflicting_name);
+		}
+		drawer.NextRow();
+	}
+
+	if (data->user_events.size == 0) {
+		// Destroy the current window by pushing a frame handler
+		drawer.system->PushDestroyWindowHandler(drawer.window_index);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void TickEditorComponents(EditorState* editor_state)
+{
+	ECS_STACK_CAPACITY_STREAM(EditorComponentEvent, user_events, 512);
+	EditorStateResolveComponentEvents(editor_state, user_events);
+
+	if (user_events.size > 0) {
+		const char* WINDOW_NAME = "User events";
+		unsigned int window_index = editor_state->ui_system->GetWindowFromName(WINDOW_NAME);
+		if (window_index == -1) {
+			UserEventsWindowData window_data;
+			window_data.editor_state = editor_state;
+			window_data.user_events.InitializeAndCopy(editor_state->EditorAllocator(), user_events);
+
+			UIWindowDescriptor descriptor;
+
+			descriptor.draw = UserEventsWindow;
+			descriptor.window_data = &window_data;
+			descriptor.window_data_size = sizeof(window_data);
+			descriptor.window_name = WINDOW_NAME;
+
+			descriptor.initial_position_x = 0.0f;
+			descriptor.initial_position_y = 0.0f;
+			descriptor.initial_size_x = 0.5f;
+			descriptor.initial_size_y = 0.5f;
+
+			descriptor.destroy_action = UserEventsWindowDestroy;
+
+			editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL ^ UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X);
 		}
 		else {
-			runtime_locks[index] = { nullptr, 0 };
+			// Append to the list of the window
+			UserEventsWindowData* window_data = (UserEventsWindowData*)editor_state->ui_system->GetWindowData(window_index);
+			window_data->user_events.AddStream(user_events);
 		}
-
-		unsigned int archetype_count = editor_state->sandboxes[index].scene_entities.GetArchetypeCount();
-		scene_locks[index].InitializeFromBuffer(ptr, archetype_count);
-		memset(scene_locks[index].buffer, 0, sizeof(SpinLock) * archetype_count);
 	}
+}
 
-	semaphore->Enter(editor_state->editor_components.events.size);
+// ----------------------------------------------------------------------------------------------
 
-	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
-		EditorComponentEvent event = editor_state->editor_components.events[index];
-
-		// Increase the prevent launch flag
+void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream<EditorComponentEvent>& user_events)
+{
+	if (editor_state->editor_components.events.size > 0) {
 		EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 
-		ExecuteComponentEventData execute_data;
-		execute_data.editor_state = editor_state;
-		execute_data.event_to_handle = event;
-		execute_data.semaphore = semaphore;
-		execute_data.runtime_spin_locks = runtime_locks;
-		execute_data.scene_spin_locks = scene_locks;
-		EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(ExecuteComponentEvent, &execute_data, sizeof(execute_data)));
-	}
+		editor_state->editor_components.GetUserEvents(user_events);
 
-	EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+		// For each sandbox we must create its appropriate spin locks
+		size_t total_allocation_size = sizeof(Semaphore) + sizeof(Stream<SpinLock>) * editor_state->sandboxes.size * 2 + 
+			sizeof(EditorComponentEvent) * editor_state->editor_components.events.size * editor_state->sandboxes.size + sizeof(AtomicStream<EditorComponentEvent>);
+		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+			if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
+				total_allocation_size += sizeof(SpinLock) * editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount();
+			}
+			total_allocation_size += sizeof(SpinLock) * editor_state->sandboxes[index].scene_entities.GetArchetypeCount();
+		}
+
+		void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(total_allocation_size);
+		Semaphore* semaphore = (Semaphore*)allocation;
+		uintptr_t ptr = (uintptr_t)allocation;
+		ptr += sizeof(*semaphore);
+
+		AtomicStream<EditorComponentEvent>* unhandled_events = (AtomicStream<EditorComponentEvent>*)ptr;
+		ptr += sizeof(AtomicStream<EditorComponentEvent>);
+		unhandled_events->InitializeFromBuffer(ptr, 0, editor_state->editor_components.events.size * editor_state->sandboxes.size);
+
+		Stream<Stream<SpinLock>> runtime_locks;
+		runtime_locks.InitializeFromBuffer(ptr, editor_state->sandboxes.size);
+
+		Stream<Stream<SpinLock>> scene_locks;
+		scene_locks.InitializeFromBuffer(ptr, editor_state->sandboxes.size);
+
+		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+			if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
+				unsigned int archetype_count = editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount();
+				runtime_locks[index].InitializeFromBuffer(ptr, archetype_count);
+				memset(runtime_locks[index].buffer, 0, sizeof(SpinLock) * archetype_count);
+			}
+			else {
+				runtime_locks[index] = { nullptr, 0 };
+			}
+
+			unsigned int archetype_count = editor_state->sandboxes[index].scene_entities.GetArchetypeCount();
+			scene_locks[index].InitializeFromBuffer(ptr, archetype_count);
+			memset(scene_locks[index].buffer, 0, sizeof(SpinLock) * archetype_count);
+		}
+
+		semaphore->Enter(editor_state->editor_components.events.size);
+
+		for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
+			EditorComponentEvent event = editor_state->editor_components.events[index];
+
+			// Increase the prevent launch flag
+			EditorStateSetFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+
+			ExecuteComponentEventData execute_data;
+			execute_data.editor_state = editor_state;
+			execute_data.event_to_handle = event;
+			execute_data.semaphore = semaphore;
+			execute_data.runtime_spin_locks = runtime_locks;
+			execute_data.scene_spin_locks = scene_locks;
+			execute_data.unhandled_events = unhandled_events;
+			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(ExecuteComponentEvent, &execute_data, sizeof(execute_data)));
+		}
+
+		editor_state->editor_components.EmptyEventStream();
+
+		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<EditorComponentEvent>& user_events)
+{
+	for (unsigned int index = 0; index < user_events.size; index++) {
+		EditorComponentEvent component_event = user_events[index];
+		// Verify if it has been satisfied
+		if (component_event.type == EDITOR_COMPONENT_EVENT_SAME_ID) {
+			ReflectionType first_type;
+			first_type.name.size = 0;
+			ReflectionType second_type;
+			second_type.name.size = 0;
+
+			// If one of the types has been removed, then remove the event
+			// Else if their component ids have changed
+			if (!editor_state->module_reflection->reflection->TryGetType(component_event.name, first_type)) {
+				editor_state->ui_reflection->reflection->TryGetType(component_event.name, first_type);
+			}
+
+			if (!editor_state->module_reflection->reflection->TryGetType(component_event.conflicting_name, second_type)) {
+				editor_state->ui_reflection->reflection->TryGetType(component_event.conflicting_name, second_type);
+			}
+
+			if (first_type.name.size == 0 || second_type.name.size == 0) {
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+
+			double first_id = first_type.GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
+			double second_id = second_type.GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
+
+			if (first_id == DBL_MAX || second_id == DBL_MAX) {
+				// If any of the these is not found, remove the event
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+
+			// Their ids have changed
+			if (first_id != second_id) {
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+		}
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_IS_MISSING_ID) {
+			ReflectionType type;
+			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+				double evaluation = type.GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
+				if (evaluation != DBL_MAX) {
+					user_events.Remove(index);
+					index--;
+					continue;
+				}
+			}
+			else {
+				// Remove the event if the type has disapperead from the module reflection
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+		}
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR) {
+			ReflectionType type;
+			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+				double evaluation = type.GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+				if (evaluation != DBL_MAX) {
+					user_events.Remove(index);
+					index--;
+					continue;
+				}
+			}
+			else {
+				// Remove the event if the type has disapperead from the module reflection
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------------------------

@@ -20,6 +20,7 @@ namespace ECSEngine {
 		void* thread_function;
 	};
 
+	// For non-commit usage
 	void ForEachEntityBatchImplementation(
 		unsigned int thread_id,
 		World* world,
@@ -66,7 +67,7 @@ namespace ECSEngine {
 				for (unsigned char component_index = 0; component_index < task_data.component_map_count; component_index++) {
 					ECS_CRASH_RETURN(
 						task_data.component_map[component_index] != -1,
-						"An archetype was corrupted. During query {#} execution a component was not found.",
+						"ForEachEntity/Batch: An archetype was corrupted. During query {#} execution a component was not found.",
 						functor_name
 					);
 				}
@@ -74,7 +75,7 @@ namespace ECSEngine {
 				for (unsigned char shared_component_index = 0; shared_component_index < task_data.shared_component_map_count; shared_component_index++) {
 					ECS_CRASH_RETURN(
 						task_data.shared_component_map[shared_component_index] != -1,
-						"An archetype was corrupted. During query {#} execution a shared component was not found.",
+						"ForEachEntity/Batch: An archetype was corrupted. During query {#} execution a shared component was not found.",
 						functor_name
 					);
 				}
@@ -219,6 +220,54 @@ namespace ECSEngine {
 		unsigned int deferred_calls_capacity
 	) {
 		ForEachEntityBatchImplementation(thread_id, world, functor, functor_name, data, data_size, deferred_calls_capacity, ForEachEntityThreadTask);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void ForEachEntityCommit(
+		World* world, 
+		ForEachEntityFunctor functor,
+		void* data, 
+		ComponentSignature unique_signature,
+		ComponentSignature shared_signature,
+		ComponentSignature unique_exclude_signature,
+		ComponentSignature shared_exclude_signature
+	)
+	{
+		ECS_STACK_CAPACITY_STREAM(unsigned int, archetype_indices, ECS_MAIN_ARCHETYPE_MAX_COUNT);
+
+		EntityManager* entity_manager = world->entity_manager;
+		if (unique_exclude_signature.count == 0 && shared_exclude_signature.count == 0) {
+			ArchetypeQuery query(unique_signature, shared_signature);
+			entity_manager->GetArchetypes(query, archetype_indices);
+		}
+		else {
+			ArchetypeQueryExclude query(unique_signature, shared_signature, unique_exclude_signature, shared_exclude_signature);
+			entity_manager->GetArchetypesExclude(query, archetype_indices);
+		}
+
+		unsigned char component_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
+		unsigned char shared_indices[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+
+		ForEachEntityBatchImplementationTaskData task_data;
+		task_data.functor_data = data;
+		task_data.thread_function = functor;
+
+		for (unsigned int index = 0; index < archetype_indices.size; index++) {
+			Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
+			unsigned int base_count = archetype->GetBaseCount();
+
+			task_data.archetype_indices.x = archetype_indices[index];
+			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+				ArchetypeBase* base = archetype->GetBase(base_index);
+				task_data.command_stream = nullptr;
+				task_data.archetype_indices.y = base_index;
+				task_data.count = base->EntityCount();
+				task_data.entity_offset = 0;
+				
+				ForEachEntityThreadTask(0, world, &task_data);
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------

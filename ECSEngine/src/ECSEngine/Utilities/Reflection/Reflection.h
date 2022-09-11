@@ -102,7 +102,7 @@ namespace ECSEngine {
 			// Returns true if it succededs. It can fail due to expression evaluation
 			// or if a referenced type is not yet reflected
 			bool BindApprovedData(
-				const ReflectionManagerParseStructuresThreadTaskData* data,
+				ReflectionManagerParseStructuresThreadTaskData* data,
 				unsigned int data_count,
 				unsigned int folder_index
 			);

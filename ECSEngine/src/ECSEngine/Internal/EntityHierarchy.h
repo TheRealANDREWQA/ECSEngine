@@ -5,8 +5,8 @@
 
 namespace ECSEngine {
 
-	struct ECSENGINE_API EntityHierarchyHash {
-		static unsigned int Hash(Entity entity) {
+	struct EntityHierarchyHash {
+		static inline unsigned int Hash(Entity entity) {
 			return (entity.value + entity.value) * entity.value;
 		};
 	};
@@ -47,6 +47,8 @@ namespace ECSEngine {
 			unsigned int parent_table_initial_size = -1
 		);
 
+		// If the parent doesn't exist it will insert it as well.
+		// If the parent is -1, then the child will be placed as a root
 		void AddEntry(Entity parent, Entity child);
 		
 		// The allocator should already be initialized
@@ -90,7 +92,10 @@ namespace ECSEngine {
 		unsigned int GetEntityCount() const;
 
 		// It will alias the children from inside the table. Do not modify !!
-		Stream<Entity> GetChildren(Entity parent) const;
+		// If the static storage is provided and the stream would normally point to it,
+		// then it will copy into the given buffer (useful if wanting to read the children
+		// while doing operations like adding and removing)
+		Stream<Entity> GetChildren(Entity parent, Entity* static_storage = nullptr) const;
 
 		// It will copy into the children stream
 		void GetChildrenCopy(Entity parent, CapacityStream<Entity>& children) const;
@@ -100,12 +105,17 @@ namespace ECSEngine {
 		// It does nothing if the entity doesn't exist in the hierarchy
 		void GetAllChildrenFromEntity(Entity entity, CapacityStream<Entity>& children) const;
 
-		// It returns an entity full of 1's (can verify with -1) in case the entity does not have a parent (doesn't exist, or it is a root)
+		// It returns an entity -1 in case the entity does not have a parent (doesn't exist, or it is a root)
 		Entity GetParent(Entity entity) const;
 
 		// Determines the root that contains that entity
-		// It returns an entity full of 1's in case the entity doesn't exist in the hierarchy at all
+		// It returns an entity -1 in case the entity doesn't exist in the hierarchy at all.
+		// It can happen that if some disconnect happened inside the hierarchy it returns a valid entity
+		// that is not the root of the given entity
 		Entity GetRootFromChildren(Entity entity) const;
+
+		// Returns true if the entity is a root, else false (can return false if the entity has not yet been inserted)
+		bool IsRoot(Entity entity) const;
 
 		// It will eliminate all the children as well
 		void RemoveEntry(Entity entity);
@@ -129,13 +139,9 @@ namespace ECSEngine {
 			Entity static_children[ECS_ENTITY_HIERARCHY_STATIC_STORAGE];
 			struct {
 				Entity* entities;
+				// Needed such that the 3 entities don't overlap the count
 				unsigned int padding;
-
-				// Used to tell if this is a root or not
-				unsigned int is_root : 1;
-				// Indexes into the roots stream and can be used to quickly remove roots
-				unsigned int root_index : 20;
-				unsigned int count : 11;
+				unsigned int count;
 			};
 		};
 

@@ -15,7 +15,6 @@
     <ClInclude Include="src\Project\ProjectUITemplate.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="src\Project\ProjectFile.h" />
-    <ClInclude Include="src\Metafiles\Metafiles.h" />
     <ClInclude Include="src\Project\ProjectFolders.h" />
     <ClInclude Include="src\Project\ProjectBackup.h" />
     <ClInclude Include="src\Editor\EditorSandbox.h" />
@@ -54,7 +53,6 @@
     <ClCompile Include="src\Editor\EditorEvent.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Editor\EditorState.cpp" />
-    <ClCompile Include="src\Metafiles\Metafiles.cpp" />
     <ClCompile Include="src\Project\ProjectFolders.cpp" />
     <ClCompile Include="src\Project\ProjectBackup.cpp" />
     <ClCompile Include="src\Editor\EditorSandbox.cpp" />

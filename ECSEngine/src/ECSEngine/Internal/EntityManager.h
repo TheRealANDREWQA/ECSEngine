@@ -16,8 +16,6 @@
 #define ECS_ENTITY_MANAGER_DEFERRED_ACTION_CAPACITY (1 << 12)
 #endif
 
-#define ECS_ENTITY_MANAGER_TRANSFORM_HIERARCHY 0
-
 namespace ECSEngine {
 
 	struct EntityManager;
@@ -206,24 +204,41 @@ namespace ECSEngine {
 			Entity entity,
 			SharedComponentSignature components,
 			DeferredActionParameters parameters = {},
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
 		// Sets the child to have as parent the given entity. The child must not be previously found in the hierarchy
 		// If the parent is set to -1, then the child will be inserted as a root
-		void AddEntityToHierarchyCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs);
+		void AddEntityToHierarchyCommit(Stream<EntityPair> pairs);
 
 		// Deferred Call
 		// Sets the child to have as parent the given entity. The child must not be previously found in the hierarchy
 		// If the parent is set to -1, then the child will be inserted as a root
 		void AddEntityToHierarchy(
-			unsigned int hierarchy_index,
 			Stream<EntityPair> pairs,
 			DeferredActionParameters parameters,
-			DebugInfo debug_info = { ECS_LOCATION }
+			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
+
+		// Sets the child to have as parent the given entity. The child must not be previously found in the hierarchy
+		// If the parent is set to -1, then the child will be inserted as a root
+		void AddEntityToHierarchyCommit(const Entity* parents, const Entity* children, unsigned int count);
+
+		// Deferred call
+		// Sets the child to have as parent the given entity. The child must not be previously found in the hierarchy
+		// If the parent is set to -1, then the child will be inserted as a root
+		void AddEntityToHierarchy(const Entity* parents, const Entity* children, unsigned int count, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Sets the entities to be children of the given parent.
+		void AddEntitiesToParentCommit(Stream<Entity> entities, Entity parent);
+
+		// Deferred call
+		// Sets the entities to be children of the given parent.
+		void AddEntitiesToParent(Stream<Entity> entities, Entity parent, DeferredActionParameters parameters, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -241,10 +256,9 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void ChangeEntityParentCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs);
+		void ChangeEntityParentCommit(Stream<EntityPair> pairs);
 
 		void ChangeEntityParent(
-			unsigned int hierarchy_index,
 			Stream<EntityPair> pairs,
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -252,10 +266,9 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void ChangeOrSetEntityParentCommit(unsigned int hierarchy_index, Stream<EntityPair> pairs);
+		void ChangeOrSetEntityParentCommit(Stream<EntityPair> pairs);
 
 		void ChangeOrSetEntityParent(
-			unsigned int hierarchy_index,
 			Stream<EntityPair> pairs, 
 			DeferredActionParameters parameters = {},
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -268,7 +281,7 @@ namespace ECSEngine {
 
 		// Deferred call
 		// The tag should be only the bit index, not the actual value
-		void ClearEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+		void ClearEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -276,6 +289,14 @@ namespace ECSEngine {
 
 		// It will copy everything. The components, the shared components, the archetypes, the entities inside the entity pool
 		void CopyOther(const EntityManager* entity_manager);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Deferred call
+		void CopyEntity(Entity entity, unsigned int count, bool copy_children = true, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		// If the copies are desired, then give a copies buffer. It will only populate the top most entity (not every single child)
+		void CopyEntityCommit(Entity entity, unsigned int count, bool copy_children = true, Entity* copies = nullptr);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -330,13 +351,14 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		Entity CreateEntityCommit(ComponentSignature unique_components, SharedComponentSignature shared_components);
+		Entity CreateEntityCommit(ComponentSignature unique_components, SharedComponentSignature shared_components, bool exclude_from_hierarchy = false);
 
 		// It will search for an archetype that matches the given signatures
 		// If it doesn't exist, it will create a new one
 		void CreateEntity(
 			ComponentSignature unique_components,
 			SharedComponentSignature shared_components,
+			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
@@ -349,6 +371,7 @@ namespace ECSEngine {
 			unsigned int count,
 			ComponentSignature unique_components,
 			SharedComponentSignature shared_components,
+			bool exclude_from_hierarchy = false,
 			Entity* entities = nullptr
 		);
 
@@ -361,6 +384,7 @@ namespace ECSEngine {
 			unsigned int count,
 			ComponentSignature unique_components,
 			SharedComponentSignature shared_components,
+			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
@@ -376,6 +400,7 @@ namespace ECSEngine {
 			ComponentSignature components_with_data,
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
+			bool exclude_from_hierarchy = false,
 			Entity* entities = nullptr
 		);
 
@@ -391,25 +416,16 @@ namespace ECSEngine {
 			ComponentSignature components_with_data,
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
+			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
-		);
-
-		// Creates a new hierarchy. Must be called from a single threaded environment. The hierarchy index needs to be specified
-		// and can be used to index directly into the stream when the hierarchy is needed (must be at most as index ECS_ENTITY_HIERARCHY_MAX_COUNT)
-		// Leave the last 4 parameters unchanged if the default values are desired. Starting table capacity must be a power of two if specified.
-		// The name is used only for debugging purposes
-		void CreateHierarchy(
-			unsigned int hierarchy_index,
-			bool owning_children,
-			Stream<char> name = { nullptr, 0 },
-			unsigned int starting_root_count = -1,
-			unsigned int starting_children_table_capacity = -1,
-			unsigned int starting_parent_table_capacity = -1
 		);
 
 		// Returns the byte size of a component
-		unsigned short ComponentSize(Component component) const;
+		unsigned int ComponentSize(Component component) const;
+
+		// Returns the byte size of a component
+		unsigned int SharedComponentSize(Component component) const;
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -467,10 +483,6 @@ namespace ECSEngine {
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
-		
-		// ---------------------------------------------------------------------------------------------------
-
-		void DestroyHierarchy(unsigned int hierarchy_index);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -578,9 +590,6 @@ namespace ECSEngine {
 		// Verifies if a shared instance is a valid instance - checks to see if the component also exists
 		bool ExistsSharedInstance(Component component, SharedInstance instance) const;
 
-		// Verifies if the hierarchy is already allocated
-		bool ExistsHierarchy(unsigned int hierarchy_index) const;
-
 		unsigned int GetArchetypeCount() const;
 
 		Archetype* GetArchetype(unsigned int index);
@@ -614,17 +623,25 @@ namespace ECSEngine {
 
 		void* GetComponent(Entity entity, Component component);
 
+		const void* GetComponent(Entity entity, Component component) const;
+
 		void* GetComponentWithIndex(Entity entity, unsigned char component_index);
 
-		// Data must have components.count pointers
-		void GetComponent(Entity entity, ComponentSignature components, void** data);
+		const void* GetComponentWithIndex(Entity entity, unsigned char component_index) const;
 
 		// Data must have components.count pointers
-		void GetComponentWithIndex(Entity entity, ComponentSignature components, void** data);
+		void GetComponent(Entity entity, ComponentSignature components, void** data) const;
+
+		// Data must have components.count pointers
+		void GetComponentWithIndex(Entity entity, ComponentSignature components, void** data) const;
 
 		MemoryArena* GetComponentAllocator(Component component);
 
+		AllocatorPolymorphic GetComponentAllocatorPolymorphic(Component component);
+
 		MemoryArena* GetSharedComponentAllocator(Component component);
+
+		AllocatorPolymorphic GetSharedComponentAllocatorPolymorphic(Component component);
 
 		// Returns how many entities exist
 		unsigned int GetEntityCount() const;
@@ -690,26 +707,17 @@ namespace ECSEngine {
 		// These are vector components which are much faster to use than normal components
 		VectorComponentSignature* GetArchetypeSharedComponentsPtr(unsigned int archetype_index);
 
-		EntityHierarchy* GetHierarchy(unsigned int hierarchy_index);
-
-		const EntityHierarchy* GetHierarchy(unsigned int hierarchy_index) const;
-
-		Stream<char> GetHierarchyName(unsigned int hierarchy_index) const;
-
-		// Fills in the hierarchies in which this entity is present
-		void GetEntityHierarchies(Entity entity, CapacityStream<unsigned int>& hierarchy_indices) const;
-
-		void GetEntityHierarchies(EntityInfo info, CapacityStream<unsigned int>& hierarchy_indices) const;
-
 		// Returns -1 if the entity doesn't have a parent (it is a root or doesn't exist)
-		Entity GetEntityParent(unsigned int hierarchy_index, Entity child) const;
+		Entity GetEntityParent(Entity child) const;
 
-		// Aliases the internal structures. Do not modify, readonly
+		// Aliases the internal structures. Do not modify, readonly. If the static_storage is provided
+		// then if the pointer is to a static storage, it will copy to it instead (useful if getting
+		// the children and then doing operations like adding/removing entities from hierarchy)
 		// If the parent does not exist in the hierarchy, { nullptr, 0 } is returned
-		Stream<Entity> GetHierarchyChildren(unsigned int hierarchy_index, Entity parent) const;
+		Stream<Entity> GetHierarchyChildren(Entity parent, Entity* static_storage = nullptr) const;
 
 		// It will copy the children into the stream. If the parent does not exist, nothing will be copied
-		void GetHierarchyChildrenCopy(unsigned int hierarchy_index, Entity parent, CapacityStream<Entity>& children) const;
+		void GetHierarchyChildrenCopy(Entity parent, CapacityStream<Entity>& children) const;
 
 		// Returns the indices of the archetypes that match the given query
 		Stream<unsigned int> GetQueryResults(unsigned int handle) const;
@@ -737,12 +745,11 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		void RemoveEntityFromHierarchyCommit(unsigned int hierarchy_index, Stream<Entity> entities, bool default_child_destroy = true);
+		void RemoveEntityFromHierarchyCommit(Stream<Entity> entities, bool default_child_destroy = true);
 
 		// If the destroy children flag is set to false, it will flip the behaviour of the state stored in the hierarchy
 		// Such that you can choose which behaviour to use
 		void RemoveEntityFromHierarchy(
-			unsigned int hierarchy_index,
 			Stream<Entity> entities,
 			DeferredActionParameters parameters = {},
 			bool default_child_destroy = true,
@@ -776,7 +783,7 @@ namespace ECSEngine {
 		// Each component gets an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
 		// use because all the allocations will happen from this allocator
-		void RegisterComponentCommit(Component component, unsigned short size, size_t allocator_size = 0);
+		void RegisterComponentCommit(Component component, unsigned int size, size_t allocator_size = 0);
 
 		// Deferred call
 		// Each component gets an allocator that can be used to keep the data together
@@ -784,7 +791,7 @@ namespace ECSEngine {
 		// use because all the allocations will happen from this allocator
 		void RegisterComponent(
 			Component component, 
-			unsigned short size,
+			unsigned int size,
 			size_t allocator_size = 0,
 			EntityManagerCommandStream* command_stream = nullptr, 
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -795,7 +802,7 @@ namespace ECSEngine {
 		// Each component gets an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
 		// use because all the allocations will happen from this allocator
-		void RegisterSharedComponentCommit(Component component, unsigned short size, size_t allocator_size = 0);
+		void RegisterSharedComponentCommit(Component component, unsigned int size, size_t allocator_size = 0);
 
 		// Deferred call
 		// Each component gets an allocator that can be used to keep the data together
@@ -803,7 +810,7 @@ namespace ECSEngine {
 		// use because all the allocations will happen from this allocator
 		void RegisterSharedComponent(
 			Component component, 
-			unsigned short size,
+			unsigned int size,
 			size_t allocator_size = 0,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -868,7 +875,7 @@ namespace ECSEngine {
 
 		// Immediate call. It will deallocate the data used by the shared instances and reallocate
 		// the data but it will not copy any old data.
-		void ResizeSharedComponent(Component component, unsigned short new_size);
+		void ResizeSharedComponent(Component component, unsigned int new_size);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -902,8 +909,26 @@ namespace ECSEngine {
 
 		// Deferred call
 		// The tag should only be the bit index, not the actual value
-		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = { ECS_LOCATION });
+		void SetEntityTag(Stream<Entity> entities, unsigned char tag, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
 
+		// ---------------------------------------------------------------------------------------------------
+
+		// If the entity doesn't have the component, it will return nullptr
+		void* TryGetComponent(Entity entity, Component component);
+
+		// If the entity doesn't have the component, it will return nullptr
+		const void* TryGetComponent(Entity entity, Component component) const;
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Returns true if the entity was removed, else false
+		bool TryRemoveEntityFromHierarchyCommit(Entity entity, bool default_child_destroy = true);
+
+		// Returns true if all entities were removed, else false
+		bool TryRemoveEntityFromHierarchyCommit(Stream<Entity> entities, bool default_child_destroy = true);
+
+		void TryRemoveEntityFromHierarchy(Stream<Entity> entities, bool default_child_destroy, DeferredActionParameters parameters = {}, DebugInfo debug_info = ECS_DEBUG_INFO);
+		
 		// ---------------------------------------------------------------------------------------------------
 
 		// Frees the slot used by that component.
@@ -924,16 +949,6 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		struct InternalEntityHierarchy {
-			MemoryManager allocator;
-			EntityHierarchy hierarchy;
-			Stream<char> name;
-
-			// When this is set to true, when removing a parent from the hierarchy
-			// its children are automatically destroyed
-			bool owning_children;
-		};
-
 		MemoryManager m_small_memory_manager;
 		
 		// Alongside this vector, the vector components will be kept in sync to allow
@@ -950,7 +965,8 @@ namespace ECSEngine {
 		AtomicStream<EntityManagerCommandStream> m_pending_command_streams;
 		ArchetypeQueryCache* m_query_cache;
 
-		Stream<InternalEntityHierarchy> m_hierarchies;
+		MemoryManager m_hierarchy_allocator;
+		EntityHierarchy m_hierarchy;
 
 		MemoryManager* m_memory_manager;
 		EntityPool* m_entity_pool;

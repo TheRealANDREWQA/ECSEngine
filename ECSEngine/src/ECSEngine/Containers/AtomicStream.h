@@ -158,6 +158,10 @@ namespace ECSEngine {
 				Swap(index, current_size - index - 1);
 			}
 		}
+		
+		Stream<T> ToStream() const {
+			return { buffer, size.load(ECS_RELAXED) };
+		}
 
 		// It will atomically increment the size and if the size is still
 		// in the bounds it will read that element. This only works if all 
