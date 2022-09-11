@@ -96,10 +96,22 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------
 
 		// It is assumed that the path is absolute and reference is only a filename
-		ECSENGINE_API Path PathRelativeTo(Path path, Path reference);
+		ECSENGINE_API Path PathRelativeToFilename(Path path, Path reference);
 
 		// It is assumed that the path is absolute and reference is only a filename
-		ECSENGINE_API ASCIIPath PathRelativeTo(ASCIIPath path, ASCIIPath reference);
+		ECSENGINE_API ASCIIPath PathRelativeToFilename(ASCIIPath path, ASCIIPath reference);
+
+		// -------------------------------------------------------------------------------------------------
+
+		// It is assumed that the path is absolute. For example path C:\Users\Name\Project\NewFolder
+		// and absolute_reference C:\Users\Name\Project it returns NewFolder (it skips the first backslash)
+		// Returns { nullptr, 0 } if the absolute reference doesn't exist in the path
+		ECSENGINE_API Path PathRelativeToAbsolute(Path path, Path absolute_reference);
+
+		// It is assumed that the path is absolute. For example path C:\Users\Name\Project\NewFolder
+		// and absolute_reference C:\Users\Name\Project it returns NewFolder (it skips the first backslash)
+		// Returns { nullptr, 0 } if the absolute reference doesn't exist in the path
+		ECSENGINE_API ASCIIPath PathRelativeToAbsolute(ASCIIPath path, ASCIIPath absolute_reference);
 
 		// -------------------------------------------------------------------------------------------------
 

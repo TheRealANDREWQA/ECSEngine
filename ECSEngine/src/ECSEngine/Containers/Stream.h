@@ -4,6 +4,7 @@
 #include "../Allocators/AllocatorPolymorphic.h"
 #include <stdint.h>
 #include <string.h>
+#include <type_traits>
 
 #define ECS_RESIZABLE_STREAM_FACTOR (1.5f)
 
@@ -234,7 +235,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		ECS_INLINE CapacityStream(const char* string) : buffer((char*)string) {
 			ECS_ASSERT(string != nullptr);
 			size = strlen(string);
-			capacity = string_size;
+			capacity = size;
 		}
 
 		template<typename = std::enable_if_t<std::is_same_v<wchar_t, T>>>

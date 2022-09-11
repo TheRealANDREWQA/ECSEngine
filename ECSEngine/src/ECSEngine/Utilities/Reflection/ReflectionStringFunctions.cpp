@@ -631,9 +631,6 @@ namespace ECSEngine {
 
 		void ConvertStringToPrimitiveType(Stream<char> string, ReflectionBasicFieldType& basic_type, ReflectionStreamFieldType& stream_type)
 		{
-			char previous_char = string[string.size];
-			string[string.size] = '\0';
-
 			basic_type = ReflectionBasicFieldType::UserDefined;
 			stream_type = ReflectionStreamFieldType::Basic;
 
@@ -674,8 +671,6 @@ namespace ECSEngine {
 					basic_type = ConvertStringToBasicFieldType({ string.buffer, function::PointerDifference(asterisk.buffer, string.buffer) });
 				}
 			}
-
-			string[string.size] = previous_char;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

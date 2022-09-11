@@ -54,7 +54,7 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API EntityInfo {
 		EntityInfo() : main_archetype(0), base_archetype(0), stream_index(0) {}
-		EntityInfo(unsigned short _archetype_index, unsigned short _subarchetype_index, unsigned int _index) :
+		EntityInfo(unsigned int _archetype_index, unsigned int _subarchetype_index, unsigned int _index) :
 			main_archetype(_archetype_index), base_archetype(_subarchetype_index), stream_index(_index) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(EntityInfo);
@@ -67,8 +67,7 @@ namespace ECSEngine {
 
 		// 32 bits for these 3 fields
 		unsigned int stream_index : 24;
-		unsigned int layer : 4;
-		unsigned int hierarchy : 4;
+		unsigned int layer : 8;
 	};
 
 	struct Component {
@@ -76,7 +75,7 @@ namespace ECSEngine {
 			return value;
 		}
 
-		unsigned short value;
+		short value;
 	};
 
 	inline bool operator == (const Component& lhs, const Component& rhs) {
@@ -88,7 +87,7 @@ namespace ECSEngine {
 	}
 
 	struct SharedInstance {
-		unsigned short value;
+		short value;
 	};
 
 	inline bool operator == (const SharedInstance& lhs, const SharedInstance& rhs) {
@@ -101,11 +100,11 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API ComponentInfo {
 		ComponentInfo() : size(0) {}
-		ComponentInfo(unsigned short _size) : size(_size) {}
+		ComponentInfo(unsigned int _size) : size(_size) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentInfo);
 
-		unsigned short size;
+		unsigned int size;
 		MemoryArena* allocator;
 	};
 
@@ -122,6 +121,14 @@ namespace ECSEngine {
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentSignature);
 
 		ComponentSignature Copy(uintptr_t& ptr);
+
+		ECS_INLINE Component& operator[](size_t index) {
+			return indices[index];
+		}
+
+		ECS_INLINE const Component& operator[](size_t index) const {
+			return indices[index];
+		}
 
 		Component* indices;
 		unsigned char count;
@@ -200,6 +207,7 @@ namespace ECSEngine {
 					m_entity_infos[index].stream.ForEachIndex<early_exit>([&](unsigned int stream_index) {
 						Entity entity = GetEntityFromPosition(index, stream_index);
 						EntityInfo info = m_entity_infos[index].stream[stream_index];
+						entity.generation_count = info.generation_count;
 						if constexpr (early_exit) {
 							if (functor(entity, info)) {
 								should_continue = false;
@@ -269,7 +277,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void SerializeEntityPool(const EntityPool* entity_pool, uintptr_t* stream);
+	ECSENGINE_API void SerializeEntityPool(const EntityPool* entity_pool, uintptr_t& stream);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -281,7 +289,7 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	ECSENGINE_API void DeserializeEntityPool(EntityPool* entity_pool, uintptr_t* stream);
+	ECSENGINE_API bool DeserializeEntityPool(EntityPool* entity_pool, uintptr_t& stream);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 

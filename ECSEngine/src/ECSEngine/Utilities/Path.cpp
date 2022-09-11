@@ -219,30 +219,50 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		Path PathRelativeTo(Path path, Path reference) {
+		template<typename PathType, typename CharType>
+		PathType PathRelativeToFilenameImpl(PathType path, PathType reference, CharType separator) {
 			size_t path_initial_size = path.size;
 			path = PathParent(path);
-			Path reference_directory = PathFilename(reference, ECS_OS_PATH_SEPARATOR_REL);
-			Path path_directory = PathFilename(path);
+			PathType reference_directory = PathFilename(reference, separator);
+			PathType path_directory = PathFilename(path);
 			while (!CompareStrings(reference_directory, path_directory) && path.size > 0) {
 				path = PathParent(path);
 				path_directory = PathFilename(path);
 			}
-			return Path(path_directory.buffer + reference.size + 1, path_initial_size - (path_directory.buffer - path.buffer) - reference.size - 1);
+			return PathType(path_directory.buffer + reference.size + 1, path_initial_size - (path_directory.buffer - path.buffer) - reference.size - 1);
+		}
+
+		Path PathRelativeToFilename(Path path, Path reference) {
+			return PathRelativeToFilenameImpl(path, reference, ECS_OS_PATH_SEPARATOR_REL);
 		}
 
 		// --------------------------------------------------------------------------------------------------
 
-		ASCIIPath PathRelativeTo(ASCIIPath path, ASCIIPath reference) {
-			size_t path_initial_size = path.size;
-			path = PathParent(path);
-			ASCIIPath reference_directory = PathFilename(reference, ECS_OS_PATH_SEPARATOR_ASCII_REL);
-			ASCIIPath path_directory = PathFilename(path);
-			while (!CompareStrings(reference_directory, path_directory) && path.size > 0) {
-				path = PathParent(path);
-				path_directory = PathFilename(path);
+		ASCIIPath PathRelativeToFilename(ASCIIPath path, ASCIIPath reference) {
+			return PathRelativeToFilenameImpl(path, reference, ECS_OS_PATH_SEPARATOR_ASCII_REL);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename PathType>
+		PathType PathRelativeToAbsoluteImpl(PathType path, PathType absolute_reference) {
+			if (memcmp(path.buffer, absolute_reference.buffer, absolute_reference.MemoryOf(absolute_reference.size)) == 0) {
+				if (path.size == absolute_reference.size) {
+					return { path.buffer + path.size, 0 };
+				}
+				return { path.buffer + absolute_reference.size + 1, path.size - absolute_reference.size - 1 };
 			}
-			return ASCIIPath(path.buffer + reference.size + 1, path_initial_size - reference.size - 1);
+			return { nullptr, 0 };
+		}
+
+		Path PathRelativeToAbsolute(Path path, Path absolute_reference)
+		{
+			return PathRelativeToAbsoluteImpl(path, absolute_reference);
+		}
+
+		ASCIIPath PathRelativeToAbsolute(ASCIIPath path, ASCIIPath absolute_reference)
+		{
+			return PathRelativeToAbsoluteImpl(path, absolute_reference);
 		}
 
 		// --------------------------------------------------------------------------------------------------

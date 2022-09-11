@@ -208,7 +208,7 @@ namespace ECSEngine {
 	void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags) {
 		unsigned int type_int = (unsigned int)type;
 
-		int hashed_position = resource_manager->m_resource_types[type_int].Find<true>(identifier);
+		int hashed_position = resource_manager->m_resource_types[type_int].Find(identifier);
 		ECS_ASSERT(hashed_position != -1, "Trying to delete a resource that has not yet been loaded!");
 
 		DeleteResource<reference_counted>(resource_manager, hashed_position, type, flags);
@@ -514,7 +514,7 @@ namespace ECSEngine {
 		if (m_resource_types[(unsigned int)type].GetCapacity() == 0) {
 			return false;
 		}
-		int hashed_position = m_resource_types[(unsigned int)type].Find<true>(identifier);
+		int hashed_position = m_resource_types[(unsigned int)type].Find(identifier);
 		return hashed_position != -1;
 	}
 
@@ -525,7 +525,7 @@ namespace ECSEngine {
 			return false;
 		}
 
-		table_index = m_resource_types[(unsigned int)type].Find<true>(identifier);
+		table_index = m_resource_types[(unsigned int)type].Find(identifier);
 		return table_index != -1;
 	}
 
@@ -582,7 +582,7 @@ namespace ECSEngine {
 
 	int ResourceManager::GetResourceIndex(ResourceIdentifier identifier, ResourceType type) const
 	{
-		int index = m_resource_types[(unsigned int)type].Find<true>(identifier);
+		int index = m_resource_types[(unsigned int)type].Find(identifier);
 
 		ECS_ASSERT(index != -1, "The resource was not found");
 		return index;
@@ -592,7 +592,7 @@ namespace ECSEngine {
 
 	void* ResourceManager::GetResource(ResourceIdentifier identifier, ResourceType type)
 	{
-		int hashed_position = m_resource_types[(unsigned int)type].Find<true>(identifier);
+		int hashed_position = m_resource_types[(unsigned int)type].Find(identifier);
 		if (hashed_position != -1) {
 			return m_resource_types[(unsigned int)type].GetValueFromIndex(hashed_position).data_pointer.GetPointer();
 		}

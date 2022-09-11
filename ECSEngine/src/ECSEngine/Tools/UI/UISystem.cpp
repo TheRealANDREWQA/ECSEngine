@@ -2228,8 +2228,21 @@ namespace ECSEngine {
 
 		unsigned int UISystem::CreateWindowAndDockspace(const UIWindowDescriptor& descriptor, size_t additional_flags)
 		{
+			UIWindowDescriptor temp_descriptor;
+			const UIWindowDescriptor* descriptor_to_use = &descriptor;
+			if (function::HasFlag(additional_flags, UI_POP_UP_WINDOW_FIT_TO_CONTENT)) {
+				memcpy(&temp_descriptor, &descriptor, sizeof(temp_descriptor));
+				descriptor_to_use = &temp_descriptor;
+
+				temp_descriptor.initial_position_x = 0.0f;
+				temp_descriptor.initial_position_y = 0.0f;
+				
+				temp_descriptor.initial_size_x = 0.5f;
+				temp_descriptor.initial_size_y = 0.5f;
+			}
+
 			// create window normally
-			unsigned int window_index = Create_Window(descriptor);
+			unsigned int window_index = Create_Window(*descriptor_to_use);
 
 			// if there are no more floating horizontal dockspaces, make a floating vertical
 			DockspaceType type = DockspaceType::FloatingHorizontal;
@@ -2241,7 +2254,7 @@ namespace ECSEngine {
 			unsigned int dockspace_index;
 			if (!function::HasFlag(additional_flags, UI_DOCKSPACE_FIXED)) {
 				dockspace_index = CreateDockspace(
-					{ { descriptor.initial_position_x, descriptor.initial_position_y }, {descriptor.initial_size_x, descriptor.initial_size_y} },
+					{ { descriptor_to_use->initial_position_x, descriptor_to_use->initial_position_y }, { descriptor_to_use->initial_size_x, descriptor_to_use->initial_size_y} },
 					type,
 					window_index,
 					false,
@@ -2250,7 +2263,7 @@ namespace ECSEngine {
 			}
 			else {
 				dockspace_index = CreateFixedDockspace(
-					{ { descriptor.initial_position_x, descriptor.initial_position_y }, {descriptor.initial_size_x, descriptor.initial_size_y} },
+					{ { descriptor_to_use->initial_position_x, descriptor_to_use->initial_position_y }, {descriptor_to_use->initial_size_x, descriptor_to_use->initial_size_y} },
 					type,
 					window_index,
 					false,
@@ -5088,7 +5101,7 @@ namespace ECSEngine {
 		bool UISystem::ExistsWindowResource(unsigned int window_index, Stream<char> name) const
 		{
 			ResourceIdentifier identifier(name);
-			return m_windows[window_index].table.Find<true>(identifier) != -1;
+			return m_windows[window_index].table.Find(identifier) != -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -5214,7 +5227,7 @@ namespace ECSEngine {
 
 		void* UISystem::FindWindowResource(unsigned int window_index, const void* _identifier, unsigned int identifier_size) const {
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
-			return m_windows[window_index].table.GetValue<true>(identifier);
+			return m_windows[window_index].table.GetValue(identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6770,7 +6783,7 @@ namespace ECSEngine {
 
 		void UISystem::HandleFocusedWindowCleanupHoverable(float2 mouse_position, unsigned int thread_id, void* additional_data)
 		{
-			if (m_focused_window_data.clean_up_call_general) {
+			if (m_focused_window_data.clean_up_call_hoverable) {
 				ActionData action_data;
 				action_data.additional_data = additional_data;
 				action_data.border_index = m_focused_window_data.cleanup_hoverable_location.border_index;
@@ -6788,7 +6801,7 @@ namespace ECSEngine {
 				action_data.position = m_focused_window_data.hoverable_transform.position;
 				action_data.scale = m_focused_window_data.hoverable_transform.scale;
 
-				m_focused_window_data.general_handler.action(&action_data);
+				m_focused_window_data.hoverable_handler.action(&action_data);
 			}
 		}
 
@@ -9045,7 +9058,7 @@ namespace ECSEngine {
 		void UISystem::ReleaseWindowResource(size_t window_index, const void* _identifier, unsigned int identifier_size)
 		{
 			ResourceIdentifier identifier = ResourceIdentifier(_identifier, identifier_size);
-			m_windows[window_index].table.Erase<true>(identifier);
+			m_windows[window_index].table.Erase(identifier);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11152,7 +11165,7 @@ namespace ECSEngine {
 							system->DestroyDockspace(dockspace->borders.buffer, type);
 							//system->RemoveDockspaceBorder(dockspace, border_index, type, true);
 						}
-						system->PopFrameHandler();
+						system->RemoveFrameHandler(PopUpWindowSystemHandler, data);
 						if (data->flag_destruction != nullptr) {
 							*data->flag_destruction = true;
 						}
@@ -11160,7 +11173,7 @@ namespace ECSEngine {
 
 					if (data->reset_when_window_is_destroyed) {
 						if (system->GetWindowFromName(data->name) == -1) {
-							system->PopFrameHandler();
+							system->RemoveFrameHandler(PopUpWindowSystemHandler, data);
 							if (data->deallocate_name) {
 								system->m_memory->Deallocate(data->name.buffer);
 							}
@@ -11173,7 +11186,7 @@ namespace ECSEngine {
 					else {
 						unsigned int window_index = system->GetWindowFromName(data->name);
 						if (window_index == -1) {
-							system->PopFrameHandler();
+							system->RemoveFrameHandler(PopUpWindowSystemHandler, data);
 							if (data->deallocate_name) {
 								system->m_memory->Deallocate(data->name.buffer);
 							}
@@ -11207,21 +11220,7 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
 		void CloseXBorderClickableAction(ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
-/*
-			UIDockspace* floating_dockspace;
-			DockspaceType floating_type = DockspaceType::Horizontal;
-			floating_dockspace = system->GetFloatingDockspaceFromDockspace(dockspace, dockspace_mask, floating_type);
-			if (floating_type == DockspaceType::Horizontal)
-				floating_type = dockspace_type;
-			bool is_fixed = system->IsFixedDockspace(floating_dockspace);
-			if (is_fixed)
-				system->RemoveFixedDockspaceBorder(dockspace, border_index, dockspace_type);
-			else {
-				system->RemoveDockspaceBorder(dockspace, border_index, dockspace_type);
-			}	*/	
-
-			system->RemoveDockspaceBorder(dockspace, border_index, dockspace_type);
+			DestroyCurrentActionWindow(action_data);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11256,6 +11255,14 @@ namespace ECSEngine {
 				(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE],
 				counts[ECS_TOOLS_UI_TEXT_SPRITE]
 			);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void DestroyCurrentActionWindow(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+			system->RemoveDockspaceBorder(dockspace, border_index, dockspace_type);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -12137,7 +12144,7 @@ namespace ECSEngine {
 
 			unsigned int* window_index = (unsigned int*)_data;
 			system->RemoveWindowFromDockspaceRegion(*window_index);
-			system->PopFrameHandler();
+			system->RemoveFrameHandler(DestroyWindowSystemHandler, nullptr);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

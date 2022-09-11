@@ -117,7 +117,6 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 
 		folder_data->os_data.get_file_data.path = *solution_path_wide;
 		folder_data->os_data.get_file_data.error_message.buffer = nullptr;
-		folder_data->os_data.get_file_data.initial_directory = nullptr;
 		folder_data->os_data.get_file_data.hWnd = nullptr;
 
 		
@@ -222,7 +221,7 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 			EditorSetConsoleError("Could not add new project module. Invalid data.");
 		}
 
-		CloseXBorderClickableAction(action_data);
+		DestroyCurrentActionWindow(action_data);
 	};
 
 	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Add", { add_project_action, add_data, 0, ECS_UI_DRAW_SYSTEM });
@@ -232,7 +231,7 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 	add_transform.position.x = drawer.GetAlignedToRight(add_transform.scale.x).x;
 	config.AddFlag(add_transform);
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 // --------------------------------------------------------------------------------------------------------

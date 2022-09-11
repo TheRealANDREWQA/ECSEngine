@@ -6,9 +6,10 @@
 #include "EditorParameters.h"
 #include "EditorEvent.h"
 #include "../Modules/Module.h"
-#include "../Metafiles/Metafiles.h"
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
+
+#include "../UI/Scene.h"
 
 using namespace ECSEngine;
 
@@ -174,16 +175,6 @@ void TickLazyEvaluationCounters(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void TickCreateDefaultMetafiles(EditorState* editor_state) {
-	if (editor_state->lazy_evaluation_counters[EDITOR_LAZY_EVALUATION_CREATE_DEFAULT_METAFILES] > LAZY_EVALUATION_CREATE_DEFAULT_METAFILES_THRESHOLD) {
-		RemoveProjectUnbindedMetafiles(editor_state);
-		CreateProjectMissingMetafiles(editor_state);
-		editor_state->lazy_evaluation_counters[EDITOR_LAZY_EVALUATION_CREATE_DEFAULT_METAFILES] = 0;
-	}
-}
-
-// -----------------------------------------------------------------------------------------------------------------
-
 void TickGPUTasks(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 
@@ -234,7 +225,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 
 		TickEvents(editor_state);
 		TickPendingTasks(editor_state);
-		TickCreateDefaultMetafiles(editor_state);
+
+		TickEditorComponents(editor_state);
 	}
 }
 
@@ -341,15 +333,19 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\ECSEngine\\src");
 	editor_reflection_manager->CreateFolderHierarchy(L"C:\\Users\\Andrei\\C++\\ECSEngine\\Editor\\src");
 	ECS_TEMP_ASCII_STRING(error_message, 256);
-	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
+	bool success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)0, /*editor_task_manager,*/ &error_message);
 	ECS_ASSERT(success);
 
-	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
+	success = editor_reflection_manager->ProcessFolderHierarchy((unsigned int)1, /*editor_task_manager,*/ &error_message);
 	ECS_ASSERT(success);
 
 	size_t editor_component_allocator_size = editor_state->editor_components.DefaultAllocatorSize();
 	void* editor_component_allocator_buffer = editor_allocator->Allocate(editor_component_allocator_size);
 	editor_state->editor_components.Initialize(editor_component_allocator_buffer);
+
+	// Update the editor components
+	editor_state->editor_components.UpdateComponents(editor_reflection_manager, 0, "ECSEngine");
+	editor_state->editor_components.EmptyEventStream();
 
 	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
@@ -423,6 +419,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 		 ECS_RUNTIME_PDB_PATHS[ecs_runtime_index + 1]
 	};
 	OS::InitializeSymbolicLinksPaths({ pdb_paths, std::size(pdb_paths) });
+
+	// Initialize the gpu_tasks and background tasks queues
+	editor_state->gpu_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
+	editor_state->pending_background_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -466,6 +466,37 @@ void EditorStateLazyEvaluationSetMax(EditorState* editor_state, unsigned int ind
 void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index, unsigned short value)
 {
 	editor_state->lazy_evaluation_counters[index] = value;
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+struct ApplicationQuitHandlerData {
+	char* response;
+};
+
+void ApplicationQuitHandler(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	ApplicationQuitHandlerData* data = (ApplicationQuitHandlerData*)_data;
+	SaveScenePopUpResult* result = (SaveScenePopUpResult*)_additional_data;
+
+	if (result->cancel_call) {
+		*data->response = 0;
+	}
+	else {
+		*data->response = 1;
+	}
+}
+
+void EditorStateApplicationQuit(EditorState* editor_state, char* response)
+{
+	ApplicationQuitHandlerData quit_data;
+	quit_data.response = response;
+
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, sandbox_indices, editor_state->sandboxes.size);
+	sandbox_indices.size = editor_state->sandboxes.size;
+	function::MakeSequence(sandbox_indices);
+	CreateSaveScenePopUp(editor_state, sandbox_indices, { ApplicationQuitHandler, &quit_data, sizeof(quit_data) });
 }
 
 // -----------------------------------------------------------------------------------------------------------------

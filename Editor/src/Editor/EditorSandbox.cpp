@@ -203,6 +203,16 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	
+	if (new_scene.size == 0) {
+		// Reset the scene entities
+		sandbox->scene_entities.Reset();
+		sandbox->database.Reset();
+		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
+
+		sandbox->scene_path.size = 0;
+		return true;
+	}
+
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetSandboxScenePathImpl(editor_state, new_scene, absolute_path);
 
@@ -221,8 +231,10 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 		sandbox->scene_entities.CopyOther(&entity_manager);
 		sandbox->database = database_reference.Copy(sandbox->database.mesh_metadata.allocator);
+		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
 
 		sandbox->scene_path.Copy(new_scene);
+		sandbox->is_scene_dirty = false;
 	}
 
 	// Now we can release the temporary objects
@@ -330,6 +342,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->should_pause = true;
 	sandbox->should_play = true;
 	sandbox->should_step = true;
+	sandbox->is_scene_dirty = false;
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 
@@ -593,6 +606,7 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 		// Recreate the world
 		sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 		sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
+		editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
 	}
 }
 
@@ -792,11 +806,19 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 			// If it fails, default initialize the runtime
 			if (!ChangeSandboxRuntimeSettings(editor_state, index, sandboxes[index].runtime_settings)) {
 				// Print an error message
-				ECS_FORMAT_TEMP_STRING(console_message, "The runtime settings {#} doesn't exist or is corrupted when trying to deserialize sandbox {#}."
+				ECS_FORMAT_TEMP_STRING(console_message, "The runtime settings {#} doesn't exist or is corrupted when trying to deserialize sandbox {#}. "
 					"The sandbox will revert to default settings.", sandboxes[index].runtime_settings, index);
 				EditorSetConsoleWarn(console_message);
 
 				ChangeSandboxRuntimeSettings(editor_state, index, { nullptr, 0 });
+			}
+
+			if (!ChangeSandboxScenePath(editor_state, index, sandboxes[index].scene_path)) {
+				ECS_FORMAT_TEMP_STRING(console_message, "The scene path {#} doesn't exist or is invalid when trying to deserialize sandbox {#}. "
+					"The sandbox will revert to no scene.", sandboxes[index].scene_path, index);
+				EditorSetConsoleWarn(console_message);
+
+				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
 			}
 
 			sandbox->database = AssetDatabaseReference(&editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
@@ -920,6 +942,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		sandbox->runtime_descriptor.entity_pool_power_of_two,
 		allocator
 	);
+	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
 
 	// Create the task manager that is going to be reused accros runtime plays
 	TaskManager* task_manager = (TaskManager*)allocator->Allocate(sizeof(TaskManager));
@@ -940,6 +963,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// Create the sandbox world
 	sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
+	editor_state->editor_components.SetManagerComponents(sandbox->sandbox_world.entity_manager);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1019,13 +1043,17 @@ bool SaveRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-bool SaveSandboxScene(const EditorState* editor_state, unsigned int sandbox_index)
+bool SaveSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	GetSandboxScenePath(editor_state, sandbox_index, absolute_path);
-	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
+	bool success = SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
+	if (success) {
+		sandbox->is_scene_dirty = false;
+	}
+	return success;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1080,6 +1108,17 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 	}
 
 	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index)
+{
+	// If it is paused, then we don't need to make the scene dirty since the change is made on the runtime sandbox world
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+		sandbox->is_scene_dirty = true;
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

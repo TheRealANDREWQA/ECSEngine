@@ -1478,16 +1478,34 @@ namespace ECSEngine {
 			// If the action_data is nullptr, then it will skip the callback
 			void AddSelection(Stream<char> label, ActionData* action_data);
 
+			void AddOpenedLabel(UISystem* system, unsigned int window_index, Stream<char> label);
+
 			// If the action_data is nullptr, then it will skip the callback
 			void ChangeSelection(Stream<char> label, ActionData* action_data);
+
+			void ChangeSelection(Stream<Stream<char>> labels, ActionData* action_data);
+
+			void ClearSelection(ActionData* action_data);
+
+			unsigned int DynamicIndex(const UISystem* system, unsigned int window_index) const;
+
+			// For copy/cut
+			void RecordSelection(ActionData* action_data);
 
 			// If the action_data is nullptr, then it will skip the callback
 			void RemoveSelection(Stream<char> label, ActionData* action_data);
 
-			void ClearSelection(ActionData* action_data);
+			void RemoveOpenedLabel(UISystem* system, unsigned int window_index, Stream<char> label);
 
-			// For copy/cut
-			void RecordSelection(ActionData* action_data);
+			void SetSelectionCut(bool is_cut = true);
+
+			void TriggerSelectable(ActionData* action_data);
+
+			void TriggerCopy(ActionData* action_data);
+
+			void TriggerCut(ActionData* action_data);
+			
+			void TriggerDelete(ActionData* action_data);
 
 			Stream<Stream<char>> opened_labels;
 			CapacityStream<char> hovered_label;
@@ -1555,8 +1573,8 @@ namespace ECSEngine {
 
 		struct UIDrawerLabelHierarchyDragData {
 			void* data;
-			Stream<Stream<char>> source_label; // The ones being dragged
-			Stream<char> destination_label; // The one where it is being dragged
+			Stream<Stream<char>> source_labels; // The ones being dragged
+			Stream<char> destination_label; // The one where they are being dragged
 		};
 
 		struct UIDrawerLabelHierarchyDoubleClickData {

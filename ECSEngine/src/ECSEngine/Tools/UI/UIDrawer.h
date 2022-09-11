@@ -97,12 +97,22 @@ namespace ECSEngine {
 
 			void SetIndentation(float indentation);
 
+			void SetHorizontalAlignment(ECS_UI_ALIGN alignment);
+
+			void SetVerticalAlignment(ECS_UI_ALIGN alignment);
+
 			void UpdateRowYScale(float scale);
 
 			void UpdateSquareElements();
 
 			// At the moment just 1 window dependent scale element is accepted
 			void UpdateWindowDependentElements();
+
+			// Sets the new positions of the elements according to the alignment
+			void UpdateElementsFromAlignment();
+
+			ECS_UI_ALIGN horizontal_alignment;
+			ECS_UI_ALIGN vertical_alignment;
 
 			UIDrawer* drawer;
 			float2 row_scale; // This is the total scale
@@ -3819,7 +3829,7 @@ namespace ECSEngine {
 
 				Color label_color = HandleColor(configuration, config);
 				Color drag_highlight_color = label_color;
-				drag_highlight_color.alpha = 100;
+				drag_highlight_color.alpha = 150;
 
 				UIConfigTextAlignment text_alignment;
 				text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
@@ -3842,6 +3852,10 @@ namespace ECSEngine {
 					temp_first.Copy(data->first_selected);
 					data->ChangeSelection(data->last_selected, &action_data);
 					data->first_selected.Copy(temp_first);
+				}
+
+				if (data->is_dragging) {
+					data->hovered_label.size = 0;
 				}
 
 				while (iterator.Valid()) {
@@ -3988,6 +4002,7 @@ namespace ECSEngine {
 								size_t _right_click_data[64];
 								UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_right_click_data;
 								right_click_data->data = data;
+								right_click_data->hierarchy = data;
 								unsigned int write_size = right_click_data->WriteLabel(current_label);
 
 								AddHoverable(label_position, label_scale, { LabelHierarchyRightClickAction, right_click_data, write_size, right_click_phase });
@@ -4021,13 +4036,7 @@ namespace ECSEngine {
 
 					data->determine_selection = false;
 					// Call the selection callback
-					if (data->selectable_action != nullptr) {
-						UIDrawerLabelHierarchySelectableData select_data;
-						select_data.data = data->selectable_data;
-						select_data.labels = data->selected_labels;
-						action_data.data = &select_data;
-						data->selectable_action(&action_data);
-					}
+					data->TriggerSelectable(&action_data);
 				}
 
 				if (configuration & UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS) {
@@ -4036,11 +4045,11 @@ namespace ECSEngine {
 						// Check for Ctrl+C, Ctrl+X, Ctrl+V and delete
 						if (system->m_keyboard->IsKeyDown(HID::Key::LeftControl)) {
 							if (system->m_keyboard->IsKeyPressed(HID::Key::C)) {
-								data->is_selection_cut = false;
+								data->SetSelectionCut(false);
 								data->RecordSelection(&action_data);
 							}
 							else if (system->m_keyboard->IsKeyPressed(HID::Key::X)) {
-								data->is_selection_cut = true;
+								data->SetSelectionCut(true);
 								data->RecordSelection(&action_data);
 							}
 							else if (system->m_keyboard->IsKeyPressed(HID::Key::V)) {
@@ -4048,34 +4057,23 @@ namespace ECSEngine {
 								// Only if there is no selection or just a single selection
 								if (data->copied_labels.size > 0 && (data->selected_labels.size == 0 || data->selected_labels.size == 1)) {
 									if (data->is_selection_cut && data->cut_action != nullptr) {
-										UIDrawerLabelHierarchyCutData cut_data;
-										cut_data.data = data->cut_data;
-										cut_data.destination_label = data->selected_labels.size == 0 ? Stream<char>(nullptr, 0) : data->selected_labels[0];
-										cut_data.source_labels = data->copied_labels;
-										action_data.data = &cut_data;
-
-										data->cut_action(&action_data);
+										data->TriggerCut(&action_data);
 									}
 									else if (data->copy_action != nullptr) {
-										UIDrawerLabelHierarchyCopyData copy_data;
-										copy_data.data = data->copy_data;
-										copy_data.destination_label = data->selected_labels.size == 0 ? Stream<char>(nullptr, 0) : data->selected_labels[0];
-										copy_data.source_labels = data->copied_labels;
-										action_data.data = &copy_data;
-
-										data->copy_action(&action_data);
+										data->TriggerCopy(&action_data);
 									}
 								}
+							}
+							else if (system->m_keyboard->IsKeyPressed(HID::Key::D)) {
+								data->SetSelectionCut(false);
+								data->RecordSelection(&action_data);
+
+								data->TriggerCopy(&action_data);
 							}
 						}
 						else if (system->m_keyboard_tracker->IsKeyPressed(HID::Key::Delete)) {
 							if (data->selected_labels.size > 0) {
-								UIDrawerLabelHierarchyDeleteData delete_data;
-								delete_data.data = data->delete_data;
-								delete_data.source_labels = data->selected_labels;
-								action_data.data = &delete_data;
-
-								data->delete_action(&action_data);
+								data->TriggerDelete(&action_data);
 							}
 						}
 					}

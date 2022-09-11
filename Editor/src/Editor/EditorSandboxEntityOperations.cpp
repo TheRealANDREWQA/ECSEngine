@@ -3,6 +3,9 @@
 #include "EditorSandbox.h"
 #include "EditorState.h"
 
+#include "ECSEngineComponents.h"
+#include "ECSEngineForEach.h"
+
 using namespace ECSEngine;
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -39,6 +42,7 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			entity_manager->AddComponentCommit(entity, component);
+			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
 	else {
@@ -56,11 +60,46 @@ void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int san
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
 			entity_manager->AddSharedComponentCommit(entity, component, SharedInstance{ 0 });
+			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
 	else {
 		ECS_FORMAT_TEMP_STRING(console_message, "Failed to add shared component {#} to entity {#}.", component_name, entity.value);
 		EditorSetConsoleError(console_message);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void AttachEntityName(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> name)
+{
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	if (entity_manager->ExistsEntity(entity)) {
+		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
+		AllocatorPolymorphic allocator = entity_manager->GetComponentAllocatorPolymorphic(name_component);
+
+		Name name_data = { function::StringCopy(allocator, name) };
+		entity_manager->AddComponentCommit(entity, name_component, &name_data);
+		SetSandboxSceneDirty(editor_state, sandbox_index);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ChangeEntityName(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> new_name)
+{
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	if (entity_manager->ExistsEntity(entity)) {
+		Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
+		if (entity_manager->HasComponent(entity, name_component)) {
+			Name* name_data = (Name*)entity_manager->GetComponent(entity, name_component);
+			AllocatorPolymorphic allocator = entity_manager->GetComponentAllocatorPolymorphic(name_component);
+			if (name_data->name.size > 0) {
+				Deallocate(allocator, name_data->name.buffer);
+			}
+			name_data->name = function::StringCopy(allocator, new_name);
+			SetSandboxSceneDirty(editor_state, sandbox_index);
+		}
 	}
 }
 
@@ -75,8 +114,24 @@ Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index
 
 Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, ComponentSignature unique, SharedComponentSignature shared)
 {
+	Component unique_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+	ECS_ASSERT(unique.count < ECS_ARCHETYPE_MAX_COMPONENTS);
+	memcpy(unique_components, unique.indices, sizeof(Component) * unique.count);
+	unique.indices = unique_components;
+
+	Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
+	unique[unique.count] = name_component;
+	unique.count++;
+
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	return entity_manager->CreateEntityCommit(unique, shared);
+	Entity entity = entity_manager->CreateEntityCommit(unique, shared);
+
+	ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
+	EntityToString(entity, entity_name);
+	ChangeEntityName(editor_state, sandbox_index, entity, entity_name);
+	SetSandboxSceneDirty(editor_state, sandbox_index);
+
+	return entity;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -86,35 +141,29 @@ Entity CopySandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 
 	if (entity_manager->ExistsEntity(entity)) {
-		ComponentSignature unique = EntityUniqueComponents(editor_state, sandbox_index, entity);
-		SharedComponentSignature shared = EntitySharedInstances(editor_state, sandbox_index, entity);
-		Entity destination_entity = CreateSandboxEntity(editor_state, sandbox_index, unique, shared);
-
-		// Now copy the unique data
-		for (unsigned char index = 0; index < unique.count; index++) {
-			void* source_data = entity_manager->GetComponent(entity, unique.indices[index]);
-			void* destination_data = entity_manager->GetComponent(destination_entity, unique.indices[index]);
-
-			unsigned short component_size = entity_manager->ComponentSize(unique.indices[index]);
-			memcpy(destination_data, source_data, component_size);
-		}
-
-		// Now copy the hierarchies it is in
-		ECS_STACK_CAPACITY_STREAM(unsigned int, entity_hierarchies, ECS_ENTITY_HIERARCHY_MAX_COUNT);
-		entity_manager->GetEntityHierarchies(entity, entity_hierarchies);
-		for (unsigned int index = 0; index < entity_hierarchies.size; index++) {
-			Entity current_parent = entity_manager->GetEntityParent(entity_hierarchies[index], entity);
-
-			EntityPair pair;
-			pair.child = destination_entity;
-			pair.parent = current_parent;
-			entity_manager->AddEntityToHierarchyCommit(entity_hierarchies[index], { &pair, 1 });
-		}
-
+		Entity destination_entity;
+		entity_manager->CopyEntityCommit(entity, 1, &destination_entity);
+		SetSandboxSceneDirty(editor_state, sandbox_index);
 		return destination_entity;
 	}
 	else {
 		return { (unsigned int)-1 };
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+bool CopySandboxEntities(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int count, Entity* copied_entities)
+{
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+
+	if (entity_manager->ExistsEntity(entity)) {
+		entity_manager->CopyEntityCommit(entity, count, copied_entities);
+		SetSandboxSceneDirty(editor_state, sandbox_index);
+		return true;
+	}
+	else {
+		return false;
 	}
 }
 
@@ -127,6 +176,7 @@ void DeleteSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 	// Be safe. If for some reason the UI lags behind and the runtime might delete the entity before us
 	if (entity_manager->ExistsEntity(entity)) {
 		entity_manager->DeleteEntityCommit(entity);
+		SetSandboxSceneDirty(editor_state, sandbox_index);
 	}
 }
 
@@ -182,6 +232,37 @@ Entity GetSandboxEntity(const EditorState* editor_state, unsigned int sandbox_in
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void ParentSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity child, Entity parent)
+{
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	bool child_exists = entity_manager->ExistsEntity(child);
+	if (child_exists) {
+		if (parent.value != -1) {
+			bool exists_parent = entity_manager->ExistsEntity(parent);
+			if (!exists_parent) {
+				return;
+			}
+		}
+
+		EntityPair pair;
+		pair.parent = parent;
+		pair.child = child;
+		entity_manager->ChangeOrSetEntityParentCommit({ &pair, 1 });
+		SetSandboxSceneDirty(editor_state, sandbox_index);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ParentSandboxEntities(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> children, Entity parent)
+{
+	for (size_t index = 0; index < children.size; index++) {
+		ParentSandboxEntity(editor_state, sandbox_index, children[index], parent);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void RemoveSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -190,6 +271,7 @@ void RemoveSandboxEntityComponent(EditorState* editor_state, unsigned int sandbo
 		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasComponent(entity, component)) {
 			entity_manager->RemoveComponentCommit(entity, { &component, 1 });
+			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
 }
@@ -204,7 +286,19 @@ void RemoveSandboxEntitySharedComponent(EditorState* editor_state, unsigned int 
 		Component component = editor_state->editor_components.GetComponentID(component_name);
 		if (entity_manager->HasSharedComponent(entity, component)) {
 			entity_manager->RemoveSharedComponentCommit(entity, { &component, 1 });
+			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+{
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+
+	if (entity_manager->ExistsEntity(entity)) {
+		entity_manager->RemoveEntityFromHierarchyCommit({ &entity, 1 });
 	}
 }
 

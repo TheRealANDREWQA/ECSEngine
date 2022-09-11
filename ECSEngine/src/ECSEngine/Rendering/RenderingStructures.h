@@ -1322,19 +1322,6 @@ namespace ECSEngine {
 		ID3D11CommandList* list;
 	};
 
-#define TRANSLATION 0
-	struct ECSENGINE_API Translation {
-		Translation();
-		Translation(float _x, float _y, float _z);
-
-		Translation(const Translation& other) = default;
-		Translation& operator = (const Translation& other) = default;
-
-		float x;
-		float y;
-		float z;
-	};	
-
 	struct ECSENGINE_API Camera {
 		Camera();
 		Camera(float3 translation, float3 rotation);

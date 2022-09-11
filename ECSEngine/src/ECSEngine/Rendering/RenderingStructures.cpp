@@ -670,12 +670,6 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	Translation::Translation() : x(0.0f), y(0.0f), z(0.0f) {}
-
-	Translation::Translation(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	Color::Color() : red(0), green(0), blue(0), alpha(255) {}
 
 	Color::Color(unsigned char _red) : red(_red), green(0), blue(0), alpha(255) {}

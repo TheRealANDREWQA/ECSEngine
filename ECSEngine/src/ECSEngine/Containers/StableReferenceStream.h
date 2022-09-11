@@ -20,6 +20,65 @@ namespace ECSEngine {
 		StableReferenceStream(const StableReferenceStream& other) = default;
 		StableReferenceStream<T, queue_indirection_list>& operator = (const StableReferenceStream<T, queue_indirection_list>& other) = default;
 
+		// Forcefully allocates an index. If the index is occupied, it will assert
+		// It increases the size as well
+		void AllocateIndex(unsigned int index) {
+			unsigned int indirection_index = 0;
+			if constexpr (queue_indirection_list) {
+				// A - used, B - free
+				if (indirection_list_start_index == 0) {
+					// AAAA BBBBBB
+					indirection_index = function::SearchBytes(indirection_list + size, capacity - size, index, sizeof(index));
+					indirection_index = indirection_index == -1 ? -1 : indirection_index + size;
+				}
+				else {
+					if (indirection_list_start_index + size < capacity) {
+						// BBB AAAA BBBB
+						// 2 searches, one before and one after
+						indirection_index = function::SearchBytes(indirection_list, indirection_list_start_index, index, sizeof(index));
+						if (indirection_index == -1) {
+							unsigned int offset = indirection_list_start_index + size;
+							indirection_index = function::SearchBytes(indirection_list + offset, capacity - offset, index, sizeof(index));
+							indirection_index = indirection_index == -1 ? -1 : indirection_index + offset;
+						}
+					}
+					else {
+						if (indirection_list_start_index + size == capacity) {
+							// BBBBBB AAAAA
+							// One search
+							indirection_index = function::SearchBytes(indirection_list, capacity - size, index, sizeof(index));
+						}
+						else {
+							// AA BBBBBB AAA
+							// 1 search in the middle of the wrap around
+							unsigned int offset = indirection_list_start_index + size - capacity;
+							indirection_index = function::SearchBytes(indirection_list + offset, capacity - size, index, sizeof(index));
+							indirection_index = indirection_index == -1 ? -1 : indirection_index + offset;
+						}
+					}
+				}
+			}
+			else {
+				indirection_index = function::SearchBytes(indirection_list + size, capacity - size, index, sizeof(index));
+				indirection_index = indirection_index == -1 ? -1 : indirection_index + size;
+			}
+
+			// If -1 then its already occupied
+			ECS_ASSERT(indirection_index != -1);
+
+			// Now move the index such that it gets used
+			if constexpr (queue_indirection_list) {
+				unsigned int offset = indirection_list_start_index + size;
+				offset = offset >= capacity ? offset - capacity : offset;
+				std::swap(indirection_list[offset], indirection_list[indirection_index]);
+			}
+			else {
+				std::swap(indirection_list[size], indirection_list[indirection_index]);
+			}
+
+			size++;
+		}
+
 		// Returns an index that can be used for the lifetime of the object to access it
 		ECS_INLINE unsigned int Add(T element) {
 			unsigned int index = ReserveOne();
@@ -195,6 +254,7 @@ namespace ECSEngine {
 					// No wrapping
 					free_list_index = function::SearchBytes(indirection_list + indirection_list_start_index, size, index, sizeof(index));
 					ECS_ASSERT(free_list_index != -1);
+					free_list_index += indirection_list_start_index;
 				}
 				else {
 					// Two checks
@@ -203,6 +263,9 @@ namespace ECSEngine {
 					if (free_list_index == -1) {
 						free_list_index = function::SearchBytes(indirection_list, size - first_chunk_count, index, sizeof(index));
 						ECS_ASSERT(free_list_index != -1);
+					}
+					else {
+						free_list_index += indirection_list_start_index;
 					}
 				}
 

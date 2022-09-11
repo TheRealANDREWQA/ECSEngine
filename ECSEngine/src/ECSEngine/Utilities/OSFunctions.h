@@ -208,7 +208,6 @@ namespace ECSEngine {
 		struct FileExplorerGetFileData {
 			CapacityStream<wchar_t> path;
 			CapacityStream<char> error_message = { nullptr, 0, 0 };
-			const wchar_t* initial_directory = nullptr;
 			Stream<Stream<wchar_t>> extensions = { nullptr, 0 };
 			HWND hWnd = NULL;
 		};

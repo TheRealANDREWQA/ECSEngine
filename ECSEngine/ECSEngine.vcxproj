@@ -283,6 +283,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
     <ClInclude Include="src\ECSEngine\Utilities\TreeIterator.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
     <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
@@ -310,12 +311,14 @@
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
     <ClInclude Include="src\Includes\ECSEngineBasics.h" />
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
+    <ClInclude Include="src\Includes\ECSEngineComponents.h" />
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
     <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
     <ClInclude Include="src\Includes\ECSEngineEntities.h" />
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
+    <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\Includes\ECSEngineInternal.h" />
     <ClInclude Include="src\Includes\ECSEngineMath.h" />
     <ClInclude Include="src\Includes\ECSEngineModule.h" />

@@ -12,8 +12,7 @@
 #include "../Project/ProjectFolders.h"
 #include "Sandbox.h"
 
-//using namespace ECSEngine;
-//ECS_TOOLS;
+#include "Scene.h"
 
 constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 
@@ -263,19 +262,19 @@ void InspectorCleanNothing(EditorState* editor_state, void* data) {}
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawNothing(EditorState* editor_state, void* data, UIDrawer* drawer) {
+void InspectorDrawNothing(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
 	UIDrawConfig config;
 	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Nothing is selected.");
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawFolderInfo(EditorState* editor_state, void* data, UIDrawer* drawer) {
+void InspectorDrawFolderInfo(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
 	const wchar_t* path = (const wchar_t*)data;
 
 	// Test to see if the folder still exists - if it does not revert to draw nothing
 	if (!ExistsFileOrFolder(path)) {
-		ChangeInspectorToNothing(editor_state);
+		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 
@@ -316,12 +315,12 @@ void InspectorDrawFolderInfo(EditorState* editor_state, void* data, UIDrawer* dr
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawTexture(EditorState* editor_state, void* data, UIDrawer* drawer) {
+void InspectorDrawTexture(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
 	const wchar_t* path = (const wchar_t*)data;
 
 	// Check to see if the file still exists - if it doesn't revert to draw nothing
 	if (!ExistsFileOrFolder(path)) {
-		ChangeInspectorToNothing(editor_state);
+		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 
@@ -336,12 +335,12 @@ void InspectorDrawTexture(EditorState* editor_state, void* data, UIDrawer* drawe
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawBlankFile(EditorState* editor_state, void* data, UIDrawer* drawer) {
+void InspectorDrawBlankFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
 	const wchar_t* path = (const wchar_t*)data;
 
 	// Check to see if the file still exists - else revert to draw nothing
 	if (!ExistsFileOrFolder(path)) {
-		ChangeInspectorToNothing(editor_state);
+		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 
@@ -355,13 +354,13 @@ void InspectorDrawBlankFile(EditorState* editor_state, void* data, UIDrawer* dra
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawTextFileImplementation(EditorState* editor_state, void* data, UIDrawer* drawer, const wchar_t* icon_texture, float row_offset) {
+void InspectorDrawTextFileImplementation(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer, const wchar_t* icon_texture, float row_offset) {
 	EDITOR_STATE(editor_state);
 	const wchar_t* path = (const wchar_t*)data;
 
 	// Check to see if the file still exists - else revert to draw nothing
 	if (!ExistsFileOrFolder(path)) {
-		ChangeInspectorToNothing(editor_state);
+		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 
@@ -378,26 +377,26 @@ void InspectorDrawTextFileImplementation(EditorState* editor_state, void* data, 
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawTextFile(EditorState* editor_state, void* data, UIDrawer* drawer) {
-	InspectorDrawTextFileImplementation(editor_state, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_TEXT, TEXT_FILE_ROW_OFFSET);
+void InspectorDrawTextFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
+	InspectorDrawTextFileImplementation(editor_state, inspector_index, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_TEXT, TEXT_FILE_ROW_OFFSET);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawCTextFile(EditorState* editor_state, void* data, UIDrawer* drawer) {
-	InspectorDrawTextFileImplementation(editor_state, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_C, C_FILE_ROW_OFFSET);
+void InspectorDrawCTextFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
+	InspectorDrawTextFileImplementation(editor_state, inspector_index, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_C, C_FILE_ROW_OFFSET);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawCppTextFile(EditorState* editor_state, void* data, UIDrawer* drawer) {
-	InspectorDrawTextFileImplementation(editor_state, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_CPP, C_FILE_ROW_OFFSET);
+void InspectorDrawCppTextFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
+	InspectorDrawTextFileImplementation(editor_state, inspector_index, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_CPP, C_FILE_ROW_OFFSET);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorDrawHlslTextFile(EditorState* editor_state, void* data, UIDrawer* drawer) {
-	InspectorDrawTextFileImplementation(editor_state, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_SHADER, C_FILE_ROW_OFFSET);
+void InspectorDrawHlslTextFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
+	InspectorDrawTextFileImplementation(editor_state, inspector_index, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_SHADER, C_FILE_ROW_OFFSET);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -454,12 +453,12 @@ void InspectorMeshPreviewHoverable(ActionData* action_data) {
 	PinWindowVerticalSliderPosition(system, window_index);
 }
 
-void InspectorDrawMeshFile(EditorState* editor_state, void* _data, UIDrawer* drawer) {
+void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
 
 	// Check to see if the file still exists - else revert to draw nothing
 	if (!ExistsFileOrFolder(data->path)) {
-		ChangeInspectorToNothing(editor_state);
+		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 
@@ -732,13 +731,14 @@ void InspectorDrawModuleClean(EditorState* editor_state, void* _data) {
 	editor_state->editor_allocator->Deallocate(data->module_name.buffer);
 }
 
-void InspectorDrawModule(EditorState* editor_state, void* _data, UIDrawer* drawer) {
+void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	EDITOR_STATE(editor_state);
 
 	DrawModuleData* data = (DrawModuleData*)_data;
+	data->inspector_index = inspector_index;
 	unsigned int module_index = GetModuleIndexFromName(editor_state, data->module_name);
 	if (module_index == -1) {
-		ChangeInspectorToNothing(editor_state);
+		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 	
@@ -1318,7 +1318,7 @@ void DrawSandboxSelectionWindow(void* window_data, void* drawer_descriptor, bool
 
 		// Write the sandbox file
 		SaveEditorSandboxFile(data->editor_state);
-		CloseXBorderClickableAction(action_data);
+		DestroyCurrentActionWindow(action_data);
 	};
 
 	UIConfigActiveState active_state;
@@ -1329,7 +1329,7 @@ void DrawSandboxSelectionWindow(void* window_data, void* drawer_descriptor, bool
 	config.AddFlag(active_state);
 
 	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ACTIVE_STATE, config, "Confirm", { confirm_data, data, 0, ECS_UI_DRAW_SYSTEM });
-	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ALIGN_ELEMENT_RIGHT, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ALIGN_ELEMENT_RIGHT, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 struct CreateAddSandboxWindowData {
@@ -1363,12 +1363,10 @@ void CreateAddSandboxWindow(ActionData* action_data) {
 	system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
 }
 
-void InspectorDrawSandboxSettings(EditorState* editor_state, void* _data, UIDrawer* drawer) {
+void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	EDITOR_STATE(editor_state);
 
 	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
-	unsigned int inspector_index = GetInspectorIndex(drawer->system->GetWindowName(drawer->window_index));
-
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 
 	// Initialize the ui_reflection_instance if we haven't done so
@@ -1459,46 +1457,16 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, void* _data, UIDraw
 	}
 	else {
 		drawer->TextWide(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox->scene_path);
-	} 
+	}
 
-	struct SelectSceneData {
-		EditorState* editor_state;
-		unsigned int sandbox_index;
-	};
-
-	auto select_scene_action = [](ActionData* action_data) {
-		UI_UNPACK_ACTION_DATA;
-		SelectSceneData* data = (SelectSceneData*)_data;
-
-		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_directory, 512);
-		GetProjectAssetsFolder(data->editor_state, assets_directory);
-
-		ECS_STACK_CAPACITY_STREAM(wchar_t, new_scene_path, 512);
-		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-
-		OS::FileExplorerGetFileData get_file_data;
-		Stream<wchar_t> extensions[] = {
-			EDITOR_SCENE_EXTENSION
-		};
-		get_file_data.extensions = { extensions, std::size(extensions) };
-		get_file_data.initial_directory = assets_directory.buffer;
-		get_file_data.path = new_scene_path;
-		get_file_data.error_message = error_message;
-
-		bool success = OS::FileExplorerGetFile(&get_file_data);
-		if (!success) {
-			ECS_FORMAT_TEMP_STRING(console_message, "Failed to get new scene path. Reason: {#}.", get_file_data.error_message);
-			EditorSetConsoleError(console_message);
-		}
-		else {
-			// Try to change the scene
-			// Spawn a window to ask the user if he wants to save the current scene before loading the new one
-			// only if it is diry.
-		}
-	};
-
-	SelectSceneData select_data;
-	drawer->SpriteButton(UI_CONFIG_ALIGN_ELEMENT_RIGHT, config, { select_scene_action, &select_data, sizeof(select_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_FOLDER);
+	ChangeSandboxSceneActionData change_scene_data = { editor_state, sandbox_index };
+	drawer->SpriteButton(
+		UI_CONFIG_MAKE_SQUARE,
+		config,
+		{ ChangeSandboxSceneAction, &change_scene_data, sizeof(change_scene_data), ECS_UI_DRAW_SYSTEM },
+		ECS_TOOLS_UI_TEXTURE_FOLDER
+	);
+	drawer->NextRow();
 
 	drawer->CollapsingHeader("Modules", &data->collapsing_module_state, [&]() {
 		// Display the count of modules in use
@@ -1780,6 +1748,18 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, void* _data, UIDraw
 	});
 }
 
+void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
+	const wchar_t* _absolute_path = (const wchar_t*)_data;
+	Stream<wchar_t> absolute_path = _absolute_path;
+	if (!ExistsFileOrFolder(absolute_path)) {
+		ChangeInspectorToNothing(editor_state, inspector_index);
+	}
+
+	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_SCENE, drawer->color_theme.text, drawer->color_theme.theme);
+	InspectorIconNameAndPath(drawer, absolute_path);
+	InspectorDrawFileTimes(drawer, absolute_path);
+}
+
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
@@ -1864,7 +1844,7 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 			ChangeInspectorToNothing(editor_state, inspector_index);
 		}
 
-		data->draw_function(editor_state, data->draw_data, &drawer);
+		data->draw_function(editor_state, inspector_index, data->draw_data, &drawer);
 
 		// Draw now the combo for the sandbox
 		// We draw later on rather then at that moment because it will interfere with what's on the first row
@@ -2196,6 +2176,13 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+void ChangeInspectorToScene(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index)
+{
+
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index)
 {
 	return editor_state->inspector_manager.data[inspector_index].target_sandbox;
@@ -2325,6 +2312,7 @@ void InitializeInspectorTable(EditorState* editor_state) {
 	AddInspectorTableFunction(&editor_state->inspector_manager.function_table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, L".hlsli");
 	AddInspectorTableFunction(&editor_state->inspector_manager.function_table, { InspectorDrawMeshFile, InspectorCleanMeshFile }, L".gltf");
 	AddInspectorTableFunction(&editor_state->inspector_manager.function_table, { InspectorDrawMeshFile, InspectorCleanMeshFile }, L".glb");
+	AddInspectorTableFunction(&editor_state->inspector_manager.function_table, { InspectorDrawSceneFile, InspectorCleanNothing }, L".scene");
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

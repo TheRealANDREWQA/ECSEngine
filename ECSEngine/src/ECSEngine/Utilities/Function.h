@@ -23,6 +23,9 @@ namespace ECSEngine {
 
 	namespace function {
 
+		// It will remap the pointer from the first base into the second base
+		ECSENGINE_API void* RemapPointer(const void* first_base, const void* second_base, const void* pointer);
+
 		template<typename CharacterType>
 		CharacterType Character(char character) {
 			if constexpr (std::is_same_v<CharacterType, char>) {
@@ -43,210 +46,6 @@ namespace ECSEngine {
 			size_t mask = alignment - 1;
 			return (pointer + mask) & ~mask;
 		}
-		
-		// Returns the index of the first most significant bit set, -1 if no bit is set
-		// (it is like a reverse search inside the bits)
-		inline unsigned int FirstMSB64(size_t number) {
-			unsigned long value = 0;
-			return _BitScanReverse64(&value, number) == 0 ? -1 : value;
-		}
-
-		// Returns the index of the first most significant bit set, -1 if no bit is set
-		// (it is like a reverse search inside the bits)
-		inline unsigned int FirstMSB(unsigned int number) {
-			unsigned long value = 0;
-			return _BitScanReverse(&value, number) == 0 ? -1 : value;
-		}
-
-		// Returns the index of the first least significant bit set, -1 if no bit is set
-		// (it is like a forward search inside bits)
-		inline unsigned int FirstLSB64(size_t number) {
-			unsigned long value = 0;
-			return _BitScanForward64(&value, number) == 0 ? -1 : value;
-		}
-
-		// Returns the index of the first least significant bit set, -1 if no bit is set
-		// (it is like a forward search inside bits)
-		inline unsigned int FirstLSB(unsigned int number) {
-			unsigned long value = 0;
-			return _BitScanForward(&value, number) == 0 ? -1 : value;
-		}
-
-		/* Supports alignments up to 256 bytes */
-		inline uintptr_t AlignPointerStack(uintptr_t pointer, size_t alignment) {
-			uintptr_t first_aligned_pointer = AlignPointer(pointer, alignment);
-			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
-		}
-
-		inline size_t PowerOfTwoGreater(size_t number) {
-			// Use bitscan to quickly find this out
-			// Example 00011010 -> 00100000
-
-			unsigned int index = FirstMSB(number);
-			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
-			return (size_t)1 << (index + 1);
-		}
-
-		// Extends the 47th bit into the 48-63 range
-		inline void* SignExtendPointer(const void* pointer) {
-			intptr_t ptr = (intptr_t)pointer;
-			ptr <<= 16;
-			ptr >>= 16;
-			return (void*)ptr;
-		}
-
-		// pointers should be aligned preferably to 32 bytes at least
-		ECSENGINE_API void avx2_copy(void* destination, const void* source, size_t bytes);
-
-		inline void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
-			int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
-		}
-
-		inline void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
-			int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
-		}
-
-		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
-			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
-			wide_string.size += ascii_string.size;
-		}
-
-		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
-			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
-			wide_string.size += ascii_string.size;
-		}
-
-		inline void ConcatenateCharPointers(
-			char* pointer_to_store, 
-			const char* pointer_to_add, 
-			size_t offset, 
-			size_t size_of_pointer_to_add = 0
-		) {
-			memcpy(pointer_to_store + offset, pointer_to_add, size_of_pointer_to_add == 0 ? strlen(pointer_to_add) : size_of_pointer_to_add);
-		}
-
-		inline void ConcatenateWideCharPointers(
-			wchar_t* pointer_to_store,
-			const wchar_t* pointer_to_add,
-			size_t offset,
-			size_t size_of_pointer_to_add = 0
-		) {
-			memcpy(pointer_to_store + offset, pointer_to_add, (size_of_pointer_to_add == 0 ? wcsnlen_s(pointer_to_add, 4096) : size_of_pointer_to_add) * sizeof(wchar_t));
-		}
-
-		ECSENGINE_API void CheckWindowsFunctionErrorCode(HRESULT hr, LPCWSTR box_name, const char* filename, unsigned int line, bool do_exit);
-#define ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(hr, box_name, do_exit) function::CheckWindowsFunctionErrorCode(hr, box_name, __FILE__, __LINE__, do_exit)
-
-		// returns the count of decoded numbers
-		ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, unsigned int* number_buffer);
-
-		// returns the count of decoded numbers
-		ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, int* number_buffer);
-
-		inline void ConvertWideCharsToASCII(
-			const wchar_t* wide_chars,
-			char* chars,
-			size_t wide_char_count,
-			size_t destination_size,
-			size_t max_char_count,
-			size_t& written_chars
-		) {
-			// counts the null terminator aswell
-			errno_t status = wcstombs_s(&written_chars, chars, destination_size, wide_chars, max_char_count);
-			if (written_chars > 0) {
-				written_chars--;
-			}
-			ECS_ASSERT(status == 0);
-		}
-
-		inline void ConvertWideCharsToASCII(
-			const wchar_t* wide_chars,
-			char* chars,
-			size_t wide_char_count,
-			size_t max_char_count
-		) {
-			size_t written_chars = 0;
-			errno_t status = wcstombs_s(&written_chars, chars, max_char_count, wide_chars, wide_char_count);
-			ECS_ASSERT(status == 0);
-		}
-
-		inline void ConvertWideCharsToASCII(
-			Stream<wchar_t> wide_chars,
-			CapacityStream<char>& ascii_chars
-		) {
-			size_t written_chars = 0;
-			errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
-			ECS_ASSERT(status == 0);
-			ascii_chars.size += written_chars - 1;
-		}
-
-		// it searches for spaces and next line characters
-		ECSENGINE_API size_t ParseWordsFromSentence(Stream<char> sentence, char separator_token = ' ');
-
-		// positions will be filled with the 4 corners of the rectangle
-		ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
-
-		constexpr ECS_INLINE float CalculateFloatPrecisionPower(size_t precision) {
-			float value = 1.0f;
-			for (size_t index = 0; index < precision; index++) {
-				value *= 10.0f;
-			}
-			return value;
-		}
-
-		constexpr ECS_INLINE double CalculateDoublePrecisionPower(size_t precision) {
-			double value = 1.0f;
-			for (size_t index = 0; index < precision; index++) {
-				value *= 10.0f;
-			}
-			return value;
-		}
-		
-		// Duration should be expressed as milliseconds
-		// Returns how many characters were written
-		ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, char* characters);
-
-		// finds the tokens that appear in the current string
-		ECSENGINE_API void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens);
-
-		// finds the tokens that appear in the current string
-		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens);
-
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, CapacityStream<unsigned int>& tokens);
-
-		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens);
-
-		// It will return the first appereance of the token inside the character stream
-		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
-		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
-		// until the end of the characters string
-		ECSENGINE_API Stream<char> FindFirstToken(Stream<char> characters, Stream<char> token);
-
-		// It will return the first appereance of the token inside the character stream
-		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
-		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
-		// until the end of the characters string
-		ECSENGINE_API Stream<wchar_t> FindFirstToken(Stream<wchar_t> characters, Stream<wchar_t> token);
-
-		// It will return the first appereance of the token inside the character stream
-		// It will not call strchr, this function being well suited if searching a large string
-		// Returns { nullptr, 0 } if it doesn't exit, else a string that starts with the token
-		// until the end of the character string
-		ECSENGINE_API Stream<char> FindFirstCharacter(Stream<char> characters, char token);
-
-		// It will search from the end of the characters string till its start
-		// It uses SIMD to speed up the find
-		ECSENGINE_API Stream<char> FindTokenReverse(Stream<char> characters, Stream<char> token);
-
-		// It will search from the end of the characters string till its start
-		// It uses SIMD to speed up the find
-		ECSENGINE_API Stream<wchar_t> FindTokenReverse(Stream<wchar_t> characters, Stream<wchar_t> token);
-
-		// It will search the string from the last character until the starting one
-		ECSENGINE_API Stream<char> FindCharacterReverse(Stream<char> characters, char character);
-
-		// It will search the string from the last character until the starting one
-		ECSENGINE_API Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character);
 
 		inline void Capitalize(char* character) {
 			if (*character >= 'a' && *character <= 'z') {
@@ -378,17 +177,6 @@ namespace ECSEngine {
 			return CompareStrings(Stream<char>(string, string_size), Stream<char>(other, other_size));
 		}
 
-		// It will remap the pointer from the first base into the second base
-		ECSENGINE_API void* RemapPointer(const void* first_base, const void* second_base, const void* pointer);
-
-		ECSENGINE_API unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other);
-
-		ECSENGINE_API unsigned int FindString(Stream<char> string, Stream<Stream<char>> other);
-
-		ECSENGINE_API unsigned int FindString(const wchar_t* ECS_RESTRICT string, Stream<const wchar_t*> other);
-
-		ECSENGINE_API unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other);
-
 		inline void* OffsetPointer(const void* pointer, int64_t offset) {
 			return (void*)((int64_t)pointer + offset);
 		}
@@ -417,20 +205,74 @@ namespace ECSEngine {
 			}
 			return (void*)pointer;
 		}
+		
+		// Returns the index of the first most significant bit set, -1 if no bit is set
+		// (it is like a reverse search inside the bits)
+		inline unsigned int FirstMSB64(size_t number) {
+			unsigned long value = 0;
+			return _BitScanReverse64(&value, number) == 0 ? -1 : value;
+		}
 
-		// If allocating a stream alongside its data, this function sets it up
-		ECSENGINE_API void* CoallesceStreamWithData(void* allocation, size_t size);
+		// Returns the index of the first most significant bit set, -1 if no bit is set
+		// (it is like a reverse search inside the bits)
+		inline unsigned int FirstMSB(unsigned int number) {
+			unsigned long value = 0;
+			return _BitScanReverse(&value, number) == 0 ? -1 : value;
+		}
 
-		// If allocating a capacity stream alongside its data, this function sets it up
-		ECSENGINE_API void* CoallesceCapacityStreamWithData(void* allocation, size_t size, size_t capacity);
+		// Returns the index of the first least significant bit set, -1 if no bit is set
+		// (it is like a forward search inside bits)
+		inline unsigned int FirstLSB64(size_t number) {
+			unsigned long value = 0;
+			return _BitScanForward64(&value, number) == 0 ? -1 : value;
+		}
 
-		// Verifies if the characters form a valid floating point number: 
-		// consisting of at maximum a dot and only number characters and at max a minus or plus as the first character
-		ECSENGINE_API bool IsFloatingPointNumber(Stream<char> characters);
+		// Returns the index of the first least significant bit set, -1 if no bit is set
+		// (it is like a forward search inside bits)
+		inline unsigned int FirstLSB(unsigned int number) {
+			unsigned long value = 0;
+			return _BitScanForward(&value, number) == 0 ? -1 : value;
+		}
 
-		// Verifies if the characters form a valid number: 
-		// only number characters and at max a minus or plus as the first character
-		ECSENGINE_API bool IsIntegerNumber(Stream<char> characters);
+		/* Supports alignments up to 256 bytes */
+		inline uintptr_t AlignPointerStack(uintptr_t pointer, size_t alignment) {
+			uintptr_t first_aligned_pointer = AlignPointer(pointer, alignment);
+			return first_aligned_pointer + alignment * ((first_aligned_pointer - pointer) == 0);
+		}
+
+		inline size_t PowerOfTwoGreater(size_t number) {
+			// Use bitscan to quickly find this out
+			// Example 00011010 -> 00100000
+
+			unsigned int index = FirstMSB(number);
+			// This works out even when index is -1 (that is number is 0, index + 1 will be 0 so the returned value will be 1)
+			return (size_t)1 << (index + 1);
+		}
+
+		// Extends the 47th bit into the 48-63 range
+		inline void* SignExtendPointer(const void* pointer) {
+			intptr_t ptr = (intptr_t)pointer;
+			ptr <<= 16;
+			ptr >>= 16;
+			return (void*)ptr;
+		}
+
+		// The type must have as its first field a size_t describing the stream size
+		// It returns the total amount of data needed to copy this structure
+		template<typename StreamType, typename Type>
+		inline size_t EmbedStream(Type* type, Stream<StreamType> stream) {
+			memcpy(function::OffsetPointer(type, sizeof(*type)), stream.buffer, stream.MemoryOf(stream.size));
+			size_t* size_ptr = (size_t*)type;
+			*size_ptr = stream.size;
+			return stream.MemoryOf(stream.size) + sizeof(*type);
+		}
+
+		// The type must have its first field a size_t describing its stream size
+		template<typename StreamType, typename Type>
+		inline Stream<StreamType> GetEmbeddedStream(const Type* type) {
+			const size_t* size_ptr = (const size_t*)type;
+			return { function::OffsetPointer(type, sizeof(*type)), *size_ptr };
+		}
 
 		inline bool IsNumberCharacter(char value) {
 			return value >= '0' && value <= '9';
@@ -452,10 +294,98 @@ namespace ECSEngine {
 			return pointer;
 		}
 
-		// If the increment is negative, it will start from the last character to the first
-		// and return the value into stream.buffer + stream.size. Example |value   | ->
-		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
-		ECSENGINE_API Stream<char> SkipSpaceStream(Stream<char> characters, int increment = 1);
+		// pointers should be aligned preferably to 32 bytes at least
+		ECSENGINE_API void avx2_copy(void* destination, const void* source, size_t bytes);
+
+		inline void ConvertASCIIToWide(wchar_t* wide_string, const char* pointer, size_t max_w_string_count) {
+			int result = MultiByteToWideChar(CP_ACP, 0, pointer, -1, wide_string, max_w_string_count);
+		}
+
+		inline void ConvertASCIIToWide(wchar_t* wide_string, Stream<char> pointer, size_t max_w_string_count) {
+			int result = MultiByteToWideChar(CP_ACP, 0, pointer.buffer, pointer.size, wide_string, max_w_string_count);
+		}
+
+		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string) {
+			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+			wide_string.size += ascii_string.size;
+		}
+
+		inline void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
+			int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, wide_string.buffer + wide_string.size, wide_string.capacity);
+			wide_string.size += ascii_string.size;
+		}
+
+		inline void ConcatenateCharPointers(
+			char* pointer_to_store, 
+			const char* pointer_to_add, 
+			size_t offset, 
+			size_t size_of_pointer_to_add = 0
+		) {
+			memcpy(pointer_to_store + offset, pointer_to_add, size_of_pointer_to_add == 0 ? strlen(pointer_to_add) : size_of_pointer_to_add);
+		}
+
+		inline void ConcatenateWideCharPointers(
+			wchar_t* pointer_to_store,
+			const wchar_t* pointer_to_add,
+			size_t offset,
+			size_t size_of_pointer_to_add = 0
+		) {
+			memcpy(pointer_to_store + offset, pointer_to_add, (size_of_pointer_to_add == 0 ? wcsnlen_s(pointer_to_add, 4096) : size_of_pointer_to_add) * sizeof(wchar_t));
+		}
+
+		// Can use the increment to go backwards by setting it to -1
+		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
+			while (IsCodeIdentifierCharacter(*pointer)) {
+				pointer += increment;
+			}
+			return pointer;
+		}
+
+		ECSENGINE_API void CheckWindowsFunctionErrorCode(HRESULT hr, LPCWSTR box_name, const char* filename, unsigned int line, bool do_exit);
+#define ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(hr, box_name, do_exit) function::CheckWindowsFunctionErrorCode(hr, box_name, __FILE__, __LINE__, do_exit)
+
+		// returns the count of decoded numbers
+		ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, unsigned int* number_buffer);
+
+		// returns the count of decoded numbers
+		ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, int* number_buffer);
+
+		inline void ConvertWideCharsToASCII(
+			const wchar_t* wide_chars,
+			char* chars,
+			size_t wide_char_count,
+			size_t destination_size,
+			size_t max_char_count,
+			size_t& written_chars
+		) {
+			// counts the null terminator aswell
+			errno_t status = wcstombs_s(&written_chars, chars, destination_size, wide_chars, max_char_count);
+			if (written_chars > 0) {
+				written_chars--;
+			}
+			ECS_ASSERT(status == 0);
+		}
+
+		inline void ConvertWideCharsToASCII(
+			const wchar_t* wide_chars,
+			char* chars,
+			size_t wide_char_count,
+			size_t max_char_count
+		) {
+			size_t written_chars = 0;
+			errno_t status = wcstombs_s(&written_chars, chars, max_char_count, wide_chars, wide_char_count);
+			ECS_ASSERT(status == 0);
+		}
+
+		inline void ConvertWideCharsToASCII(
+			Stream<wchar_t> wide_chars,
+			CapacityStream<char>& ascii_chars
+		) {
+			size_t written_chars = 0;
+			errno_t status = wcstombs_s(&written_chars, ascii_chars.buffer + ascii_chars.size, ascii_chars.capacity - ascii_chars.size, wide_chars.buffer, wide_chars.size);
+			ECS_ASSERT(status == 0);
+			ascii_chars.size += written_chars - 1;
+		}
 
 		// Tabs and spaces
 		// Can use the increment to go backwards by setting it to -1
@@ -473,24 +403,6 @@ namespace ECSEngine {
 			}
 			return pointer;
 		}
-		
-		// If the increment is negative, it will start from the last character to the first
-		// and return the value into stream.buffer + stream.size. Example |value  \n | ->
-		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
-		ECSENGINE_API Stream<char> SkipWhitespace(Stream<char> characters, int increment = 1);
-
-		// Can use the increment to go backwards by setting it to -1
-		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
-			while (IsCodeIdentifierCharacter(*pointer)) {
-				pointer += increment;
-			}
-			return pointer;
-		}
-
-		// If the increment is negative, it will start from the last character to the first
-		// and return the value into stream.buffer + stream.size. Example |hey   value| ->
-		// will be returned as |hey   | -> stream.buffer = 'h', stream.buffer + stream.size = ' '
-		ECSENGINE_API Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment = 1);
 
 		// Shifts the pointer 3 positions to the right in order to provide significant digits for hashing functions
 		// like power of two that use the lower bits in order to hash the element inside the table.
@@ -554,6 +466,111 @@ namespace ECSEngine {
 		Value ClampMax(Value value, Value max) {
 			return value > max ? max : value;
 		}
+
+		// it searches for spaces and next line characters
+		ECSENGINE_API size_t ParseWordsFromSentence(Stream<char> sentence, char separator_token = ' ');
+
+		// positions will be filled with the 4 corners of the rectangle
+		ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
+
+		constexpr ECS_INLINE float CalculateFloatPrecisionPower(size_t precision) {
+			float value = 1.0f;
+			for (size_t index = 0; index < precision; index++) {
+				value *= 10.0f;
+			}
+			return value;
+		}
+
+		constexpr ECS_INLINE double CalculateDoublePrecisionPower(size_t precision) {
+			double value = 1.0f;
+			for (size_t index = 0; index < precision; index++) {
+				value *= 10.0f;
+			}
+			return value;
+		}
+		
+		// Duration should be expressed as milliseconds
+		// Returns how many characters were written
+		ECSENGINE_API size_t ConvertDurationToChars(size_t duration_milliseconds, char* characters);
+
+		// finds the tokens that appear in the current string
+		ECSENGINE_API void FindToken(Stream<char> string, char token, CapacityStream<unsigned int>& tokens);
+
+		// finds the tokens that appear in the current string
+		ECSENGINE_API void FindToken(Stream<char> string, Stream<char> token, CapacityStream<unsigned int>& tokens);
+
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, wchar_t token, CapacityStream<unsigned int>& tokens);
+
+		ECSENGINE_API void FindToken(Stream<wchar_t> string, Stream<wchar_t> token, CapacityStream<unsigned int>& tokens);
+
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
+		// until the end of the characters string
+		ECSENGINE_API Stream<char> FindFirstToken(Stream<char> characters, Stream<char> token);
+
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strstr, it uses a SIMD search, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exist, else a string that starts with the token
+		// until the end of the characters string
+		ECSENGINE_API Stream<wchar_t> FindFirstToken(Stream<wchar_t> characters, Stream<wchar_t> token);
+
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strchr, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exit, else a string that starts with the token
+		// until the end of the character string
+		ECSENGINE_API Stream<char> FindFirstCharacter(Stream<char> characters, char token);
+
+		// It will search from the end of the characters string till its start
+		// It uses SIMD to speed up the find
+		ECSENGINE_API Stream<char> FindTokenReverse(Stream<char> characters, Stream<char> token);
+
+		// It will search from the end of the characters string till its start
+		// It uses SIMD to speed up the find
+		ECSENGINE_API Stream<wchar_t> FindTokenReverse(Stream<wchar_t> characters, Stream<wchar_t> token);
+
+		// It will search the string from the last character until the starting one
+		ECSENGINE_API Stream<char> FindCharacterReverse(Stream<char> characters, char character);
+
+		// It will search the string from the last character until the starting one
+		ECSENGINE_API Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character);
+
+		ECSENGINE_API unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other);
+
+		ECSENGINE_API unsigned int FindString(Stream<char> string, Stream<Stream<char>> other);
+
+		ECSENGINE_API unsigned int FindString(const wchar_t* ECS_RESTRICT string, Stream<const wchar_t*> other);
+
+		ECSENGINE_API unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other);
+
+		// If allocating a stream alongside its data, this function sets it up
+		ECSENGINE_API void* CoallesceStreamWithData(void* allocation, size_t size);
+
+		// If allocating a capacity stream alongside its data, this function sets it up
+		ECSENGINE_API void* CoallesceCapacityStreamWithData(void* allocation, size_t size, size_t capacity);
+
+		// Verifies if the characters form a valid floating point number: 
+		// consisting of at maximum a dot and only number characters and at max a minus or plus as the first character
+		ECSENGINE_API bool IsFloatingPointNumber(Stream<char> characters);
+
+		// Verifies if the characters form a valid number: 
+		// only number characters and at max a minus or plus as the first character
+		ECSENGINE_API bool IsIntegerNumber(Stream<char> characters);
+
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |value   | ->
+		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
+		ECSENGINE_API Stream<char> SkipSpaceStream(Stream<char> characters, int increment = 1);
+		
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |value  \n | ->
+		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
+		ECSENGINE_API Stream<char> SkipWhitespace(Stream<char> characters, int increment = 1);
+
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |hey   value| ->
+		// will be returned as |hey   | -> stream.buffer = 'h', stream.buffer + stream.size = ' '
+		ECSENGINE_API Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment = 1);
 
 		ECSENGINE_API unsigned int GetAlphabetIndex(char character);
 

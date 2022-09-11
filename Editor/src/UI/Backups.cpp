@@ -334,8 +334,7 @@ void RestoreBackupWindowDraw(void* window_data, void* drawer_descriptor, bool in
 
 		// This will report any errors encountered
 		LoadProjectBackup(data->editor_state, data->folder, backup_files);
-
-		CloseXBorderClickableAction(action_data);
+		DestroyCurrentActionWindow(action_data);
 	};
 
 	drawer.Button("Confirm", { confirm_action, data, 0, ECS_UI_DRAW_SYSTEM });
@@ -347,7 +346,7 @@ void RestoreBackupWindowDraw(void* window_data, void* drawer_descriptor, bool in
 	UIDrawConfig config;
 	config.AddFlag(transform);
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 void SetRestoreBackupWindowDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, Stream<wchar_t> folder) {

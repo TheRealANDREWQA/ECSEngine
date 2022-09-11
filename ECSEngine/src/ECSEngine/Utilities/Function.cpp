@@ -299,14 +299,14 @@ namespace ECSEngine {
 			// that we cannot cache the SIMD vectors
 			// So unroll that manually here
 
+			if (string.size < token.size) {
+				return;
+			}
+
 			// If the token size is greater than 256 bytes (i.e. 8 32 byte element SIMD registers)
 			// The check should be done manually with memcmp
 			VectorType simd_token[8];
 			VectorType first_char(token[0]);
-
-			if (string.size < token.size) {
-				return;
-			}
 
 			// Do a SIMD search for the first character
 			// If we get a match, then do the SIMD search from that index
@@ -323,8 +323,8 @@ namespace ECSEngine {
 				}
 				if (token.size > 0) {
 					size_t offset = simd_token_count * first_char.size();
-					simd_token[simd_token_count].load_partial(token.size * sizeof(CharacterType), token.buffer + offset);
-					simd_remainder = token.size * sizeof(CharacterType);
+					simd_token[simd_token_count].load_partial(token.size, token.buffer + offset);
+					simd_remainder = token.size;
 				}
 
 				for (size_t index = 0; index < simd_count; index += first_char.size()) {
@@ -1516,7 +1516,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < operators.size; index++) {
 					for (size_t op_index = 0; op_index < OPERATOR_ORDER[precedence].size; op_index++) {
 						if (operators[index].operator_index == OPERATOR_ORDER[precedence][op_index]) {
-							order.Add(index);
+							order.AddSafe(index);
 						}
 					}
 				}
@@ -1597,7 +1597,7 @@ namespace ECSEngine {
 			opened_braces.Add((unsigned int)0);
 			FindToken(characters, Character<CharacterType>('('), opened_braces);
 			FindToken(characters, Character<CharacterType>(')'), closed_braces);
-			closed_braces.Add(characters.size + 1);
+			closed_braces.AddSafe(characters.size + 1);
 
 			auto get_matching_brace = [=](size_t closed_index) {
 				size_t subindex = 0;
@@ -1804,7 +1804,7 @@ namespace ECSEngine {
 				unsigned int start_index = index;
 				double value = EvaluateExpressionValue(characters, index);
 				if (value != DBL_MAX) {
-					numbers.Add({ value, start_index });
+					numbers.AddSafe({ value, start_index });
 				}
 			}
 		}
@@ -1951,6 +1951,19 @@ namespace ECSEngine {
 						}
 						else {
 							return simd_count + first;
+						}
+					}
+					else {
+						if constexpr (reverse) {
+							// If reversed, then try again until the bits integer is 0 or we get a value that is in bounds
+							bits &= ~(1 << first);
+							while (bits != 0) {
+								first = FirstMSB(bits);
+								if (first != -1 && first < last_element_count) {
+									return (size_t)first;
+								}
+								bits &= ~(1 << first);
+							}
 						}
 					}
 				}

@@ -48,6 +48,7 @@ namespace ECSEngine {
 			void* upper_bound;
 			void* default_value;
 			unsigned int byte_size;
+			unsigned int int_flags;
 		};
 
 		// The first field must always be the pointer to the field
@@ -76,6 +77,7 @@ namespace ECSEngine {
 			void* upper_bound;
 			void* default_value;
 			unsigned int byte_size;
+			unsigned int int_flags;
 		};
 
 		// The first field must always be the pointer to the field
@@ -120,6 +122,7 @@ namespace ECSEngine {
 			unsigned int count;
 			unsigned int precision = 3;
 			unsigned int byte_size;
+			unsigned int int_flags;
 		};
 		
 		struct UIReflectionDrawer;
@@ -236,7 +239,10 @@ namespace ECSEngine {
 		typedef UIReflectionStreamBaseData UIReflectionStreamDoubleInputData;
 
 		// The first field must always be the pointer to the field
-		typedef UIReflectionStreamBaseData UIReflectionStreamIntInputData;
+		struct UIReflectionStreamIntInputData {
+			UIReflectionStreamBaseData stream;
+			unsigned int int_flags;
+		};
 
 		// The first field must always be the pointer to the field
 		typedef UIReflectionStreamBaseData UIReflectionStreamTextInputData;
@@ -260,6 +266,7 @@ namespace ECSEngine {
 		struct UIReflectionStreamInputGroupData {
 			UIReflectionStreamBaseData base_data;
 			unsigned int basic_type_count;
+			unsigned int int_flags;
 		};
 
 		typedef UIReflectionStreamBaseData UIReflectionStreamDirectoryInputData;
@@ -272,16 +279,15 @@ namespace ECSEngine {
 			UIReflectionDrawer* ui_drawer;
 		};
 
-		// Must start at 56, because the array add and remove callbacks are at 54 and 55
-#define UI_INT_BASE (56)
-#define UI_INT8_T ((size_t)1 << UI_INT_BASE)
-#define UI_UINT8_T ((size_t)1 << (UI_INT_BASE + 1))
-#define UI_INT16_T ((size_t)1 << (UI_INT_BASE + 2))
-#define UI_UINT16_T ((size_t)1 << (UI_INT_BASE + 3))
-#define UI_INT32_T ((size_t)1 << (UI_INT_BASE + 4))
-#define UI_UINT32_T ((size_t)1 << (UI_INT_BASE + 5))
-#define UI_INT64_T ((size_t)1 << (UI_INT_BASE + 6))
-#define UI_UINT64_T ((size_t)1 << (UI_INT_BASE + 7))
+#define UI_INT_BASE (0)
+#define UI_INT8_T ((unsigned int)1 << UI_INT_BASE)
+#define UI_UINT8_T ((unsigned int)1 << (UI_INT_BASE + 1))
+#define UI_INT16_T ((unsigned int)1 << (UI_INT_BASE + 2))
+#define UI_UINT16_T ((unsigned int)1 << (UI_INT_BASE + 3))
+#define UI_INT32_T ((unsigned int)1 << (UI_INT_BASE + 4))
+#define UI_UINT32_T ((unsigned int)1 << (UI_INT_BASE + 5))
+#define UI_INT64_T ((unsigned int)1 << (UI_INT_BASE + 6))
+#define UI_UINT64_T ((unsigned int)1 << (UI_INT_BASE + 7))
 
 #define ECS_TOOLS_UI_CREATE_PREDICATION_TABLE_0(function, a, ...) function(0, __VA_ARGS__)
 
@@ -367,14 +373,6 @@ namespace ECSEngine {
 			ECS_TOOLS_UI_REFLECT_INT_SWITCH_CASE_IMPLEMENTATION(UI_UINT64_T, uint64_t, function); \
 		}
 
-		inline size_t ExtractIntFlags(size_t configuration_flags) {
-			return (configuration_flags & 0xFF00000000000000) /*>> UI_INT_BASE*/;
-		}
-
-		inline size_t RemoveIntFlags(size_t configuration_flags) {
-			return configuration_flags & ((1 << UI_INT_BASE)- 1);
-		}
-
 		inline bool IsStream(UIReflectionStreamType type) {
 			return type == UIReflectionStreamType::Capacity || type == UIReflectionStreamType::Resizable;
 		}
@@ -399,19 +397,8 @@ namespace ECSEngine {
 					return data->byte_size;
 				}
 				else {
-					size_t int_index = ExtractIntFlags(type.fields[field_index].configuration) >> UI_INT_BASE & (~0x1);
-					switch (int_index) {
-					case 0:
-						return 1;
-					case 2:
-						return 2;
-					case 4:
-						return 4;
-					case 6:
-						return 8;
-					}
-					ECS_ASSERT(false);
-					return 0;
+					UIReflectionStreamIntInputData* data = (UIReflectionStreamIntInputData*)type.fields[field_index].data;
+					return data->stream.stream.element_byte_size;
 				}
 			}
 			break;
@@ -439,7 +426,7 @@ namespace ECSEngine {
 				else {
 					UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)type.fields[field_index].data;
 					size_t base_count = data->basic_type_count;
-					switch (type.fields[field_index].reflection_index) {
+					/*switch (type.fields[field_index].reflection_index) {
 					case UIReflectionIndex::FloatInputGroup:
 					case UIReflectionIndex::FloatSliderGroup:
 						return base_count * sizeof(float);
@@ -448,22 +435,9 @@ namespace ECSEngine {
 						return base_count * sizeof(double);
 					case UIReflectionIndex::IntegerInputGroup:
 					case UIReflectionIndex::IntegerSliderGroup:
-						{
-							size_t int_index = ExtractIntFlags(type.fields[field_index].configuration) >> UI_INT_BASE & (~0x1);
-							switch (int_index) {
-							case 0:
-								return 1;
-							case 2:
-								return 2;
-							case 4:
-								return 4;
-							case 6:
-								return 8;
-							}
-							ECS_ASSERT(false);
-							return 0;
-						}
-					}
+					}*/
+					return base_count * data->base_data.stream.element_byte_size;
+
 
 					ECS_ASSERT(false);
 					return 0;
@@ -576,8 +550,7 @@ namespace ECSEngine {
 		void UIReflectionIntSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionIntSliderData* data = (UIReflectionIntSliderData*)_data;
 
-			size_t int_flags = ExtractIntFlags(configuration);
-			configuration = RemoveIntFlags(configuration);
+			unsigned int int_flags = data->int_flags;
 
 #define SLIDER_IMPLEMENTATION(integer_type) drawer.IntSlider<integer_type>(configuration | UI_CONFIG_SLIDER_ENTER_VALUES \
 			| UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_DEFAULT_VALUE, \
@@ -628,8 +601,7 @@ namespace ECSEngine {
 
 		void UIReflectionIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionIntInputData* data = (UIReflectionIntInputData*)_data;
-			size_t int_flags = ExtractIntFlags(configuration);
-			configuration = RemoveIntFlags(configuration);
+			unsigned int int_flags = data->int_flags;
 
 #define INPUT(integer_convert) { integer_convert default_value = *(integer_convert*)data->default_value; \
 			integer_convert upper_bound = *(integer_convert*)data->upper_bound; \
@@ -752,8 +724,7 @@ namespace ECSEngine {
 
 		void UIReflectionIntSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)_data;
-			size_t int_flags = ExtractIntFlags(configuration);
-			configuration = RemoveIntFlags(configuration);
+			unsigned int int_flags = data->int_flags;
 
 #define GROUP(integer_type) drawer.IntSliderGroup<integer_type>(configuration | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE \
 			| UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_SLIDER_DEFAULT_VALUE, config, data->count, data->group_name, data->input_names, (integer_type**)data->values, (const integer_type*)data->lower_bound, (const integer_type*)data->upper_bound, (const integer_type*)data->default_values); break;
@@ -819,8 +790,7 @@ namespace ECSEngine {
 
 		void UIReflectionIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)_data;
-			size_t int_flags = ExtractIntFlags(configuration);
-			configuration = RemoveIntFlags(configuration);
+			unsigned int int_flags = data->int_flags;
 
 			const void* lower_bound = InputGroupGetBoundOrDefaultPointer(data->lower_bound);
 			const void* upper_bound = InputGroupGetBoundOrDefaultPointer(data->upper_bound);
@@ -909,19 +879,18 @@ namespace ECSEngine {
 
 		void UIReflectionStreamIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamIntInputData* data = (UIReflectionStreamIntInputData*)_data;
-			size_t int_flags = ExtractIntFlags(configuration);
-			configuration = RemoveIntFlags(configuration);
+			unsigned int int_flags = data->int_flags;
 
 			UIDrawConfig array_config;
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
 
-#define FUNCTION(integer_type) if (data->stream.is_resizable) { \
-				drawer.ArrayInteger<integer_type>(array_configuration, array_config, data->name, (ResizableStream<integer_type>*)data->stream.resizable, \
+#define FUNCTION(integer_type) if (data->stream.stream.is_resizable) { \
+				drawer.ArrayInteger<integer_type>(array_configuration, array_config, data->stream.name, (ResizableStream<integer_type>*)data->stream.stream.resizable, \
 					configuration, &config); break; \
 			} \
 			else { \
-				drawer.ArrayInteger<integer_type>(array_configuration, array_config, data->name, (CapacityStream<integer_type>*)data->stream.capacity, \
+				drawer.ArrayInteger<integer_type>(array_configuration, array_config, data->stream.name, (CapacityStream<integer_type>*)data->stream.stream.capacity, \
 					configuration, &config); break; \
 			}
 
@@ -1131,8 +1100,7 @@ namespace ECSEngine {
 
 		void UIReflectionStreamIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)_data;
-			size_t int_flags = ExtractIntFlags(configuration);
-			configuration = RemoveIntFlags(configuration);
+			unsigned int int_flags = data->int_flags;
 
 			UIDrawConfig array_config;
 
@@ -2516,7 +2484,7 @@ namespace ECSEngine {
 			UIReflectionTypeField& field,
 			unsigned int type_byte_size,
 			UIReflectionIndex reflection_index,
-			size_t extra_configuration = 0
+			unsigned int int_flags = 0
 		) {
 			UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)reflection->allocator->Allocate(sizeof(UIReflectionGroupData<void>));
 			field.data = data;
@@ -2534,10 +2502,11 @@ namespace ECSEngine {
 
 			// Embbed in front of each buffer a boolean telling whether or not the buffer can be used or not
 			data->values = nullptr;
+			data->int_flags = int_flags;
 			CreateTypeInputGroupSetBuffers(data, ptr);
 
 			field.stream_type = UIReflectionStreamType::None;
-			field.configuration = extra_configuration;
+			field.configuration = 0;
 		};
 
 		void ConvertStreamSingleForType(
@@ -2545,9 +2514,10 @@ namespace ECSEngine {
 			const ReflectionField& reflection_field, 
 			UIReflectionTypeField& field, 
 			UIReflectionIndex reflection_index,
-			size_t extra_configuration = 0
+			unsigned int int_flags = 0
 		) {
-			UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)reflection->allocator->Allocate(sizeof(UIReflectionStreamBaseData));
+			size_t size_to_allocate = int_flags == 0 ? sizeof(UIReflectionStreamBaseData) : sizeof(UIReflectionStreamIntInputData);
+			UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)reflection->allocator->Allocate(size_to_allocate);
 			memset(data, 0, sizeof(*data));
 
 			field.data = data;
@@ -2558,8 +2528,13 @@ namespace ECSEngine {
 			data->stream.element_byte_size = reflection_field.info.stream_byte_size;
 			data->stream.is_resizable = false;
 
+			if (int_flags > 0) {
+				UIReflectionStreamIntInputData* int_data = (UIReflectionStreamIntInputData*)data;
+				int_data->int_flags = int_flags;
+			}
+
 			field.stream_type = UIReflectionStreamType::Capacity;
-			field.configuration = extra_configuration;
+			field.configuration = 0;
 		}
 
 		void ConvertStreamGroupForType(
@@ -2567,7 +2542,7 @@ namespace ECSEngine {
 			ReflectionField reflection_field,
 			UIReflectionTypeField& field,
 			UIReflectionIndex reflection_index,
-			size_t extra_configuration = 0
+			unsigned int int_flags = 0
 		) {
 			UIReflectionStreamInputGroupData* data = (UIReflectionStreamInputGroupData*)reflection->allocator->Allocate(sizeof(UIReflectionStreamInputGroupData));
 			memset(data, 0, sizeof(*data));
@@ -2580,8 +2555,10 @@ namespace ECSEngine {
 			data->basic_type_count = Reflection::BasicTypeComponentCount(reflection_field.info.basic_type);
 			data->base_data.stream.element_byte_size = reflection_field.info.stream_byte_size;
 
+			data->int_flags = int_flags;
+
 			field.stream_type = UIReflectionStreamType::Capacity;
-			field.configuration = extra_configuration;
+			field.configuration = 0;
 		}
 
 		UIReflectionType* UIReflectionDrawer::CreateType(const ReflectionType* reflected_type)
@@ -2620,9 +2597,10 @@ namespace ECSEngine {
 #undef CASE
 
 				data->value_to_modify = nullptr;
+				data->int_flags = 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type);
 
 				field.stream_type = UIReflectionStreamType::None;
-				field.configuration = (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type) /*| UI_CONFIG_TEXT_INPUT_FORMAT_NUMBER*/;
+				field.configuration = 0;
 			};
 
 			auto integer_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
@@ -2632,7 +2610,7 @@ namespace ECSEngine {
 					field, 
 					1 << ((unsigned int)reflection_field.info.basic_type / 2),
 					UIReflectionIndex::IntegerInputGroup, 
-					(size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type)
+					1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type)
 				);
 			};
 
@@ -2775,11 +2753,11 @@ namespace ECSEngine {
 			};
 
 			auto integer_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::IntegerInput, (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
+				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::IntegerInput, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
 			};
 
 			auto integer_stream_convert_group = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
-				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionIndex::IntegerInputGroup, (size_t)1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
+				ConvertStreamGroupForType(this, reflection_field, field, UIReflectionIndex::IntegerInputGroup, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
 			};
 
 			auto float_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {

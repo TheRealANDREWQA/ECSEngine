@@ -5,13 +5,16 @@
 #include "Editor/EditorSandboxEntityOperations.h"
 #include "Inspector.h"
 
+#include "ECSEngineComponents.h"
+
+#include "Scene.h"
+
 using namespace ECSEngine;
 ECS_TOOLS;
 
 struct EntitiesUIData {
 	EditorState* editor_state;
 	unsigned char sandbox_index;
-	unsigned char hierarchy_index;
 	CapacityStream<char> filter_string;
 };
 
@@ -21,8 +24,8 @@ const size_t ITERATOR_LABEL_CAPACITY = 128;
 struct HierarchyIteratorImpl {
 	HierarchyIteratorImpl() {}
 
-	HierarchyIteratorImpl(EntityHierarchy* hierarchy) {
-		Initialize(hierarchy);
+	HierarchyIteratorImpl(const EntityHierarchy* hierarchy, const EntityManager* entity_manager, Component name_component) {
+		Initialize(hierarchy, entity_manager, name_component);
 	}
 
 	using storage_type = Entity;
@@ -44,13 +47,19 @@ struct HierarchyIteratorImpl {
 	return_type GetReturnValue(storage_type value, AllocatorPolymorphic allocator) {
 		Entity entity = implementation.GetReturnValue(value, allocator);
 		entity_label.size = 0;
+		const void* component = entity_manager->TryGetComponent(entity, name_component);
+		if (component != nullptr) {
+			return ((Name*)component)->name;
+		}
+			
 		EntityToString(entity, entity_label);
-
 		return entity_label;
 	}
 
-	void Initialize(EntityHierarchy* hierarchy) {
+	void Initialize(const EntityHierarchy* hierarchy, const EntityManager* _entity_manager, Component _name_component) {
 		implementation = { hierarchy };
+		entity_manager = _entity_manager;
+		name_component = _name_component;
 		// Allocate the buffer here
 		entity_label.Initialize(hierarchy->allocator, 0, ITERATOR_LABEL_CAPACITY);
 	};
@@ -60,6 +69,8 @@ struct HierarchyIteratorImpl {
 	}
 
 	EntityHierarchyIteratorImpl implementation;
+	const EntityManager* entity_manager;
+	Component name_component;
 	CapacityStream<char> entity_label;
 };
 
@@ -169,8 +180,82 @@ void DoubleClickCallback(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
+void DragCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	UIDrawerLabelHierarchyDragData* drag_data = (UIDrawerLabelHierarchyDragData*)_data;
+	EntitiesUIData* data = (EntitiesUIData*)drag_data->data;
+
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(Entity, dragged_entities, drag_data->source_labels.size);
+	dragged_entities.size = drag_data->source_labels.size;
+	for (size_t index = 0; index < dragged_entities.size; index++) {
+		dragged_entities[index] = StringToEntity(drag_data->source_labels[index]);
+	}
+
+	Entity parent = drag_data->destination_label.size > 0 ? StringToEntity(drag_data->destination_label) : Entity{ (unsigned int)-1 };
+	ParentSandboxEntities(data->editor_state, data->sandbox_index, dragged_entities, parent);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void CopyEntityCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	UIDrawerLabelHierarchyCopyData* copy_data = (UIDrawerLabelHierarchyCopyData*)_data;
+	EntitiesUIData* data = (EntitiesUIData*)copy_data->data;
+
+	Entity parent = copy_data->destination_label.size > 0 ? StringToEntity(copy_data->destination_label) : Entity((unsigned int)-1);
+	for (size_t index = 0; index < copy_data->source_labels.size; index++) {
+		Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, StringToEntity(copy_data->source_labels[index]));
+		if (parent.value != -1) {
+			ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void DeleteEntityCallback(ActionData*);
+
+void CutEntityCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	UIDrawerLabelHierarchyCutData* cut_data = (UIDrawerLabelHierarchyCutData*)_data;
+	EntitiesUIData* data = (EntitiesUIData*)cut_data->data;
+
+	// Copy them first and then delete them
+	UIDrawerLabelHierarchyCopyData copy_data;
+	copy_data.data = data;
+	copy_data.destination_label = cut_data->destination_label;
+	copy_data.source_labels = cut_data->source_labels;
+	action_data->data = &copy_data;
+	CopyEntityCallback(action_data);
+
+	UIDrawerLabelHierarchyDeleteData delete_data;
+	delete_data.data = cut_data->data;
+	delete_data.source_labels = cut_data->source_labels;
+	action_data->data = &delete_data;
+	DeleteEntityCallback(action_data);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void DeleteEntityCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	UIDrawerLabelHierarchyDeleteData* delete_data = (UIDrawerLabelHierarchyDeleteData*)_data;
+	EntitiesUIData* data = (EntitiesUIData*)delete_data->data;
+
+	for (size_t index = 0; index < delete_data->source_labels.size; index++) {
+		Entity entity = StringToEntity(delete_data->source_labels[index]);
+		DeleteSandboxEntity(data->editor_state, data->sandbox_index, entity);
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
 struct RightClickHandlerData {
-	Entity entity;
+	UIDrawerLabelHierarchyData* label_hierarchy;
 	EditorState* editor_state;
 	unsigned int sandbox_index;
 };
@@ -179,7 +264,8 @@ void RightClickCopy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RightClickHandlerData* data = (RightClickHandlerData*)_data;
-	CopySandboxEntity(data->editor_state, data->sandbox_index, data->entity);
+	data->label_hierarchy->RecordSelection(action_data);
+	data->label_hierarchy->SetSelectionCut(false);
 	PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));
 }
 
@@ -189,7 +275,7 @@ void RightClickDelete(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RightClickHandlerData* data = (RightClickHandlerData*)_data;
-	DeleteSandboxEntity(data->editor_state, data->sandbox_index, data->entity);
+	data->label_hierarchy->TriggerDelete(action_data);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -200,25 +286,24 @@ void RightClickCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyRightClickData* right_click_data = (UIDrawerLabelHierarchyRightClickData*)_data;
 	EntitiesUIData* ui_data = (EntitiesUIData*)right_click_data->data;
 
-	const size_t ROW_COUNT = 3;
-
 	enum HANDLER_INDEX {
 		COPY,
-		DELETE_
+		DELETE_,
+		HANDLER_COUNT
 	};
 
-	UIActionHandler handlers[ROW_COUNT];
+	UIActionHandler handlers[HANDLER_COUNT];
 
 	RightClickHandlerData handler_data;
 	handler_data.editor_state = ui_data->editor_state;
-	handler_data.entity = StringToEntity(right_click_data->GetLabel());
+	handler_data.label_hierarchy = right_click_data->hierarchy;
 	handler_data.sandbox_index = ui_data->sandbox_index;
 	handlers[COPY] = { RightClickCopy, &handler_data, sizeof(handler_data) };
 	handlers[DELETE_] = { RightClickDelete, &handler_data, sizeof(handler_data) };
 
 	UIDrawerMenuState menu_state;
 	menu_state.left_characters = "Copy\nDelete";
-	menu_state.row_count = ROW_COUNT;
+	menu_state.row_count = HANDLER_COUNT;
 	menu_state.click_handlers = handlers;
 
 	UIDrawerMenuRightClickData menu_data;
@@ -245,7 +330,6 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 	EntitiesUIData* data = (EntitiesUIData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
 	data->editor_state = editor_state;
 	data->sandbox_index = -1;
-	data->hierarchy_index = 0;
 
 	CapacityStream<char> window_name(function::OffsetPointer(data, sizeof(*data)), 0, 128);
 	GetEntitiesUIWindowName(window_index, window_name);
@@ -289,6 +373,35 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 
 		// Display the combo box for the sandbox selection
 		drawer.SetCurrentPositionToHeader();
+
+		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+		row_layout.AddSquareLabel();
+		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+		row_layout.CombineLastElements();
+
+		size_t scene_icon_configuration = 0;
+		row_layout.GetTransform(config, scene_icon_configuration);
+		drawer.SpriteRectangle(scene_icon_configuration | UI_CONFIG_DO_NOT_ADVANCE, config, ECS_TOOLS_UI_TEXTURE_FILE_SCENE, drawer.color_theme.theme);
+		drawer.SolidColorRectangle(scene_icon_configuration, config, drawer.color_theme.text);
+
+		config.flag_count = 0;
+
+		size_t scene_name_configuration = UI_CONFIG_LABEL_TRANSPARENT;
+		row_layout.GetTransform(config, scene_name_configuration);
+
+		Stream<wchar_t> scene_name = function::PathStem(sandbox->scene_path);
+		if (scene_name.size == 0) {
+			// If empty then set a message
+			scene_name = L"No scene set";
+		}
+
+		ChangeSandboxSceneActionData change_data;
+		change_data.editor_state = editor_state;
+		change_data.sandbox_index = data->sandbox_index;
+		drawer.ButtonWide(scene_name_configuration, config, scene_name, { ChangeSandboxSceneAction, &change_data, sizeof(change_data), ECS_UI_DRAW_SYSTEM });
+		config.flag_count = 0;
+
+		drawer.NextRow(0.0f);
 
 		size_t HEADER_CONFIGURATION = UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_UPDATE_RENDER_BOUNDS | UI_CONFIG_DO_NOT_VALIDATE_POSITION;
 
@@ -348,39 +461,7 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 
 		if (!initialize) {
 			// Display what hierarchy we are drawing
-			ECS_STACK_CAPACITY_STREAM(Stream<char>, hierarchy_labels, 16);
-			ECS_STACK_CAPACITY_STREAM(char, temp_characters, 512);
-
-			// The first "Hierarchy" is the none one. The entities are displayed as is
-			hierarchy_labels.Add("None");
-
-			EntityManager* entity_manager = &sandbox->scene_entities;
-			for (size_t index = 0; index < ECS_ENTITY_HIERARCHY_MAX_COUNT; index++) {
-				if (entity_manager->ExistsHierarchy(index)) {
-					Stream<char> name = entity_manager->GetHierarchyName(index);
-					if (name.size > 0) {
-						// Use this name
-						hierarchy_labels.Add(name);
-					}
-					else {
-						// Create a default name for it
-						size_t current_size = temp_characters.size;
-						const char* buffer = temp_characters.buffer;
-						temp_characters.AddStream("Hierarchy ");
-						function::ConvertIntToChars(temp_characters, index);
-
-						hierarchy_labels.Add({ buffer, temp_characters.size - current_size });
-					}
-				}
-			}
-
 			config.flag_count = 0;
-			UIConfigWindowDependentSize dependent_size;
-			config.AddFlag(dependent_size);
-			drawer.ComboBox(UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Select Hierarchy", hierarchy_labels, hierarchy_labels.size, &data->hierarchy_index);
-			drawer.NextRow();
-			config.flag_count = 0;
-
 			// Now draw the hierarchy, if there is a sandbox at all
 			if (sandbox_count > 0) {
 				const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
@@ -389,7 +470,8 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 				filter.filter = data->filter_string;
 				config.AddFlag(filter);
 
-				size_t LABEL_HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_FILTER | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK;
+				size_t LABEL_HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_FILTER | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK | UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK
+					| UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS;
 
 				UIConfigLabelHierarchySelectableCallback selectable;
 				selectable.callback = SelectableCallback;
@@ -397,27 +479,39 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 				selectable.data_size = 0;
 				config.AddFlag(selectable);
 
-				// Draw the entities. No hierarchy
-				if (data->hierarchy_index == 0) {
-					EntityPool* pool = entity_manager->m_entity_pool;
-					AllEntitiesIteratorImpl implementation;
-					implementation.Initialize(pool);
+				UIConfigLabelHierarchyRightClick right_click_callback;
+				right_click_callback.callback = RightClickCallback;
+				right_click_callback.data = data;
+				right_click_callback.data_size = 0;
+				config.AddFlag(right_click_callback);
 
-					unsigned int pool_count = pool->GetCount();
-					DFSUIAllEntities iterator(GetAllocatorPolymorphic(pool->m_memory_manager), implementation, pool_count);
+				UIConfigLabelHierarchyBasicOperations basic_operations;
+				basic_operations.copy_handler = { CopyEntityCallback, data, 0 };
+				basic_operations.cut_handler = { CutEntityCallback, data, 0 };
+				basic_operations.delete_handler = { DeleteEntityCallback, data, 0 };
+				config.AddFlag(basic_operations);
 
-					drawer.LabelHierarchy(LABEL_HIERARCHY_CONFIGURATION, config, hierarchy_labels[data->hierarchy_index], iterator);
-					iterator.Free();
-				}
-				else {
-					EntityHierarchy* hierarchy = entity_manager->GetHierarchy(data->hierarchy_index - 1);
-					HierarchyIteratorImpl implementation(hierarchy);
-					DFSUIHierarchy iterator(GetAllocatorPolymorphic(hierarchy->allocator), implementation, hierarchy->children_table.GetCount());
+				const EntityManager* entity_manager = ActiveEntityManager(editor_state, data->sandbox_index);
 
-					LABEL_HIERARCHY_CONFIGURATION |= UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL | UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
-					drawer.LabelHierarchy(LABEL_HIERARCHY_CONFIGURATION, config, hierarchy_labels[data->hierarchy_index], iterator);
-					iterator.Free();
-				}
+				const EntityHierarchy* hierarchy = &entity_manager->m_hierarchy;
+				HierarchyIteratorImpl implementation(hierarchy, entity_manager, editor_state->editor_components.GetComponentID(STRING(Name)));
+
+				AllocatorPolymorphic iterator_allocator = GetAllocatorPolymorphic(entity_manager->m_memory_manager);
+
+				// Use the allocator from the entity manager because the one from the hierarchy can cause deallocating the roots
+				DFSUIHierarchy iterator(iterator_allocator, implementation, hierarchy->children_table.GetCount());
+
+				LABEL_HIERARCHY_CONFIGURATION |= UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL;
+
+				UIConfigLabelHierarchyDragCallback drag_callback;
+				drag_callback.callback = DragCallback;
+				drag_callback.data = data;
+				drag_callback.data_size = 0;
+				drag_callback.reject_same_label_drag = true;
+				config.AddFlag(drag_callback);
+
+				drawer.LabelHierarchy(LABEL_HIERARCHY_CONFIGURATION, config, "Hierarchy", iterator);
+				iterator.Free();
 			}
 		}
 	}

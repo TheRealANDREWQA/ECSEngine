@@ -57,14 +57,14 @@ void AddExistingProjectAction(ActionData* action_data) {
 	ECS_TEMP_STRING(path, 256);
 	char temp_characters[256];
 	CapacityStream<char> error_message(temp_characters, 0, 256);
-	OSFileExplorerGetFileData get_data;
+	OS::FileExplorerGetFileData get_data;
 	get_data.error_message = error_message;
 	get_data.path = path;
 	Stream<wchar_t> extensions[] = {
 		L".ecsproj"
 	};
 	get_data.extensions = { &extensions, std::size(extensions) };
-	FileExplorerGetFile(&get_data);
+	OS::FileExplorerGetFile(&get_data);
 
 	if (get_data.error_message.size > 0) {
 		EditorSetConsoleError(get_data.error_message);
@@ -245,7 +245,7 @@ void RestoreHubProjectWizardDraw(void* window_data, void* drawer_descriptor, boo
 		function::ConvertASCIIToWide(wide_name, data->name);
 
 		RestoreHubProject(data->editor_state, data->Path(), wide_name);
-		CloseXBorderClickableAction(action_data);
+		DestroyCurrentActionWindow(action_data);
 	};
 
 	UIDrawConfig config;
@@ -266,7 +266,7 @@ void RestoreHubProjectWizardDraw(void* window_data, void* drawer_descriptor, boo
 	transform.position.x = drawer.GetAlignedToRight(transform.scale.x).x;
 	config.AddFlag(transform);
 
-	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { CloseXBorderClickableAction, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 void CreateRestoreHubProjectWizard(ActionData* action_data) {
@@ -278,11 +278,11 @@ void CreateRestoreHubProjectWizard(ActionData* action_data) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, path, 512);
 
 	// Get the folder
-	OSFileExplorerGetDirectoryData get_directory;
+	OS::FileExplorerGetDirectoryData get_directory;
 	get_directory.path = path;
 	get_directory.error_message = error_message;
 
-	if (FileExplorerGetDirectory(&get_directory)) {
+	if (OS::FileExplorerGetDirectory(&get_directory)) {
 		UIWindowDescriptor wizard_descriptor;
 		
 		size_t STACK_MEMORY[512];

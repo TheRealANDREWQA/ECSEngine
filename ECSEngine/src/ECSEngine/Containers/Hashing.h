@@ -453,8 +453,13 @@ namespace ECSEngine {
 
 	struct ObjectHashFallthrough {
 		template<typename T>
-		static unsigned int Hash(T identifier) {
-			return identifier.Hash();
+		static inline unsigned int Hash(T identifier) {
+			if constexpr (std::is_arithmetic_v<T> || std::is_pointer_v<T>) {
+				return (unsigned int)identifier;
+			}
+			else {
+				return identifier.Hash();
+			}
 		}
 	};
 

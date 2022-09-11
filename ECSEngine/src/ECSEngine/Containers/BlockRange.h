@@ -8,6 +8,8 @@ namespace ECSEngine {
 	* range and ending values are stored in [m_capacity / 2 + 1; m_capacity] range.
 	* Availabilty is determined using a BooleanBitField.
 	* Capacity should be multiple of 8 and represents how many blocks it can have
+	* The a start and end pair is stored like this [start; end) (start inclusive, end exclusive)
+	* such that no addition needs to be done when checking the size
 	*/
 	struct ECSENGINE_API BlockRange
 	{

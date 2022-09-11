@@ -967,30 +967,6 @@ namespace ECSEngine {
 					return false;
 				}
 
-				if (data->initial_directory != nullptr) {
-					IShellItem* directory;
-					result = CoCreateInstance(
-						CLSID_ShellItem,
-						nullptr,
-						CLSCTX_INPROC_SERVER,
-						IID_PPV_ARGS(&directory)
-					);
-
-					if (SUCCEEDED(result)) {
-						result = dialog->SetFolder(directory);
-						if (!SUCCEEDED(result)) {
-							SetBasicErrorMessage("Setting folder failed", data->error_message);
-							data->path.size = 0;
-							return false;
-						}
-					}
-					else {
-						SetBasicErrorMessage("Creating shell directory failed!", data->error_message);
-						data->path.size = 0;
-						return false;
-					}
-				}
-
 				result = dialog->Show(nullptr);
 
 				if (SUCCEEDED(result)) {
@@ -1030,6 +1006,9 @@ namespace ECSEngine {
 				data->path.size = 0;
 				return false;
 			}
+
+			SetBasicErrorMessage("The user cancelled the search.", data->error_message);
+			return false;
 		}
 
 		// -----------------------------------------------------------------------------------------------------

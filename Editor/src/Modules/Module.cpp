@@ -1078,7 +1078,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 		if (!success) {
 			ECS_FORMAT_TEMP_STRING(
 				console_message, 
-				"Could not reflect the new added module {#} at {#}. Detailed error: {#}",
+				"Could not reflect the newly added module {#} at {#}. Detailed error: {#}",
 				module->library_name, 
 				module->solution_path,
 				error_message
@@ -1101,6 +1101,11 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 
 			// Inform the inspectors about the change
 			UpdateInspectorUIModuleSettings(editor_state, index);
+
+			// Update the engine components
+			ECS_STACK_CAPACITY_STREAM(char, ascii_name, 512);
+			function::ConvertWideCharsToASCII(module->library_name, ascii_name);
+			editor_state->editor_components.UpdateComponents(editor_state->module_reflection->reflection, folder_hierarchy, ascii_name);
 		}
 	}
 	else {

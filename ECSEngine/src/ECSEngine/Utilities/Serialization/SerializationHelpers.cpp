@@ -92,6 +92,7 @@ namespace ECSEngine {
 
 		ReflectionCustomTypeByteSizeData byte_data;
 		byte_data.definition = *data->template_type;
+		byte_data.reflection_manager = data->reflection_manager;
 
 		*data->template_type = { data->template_type->buffer + string_offset, data->template_type->size - string_offset - (string_offset > 0) };
 		result.basic_type = ConvertStringToBasicFieldType(*data->template_type);
@@ -590,8 +591,6 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		ReflectionBasicFieldType basic_type;
-		ReflectionStreamFieldType stream_type;
 		unsigned int string_offset = 0;
 
 		size_t buffer_count = 0;
@@ -758,30 +757,25 @@ namespace ECSEngine {
 
 		SparseSet<char>* set = (SparseSet<char>*)data->data;
 
-		bool* user_data = (bool*)ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET].user_data;
-		if (user_data != nullptr && *user_data) {
-			ECS_STACK_CAPACITY_STREAM(char, stream_name, 256);
-			stream_name.Copy("Stream<");
-			stream_name.AddStream(template_type);
-			stream_name.Add('>');
-
-			// It doesn't matter what type the stream has, it will always be the buffer and the size
-			Stream<char> stream = set->ToStream();
-
-			data->definition = stream_name;
-			data->data = &stream;
-			return SerializeCustomTypeRead_Stream(data);
-		}
-
-		size_t total_deserialize_size = 0;
-
 		unsigned int buffer_count = 0;
 		unsigned int buffer_capacity = 0;
 		unsigned int first_free = 0;
 
-		Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
-		Read<true>(data->stream, &buffer_capacity, sizeof(buffer_capacity));
-		Read<true>(data->stream, &first_free, sizeof(first_free));
+		bool* user_data = (bool*)ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET].user_data;
+		if (user_data != nullptr && *user_data) {
+			size_t stream_size = 0;
+			Read<true>(data->stream, &stream_size, sizeof(stream_size));
+			buffer_count = stream_size;
+			buffer_capacity = buffer_count;
+			first_free = 0;
+		}
+		else {
+			Read<true>(data->stream, &buffer_count, sizeof(buffer_count));
+			Read<true>(data->stream, &buffer_capacity, sizeof(buffer_capacity));
+			Read<true>(data->stream, &first_free, sizeof(first_free));
+		}
+
+		size_t total_deserialize_size = 0;
 
 		void* allocated_buffer = nullptr;
 
@@ -812,12 +806,20 @@ namespace ECSEngine {
 
 		set->InitializeFromBuffer(allocated_buffer, buffer_capacity);
 
-		// Now read the indirection_buffer
-		if (data->read_data) {
-			Read<true>(data->stream, set->indirection_buffer, sizeof(uint2) * buffer_capacity);
+		if (user_data != nullptr && *user_data) {
+			// No indirection buffer was written. In order to preserve the invariance we need to allocate the elements
+			for (unsigned int index = 0; index < buffer_count; index++) {
+				set->Allocate();
+			}
 		}
 		else {
-			total_deserialize_size += Read<false>(data->stream, set->indirection_buffer, sizeof(uint2) * buffer_capacity);
+			// Now read the indirection_buffer
+			if (data->read_data) {
+				Read<true>(data->stream, set->indirection_buffer, sizeof(uint2) * buffer_capacity);
+			}
+			else {
+				total_deserialize_size += Read<false>(data->stream, set->indirection_buffer, sizeof(uint2) * buffer_capacity);
+			}
 		}
 
 		set->size = buffer_count;

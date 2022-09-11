@@ -27,7 +27,6 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS : unsigned char {
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL,
 	EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS,
-	EDITOR_LAZY_EVALUATION_CREATE_DEFAULT_METAFILES,
 	EDITOR_LAZY_EVALUATION_RESET_TASK_MANAGER,
 	EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS,
 	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT,
@@ -174,6 +173,11 @@ void EditorStateLazyEvaluationSetMax(EditorState* editor_state, unsigned int ind
 
 // Can be used to set the evaluation to a certain value (useful for triggering a lazy evaluation a bit latter)
 void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index, unsigned short value);
+
+// When the application wants to quit, the editor will look to see if there is anything left to do
+// before quitting like saving scenes. Query the response for 0 if the user wants to continue the application,
+// 1 if the quit can be done and -1 if the response is not yet ready
+void EditorStateApplicationQuit(EditorState* editor_state, char* quit_response);
 
 #define EDITOR_STATE(editor_state) UIReflectionDrawer* ui_reflection = ((EditorState*)editor_state)->ui_reflection; \
 UISystem* ui_system = ((EditorState*)editor_state)->ui_system; \

@@ -22,7 +22,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------
 
 	bool ResourceIdentifier::operator == (const ResourceIdentifier& other) const {
-		return size == other.size && ptr == other.ptr;
+		return Compare(other);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
