@@ -256,6 +256,18 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Mostly for editor purposes, like when a component ID is changed (this function is given
+		// because the vector signature needs to be changed besides the ComponentSignature)
+		// It changes the registration of the component as well
+		void ChangeComponentIndex(Component old_component, Component new_component);
+
+		// Mostly for editor purposes, like when a component ID is changed (this function is given
+		// because the vector signature needs to be changed besides the ComponentSignature)
+		// It changes the registration of the component as well
+		void ChangeSharedComponentIndex(Component old_component, Component new_component);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		void ChangeEntityParentCommit(Stream<EntityPair> pairs);
 
 		void ChangeEntityParent(
@@ -616,10 +628,10 @@ namespace ECSEngine {
 		void ECS_VECTORCALL GetArchetypesPtrs(ArchetypeQuery query, CapacityStream<Archetype*>& archetypes) const;
 
 		// It will fill in the indices of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypesExclude(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const;
+		void ECS_VECTORCALL GetArchetypes(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const;
 
 		// It will fill in the pointers of the archetypes that verify the query
-		void ECS_VECTORCALL GetArchetypesExcludePtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const;
+		void ECS_VECTORCALL GetArchetypesPtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const;
 
 		void* GetComponent(Entity entity, Component component);
 
@@ -780,52 +792,67 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// Each component gets an allocator that can be used to keep the data together
+		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
-		// use because all the allocations will happen from this allocator
-		void RegisterComponentCommit(Component component, unsigned int size, size_t allocator_size = 0);
+		// use because all the allocations will happen from this allocator. If the allocator is needed,
+		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed.
+		// You can specify the buffer being a data pointer in order to save memory or a normal stream (in that case
+		// it will treat the next 4 bytes after the pointer to be a size). Both sizes, that for a stream or data pointer,
+		// need to be expressed in bytes. Provide accessors for the component in order to make usage easier. This last point
+		// about size is only needed if you intend on using the CopyEntities function. Outside of that the runtime doesn't depend on it
+		void RegisterComponentCommit(Component component, unsigned int size, size_t allocator_size = 0, Stream<ComponentBuffer> component_buffers = { nullptr, 0 });
 
 		// Deferred call
-		// Each component gets an allocator that can be used to keep the data together
+		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
-		// use because all the allocations will happen from this allocator
+		// use because all the allocations will happen from this allocator. If the allocator is needed,
+		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed.
+		// You can specify the buffer being a data pointer in order to save memory or a normal stream (in that case
+		// it will treat the next 4 bytes after the pointer to be a size). Both sizes, that for a stream or data pointer,
+		// need to be expressed in bytes. Provide accessors for the component in order to make usage easier. This last point
+		// about size is only needed if you intend on using the CopyEntities function. Outside of that the runtime doesn't depend on it
 		void RegisterComponent(
 			Component component, 
 			unsigned int size,
 			size_t allocator_size = 0,
+			Stream<ComponentBuffer> buffer_offsets = { nullptr, 0 },
 			EntityManagerCommandStream* command_stream = nullptr, 
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// Each component gets an allocator that can be used to keep the data together
+		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
-		// use because all the allocations will happen from this allocator
-		void RegisterSharedComponentCommit(Component component, unsigned int size, size_t allocator_size = 0);
+		// use because all the allocations will happen from this allocator. If the allocator is needed,
+		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed
+		void RegisterSharedComponentCommit(Component component, unsigned int size, size_t allocator_size = 0, Stream<ComponentBuffer> buffer_offset = { nullptr, 0 });
 
 		// Deferred call
-		// Each component gets an allocator that can be used to keep the data together
+		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
-		// use because all the allocations will happen from this allocator
+		// use because all the allocations will happen from this allocator. If the allocator is needed,
+		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed
 		void RegisterSharedComponent(
 			Component component, 
 			unsigned int size,
 			size_t allocator_size = 0,
+			Stream<ComponentBuffer> buffer_offset = { nullptr, 0 },
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// The value is stable
-		SharedInstance RegisterSharedInstanceCommit(Component component, const void* data);
+		// The value is stable.
+		SharedInstance RegisterSharedInstanceCommit(Component component, const void* data, bool copy_buffers = true);
 
 		// The value is stable
 		// Deferred call
 		void RegisterSharedInstance(
 			Component component, 
 			const void* data, 
+			bool copy_buffers = true,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);
@@ -833,7 +860,7 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// The value is stable
-		SharedInstance RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, const void* data);
+		SharedInstance RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, const void* data, bool copy_buffers = true);
 		
 		// The value is stable
 		// Deferred call
@@ -841,6 +868,7 @@ namespace ECSEngine {
 			Component component, 
 			ResourceIdentifier identifier, 
 			const void* data, 
+			bool copy_buffers = true,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
 		);

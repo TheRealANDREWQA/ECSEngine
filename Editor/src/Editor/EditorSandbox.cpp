@@ -238,7 +238,7 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 	}
 
 	// Now we can release the temporary objects
-	global_manager.ReleaseResources();
+	global_manager.Free();
 	_stack_allocator.ClearBackup();
 	return success;
 }
@@ -416,7 +416,7 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	DestroySandboxRuntime(editor_state, sandbox_index);
 
 	// Free the global sandbox allocator
-	sandbox->GlobalMemoryManager()->ReleaseResources();
+	sandbox->GlobalMemoryManager()->Free();
 
 	// Release the runtime settings path as well - it was allocated from the editor allocator
 	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);

@@ -23,6 +23,8 @@ namespace ECSEngine {
 
 		size_t GetMarker() const;
 
+		void* GetAllocatedBuffer();
+
 		void ReturnToMarker(size_t marker);
 
 		// Returns true if the pointer was allocated from this allocator

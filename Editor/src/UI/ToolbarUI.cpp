@@ -283,7 +283,7 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	UILayoutDescriptor* layout = drawer.GetLayoutDescriptor();
 	drawer.SetCurrentX(drawer.GetNextRowXPosition());
 	drawer.SetCurrentY(-1.0f);
-	constexpr size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_BORDER;
+	constexpr size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_BORDER | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X;
 
 	UIDrawConfig config;
 	UIConfigWindowDependentSize transform;

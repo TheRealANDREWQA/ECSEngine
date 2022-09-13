@@ -43,7 +43,7 @@ namespace ECSEngine {
 		}
 
 		void FreeBuffer() {
-			if (stream.buffer != nullptr) {
+			if (stream.capacity > 0) {
 				Deallocate(allocator, stream.buffer);
 			}
 

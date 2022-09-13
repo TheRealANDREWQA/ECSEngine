@@ -29,6 +29,13 @@ namespace ECSEngine {
 		m_shared_components.count = shared_components.count;
 		memcpy((void*)buffer, shared_components.indices, sizeof(Component) * shared_components.count);
 		buffer += sizeof(Component) * shared_components.count;
+
+		// Look to see which components have buffers to be deallocated
+		for (unsigned char index = 0; index < unique_components.count; index++) {
+			if (unique_infos[unique_components[index]].component_buffers_count > 0) {
+				m_unique_components_to_deallocate[m_unique_components_to_deallocate_count++] = index;
+			}
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -42,7 +49,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < components.count; index++) {
 			unsigned char component_index = FindSharedComponentIndex(components.indices[index]);
 			ECS_CRASH_RETURN_VALUE(component_index != -1, -1, "Incorrect components when creating a base archetype. The component {#} could not be found.",
-				components.indices[index].value);
+				components.indices[index]);
 			shared_instances_allocation[component_index] = components.instances[index];
 		}
 
@@ -99,8 +106,96 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void DeallocateEntityBuffersImpl(const ComponentInfo* current_info, MemoryArena* arena, const void* current_component, unsigned int buffer_count) {
+		for (unsigned int buffer_index = 0; buffer_index < buffer_count; buffer_index++) {
+			const void* current_buffer = function::OffsetPointer(current_component, current_info->component_buffers[buffer_index].offset);
+			if (current_info->component_buffers[buffer_index].is_data_pointer) {
+				const DataPointer* data_pointer = (const DataPointer*)current_buffer;
+				current_buffer = data_pointer->GetPointer();
+			}
+			else {
+				current_buffer = *(void**)current_buffer;
+			}
+
+			if (current_buffer != nullptr) {
+				arena->Deallocate(current_buffer);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::DeallocateEntityBuffers() const
+	{
+		// Keep iterating over the same component because it will help with cache coherency
+		for (unsigned char deallocate_index = 0; deallocate_index < m_unique_components_to_deallocate_count; deallocate_index++) {
+			unsigned char signature_index = m_unique_components_to_deallocate[deallocate_index];
+			const ComponentInfo* current_info = &m_unique_infos[m_unique_components[signature_index].value];
+			MemoryArena* arena = current_info->allocator;
+			
+			unsigned int buffer_count = current_info->component_buffers_count;
+
+			unsigned int base_count = GetBaseCount();
+			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+				const ArchetypeBase* base = GetBase(base_index);
+				unsigned int entity_count = base->EntityCount();
+				for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+					const void* current_component = base->GetComponentByIndex(entity_index, signature_index);
+					DeallocateEntityBuffersImpl(current_info, arena, current_component, buffer_count);
+				}
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::DeallocateEntityBuffers(unsigned int base_index) const
+	{
+		for (unsigned char deallocate_index = 0; deallocate_index < m_unique_components_to_deallocate_count; deallocate_index++) {
+			unsigned char signature_index = m_unique_components_to_deallocate[deallocate_index];
+			const ComponentInfo* current_info = &m_unique_infos[m_unique_components[signature_index].value];
+			MemoryArena* arena = current_info->allocator;
+
+			unsigned int buffer_count = current_info->component_buffers_count;
+
+			unsigned int base_count = GetBaseCount();
+			const ArchetypeBase* base = GetBase(base_index);
+			unsigned int entity_count = base->EntityCount();
+			for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+				const void* current_component = base->GetComponentByIndex(entity_index, signature_index);
+				DeallocateEntityBuffersImpl(current_info, arena, current_component, buffer_count);
+			}
+
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::DeallocateEntityBuffers(EntityInfo info) const {
+		for (unsigned int deallocate_index = 0; deallocate_index < m_unique_components_to_deallocate_count; deallocate_index++) {
+			DeallocateEntityBuffers(deallocate_index, info);
+		}
+	}
+
+	void Archetype::DeallocateEntityBuffers(unsigned char deallocate_index, EntityInfo info) const
+	{
+		unsigned char signature_index = m_unique_components_to_deallocate[deallocate_index];
+		const ComponentInfo* current_info = &m_unique_infos[m_unique_components[signature_index].value];
+		MemoryArena* arena = current_info->allocator;
+
+		unsigned int buffer_count = current_info->component_buffers_count;
+		const ArchetypeBase* base = GetBase(info.base_archetype);
+		const void* current_component = base->GetComponentByIndex(info.stream_index, signature_index);
+		DeallocateEntityBuffersImpl(current_info, arena, current_component, buffer_count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void Archetype::DestroyBase(unsigned int archetype_index, EntityPool* pool)
 	{
+		// Firstly deallocate all the component buffers
+		DeallocateEntityBuffers(archetype_index);
+		// Then we can deallocate the actual base
 		DeallocateBase(archetype_index);
 		m_base_archetypes.RemoveSwapBack(archetype_index);
 
@@ -126,7 +221,7 @@ namespace ECSEngine {
 				return index;
 			}
 		}
-		return -1;
+		return UCHAR_MAX;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -138,7 +233,7 @@ namespace ECSEngine {
 				return index;
 			}
 		}
-		return -1;
+		return UCHAR_MAX;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -157,7 +252,7 @@ namespace ECSEngine {
 	{
 		for (size_t index = 0; index < signature.count; index++) {
 			unsigned char component_index = FindSharedComponentIndex(signature.indices[index]);
-			signature.indices[index].value = component_index == (unsigned char)-1 ? (unsigned short)-1 : component_index;
+			signature.indices[index].value = component_index == UCHAR_MAX ? -1 : component_index;
 		}
 	}
 
@@ -170,7 +265,7 @@ namespace ECSEngine {
 		// Find the component indices and then do the linear search
 		for (size_t index = 0; index < signature.count; index++) {
 			unsigned char component_index = FindSharedComponentIndex(signature.indices[index]);
-			signature.instances[index].value = component_index != -1 ? m_base_archetypes[archetype_index].shared_instances[component_index].value : -1;
+			signature.instances[index].value = component_index != UCHAR_MAX ? m_base_archetypes[archetype_index].shared_instances[component_index].value : -1;
 		}
 	}
 
@@ -178,7 +273,7 @@ namespace ECSEngine {
 
 	ArchetypeBase* Archetype::FindBase(SharedComponentSignature shared_signature)
 	{
-		unsigned short index = FindBaseIndex(shared_signature);
+		unsigned int index = FindBaseIndex(shared_signature);
 		return index != -1 ? &m_base_archetypes[index].archetype : nullptr;
 	}
 
@@ -186,7 +281,7 @@ namespace ECSEngine {
 
 	ArchetypeBase* Archetype::FindBase(VectorComponentSignature shared_signature, VectorComponentSignature shared_instances)
 	{
-		unsigned short index = FindBaseIndex(shared_signature, shared_instances);
+		unsigned int index = FindBaseIndex(shared_signature, shared_instances);
 		return index != -1 ? &m_base_archetypes[index].archetype : nullptr;
 	}
 
@@ -197,7 +292,7 @@ namespace ECSEngine {
 		unsigned char* temporary_mapping = (unsigned char*)ECS_STACK_ALLOC(sizeof(unsigned char) * shared_signature.count);
 		for (size_t index = 0; index < shared_signature.count; index++) {
 			unsigned char component_index = FindSharedComponentIndex(shared_signature.indices[index]);
-			if (component_index == -1) {
+			if (component_index == UCHAR_MAX) {
 				return -1;
 			}
 			temporary_mapping[index] = component_index;

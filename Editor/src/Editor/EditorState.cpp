@@ -10,6 +10,7 @@
 #include "../Project/ProjectBackup.h"
 
 #include "../UI/Scene.h"
+#include "ECSEngineComponents.h"
 
 using namespace ECSEngine;
 
@@ -354,9 +355,17 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
 	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 
+	// Inherit the constants from the ui_reflection
+	module_reflection_manager->InheritConstants(editor_reflection_manager);
+
 	UIReflectionDrawer* module_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
 	*module_ui_reflection = UIReflectionDrawer(resizable_arena, module_reflection_manager);
 	editor_state->module_reflection = module_ui_reflection;
+
+	// Create all the engine components as types into the ui_reflection
+	for (size_t index = 0; index < std::size(ECS_COMPONENTS); index++) {
+		editor_ui_reflection->CreateType(editor_reflection_manager->GetType(ECS_COMPONENTS[index]));
+	}
 
 	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
 	hub_data->projects.Initialize(editor_allocator, 0, EDITOR_HUB_PROJECT_CAPACITY);
@@ -428,7 +437,7 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 // -----------------------------------------------------------------------------------------------------------------
 
 void EditorStateDestroy(EditorState* editor_state) {
-	editor_state->editor_allocator->m_backup->ReleaseResources();
+	editor_state->editor_allocator->m_backup->Free();
 	DestroyGraphics(editor_state->ui_system->m_graphics);
 
 	// If necessary, free all the malloc's for the individual allocations - but there are very small and insignificant

@@ -22,11 +22,25 @@ namespace ECSEngine {
 		CreateAllocator(size, maximum_pool_count);
 	}
 
+	void GlobalMemoryManager::Clear()
+	{
+		for (size_t index = 1; index < m_allocator_count; index++) {
+			DeallocateAllocator(index);
+		}
+		m_allocators[0].Clear();
+		m_allocator_count = 1;
+	}
+
 	void GlobalMemoryManager::CreateAllocator(size_t size, size_t maximum_pool_count) {
 		ECS_ASSERT(m_allocator_count < ECS_GLOBAL_MANAGER_SIZE);
 		void* allocation = malloc(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
 		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)allocation, size, maximum_pool_count);
 		m_allocator_count++;
+	}
+
+	void GlobalMemoryManager::DeallocateAllocator(size_t index)
+	{
+		free(m_allocators[index].GetAllocatedBuffer());
 	}
 
 	void GlobalMemoryManager::Trim()
@@ -41,10 +55,10 @@ namespace ECSEngine {
 		}
 	}
 
-	void GlobalMemoryManager::ReleaseResources()
+	void GlobalMemoryManager::Free()
 	{
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			free(m_allocators[index].GetAllocatedBuffer());
+			DeallocateAllocator(index);
 		}
 		free(m_allocators);
 	}
@@ -149,7 +163,7 @@ namespace ECSEngine {
 
 	void MemoryManager::Free() {
 		for (size_t index = 0; index < m_allocator_count; index++) {
-			m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
+			DeallocateAllocator(index);
 		}
 		m_backup->Deallocate((void*)m_allocators);
 	}
@@ -159,6 +173,11 @@ namespace ECSEngine {
 		void* allocation = m_backup->Allocate(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
 		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)allocation, size, maximum_pool_count);
 		m_allocator_count++;
+	}
+
+	void MemoryManager::DeallocateAllocator(size_t index)
+	{
+		m_backup->Deallocate(m_allocators[index].GetAllocatedBuffer());
 	}
 
 	void* MemoryManager::Allocate(size_t size, size_t alignment) {

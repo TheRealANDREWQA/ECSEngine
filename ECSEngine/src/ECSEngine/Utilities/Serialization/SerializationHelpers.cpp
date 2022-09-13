@@ -924,6 +924,64 @@ namespace ECSEngine {
 
 #pragma endregion
 
+#pragma region Data Pointer
+
+#define SERIALIZE_CUSTOM_DATA_POINTER_VERSION (0)
+
+	// -----------------------------------------------------------------------------------------
+
+	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(DataPointer) {
+		size_t write_size = 0;
+		const DataPointer* pointer = (const DataPointer*)data->data;
+		unsigned short byte_size = pointer->GetData();
+		const void* ptr = pointer->GetPointer();
+
+		return WriteWithSizeShort(data->stream, ptr, byte_size, data->write_data);
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+	ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(DataPointer) {
+		if (data->version != SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION) {
+			return -1;
+		}
+
+		DataPointer* data_pointer = (DataPointer*)data->data;
+
+		unsigned short byte_size = 0;
+		Read<true>(data->stream, &byte_size, sizeof(byte_size));
+
+		if (data->read_data) {
+			void* pointer = nullptr;
+
+			if (data->options->field_allocator.allocator != nullptr) {
+				void* allocation = AllocateEx(data->options->field_allocator, byte_size);
+				Read<true>(data->stream, allocation, byte_size);
+				pointer = allocation;
+			}
+			else {
+				ReferenceData<true>(data->stream, &pointer, byte_size);
+			}
+
+			data_pointer->SetPointer(pointer);
+			data_pointer->SetData(byte_size);
+		}
+		else {
+			Read<false>(data->stream, nullptr, byte_size);
+		}
+		return byte_size;
+	}
+
+	// ----------------------------------------------------------------------------------------------------------------------------
+
+	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(DataPointer) {
+		return false;
+	}
+
+	// -----------------------------------------------------------------------------------------
+
+#pragma endregion
+
 	// -----------------------------------------------------------------------------------------
 
 	SerializeCustomType ECS_SERIALIZE_CUSTOM_TYPES[] = {
@@ -932,6 +990,7 @@ namespace ECSEngine {
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(SparseSet, SERIALIZE_SPARSE_SET_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Color, SERIALIZE_CUSTOM_COLOR_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(ColorFloat, SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION),
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(DataPointer, SERIALIZE_CUSTOM_DATA_POINTER_VERSION)
 	};
 
 #pragma endregion

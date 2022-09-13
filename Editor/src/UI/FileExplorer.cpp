@@ -1201,7 +1201,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 
 	// Enter the semaphore
 	unsigned int count = data->semaphore->Enter();
-	allocator.ReleaseResources();
+	allocator.Free();
 
 	// The last thread deallocates the shared resources and set the preload end flag
 	if (count == data->semaphore->target - 1) {

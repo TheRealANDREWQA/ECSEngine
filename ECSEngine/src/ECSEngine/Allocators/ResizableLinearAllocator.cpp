@@ -102,6 +102,14 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------
 
+	void ResizableLinearAllocator::Free()
+	{
+		ClearBackup();
+		DeallocateIfBelongs(m_backup, m_initial_buffer);
+	}
+
+	// ---------------------------------------------------------------------------------
+
 	size_t ResizableLinearAllocator::GetMarker() const
 	{
 		return m_marker;

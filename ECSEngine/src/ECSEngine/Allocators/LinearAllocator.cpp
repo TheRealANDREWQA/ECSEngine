@@ -33,6 +33,11 @@ namespace ECSEngine {
 		return m_top;
 	}
 
+	void* LinearAllocator::GetAllocatedBuffer()
+	{
+		return m_buffer;
+	}
+
 	void LinearAllocator::ReturnToMarker(size_t marker)
 	{
 		ECS_ASSERT(marker <= m_top);

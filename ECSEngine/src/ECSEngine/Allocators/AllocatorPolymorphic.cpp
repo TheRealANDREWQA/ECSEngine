@@ -66,6 +66,43 @@ namespace ECSEngine {
 		return allocator->Belongs(buffer);
 	}
 
+	template<typename Allocator>
+	void ClearAllocator(void* _allocator) {
+		Allocator* allocator = (Allocator*)_allocator;
+		allocator->Clear();
+	}
+
+	template<typename Allocator>
+	void FreeAllocator(void* _allocator) {
+		Allocator* allocator = (Allocator*)_allocator;
+		allocator->Free();
+	}
+
+	// Do nothing for these types that do not support that
+	void FreeAllocatorDummy(void* _allocator) {}
+
+	template<typename Allocator>
+	const void* GetAllocatorBuffer(void* _allocator) {
+		Allocator* allocator = (Allocator*)_allocator;
+		return allocator->GetAllocatedBuffer();
+	}
+
+	const void* GetAllocatorBufferDummy(void* _allocator) {
+		return nullptr;
+	}
+
+	template<typename Allocator>
+	void FreeAllocatorFromOtherResizable(void* _allocator, AllocatorPolymorphic initial_allocator) {
+		Allocator* allocator = (Allocator*)_allocator;
+		allocator->Free();
+	}
+
+	template<typename Allocator>
+	void FreeAllocatorFromOtherWithBuffer(void* _allocator, AllocatorPolymorphic initial_allocator) {
+		Allocator* allocator = (Allocator*)_allocator;
+		Deallocate(initial_allocator, allocator->GetAllocatedBuffer());
+	}
+
 #define ECS_JUMP_TABLE(function_name)	function_name<LinearAllocator>, \
 										function_name<StackAllocator>, \
 										function_name<MultipoolAllocator>, \
@@ -74,6 +111,35 @@ namespace ECSEngine {
 										function_name<MemoryArena>, \
 										function_name<ResizableMemoryArena>, \
 										function_name<ResizableLinearAllocator>
+
+#define ECS_JUMP_TABLE_FOR_RESIZABLE(resizable_function, fixed_function)	fixed_function, \
+																			fixed_function, \
+																			fixed_function, \
+																			resizable_function<MemoryManager>, \
+																			resizable_function<GlobalMemoryManager>, \
+																			fixed_function, \
+																			resizable_function<ResizableMemoryArena>, \
+																			resizable_function<ResizableLinearAllocator>
+
+#define ECS_JUMP_TABLE_FOR_FIXED(fixed_function, resizable_function)	fixed_function<LinearAllocator>, \
+																		fixed_function<StackAllocator>, \
+																		fixed_function<MultipoolAllocator>, \
+																		resizable_function, \
+																		resizable_function, \
+																		fixed_function<MemoryArena>, \
+																		resizable_function, \
+																		resizable_function
+
+#define ECS_JUMP_TABLE_FOR_FIXED_AND_RESIZABLE(fixed_function, resizable_function)	fixed_function<LinearAllocator>, \
+																					fixed_function<StackAllocator>, \
+																					fixed_function<MultipoolAllocator>, \
+																					resizable_function<MemoryManager>, \
+																					resizable_function<GlobalMemoryManager>, \
+																					fixed_function<MemoryArena>, \
+																					resizable_function<ResizableMemoryArena>, \
+																					resizable_function<ResizableLinearAllocator>
+
+
 
 	AllocateFunction ECS_ALLOCATE_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(AllocateFunctionAllocator)
@@ -109,6 +175,22 @@ namespace ECSEngine {
 
 	BelongsToAllocatorFunction ECS_BELONGS_TO_ALLOCATOR_FUNCTIONS[] = {
 		ECS_JUMP_TABLE(BelongsToAllocator)
+	};
+
+	ClearAllocatorFunction ECS_CLEAR_ALLOCATOR_FUNCTIONS[] = {
+		ECS_JUMP_TABLE(ClearAllocator)
+	};
+
+	FreeAllocatorFunction ECS_FREE_ALLOCATOR_FUNCTIONS[] = {
+		ECS_JUMP_TABLE_FOR_RESIZABLE(FreeAllocator, FreeAllocatorDummy)
+	};
+
+	GetAllocatorBufferFunction ECS_GET_ALLOCATOR_BUFFER_FUNCTIONS[] = {
+		ECS_JUMP_TABLE_FOR_FIXED(GetAllocatorBuffer, GetAllocatorBufferDummy)
+	};
+
+	FreeAllocatorFromFunction ECS_FREE_ALLOCATOR_FROM_FUNCTIONS[] = {
+		ECS_JUMP_TABLE_FOR_FIXED_AND_RESIZABLE(FreeAllocatorFromOtherWithBuffer, FreeAllocatorFromOtherResizable)
 	};
 
 #undef ECS_JUMP_TABLE

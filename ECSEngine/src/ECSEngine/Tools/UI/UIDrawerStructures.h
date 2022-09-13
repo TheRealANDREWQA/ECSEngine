@@ -1469,8 +1469,8 @@ namespace ECSEngine {
 				return UI_CONFIG_ALIGN_ELEMENT;
 			}
 
-			ECS_UI_ALIGN horizontal;
-			ECS_UI_ALIGN vertical;
+			ECS_UI_ALIGN horizontal = ECS_UI_ALIGN_LEFT;
+			ECS_UI_ALIGN vertical = ECS_UI_ALIGN_TOP;
 		};
 
 		// Keeps a list with all the opened labels and any user callbacks

@@ -13,8 +13,15 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------
 
-	ArchetypeQueryCache::ArchetypeQueryCache(AllocatorPolymorphic allocator, unsigned int initial_capacity) : allocator(allocator)
+	ArchetypeQueryCache::ArchetypeQueryCache(EntityManager* entity_manager, AllocatorPolymorphic allocator, unsigned int initial_capacity) : allocator(allocator),
+		entity_manager(entity_manager)
 	{
+		query_results.count = 0;
+		query_results.capacity = 0;
+
+		exclude_query_results.count = 0;
+		exclude_query_results.capacity = 0;
+
 		// Resize the non exclude with the value given and the exclude with a quarter
 		if (initial_capacity > 0) {
 			Resize(initial_capacity);
@@ -61,13 +68,36 @@ namespace ECSEngine {
 		exclude_query_results.components[index] = query;
 
 		ECS_STACK_CAPACITY_STREAM(unsigned int, results, ECS_KB * 8);
-		entity_manager->GetArchetypesExclude(query, results);
+		entity_manager->GetArchetypes(query, results);
 		// Allocate a new chunk
 		exclude_query_results.results->InitializeAndCopy(allocator, results);
 		exclude_query_results.count++;
 
 		exclude_query_results.lock.unlock();
 		return index + EXCLUDE_HANDLE_OFFSET;
+	}
+
+	// -----------------------------------------------------------------------------------------------
+
+	void ArchetypeQueryCache::CopyOther(const ArchetypeQueryCache* other)
+	{
+		Reset();
+
+		if (other->query_results.count > 0) {
+			Resize(other->query_results.count);
+		}
+
+		if (other->exclude_query_results.count > 0) {
+			ResizeExclude(other->exclude_query_results.count);
+		}
+
+		for (unsigned int index = 0; index < other->query_results.count; index++) {
+			AddQuery(other->query_results.components[index]);
+		}
+
+		for (unsigned int index = 0; index < other->exclude_query_results.count; index++) {
+			AddQuery(other->exclude_query_results.components[index]);
+		}
 	}
 
 	// -----------------------------------------------------------------------------------------------
@@ -168,6 +198,17 @@ namespace ECSEngine {
 			results = query_results.results[handle];
 			query = query_results.components[handle];
 		}
+	}
+
+	// -----------------------------------------------------------------------------------------------
+
+	void ArchetypeQueryCache::Reset()
+	{
+		ClearAllocator(allocator);
+		query_results.count = 0;
+		query_results.capacity = 0;
+		exclude_query_results.count = 0;
+		exclude_query_results.capacity = 0;
 	}
 
 	// -----------------------------------------------------------------------------------------------
