@@ -696,7 +696,7 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// It will trim the container if the difference between the capacity and the current size is greater or equal to
 		// the threshold. Returns whether or not it trimmed
-		bool TrimThreshold(unsigned int threshold) {
+		ECS_INLINE bool TrimThreshold(unsigned int threshold) {
 			if (capacity - size >= threshold) {
 				Trim();
 				return true;
@@ -704,6 +704,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return false;
 		}
 
+		ECS_INLINE Stream<T> ToStream() const {
+			return { buffer, size };
+		}
+		
 		ECS_INLINE T& operator [](unsigned int index) {
 			return buffer[index];
 		}

@@ -10,9 +10,12 @@
 #include "ECSEngineRendering.h"
 #include "../Modules/ModuleSettings.h"
 #include "../Project/ProjectFolders.h"
-#include "Sandbox.h"
 
+#include "../Editor/EditorSandbox.h"
+#include "../Editor/EditorSandboxEntityOperations.h"
+#include "Sandbox.h"
 #include "Scene.h"
+#include "ECSEngineComponents.h"
 
 constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 
@@ -397,6 +400,254 @@ void InspectorDrawCppTextFile(EditorState* editor_state, unsigned int inspector_
 
 void InspectorDrawHlslTextFile(EditorState* editor_state, unsigned int inspector_index, void* data, UIDrawer* drawer) {
 	InspectorDrawTextFileImplementation(editor_state, inspector_index, data, drawer, ECS_TOOLS_UI_TEXTURE_FILE_SHADER, C_FILE_ROW_OFFSET);
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+#define INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY (128)
+
+// The name structure is embedded in the structure
+struct InspectorDrawEntityData {
+	Entity entity;
+	CapacityStream<char> name_input;
+	bool header_state[ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];
+};
+
+void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
+	EDITOR_STATE(editor_state);
+
+	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
+	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
+
+	bool is_initialized = data->name_input.buffer != nullptr;
+
+	if (!is_initialized) {
+		// The name input is embedded in the structure
+		data->name_input.buffer = (char*)function::OffsetPointer(data, sizeof(*data));
+	}
+
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+
+	// Check to see if the entity still exists - else revert to draw nothing
+	if (!entity_manager->ExistsEntity(data->entity)) {
+		ChangeInspectorToNothing(editor_state, inspector_index);
+		return;
+	}
+
+	Color icon_color = drawer->color_theme.theme;
+	icon_color = RGBToHSV(icon_color);
+	icon_color.value = function::ClampMin(icon_color.value, (unsigned char)200);
+	icon_color = HSVToRGB(icon_color);
+	InspectorIcon(drawer, ECS_TOOLS_UI_TEXTURE_FILE_MESH, icon_color);
+
+	Component name_component = editor_state->editor_components.GetComponentID(STRING(Name));
+	Name* name = (Name*)entity_manager->TryGetComponent(data->entity, name_component);
+
+	ECS_STACK_CAPACITY_STREAM(char, base_entity_name, 256);
+	EntityToString(data->entity, base_entity_name, true);
+
+	UIDrawConfig config;
+	if (name != nullptr) {
+		UIConfigRelativeTransform transform;
+		transform.scale.x = 2.5f;
+		config.AddFlag(transform);
+
+		struct CallbackData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+			InspectorDrawEntityData* data;
+		};
+
+		auto name_input_callback = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			CallbackData* data = (CallbackData*)_data;
+			ChangeEntityName(data->editor_state, data->sandbox_index, data->data->entity, data->data->name_input);
+		};
+
+		CallbackData callback_data;
+		callback_data.editor_state = editor_state;
+		callback_data.sandbox_index = sandbox_index;
+		callback_data.data = data;
+		UIConfigTextInputCallback input_callback = { { name_input_callback, &callback_data, sizeof(callback_data) } };
+		config.AddFlag(input_callback);
+
+		UIDrawerTextInput* input = drawer->TextInput(
+			UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_ALIGN_TO_ROW_Y,
+			config, 
+			"Name Input",
+			&data->name_input
+		);
+		if (!input->is_currently_selected) {
+			data->name_input.Copy(name->name);
+		}
+		drawer->NextRow();
+
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, base_entity_name);
+		config.flag_count = 0;
+	}
+	else {
+		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, base_entity_name);
+	}
+
+	drawer->NextRow();
+
+	ComponentSignature unique_signature = entity_manager->GetEntitySignatureStable(data->entity);
+	SharedComponentSignature shared_signature = entity_manager->GetEntitySharedSignatureStable(data->entity);
+
+	UIConfigNamePadding name_padding;
+	name_padding.alignment = ECS_UI_ALIGN_LEFT;
+	name_padding.total_length = 0.25f;
+	config.AddFlag(name_padding);
+
+	ECS_STACK_CAPACITY_STREAM(char, instance_name, 256);
+
+	auto get_unique_data = [&](size_t index) {
+		return entity_manager->GetComponentWithIndex(data->entity, index);
+	};
+
+	auto get_shared_data = [&](size_t index) {
+		return entity_manager->GetSharedData(shared_signature.indices[index], shared_signature.instances[index]);
+	};
+
+	auto draw_component = [&](ComponentSignature signature, bool shared, unsigned int header_state_offset, auto get_current_data) {
+		for (size_t index = 0; index < signature.count; index++) {
+			// Verify that the instance exists because it might have been destroyed in the meantime
+			instance_name.size = 0;
+			Stream<char> current_component_name = editor_state->editor_components.TypeFromID(signature[index].value, shared);
+			ECS_ASSERT(current_component_name.size > 0);
+			instance_name.Copy(current_component_name);
+			instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+			instance_name.AddStream(base_entity_name);
+			function::ConvertIntToChars(instance_name, sandbox_index);
+
+			// Check to see whether or not the component is from the engine side or from the module side
+			UIReflectionDrawer* ui_drawer = editor_state->module_reflection;
+			UIReflectionType* type = editor_state->ui_reflection->GetTypePtr(current_component_name);
+			if (type != nullptr) {
+				// Engine side
+				ui_drawer = editor_state->ui_reflection;
+			}
+			// Else module side
+
+			UIReflectionInstance* instance = ui_drawer->GetInstancePtr(instance_name);
+			if (instance == nullptr) {
+				instance = ui_drawer->CreateInstance(instance_name, current_component_name);
+				void* current_component = get_current_data(index);
+				ui_drawer->BindInstancePtrs(instance, current_component);
+			}
+
+			drawer->CollapsingHeader(instance->name, data->header_state + index + header_state_offset, [&]() {
+				ui_drawer->DrawInstance(instance, *drawer, config, UI_CONFIG_NAME_PADDING);
+			});
+		}
+	};
+
+	// Now draw the entity using the reflection drawer
+	draw_component(unique_signature, false, 0, get_unique_data);
+	draw_component({ shared_signature.indices, shared_signature.count }, true, unique_signature.count, get_shared_data);
+
+	// This is what the click handlers will use
+	struct AddComponentCallbackData {
+		EditorState* editor_state;
+		unsigned int sandbox_index;
+		Entity entity;
+		Stream<char> component_name;
+	};
+
+	auto add_component_callback = [](ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		AddComponentCallbackData* data = (AddComponentCallbackData*)_data;
+		AddSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->entity, data->component_name);
+	};
+
+	unsigned int module_count = editor_state->editor_components.loaded_modules.size;
+	bool* is_submenu = (bool*)ECS_STACK_ALLOC(sizeof(bool) * module_count);
+	memset(is_submenu, 1, sizeof(bool) * module_count);
+
+	UIDrawerMenuState* submenues = (UIDrawerMenuState*)ECS_STACK_ALLOC(sizeof(UIDrawerMenuState) * module_count);
+	// These won't be used, but still need to be provided with data size 0
+	UIActionHandler* dummy_handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * module_count);
+
+	UIDrawerMenuState add_menu_state;
+	add_menu_state.row_count = module_count;
+	add_menu_state.row_has_submenu = is_submenu;
+	add_menu_state.submenues = submenues;
+	add_menu_state.submenu_index = 0;
+	add_menu_state.click_handlers = dummy_handlers;
+
+	ECS_STACK_CAPACITY_STREAM(char, add_menu_state_characters, 512);
+
+	ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 256);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, shared_indices, 256);
+
+	for (unsigned int index = 0; index < module_count; index++) {
+		add_menu_state_characters.AddStream(editor_state->editor_components.loaded_modules[index].name);
+		add_menu_state_characters.Add('\n');
+		dummy_handlers[index].data_size = 0;
+
+		component_indices.size = 0;
+		shared_indices.size = 0;
+		editor_state->editor_components.GetModuleComponentIndices(index, &component_indices);
+		editor_state->editor_components.GetModuleSharedComponentIndices(index, &shared_indices);
+
+		unsigned int total_count = component_indices.size + shared_indices.size;
+
+		// The ECS_STACK_ALLOC references are going to be valid outside the scope of the for because _alloca is deallocated on function exit
+		UIActionHandler* handlers = (UIActionHandler*)ECS_STACK_ALLOC(sizeof(UIActionHandler) * total_count);
+		AddComponentCallbackData* handler_data = (AddComponentCallbackData*)ECS_STACK_ALLOC(sizeof(AddComponentCallbackData) * total_count);
+		submenues[index].click_handlers = handlers;
+		submenues[index].right_characters = { nullptr, 0 };
+		submenues[index].row_has_submenu = nullptr;
+		submenues[index].submenues = nullptr;
+		submenues[index].separation_line_count = 0;
+
+		void* _left_character_allocation = ECS_STACK_ALLOC(sizeof(char) * 512);
+		CapacityStream<char> left_characters;
+		left_characters.InitializeFromBuffer(_left_character_allocation, 0, 512);
+		for (unsigned int subindex = 0; subindex < component_indices.size; subindex++) {
+			Stream<char> component_name = editor_state->editor_components.loaded_modules[index].types[component_indices[subindex]];
+			left_characters.AddStream(component_name);
+			left_characters.AddSafe('\n');
+			handler_data[subindex] = { editor_state, sandbox_index, data->entity, component_name };
+			handlers[subindex] = { add_component_callback, handler_data + subindex, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
+		}
+
+		for (unsigned int subindex = 0; subindex < shared_indices.size; subindex++) {
+			Stream<char> component_name = editor_state->editor_components.loaded_modules[index].types[shared_indices[subindex]];
+			left_characters.AddStream(component_name);
+			left_characters.AddSafe('\n');
+			handler_data[subindex + component_indices.size] = { editor_state, sandbox_index, data->entity, component_name };
+			handlers[subindex + component_indices.size] = { add_component_callback, handler_data + subindex + component_indices.size, sizeof(AddComponentCallbackData), ECS_UI_DRAW_NORMAL };
+		}
+		// Remove the last '\n'
+		left_characters.size--;
+
+		submenues[index].left_characters = left_characters;
+		submenues[index].row_count = total_count;
+		if (component_indices.size > 0 && shared_indices.size) {
+			submenues[index].separation_lines[0] = component_indices.size;
+			submenues[index].separation_line_count = 1;
+		}
+		submenues[index].submenu_index = 1;
+
+		bool* is_unavailable = (bool*)ECS_STACK_ALLOC(sizeof(bool) * total_count);
+		bool can_have_unique = unique_signature.count < ECS_ARCHETYPE_MAX_COMPONENTS;
+		bool can_have_shared = shared_signature.count < ECS_ARCHETYPE_MAX_SHARED_COMPONENTS;
+		memset(is_unavailable, !can_have_unique, sizeof(bool) * component_indices.size);
+		memset(is_unavailable, !can_have_shared, sizeof(bool) * shared_indices.size);
+		submenues[index].unavailables = is_unavailable;
+	}
+	// Remove the last '\n'
+	add_menu_state_characters.size--;
+	add_menu_state.left_characters = add_menu_state_characters;
+	
+	config.flag_count = 0;
+	UIConfigAlignElement align_element;
+	align_element.horizontal = ECS_UI_ALIGN_MIDDLE;
+	config.AddFlag(align_element);
+	drawer->Menu(UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_MENU_COPY_STATES, config, "Add Component", &add_menu_state);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -1155,7 +1406,6 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 			UIReflectionDrawConfigAddConfig(ui_reflection_configs + 7, &path_input_callback);
 
 			config.flag_count = 0;
-			// The window dependendent size must be adjusted to account for the indentation
 			dependent_size.scale_factor.x = 1.0f;
 			config.AddFlag(dependent_size);
 			for (size_t index = 0; index < instance_indices.size; index++) {
@@ -1764,11 +2014,11 @@ void InspectorDrawSceneFile(EditorState* editor_state, unsigned int inspector_in
 
 void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	const float PADLOCK_SIZE = 0.04f;
-	const float REDUCE_FONT_SIZE = 0.9f;
+	const float REDUCE_FONT_SIZE = 1.0f;
 
 	UI_PREPARE_DRAWER(initialize);
-	//drawer.DisablePaddingForRenderRegion();
-	//drawer.DisablePaddingForRenderSliders();
+	drawer.DisablePaddingForRenderRegion();
+	drawer.DisablePaddingForRenderSliders();
 
 	EditorState* editor_state = (EditorState*)window_data;
 
@@ -2172,6 +2422,23 @@ void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int in
 
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)
 {
+	size_t _draw_data[128];
+
+	InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)_draw_data;
+	draw_data->entity = entity;
+	draw_data->name_input.buffer = nullptr;
+	draw_data->name_input.size = 0;
+	draw_data->name_input.capacity = INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY;
+
+	memset(draw_data->header_state, 0, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
+
+	ChangeInspectorDrawFunction(
+		editor_state,
+		inspector_index,
+		{ InspectorDrawEntity, InspectorCleanNothing },
+		draw_data,
+		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY
+	);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

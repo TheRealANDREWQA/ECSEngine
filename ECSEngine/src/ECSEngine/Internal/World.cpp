@@ -122,7 +122,7 @@ namespace ECSEngine {
 		DestroyGraphics(world->graphics);
 
 		// Release the global allocator
-		world->memory->ReleaseResources();
+		world->memory->Free();
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------

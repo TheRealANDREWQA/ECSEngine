@@ -29,6 +29,8 @@ namespace ECSEngine {
 
 		void Clear();
 
+		// This is not the actual block range byte capacity
+		// Instead is the maximum number of blocks that there can be at the same time
 		unsigned int GetCapacity() const;
 
 		unsigned int GetStart(unsigned int index) const;

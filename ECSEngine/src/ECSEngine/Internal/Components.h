@@ -12,6 +12,12 @@
 
 namespace ECSEngine {
 
+	// The name of the unique and shared components from the engine
+	inline Stream<char> ECS_COMPONENTS[] = {
+		STRING(Translation),
+		STRING(Name)
+	};
+
 	struct ECS_REFLECT_COMPONENT Translation {
 		ECS_EVALUATE_FUNCTION_REFLECT static short ID() {
 			return ECS_COMPONENT_BASE + 0;

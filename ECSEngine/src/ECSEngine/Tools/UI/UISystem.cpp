@@ -10160,10 +10160,17 @@ namespace ECSEngine {
 			DockspaceType type;
 			unsigned int border_index;
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
+
 			if (dockspace != nullptr) {
-				for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
-					if (dockspace->borders[border_index].window_indices[index] == window_index) {
-						RemoveWindowFromDockspaceRegion(dockspace, type, border_index, index);
+				bool is_pop_up = IsPopUpWindow(window_index) != -1;
+				if (is_pop_up) {
+					DestroyDockspace(dockspace->borders.buffer, type);
+				}
+				else {
+					for (size_t index = 0; index < dockspace->borders[border_index].window_indices.size; index++) {
+						if (dockspace->borders[border_index].window_indices[index] == window_index) {
+							RemoveWindowFromDockspaceRegion(dockspace, type, border_index, index);
+						}
 					}
 				}
 			}
@@ -12144,7 +12151,7 @@ namespace ECSEngine {
 
 			unsigned int* window_index = (unsigned int*)_data;
 			system->RemoveWindowFromDockspaceRegion(*window_index);
-			system->RemoveFrameHandler(DestroyWindowSystemHandler, nullptr);
+			system->RemoveFrameHandler(DestroyWindowSystemHandler, _data);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

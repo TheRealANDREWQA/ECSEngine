@@ -3426,7 +3426,7 @@ namespace ECSEngine {
 			unsigned int draw_mode_target = drawer.draw_mode_target;
 
 			bool pushed_string_identifier = drawer.PushIdentifierStackStringPattern();
-			drawer.PushIdentifierStack(instance->name);
+			drawer.PushIdentifierStackEx(instance->name);
 
 			drawer.SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 

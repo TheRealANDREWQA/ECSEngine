@@ -112,6 +112,74 @@ bool EditorComponents::IsSharedComponent(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+unsigned int EditorComponents::ModuleComponentCount(ECSEngine::Stream<char> name) const
+{
+	unsigned int module_index = IsModule(name);
+	ECS_ASSERT(module_index != -1);
+	return ModuleComponentCount(module_index);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::ModuleComponentCount(unsigned int module_index) const
+{
+	unsigned int count = 0;
+	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
+		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
+		count += IsReflectionTypeComponent(type);
+	}
+	return count;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::ModuleSharedComponentCount(ECSEngine::Stream<char> name) const
+{
+	unsigned int module_index = IsModule(name);
+	ECS_ASSERT(module_index != -1);
+	return ModuleSharedComponentCount(module_index);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::ModuleSharedComponentCount(unsigned int module_index) const
+{
+	unsigned int count = 0;
+	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
+		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
+		count += IsReflectionTypeSharedComponent(type);
+	}
+	return count;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::GetModuleComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices) const
+{
+	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
+		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
+		if (IsReflectionTypeComponent(type)) {
+			module_indices->Add(index);
+		}
+	}
+	module_indices->AssertCapacity();
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::GetModuleSharedComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices) const
+{
+	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
+		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
+		if (IsReflectionTypeSharedComponent(type)) {
+			module_indices->Add(index);
+		}
+	}
+	module_indices->AssertCapacity();
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void EditorComponents::RecoverData(EntityManager* entity_manager, const ReflectionManager* reflection_manager, Stream<char> component_name, Stream<SpinLock> locks)
 {
 	const ReflectionType* current_type = reflection_manager->GetType(component_name);
@@ -162,6 +230,9 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 
 	bool has_buffers = HasBuffers(component_name);
 	bool has_locks = locks.size > 0;
+	if (has_locks) {
+		ECS_ASSERT(locks.size == entity_manager->GetArchetypeCount() + 1);
+	}
 
 	if (IsReflectionTypeComponent(old_type)) {
 		ArchetypeQuery query;
@@ -202,22 +273,22 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 
 			ECS_ASSERT(ptr - (uintptr_t)temporary_allocation <= TEMPORARY_ALLOCATION_CAPACITY);
 
+			if (has_locks) {
+				// Lock the memory manager allocator
+				locks[locks.size - 1].lock();
+			}
+
 			MemoryArena* arena = entity_manager->GetComponentAllocator(component);
 			if (new_allocator_size == old_allocator_size) {
 				arena->Clear();
 			}
 			else {
-				if (has_locks) {
-					// Lock the memory manager allocator
-					entity_manager->m_memory_manager->Lock();
-				}
-
 				// Resize the arena
 				arena = entity_manager->ResizeComponentAllocator(component, new_allocator_size);
+			}
 
-				if (has_locks) {
-					entity_manager->m_memory_manager->Unlock();
-				}
+			if (has_locks) {
+				locks[locks.size - 1].unlock();
 			}
 
 			if (arena != nullptr) {
@@ -264,14 +335,14 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager->m_memory_manager->Lock();
+						locks[locks.size - 1].lock();
 					}
 
 					// Need to resize the component allocator
 					arena = entity_manager->ResizeComponentAllocator(component, new_allocator_size);
 
 					if (has_locks) {
-						entity_manager->m_memory_manager->Unlock();
+						locks[locks.size - 1].unlock();
 					}
 				}
 				else {
@@ -313,7 +384,7 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 			}
 		}
 		else {
-			entity_manager->m_unique_components[component.value].size = new_size;
+			entity_manager->m_unique_components[component].size = new_size;
 
 			// First functor receives (void* destination, const void* source, size_t copy_size) and must return how many bytes it wrote
 			// Second functor receives the void* to the new component memory and a void* to the old data
@@ -356,9 +427,16 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 						unsigned int previous_capacity = base->m_capacity;
 						base->m_size = 0;
 
+						// We need to lock because resize does an allocation inside
+						if (has_locks) {
+							locks[locks.size - 1].lock();
+						}
 						// The size 0 it tells the base to just resize.
 						// Now everything will be in its place
 						base->Resize(previous_capacity);
+						if (has_locks) {
+							locks[locks.size - 1].unlock();
+						}
 
 						void** new_buffers = base->m_buffers;
 
@@ -418,14 +496,14 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager->m_memory_manager->Lock();
+						locks[locks.size - 1].lock();
 					}
 
 					// Need to resize the component allocator
 					arena = entity_manager->ResizeComponentAllocator(component, new_allocator_size);
 
 					if (has_locks) {
-						entity_manager->m_memory_manager->Unlock();
+						locks[locks.size - 1].unlock();
 					}
 				}
 				else {
@@ -476,7 +554,7 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 			if (has_buffers) {
 				// Must a do a prepass and serialize the components into the temporary buffer
 				ptr = (uintptr_t)temporary_allocation;
-				entity_manager->m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {
+				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 					Serialize(internal_manager, old_type, data, ptr, &serialize_options);
 				});
 
@@ -484,11 +562,11 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager->m_memory_manager->Lock();
+						locks[locks.size - 1].lock();
 					}
 					arena = entity_manager->ResizeSharedComponentAllocator(component, new_allocator_size);
 					if (has_locks) {
-						entity_manager->m_memory_manager->Unlock();
+						locks[locks.size - 1].unlock();
 					}
 				}
 				else {
@@ -505,7 +583,7 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 				}
 
 				ptr = (uintptr_t)temporary_allocation;
-				entity_manager->m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {
+				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 					ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, ptr, &deserialize_options);
 					ECS_ASSERT(code == ECS_DESERIALIZE_OK);
 				});
@@ -514,11 +592,11 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 				MemoryArena* arena = nullptr;
 				if (new_allocator_size != old_allocator_size) {
 					if (has_locks) {
-						entity_manager->m_memory_manager->Lock();
+						locks[locks.size - 1].lock();
 					}
 					arena = entity_manager->ResizeSharedComponentAllocator(component, new_allocator_size);
 					if (has_locks) {
-						entity_manager->m_memory_manager->Unlock();
+						locks[locks.size - 1].unlock();
 					}
 				}
 				else {
@@ -531,7 +609,7 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 					deserialize_options.field_allocator = alloc;
 				}
 
-				entity_manager->m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {
+				entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 					ptr = (uintptr_t)temporary_allocation;
 					Serialize(internal_manager, old_type, data, ptr, &serialize_options);
 					ptr = (uintptr_t)temporary_allocation;
@@ -544,31 +622,24 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 			// Need to reallocate the shared instances
 			// First copy all of them into a temporary buffer and then deserialize from it
 			ptr = (uintptr_t)temporary_allocation;
-			entity_manager->m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {
+			entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 				Serialize(internal_manager, old_type, data, ptr, &serialize_options);
 			});
 
 			if (has_locks) {
-				entity_manager->m_memory_manager->Lock();
+				locks[locks.size - 1].lock();
 			}
 			entity_manager->ResizeSharedComponent(component, new_size);
 			if (has_locks) {
-				entity_manager->m_memory_manager->Unlock();
+				locks[locks.size - 1].unlock();
 			}
 
-			entity_manager->m_shared_components[component.value].instances.stream.ForEachConst([&](void* data) {
+			entity_manager->m_shared_components[component].instances.stream.ForEachConst([&](void* data) {
 				ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, current_type, data, ptr, &deserialize_options);
 				ECS_ASSERT(code == ECS_DESERIALIZE_OK);
 			});
 		}
 	}
-
-	// Now we need to update this type to be the new one
-	DeallocateTs(allocator.allocator, allocator.allocator_type, old_type->name.buffer);
-	size_t copy_size = current_type->CopySize();
-	void* allocation = AllocateTs(allocator.allocator, allocator.allocator_type, copy_size);
-	ptr = (uintptr_t)allocation;
-	*old_type = current_type->Copy(ptr);
 
 	free(temporary_allocation);
 	stack_allocator.ClearBackup();
@@ -576,29 +647,62 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stream<char> component_name)
-{
-	const ReflectionType* internal_type = internal_manager->GetType(component_name);
-	bool is_component = IsReflectionTypeComponent(internal_type);
-	
-	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
-	double allocator_size_d = internal_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-	size_t allocator_size = allocator_size_d == DBL_MAX ? 0 : (size_t)allocator_size_d;
-
-	// Lock the small memory manager in order to commit the type
-	entity_manager->m_small_memory_manager.Lock();
-	if (is_component) {
-		entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size);
+void GetTypeComponentBuffers(const ReflectionType* type, ComponentBuffer* component_buffers, unsigned short& component_buffer_count) {
+	// Get the buffers and the data_pointers
+	for (size_t index = 0; index < type->fields.size; index++) {
+		if (IsStream(type->fields[index].info.stream_type)) {
+			component_buffers[component_buffer_count].is_data_pointer = false;
+			component_buffers[component_buffer_count].offset = type->fields[index].info.pointer_offset;
+			component_buffer_count++;
+		}
+		else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
+			component_buffers[component_buffer_count].is_data_pointer = true;
+			component_buffers[component_buffer_count].offset = type->fields[index].info.pointer_offset;
+			component_buffer_count++;
+		}
 	}
-	else {
-		entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size);
-	}
-	entity_manager->m_small_memory_manager.Unlock();
 }
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<char> component_name, short new_id)
+void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stream<char> component_name, SpinLock* lock)
+{
+	const ReflectionType* internal_type = internal_manager->GetType(component_name);
+	bool is_component = IsReflectionTypeComponent(internal_type);
+	
+	ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+	unsigned short component_buffer_count = 0;
+
+	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+	double allocator_size_d = internal_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+	size_t allocator_size = allocator_size_d == DBL_MAX ? 0 : (size_t)allocator_size_d;
+	if (allocator_size > 0) {
+		GetTypeComponentBuffers(internal_type, component_buffers, component_buffer_count);
+	}
+
+	// Lock the small memory manager in order to commit the type
+	if (lock != nullptr) {
+		lock->lock();
+	}
+	// Check to see if it already exists. If it does, don't commit it
+	if (is_component) {
+		if (!entity_manager->ExistsComponent(component)) {
+			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, { component_buffers, component_buffer_count });
+		}
+	}
+	else {
+		if (!entity_manager->ExistsSharedComponent(component)) {
+			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, { component_buffers, component_buffer_count });
+		}
+	}
+	if (lock != nullptr) {
+		lock->unlock();
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<char> component_name, short new_id, SpinLock* lock)
 {
 	ReflectionType* type = internal_manager->type_definitions.GetValuePtr(component_name);
 	unsigned short byte_size = (unsigned short)GetReflectionTypeByteSize(type);
@@ -615,38 +719,17 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 	Component new_component = { new_id };
 
 	MemoryArena* arena = nullptr;
+	if (lock != nullptr) {
+		lock->lock();
+	}
 	if (is_component) {
-		arena = entity_manager->GetComponentAllocator(old_component);
-		// Always use size 0 allocator size because we will transfer the arena to the new slot
-		// In this way we avoid creating a new allocator and transfer all the existing data to it
-
-		// We also need to lock the small memory manager
-		entity_manager->m_small_memory_manager.Lock();
-		entity_manager->RegisterComponentCommit(new_component, byte_size, 0);
-
-		if (arena != nullptr) {
-			entity_manager->m_unique_components[old_id].allocator = nullptr;
-			entity_manager->m_unique_components[new_id].allocator = arena;
-		}
-
-		// Now destroy the old component
-		entity_manager->UnregisterComponentCommit(old_component);
-		entity_manager->m_small_memory_manager.Unlock();
+		entity_manager->ChangeComponentIndex(old_component, new_component);
 	}
 	else {
-		arena = entity_manager->GetSharedComponentAllocator(old_component);
-
-		entity_manager->m_small_memory_manager.Lock();
-		entity_manager->RegisterSharedComponentCommit(new_component, byte_size, 0);
-
-		if (arena != nullptr) {
-			entity_manager->m_shared_components[old_id].info.allocator = nullptr;
-			entity_manager->m_shared_components[new_id].info.allocator = arena;
-		}
-
-		// Now destroy the old component
-		entity_manager->UnregisterSharedComponentCommit(old_component);
-		entity_manager->m_small_memory_manager.Unlock();
+		entity_manager->ChangeSharedComponentIndex(old_component, new_component);
+	}
+	if (lock != nullptr) {
+		lock->unlock();
 	}
 }
 
@@ -655,6 +738,61 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 void EditorComponents::EmptyEventStream()
 {
 	events.FreeBuffer();
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager, UIReflectionDrawer* ui_drawer, EditorComponentEvent event)
+{
+	// At the moment only the calls that need to update the component
+
+	switch (event.type) {
+	case EDITOR_COMPONENT_EVENT_IS_ADDED:
+	{
+		// Update the UIDrawer
+		const ReflectionType* type = reflection_manager->GetType(event.name);
+		ui_drawer->CreateType(type);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
+	{
+		// Update the UIDrawer, the destroy call will destroy all instances of that type
+		ui_drawer->DestroyType(event.name);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED:
+	{
+		UpdateComponent(reflection_manager, event.name);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
+	{
+		// Update the UIDrawer as well
+		// Destroy the component to invalidate all current instances and then recreate it
+		const ReflectionType* type = reflection_manager->GetType(event.name);
+		ui_drawer->DestroyType(event.name);
+		ui_drawer->CreateType(type);
+
+		UpdateComponent(reflection_manager, event.name);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
+	{
+		// Update the UIDrawer as well
+		// Destroy the component to invalidate all current instances and then recreate it
+		const ReflectionType* type = reflection_manager->GetType(event.name);
+		ui_drawer->DestroyType(event.name);
+		ui_drawer->CreateType(type);
+
+		UpdateComponent(reflection_manager, event.name);
+	}
+	break;
+	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
+	{
+		UpdateComponent(reflection_manager, event.name);
+	}
+	break;
+	}
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -755,17 +893,66 @@ void EditorComponents::RemoveType(Stream<char> name)
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::RemoveTypeFromManager(EntityManager* entity_manager, Component component, bool shared) const
+void EditorComponents::RemoveTypeFromManager(EntityManager* entity_manager, Component component, bool shared, SpinLock* lock) const
 {
+	ECS_STACK_CAPACITY_STREAM(unsigned int, archetype_indices, ECS_MAIN_ARCHETYPE_MAX_COUNT);
+
 	// Lock the small memory manager
-	entity_manager->m_small_memory_manager.Lock();
+	if (lock != nullptr) {
+		lock->lock();
+	}
+
+	ComponentSignature signature = { &component, 1 };
+	ArchetypeQuery query;
 	if (shared) {
+		// Get all archetypes with that component and remove it from them
+		query.shared.ConvertComponents(signature);
+		entity_manager->GetArchetypes(query, archetype_indices);
+
+		for (unsigned int index = 0; index < archetype_indices.size; index++) {
+			const Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
+			unsigned int base_count = archetype->GetBaseCount();
+			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+				const ArchetypeBase* base = archetype->GetBase(base_index);
+				unsigned int entity_count = base->EntityCount();
+				const Entity* entities = base->m_entities;
+				entity_manager->RemoveSharedComponentCommit({ entities, entity_count }, signature);
+			}
+		}
+
+		// Destroy all matched archetypes now
+		for (unsigned int index = 0; index < archetype_indices.size; index++) {
+			entity_manager->DestroyArchetypeCommit(archetype_indices[index]);
+		}
+
 		entity_manager->UnregisterSharedComponentCommit(component);
 	}
 	else {
+		// Get all archetypes with that component and remove it from them
+		query.unique.ConvertComponents(signature);
+		entity_manager->GetArchetypes(query, archetype_indices);
+
+		for (unsigned int index = 0; index < archetype_indices.size; index++) {
+			const Archetype* archetype = entity_manager->GetArchetype(archetype_indices[index]);
+			unsigned int base_count = archetype->GetBaseCount();
+			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+				const ArchetypeBase* base = archetype->GetBase(base_index);
+				unsigned int entity_count = base->EntityCount();
+				const Entity* entities = base->m_entities;
+				entity_manager->RemoveComponentCommit({ entities, entity_count }, signature);
+			}
+		}
+
+		// Destroy all matched archetypes now
+		for (unsigned int index = 0; index < archetype_indices.size; index++) {
+			entity_manager->DestroyArchetypeCommit(archetype_indices[index]);
+		}
+
 		entity_manager->UnregisterComponentCommit(component);
 	}
-	entity_manager->m_small_memory_manager.Unlock();
+	if (lock != nullptr) {
+		lock->unlock();
+	}
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -776,14 +963,14 @@ bool EditorComponents::ResolveEvent(EntityManager* entity_manager, const Reflect
 	case EDITOR_COMPONENT_EVENT_IS_ADDED:
 	{
 		if (IsComponent(event.name)) {
-			AddComponentToManager(entity_manager, event.name);
+			AddComponentToManager(entity_manager, event.name, locks.buffer + locks.size - 1);
 			return true;
 		}
 	}
 		break;
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	{
-		RemoveTypeFromManager(entity_manager, { event.new_id }, event.is_shared);
+		RemoveTypeFromManager(entity_manager, { event.new_id }, event.is_shared, locks.buffer + locks.size - 1);
 		return true;
 	}
 		break;
@@ -814,18 +1001,20 @@ bool EditorComponents::ResolveEvent(EntityManager* entity_manager, const Reflect
 		// Recover the data firstly and then update the component references
 		if (IsComponent(event.name)) {
 			RecoverData(entity_manager, reflection_manager, event.name, locks);
-			ChangeComponentID(entity_manager, event.name, event.new_id);
+			ChangeComponentID(entity_manager, event.name, event.new_id, locks.buffer + locks.size - 1);
 			return true;
 		}
 	}
 		break;
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
+	{
 		RecoverData(entity_manager, reflection_manager, event.name, locks);
 		return true;
+	}
 		break;
 	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
 		if (IsComponent(event.name)) {
-			ChangeComponentID(entity_manager, event.name, event.new_id);
+			ChangeComponentID(entity_manager, event.name, event.new_id, locks.buffer + locks.size - 1);
 			return true;
 		}
 		break;
@@ -847,8 +1036,16 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsComponent(component_id)) {
-			double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size == DBL_MAX ? 0 : (size_t)allocator_size);
+			double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+			size_t allocator_size = _allocator_size == DBL_MAX ? 0 : (size_t)_allocator_size;
+
+			ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+			unsigned short component_buffer_count = 0;
+			if (allocator_size > 0) {
+				GetTypeComponentBuffers(type, component_buffers, component_buffer_count);
+			}
+ 
+			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, { component_buffers, component_buffer_count });
 		}
 	};
 
@@ -861,8 +1058,15 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		if (!data->entity_manager->ExistsSharedComponent(component_id)) {
-			double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size == DBL_MAX ? 0 : (size_t)allocator_size);
+			double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+			size_t allocator_size = _allocator_size == DBL_MAX ? 0 : (size_t)_allocator_size;
+
+			ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+			unsigned short component_buffer_count = 0;
+			if (allocator_size > 0) {
+				GetTypeComponentBuffers(type, component_buffers, component_buffer_count);
+			}
+			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, { component_buffers, component_buffer_count });
 		}
 	};
 
@@ -905,6 +1109,37 @@ void EditorComponents::SetManagerComponentAllocators(EntityManager* entity_manag
 	SharedFunctorData shared_data;
 	shared_data.entity_manager = entity_manager;
 	ForEachSharedComponent(shared_functor, &shared_data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::UpdateComponent(const ReflectionManager* reflection_manager, Stream<char> component_name)
+{
+	unsigned int internal_index = internal_manager->type_definitions.Find(component_name);
+	ReflectionType* old_type = internal_manager->type_definitions.GetValuePtrFromIndex(internal_index);
+	const ReflectionType* current_type = reflection_manager->GetType(component_name);
+
+	// Locate the name inside the module type list and update the reference to the new name
+	unsigned int module_index = 0;
+	unsigned int type_list_index = 0;
+	for (; module_index < loaded_modules.size; module_index++) {
+		type_list_index = function::FindString(component_name, loaded_modules[module_index].types);
+		if (type_list_index != -1) {
+			break;
+		}
+	}
+	ECS_ASSERT(module_index < loaded_modules.size);
+
+	// Now we need to update this type to be the new one
+	DeallocateTs(allocator.allocator, allocator.allocator_type, old_type->name.buffer);
+	size_t copy_size = current_type->CopySize();
+	void* allocation = AllocateTs(allocator.allocator, allocator.allocator_type, copy_size);
+	uintptr_t ptr = (uintptr_t)allocation;
+	*old_type = current_type->CopyTo(ptr);
+
+	// Update the reference to the name - also the one from the internal reflection manager needs to be updated
+	loaded_modules[module_index].types[type_list_index] = old_type->name;
+	*internal_manager->type_definitions.GetIdentifierPtrFromIndex(internal_index) = old_type->name;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -965,13 +1200,30 @@ void EditorComponents::UpdateComponents(
 					events.Add({ EDITOR_COMPONENT_EVENT_SAME_ID, type->name, existing_type });
 					continue;
 				}
+
+				double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+				bool has_buffers = !IsTriviallyCopyable(reflection_manager, type);
+				if (allocator_size != DBL_MAX) {
+					if (!has_buffers) {
+						events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name });
+						continue;
+					}
+				}
+				else {
+					if (has_buffers) {
+						events.Add({ EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR, type->name });
+						continue;
+					}
+				}
+
+				events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
 			}
 			// Copy the reflection_type into a separate allocation
 			size_t copy_size = type->CopySize();
 			void* allocation = Allocate(allocator, copy_size);
 
 			uintptr_t ptr = (uintptr_t)allocation;
-			ReflectionType copied_type = type->Copy(ptr);
+			ReflectionType copied_type = type->CopyTo(ptr);
 				
 			// The name of the copied type is stable
 			InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, copied_type.name);
@@ -985,10 +1237,18 @@ void EditorComponents::UpdateComponents(
 			unsigned int old_type_index = internal_manager->type_definitions.Find(type->name);
 
 			bool is_trivially_copyable = IsTriviallyCopyable(reflection_manager, type);
+			double buffer_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+
 			if (!is_trivially_copyable) {
-				double buffer_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 				if (buffer_size == DBL_MAX) {
 					events.Add({ EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR, type->name, type->name });
+					continue;
+				}
+			}
+			else {
+				if (buffer_size != DBL_MAX) {
+					events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name });
+					continue;
 				}
 			}
 
@@ -1007,13 +1267,15 @@ void EditorComponents::UpdateComponents(
 						events.Add({ EDITOR_COMPONENT_EVENT_SAME_ID, type->name, existing_type });
 						continue;
 					}
+
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
 				}
 				// Copy the reflection_type into a separate allocation
 				size_t copy_size = type->CopySize();
 				void* allocation = Allocate(allocator, copy_size);
 
 				uintptr_t ptr = (uintptr_t)allocation;
-				ReflectionType copied_type = type->Copy(ptr);
+				ReflectionType copied_type = type->CopyTo(ptr);
 
 				// The name of the copied type is stable
 				InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, copied_type.name);
@@ -1033,7 +1295,7 @@ void EditorComponents::UpdateComponents(
 						continue;
 					}
 
-					double old_id = type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
+					double old_id = old_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
 					ECS_ASSERT(old_id != DBL_MAX, "EditorComponents: An old type is promoted to a component.");
 
 					if (old_id == new_id) {
@@ -1114,15 +1376,13 @@ void EditorComponents::UpdateComponents(
 				// Emit a removed event
 				events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, {(short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION)}, IsReflectionTypeSharedComponent(type) });
 			}
-			else {
-				// Not a component, deallocate it now
-				RemoveType(type->name);
-				unsigned int idx = function::FindString(type->name, loaded_modules[module_index].types);
-				loaded_modules[module_index].types.RemoveSwapBack(idx);
-			}
+			// Even if it is a component we can remove it now since the RemoveTypeFromManager doesn't require the internal component to be alive
+			// Not a component, deallocate it now
+			RemoveType(type->name);
 		}
 
 		if (added_types.size > 0) {
+			// The add events are generated inside the registration
 			size_t new_size = added_types.size + loaded_modules[module_index].types.size;
 			void* new_allocation = Allocate(allocator, loaded_modules[module_index].types.MemoryOf(new_size));
 			loaded_modules[module_index].types.CopyTo(new_allocation);
@@ -1141,7 +1401,7 @@ void EditorComponents::UpdateComponents(
 
 // ----------------------------------------------------------------------------------------------
 
-Stream<char> EditorComponents::TypeFromID(unsigned short id, bool shared)
+Stream<char> EditorComponents::TypeFromID(short id, bool shared)
 {
 	Stream<char> name = { nullptr, 0 };
 	internal_manager->type_definitions.ForEachConst<true>([&](const ReflectionType& type, ResourceIdentifier identifier) {
@@ -1172,6 +1432,7 @@ bool IsEditorComponentHandledInternally(EDITOR_COMPONENT_EVENT event_type)
 {
 	switch (event_type)
 	{
+	case EDITOR_COMPONENT_EVENT_IS_ADDED:
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
 	case EDITOR_COMPONENT_EVENT_DEPENDENCY_CHANGED:
@@ -1209,6 +1470,7 @@ struct ExecuteComponentEventData {
 ECS_THREAD_TASK(ExecuteComponentEvent) {
 	ExecuteComponentEventData* data = (ExecuteComponentEventData*)_data;
 
+	bool was_handled = true;
 	for (unsigned int index = 0; index < data->editor_state->sandboxes.size; index++) {
 		if (GetSandboxState(data->editor_state, index) == EDITOR_SANDBOX_PAUSED) {
 			// Update the runtime entity manager as well
@@ -1221,15 +1483,19 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		}
 
 		// Now handle the scene manager
-		bool was_handled = data->editor_state->editor_components.ResolveEvent(
+		was_handled &= data->editor_state->editor_components.ResolveEvent(
 			&data->editor_state->sandboxes[index].scene_entities,
 			data->editor_state->module_reflection->reflection,
 			data->event_to_handle,
 			data->scene_spin_locks[index]
 		);
-		if (!was_handled) {
-			data->unhandled_events->Add(data->event_to_handle);
-		}
+	}
+
+	if (!was_handled) {
+		data->unhandled_events->Add(data->event_to_handle);
+	}
+	else {
+		data->editor_state->editor_components.FinalizeEvent(data->editor_state->module_reflection->reflection, data->editor_state->module_reflection, data->event_to_handle);
 	}
 
 	unsigned int previous_count = data->semaphore->Exit();
@@ -1282,6 +1548,7 @@ void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initializ
 		"SAME_ID: Modify the source file for the conflicting components such that they have different IDs.",
 		"MISSING_ID: Give the component an ID.",
 		"HAS_BUFFERS_NO_ALLOCATOR: Give the component an allocator size.",
+		"HAS_ALLOCATOR_BUT_NO_BUFFERS: Remove the allocator function."
 	};
 	drawer.LabelList(UI_CONFIG_LABEL_LIST_NO_NAME, config, "List", { label_lists, std::size(label_lists) });
 	drawer.NextRow();
@@ -1305,9 +1572,14 @@ void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initializ
 		else if (component_event == EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR) {
 			type_string = " HAS_BUFFERS_NO_ALLOCATOR";
 		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
+			type_string = " HAS_ALLOCATOR_NO_BUFFERS";
+		}
 
 		drawer.Text(data->user_events[index].name);	
+		drawer.Indent(-1.0f);
 		drawer.Text(type_string);
+		drawer.Indent(-1.0f);
 
 		if (component_event == EDITOR_COMPONENT_EVENT_SAME_ID) {
 			drawer.Text(data->user_events[index].conflicting_name);
@@ -1374,9 +1646,9 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			sizeof(EditorComponentEvent) * editor_state->editor_components.events.size * editor_state->sandboxes.size + sizeof(AtomicStream<EditorComponentEvent>);
 		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
 			if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
-				total_allocation_size += sizeof(SpinLock) * editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount();
+				total_allocation_size += sizeof(SpinLock) * (editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount() + 1);
 			}
-			total_allocation_size += sizeof(SpinLock) * editor_state->sandboxes[index].scene_entities.GetArchetypeCount();
+			total_allocation_size += sizeof(SpinLock) * (editor_state->sandboxes[index].scene_entities.GetArchetypeCount() + 1);
 		}
 
 		void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(total_allocation_size);
@@ -1397,6 +1669,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
 			if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
 				unsigned int archetype_count = editor_state->sandboxes[index].sandbox_world.entity_manager->GetArchetypeCount();
+				archetype_count++;
 				runtime_locks[index].InitializeFromBuffer(ptr, archetype_count);
 				memset(runtime_locks[index].buffer, 0, sizeof(SpinLock) * archetype_count);
 			}
@@ -1405,6 +1678,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			}
 
 			unsigned int archetype_count = editor_state->sandboxes[index].scene_entities.GetArchetypeCount();
+			archetype_count++;
 			scene_locks[index].InitializeFromBuffer(ptr, archetype_count);
 			memset(scene_locks[index].buffer, 0, sizeof(SpinLock) * archetype_count);
 		}
@@ -1496,11 +1770,18 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 				continue;
 			}
 		}
-		else if (component_event.type == EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR) {
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR || component_event.type == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
 			ReflectionType type;
 			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+				bool is_trivially_copyable = IsTriviallyCopyable(editor_state->module_reflection->reflection, &type);
+
 				double evaluation = type.GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-				if (evaluation != DBL_MAX) {
+				if (evaluation != DBL_MAX && !is_trivially_copyable) {
+					user_events.Remove(index);
+					index--;
+					continue;
+				}
+				else if (evaluation == DBL_MAX && is_trivially_copyable) {
 					user_events.Remove(index);
 					index--;
 					continue;

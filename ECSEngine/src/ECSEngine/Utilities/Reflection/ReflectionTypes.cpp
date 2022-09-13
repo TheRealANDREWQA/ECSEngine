@@ -23,7 +23,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionField ReflectionField::Copy(uintptr_t& ptr) const {
+		ReflectionField ReflectionField::CopyTo(uintptr_t& ptr) const {
 			ReflectionField copy;
 
 			copy.name.InitializeAndCopy(ptr, name);
@@ -42,7 +42,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionEvaluation ReflectionEvaluation::Copy(uintptr_t& ptr) const {
+		ReflectionEvaluation ReflectionEvaluation::CopyTo(uintptr_t& ptr) const {
 			ReflectionEvaluation copy;
 
 			copy.name.InitializeAndCopy(ptr, name);
@@ -169,7 +169,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionType ReflectionType::Copy(uintptr_t& ptr) const
+		ReflectionType ReflectionType::CopyTo(uintptr_t& ptr) const
 		{
 			ReflectionType copy;
 
@@ -241,7 +241,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ReflectionEnum ReflectionEnum::Copy(uintptr_t& ptr) const
+		ReflectionEnum ReflectionEnum::CopyTo(uintptr_t& ptr) const
 		{
 			ReflectionEnum copy;
 
@@ -250,6 +250,26 @@ namespace ECSEngine {
 			copy.fields = StreamDeepCopy(fields, ptr);
 
 			return copy;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionConstant ReflectionConstant::CopyTo(uintptr_t& ptr) const
+		{
+			ReflectionConstant constant;
+			
+			constant.name.InitializeAndCopy(ptr, name);
+			constant.folder_hierarchy = folder_hierarchy;
+			constant.value = value;
+
+			return constant;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t ReflectionConstant::CopySize() const
+		{
+			return name.MemoryOf(name.size);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

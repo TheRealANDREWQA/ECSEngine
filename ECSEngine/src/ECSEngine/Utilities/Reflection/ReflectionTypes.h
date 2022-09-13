@@ -140,7 +140,7 @@ namespace ECSEngine {
 
 			bool Is(Stream<char> string) const;
 
-			ReflectionField Copy(uintptr_t& ptr) const;
+			ReflectionField CopyTo(uintptr_t& ptr) const;
 
 			// Only the buffer size is needed
 			size_t CopySize() const;
@@ -152,7 +152,7 @@ namespace ECSEngine {
 		};
 
 		struct ECSENGINE_API ReflectionEvaluation {
-			ReflectionEvaluation Copy(uintptr_t& ptr) const;
+			ReflectionEvaluation CopyTo(uintptr_t& ptr) const;
 
 			// Only the buffer size is needed
 			size_t CopySize() const;
@@ -172,7 +172,7 @@ namespace ECSEngine {
 			double GetEvaluation(Stream<char> name) const;
 
 			// Copies everything that needs to be copied into this buffer
-			ReflectionType Copy(uintptr_t& ptr) const;
+			ReflectionType CopyTo(uintptr_t& ptr) const;
 
 			size_t CopySize() const;
 
@@ -185,16 +185,20 @@ namespace ECSEngine {
 			unsigned int alignment;
 		};
 
-		struct ReflectionEnum {
+		struct ECSENGINE_API ReflectionEnum {
 			// Copies everything that needs to be copied into this buffer
-			ReflectionEnum Copy(uintptr_t& ptr) const;
+			ReflectionEnum CopyTo(uintptr_t& ptr) const;
 
 			Stream<char> name;
 			Stream<Stream<char>> fields;
 			unsigned int folder_hierarchy_index;
 		};
 
-		struct ReflectionConstant {
+		struct ECSENGINE_API ReflectionConstant {
+			ReflectionConstant CopyTo(uintptr_t& ptr) const;
+
+			size_t CopySize() const;
+
 			Stream<char> name;
 			double value;
 			unsigned int folder_hierarchy;

@@ -48,6 +48,11 @@ namespace ECSEngine {
 		return ptr >= (uintptr_t)m_buffer && ptr < (uintptr_t)m_buffer + m_capacity;
 	}
 
+	void* StackAllocator::GetAllocatedBuffer()
+	{
+		return m_buffer;
+	}
+
 	void StackAllocator::SetMarker() {
 		m_marker = m_top;
 	}

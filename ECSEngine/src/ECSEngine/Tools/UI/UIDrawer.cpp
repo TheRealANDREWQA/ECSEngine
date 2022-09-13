@@ -5227,13 +5227,28 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::MenuDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerMenu* data, float2 position, float2 scale) {
-			HandleFitSpaceRectangle(configuration, position, scale);
-
 			bool is_active = true;
 			if (configuration & UI_CONFIG_ACTIVE_STATE) {
 				const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
 				is_active = active_state->state;
 			}
+
+			size_t label_configuration = configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION;
+			label_configuration = function::ClearFlag(label_configuration, UI_CONFIG_ALIGN_ELEMENT, UI_CONFIG_ALIGN_ELEMENT_BOTTOM, UI_CONFIG_ALIGN_ELEMENT_RIGHT);
+			label_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
+			
+			if (~configuration & UI_CONFIG_MENU_SPRITE) {
+				float2 label_scale = GetLabelScale(data->name);
+				if (~configuration & UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X) {
+					scale.x = label_scale.x;
+				}
+				else {
+					label_configuration |= UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X;
+				}
+			}
+
+			GetElementAlignedPosition(configuration, config, position, scale);			
+			HandleFitSpaceRectangle(configuration, position, scale);
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
 				UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
@@ -5243,8 +5258,6 @@ namespace ECSEngine {
 
 			if (ValidatePosition(configuration, position, scale)) {
 				if (~configuration & UI_CONFIG_MENU_SPRITE) {
-					size_t label_configuration = configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_DO_NOT_ADVANCE;
-					label_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
 					TextLabelDrawer(
 						label_configuration,
 						config,
@@ -5331,9 +5344,10 @@ namespace ECSEngine {
 			size_t total_memory = MenuCalculateStateMemory(state, copy_states);
 			if (state->row_has_submenu != nullptr) {
 				for (size_t index = 0; index < state->row_count; index++) {
-					if (state->row_has_submenu[index] && !state->unavailables[index]) {
-						total_memory += MenuCalculateStateMemory(&state->submenues[index], copy_states);
-						MenuWalkStatesMemory(&state->submenues[index], copy_states);
+					if (state->row_has_submenu[index]) {
+						if (state->unavailables == nullptr || !state->unavailables[index]) {
+							total_memory += MenuWalkStatesMemory(&state->submenues[index], copy_states);					
+						}
 					}
 				}
 			}
@@ -5415,6 +5429,7 @@ namespace ECSEngine {
 						void* current_buffer = (void*)buffer;
 						memcpy(current_buffer, state->click_handlers[index].data, state->click_handlers[index].data_size);
 						state->click_handlers[index].data = current_buffer;
+						buffer += state->click_handlers[index].data_size;
 					}
 				}
 			}
@@ -5433,8 +5448,10 @@ namespace ECSEngine {
 			UIDrawer::MenuSetStateBuffers(state, buffer, stream, copy_states);
 			if (state->row_has_submenu != nullptr) {
 				for (size_t index = 0; index < state->row_count; index++) {
-					if (state->row_has_submenu[index] && !state->unavailables[index]) {
-						MenuSetStateBuffers(&state->submenues[index], buffer, stream, copy_states);
+					if (state->row_has_submenu[index]) {
+						if (state->unavailables == nullptr || !state->unavailables[index]) {
+							MenuSetStateBuffers(&state->submenues[index], buffer, stream, copy_states);
+						}
 					}
 				}
 			}
@@ -12565,6 +12582,25 @@ namespace ECSEngine {
 			identifier.CopyTo(current_identifier.buffer + current_identifier.size);
 			identifier_stack.Add(identifier.size);
 			current_identifier.size += identifier.size;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void UIDrawer::PushIdentifierStackEx(Stream<char> identifier)
+		{
+			ECS_STACK_CAPACITY_STREAM_DYNAMIC(char, identifier_final, identifier.size);
+			Stream<char> pattern = function::FindFirstToken(identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+			if (pattern.size > 0) {
+				identifier_final.Copy(Stream<char>(identifier.buffer, pattern.buffer - identifier.buffer));
+				pattern.buffer += ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
+				pattern.size -= ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT;
+				identifier_final.AddStream(pattern);
+			}
+			else {
+				identifier_final = identifier;
+			}
+
+			PushIdentifierStack(identifier_final);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

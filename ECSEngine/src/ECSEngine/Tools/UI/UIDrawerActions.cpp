@@ -2315,6 +2315,8 @@ namespace ECSEngine {
 				previous_config, 
 				input->color_picker_initial_color
 			);
+
+			drawer.SetCurrentPositionToStart();
 			drawer.NextRow();
 #pragma endregion
 
@@ -2327,7 +2329,7 @@ namespace ECSEngine {
 			UIDrawConfig color_input_config;
 			UIConfigWindowDependentSize color_input_transform;
 			color_input_transform.type = ECS_UI_WINDOW_DEPENDENT_HORIZONTAL;
-			color_input_transform.scale_factor = { 0.34f, 1.0f };
+			color_input_transform.scale_factor = { 0.33f, 1.0f };
 
 			UIConfigSliderMouseDraggable mouse_draggable;
 			mouse_draggable.interpolate_bounds = true;
@@ -2544,14 +2546,21 @@ namespace ECSEngine {
 					UIDrawerMenu* menu;
 					Action action;
 					void* data;
+					size_t data_size;
 				};
 
 				auto clickable_wrapper = [](ActionData* action_data) {
 					UI_UNPACK_ACTION_DATA;
+					
+					ClickableWrapperData* data = (ClickableWrapperData*)_data;
 
 					if (IsClickableTrigger(action_data)) {
-						ClickableWrapperData* data = (ClickableWrapperData*)_data;
-						action_data->data = data->data;
+						if (data->data_size > 0) {
+							action_data->data = function::OffsetPointer(data, sizeof(*data));
+						}
+						else {
+							action_data->data = data->data;
+						}
 						data->action(action_data);
 
 						UIDrawerMenuCleanupSystemHandlerData cleanup_data;
@@ -2577,15 +2586,23 @@ namespace ECSEngine {
 					size_t RECTANGLE_CONFIGURATION = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_RECTANGLE_GENERAL_ACTION;
 					
 					if (state->unavailables == nullptr || (state->unavailables != nullptr && !state->unavailables[index])) {
-						ClickableWrapperData wrapper_data;
-						wrapper_data.action = state->click_handlers[index].action;
-						wrapper_data.data = state->click_handlers[index].data;
-						wrapper_data.menu = data->menu;
-						clickable.handler = { clickable_wrapper, &wrapper_data, sizeof(wrapper_data), state->click_handlers[index].phase };
-
+						// Embed the data into the wrapper
+						size_t _wrapper_data[256];
 						if (state->row_has_submenu != nullptr && state->row_has_submenu[index] == true) {
 							clickable.handler = { SkipAction, nullptr, 0 };
 						}
+						else {
+							ClickableWrapperData* wrapper_data = (ClickableWrapperData*)_wrapper_data;
+							wrapper_data->action = state->click_handlers[index].action;
+							wrapper_data->data = state->click_handlers[index].data;
+							wrapper_data->menu = data->menu;
+							wrapper_data->data_size = state->click_handlers[index].data_size;
+							if (state->click_handlers[index].data_size > 0) {
+								memcpy(function::OffsetPointer(wrapper_data, sizeof(*wrapper_data)), state->click_handlers[index].data, state->click_handlers[index].data_size);
+							}
+							clickable.handler = { clickable_wrapper, wrapper_data, (unsigned int)(sizeof(*wrapper_data) + wrapper_data->data_size), state->click_handlers[index].phase };
+						}
+
 						config.AddFlag(clickable);
 
 						LABEL_CONFIGURATION = function::ClearFlag(LABEL_CONFIGURATION, UI_CONFIG_UNAVAILABLE_TEXT);

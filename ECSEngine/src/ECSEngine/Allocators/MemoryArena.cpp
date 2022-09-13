@@ -63,6 +63,12 @@ namespace ECSEngine {
 		}
 	}
 
+	const void* MemoryArena::GetAllocatedBuffer() const
+	{
+		uintptr_t ptr = (uintptr_t)m_initial_buffer;
+		return (const void*)(ptr - MemoryOfArenas(m_allocator_count, m_allocators[0].m_range.GetCapacity()));
+	}
+
 	template<bool trigger_error_if_not_found>
 	void MemoryArena::Deallocate(const void* block)
 	{
@@ -172,6 +178,15 @@ namespace ECSEngine {
 		return false;
 	}
 
+	void ResizableMemoryArena::Clear()
+	{
+		for (size_t index = 1; index < m_arena_size; index++) {
+			DeallocateArena(index);
+		}
+		m_arena_size = 1;
+		m_arenas[0].Clear();
+	}
+
 	void ResizableMemoryArena::CreateArena() {
 		CreateArena(m_new_arena_capacity, m_new_allocator_count, m_new_blocks_per_allocator);
 	}
@@ -185,6 +200,7 @@ namespace ECSEngine {
 			MemoryArena* new_arenas = (MemoryArena*)m_backup->Allocate(sizeof(MemoryArena) * new_capacity);
 			memcpy(new_arenas, m_arenas, sizeof(MemoryArena) * m_arena_capacity);
 			m_arena_capacity = new_capacity;
+			m_arenas = new_arenas;
 		}
 
 		m_arenas[m_arena_size++] = MemoryArena(
@@ -193,6 +209,19 @@ namespace ECSEngine {
 			allocator_count,
 			blocks_per_allocator
 		);
+	}
+
+	void ResizableMemoryArena::DeallocateArena(size_t index)
+	{
+		m_backup->Deallocate(m_arenas[index].GetAllocatedBuffer());
+	}
+
+	void ResizableMemoryArena::Free()
+	{
+		for (size_t index = 0; index < m_arena_size; index++) {
+			DeallocateArena(index);
+		}
+		m_backup->Deallocate(m_arenas);
 	}
 
 	// ---------------------------------------------------- Thread safe variants -----------------------------------------

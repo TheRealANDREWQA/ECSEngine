@@ -34,6 +34,10 @@ namespace ECSEngine {
 		// since it can be taken from the stack and it returns the top to 0
 		void Clear();
 
+		// Clears all the allocated memory from the backup. If the initial buffer is also from the
+		// given allocator, it will deallocate it as well
+		void Free();
+
 		size_t GetMarker() const;
 
 		void ReturnToMarker(size_t marker);

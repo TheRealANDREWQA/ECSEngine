@@ -108,6 +108,8 @@ namespace ECSEngine {
 		Component component;
 		unsigned int size;
 		size_t allocator_size;
+		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+		unsigned short component_buffers_count;
 	};
 
 	struct DeferredDestroyComponent {
@@ -118,6 +120,8 @@ namespace ECSEngine {
 		Component component;
 		unsigned int size;
 		size_t allocator_size;
+		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+		unsigned short component_buffers_count;
 	};
 
 	struct DeferredDestroySharedComponent {
@@ -126,11 +130,13 @@ namespace ECSEngine {
 
 	struct DeferredCreateSharedInstance {
 		Component component;
+		bool copy_buffers;
 		const void* data;
 	};
 
 	struct DeferredCreateNamedSharedInstance {
 		Component component;
+		bool copy_buffers;
 		const void* data;
 		ResourceIdentifier identifier;
 	};
@@ -1115,6 +1121,11 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->entities.size; index++) {
 			EntityInfo info = manager->GetEntityInfo(data->entities[index]);
 			ArchetypeBase* base_archetype = manager->GetBase(info.main_archetype, info.base_archetype);
+			const Archetype* main_archetype = manager->GetArchetype(info.main_archetype);
+			
+			// Dealocate any buffers this entity might have
+			main_archetype->DeallocateEntityBuffers(info);
+
 			// Remove the entities from the archetype
 			base_archetype->RemoveEntity(info.stream_index, manager->m_entity_pool);
 			
@@ -1237,12 +1248,11 @@ namespace ECSEngine {
 					shared_signature.indices[subindex] = shared_signature.indices[shared_signature.count];
 					shared_signature.instances[subindex] = shared_signature.instances[shared_signature.count];
 
-					// Exit the loop
-					subindex = -2;
+					break;
 				}
 			}
 			// Fail if the component doesn't exist
-			ECS_CRASH_RETURN(subindex != -1, "EntityManager: A component could not be found when trying to remove components from entities. "
+			ECS_CRASH_RETURN(subindex < shared_signature.count, "EntityManager: A component could not be found when trying to remove components from entities. "
 				"The first entity is {#}. The component is {#}.", data->entities[0].value, data->components.indices[index].value);
 		}
 
@@ -1332,6 +1342,9 @@ namespace ECSEngine {
 		*manager->GetArchetypeUniqueComponentsPtr(archetype_index) = VectorComponentSignature(data->unique_components);
 		*manager->GetArchetypeSharedComponentsPtr(archetype_index) = VectorComponentSignature(data->shared_components);
 
+		// Update all the queries to reflect the change
+		manager->m_query_cache->UpdateAdd(archetype_index);
+
 		if (_additional_data != nullptr) {
 			unsigned int* additional_data = (unsigned int*)_additional_data;
 			*additional_data = archetype_index;
@@ -1382,6 +1395,11 @@ namespace ECSEngine {
 		ECS_CRASH_RETURN(archetype_index != -1, "EntityManager: Could not find archetype when trying to destroy it.");
 
 		Archetype* archetype = manager->GetArchetype(archetype_index);
+		// If it has components with buffers, those need to be deallocated manually
+		if (archetype->m_unique_components_to_deallocate_count > 0) {
+			archetype->DeallocateEntityBuffers();
+		}
+
 		EntityPool* pool = manager->m_entity_pool;
 		// Do a search and eliminate every entity inside the base archetypes
 		for (unsigned int index = 0; index < archetype->GetBaseCount(); index++) {
@@ -1595,20 +1613,36 @@ namespace ECSEngine {
 	void CommitCreateComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateComponent* data = (DeferredCreateComponent*)_data;
 
+		// Crash if the allocator is specified but the buffer offsets are not
+		ECS_CRASH_RETURN(data->allocator_size == 0 || data->component_buffers_count > 0, "EntityManager: Trying to create component {#} with an allocator but without buffer offsets.", data->component.value);
+
 		if (manager->m_unique_components.size <= data->component.value) {
 			size_t old_capacity = manager->m_unique_components.size;
-			void* allocation = manager->m_small_memory_manager.Allocate(sizeof(SharedComponentInfo) * data->component.value);
+			void* allocation = manager->m_small_memory_manager.Allocate(sizeof(ComponentInfo) * (data->component.value + 1));
 			manager->m_unique_components.CopyTo(allocation);
 			manager->m_small_memory_manager.Deallocate(manager->m_unique_components.buffer);
 
-			manager->m_unique_components.InitializeFromBuffer(allocation, data->component.value);
+			manager->m_unique_components.InitializeFromBuffer(allocation, data->component.value + 1);
 			for (size_t index = old_capacity; index < manager->m_unique_components.size; index++) {
 				manager->m_unique_components[index].size = -1;
+			}
+
+			// Update the component info reference to all archetypes and base archetypes
+			for (unsigned int main_index = 0; main_index < manager->m_archetypes.size; main_index++) {
+				Archetype* archetype = manager->GetArchetype(main_index);
+				archetype->m_unique_infos = manager->m_unique_components.buffer;
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					ArchetypeBase* base = archetype->GetBase(base_index);
+					base->m_infos = manager->m_unique_components.buffer;
+				}
 			}
 		}
 		// If the size is different from -1, it means there is a component actually allocated to this slot
 		ECS_CRASH_RETURN(!manager->ExistsComponent(data->component), "EntityManager: Creating component at position {#} failed. It already exists.", data->component.value);
 		manager->m_unique_components[data->component.value].size = data->size;
+		manager->m_unique_components[data->component.value].component_buffers_count = data->component_buffers_count;
+		memcpy(manager->m_unique_components[data->component.value].component_buffers, data->component_buffers, sizeof(ComponentBuffer) * data->component_buffers_count);
 		CreateAllocatorForComponent(manager, manager->m_unique_components[data->component.value], data->allocator_size);
 	}
 
@@ -1616,6 +1650,8 @@ namespace ECSEngine {
 		EntityManager* manager,
 		Component component,
 		unsigned int size,
+		size_t allocator_size,
+		Stream<ComponentBuffer> buffer_offsets,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -1625,6 +1661,14 @@ namespace ECSEngine {
 		DeferredCreateComponent* data = (DeferredCreateComponent*)allocation;
 		data->component = component;
 		data->size = size;
+		data->allocator_size = allocator_size;
+		if (buffer_offsets.size > 0) {
+			data->component_buffers_count = buffer_offsets.size;
+			buffer_offsets.CopyTo(data->component_buffers);
+		}
+		else {
+			data->component_buffers_count = 0;
+		}
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_CREATE_COMPONENT), debug_info });
@@ -1639,7 +1683,7 @@ namespace ECSEngine {
 
 		ECS_CRASH_RETURN(data->component.value < manager->m_unique_components.size, "EntityManager: Incorrect component index {#} when trying to delete it.", data->component.value);
 		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_RETURN(manager->m_unique_components[data->component.value].size != -1, "EntityManager: Trying to destroy component {#} when it doesn't exist.", data->component.value);
+		ECS_CRASH_RETURN(manager->ExistsComponent(data->component), "EntityManager: Trying to destroy component {#} when it doesn't exist.", data->component.value);
 
 		// If it has an allocator, deallocate it
 		if (manager->m_unique_components[data->component.value].allocator != nullptr) {
@@ -1673,23 +1717,27 @@ namespace ECSEngine {
 	void CommitCreateSharedComponent(EntityManager* manager, void* _data, void* _additional_data) {
 		DeferredCreateSharedComponent* data = (DeferredCreateSharedComponent*)_data;
 
+		// Crash if the allocator size is specified but the buffer offsets are not
+		ECS_CRASH_RETURN(data->allocator_size == 0 || data->component_buffers_count > 0, "EntityManager: Trying to create shared component {#} with an allocator but without buffer_offsets.", data->component.value);
+
 		if (manager->m_shared_components.size <= data->component.value) {
 			size_t old_capacity = manager->m_shared_components.size;
-			void* allocation = manager->m_small_memory_manager.Allocate(sizeof(SharedComponentInfo) * data->component.value);
+			void* allocation = manager->m_small_memory_manager.Allocate(sizeof(SharedComponentInfo) * (data->component.value + 1));
 			manager->m_shared_components.CopyTo(allocation);
 			manager->m_small_memory_manager.Deallocate(manager->m_shared_components.buffer);
 
-			manager->m_shared_components.InitializeFromBuffer(allocation, data->component.value);
+			manager->m_shared_components.InitializeFromBuffer(allocation, data->component.value + 1);
 			for (size_t index = old_capacity; index < manager->m_shared_components.size; index++) {
 				manager->m_shared_components[index].info.size = -1;
-				manager->m_shared_components[index].instances.Initialize(GetAllocatorPolymorphic(&manager->m_small_memory_manager), 0);
-				manager->m_shared_components[index].named_instances.InitializeFromBuffer(nullptr, 0);
 			}
 		}
 		// If the size is different from -1, it means there is a component actually allocated to this slot
 		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].info.size == -1, "EntityManager: Trying to create shared component {#} when it already exists a shared component at that slot.", data->component.value);
 		manager->m_shared_components[data->component.value].info.size = data->size;
+		manager->m_shared_components[data->component.value].info.component_buffers_count = data->component_buffers_count;
+		memcpy(manager->m_shared_components[data->component.value].info.component_buffers, data->component_buffers, sizeof(ComponentBuffer) * data->component_buffers_count);
 		manager->m_shared_components[data->component.value].instances.Initialize(GetAllocatorPolymorphic(&manager->m_small_memory_manager), 0);
+		manager->m_shared_components[data->component.value].named_instances.Initialize(GetAllocatorPolymorphic(&manager->m_small_memory_manager), 0);
 		
 		CreateAllocatorForComponent(manager, manager->m_shared_components[data->component.value].info, data->allocator_size);
 		// The named instances table should start with size 0 and only create it when actually needing the tags
@@ -1700,6 +1748,7 @@ namespace ECSEngine {
 		Component component,
 		unsigned int size,
 		size_t allocator_size,
+		Stream<ComponentBuffer> component_buffers,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -1710,6 +1759,10 @@ namespace ECSEngine {
 		data->component = component;
 		data->size = size;
 		data->allocator_size = allocator_size;
+		data->component_buffers_count = component_buffers.size;
+		if (data->component_buffers > 0) {
+			component_buffers.CopyTo(data->component_buffers);
+		}
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(manager, parameters, { DataPointer(allocation, DEFERRED_CREATE_SHARED_COMPONENT), debug_info });
@@ -1724,7 +1777,7 @@ namespace ECSEngine {
 
 		ECS_CRASH_RETURN(data->component.value < manager->m_shared_components.size, "EntityManager: Invalid shared component {#} when trying to destroy it.", data->component.value);
 		// -1 Signals it's empty - a component was never associated to this slot
-		ECS_CRASH_RETURN(manager->m_shared_components[data->component.value].info.size == -1, "EntityManager: Trying to destroy shared component {#} when it doesn't exist.", data->component.value);
+		ECS_CRASH_RETURN(manager->ExistsSharedComponent(data->component), "EntityManager: Trying to destroy shared component {#} when it doesn't exist.", data->component.value);
 
 		// If it has an allocator deallocate it
 		MemoryArena** allocator = &manager->m_shared_components[data->component.value].info.allocator;
@@ -1736,7 +1789,7 @@ namespace ECSEngine {
 		manager->m_shared_components[data->component.value].instances.FreeBuffer();
 		manager->m_shared_components[data->component.value].info.size = -1;
 		const void* table_buffer = manager->m_shared_components[data->component.value].named_instances.GetAllocatedBuffer();
-		if (table_buffer != nullptr) {
+		if (table_buffer != nullptr && manager->m_shared_components[data->component.value].named_instances.GetCapacity() > 0) {
 			// Deallocate the table
 			manager->m_small_memory_manager.Deallocate(table_buffer);
 		}
@@ -1774,8 +1827,41 @@ namespace ECSEngine {
 		memcpy(allocation, data->data, component_size);
 
 		unsigned int instance_index = manager->m_shared_components[data->component.value].instances.Add(allocation);
-		ECS_CRASH_RETURN(instance_index > USHORT_MAX, "EntityManager: Too many shared instances created for component {#}.", data->component.value);
+		ECS_CRASH_RETURN(instance_index > SHORT_MAX, "EntityManager: Too many shared instances created for component {#}.", data->component.value);
 		
+		if (data->copy_buffers) {
+			MemoryArena* arena = manager->GetSharedComponentAllocator({ (short)instance_index });
+			if (arena != nullptr) {
+				const ComponentInfo* info = &manager->m_shared_components[data->component.value].info;
+				for (unsigned char buffer_index = 0; buffer_index < info->component_buffers_count; buffer_index++) {
+					void* pointer = function::OffsetPointer(data->data, info->component_buffers[buffer_index].offset);
+					void* pointer_to_change = pointer;
+					unsigned int byte_size = 0;
+					if (info->component_buffers[buffer_index].is_data_pointer) {
+						DataPointer* data_pointer = (DataPointer*)pointer;
+						pointer = data_pointer->GetPointer();
+						byte_size = data_pointer->GetData();
+					}
+					else {
+						pointer = *(void**)pointer;
+						unsigned int* size = (unsigned int*)function::OffsetPointer(pointer, sizeof(void*));
+						byte_size = *size;
+					}
+
+					void* new_buffer = arena->Allocate(byte_size);
+					memcpy(new_buffer, pointer, byte_size);
+					if (info->component_buffers[buffer_index].is_data_pointer) {
+						DataPointer* data_pointer = (DataPointer*)pointer_to_change;
+						data_pointer->SetPointer(new_buffer);
+					}
+					else {
+						void** ptr = (void**)pointer_to_change;
+						*ptr = new_buffer;
+					}
+				}
+			}
+		}
+
 		// Assert that the maximal amount of shared instance is not reached
 		if (_additional_data != nullptr) {
 			SharedInstance* instance = (SharedInstance*)_additional_data;
@@ -1787,6 +1873,7 @@ namespace ECSEngine {
 		EntityManager* manager,
 		Component component,
 		const void* instance_data,
+		bool copy_buffers,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -1832,6 +1919,7 @@ namespace ECSEngine {
 		Component component,
 		const void* instance_data,
 		ResourceIdentifier identifier,
+		bool copy_buffers,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
@@ -2400,8 +2488,8 @@ namespace ECSEngine {
 		// Allocate the query cache now
 		// Get a default allocator for it for the moment
 		AllocatorPolymorphic query_cache_allocator = ArchetypeQueryCache::DefaultAllocator(descriptor.memory_manager->m_backup);
-		m_query_cache = (ArchetypeQueryCache*)Allocate(query_cache_allocator, sizeof(ArchetypeQueryCache));
-		*m_query_cache = ArchetypeQueryCache(query_cache_allocator);
+		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
+		*m_query_cache = ArchetypeQueryCache(this, query_cache_allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -2707,6 +2795,79 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::ChangeComponentIndex(Component old_component, Component new_component)
+	{
+		ECS_ASSERT(ExistsComponent(old_component) && !ExistsComponent(new_component));
+
+		unsigned short byte_size = m_unique_components[old_component.value].size;
+
+		MemoryArena* arena = GetComponentAllocator(old_component);
+		// Always use size 0 allocator size because we will transfer the arena to the new slot
+		// In this way we avoid creating a new allocator and transfer all the existing data to it
+		RegisterComponentCommit(new_component, byte_size, 0);
+
+		if (arena != nullptr) {
+			m_unique_components[old_component.value].allocator = nullptr;
+			m_unique_components[new_component.value].allocator = arena;
+		}
+
+		// Now destroy the old component
+		UnregisterComponentCommit(old_component);
+
+		unsigned int archetype_count = GetArchetypeCount();
+		for (unsigned int index = 0; index < archetype_count; index++) {
+			unsigned char component_index = FindArchetypeUniqueComponent(index, old_component);
+			if (component_index != UCHAR_MAX) {
+				m_archetypes[index].m_unique_components[component_index] = new_component;
+				*GetArchetypeUniqueComponentsPtr(index) = VectorComponentSignature(m_archetypes[index].m_unique_components);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void EntityManager::ChangeSharedComponentIndex(Component old_component, Component new_component)
+	{
+		ECS_ASSERT(ExistsSharedComponent(old_component) && !ExistsSharedComponent(new_component));
+
+		MemoryArena* arena = GetSharedComponentAllocator(old_component);
+
+		unsigned short byte_size = m_shared_components[old_component.value].info.size;
+
+		// Record the instances and the named instances in order to be transfered
+		auto instances = m_shared_components[old_component.value].instances;
+		auto named_instances = m_shared_components[old_component.value].named_instances;
+		m_shared_components[old_component.value].instances.stream.capacity = 0;
+		m_shared_components[old_component.value].named_instances.m_capacity = 0;
+
+		// Always use size 0 allocator size because we will transfer the arena to the new slot
+		// In this way we avoid creating a new allocator and transfer all the existing data to it
+		RegisterSharedComponentCommit(new_component, byte_size, 0);
+
+		m_shared_components[new_component.value].instances = instances;
+		m_shared_components[new_component.value].named_instances = named_instances;
+
+		if (arena != nullptr) {
+			m_shared_components[old_component.value].info.allocator = nullptr;
+			m_shared_components[new_component.value].info.allocator = arena;
+		}
+
+		// Now destroy the old component
+		UnregisterSharedComponentCommit(old_component);
+
+		// Update the archetype references
+		unsigned int archetype_count = GetArchetypeCount();
+		for (unsigned int index = 0; index < archetype_count; index++) {
+			unsigned char component_index = FindArchetypeSharedComponent(index, old_component);
+			if (component_index != UCHAR_MAX) {
+				m_archetypes[index].m_shared_components[component_index] = new_component;
+				*GetArchetypeSharedComponentsPtr(index) = VectorComponentSignature(m_archetypes[index].m_shared_components);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::ChangeEntityParentCommit(Stream<EntityPair> pairs)
 	{
 		DeferredChangeEntityParentHierarchy data;
@@ -2880,6 +3041,8 @@ namespace ECSEngine {
 			entity_manager->m_hierarchy.parent_table.GetCapacity()
 		);
 		m_hierarchy.CopyOther(&entity_manager->m_hierarchy);
+
+		m_query_cache->CopyOther(entity_manager->m_query_cache);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -3602,14 +3765,14 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypesExclude(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const
+	void EntityManager::GetArchetypes(ArchetypeQueryExclude query, CapacityStream<unsigned int>& archetypes) const
 	{
 		GetArchetypeImplementation(this, query, archetypes);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::GetArchetypesExcludePtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const
+	void EntityManager::GetArchetypesPtrs(ArchetypeQueryExclude query, CapacityStream<Archetype*>& archetypes) const
 	{
 		GetArchetypePtrsImplementation(this, query, archetypes);
 	}
@@ -4124,40 +4287,66 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterComponentCommit(Component component, unsigned int size, size_t allocator_size) {
+	void EntityManager::RegisterComponentCommit(Component component, unsigned int size, size_t allocator_size, Stream<ComponentBuffer> component_buffers) {
 		DeferredCreateComponent commit_data;
 		commit_data.component = component;
 		commit_data.size = size;
+		commit_data.allocator_size = allocator_size;
+		if (component_buffers.size > 0) {
+			commit_data.component_buffers_count = component_buffers.size;
+			component_buffers.CopyTo(commit_data.component_buffers);
+		}
+		else {
+			commit_data.component_buffers_count = 0;
+		}
+
 		CommitCreateComponent(this, &commit_data, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterComponent(Component component, unsigned int size, size_t allocator_size, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
-		RegisterCreateComponent(this, component, size, command_stream, debug_info);
+	void EntityManager::RegisterComponent(Component component, unsigned int size, size_t allocator_size, Stream<ComponentBuffer> buffer_offsets, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
+		RegisterCreateComponent(this, component, size, allocator_size, buffer_offsets, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterSharedComponentCommit(Component component, unsigned int size, size_t allocator_size) {
+	void EntityManager::RegisterSharedComponentCommit(Component component, unsigned int size, size_t allocator_size, Stream<ComponentBuffer> component_buffers) {
 		DeferredCreateSharedComponent commit_data;
 		commit_data.component = component;
 		commit_data.size = size;
+		commit_data.allocator_size = allocator_size;
+		if (component_buffers.size > 0) {
+			commit_data.component_buffers_count = component_buffers.size;
+			component_buffers.CopyTo(commit_data.component_buffers);
+		}
+		else {
+			commit_data.component_buffers_count = 0;
+		}
+
 		CommitCreateSharedComponent(this, &commit_data, nullptr);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterSharedComponent(Component component, unsigned int size, size_t allocator_size, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
-		RegisterCreateSharedComponent(this, component, size, allocator_size, command_stream, debug_info);
+	void EntityManager::RegisterSharedComponent(
+		Component component, 
+		unsigned int size, 
+		size_t allocator_size, 
+		Stream<ComponentBuffer> buffer_offsets, 
+		EntityManagerCommandStream* command_stream,
+		DebugInfo debug_info
+	) {
+		RegisterCreateSharedComponent(this, component, size, allocator_size, buffer_offsets, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	SharedInstance EntityManager::RegisterSharedInstanceCommit(Component component, const void* data) {
+	SharedInstance EntityManager::RegisterSharedInstanceCommit(Component component, const void* data, bool copy_buffers) {
 		DeferredCreateSharedInstance commit_data;
 		commit_data.component = component;
 		commit_data.data = data;
+		commit_data.copy_buffers = copy_buffers;
 
 		SharedInstance instance;
 		CommitCreateSharedInstance(this, &commit_data, &instance);
@@ -4167,17 +4356,18 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::RegisterSharedInstance(Component component, const void* data, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
-		RegisterCreateSharedInstance(this, component, data, command_stream, debug_info);
+	void EntityManager::RegisterSharedInstance(Component component, const void* data, bool copy_buffers, EntityManagerCommandStream* command_stream, DebugInfo debug_info) {
+		RegisterCreateSharedInstance(this, component, data, copy_buffers, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	SharedInstance EntityManager::RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, const void* data) {
+	SharedInstance EntityManager::RegisterNamedSharedInstanceCommit(Component component, ResourceIdentifier identifier, const void* data, bool copy_buffers) {
 		DeferredCreateNamedSharedInstance commit_data;
 		commit_data.component = component;
 		commit_data.identifier = identifier;
 		commit_data.data = data;
+		commit_data.copy_buffers = copy_buffers;
 
 		SharedInstance instance;
 		CommitCreateNamedSharedInstance(this, &commit_data, &instance);
@@ -4190,11 +4380,12 @@ namespace ECSEngine {
 	void EntityManager::RegisterNamedSharedInstance(
 		Component component, 
 		ResourceIdentifier identifier, 
-		const void* data, 
+		const void* data,
+		bool copy_buffers,
 		EntityManagerCommandStream* command_stream,
 		DebugInfo debug_info
 	) {
-		RegisterCreateNamedSharedInstance(this, component, data, identifier, command_stream, debug_info);
+		RegisterCreateNamedSharedInstance(this, component, data, identifier, copy_buffers, command_stream, debug_info);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4216,16 +4407,22 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	template<typename Query>
+	unsigned int RegisterQueryImplementation(EntityManager* entity_manager, Query query) {
+		// The AddQuery already retrieves all matching initial archetypes
+		return entity_manager->m_query_cache->AddQuery(query);
+	}
+
 	unsigned int EntityManager::RegisterQuery(ArchetypeQuery query)
 	{
-		return m_query_cache->AddQuery(query);
+		return RegisterQueryImplementation(this, query);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	unsigned int EntityManager::RegisterQuery(ArchetypeQueryExclude query)
 	{
-		return m_query_cache->AddQuery(query);
+		return RegisterQueryImplementation(this, query);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4305,7 +4502,9 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void EntityManager::Reset() {
-		// Clear the main allocator and reassign to it
+		// Free the allocator of the query cache
+		FreeAllocatorFrom(m_query_cache->allocator, GetAllocatorPolymorphic(m_memory_manager->m_backup));
+
 		m_hierarchy_allocator.Free();
 		m_memory_manager->Clear();
 		m_entity_pool->Reset();

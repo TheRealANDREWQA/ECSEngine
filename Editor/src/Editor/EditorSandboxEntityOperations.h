@@ -17,6 +17,9 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 // Does nothing if the entity doesn't exist
 void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
 
+// It forwards to the unique or shared variant
+void AddSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
+
 void AttachEntityName(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> name);
 
 void ChangeEntityName(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> new_name);

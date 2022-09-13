@@ -63,6 +63,10 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+#pragma region Stream
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(Stream) {
 			if (data->definition.size < sizeof("Stream<")) {
 				return false;
@@ -112,6 +116,12 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+#pragma endregion
+
+#pragma region SparseSet
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(SparseSet) {
 			return ReflectionCustomTypeMatchTemplate(data, "SparseSet") || ReflectionCustomTypeMatchTemplate(data, "ResizableSparseSet");
 		}
@@ -135,6 +145,12 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+#pragma endregion
+
+#pragma region Color
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(Color) {
 			return function::CompareStrings(("Color"), data->definition);
 		}
@@ -148,6 +164,12 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(Color) {}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+#pragma region ColorFloat
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -167,6 +189,32 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+#pragma endregion
+
+#pragma region DataPointer
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_MATCH_FUNCTION(DataPointer) {
+			return function::CompareStrings(STRING(DataPointer), data->definition);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_BYTE_SIZE_FUNCTION(DataPointer) {
+			return { sizeof(DataPointer), alignof(DataPointer) };
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(DataPointer) {}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		// TODO: move this to another file
 		ReflectionCustomType ECS_REFLECTION_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_COUNT] = {
 			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(Stream),
@@ -174,7 +222,8 @@ namespace ECSEngine {
 			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(SparseSet),
 			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(Color),
 			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(ColorFloat),
-			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(MaterialAsset)
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(MaterialAsset),
+			ECS_REFLECTION_CUSTOM_TYPE_STRUCT(DataPointer)
 		};
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -316,7 +365,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					const ReflectionType* data_type = &data[data_index].types[index];
 
-					ReflectionType type = data_type->Copy(ptr);
+					ReflectionType type = data_type->CopyTo(ptr);
 					type.folder_hierarchy_index = folder_index;
 					ResourceIdentifier identifier(type.name);
 					// If the type already exists, fail
@@ -334,7 +383,7 @@ namespace ECSEngine {
 					// Stylized the labels such that they don't appear excessively long
 					ReflectionManagerStylizeEnum(temp_copy);
 
-					ReflectionEnum enum_ = temp_copy.Copy(ptr);
+					ReflectionEnum enum_ = temp_copy.CopyTo(ptr);
 					enum_.folder_hierarchy_index = folder_index;
 					ResourceIdentifier identifier(enum_.name);
 					if (enum_definitions.Find(identifier) != -1) {
@@ -350,11 +399,7 @@ namespace ECSEngine {
 					// Set the folder index before
 					ReflectionConstant constant = data[data_index].constants[constant_index];
 					constant.folder_hierarchy = folder_index;
-					// Copy the name
-					char* new_name = (char*)ptr;
-					constant.name.CopyTo(ptr);
-					constant.name.buffer = new_name;
-					constants.Add(constant);
+					constants.Add(constant.CopyTo(ptr));
 				}
 			}
 
@@ -1070,6 +1115,20 @@ namespace ECSEngine {
 		bool ReflectionManager::TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const {
 			ResourceIdentifier identifier(name);
 			return enum_definitions.TryGetValue(identifier, enum_);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::InheritConstants(const ReflectionManager* other)
+		{
+			constants.ReserveNewElements(other->constants.size);
+			Stream<ReflectionConstant> new_constants = StreamDeepCopy(other->constants.ToStream(), folders.allocator);
+			// Set the folder hierarchy index for these constants to -1 such that they don't get bound to any
+			// folder index
+			for (size_t index = 0; index < new_constants.size; index++) {
+				new_constants[index].folder_hierarchy = -1;
+			}
+			constants.AddStream(new_constants);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

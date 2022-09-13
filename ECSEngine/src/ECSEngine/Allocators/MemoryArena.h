@@ -31,6 +31,9 @@ namespace ECSEngine {
 		// Deallocates everything (as if nothing is allocated)
 		void Clear();
 
+		// Return the original buffer given
+		const void* GetAllocatedBuffer() const;
+
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate(const void* block);
 
@@ -47,6 +50,8 @@ namespace ECSEngine {
 
 		MultipoolAllocator* m_allocators;
 		size_t m_allocator_count;
+		// This buffer is not actually the buffer that was given in the constructor but instead the starting pointer of the
+		// memory that the allocators start allocating from. Used by Belongs and Deallocate functions
 		void* m_initial_buffer;
 		unsigned int m_size_per_allocator;
 		unsigned int m_current_index;
@@ -76,8 +81,17 @@ namespace ECSEngine {
 
 		bool Belongs(const void* buffer) const;
 
+		// Deallocates all arenas besides the first one.
+		void Clear();
+
 		void CreateArena();
+
 		void CreateArena(size_t arena_capacity, size_t allocator_count, size_t blocks_per_allocator);
+
+		void DeallocateArena(size_t index);
+
+		// Deallocates everythign
+		void Free();
 
 		// ------------------------------------------------- Thread safe ----------------------------------------------------
 

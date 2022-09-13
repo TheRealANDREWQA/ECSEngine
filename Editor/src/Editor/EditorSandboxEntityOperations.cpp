@@ -41,7 +41,11 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
-			entity_manager->AddComponentCommit(entity, component);
+			unsigned short byte_size = entity_manager->ComponentSize(component);
+			// Default initialize the component with zeroes
+			size_t storage[512];
+			memset(storage, 0, byte_size);
+			entity_manager->AddComponentCommit(entity, component, storage);
 			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
@@ -66,6 +70,18 @@ void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int san
 	else {
 		ECS_FORMAT_TEMP_STRING(console_message, "Failed to add shared component {#} to entity {#}.", component_name, entity.value);
 		EditorSetConsoleError(console_message);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void AddSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+{
+	if (editor_state->editor_components.IsComponent(component_name)) {
+		AddSandboxEntityComponent(editor_state, sandbox_index, entity, component_name);
+	}
+	else {
+		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
 	}
 }
 

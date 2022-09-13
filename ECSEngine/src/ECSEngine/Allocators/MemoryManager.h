@@ -5,7 +5,6 @@
 
 namespace ECSEngine {
 
-	/* One instance should be created for each "World" */
 	struct ECSENGINE_API GlobalMemoryManager
 	{
 		// size is the initial size that will be allocated
@@ -18,12 +17,18 @@ namespace ECSEngine {
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate(const void* block);
 
+		// Deallocates all the "extra allocators" and keeps only the first one with no allocations
+		// After the function the allocator is as if there was no allocation made
+		void Clear();
+
 		void CreateAllocator(size_t size, size_t maximum_pool_count);
+
+		void DeallocateAllocator(size_t index);
 
 		// Removes the allocators that have currently no allocations active
 		void Trim();
 
-		void ReleaseResources();
+		void Free();
 
 		bool Belongs(const void* buffer) const;
 
@@ -40,11 +45,7 @@ namespace ECSEngine {
 		size_t m_new_allocation_size;
 		size_t m_maximum_pool_count;
 	};
-
-
-	/* The interface to allocate memory for the application. Several can be instanced for finer grained
-	control. Maximum number of allocators is set by ECS_MEMORY_MANAGER_SIZE.
-	*/
+	
 	struct ECSENGINE_API MemoryManager
 	{
 		MemoryManager();
@@ -58,6 +59,8 @@ namespace ECSEngine {
 		void Deallocate(const void* block);
 
 		void CreateAllocator(size_t size, size_t maximum_pool_count);
+
+		void DeallocateAllocator(size_t index);
 
 		// Deallocates all the extra buffers, keeps only the first one and resets the allocations such that there are none
 		void Clear();

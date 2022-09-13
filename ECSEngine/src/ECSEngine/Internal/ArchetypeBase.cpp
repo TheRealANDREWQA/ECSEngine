@@ -341,7 +341,7 @@ namespace ECSEngine {
 		size_t per_entity_size = 0;
 
 		size_t new_total_byte_size = sizeof(Entity) * count + sizeof(void*) * m_components.count;
-		for (size_t component_index = 0; component_index < m_components.count; component_index) {
+		for (size_t component_index = 0; component_index < m_components.count; component_index++) {
 			per_entity_size += m_infos[m_components.indices[component_index].value].size;
 		}
 		// Add a cache line for component alignment

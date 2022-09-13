@@ -13,17 +13,21 @@ namespace ECSEngine {
 	// It uses a spin lock for synchronizing between multiple threads. It shouldn't be that necessary tho
 	struct ECSENGINE_API ArchetypeQueryCache {
 		ArchetypeQueryCache() = default;
-		ArchetypeQueryCache(AllocatorPolymorphic allocator, unsigned int initial_capacity = 0);
+		ArchetypeQueryCache(EntityManager* entity_manager, AllocatorPolymorphic allocator, unsigned int initial_capacity = 0);
 
-		// Returns a handle that will be used for the lifetime of the scene
-		// to be used to access the results. Needs to be stored.
 		// Thread safe
+		// Returns a handle that will be used for the lifetime of the scene
+		// to be used to access the results. Needs to be stored. It already retrieves all archetypes that match
+		// the given query.
 		unsigned int AddQuery(ArchetypeQuery query);
 
-		// Returns a handle that will be used for the lifetime of the scene
-		// to be used to access the results. Needs to be stored.
 		// Thread safe
+		// Returns a handle that will be used for the lifetime of the scene
+		// to be used to access the results. Needs to be stored. It already retrieves all archetypes that match
+		// the given query.
 		unsigned int AddQuery(ArchetypeQueryExclude query);
+
+		void CopyOther(const ArchetypeQueryCache* other);
 
 		// It asserts that the handle is valid
 		Stream<unsigned int> GetResults(unsigned int handle) const;
@@ -33,6 +37,8 @@ namespace ECSEngine {
 
 		// TODO: Investigate if the assembly generated involves many copies and not passing things by registers
 		void GetResultsAndComponents(unsigned int handle, Stream<unsigned int>& results, ArchetypeQuery& query) const;
+
+		void Reset();
 
 		// Resizes the non exclude results to the new capacity (the SoA structure)
 		void Resize(unsigned int new_capacity);

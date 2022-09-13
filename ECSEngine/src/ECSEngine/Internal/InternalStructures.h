@@ -71,7 +71,11 @@ namespace ECSEngine {
 	};
 
 	struct Component {
-		unsigned int Hash() const {
+		ECS_INLINE unsigned int Hash() const {
+			return value;
+		}
+
+		ECS_INLINE operator short() {
 			return value;
 		}
 
@@ -98,14 +102,23 @@ namespace ECSEngine {
 		return !(lhs == rhs);
 	}
 
+	struct ComponentBuffer {
+		unsigned short offset : 15;
+		unsigned short is_data_pointer : 1;
+	};
+
+#define ECS_COMPONENT_INFO_MAX_BUFFER_COUNT (5)
+
 	struct ECSENGINE_API ComponentInfo {
-		ComponentInfo() : size(0) {}
-		ComponentInfo(unsigned int _size) : size(_size) {}
+		ComponentInfo() : size(0), component_buffers_count(0) {}
+		ComponentInfo(unsigned int _size) : size(_size), component_buffers_count(0) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(ComponentInfo);
 
-		unsigned int size;
 		MemoryArena* allocator;
+		unsigned int size;
+		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+		unsigned short component_buffers_count;
 	};
 
 	struct ECSENGINE_API SharedComponentInfo {

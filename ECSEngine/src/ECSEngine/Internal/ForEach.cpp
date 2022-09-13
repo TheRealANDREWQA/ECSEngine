@@ -243,7 +243,7 @@ namespace ECSEngine {
 		}
 		else {
 			ArchetypeQueryExclude query(unique_signature, shared_signature, unique_exclude_signature, shared_exclude_signature);
-			entity_manager->GetArchetypesExclude(query, archetype_indices);
+			entity_manager->GetArchetypes(query, archetype_indices);
 		}
 
 		unsigned char component_indices[ECS_ARCHETYPE_MAX_COMPONENTS];

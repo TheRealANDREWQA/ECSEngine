@@ -9,7 +9,7 @@
 
 struct ECS_REFLECT_COMPONENT GraphicsTranslation {
 	ECS_EVALUATE_FUNCTION_REFLECT static inline short ID() {
-		return GRAPHICS_COMPONENT_BASE + 5;
+		return GRAPHICS_COMPONENT_BASE + 25;
 	}
 
 	ECSEngine::float3 translation;
@@ -20,8 +20,8 @@ struct ECS_REFLECT_SHARED_COMPONENT GraphicsMesh {
 		return GRAPHICS_SHARED_COMPONENT_BASE + 0;
 	}
 
-	ECS_EVALUATE_FUNCTION_REFLECT static size_t AllocatorSize() {
-		return 0;
+	ECS_EVALUATE_FUNCTION_REFLECT static inline size_t AllocatorSize() {
+		return 120;
 	}
 
 	ECSEngine::Stream<char> name;
@@ -29,8 +29,13 @@ struct ECS_REFLECT_SHARED_COMPONENT GraphicsMesh {
 
 struct ECS_REFLECT_SHARED_COMPONENT GraphicsTexture {
 	ECS_EVALUATE_FUNCTION_REFLECT static inline short ID() {
-		return GRAPHICS_SHARED_COMPONENT_BASE + 100;
+		return GRAPHICS_SHARED_COMPONENT_BASE + 1;
 	}
 
+	ECS_EVALUATE_FUNCTION_REFLECT static inline size_t AllocatorSize() {
+		return ECS_KB_R * 2;
+	}
+
+	ECSEngine::Stream<char> name;
 	ECSEngine::float3 value;
 };

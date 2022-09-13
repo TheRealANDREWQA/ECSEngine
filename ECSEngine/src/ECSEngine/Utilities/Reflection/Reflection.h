@@ -31,6 +31,7 @@ namespace ECSEngine {
 			ECS_REFLECTION_CUSTOM_TYPE_COLOR,
 			ECS_REFLECTION_CUSTOM_TYPE_COLOR_FLOAT,
 			ECS_REFLECTION_CUSTOM_TYPE_MATERIAL_ASSET,
+			ECS_REFLECTION_CUSTOM_TYPE_DATA_POINTER,
 			ECS_REFLECTION_CUSTOM_TYPE_COUNT
 		};
 
@@ -58,6 +59,10 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------
 		
 		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(ColorFloat);
+
+		// ---------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(DataPointer);
 
 		// ---------------------------------------------------------------------------------------------------------------------
 		
@@ -166,6 +171,9 @@ namespace ECSEngine {
 
 			bool TryGetType(Stream<char> name, ReflectionType& type) const;
 			bool TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const;
+
+			// Copies the constants reflected from another manager into this one
+			void InheritConstants(const ReflectionManager* other);
 
 			void InitializeFieldTable();
 			void InitializeTypeTable(size_t count);

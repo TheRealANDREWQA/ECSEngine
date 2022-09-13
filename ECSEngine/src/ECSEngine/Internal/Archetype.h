@@ -10,7 +10,6 @@ namespace ECSEngine {
 
 	struct ECSENGINE_API Archetype
 	{
-	public:
 		Archetype(
 			MemoryManager* small_memory_manager,
 			MemoryManager* memory_manager,
@@ -33,6 +32,19 @@ namespace ECSEngine {
 		void Deallocate();
 
 		void DeallocateBase(unsigned int archetype_index);
+
+		// Deallocates the buffers of components that contain them in all base archetypes
+		void DeallocateEntityBuffers() const;
+
+		// Deallocates all buffers in a given base archetype
+		void DeallocateEntityBuffers(unsigned int base_index) const;
+
+		// Deallocates all buffers of the given entity
+		void DeallocateEntityBuffers(EntityInfo info) const;
+
+		// Deallocate the buffers that are contained by that given entity. Deallocate index is the index
+		// in the m_unique_components_to_deallocate
+		void DeallocateEntityBuffers(unsigned char deallocate_index, EntityInfo info) const;
 
 		// Deallocates that archetype and the removes swap back in the base archetype stream
 		// The entities that are moved into the slot of the base inside the base stream
@@ -86,7 +98,6 @@ namespace ECSEngine {
 
 		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned int base_index) const;
 
-	//private:
 		struct InternalBase {
 			ArchetypeBase archetype;
 			SharedInstance* shared_instances;
@@ -99,6 +110,10 @@ namespace ECSEngine {
 		const ComponentInfo* m_unique_infos;
 		ComponentSignature m_unique_components;
 		ComponentSignature m_shared_components;
+
+		// These are kept in order to speed up the deallocation of the buffer when an entity is destroyed
+		unsigned char m_unique_components_to_deallocate[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+		unsigned char m_unique_components_to_deallocate_count;
 	};
 
 }
