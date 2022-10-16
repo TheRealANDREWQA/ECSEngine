@@ -73,6 +73,7 @@ void CreateMissingProjectWindow(EditorState* editor_state, Stream<Stream<char>> 
 		EDITOR_STATE(editor_state);
 		ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_LOCK_WINDOW | UI_DOCKSPACE_NO_DOCKING | UI_POP_UP_WINDOW_FIT_TO_CONTENT
 			| UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER | UI_POP_UP_WINDOW_FIT_TO_CONTENT_ADD_RENDER_SLIDER_SIZE);
+		return false;
 	};
 	
 	EditorAddEvent(editor_state, editor_event, &paths, sizeof(paths));

@@ -218,12 +218,15 @@ namespace ECSEngine {
 		}
 
 		template<typename Allocator>
-		void Initialize(Allocator * allocator, unsigned int _capacity) {
+		void Initialize(Allocator* allocator, unsigned int _capacity) {
 			size_t memory_size = MemoryOf(_capacity);
 			void* allocation = allocator->Allocate(memory_size, alignof(T));
-			buffer = (T*)allocation;
-			size = 0;
-			capacity = _capacity;
+			InitializeFromBuffer(allocation, 0, _capacity);
+		}
+
+		void Initialize(AllocatorPolymorphic allocator, unsigned int _capacity) {
+			void* allocation = Allocate(allocator, MemoryOf(_capacity), alignof(T));
+			InitializeFromBuffer(allocation, 0, _capacity);
 		}
 
 		T* buffer;

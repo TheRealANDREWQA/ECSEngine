@@ -173,29 +173,24 @@ namespace ECSEngine {
 		// Remapp all the pointers into this space
 		for (size_t index = 0; index < asset_type_stream.size; index++) {
 			// The extension
-			types[index].extension = (wchar_t*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].extension);
+			types[index].extension.buffer = (wchar_t*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].extension.buffer);
 
 			// The dependencies
 			if (types[index].dependencies.size > 0) {
-				types[index].dependencies.buffer = (ECS_MODULE_BUILD_COMMAND_DEPENDENCY*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].dependencies.buffer);
+				types[index].dependencies.buffer = (ECS_MODULE_BUILD_DEPENDENCY*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].dependencies.buffer);
 			}
 			else {
 				types[index].dependencies = { nullptr, 0 };
 			}
 
-			// The asset name
-			if (types[index].asset_type_name != nullptr) {
-				types[index].asset_type_name = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_type_name);
-			}
-
 			// The editor name
-			if (types[index].asset_editor_name != nullptr) {
-				types[index].asset_editor_name = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_editor_name);
+			if (types[index].asset_editor_name.size > 0) {
+				types[index].asset_editor_name.buffer = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_editor_name.buffer);
 			}
 
 			// The metadata name
-			if (types[index].asset_metadata_name != nullptr) {
-				types[index].asset_metadata_name = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_metadata_name);
+			if (types[index].asset_metadata_name.size > 0) {
+				types[index].asset_metadata_name.buffer = (char*)function::RemapPointerIfInRange(_extra_memory, EXTRA_MEMORY_SIZE, buffer, types[index].asset_metadata_name.buffer);
 			}
 		}
 
@@ -299,7 +294,7 @@ namespace ECSEngine {
 		memcpy(buffer, temp_allocator.m_buffer, temp_allocator.m_top);
 
 		for (size_t index = 0; index < valid_links.size; index++) {
-			targets[index].component_name = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name);
+			targets[index].component_name.buffer = (char*)function::RemapPointerIfInRange(temp_allocator.m_buffer, MAX_COMPONENT_NAME_SIZE, buffer, targets[index].component_name.buffer);
 		}
 
 		return { targets, valid_links.size };
@@ -316,15 +311,9 @@ namespace ECSEngine {
 
 	void ValidateModuleBuildAssetTypes(Stream<ModuleBuildAssetType>& build_types)
 	{
-		// Validate that the names are properly provided, aswell as the extension and the functions
+		// Validate that the names are properly provided, as well the extension and the functions
 		for (int32_t index = 0; index < (int32_t)build_types.size; index++) {
-			if (build_types[index].extension == nullptr || wcslen(build_types[index].extension) == 0) {
-				build_types.Swap(index, build_types.size - 1);
-				index--;
-				continue;
-			}
-
-			if (build_types[index].asset_metadata_name == nullptr && build_types[index].asset_type_name == nullptr) {
+			if (build_types[index].extension.buffer == nullptr || build_types[index].extension.size == 0) {
 				build_types.Swap(index, build_types.size - 1);
 				index--;
 				continue;
@@ -344,13 +333,13 @@ namespace ECSEngine {
 	{
 		// Validate that the names are properly provided, aswell as the extension and the functions
 		for (int32_t index = 0; index < (int32_t)link_targets.size; index++) {
-			if (link_targets[index].component_name == nullptr) {
+			if (link_targets[index].component_name.buffer == nullptr || link_targets[index].component_name.size == 0) {
 				link_targets.Swap(index, link_targets.size - 1);
 				index--;
 				continue;
 			}
 
-			if (link_targets[index].build_function == nullptr) {
+			if (link_targets[index].build_function == nullptr || link_targets[index].reverse_function == nullptr) {
 				link_targets.Swap(index, link_targets.size - 1);
 				index--;
 				continue;

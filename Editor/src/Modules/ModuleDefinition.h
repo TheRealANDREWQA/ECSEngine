@@ -62,4 +62,9 @@ struct EditorModule {
 	EditorModuleInfo infos[EDITOR_MODULE_CONFIGURATION_COUNT];
 };
 
+struct EditorLinkComponent {
+	ECSEngine::Stream<char> name;
+	ECSEngine::Stream<char> target;
+};
+
 typedef ECSEngine::ResizableStream<EditorModule> ProjectModules;

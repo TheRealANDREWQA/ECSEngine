@@ -145,24 +145,14 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 // Returns -1 if it fails
 unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, unsigned int module_index);
 
-// The indices inside the normal reflection, not UI reflection
-void GetModuleReflectionComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* indices);
-
-// The indices inside the normal reflection, not UI reflection
-void GetModuleReflectionSharedComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* indices);
-
-// The indices inside the normal reflection, not UI reflection
-void GetModuleReflectionAllComponentIndices(
-	const EditorState* editor_state,
-	unsigned int module_index,
-	CapacityStream<unsigned int>* unique_indices,
-	CapacityStream<unsigned int>* shared_indices
-);
-
 // Returns the most suitable configuration. The rules are like this. Find the first GOOD configuration (from distribution to debug).
 // If found return it. If none is found, find the first OUT_OF_DATE configuration (also from distribution to debug). If found, return it.
 // If all are not loaded, then return EDITOR_MODULE_CONFIGURATION_COUNT
 EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* editor_state, unsigned int module_index);
+
+// Returns a structures with both functions nullptr in case there is no such component. (Fine for components
+// that only expose handles to assets). If there is no dll loaded, then it will simply return
+ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, unsigned int module_index, Stream<char> name);
 
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 

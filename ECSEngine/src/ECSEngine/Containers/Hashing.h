@@ -15,23 +15,31 @@ namespace ECSEngine {
 	// filename can be used as a general purpose pointer if other identifier than the filename is used
 	// Compare function uses AVX2 32 byte SIMD char compare
 	struct ECSENGINE_API ResourceIdentifier {
-		ResourceIdentifier();
-		ResourceIdentifier(const char* filename);
-		ResourceIdentifier(const wchar_t* filename);
-		// if the identifier is something other than a LPCWSTR path
-		ResourceIdentifier(const void* id, unsigned int size);
-		ResourceIdentifier(Stream<void> identifier);
-		ResourceIdentifier(Stream<char> identifier);
-		ResourceIdentifier(Stream<wchar_t> identifier);
+		ECS_INLINE ResourceIdentifier() : ptr(nullptr), size(0) {}
+		ECS_INLINE ResourceIdentifier(const char* filename) : ptr(filename), size(strlen(filename)) {}
+		ECS_INLINE ResourceIdentifier(const wchar_t* filename) : ptr(filename), size(wcslen(filename) * sizeof(wchar_t)) {}
+		ECS_INLINE ResourceIdentifier(const void* id, unsigned int size) : ptr(id), size(size) {}
+		ECS_INLINE ResourceIdentifier(Stream<void> identifier) : ptr(identifier.buffer), size(identifier.size) {}
+		ECS_INLINE ResourceIdentifier(Stream<char> identifier) : ptr(identifier.buffer), size(identifier.size) {}
+		ECS_INLINE ResourceIdentifier(Stream<wchar_t> identifier) : ptr(identifier.buffer), size(identifier.size * sizeof(wchar_t)) {}
 
 		ResourceIdentifier(const ResourceIdentifier& other) = default;
 		ResourceIdentifier& operator = (const ResourceIdentifier& other) = default;
 
 		bool operator == (const ResourceIdentifier& other) const;
 
+		ResourceIdentifier Copy(AllocatorPolymorphic allocator) const;
+
 		bool Compare(const ResourceIdentifier& other) const;
 
+		void Deallocate(AllocatorPolymorphic allocator) const;
+
 		unsigned int Hash() const;
+
+		// Constructs an identifier from a base with an optional suffix. If the size is 0,
+		// then it will simply reference the base. If it has a suffix, it will copy the base into
+		// the temp_buffer and the append the suffix
+		static ResourceIdentifier WithSuffix(ResourceIdentifier base, CapacityStream<void> temp_buffer, Stream<void> suffix);
 
 		const void* ptr;
 		unsigned int size;

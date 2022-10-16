@@ -54,7 +54,8 @@ namespace ECSEngine {
 
 			// it returns the replaced config flag
 			template<typename ConfigFlag>
-			void SetExistingFlag(const ConfigFlag& flag, size_t bit_flag, ConfigFlag& previous_flag) {
+			void SetExistingFlag(const ConfigFlag& flag, ConfigFlag& previous_flag) {
+				size_t bit_flag = flag.GetAssociatedBit();
 				for (size_t index = 0; index < flag_count; index++) {
 					if (associated_bits[index] == bit_flag) {
 						ConfigFlag* ptr = (ConfigFlag*)(parameters + parameter_start[index]);
@@ -65,7 +66,8 @@ namespace ECSEngine {
 			}
 
 			template<typename ConfigFlag>
-			void RestoreFlag(const ConfigFlag& previous_flag, size_t bit_flag) {
+			void RestoreFlag(const ConfigFlag& previous_flag) {
+				size_t bit_flag = previous_flag.GetAssociatedBit();
 				for (size_t index = 0; index < flag_count; index++) {
 					if (associated_bits[index] == bit_flag) {
 						ConfigFlag* flag = (ConfigFlag*)(parameters + parameter_start[index]);

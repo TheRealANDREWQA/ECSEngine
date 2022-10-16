@@ -102,10 +102,28 @@ namespace ECSEngine {
 		return !(lhs == rhs);
 	}
 
+	// Both offsets (for the pointer and for the size) need to be specified relative to the base
+	// of the struct. Use the offsetof macro to help with that or create helper functions
+	// The size when not a data pointer need to be a unsigned int (it works for size_t's as well
+	// because if it fits in uint range the high 4 bytes are zero).
 	struct ComponentBuffer {
-		unsigned short offset : 15;
-		unsigned short is_data_pointer : 1;
+		unsigned int pointer_offset : 10;
+		unsigned int size_offset : 10;
+		unsigned int element_byte_size : 11;
+		unsigned int is_data_pointer : 1;
 	};
+
+	ECSENGINE_API void ComponentBufferCopy(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination);
+
+	ECSENGINE_API void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination);
+
+	ECSENGINE_API void ComponentBufferCopyStream(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination);
+
+	ECSENGINE_API void ComponentBufferDeallocate(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source);
+
+	ECSENGINE_API void ComponentBufferDeallocateDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source);
+
+	ECSENGINE_API void ComponentBufferDeallocateNormalPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source);
 
 #define ECS_COMPONENT_INFO_MAX_BUFFER_COUNT (5)
 

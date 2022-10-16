@@ -33,11 +33,21 @@ namespace ECSEngine {
 			// checking if the start value is valid
 			ECS_ASSERT(flag != -1, "Attempting to free a block that was not allocated");
 		}
+		else {
+			if (flag == -1) {
+				return;
+			}
+		}
 
 		size_t index = i + flag - temp.size();
 
 		if constexpr (assert_if_not_found) {
 			ECS_ASSERT(index >= m_free_block_count && index < m_used_block_count + m_free_block_count, "Attempting to free a block that was not allocated");
+		}
+		else {
+			if (index < m_free_block_count || index >= m_used_block_count + m_free_block_count) {
+				return;
+			}
 		}
 
 		unsigned int end = GetEnd(index);
@@ -104,7 +114,6 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, BlockRange::Free, unsigned int);
-
 
 	unsigned int BlockRange::Request(unsigned int size) {
 		ECS_ASSERT(size > 0, "Block range: zero allocation not allowed");
@@ -194,6 +203,7 @@ namespace ECSEngine {
 
 	ECS_INLINE void BlockRange::SetStart(unsigned int index, unsigned int value) {
 		ECS_ASSERT(index < m_free_block_count + m_used_block_count && index >= 0);
+		//ECS_ASSERT(value < 3'000'000'000);
 		m_buffer[index] = value;
 	}
 

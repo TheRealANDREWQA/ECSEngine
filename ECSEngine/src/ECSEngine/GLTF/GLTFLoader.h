@@ -31,10 +31,15 @@ namespace ECSEngine {
 		Stream<unsigned int> indices;
 	};
 
+	// If it fails, it returns a data pointer nullptr
 	// Cgltf uses const char* internally, so a conversion must be done
-	ECSENGINE_API GLTFData LoadGLTFFile(Stream<wchar_t> path, CapacityStream<char>* error_message = nullptr);
+	ECSENGINE_API GLTFData LoadGLTFFile(Stream<wchar_t> path, AllocatorPolymorphic allocator = { nullptr }, CapacityStream<char>* error_message = nullptr);
 
-	ECSENGINE_API GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message = nullptr);
+	// If it fails it returns a data pointer nullptr
+	ECSENGINE_API GLTFData LoadGLTFFile(Stream<char> path, AllocatorPolymorphic allocator = { nullptr }, CapacityStream<char>* error_message = nullptr);
+
+	// If it fails it returns a data pointer nullptr
+	ECSENGINE_API GLTFData LoadGLTFFileFromMemory(Stream<void> file_data, AllocatorPolymorphic allocator = { nullptr }, CapacityStream<char>* error_message = nullptr);
 
 	ECSENGINE_API bool LoadMeshFromGLTF(
 		GLTFData data,
@@ -116,7 +121,7 @@ namespace ECSEngine {
 
 	// SINGLE THREADED - relies on the context to copy the resources
 	// Merges the submeshes that have the same material into the same buffer
-	// Material count submeshes will be created
+	// PBRMaterial count submeshes will be created
 	// The returned mesh will have no name associated with it
 	// The submeshes will inherit the mesh name
 	// Currently misc_flags can be set to D3D11_RESOURCE_MISC_SHARED to enable sharing of the vertex buffers across devices
@@ -135,4 +140,7 @@ namespace ECSEngine {
 	ECSENGINE_API void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void FreeGLTFFile(GLTFData data);
+
+	ECSENGINE_API void ScaleGLTFMeshes(const GLTFMesh* gltf_meshes, size_t count, float scale_factor);
+
 }

@@ -24,10 +24,17 @@ struct FileExplorerData {
 	ECSEngine::CapacityStream<char> filter_stream;
 	ECSEngine::LinearAllocator temporary_allocator;
 	FileExplorerFunctorTable file_functors;
+
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> add_handlers;
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> file_right_click_handlers;
 	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> folder_right_click_handlers;
-	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> deselection_right_click_handlers;
+
+	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> deselection_menu_handlers;
+	ECSEngine::CapacityStream<ECSEngine::Tools::UIActionHandler> deselection_create_menu_handlers;
+	// For the asset creation
+	ECSEngine::Tools::TextInputWizardData* deselection_create_menu_handler_data;
+	ECSEngine::Tools::UIDrawerMenuState deselection_menu_create_state;
+
 	// Right click handlers take as arguments Stream<wchar_t>, so an extra must be set
 	// By the right click callback in order to have them behave correctly
 	ECSEngine::Stream<wchar_t> right_click_stream;
@@ -49,3 +56,7 @@ struct FileExplorerData {
 };
 
 void InitializeFileExplorer(EditorState* editor_state);
+
+// Returns a nullptr view if it doesn't exist
+// Implemented in FileExplorer.cpp
+ECSEngine::ResourceView FileExplorerGetMeshThumbnail(const EditorState* editor_state, ECSEngine::Stream<wchar_t> absolute_path);

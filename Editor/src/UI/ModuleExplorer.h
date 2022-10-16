@@ -7,7 +7,7 @@ using namespace ECSEngine;
 
 struct EditorState;
 
-void ModuleExplorerSetDescriptor(Tools::UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
+void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
 void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
@@ -15,7 +15,7 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 void CreateModuleExplorer(EditorState* editor_state);
 
 // It creates the dockspace and the window
-void CreateModuleExplorerAction(Tools::ActionData* action_data);
+void CreateModuleExplorerAction(ActionData* action_data);
 
 // It only creates the window, it will not be assigned to any dockspace and returns the window index
 unsigned int CreateModuleExplorerWindow(EditorState* editor_state);

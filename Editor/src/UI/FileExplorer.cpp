@@ -10,8 +10,12 @@
 #include "ECSEngineUtilities.h"
 #include "ECSEngineRendering.h"
 #include "ECSEngineRenderingCompression.h"
+#include "ECSEngineAssets.h"
+#include "ECSEngineDebugDrawer.h"
 
-#include "Scene.h"
+#include "CreateScene.h"
+#include "../Assets/AssetManagement.h"
+#include "../Assets/AssetExtensions.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -35,8 +39,16 @@ char* FILE_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCop
 constexpr size_t FOLDER_RIGHT_CLICK_ROW_COUNT = 7;
 char* FOLDER_RIGHT_CLICK_CHARACTERS = "Open\nShow In Explorer\nDelete\nRename\nCopy Path\nCut\nCopy";
 
-constexpr size_t FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT = 3;
-char* FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS = "Create New Scene\nPaste\nReset Copied Files";
+constexpr size_t FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT = 3;
+char* FILE_EXPLORER_DESELECTION_MENU_CHARACTERS = "Create\nPaste\nReset Copied Files";
+bool FILE_EXPLORER_DESELECTION_HAS_SUBMENUES[FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT] = {
+	true,
+	false,
+	false
+};
+
+constexpr size_t FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT = 5;
+char* FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS = "Scene\nSampler\nShader\nMaterial\nMisc";
 
 constexpr const char* RENAME_LABEL_FILE_NAME = "Rename File";
 constexpr const char* RENAME_LABEL_FILE_INPUT_NAME = "New file name";
@@ -70,6 +82,10 @@ constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 600;
 
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 1'500;
 constexpr size_t FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION = 500;
+constexpr size_t FILE_EXPLORER_MATERIAL_THUMBNAIL_LAZY_EVALUATION = 500;
+
+#define MAX_MESH_THUMBNAILS_PER_FRAME 2
+#define MAX_MATERIAL_THUMBNAILS_PER_FRAME 2
 
 enum FILE_RIGHT_CLICK_INDEX {
 	FILE_RIGHT_CLICK_OPEN,
@@ -91,10 +107,18 @@ enum FOLDER_RIGHT_CLICK_INDEX {
 	FOLDER_RIGHT_CLICK_COPY_SELECTION
 };
 
-enum DESELECTION_RIGHT_CLICK_INDEX {
-	DESELECTION_RIGHT_CLICK_CREATE_NEW_SCENE,
-	DESELECTION_RIGHT_CLICK_PASTE,
-	DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES
+enum DESELECTION_MENU_INDEX {
+	DESELECTION_MENU_CREATE,
+	DESELECTION_MENU_PASTE,
+	DESELECTION_MENU_RESET_COPIED_FILES
+};
+
+enum DESELECTION_MENU_CREATE_INDEX {
+	DESELECTION_MENU_CREATE_SCENE,
+	DESELECTION_MENU_CREATE_SAMPLER,
+	DESELECTION_MENU_CREATE_SHADER,
+	DESELECTION_MENU_CREATE_MATERIAL,
+	DESELECTION_MENU_CREATE_MISC
 };
 
 void FileExplorerResetSelectedFiles(FileExplorerData* data) {
@@ -642,10 +666,10 @@ UIDrawConfig* config = functor_data->for_each_data->config; \
 Color white_color = ECS_COLOR_WHITE; \
 white_color.alpha = functor_data->color_alpha;
 
-void TextureDraw(ActionData* action_data) {
+void FileTextureDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
-	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, data->selection.buffer, white_color);
+	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE , *config, data->selection, white_color);
 }
 
 void FileBlankDraw(ActionData* action_data) {
@@ -705,11 +729,40 @@ void FileSceneDraw(ActionData* action_data) {
 	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_FILE_SCENE);
 }
 
+void FileAssetShaderDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_PAINTBRUSH);
+}
+
+void FileAssetGPUSamplerDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_COLOR_PICKER);
+}
+
+void FileAssetMiscDraw(ActionData* action_data) {
+	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_MODULE);
+}
+
+void FileMaterialDraw(ActionData* action_data) {
+	EXPAND_ACTION;
+
+	Color base_color = LightenColorClamp(drawer->color_theme.theme, 1.5f);
+	Color overlay_color = drawer->color_theme.text;
+	base_color.alpha = white_color.alpha;
+	overlay_color.alpha = white_color.alpha;
+	drawer->SpriteRectangleDouble(
+		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
+		*config,
+		ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
+		ECS_TOOLS_UI_TEXTURE_SHADED_SPHERE,
+		overlay_color,
+		base_color
+	);
+}
+
 void FileMeshThumbnailDraw(ActionData* action_data) {
 	EXPAND_ACTION;
 
 	FileExplorerData* explorer_data = data->editor_state->file_explorer_data;
-	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValue(ResourceIdentifier(data->selection.buffer, data->selection.size * sizeof(wchar_t)));
+	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValue(data->selection);
 
 	drawer->SpriteRectangle(UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE, *config, thumbnail.texture, white_color);
 }
@@ -743,7 +796,7 @@ constexpr Action filter_functors[] = { FilterNothing, FilterActive };
 
 #pragma endregion
 
-#pragma region Add Functions - for plus
+#pragma region Add Functions - for the plus sign
 
 void FileExplorerImportFile(ActionData* action_data) {
 
@@ -795,7 +848,7 @@ void FileExplorerDrag(ActionData* action_data) {
 				ResourceIdentifier identifier(last_type_extension.buffer, last_type_extension.size * sizeof(wchar_t));
 				bool success = explorer_data->file_functors.TryGetValue(identifier, action);
 				if (success) {
-					if (action == TextureDraw) {
+					if (action == FileTextureDraw) {
 						texture_draw.Copy(last_file);
 						texture_draw.Add(L'\0');
 						texture = texture_draw.buffer;
@@ -856,7 +909,7 @@ void FileExplorerDrag(ActionData* action_data) {
 					transparent_color,
 					{ 0.0f, 0.0f },
 					{ 1.0f, 1.0f },
-					ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM
+					ECS_UI_DRAW_SYSTEM
 				);
 			}
 			else {
@@ -871,7 +924,7 @@ void FileExplorerDrag(ActionData* action_data) {
 					transparent_color,
 					{ 0.0f, 0.0f },
 					{ 1.0f, 1.0f },
-					ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM
+					ECS_UI_DRAW_SYSTEM
 				);
 			}
 
@@ -1116,7 +1169,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 		Stream<void> file_contents = ReadWholeFileBinary(data->preload_textures[index].path, current_allocator);
 		// Only if it succeeded
 		if (file_contents.buffer != nullptr) {
-			DecodedTexture decoded_texture = DecodeTexture(file_contents, data->preload_textures[index].path.buffer, current_allocator);
+			DecodedTexture decoded_texture = DecodeTexture(file_contents, data->preload_textures[index].path.buffer, current_allocator, ECS_DECODE_TEXTURE_HDR_TONEMAP);
 			// Deallocate the previous contents
 			allocator.Deallocate(file_contents.buffer);
 
@@ -1175,7 +1228,7 @@ ECS_THREAD_TASK(FileExplorerPreloadTextureThreadTask) {
 			ECS_TEXTURE_COMPRESSION_EX compression_type = GetTextureCompressionType(decoded_texture.format);
 			if (IsTextureCompressionTypeValid(compression_type)) {
 				// Apply compression - only if not HDR compression
-				if (compression_type != ECS_TEXTURE_COMPRESSION_HDR) {
+				if (compression_type != ECS_TEXTURE_COMPRESSION_EX_HDR) {
 					CompressTextureDescriptor compress_descriptor;
 					compress_descriptor.allocator = current_allocator;
 
@@ -1222,13 +1275,12 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 			data->preloaded_textures.Add(data->staging_preloaded_textures[index]);
 
 			// Now change the resource manager bindings
-			const wchar_t* texture_path = data->staging_preloaded_textures[index].path.buffer;
-			ResourceIdentifier identifier(texture_path);
+			ResourceIdentifier identifier(data->staging_preloaded_textures[index].path);
 
 			// If it doesn't exist
 			if (!resource_manager->Exists(identifier, ResourceType::Texture)) {
 				resource_manager->AddResource(
-					texture_path,
+					identifier,
 					ResourceType::Texture,
 					data->staging_preloaded_textures[index].texture.view, 
 					data->staging_preloaded_textures[index].last_write_time
@@ -1244,8 +1296,8 @@ void FileExplorerCommitStagingPreloadTextures(EditorState* editor_state) {
 	// Free the buffer
 	data->staging_preloaded_textures.Reset();
 
-	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
-	data->preload_flags = function::ClearFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED);
+	// The flags need to be reset
+	data->preload_flags = 0;
 }
 
 void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
@@ -1340,8 +1392,10 @@ void FileExplorerRegisterPreloadTextures(EditorState* editor_state) {
 		}
 	}
 
-	// Set the preload started flag
-	data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
+	// Set the preload started flag, only if there are textures to preload
+	if (data->staging_preloaded_textures.size > 0) {
+		data->preload_flags = function::SetFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED);
+	}
 }
 
 void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
@@ -1367,14 +1421,12 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 			per_thread_remainder -= has_remainder;
 			unsigned int thread_texture_count = per_thread_textures + has_remainder;
 
-			FileExplorerPreloadTextureThreadTaskData* thread_data = (FileExplorerPreloadTextureThreadTaskData*)editor_allocator->Allocate(
-				sizeof(FileExplorerPreloadTextureThreadTaskData)
-			);
-			thread_data->preload_textures = { data->staging_preloaded_textures.buffer + total_texture_count, thread_texture_count };
-			thread_data->editor_state = editor_state;
-			thread_data->semaphore = semaphore;
+			FileExplorerPreloadTextureThreadTaskData thread_data;
+			thread_data.preload_textures = { data->staging_preloaded_textures.buffer + total_texture_count, thread_texture_count };
+			thread_data.editor_state = editor_state;
+			thread_data.semaphore = semaphore;
 
-			ThreadTask thread_task = ECS_THREAD_TASK_NAME(FileExplorerPreloadTextureThreadTask, thread_data, 0);
+			ThreadTask thread_task = ECS_THREAD_TASK_NAME(FileExplorerPreloadTextureThreadTask, &thread_data, sizeof(thread_data));
 			task_manager->AddDynamicTaskAndWake(thread_task);
 
 			total_texture_count += thread_texture_count;
@@ -1389,19 +1441,15 @@ void FileExplorerLaunchPreloadTextures(EditorState* editor_state) {
 #pragma region Generate Mesh Thumbnails
 
 void FileExplorerReleaseMeshThumbnail(EditorState* editor_state, FileExplorerData* explorer_data, unsigned int table_index) {
-	EDITOR_STATE(editor_state);
-
-	FileExplorerMeshThumbnail thumbnail = explorer_data->mesh_thumbnails.GetValueFromIndex(table_index);
+	auto thumbnail = explorer_data->mesh_thumbnails.GetValueFromIndex(table_index);
 	// Release the resource view and the memory allocated for the resource identifier
 	ResourceIdentifier identifier = explorer_data->mesh_thumbnails.GetIdentifierFromIndex(table_index);
 
-	editor_allocator->Deallocate(identifier.ptr);
+	editor_state->editor_allocator->Deallocate(identifier.ptr);
 	// Release the resources only if the thumbnail could be loaded
 	if (thumbnail.could_be_read) {
-		Texture2D texture = thumbnail.texture.GetResource();
 		Graphics* graphics = editor_state->UIGraphics();
-		graphics->FreeResource(texture);
-		graphics->FreeResource(thumbnail.texture);
+		graphics->FreeResourceView(thumbnail.texture);
 	}
 
 	explorer_data->mesh_thumbnails.EraseFromIndex(table_index);
@@ -1411,12 +1459,13 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 	FileExplorerData* data = editor_state->file_explorer_data;
 
+	// Evict out of data thumbnails
 	data->mesh_thumbnails.ForEachIndex([&](unsigned int index) {
 		ResourceIdentifier identifier = data->mesh_thumbnails.GetIdentifierFromIndex(index);
 
 		Stream<wchar_t> path = { identifier.ptr, identifier.size };
 		// If the mesh was changed or deleted, remove it
-		size_t last_write = OS::GetFileLastWrite(path.buffer);
+		size_t last_write = OS::GetFileLastWrite(path);
 		if (!ExistsFileOrFolder(path) || last_write > data->mesh_thumbnails.GetValueFromIndex(index).last_write_time) {
 			FileExplorerReleaseMeshThumbnail(editor_state, data, index);
 			return true;
@@ -1429,10 +1478,10 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 		MemoryManager* editor_allocator;
 		ResourceManager* resource_manager;
 		FileExplorerData* explorer_data;
-		bool thumbnail_found = false;
+		unsigned char thumbnail_count = 0;
 	};
 
-	FunctorData functor_data = { editor_allocator, editor_state->resource_manager, data };
+	FunctorData functor_data = { editor_allocator, editor_state->ui_resource_manager, data };
 
 	auto functor = [](Stream<wchar_t> path, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
@@ -1458,35 +1507,57 @@ void FileExplorerGenerateMeshThumbnails(EditorState* editor_state) {
 				// Free the coallesced mesh
 				data->resource_manager->UnloadCoallescedMeshImplementation(mesh);
 			}
-			//thumbnail.could_be_read = false;
 
 			// Update the hash table
-			InsertIntoDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, ResourceIdentifier(allocated_path.buffer, allocated_path.size * sizeof(wchar_t)));
+			InsertIntoDynamicTable(data->explorer_data->mesh_thumbnails, data->editor_allocator, thumbnail, allocated_path);
 
-			data->thumbnail_found = true;
+			data->thumbnail_count++;
 
 			// Exit the search - only a thumbnail is generated per frame
-			return false;
+			return data->thumbnail_count < MAX_MESH_THUMBNAILS_PER_FRAME;
 		}
 		return true;
 	};
 
 	ECS_TEMP_STRING(assests_folder, 256);
 	GetProjectAssetsFolder(editor_state, assests_folder);
-	Stream<wchar_t> extensions[] = {
-		L".gltf",
-		L".glb",
-	};
+	Stream<wchar_t> extensions[std::size(ASSET_MESH_EXTENSIONS)];
+	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
+		extensions[index] = ASSET_MESH_EXTENSIONS[index];
+	}
+	
 	ForEachFileInDirectoryRecursiveWithExtension(assests_folder, { extensions, std::size(extensions) }, &functor_data, functor);
 
-	if (functor_data.thumbnail_found) {
-		// In another 30 ms the lazy evaluation should be triggered again. A couple of frames will run in between helping to preserve the fluidity of
-		// the editor meantime
+	if (functor_data.thumbnail_count == MAX_MESH_THUMBNAILS_PER_FRAME) {
+		// In another 30 ms the lazy evaluation should be triggered again (there might be more thumbnails to generate). 
+		// A couple of frames will run in between helping to preserve the fluidity of the editor meantime
 		EditorStateLazyEvaluationSet(editor_state, EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL, FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION - 30);
 	}
 }
 
 #pragma endregion
+
+template<bool (*CreateFunction)(const EditorState*, Stream<wchar_t>)>
+struct CreateAssetFileStruct {
+	static void Function(ActionData* action_data) {
+		UI_UNPACK_ACTION_DATA;
+
+		EditorState* editor_state = (EditorState*)_data;
+		CapacityStream<char>* additional_data = (CapacityStream<char>*)_additional_data;
+		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
+		absolute_path.Copy(editor_state->file_explorer_data->current_directory);
+		absolute_path.Add(ECS_OS_PATH_SEPARATOR);
+		function::ConvertASCIIToWide(absolute_path, *additional_data);
+
+		Stream<wchar_t> relative_path = GetProjectAssetRelativePath(editor_state, absolute_path);
+
+		bool success = CreateFunction(editor_state, relative_path);
+		if (!success) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to create asset file {#}.", absolute_path);
+			EditorSetConsoleError(error_message);
+		}
+	}
+};
 
 // window_data is EditorState*
 void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initialize) {
@@ -1524,21 +1595,49 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 
 #pragma endregion
 
-#pragma region Deselection Handlers
+#pragma region Deselection Handlers - Main
 
-			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
-			data->deselection_right_click_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT);
+			// The main menu
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT);
+			data->deselection_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT);
 
-			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_CREATE_NEW_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
-
-			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
+			data->deselection_menu_handlers[DESELECTION_MENU_PASTE] = { FileExplorerPasteElements, editor_state, 0 };
 
 			auto reset_copied_files = [](ActionData* action_data) {
 				UI_UNPACK_ACTION_DATA;
 
 				FileExplorerResetCopiedFiles((FileExplorerData*)_data);
 			};
-			data->deselection_right_click_handlers[DESELECTION_RIGHT_CLICK_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
+			data->deselection_menu_handlers[DESELECTION_MENU_RESET_COPIED_FILES] = { reset_copied_files, data, 0 };
+			
+#pragma endregion
+
+#pragma region Deslection Handlers - Create submenu
+
+			allocation = drawer.GetMainAllocatorBuffer(sizeof(UIActionHandler) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
+			data->deselection_create_menu_handlers.InitializeFromBuffer(allocation, 0, FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
+
+			data->deselection_create_menu_handler_data = (TextInputWizardData*)drawer.GetMainAllocatorBuffer(sizeof(TextInputWizardData) * FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT);
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SAMPLER] = { "Sampler name", "Choose a name", CreateAssetFileStruct<CreateSamplerFile>::Function, editor_state, 0 };
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER] = { "Shader name", "Choose a name", CreateAssetFileStruct<CreateShaderFile>::Function, editor_state, 0 };
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MATERIAL] = { "Material name", "Choose a name", CreateAssetFileStruct<CreateMaterialFile>::Function, editor_state, 0 };
+			data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_MISC] = { "Misc name", "Choose a name", CreateAssetFileStruct<CreateMiscFile>::Function, editor_state, 0 };;
+
+			data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+
+#define SET_HANDLER(index) data->deselection_create_menu_handlers[index] = { CreateTextInputWizardAction, data->deselection_create_menu_handler_data + index, 0, ECS_UI_DRAW_SYSTEM };
+			
+			SET_HANDLER(DESELECTION_MENU_CREATE_SAMPLER);
+			SET_HANDLER(DESELECTION_MENU_CREATE_SHADER);
+			SET_HANDLER(DESELECTION_MENU_CREATE_MATERIAL);
+			SET_HANDLER(DESELECTION_MENU_CREATE_MISC);
+
+#undef SET_HANDLER
+
+			data->deselection_menu_create_state.row_count = FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT;
+			data->deselection_menu_create_state.submenu_index = 1;
+			data->deselection_menu_create_state.left_characters = FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS;
+			data->deselection_menu_create_state.click_handlers = data->deselection_create_menu_handlers.buffer;
 
 #pragma endregion
 
@@ -1586,12 +1685,6 @@ void FileExplorerDraw(void* window_data, void* drawer_descriptor, bool initializ
 #define ADD_FUNCTOR(action, string) identifier = ResourceIdentifier(string); \
 ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 
-			ADD_FUNCTOR(TextureDraw, L".jpg");
-			ADD_FUNCTOR(TextureDraw, L".png");
-			ADD_FUNCTOR(TextureDraw, L".tiff");
-			ADD_FUNCTOR(TextureDraw, L".bmp");
-			ADD_FUNCTOR(TextureDraw, L".tga");
-			ADD_FUNCTOR(TextureDraw, L".hdr");
 			ADD_FUNCTOR(FileCDraw, L".c");
 			ADD_FUNCTOR(FileCppDraw, L".cpp");
 			ADD_FUNCTOR(FileCppDraw, L".h");
@@ -1601,9 +1694,25 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			ADD_FUNCTOR(FileTextDraw, L".doc");
 			ADD_FUNCTOR(FileShaderDraw, L".hlsl");
 			ADD_FUNCTOR(FileShaderDraw, L".hlsli");
-			ADD_FUNCTOR(FileMeshDraw, L".gltf");
-			ADD_FUNCTOR(FileMeshDraw, L".glb");
-			ADD_FUNCTOR(FileSceneDraw, L".scene");
+			for (size_t index = 0; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
+				ADD_FUNCTOR(FileAssetShaderDraw, ASSET_SHADER_EXTENSIONS[index]);
+			}
+			for (size_t index = 0; index < std::size(ASSET_GPU_SAMPLER_EXTENSIONS); index++) {
+				ADD_FUNCTOR(FileAssetGPUSamplerDraw, ASSET_GPU_SAMPLER_EXTENSIONS[index]);
+			}
+			for (size_t index = 0; index < std::size(ASSET_MISC_EXTENSIONS); index++) {
+				ADD_FUNCTOR(FileAssetMiscDraw, ASSET_MISC_EXTENSIONS[index]);
+			}
+			for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
+				ADD_FUNCTOR(FileMeshDraw, ASSET_MESH_EXTENSIONS[index]);
+			}
+			for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
+				ADD_FUNCTOR(FileTextureDraw, ASSET_TEXTURE_EXTENSIONS[index]);
+			}
+			for (size_t index = 0; index < std::size(ASSET_MATERIAL_EXTENSIONS); index++) {
+				ADD_FUNCTOR(FileMaterialDraw, ASSET_MATERIAL_EXTENSIONS[index]);
+			}
+			ADD_FUNCTOR(FileSceneDraw, EDITOR_SCENE_EXTENSION);
 
 #undef ADD_FUNCTOR
 		}
@@ -1629,14 +1738,17 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 	UIActionHandler deselect_click = { DeselectClick, data, 0 };
 	drawer.SetWindowClickable(&deselect_click);
 
-	UIDrawerMenuRightClickData deselection_right_click_data;
-	deselection_right_click_data.name = "Deselection Menu";
-	deselection_right_click_data.window_index = 0;
-	deselection_right_click_data.state.click_handlers = data->deselection_right_click_handlers.buffer;
-	deselection_right_click_data.state.left_characters = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_CHARACTERS;
-	deselection_right_click_data.state.row_count = FILE_EXPLORER_DESELECTION_RIGHT_CLICK_ROW_COUNT;
+	UIDrawerMenuRightClickData deselection_menu_data;
+	deselection_menu_data.name = "Deselection Menu";
+	deselection_menu_data.window_index = 0;
+	deselection_menu_data.state.click_handlers = data->deselection_menu_handlers.buffer;
+	deselection_menu_data.state.left_characters = FILE_EXPLORER_DESELECTION_MENU_CHARACTERS;
+	deselection_menu_data.state.row_count = FILE_EXPLORER_DESELECTION_MENU_ROW_COUNT;
+	deselection_menu_data.state.submenues = &data->deselection_menu_create_state;
+	deselection_menu_data.state.submenu_index = 0;
+	deselection_menu_data.state.row_has_submenu = FILE_EXPLORER_DESELECTION_HAS_SUBMENUES;
 
-	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_right_click_data, sizeof(deselection_right_click_data), ECS_UI_DRAW_SYSTEM };
+	UIActionHandler deselect_right_click_handler = { RightClickMenu, &deselection_menu_data, sizeof(deselection_menu_data), ECS_UI_DRAW_SYSTEM };
 	drawer.SetWindowHoverable(&deselect_right_click_handler);
 
 #pragma endregion
@@ -1977,7 +2089,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				// Functor was initialized outside the if with FileBlankDraw
 				bool has_functor = data->file_functors.TryGetValue(identifier, functor);
 				if (has_functor) {
-					if (functor == TextureDraw) {
+					if (functor == FileTextureDraw) {
 						if (function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED)) {
 							// Check to see if it is a texture that is being preloaded
 							for (size_t index = 0; index < data->staging_preloaded_textures.size; index++) {
@@ -2293,4 +2405,17 @@ void FileExplorerTick(EditorState* editor_state)
 	if (function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_STARTED) && function::HasFlag(data->preload_flags, FILE_EXPLORER_FLAGS_PRELOAD_ENDED)) {
 		FileExplorerCommitStagingPreloadTextures(editor_state);
 	}
+}
+
+ResourceView FileExplorerGetMeshThumbnail(const EditorState* editor_state, Stream<wchar_t> absolute_path) {
+	ResourceView view = nullptr;
+	editor_state->file_explorer_data->mesh_thumbnails.ForEachConst<true>([&](const FileExplorerMeshThumbnail& thumbnail, ResourceIdentifier identifier) {
+		if (thumbnail.could_be_read && identifier.Compare(absolute_path)) {
+			view = thumbnail.texture;
+			return true;
+		}
+		return false;
+	});
+
+	return view;
 }

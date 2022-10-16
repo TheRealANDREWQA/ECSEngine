@@ -2180,7 +2180,10 @@ namespace ECSEngine {
 				drawer.CollapsingHeader(data->sections[index].name, nullptr, [&]() {
 					if (!initializer) {
 						for (size_t subindex = 0; subindex < data->sections[index].elements.size; subindex++) {
-							data->ui_reflection->DrawInstance(data->sections[index].elements[subindex].name, drawer, config);
+							UIReflectionDrawInstanceOptions options;
+							options.drawer = &drawer;
+							options.config = &config;
+							data->ui_reflection->DrawInstance(data->sections[index].elements[subindex].name, &options);
 						}
 					}
 				});

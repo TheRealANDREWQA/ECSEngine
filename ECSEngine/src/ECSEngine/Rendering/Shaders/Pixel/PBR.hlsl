@@ -1,32 +1,32 @@
 #include "../PBRBase.hlsli"
 #include "../Utilities.hlsli"
 
+TextureCube environment_diffuse : register(t0);
+TextureCube environment_specular : register(t1);
+Texture2D<float2> brdf_lut : register(t2);
+SamplerState environment_sampler : register(s0);
+
 #ifdef COLOR_TEXTURE
-Texture2D ColorMap : register(t0);
+Texture2D ColorMap : register(t3);
 #endif
 
 #ifdef NORMAL_TEXTURE
-Texture2D NormalMap : register(t1);
+Texture2D NormalMap : register(t4);
 #endif
 
 #ifdef METALLIC_TEXTURE
-Texture2D MetallicMap : register(t2);
+Texture2D MetallicMap : register(t5);
 #endif
 
 #ifdef ROUGHNESS_TEXTURE
-Texture2D RoughnessMap : register(t3);
+Texture2D RoughnessMap : register(t6);
 #endif
 
 #ifdef OCCLUSION_TEXTURE
-Texture2D AmbientOcclusion : register(t4);
+Texture2D AmbientOcclusion : register(t7);
 #endif
 
-SamplerState pbr_texture_sampler : register(s0);
-
-TextureCube environment_diffuse : register(t5);
-TextureCube environment_specular : register(t6);
-Texture2D<float2> brdf_lut : register(t7);
-SamplerState environment_sampler : register(s1);
+SamplerState pbr_texture_sampler : register(s1);
 
 struct PS_INPUT
 {

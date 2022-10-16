@@ -372,28 +372,7 @@ namespace ECSEngine {
 		}
 
 		template<typename Element>
-		float GetMinX(const Element* element, size_t size);
-
-		template<typename Element>
 		float GetMinXRectangle(const Element* element, size_t size);
-
-		template<typename Element>
-		float GetMaxX(const Element* element, size_t size);
-
-		template<typename Element>
-		float GetMaxXRectangle(const Element* element, size_t size);
-
-		template<typename Element>
-		float GetMinY(const Element* element, size_t size);
-
-		template<typename Element>
-		float GetMinYRectangle(const Element* element, size_t size);
-
-		template<typename Element>
-		float GetMaxY(const Element* element, size_t size);
-
-		template<typename Element>
-		float GetMaxYRectangle(const Element* element, size_t size);
 
 		ECSENGINE_API float2 ExpandRectangle(
 			float2 position,

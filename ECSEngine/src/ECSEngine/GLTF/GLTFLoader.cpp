@@ -280,21 +280,39 @@ namespace ECSEngine {
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
+	
+	void* cgltf_allocate(void* user_data, size_t size) {
+		AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)user_data;
+		return AllocateEx(*allocator, size);
+	}
 
-	GLTFData LoadGLTFFile(Stream<char> path, CapacityStream<char>* error_message)
-	{
-		NULL_TERMINATE(path);
+	void cgltf_free(void* user_data, void* buffer) {
+		AllocatorPolymorphic* allocator = (AllocatorPolymorphic*)user_data;
+		//if (buffer != nullptr) {
+			DeallocateEx(*allocator, buffer);
+		//}
+	}
 
+	// The functor only needs to parse the data from memory/disk
+	template<typename Functor>
+	GLTFData LoadGLTFFileImpl(CapacityStream<char>* error_message, Stream<char> path, AllocatorPolymorphic allocator, Functor&& functor) {
 		GLTFData data;
 		data.mesh_count = 0;
 
 		cgltf_options options;
 		memset(&options, 0, sizeof(cgltf_options));
-		cgltf_result result = cgltf_parse_file(&options, path.buffer, &data.data);
+		AllocatorPolymorphic* _allocator = (AllocatorPolymorphic*)malloc(sizeof(AllocatorPolymorphic));
+		memcpy(_allocator, &allocator, sizeof(allocator));
+		options.memory.user_data = _allocator;
+		
+		options.memory.alloc = cgltf_allocate;
+		options.memory.free = cgltf_free;
+
+		cgltf_result result = functor(&options, &data.data);
 
 		if (result != cgltf_result_success) {
 			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Could not load {#}. Parsing failed.", path);
+				ECS_FORMAT_STRING(*error_message, "Could not load gltf file {#}. Parsing failed.", path);
 			}
 			data.data = nullptr;
 			return data;
@@ -303,7 +321,7 @@ namespace ECSEngine {
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
 			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Could not load {#}. Loading buffers failed.", path);
+				ECS_FORMAT_STRING(*error_message, "Could not load gltf file {#}. Loading buffers failed.", path);
 			}
 			data.data = nullptr;
 			return data;
@@ -312,25 +330,40 @@ namespace ECSEngine {
 		if (result != cgltf_result_success) {
 			cgltf_free(data.data);
 			if (error_message != nullptr) {
-				ECS_FORMAT_STRING(*error_message, "Invalid file {#}. Validation failed.", path);
+				ECS_FORMAT_STRING(*error_message, "Invalid gltf file {#}. Validation failed.", path);
 			}
 			data.data = nullptr;
 			return data;
 		}
 
 		data.mesh_count = GLTFMeshCount(data.data);
-
 		return data;
+	}
+
+	GLTFData LoadGLTFFile(Stream<char> path, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
+	{
+		NULL_TERMINATE(path);
+		return LoadGLTFFileImpl(error_message, path, allocator, [=](const cgltf_options* options, cgltf_data** data) {
+			return cgltf_parse_file(options, path.buffer, data);
+		});
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
 
-	GLTFData LoadGLTFFile(Stream<wchar_t> path, CapacityStream<char>* error_message)
+	GLTFData LoadGLTFFile(Stream<wchar_t> path, AllocatorPolymorphic allocator, CapacityStream<char>* error_message)
 	{
 		ECS_TEMP_ASCII_STRING(temp_path, 512);
 		function::ConvertWideCharsToASCII(path, temp_path);
 		temp_path[temp_path.size] = '\0';
-		return LoadGLTFFile(temp_path, error_message);
+		return LoadGLTFFile(temp_path, allocator, error_message);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	GLTFData LoadGLTFFileFromMemory(Stream<void> file_data, AllocatorPolymorphic allocator, CapacityStream<char>* error_message) {
+		return LoadGLTFFileImpl(error_message, "in memory", allocator, [=](const cgltf_options* options, cgltf_data** data) {
+			return cgltf_parse(options, file_data.buffer, file_data.size, data);
+		});
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------
@@ -810,10 +843,10 @@ namespace ECSEngine {
 		Mesh mesh;
 
 		if (gltf_mesh.name != nullptr) {
-			mesh.name = function::StringCopy(graphics->Allocator(), gltf_mesh.name).buffer;
+			mesh.name = function::StringCopy(graphics->Allocator(), gltf_mesh.name);
 		}
 		else {
-			mesh.name = nullptr;
+			mesh.name = { nullptr, 0 };
 		}
 
 		const ECS_GRAPHICS_USAGE buffer_usage = ECS_GRAPHICS_USAGE_IMMUTABLE;
@@ -1009,10 +1042,10 @@ namespace ECSEngine {
 		// Propragate the names
 		for (size_t index = 0; index < count; index++) {
 			if (gltf_meshes[index].name != nullptr) {
-				submeshes[index].name = function::StringCopy(graphics->Allocator(), gltf_meshes[index].name).buffer;
+				submeshes[index].name = function::StringCopy(graphics->Allocator(), gltf_meshes[index].name);
 			}
 			else {
-				submeshes[index].name = nullptr;
+				submeshes[index].name = { nullptr, 0 };
 			}
 		}
 
@@ -1068,7 +1101,43 @@ namespace ECSEngine {
 
 	void FreeGLTFFile(GLTFData data)
 	{
+		// It has an allocator written into it
+		void* allocator_polymorphic = data.data->memory.user_data;
 		cgltf_free(data.data);
+		free(allocator_polymorphic);
 	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
+
+	void ScaleGLTFMeshes(const GLTFMesh* gltf_meshes, size_t count, float scale_factor)
+	{
+		if (scale_factor != 1.0f) {
+			// Scaling with the same factor on all axis basically means multiplying the coordinates by the given scale factor
+			Vector8 splatted_factor(scale_factor);
+
+			for (size_t index = 0; index < count; index++) {
+				size_t vertex_count = gltf_meshes[index].positions.size;
+
+				size_t float_count = vertex_count * 3;
+				size_t simd_size = 8;
+				size_t simd_count = function::GetSimdCount(float_count, simd_size);
+
+				float* float_positions = (float*)gltf_meshes[index].positions.buffer;
+				for (size_t float_index = 0; float_index < simd_count; float_index += simd_size) {
+					Vector8 positions(float_positions + float_index);
+					positions *= splatted_factor;
+					positions.Store(float_positions + float_index);
+				}
+				// There is a remainder vertex
+				if (simd_count < vertex_count) {
+					for (size_t float_index = simd_count; float_index < float_count; float_index++) {
+						float_positions[float_index] *= scale_factor;
+					}
+				}
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------------
 
 }

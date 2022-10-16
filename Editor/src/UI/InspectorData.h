@@ -56,8 +56,7 @@ void RegisterInspectorSandbox(EditorState* editor_state);
 // It will also change the name of the sandbox window if there is one with that index
 void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_index, unsigned int new_sandbox_index);
 
-// Recreates the UI instances for the inspectors that target the settings
-// of the given module
+// Recreates the UI instances for the inspectors that target the settings of the given module
 void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
 
 void SetInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);

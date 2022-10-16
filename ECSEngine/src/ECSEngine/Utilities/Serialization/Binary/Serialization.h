@@ -3,8 +3,6 @@
 
 namespace ECSEngine {
 
-#define ECS_SERIALIZATION_OMIT_FIELD
-
 	// -------------------------------------------------------------------------------------------------------------
 
 	namespace Reflection {
@@ -37,6 +35,9 @@ namespace ECSEngine {
 
 		// Returns true if the reflected type is the same as the one in the file
 		bool IsUnchanged(unsigned int type_index, const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type) const;
+
+		// Writes all types into the reflection manager. A stack allocator should be passed such that small allocations can be made
+		void ToNormalReflection(Reflection::ReflectionManager* reflection_manager, AllocatorPolymorphic allocator) const;
 
 		Stream<Type> types;
 		// Each serializer has the version written at the beginning
@@ -99,6 +100,9 @@ namespace ECSEngine {
 		Stream<void> header = { nullptr, 0 };
 
 		DeserializeFieldTable* field_table = nullptr;
+		// It is used for skipping fields. It can be specified such that it won't need to be recreated multiple times
+		Reflection::ReflectionManager* deserialized_field_manager = nullptr;
+
 		bool read_type_table = true;
 		bool fail_if_field_mismatch = false;
 		bool verify_dependent_types = true;
@@ -234,10 +238,11 @@ namespace ECSEngine {
 	);
 
 	// It will ignore the current type. It must be placed after the deserialize table has been called on the
-	// the data
+	// the data. If the deserialized manager is not available, it will create it inside
 	ECSENGINE_API void IgnoreDeserialize(
 		uintptr_t& data,
-		DeserializeFieldTable field_table
+		DeserializeFieldTable field_table,
+		const Reflection::ReflectionManager* deserialized_manager = nullptr 
 	);
 
 }

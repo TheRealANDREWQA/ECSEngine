@@ -137,7 +137,7 @@ namespace ECSEngine {
 		// --------------------------------------------------------------------------------------------------------------
 
 		// The callback receives the char stream through the additional_data parameter
-		struct ECSENGINE_API TextInputWizardData {
+		struct TextInputWizardData {
 			const char* input_name;
 			const char* window_name;
 			Action callback;

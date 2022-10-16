@@ -333,6 +333,7 @@ namespace ECSEngine {
 				options.fail_if_field_mismatch = data->read_data->options->fail_if_field_mismatch;
 				options.field_table = data->read_data->options->field_table;
 				options.omit_fields = data->read_data->options->omit_fields;
+				options.deserialized_field_manager = data->read_data->options->deserialized_field_manager;
 			}
 
 			if (data->read_data->read_data) {
@@ -571,7 +572,7 @@ namespace ECSEngine {
 		helper_data.data_to_write = { buffer, buffer_count };
 		helper_data.template_type = template_type;
 		helper_data.write_data = data;
-		return SerializeCustomWriteHelperEx(&helper_data);
+		return total_serialize_size + SerializeCustomWriteHelperEx(&helper_data);
 
 		/*SerializeCustomTypeDeduceTypeHelperData basic_helper_data;
 		basic_helper_data.reflection_manager = data->reflection_manager;
@@ -804,12 +805,16 @@ namespace ECSEngine {
 
 		total_deserialize_size += user_defined_size;
 
-		set->InitializeFromBuffer(allocated_buffer, buffer_capacity);
+		if (data->read_data) {
+			set->InitializeFromBuffer(allocated_buffer, buffer_capacity);
+		}
 
 		if (user_data != nullptr && *user_data) {
-			// No indirection buffer was written. In order to preserve the invariance we need to allocate the elements
-			for (unsigned int index = 0; index < buffer_count; index++) {
-				set->Allocate();
+			if (data->read_data) {
+				// No indirection buffer was written. In order to preserve the invariance we need to allocate the elements
+				for (unsigned int index = 0; index < buffer_count; index++) {
+					set->Allocate();
+				}
 			}
 		}
 		else {
@@ -822,8 +827,10 @@ namespace ECSEngine {
 			}
 		}
 
-		set->size = buffer_count;
-		set->first_empty_slot = first_free;
+		if (data->read_data) {
+			set->size = buffer_count;
+			set->first_empty_slot = first_free;
+		}
 
 		return total_deserialize_size;
 	}

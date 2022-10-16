@@ -46,6 +46,256 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
+		void ConvertSystemTimeToDate(const SYSTEMTIME* system_time, char* characters) {
+			Stream<char> stream(characters, 0);
+			function::ConvertIntToChars(stream, system_time->wDay);
+			stream.Add('/');
+			function::ConvertIntToChars(stream, system_time->wMonth);
+			stream.Add('/');
+			function::ConvertIntToChars(stream, system_time->wYear);
+			stream.Add(' ');
+			function::ConvertIntToChars(stream, system_time->wHour);
+			stream.Add(':');
+			function::ConvertIntToChars(stream, system_time->wMinute);
+			stream.Add(':');
+			function::ConvertIntToChars(stream, system_time->wSecond);
+			stream[stream.size] = '\0';
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetFileTimesInternal(HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+		{
+			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
+
+			// if getting the handle was succesful, get file times
+			BOOL success = GetFileTime(file_handle, &filetime_creation, &filetime_last_access, &filetime_last_write);
+			if (!success) {
+				return false;
+			}
+
+			SYSTEMTIME sys_creation_time, sys_access_time, sys_last_write_time;
+			if (creation_time != nullptr) {
+				SYSTEMTIME local_creation_time;
+				success &= FileTimeToSystemTime(&filetime_creation, &sys_creation_time);
+				success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_creation_time, &local_creation_time);
+				if (success) {
+					ConvertSystemTimeToDate(&local_creation_time, creation_time);
+				}
+			}
+			if (access_time != nullptr && success) {
+				SYSTEMTIME local_access_time;
+				success &= FileTimeToSystemTime(&filetime_last_access, &sys_access_time);
+				success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_access_time, &local_access_time);
+				if (success) {
+					ConvertSystemTimeToDate(&local_access_time, access_time);
+				}
+			}
+			if (last_write_time != nullptr && success) {
+				SYSTEMTIME local_write_time;
+				success &= FileTimeToSystemTime(&filetime_last_write, &sys_last_write_time);
+				success &= SystemTimeToTzSpecificLocalTime(nullptr, &sys_last_write_time, &local_write_time);
+				if (success) {
+					ConvertSystemTimeToDate(&local_write_time, last_write_time);
+				}
+			}
+			return success;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetFileTimesInternal(HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		{
+			char _creation_time[256];
+			char _access_time[256];
+			char _last_write_time[256];
+
+			char* ptr1 = creation_time == nullptr ? nullptr : _creation_time;
+			char* ptr2 = access_time == nullptr ? nullptr : _access_time;
+			char* ptr3 = last_write_time == nullptr ? nullptr : _last_write_time;
+
+			bool success = GetFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
+			if (success) {
+				if (ptr1 != nullptr) {
+					function::ConvertASCIIToWide(creation_time, ptr1, 256);
+				}
+				if (ptr2 != nullptr) {
+					function::ConvertASCIIToWide(access_time, ptr2, 256);
+				}
+				if (ptr3 != nullptr) {
+					function::ConvertASCIIToWide(last_write_time, ptr3, 256);
+				}
+				return true;
+			}
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetFileTimesInternal(HANDLE file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
+		{
+			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
+
+			// if getting the handle was succesful, get file times
+			BOOL success = GetFileTime(file_handle, &filetime_creation, &filetime_last_access, &filetime_last_write);
+
+			if (!success) {
+				return false;
+			}
+
+			// use as per MSDN ULARGE_INTEGER in order to convert to normal integers and perform substraction
+			ULARGE_INTEGER large_integer;
+			if (creation_time != nullptr) {
+				large_integer.LowPart = filetime_creation.dwLowDateTime;
+				large_integer.HighPart = filetime_creation.dwHighDateTime;
+				uint64_t value = large_integer.QuadPart;
+
+				// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
+				// Divide by 10'000 to get milliseconds
+				*creation_time = value / 10'000;
+			}
+
+			if (access_time != nullptr) {
+				large_integer.LowPart = filetime_last_access.dwLowDateTime;
+				large_integer.HighPart = filetime_last_access.dwHighDateTime;
+				uint64_t value = large_integer.QuadPart;
+
+				// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
+				// Divide by 10'000 to get milliseconds
+				*access_time = value / 10'000;
+			}
+
+			if (last_write_time != nullptr) {
+				large_integer.LowPart = filetime_last_write.dwLowDateTime;
+				large_integer.HighPart = filetime_last_write.dwHighDateTime;
+				uint64_t value = large_integer.QuadPart;
+
+				// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
+				// Divide by 10'000 to get milliseconds
+				*last_write_time = value / 10'000;
+			}
+			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetRelativeFileTimesInternal(HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+		{
+			size_t creation_time_int, access_time_int, last_write_time_int;
+			size_t* ptr1 = nullptr;
+			size_t* ptr2 = nullptr;
+			size_t* ptr3 = nullptr;
+
+			ptr1 = creation_time != nullptr ? &creation_time_int : nullptr;
+			ptr2 = access_time != nullptr ? &access_time_int : nullptr;
+			ptr3 = last_write_time != nullptr ? &last_write_time_int : nullptr;
+
+			bool success = GetRelativeFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
+			if (success) {
+				if (ptr1 != nullptr) {
+					function::ConvertDurationToChars(creation_time_int, creation_time);
+				}
+				if (ptr2 != nullptr) {
+					function::ConvertDurationToChars(access_time_int, access_time);
+				}
+				if (ptr3 != nullptr) {
+					function::ConvertDurationToChars(last_write_time_int, last_write_time);
+				}
+				return true;
+			}
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetRelativeFileTimesInternal(HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+		{
+			char temp_characters1[256];
+			char temp_characters2[256];
+			char temp_characters3[256];
+
+			char* ptr1 = creation_time != nullptr ? temp_characters1 : nullptr;
+			char* ptr2 = access_time != nullptr ? temp_characters2 : nullptr;
+			char* ptr3 = last_write_time != nullptr ? temp_characters3 : nullptr;
+			bool success = GetRelativeFileTimesInternal(file_handle, ptr1, ptr2, ptr3);
+
+			if (success) {
+				if (ptr1 != nullptr) {
+					function::ConvertASCIIToWide(creation_time, temp_characters1, 256);
+				}
+				if (ptr2 != nullptr) {
+					function::ConvertASCIIToWide(access_time, temp_characters2, 256);
+				}
+				if (ptr3 != nullptr) {
+					function::ConvertASCIIToWide(last_write_time, temp_characters3, 256);
+				}
+				return true;
+			}
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
+		bool GetRelativeFileTimesInternal(HANDLE file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
+		{
+			FILETIME filetime_creation, filetime_last_access, filetime_last_write;
+
+			// if getting the handle was succesful, get file times
+			BOOL success = GetFileTime(file_handle, &filetime_creation, &filetime_last_access, &filetime_last_write);
+
+			if (!success) {
+				return false;
+			}
+
+			SYSTEMTIME system_time;
+			GetSystemTime(&system_time);
+
+			FILETIME converted_time;
+			success = SystemTimeToFileTime(&system_time, &converted_time);
+
+			if (success) {
+				// use as per MSDN ULARGE_INTEGER in order to convert to normal integers and perform substraction
+				ULARGE_INTEGER large_integer;
+				large_integer.LowPart = converted_time.dwLowDateTime;
+				large_integer.HighPart = converted_time.dwHighDateTime;
+				uint64_t system_value = large_integer.QuadPart;
+
+				if (creation_time != nullptr) {
+					large_integer.LowPart = filetime_creation.dwLowDateTime;
+					large_integer.HighPart = filetime_creation.dwHighDateTime;
+					uint64_t second_value = large_integer.QuadPart;
+
+					// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
+					// Divide by 10'000 to get milliseconds
+					*creation_time = (system_value - second_value) / 10'000;
+				}
+
+				if (access_time != nullptr) {
+					large_integer.LowPart = filetime_last_access.dwLowDateTime;
+					large_integer.HighPart = filetime_last_access.dwHighDateTime;
+					uint64_t second_value = large_integer.QuadPart;
+
+					// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
+					// Divide by 10'000 to get milliseconds
+					*access_time = (system_value - second_value) / 10'000;
+				}
+
+				if (last_write_time != nullptr) {
+					large_integer.LowPart = filetime_last_write.dwLowDateTime;
+					large_integer.HighPart = filetime_last_write.dwHighDateTime;
+					uint64_t second_value = large_integer.QuadPart;
+
+					// FILETIME: Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC).
+					// Divide by 10'000 to get milliseconds
+					*last_write_time = (system_value - second_value) / 10'000;
+				}
+				return true;
+			}
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------
+
 		bool GetFileTimesInternal(Stream<wchar_t> path, FILETIME* filetime_creation, FILETIME* filetime_last_access, FILETIME* filetime_last_write) {
 			NULL_TERMINATE_WIDE(path);
 			
@@ -78,25 +328,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		void ConvertSystemTimeToDate(const SYSTEMTIME* system_time, char* characters) {
-			Stream<char> stream(characters, 0);
-			function::ConvertIntToChars(stream, system_time->wDay);
-			stream.Add('/');
-			function::ConvertIntToChars(stream, system_time->wMonth);
-			stream.Add('/');
-			function::ConvertIntToChars(stream, system_time->wYear);
-			stream.Add(' ');
-			function::ConvertIntToChars(stream, system_time->wHour);
-			stream.Add(':');
-			function::ConvertIntToChars(stream, system_time->wMinute);
-			stream.Add(':');
-			function::ConvertIntToChars(stream, system_time->wSecond);
-			stream[stream.size] = '\0';
-		}
-
-		// -----------------------------------------------------------------------------------------------------
-
-		bool GetFileTimes(Stream<wchar_t> path, char* ECS_RESTRICT creation_time, char* ECS_RESTRICT access_time, char* ECS_RESTRICT last_write_time)
+		bool GetFileTimes(Stream<wchar_t> path, char* creation_time, char* access_time, char* last_write_time)
 		{
 			FILETIME os_creation_time, os_access_time, os_last_write_time;
 			bool success = GetFileTimesInternal(path, &os_creation_time, &os_access_time, &os_last_write_time);
@@ -134,10 +366,8 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(Stream<wchar_t> path, wchar_t* ECS_RESTRICT creation_time, wchar_t* ECS_RESTRICT access_time, wchar_t* ECS_RESTRICT last_write_time)
+		bool GetFileTimes(Stream<wchar_t> path, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
 		{
-			NULL_TERMINATE_WIDE(path);
-
 			char _creation_time[256];
 			char _access_time[256];
 			char _last_write_time[256];
@@ -164,7 +394,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------
 
-		bool GetFileTimes(Stream<wchar_t> path, size_t* ECS_RESTRICT creation_time, size_t* ECS_RESTRICT access_time, size_t* ECS_RESTRICT last_write_time)
+		bool GetFileTimes(Stream<wchar_t> path, size_t* creation_time, size_t* access_time, size_t* last_write_time)
 		{
 			FILETIME os_creation_time, os_access_time, os_last_write_time;
 			bool success = GetFileTimesInternal(path, &os_creation_time, &os_access_time, &os_last_write_time);
@@ -210,9 +440,9 @@ namespace ECSEngine {
 
 		bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			size_t* ECS_RESTRICT creation_time,
-			size_t* ECS_RESTRICT access_time,
-			size_t* ECS_RESTRICT last_write_time
+			size_t* creation_time,
+			size_t* access_time,
+			size_t* last_write_time
 		)
 		{
 			FILETIME os_creation_time, os_access_time, os_last_write_time;
@@ -271,9 +501,9 @@ namespace ECSEngine {
 
 		bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			char* ECS_RESTRICT creation_time,
-			char* ECS_RESTRICT access_time,
-			char* ECS_RESTRICT last_write_time
+			char* creation_time,
+			char* access_time,
+			char* last_write_time
 		)
 		{
 			size_t creation_time_int, access_time_int, last_write_time_int;
@@ -305,9 +535,9 @@ namespace ECSEngine {
 
 		bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			wchar_t* ECS_RESTRICT creation_time,
-			wchar_t* ECS_RESTRICT access_time,
-			wchar_t* ECS_RESTRICT last_write_time
+			wchar_t* creation_time,
+			wchar_t* access_time,
+			wchar_t* last_write_time
 		)
 		{
 			char temp_characters1[256];
@@ -526,6 +756,33 @@ namespace ECSEngine {
 		// -----------------------------------------------------------------------------------------------------
 
 #define LAUNCH_FILE_EXPLORER_ERROR_STRING "Launching file explorer at {#} failed. Incorrect path."
+
+		// -----------------------------------------------------------------------------------------------------
+
+		void ChangeThreadPriority(ECS_THREAD_PRIORITY priority)
+		{
+			int thread_priority = 0;
+			switch (priority) {
+			case ECS_THREAD_PRIORITY_VERY_LOW:
+				thread_priority = THREAD_PRIORITY_LOWEST;
+				break;
+			case ECS_THREAD_PRIORITY_LOW:
+				thread_priority = THREAD_PRIORITY_BELOW_NORMAL;
+				break;
+			case ECS_THREAD_PRIORITY_NORMAL:
+				thread_priority = THREAD_PRIORITY_NORMAL;
+				break;
+			case ECS_THREAD_PRIORITY_HIGH:
+				thread_priority = THREAD_PRIORITY_ABOVE_NORMAL;
+				break;
+			case ECS_THREAD_PRIORITY_VERY_HIGH:
+				thread_priority = THREAD_PRIORITY_HIGHEST;
+				break;
+			}
+
+			BOOL success = SetThreadPriority(GetCurrentThread(), thread_priority);
+			ECS_ASSERT(success, "Changing thread priority failed.");
+		}
 
 		// -----------------------------------------------------------------------------------------------------
 

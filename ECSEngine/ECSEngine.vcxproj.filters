@@ -43,7 +43,7 @@
     </ClInclude>
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceManager.h" />
     <ClInclude Include="src\ECSEngine\Rendering\RenderingStructures.h" />
-    <ClInclude Include="src\ECSEngine\Rendering\ColorMacros.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\ColorUtilities.h" />
     <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
     <ClInclude Include="src\ECSEngine\Containers\Stacks.h" />
     <ClInclude Include="src\ECSEngine\Rendering\GraphicsHelpers.h" />
@@ -156,7 +156,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\BasicTypes.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\CrashHandler.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Encryption.h" />
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePackaging.h" />
@@ -184,6 +184,14 @@
     <ClInclude Include="src\Includes\ECSEngineComponents.h" />
     <ClInclude Include="src\Includes\ECSEngineForEach.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
+    <ClInclude Include="src\Includes\ECSEngineCrash.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataHandling.h" />
+    <ClInclude Include="src\Includes\ECSEngineAssets.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataMacros.h" />
+    <ClInclude Include="src\Includes\ECSEngineAssetMacros.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -270,7 +278,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Assert.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\CrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />
@@ -287,6 +295,9 @@
     <ClCompile Include="src\ECSEngine\Containers\Hashing.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\ReferenceCountSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\ColorUtilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataHandling.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

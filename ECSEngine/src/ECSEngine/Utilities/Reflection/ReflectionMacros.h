@@ -20,11 +20,14 @@
 #define ECS_REFLECT_SETTINGS
 #define ECS_REFLECT_COMPONENT
 #define ECS_REFLECT_SHARED_COMPONENT
+#define ECS_REFLECT_LINK_COMPONENT()
 
-// Used by the HasTag function of the ReflectionType
+// Used with the IsTag function of the ReflectionType
 #define ECS_COMPONENT_TAG "COMPONENT"
-// Used by the HasTag function of the ReflectionType
+// Used with the IsTag function of the ReflectionType
 #define ECS_SHARED_COMPONENT_TAG "SHARED_COMPONENT"
+// Used with the HasTag function of the ReflectionType
+#define ECS_LINK_COMPONENT_TAG "LINK_COMPONENT"
 
 #define ECS_COMPONENT_ID_FUNCTION "ID"
 #define ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION "AllocatorSize"

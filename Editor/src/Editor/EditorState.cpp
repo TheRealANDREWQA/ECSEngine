@@ -9,8 +9,10 @@
 #include "../Project/ProjectFolders.h"
 #include "../Project/ProjectBackup.h"
 
-#include "../UI/Scene.h"
+#include "../UI/CreateScene.h"
 #include "ECSEngineComponents.h"
+#include "../Assets/AssetManagement.h"
+#include "../UI/AssetOverrides.h"
 
 using namespace ECSEngine;
 
@@ -87,6 +89,13 @@ bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag
 
 // -----------------------------------------------------------------------------------------------------------------
 
+void EditorStateWaitFlag(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, bool set)
+{
+	TickWait<'!'>(sleep_milliseconds, editor_state->flags[flag], (size_t)set);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
 void TickModuleStatus(EditorState* editor_state) {
 	EDITOR_STATE(editor_state);
 	ProjectModules* project_modules = editor_state->project_modules;
@@ -152,7 +161,10 @@ void TickEvents(EditorState* editor_state) {
 	while (event_index < event_count) {
 		editor_state->event_queue.PopNonAtomic(editor_event);
 		EditorEventFunction event_function = (EditorEventFunction)editor_event.function;
-		event_function(editor_state, editor_event.data);
+		bool needs_push = event_function(editor_state, editor_event.data);
+		if (needs_push) {
+			editor_state->event_queue.PushNonAtomic(editor_event);
+		}
 		event_index++;
 	}
 }
@@ -228,6 +240,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickPendingTasks(editor_state);
 
 		TickEditorComponents(editor_state);
+		TickDefaultMetadataForAssets(editor_state);
 	}
 }
 
@@ -254,11 +267,68 @@ void EditorStateAddBackgroundTask(EditorState* editor_state, ECSEngine::ThreadTa
 
 // -----------------------------------------------------------------------------------------------------------------
 
-void EditorStateAddGPUTask(EditorState* editor_state, ECSEngine::ThreadTask task)
+void EditorStateAddGPUTask(EditorState* editor_state, ThreadTask task)
 {
 	EDITOR_STATE(editor_state);
 	task.data = task.data_size > 0 ? function::Copy(GetAllocatorPolymorphic(multithreaded_editor_allocator, ECS_ALLOCATION_MULTI), task.data, task.data_size) : task.data;
 	editor_state->gpu_tasks.Push(task);
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+// There needs to be a separate graphics initialization of the runtime and the initialization
+// of the rest of the runtime (like the resource manager and the asset database)
+void PreinitializeRuntime(EditorState* editor_state) {
+	// Use separate allocators for them. Coallesce all the types into a single allocation
+	// The resizable memory arena is for the asset database
+	MemoryManager* runtime_resource_manager_allocator = (MemoryManager*)editor_state->multithreaded_editor_allocator->Allocate_ts(sizeof(MemoryManager)
+		+ sizeof(ResourceManager) + sizeof(ResizableMemoryArena) + sizeof(AssetDatabase));
+
+	*runtime_resource_manager_allocator = DefaultResourceManagerAllocator(editor_state->GlobalMemoryManager());
+
+	// Create the resource manager
+	editor_state->runtime_resource_manager = (ResourceManager*)function::OffsetPointer(runtime_resource_manager_allocator, sizeof(*runtime_resource_manager_allocator));
+	*editor_state->runtime_resource_manager = ResourceManager(runtime_resource_manager_allocator, editor_state->RuntimeGraphics(), editor_state->task_manager->GetThreadCount());
+
+	// And the asset database
+	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)function::OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
+	*database_arena = ResizableMemoryArena(editor_state->editor_allocator->m_backup, ECS_MB, 4, ECS_KB * 4, ECS_MB * 5, 4, ECS_KB * 4);
+
+	AssetDatabase* database = (AssetDatabase*)function::OffsetPointer(database_arena, sizeof(*database_arena));
+	*database = AssetDatabase(GetAllocatorPolymorphic(database_arena), editor_state->ui_reflection->reflection);
+	editor_state->asset_database = database;
+}
+
+ECS_THREAD_TASK(InitializeRuntimeGraphicsTask) {
+	EditorState* editor_state = (EditorState*)_data;
+
+	const size_t GRAPHICS_ALLOCATOR_CAPACITY = ECS_KB * 50;
+	const size_t GRAPHICS_ALLOCATOR_BLOCK_COUNT = 1024;
+
+	// Coallesce the allocations
+	size_t allocation_size = sizeof(MemoryManager) + sizeof(Graphics);
+	void* allocation = editor_state->multithreaded_editor_allocator->Allocate_ts(allocation_size);
+	MemoryManager* runtime_graphics_allocator = (MemoryManager*)allocation;
+	editor_state->runtime_graphics = (Graphics*)function::OffsetPointer(runtime_graphics_allocator, sizeof(*runtime_graphics_allocator));
+
+	*runtime_graphics_allocator = MemoryManager(GRAPHICS_ALLOCATOR_CAPACITY, GRAPHICS_ALLOCATOR_BLOCK_COUNT, GRAPHICS_ALLOCATOR_CAPACITY, editor_state->GlobalMemoryManager());
+
+	GraphicsDescriptor graphics_descriptor;
+	graphics_descriptor.allocator = runtime_graphics_allocator;
+	graphics_descriptor.create_swap_chain = false;
+	graphics_descriptor.gamma_corrected = true;
+	graphics_descriptor.discrete_gpu = true;
+	graphics_descriptor.hWnd = nullptr;
+	graphics_descriptor.window_size = { 0, 0 };
+	*editor_state->runtime_graphics = Graphics(&graphics_descriptor);
+	editor_state->runtime_resource_manager->m_graphics = editor_state->runtime_graphics;
+
+	EditorStateSetFlag(editor_state, EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED);
+}
+
+void InitializeRuntime(EditorState* editor_state) {
+	PreinitializeRuntime(editor_state);
+	editor_state->task_manager->AddDynamicTaskAndWake({ InitializeRuntimeGraphicsTask, editor_state, 0 });
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -270,7 +340,8 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	GlobalMemoryManager* global_memory_manager = new GlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
 	Graphics* graphics = (Graphics*)malloc(sizeof(Graphics));
-	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager);
+	// Prefer the integrated GPU
+	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, false);
 
 	MemoryManager* editor_allocator = new MemoryManager(2'000'000, 4096, 10'000'000, global_memory_manager);
 	editor_state->editor_allocator = editor_allocator;
@@ -293,19 +364,14 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ResourceManager* ui_resource_manager = (ResourceManager*)malloc(sizeof(ResourceManager));
 	*ui_resource_manager = ResourceManager(ui_resource_manager_allocator, graphics, thread_count);
 
-	MemoryManager* resource_manager_allocator = (MemoryManager*)malloc(sizeof(MemoryManager));
-	*resource_manager_allocator = DefaultResourceManagerAllocator(global_memory_manager);
-
-	ResourceManager* resource_manager = (ResourceManager*)malloc(sizeof(ResourceManager));
-	*resource_manager = ResourceManager(resource_manager_allocator, graphics, thread_count);
-	editor_state->resource_manager = resource_manager;
+	editor_state->ui_resource_manager = ui_resource_manager;
 
 	ThreadWrapperCountTasksData wrapper_data;
 	wrapper_data.count.store(0, ECS_RELAXED);
 	editor_task_manager->ChangeDynamicWrapperMode(ThreadWrapperCountTasks, &wrapper_data, sizeof(wrapper_data));
 	editor_task_manager->CreateThreads();
 
-	editor_task_manager->SetThreadPriorities(ECS_THREAD_PRIORITY_LOW);
+	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
 
 	ResizableMemoryArena* resizable_arena = (ResizableMemoryArena*)malloc(sizeof(ResizableMemoryArena));
 	*resizable_arena = DefaultUISystemAllocator(global_memory_manager);
@@ -344,13 +410,17 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	void* editor_component_allocator_buffer = editor_allocator->Allocate(editor_component_allocator_size);
 	editor_state->editor_components.Initialize(editor_component_allocator_buffer);
 
-	// Update the editor components
-	editor_state->editor_components.UpdateComponents(editor_reflection_manager, 0, "ECSEngine");
-	editor_state->editor_components.EmptyEventStream();
-
 	UIReflectionDrawer* editor_ui_reflection = (UIReflectionDrawer*)malloc(sizeof(UIReflectionDrawer));
 	*editor_ui_reflection = UIReflectionDrawer(resizable_arena, editor_reflection_manager);
 	editor_state->ui_reflection = editor_ui_reflection;
+
+	// Update the editor components
+	editor_state->editor_components.UpdateComponents(editor_reflection_manager, 0, "ECSEngine");
+	// Finalize every event
+	for (unsigned int index = 0; index < editor_state->editor_components.events.size; index++) {
+		editor_state->editor_components.FinalizeEvent(editor_reflection_manager, editor_ui_reflection, editor_state->editor_components.events[index]);
+	}
+	editor_state->editor_components.EmptyEventStream();
 
 	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)malloc(sizeof(Reflection::ReflectionManager));
 	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
@@ -362,9 +432,14 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	*module_ui_reflection = UIReflectionDrawer(resizable_arena, module_reflection_manager);
 	editor_state->module_reflection = module_ui_reflection;
 
-	// Create all the engine components as types into the ui_reflection
-	for (size_t index = 0; index < std::size(ECS_COMPONENTS); index++) {
-		editor_ui_reflection->CreateType(editor_reflection_manager->GetType(ECS_COMPONENTS[index]));
+	ECS_STACK_LINEAR_ALLOCATOR(ui_asset_override_allocator, ECS_KB * 2);
+
+	// Override the module reflection with the assets overrides
+	UIReflectionFieldOverride ui_asset_overrides[ASSET_UI_OVERRIDE_COUNT];
+	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides, GetAllocatorPolymorphic(&ui_asset_override_allocator));
+	// Set the overrides on the module reflection
+	for (size_t index = 0; index < ASSET_UI_OVERRIDE_COUNT; index++) {
+		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides + index);
 	}
 
 	HubData* hub_data = (HubData*)malloc(sizeof(HubData));
@@ -432,6 +507,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	// Initialize the gpu_tasks and background tasks queues
 	editor_state->gpu_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
 	editor_state->pending_background_tasks.m_queue.Initialize(editor_state->EditorAllocator(), 8);
+
+	// This will be run asynchronously for the graphics object
+	InitializeRuntime(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -506,6 +584,15 @@ void EditorStateApplicationQuit(EditorState* editor_state, char* response)
 	sandbox_indices.size = editor_state->sandboxes.size;
 	function::MakeSequence(sandbox_indices);
 	CreateSaveScenePopUp(editor_state, sandbox_indices, { ApplicationQuitHandler, &quit_data, sizeof(quit_data) });
+}
+
+// -----------------------------------------------------------------------------------------------------------------
+
+void EditorStateSetDatabasePath(EditorState* editor_state)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, folder, 512);
+	GetProjectMetafilesFolder(editor_state, folder);
+	editor_state->asset_database->SetFileLocation(folder);
 }
 
 // -----------------------------------------------------------------------------------------------------------------

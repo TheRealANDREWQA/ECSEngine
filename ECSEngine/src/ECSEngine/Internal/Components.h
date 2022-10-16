@@ -8,7 +8,10 @@
 #include "../Containers/Stream.h"
 #include "../Utilities/BasicTypes.h"
 
+// The base of the ECSEngine unique components
 #define ECS_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
+// The base of the ECSEngine unique components
+#define ECS_SHARED_COMPONENT_BASE ECS_CONSTANT_REFLECT(0)
 
 namespace ECSEngine {
 
@@ -23,7 +26,7 @@ namespace ECSEngine {
 			return ECS_COMPONENT_BASE + 0;
 		}
 
-		float3 value;
+		float3 value = { 1.0f, 0.0f, 0.0f };
 	};
 
 	struct ECS_REFLECT_COMPONENT Name {
@@ -32,7 +35,7 @@ namespace ECSEngine {
 		}
 
 		ECS_EVALUATE_FUNCTION_REFLECT static size_t AllocatorSize() {
-			return ECS_MB_R;
+			return ECS_KB_R * 256;
 		}
 
 		Stream<char> name;

@@ -6,6 +6,7 @@
 #include "../Math/Matrix.h"
 #include "../Allocators/AllocatorTypes.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "ColorUtilities.h"
 
 #define ECS_GRAPHICS_BUFFERS(function) /* Useful for macro expansion */ function(VertexBuffer); \
 function(IndexBuffer); \
@@ -23,19 +24,13 @@ ECS_GRAPHICS_BUFFERS(function);
 
 #define ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT 4
 #define ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT 4
-#define ECS_MATERIAL_HULL_CONSTANT_BUFFER_COUNT 1
-#define ECS_MATERIAL_DOMAIN_CONSTANT_BUFFER_COUNT 1
-#define ECS_MATERIAL_GEOMETRY_CONSTANT_BUFFER_COUNT 1
 #define ECS_MATERIAL_VERTEX_TEXTURES_COUNT 2
 #define ECS_MATERIAL_PIXEL_TEXTURES_COUNT 8
-#define ECS_MATERIAL_DOMAIN_TEXTURES_COUNT 1
-#define ECS_MATERIAL_HULL_TEXTURES_COUNT 1
-#define ECS_MATERIAL_GEOMETRY_TEXTURES_COUNT 1
 #define ECS_MATERIAL_UAVIEW_COUNT 4
 
 namespace ECSEngine {
 
-	enum ECS_MESH_INDEX {
+	enum ECS_REFLECT ECS_MESH_INDEX : unsigned char {
 		ECS_MESH_POSITION,
 		ECS_MESH_NORMAL,
 		ECS_MESH_UV,
@@ -307,130 +302,34 @@ namespace ECSEngine {
 		const char* definition;
 	};
 
-	enum ShaderTarget : unsigned char {
+	enum ECS_SHADER_TARGET : unsigned char {
 		ECS_SHADER_TARGET_5_0,
 		ECS_SHADER_TARGET_5_1,
 		ECS_SHADER_TARGET_COUNT
 	};
 
-	enum ShaderCompileFlags : unsigned char {
-		ECS_SHADER_COMPILE_NONE = 0,
-		ECS_SHADER_COMPILE_DEBUG = 1 << 0,
-		ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST = 1 << 1,
-		ECS_SHADER_COMPILE_OPTIMIZATION_LOW = 1 << 2,
-		ECS_SHADER_COMPILE_OPTIMIZATION_HIGH = 1 << 3,
-		ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST = 1 << 4
+	enum ECS_REFLECT ECS_SHADER_COMPILE_FLAGS : unsigned char {
+		ECS_SHADER_COMPILE_NONE,
+		ECS_SHADER_COMPILE_DEBUG,
+		ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST,
+		ECS_SHADER_COMPILE_OPTIMIZATION_LOW,
+		ECS_SHADER_COMPILE_OPTIMIZATION_HIGH,
+		ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST
 	};
 
 	// Default is no macros, shader target 5 and no compile flags
 	struct ShaderCompileOptions {
 		Stream<ShaderMacro> macros = { nullptr, 0 };
-		ShaderTarget target = ECS_SHADER_TARGET_5_0;
-		ShaderCompileFlags compile_flags = ECS_SHADER_COMPILE_NONE;
+		ECS_SHADER_TARGET target = ECS_SHADER_TARGET_5_0;
+		ECS_SHADER_COMPILE_FLAGS compile_flags = ECS_SHADER_COMPILE_NONE;
 	};
 	
-	struct ECSENGINE_API ColorFloat;
-
 	using GraphicsContext = ID3D11DeviceContext;
 	using GraphicsDevice = ID3D11Device;
 
-	struct ECSENGINE_API Color {
-		Color();
-		Color(unsigned char red);
-
-		Color(unsigned char red, unsigned char green);
-
-		Color(unsigned char red, unsigned char green, unsigned char blue);
-
-		Color(unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha);
-
-		// normalized values
-		Color(float red, float green, float blue, float alpha);
-
-		Color(ColorFloat color);
-
-		Color(const unsigned char* values);
-
-		Color(const float* values);
-
-		Color(const Color& other) = default;
-		Color& operator = (const Color& other) = default;
-
-		bool operator == (const Color& other) const;
-		bool operator != (const Color& other) const;
-
-		// these operators do not apply for alpha
-		Color operator + (const Color& other) const;
-		Color operator * (const Color& other) const;
-		Color operator * (float percentage) const;
-
-		static constexpr float GetRange() {
-			return (float)255;
-		}
-
-		void Normalize(float* values) const;
-
-		union {
-			struct {
-				unsigned char red;
-				unsigned char green;
-				unsigned char blue;
-			};
-			struct {
-				unsigned char hue;
-				unsigned char saturation;
-				unsigned char value;
-			};
-		};
-		unsigned char alpha;
-	};
-
-	struct ECSENGINE_API ColorFloat {
-		ColorFloat();
-
-		ColorFloat(float red);
-
-		ColorFloat(float red, float green);
-
-		ColorFloat(float red, float green, float blue);
-
-		ColorFloat(float red, float green, float blue, float alpha);
-
-		ColorFloat(Color color);
-
-		ColorFloat(const float* values);
-
-		ColorFloat(const ColorFloat& other) = default;
-		ColorFloat& operator = (const ColorFloat& other) = default;
-
-		ColorFloat operator * (const ColorFloat& other) const;
-		ColorFloat operator * (float percentage) const;
-		ColorFloat operator + (const ColorFloat& other) const;
-		ColorFloat operator - (const ColorFloat& other) const;
-
-		static constexpr float GetRange() {
-			return 1.0f;
-		}
-		void Normalize(float* values) const;
-
-		union {
-			struct {
-				float red;
-				float green;
-				float blue;
-			};
-			struct {
-				float hue;
-				float saturation;
-				float value;
-			};
-		};
-		float alpha;
-	};
-
 	struct ECSENGINE_API VertexBuffer {
-		VertexBuffer();
-		VertexBuffer(UINT _stride, UINT _size, ID3D11Buffer* _buffer);
+		ECS_INLINE VertexBuffer() : buffer(nullptr), stride(0), size(0) {}
+		ECS_INLINE VertexBuffer(unsigned int _stride, unsigned int _size, ID3D11Buffer* _buffer) : buffer(_buffer), size(_size), stride(_stride) {}
 
 		VertexBuffer(const VertexBuffer& other) = default;
 		VertexBuffer& operator = (const VertexBuffer& other) = default;
@@ -454,13 +353,13 @@ namespace ECSEngine {
 
 		static VertexBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
+		ID3D11Buffer* buffer;
 		unsigned int stride;
 		unsigned int size;
-		ID3D11Buffer* buffer;
 	};
 
 	struct ECSENGINE_API IndexBuffer {
-		IndexBuffer();
+		ECS_INLINE IndexBuffer() : buffer(nullptr), count(0), int_size(0) {}
 
 		IndexBuffer(const IndexBuffer& other) = default;
 		IndexBuffer& operator = (const IndexBuffer& other) = default;
@@ -484,43 +383,14 @@ namespace ECSEngine {
 
 		static IndexBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
+		ID3D11Buffer* buffer;
 		unsigned int count;
 		unsigned int int_size;
-		ID3D11Buffer* buffer;
 	};
 
-	// The byte code is mostly needed to check the input layout
-	// against the shader's signature; Path is stable and null terminated
-	// The byte code can be released after the input layout has been created
-	struct ECSENGINE_API VertexShader {
-		VertexShader();
-
-		VertexShader(const VertexShader& other) = default;
-		VertexShader& operator = (const VertexShader& other) = default;
-
-		inline GraphicsDevice* GetDevice() const {
-			GraphicsDevice* device;
-			shader->GetDevice(&device);
-			device->Release();
-			return device;
-		}
-
-		inline ID3D11VertexShader* Interface() const {
-			return shader;
-		}
-
-		inline unsigned int Release() {
-			return shader->Release();
-		}
-
-		static VertexShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
-
-		Stream<void> byte_code;
-		ID3D11VertexShader* shader;
-	};
 
 	struct ECSENGINE_API InputLayout {
-		InputLayout();
+		ECS_INLINE InputLayout() : layout(nullptr) {}
 
 		InputLayout(const InputLayout& other) = default;
 		InputLayout& operator = (const InputLayout& other) = default;
@@ -545,10 +415,44 @@ namespace ECSEngine {
 		ID3D11InputLayout* layout;
 	};
 
+	// The byte code is mostly needed to check the input layout
+	// against the shader's signature; Path is stable and null terminated
+	// The byte code can be released after the input layout has been created
+	struct ECSENGINE_API VertexShader {
+		ECS_INLINE VertexShader() : shader(nullptr) {}
+		ECS_INLINE VertexShader(ID3D11VertexShader* _shader) : shader(_shader) {}
+
+		VertexShader(const VertexShader& other) = default;
+		VertexShader& operator = (const VertexShader& other) = default;
+
+		inline GraphicsDevice* GetDevice() const {
+			GraphicsDevice* device;
+			shader->GetDevice(&device);
+			device->Release();
+			return device;
+		}
+
+		inline ID3D11VertexShader* Interface() const {
+			return shader;
+		}
+
+		inline unsigned int Release() {
+			return shader->Release();
+		}
+
+		static VertexShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
+
+		inline static VertexShader FromInterface(void* interface_) {
+			return VertexShader((ID3D11VertexShader*)interface_);
+		}
+
+		ID3D11VertexShader* shader;
+	};
+
 	// Path is stable and null terminated
 	struct ECSENGINE_API PixelShader {
-		PixelShader();
-		PixelShader(ID3D11PixelShader* _shader) : shader(_shader) {}
+		ECS_INLINE PixelShader() : shader(nullptr) {}
+		ECS_INLINE PixelShader(ID3D11PixelShader* _shader) : shader(_shader) {}
 
 		PixelShader(const PixelShader& other) = default;
 		PixelShader& operator = (const PixelShader& other) = default;
@@ -570,12 +474,16 @@ namespace ECSEngine {
 
 		static PixelShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
+		inline static PixelShader FromInterface(void* interface_) {
+			return PixelShader((ID3D11PixelShader*)interface_);
+		}
+
 		ID3D11PixelShader* shader;
 	};
 
 	struct ECSENGINE_API GeometryShader {
-		GeometryShader() : shader(nullptr) {}
-		GeometryShader(ID3D11GeometryShader* _shader) : shader(_shader) {}
+		ECS_INLINE GeometryShader() : shader(nullptr) {}
+		ECS_INLINE GeometryShader(ID3D11GeometryShader* _shader) : shader(_shader) {}
 
 		GeometryShader(const GeometryShader& other) = default;
 		GeometryShader& operator = (const GeometryShader& other) = default;
@@ -597,12 +505,16 @@ namespace ECSEngine {
 
 		static GeometryShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
+		inline static GeometryShader FromInterface(void* interface_) {
+			return GeometryShader((ID3D11GeometryShader*)interface_);
+		}
+
 		ID3D11GeometryShader* shader;
 	};
 
 	struct ECSENGINE_API DomainShader {
-		DomainShader() : shader(nullptr) {}
-		DomainShader(ID3D11DomainShader* _shader) : shader(_shader) {}
+		ECS_INLINE DomainShader() : shader(nullptr) {}
+		ECS_INLINE DomainShader(ID3D11DomainShader* _shader) : shader(_shader) {}
 
 		DomainShader(const DomainShader& other) = default;
 		DomainShader& operator = (const DomainShader& other) = default;
@@ -624,12 +536,16 @@ namespace ECSEngine {
 
 		static DomainShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
+		inline static DomainShader FromInterface(void* interface_) {
+			return DomainShader((ID3D11DomainShader*)interface_);
+		}
+
 		ID3D11DomainShader* shader;
 	};
 
 	struct ECSENGINE_API HullShader {
-		HullShader() : shader(nullptr) {}
-		HullShader(ID3D11HullShader* _shader) : shader(_shader) {}
+		ECS_INLINE HullShader() : shader(nullptr) {}
+		ECS_INLINE HullShader(ID3D11HullShader* _shader) : shader(_shader) {}
 
 		HullShader(const HullShader& other) = default;
 		HullShader& operator = (const HullShader& other) = default;
@@ -651,12 +567,17 @@ namespace ECSEngine {
 
 		static HullShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
 
+		inline static HullShader FromInterface(void* interface_) {
+			return HullShader((ID3D11HullShader*)interface_);
+		}
+
 		ID3D11HullShader* shader;
 	};
 
 	// Path is stable and null terminated
 	struct ECSENGINE_API ComputeShader {
-		ComputeShader() : shader(nullptr) {}
+		ECS_INLINE ComputeShader() : shader(nullptr) {}
+		ECS_INLINE ComputeShader(ID3D11ComputeShader* _shader) : shader(_shader) {}
 
 		ComputeShader(const ComputeShader& other) = default;
 		ComputeShader& operator = (const ComputeShader& other) = default;
@@ -677,13 +598,30 @@ namespace ECSEngine {
 		}
 
 		static ComputeShader RawCreate(GraphicsDevice* device, Stream<void> byte_code);
+		
+		inline static ComputeShader FromInterface(void* interface_) {
+			return ComputeShader((ID3D11ComputeShader*)interface_);
+		}
 
 		ID3D11ComputeShader* shader;
 	};
 
+	// All types except the vertex shader which needs byte code as well
+	template<typename ShaderType>
+	struct ShaderStorage {
+		ShaderType shader;
+		Stream<char> source_code;
+	};
+
+	struct VertexShaderStorage {
+		VertexShader shader;
+		Stream<char> source_code;
+		Stream<void> byte_code;
+	};
+
 	struct ECSENGINE_API Topology {
-		Topology();
-		Topology(D3D11_PRIMITIVE_TOPOLOGY _topology);
+		ECS_INLINE Topology() : value(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST) {}
+		ECS_INLINE Topology(D3D11_PRIMITIVE_TOPOLOGY _topology) : value(_topology) {}
 
 		Topology(const Topology& other) = default;
 		Topology& operator = (const Topology& other) = default;
@@ -695,9 +633,9 @@ namespace ECSEngine {
 		using RawDescriptor = D3D11_TEXTURE1D_DESC;
 		using RawInterface = ID3D11Texture1D;
 
-		Texture1D();
+		ECS_INLINE Texture1D() : tex(nullptr) {}
+		ECS_INLINE Texture1D(ID3D11Texture1D* _tex) : tex(_tex) {}
 		Texture1D(ID3D11Resource* _resource);
-		Texture1D(ID3D11Texture1D* _tex);
 
 		Texture1D(const Texture1D& other) = default;
 		Texture1D& operator = (const Texture1D& other) = default;
@@ -728,9 +666,9 @@ namespace ECSEngine {
 		using RawDescriptor = D3D11_TEXTURE2D_DESC;
 		using RawInterface = ID3D11Texture2D;
 
-		Texture2D();
+		ECS_INLINE Texture2D() : tex(nullptr) {}
+		ECS_INLINE Texture2D(ID3D11Texture2D* _tex) : tex(_tex) {}
 		Texture2D(ID3D11Resource* _resource);
-		Texture2D(ID3D11Texture2D* _tex);
 
 		Texture2D(const Texture2D& other) = default;
 		Texture2D& operator = (const Texture2D& other) = default;
@@ -761,10 +699,9 @@ namespace ECSEngine {
 		using RawDescriptor = D3D11_TEXTURE3D_DESC;
 		using RawInterface = ID3D11Texture3D;
 
-		Texture3D();
+		ECS_INLINE Texture3D() : tex(nullptr) {}
+		ECS_INLINE Texture3D(ID3D11Texture3D* _tex) : tex(_tex) {}
 		Texture3D(ID3D11Resource* _resource);
-		Texture3D(ID3D11Texture3D* _tex);
-		//Texture3D(Microsoft::WRL::ComPtr<ID3D11Texture3D> _tex);
 
 		Texture3D(const Texture3D& other) = default;
 		Texture3D& operator = (const Texture3D& other) = default;
@@ -795,9 +732,9 @@ namespace ECSEngine {
 		using RawDescriptor = D3D11_TEXTURE2D_DESC;
 		using RawInterface = ID3D11Texture2D;
 
-		TextureCube();
+		ECS_INLINE TextureCube() : tex(nullptr) {}
+		ECS_INLINE TextureCube(ID3D11Texture2D* _tex) : tex(_tex) {}
 		TextureCube(ID3D11Resource* _resource);
-		TextureCube(ID3D11Texture2D* _text);
 
 		TextureCube(const TextureCube& other) = default;
 		TextureCube& operator = (const TextureCube& other) = default;
@@ -834,8 +771,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ResourceView {
-		ResourceView();
-		ResourceView(ID3D11ShaderResourceView* _view);
+		ECS_INLINE ResourceView() : view(nullptr) {}
+		ECS_INLINE ResourceView(ID3D11ShaderResourceView* _view) : view(_view) {}
 
 		ResourceView(const ResourceView& other) = default;
 		ResourceView& operator = (const ResourceView& other) = default;
@@ -866,8 +803,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API RenderTargetView {
-		RenderTargetView() : view(nullptr) {}
-		RenderTargetView(ID3D11RenderTargetView* _target) : view(_target) {}
+		ECS_INLINE RenderTargetView() : view(nullptr) {}
+		ECS_INLINE RenderTargetView(ID3D11RenderTargetView* _target) : view(_target) {}
 
 		RenderTargetView(const RenderTargetView& other) = default;
 		RenderTargetView& operator = (const RenderTargetView& other) = default;
@@ -898,8 +835,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API DepthStencilView {
-		DepthStencilView() : view(nullptr) {}
-		DepthStencilView(ID3D11DepthStencilView* _view) : view(_view) {}
+		ECS_INLINE DepthStencilView() : view(nullptr) {}
+		ECS_INLINE DepthStencilView(ID3D11DepthStencilView* _view) : view(_view) {}
 
 		DepthStencilView(const DepthStencilView& other) = default;
 		DepthStencilView& operator = (const DepthStencilView& other) = default;
@@ -930,8 +867,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API UAView {
-		UAView() : view(nullptr) {}
-		UAView(ID3D11UnorderedAccessView* _view) : view(_view) {}
+		ECS_INLINE UAView() : view(nullptr) {}
+		ECS_INLINE UAView(ID3D11UnorderedAccessView* _view) : view(_view) {}
 
 		UAView(const UAView& other) = default;
 		UAView& operator = (const UAView& other) = default;
@@ -962,8 +899,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ConstantBuffer {
-		ConstantBuffer();
-		ConstantBuffer(ID3D11Buffer* buffer);
+		ECS_INLINE ConstantBuffer() : buffer(nullptr) {}
+		ECS_INLINE ConstantBuffer(ID3D11Buffer* buffer) : buffer(buffer) {}
 
 		ConstantBuffer(const ConstantBuffer& other) = default;
 		ConstantBuffer& operator = (const ConstantBuffer& other) = default;
@@ -991,8 +928,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API StandardBuffer {
-		StandardBuffer() : buffer(nullptr) {}
-		StandardBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
+		ECS_INLINE StandardBuffer() : buffer(nullptr) {}
+		ECS_INLINE StandardBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
 		StandardBuffer(const StandardBuffer& other) = default;
 		StandardBuffer& operator = (const StandardBuffer& other) = default;
@@ -1021,8 +958,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API StructuredBuffer {
-		StructuredBuffer() : buffer(nullptr) {}
-		StructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
+		ECS_INLINE StructuredBuffer() : buffer(nullptr) {}
+		ECS_INLINE StructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
 		StructuredBuffer(const StructuredBuffer& other) = default;
 		StructuredBuffer& operator = (const StructuredBuffer& other) = default;
@@ -1050,8 +987,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API IndirectBuffer {
-		IndirectBuffer() : buffer(nullptr) {}
-		IndirectBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
+		ECS_INLINE IndirectBuffer() : buffer(nullptr) {}
+		ECS_INLINE IndirectBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
 
 		IndirectBuffer(const IndirectBuffer& other) = default;
 		IndirectBuffer& operator = (const IndirectBuffer& other) = default;
@@ -1079,8 +1016,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API UABuffer {
-		UABuffer() : buffer(nullptr), element_count(0) {}
-		UABuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
+		ECS_INLINE UABuffer() : buffer(nullptr), element_count(0) {}
+		ECS_INLINE UABuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
 
 		UABuffer(const UABuffer& other) = default;
 		UABuffer& operator = (const UABuffer& other) = default;
@@ -1104,13 +1041,13 @@ namespace ECSEngine {
 
 		static UABuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
-		size_t element_count;
 		ID3D11Buffer* buffer;
+		size_t element_count;
 	};
 
 	struct ECSENGINE_API AppendStructuredBuffer {
-		AppendStructuredBuffer() : buffer(nullptr), element_count(0) {}
-		AppendStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
+		ECS_INLINE AppendStructuredBuffer() : buffer(nullptr), element_count(0) {}
+		ECS_INLINE AppendStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
 
 		AppendStructuredBuffer(const AppendStructuredBuffer& other) = default;
 		AppendStructuredBuffer& operator = (const AppendStructuredBuffer& other) = default;
@@ -1134,13 +1071,13 @@ namespace ECSEngine {
 
 		static AppendStructuredBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
-		size_t element_count;
 		ID3D11Buffer* buffer;
+		size_t element_count;
 	};
 
 	struct ECSENGINE_API ConsumeStructuredBuffer {
-		ConsumeStructuredBuffer() : buffer(nullptr), element_count(0) {}
-		ConsumeStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
+		ECS_INLINE ConsumeStructuredBuffer() : buffer(nullptr), element_count(0) {}
+		ECS_INLINE ConsumeStructuredBuffer(ID3D11Buffer* _buffer) : buffer(_buffer), element_count(0) {}
 
 		ConsumeStructuredBuffer(const ConsumeStructuredBuffer& other) = default;
 		ConsumeStructuredBuffer& operator = (const ConsumeStructuredBuffer& other) = default;
@@ -1164,8 +1101,8 @@ namespace ECSEngine {
 
 		static ConsumeStructuredBuffer RawCreate(GraphicsDevice* device, const D3D11_BUFFER_DESC* descriptor, const D3D11_SUBRESOURCE_DATA* initial_data = nullptr);
 
-		size_t element_count;
 		ID3D11Buffer* buffer;
+		size_t element_count;
 	};
 
 	struct SamplerDescriptor {
@@ -1196,8 +1133,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API SamplerState {
-		SamplerState();
-		SamplerState(ID3D11SamplerState* _sampler);
+		ECS_INLINE SamplerState() : sampler(nullptr) {}
+		ECS_INLINE SamplerState(ID3D11SamplerState* _sampler) : sampler(_sampler) {}
 
 		SamplerState(const SamplerState& other) = default;
 		SamplerState& operator = (const SamplerState& other) = default;
@@ -1223,8 +1160,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API BlendState {
-		BlendState() : state(nullptr) {}
-		BlendState(ID3D11BlendState* _state) : state(_state) {}
+		ECS_INLINE BlendState() : state(nullptr) {}
+		ECS_INLINE BlendState(ID3D11BlendState* _state) : state(_state) {}
 
 		BlendState(const BlendState& other) = default;
 		BlendState& operator = (const BlendState& other) = default;
@@ -1248,8 +1185,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API RasterizerState {
-		RasterizerState() : state(nullptr) {}
-		RasterizerState(ID3D11RasterizerState* _state) : state(_state) {}
+		ECS_INLINE RasterizerState() : state(nullptr) {}
+		ECS_INLINE RasterizerState(ID3D11RasterizerState* _state) : state(_state) {}
 
 		RasterizerState(const RasterizerState& other) = default;
 		RasterizerState& operator = (const RasterizerState& other) = default;
@@ -1273,8 +1210,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API DepthStencilState {
-		DepthStencilState() : state(nullptr) {}
-		DepthStencilState(ID3D11DepthStencilState* _state) : state(_state) {}
+		ECS_INLINE DepthStencilState() : state(nullptr) {}
+		ECS_INLINE DepthStencilState(ID3D11DepthStencilState* _state) : state(_state) {}
 
 		DepthStencilState(const DepthStencilState& other) = default;
 		DepthStencilState& operator = (const DepthStencilState& other) = default;
@@ -1298,8 +1235,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API CommandList {
-		CommandList() : list(nullptr) {}
-		CommandList(ID3D11CommandList* _list) : list(_list) {}
+		ECS_INLINE CommandList() : list(nullptr) {}
+		ECS_INLINE CommandList(ID3D11CommandList* _list) : list(_list) {}
 
 		CommandList(const CommandList& other) = default;
 		CommandList& operator = (const CommandList& other) = default;
@@ -1344,12 +1281,12 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API Mesh {
-		Mesh() : name(nullptr), mapping_count(0) {}
+		ECS_INLINE Mesh() : name(nullptr, 0), mapping_count(0) {}
 
 		Mesh(const Mesh& other) = default;
 		Mesh& operator = (const Mesh& other) = default;
 
-		const char* name;
+		Stream<char> name;
 		IndexBuffer index_buffer;
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
 		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];
@@ -1357,15 +1294,15 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API Submesh {
-		Submesh() : name(nullptr), index_buffer_offset(0), vertex_buffer_offset(0), index_count(0), vertex_count(0) {}
-		Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset, unsigned int _index_count, unsigned int _vertex_count) 
-			: name(nullptr), index_buffer_offset(_index_buffer_offset), vertex_buffer_offset(_vertex_buffer_offset), index_count(_index_count), 
+		ECS_INLINE Submesh() : name(nullptr, 0), index_buffer_offset(0), vertex_buffer_offset(0), index_count(0), vertex_count(0) {}
+		ECS_INLINE Submesh(unsigned int _index_buffer_offset, unsigned int _vertex_buffer_offset, unsigned int _index_count, unsigned int _vertex_count) 
+			: name(nullptr, 0), index_buffer_offset(_index_buffer_offset), vertex_buffer_offset(_vertex_buffer_offset), index_count(_index_count), 
 		vertex_count(_vertex_count) {}
 
 		Submesh(const Submesh& other) = default;
 		Submesh& operator = (const Submesh& other) = default;
 
-		const char* name;
+		Stream<char> name;
 		unsigned int index_buffer_offset;
 		unsigned int vertex_buffer_offset;
 		unsigned int index_count;
@@ -1374,46 +1311,41 @@ namespace ECSEngine {
 
 	// Contains the actual pipeline objects that can be bound to the graphics context
 	struct ECSENGINE_API Material {
-		Material();
+		ECS_INLINE Material() : vertex_buffer_mapping_count(0), v_buffer_count(0), p_buffer_count(0), v_texture_count(0), p_texture_count(0),
+			unordered_view_count(0) {}
 
 		Material(const Material& other) = default;
 		Material& operator = (const Material& other) = default;
 
-		const char* name;
 		InputLayout layout;
 		VertexShader vertex_shader;
 		PixelShader pixel_shader;
-		DomainShader domain_shader;
-		HullShader hull_shader;
-		GeometryShader geometry_shader;
-		ConstantBuffer vc_buffers[ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT];
-		ConstantBuffer pc_buffers[ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT];
-		ConstantBuffer dc_buffers[ECS_MATERIAL_DOMAIN_CONSTANT_BUFFER_COUNT];
-		ConstantBuffer hc_buffers[ECS_MATERIAL_HULL_CONSTANT_BUFFER_COUNT];
-		ConstantBuffer gc_buffers[ECS_MATERIAL_GEOMETRY_CONSTANT_BUFFER_COUNT];
-		ResourceView vertex_textures[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
-		ResourceView pixel_textures[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
-		ResourceView domain_textures[ECS_MATERIAL_DOMAIN_TEXTURES_COUNT];
-		ResourceView hull_textures[ECS_MATERIAL_HULL_TEXTURES_COUNT];
-		ResourceView geometry_textures[ECS_MATERIAL_GEOMETRY_TEXTURES_COUNT];
+		ConstantBuffer v_buffers[ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT];
+		ConstantBuffer p_buffers[ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT];
+		ResourceView v_textures[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
+		ResourceView p_textures[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
 		UAView unordered_views[ECS_MATERIAL_UAVIEW_COUNT];
+		SamplerState v_samplers[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
+		SamplerState p_samplers[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
 		ECS_MESH_INDEX vertex_buffer_mappings[ECS_MESH_BUFFER_COUNT];
-		unsigned char vertex_buffer_mapping_count;
-		unsigned char vc_buffer_count;
-		unsigned char pc_buffer_count;
-		unsigned char dc_buffer_count;
-		unsigned char hc_buffer_count;
-		unsigned char gc_buffer_count;
-		unsigned char vertex_texture_count;
-		unsigned char pixel_texture_count;
-		unsigned char domain_texture_count;
-		unsigned char hull_texture_count;
-		unsigned char geometry_texture_count;
-		unsigned char unordered_view_count;
+		unsigned char vertex_buffer_mapping_count = 0;
+		unsigned char unordered_view_count = 0;
+		unsigned char v_buffer_count = 0;
+		unsigned char p_buffer_count = 0;
+		unsigned char v_texture_count = 0;
+		unsigned char p_texture_count = 0;
+		unsigned char v_sampler_count = 0;
+		unsigned char p_sampler_count = 0;
+		unsigned char v_buffer_slot[ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT];
+		unsigned char p_buffer_slot[ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT];
+		unsigned char v_texture_slot[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
+		unsigned char p_texture_slot[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
+		unsigned char v_sampler_slot[ECS_MATERIAL_VERTEX_TEXTURES_COUNT];
+		unsigned char p_sampler_slot[ECS_MATERIAL_PIXEL_TEXTURES_COUNT];
 	};
 
 	struct PBRMaterial {
-		const char* name;
+		Stream<char> name;
 		float metallic_factor;
 		float roughness_factor;
 		Color tint;
@@ -1424,6 +1356,43 @@ namespace ECSEngine {
 		Stream<wchar_t> roughness_texture;
 		Stream<wchar_t> occlusion_texture;
 		Stream<wchar_t> emissive_texture;
+	};
+
+	enum ECS_TEXTURE_COMPRESSION_EX : unsigned char;
+
+	struct ECSENGINE_API UserMaterialTexture {
+		// Fills in the suffix based on the settings to uniquely identify the texture
+		void GenerateSettingsSuffix(CapacityStream<void>& suffix) const;
+
+		Stream<wchar_t> filename;
+		ECS_SHADER_TYPE shader_type;
+		unsigned char slot;
+		bool srgb = false;
+		bool generate_mips = true;
+		ECS_TEXTURE_COMPRESSION_EX compression = (ECS_TEXTURE_COMPRESSION_EX)0;
+	};
+
+	// The data size needs to be know in order to allocate correctly the buffer. If the
+	// data buffer is nullptr then there will be no copy of the data (so it cannot be static)
+	struct UserMaterialBuffer {
+		Stream<void> data;
+		unsigned char slot;
+		bool dynamic;
+		ECS_SHADER_TYPE shader_type;
+	};
+
+	// A user material which is based only on textures and constant buffers
+	struct UserMaterial {
+		Stream<UserMaterialTexture> textures;
+		Stream<UserMaterialBuffer> buffers;
+		Stream<wchar_t> vertex_shader;
+		Stream<wchar_t> pixel_shader;
+		ShaderCompileOptions vertex_compile_options;
+		ShaderCompileOptions pixel_compile_options;
+		// If set, it will generate a suffix for each texture
+		// based upon the settings such that it won't return a texture
+		// that already exists on the same target but with different settings
+		bool generate_unique_name_from_setting;
 	};
 
 	enum PBRMaterialTextureIndex : unsigned char {

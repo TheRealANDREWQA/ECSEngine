@@ -14,7 +14,8 @@ namespace ECSEngine {
 		const ComponentInfo* unique_infos,
 		ComponentSignature unique_components,
 		ComponentSignature shared_components
-	) : m_small_memory_manager(small_memory_manager), m_memory_manager(memory_manager), m_base_archetypes(GetAllocatorPolymorphic(m_small_memory_manager), 1), m_unique_infos(unique_infos)
+	) : m_small_memory_manager(small_memory_manager), m_memory_manager(memory_manager), m_base_archetypes(GetAllocatorPolymorphic(m_small_memory_manager), 1),
+		m_unique_infos(unique_infos), m_unique_components_to_deallocate_count(0)
 	{
 		size_t allocation_size = sizeof(Component) * (unique_components.count + shared_components.count);
 		void* allocation = small_memory_manager->Allocate(allocation_size);
@@ -89,6 +90,46 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void Archetype::CopyEntityBuffers(EntityInfo info, unsigned char deallocate_index, void* target_memory) const
+	{
+		CopyEntityBuffers(info.stream_index, info.base_archetype, deallocate_index, target_memory);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::CopyEntityBuffers(EntityInfo info, void** target_buffers) const
+	{
+		for (unsigned int deallocate_index = 0; deallocate_index < m_unique_components_to_deallocate_count; deallocate_index++) {
+			CopyEntityBuffers(info, deallocate_index, target_buffers[deallocate_index]);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::CopyEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, void* target_memory) const
+	{
+		const ArchetypeBase* base = GetBase(base_index);
+		const void* component = base->GetComponentByIndex(stream_index, m_unique_components_to_deallocate[deallocate_index]);
+		const ComponentInfo* component_info = m_unique_infos + m_unique_components[m_unique_components_to_deallocate[deallocate_index]].value;
+		MemoryArena* arena = component_info->allocator;
+
+		for (unsigned int buffer_index = 0; buffer_index < component_info->component_buffers_count; buffer_index++) {
+			const void* current_buffer = function::OffsetPointer(component, component_info->component_buffers[buffer_index].pointer_offset);
+			ComponentBufferCopy(component_info->component_buffers[buffer_index], arena, current_buffer, target_memory);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	void Archetype::CopyEntityBuffers(unsigned int stream_index, unsigned int base_index, void** target_buffers) const
+	{
+		for (unsigned int deallocate_index = 0; deallocate_index < m_unique_components_to_deallocate_count; deallocate_index++) {
+			CopyEntityBuffers(stream_index, base_index, deallocate_index, target_buffers[deallocate_index]);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void Archetype::Deallocate()
 	{
 		for (size_t index = 0; index < m_base_archetypes.size; index++) {
@@ -108,18 +149,8 @@ namespace ECSEngine {
 
 	void DeallocateEntityBuffersImpl(const ComponentInfo* current_info, MemoryArena* arena, const void* current_component, unsigned int buffer_count) {
 		for (unsigned int buffer_index = 0; buffer_index < buffer_count; buffer_index++) {
-			const void* current_buffer = function::OffsetPointer(current_component, current_info->component_buffers[buffer_index].offset);
-			if (current_info->component_buffers[buffer_index].is_data_pointer) {
-				const DataPointer* data_pointer = (const DataPointer*)current_buffer;
-				current_buffer = data_pointer->GetPointer();
-			}
-			else {
-				current_buffer = *(void**)current_buffer;
-			}
-
-			if (current_buffer != nullptr) {
-				arena->Deallocate(current_buffer);
-			}
+			const void* current_buffer = function::OffsetPointer(current_component, current_info->component_buffers[buffer_index].pointer_offset);
+			ComponentBufferDeallocate(current_info->component_buffers[buffer_index], arena, current_buffer);
 		}
 	}
 
@@ -176,6 +207,8 @@ namespace ECSEngine {
 			DeallocateEntityBuffers(deallocate_index, info);
 		}
 	}
+
+	// --------------------------------------------------------------------------------------------------------------------
 
 	void Archetype::DeallocateEntityBuffers(unsigned char deallocate_index, EntityInfo info) const
 	{

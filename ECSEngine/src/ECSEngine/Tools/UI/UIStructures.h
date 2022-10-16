@@ -356,10 +356,14 @@ namespace ECSEngine {
 			CapacityStream<InputLayout> input_layouts;
 			CapacityStream<SamplerState> texture_samplers;
 			ResourceView font_texture;
+			// Used when a texture cannot be loaded
+			ResourceView invalid_texture;
 			UIDrawResources system_draw;
 			Semaphore texture_semaphore;
 			SpinLock texture_spinlock;
 		};
+
+		typedef HashTableDefault<Stream<void>> UIGlobalResources;
 
 		struct ECSENGINE_API UIHandler {
 
@@ -367,10 +371,16 @@ namespace ECSEngine {
 
 			bool Add(float2 position, float2 scale, UIActionHandler handler);
 
+			unsigned int AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler);
+
 			// position, scale, data and late_update are set inside the call
 			void Execute(unsigned int action_index, ActionData* data) const;
 
 			UIActionHandler* GetLastHandler() const;
+
+			void Resize(AllocatorPolymorphic allocator, size_t new_count);
+
+			unsigned int ReserveOne(AllocatorPolymorphic allocator);
 
 			void Reset();
 
@@ -383,6 +393,16 @@ namespace ECSEngine {
 			float* scale_x;
 			float* scale_y;
 			UIActionHandler* action;
+		};
+
+		struct ECSENGINE_API UIReservedHandler {
+			void Write(float2 position, float2 scale, UIActionHandler action_handler);
+
+			void* WrittenBuffer() const;
+
+			LinearAllocator* allocator;
+			UIHandler* handler;
+			unsigned int index;
 		};
 
 #pragma endregion
@@ -436,13 +456,13 @@ namespace ECSEngine {
 			unsigned short layer;
 		};
 
-		struct ECSENGINE_API UIDockspaceRegion {
+		struct UIDockspaceRegion {
 			UIDockspace* dockspace;
 			unsigned int border_index;
 			DockspaceType type;
 		};
 
-		struct ECSENGINE_API UIDrawDockspaceRegionData {
+		struct UIDrawDockspaceRegionData {
 			void* system;
 			UIDockspace* dockspace;
 			unsigned int border_index;
@@ -554,7 +574,9 @@ namespace ECSEngine {
 
 		// window data size 0 means it does not need to allocate memory, just take the pointer
 		// The destroy callback receives the window data in the additional data parameter
-		struct UIWindowDescriptor {
+		struct ECSENGINE_API UIWindowDescriptor {
+			void Center(float2 size);
+
 			unsigned short resource_count = 0;
 			float initial_position_x;
 			float initial_position_y;
@@ -738,8 +760,6 @@ namespace ECSEngine {
 			float next_row_offset = 0.0f;
 			float2 offset = { 0.0f, 0.0f };
 			bool* unavailable_rows = nullptr;
-			UITooltipPerRowData basic_draw;
-			UITooltipPerRowData hoverable_draw;
 			unsigned int* previous_hoverable = nullptr;
 		};
 

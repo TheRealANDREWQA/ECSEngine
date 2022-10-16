@@ -6,6 +6,7 @@
 #include "../Modules/Module.h"
 #include "ECSEngineSerialization.h"
 #include "ECSEngineSerializationHelpers.h"
+#include "ECSEngineAssets.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Reflection;
@@ -33,6 +34,17 @@ Component EditorComponents::GetComponentID(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+Component EditorComponents::GetComponentIDWithLink(Stream<char> name) const
+{
+	Stream<char> target = GetComponentFromLink(name);
+	if (target.size > 0) {
+		return GetComponentID(target);
+	}
+	return GetComponentID(name);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 unsigned short EditorComponents::GetComponentByteSize(Stream<char> name) const
 {
 	ReflectionType type;
@@ -40,6 +52,34 @@ unsigned short EditorComponents::GetComponentByteSize(Stream<char> name) const
 		return (unsigned short)GetReflectionTypeByteSize(&type);
 	}
 	return USHORT_MAX;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+Stream<char> EditorComponents::GetComponentFromLink(Stream<char> name) const
+{
+	for (size_t index = 0; index < link_components.size; index++) {
+		if (function::CompareStrings(link_components[index].name, name)) {
+			return link_components[index].target;
+		}
+	}
+	return { nullptr, 0 };
+}
+
+// ----------------------------------------------------------------------------------------------
+
+const ReflectionType* EditorComponents::GetType(ECSEngine::Stream<char> name) const
+{
+	ReflectionType* type = nullptr;
+	internal_manager->type_definitions.TryGetValuePtr(name, type);
+	return type;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+const ReflectionType* EditorComponents::GetType(unsigned int module_index, unsigned int type_index) const
+{
+	return GetType(loaded_modules[module_index].types[type_index]);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -112,7 +152,27 @@ bool EditorComponents::IsSharedComponent(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
-unsigned int EditorComponents::ModuleComponentCount(ECSEngine::Stream<char> name) const
+bool EditorComponents::IsLinkComponent(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		if (IsReflectionTypeLinkComponent(&type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::IsLinkComponentTarget(ECSEngine::Stream<char> name) const
+{
+	return GetLinkComponentForTarget(name).size > 0;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::ModuleComponentCount(Stream<char> name) const
 {
 	unsigned int module_index = IsModule(name);
 	ECS_ASSERT(module_index != -1);
@@ -154,12 +214,28 @@ unsigned int EditorComponents::ModuleSharedComponentCount(unsigned int module_in
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::GetModuleComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices) const
+void EditorComponents::GetModuleComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices, bool replace_links) const
 {
 	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
 		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
 		if (IsReflectionTypeComponent(type)) {
-			module_indices->Add(index);
+			unsigned int add_index = index;
+
+			if (replace_links) {
+				Stream<char> link_name = GetLinkComponentForTarget(type->name);
+				if (link_name.size > 0) {
+					// It has a link
+					size_t subindex = 0;
+					for (; subindex < loaded_modules[module_index].types.size; subindex++) {
+						if (function::CompareStrings(link_name, loaded_modules[module_index].types[subindex])) {
+							add_index = subindex;
+							break;
+						}
+					}
+					ECS_ASSERT(subindex < loaded_modules[module_index].types.size);
+				}
+			}
+			module_indices->Add(add_index);
 		}
 	}
 	module_indices->AssertCapacity();
@@ -167,12 +243,27 @@ void EditorComponents::GetModuleComponentIndices(unsigned int module_index, Capa
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::GetModuleSharedComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices) const
+void EditorComponents::GetModuleSharedComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices, bool replace_links) const
 {
 	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
 		const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(loaded_modules[module_index].types[index]);
 		if (IsReflectionTypeSharedComponent(type)) {
-			module_indices->Add(index);
+			unsigned int add_index = index;
+			if (replace_links) {
+				Stream<char> link_name = GetLinkComponentForTarget(type->name);
+				if (link_name.size > 0) {
+					// It has a link
+					size_t subindex = 0;
+					for (; subindex < loaded_modules[module_index].types.size; subindex++) {
+						if (function::CompareStrings(link_name, loaded_modules[module_index].types[subindex])) {
+							add_index = subindex;
+							break;
+						}
+					}
+					ECS_ASSERT(subindex < loaded_modules[module_index].types.size);
+				}
+			}
+			module_indices->Add(add_index);
 		}
 	}
 	module_indices->AssertCapacity();
@@ -647,37 +738,18 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 
 // ----------------------------------------------------------------------------------------------
 
-void GetTypeComponentBuffers(const ReflectionType* type, ComponentBuffer* component_buffers, unsigned short& component_buffer_count) {
-	// Get the buffers and the data_pointers
-	for (size_t index = 0; index < type->fields.size; index++) {
-		if (IsStream(type->fields[index].info.stream_type)) {
-			component_buffers[component_buffer_count].is_data_pointer = false;
-			component_buffers[component_buffer_count].offset = type->fields[index].info.pointer_offset;
-			component_buffer_count++;
-		}
-		else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
-			component_buffers[component_buffer_count].is_data_pointer = true;
-			component_buffers[component_buffer_count].offset = type->fields[index].info.pointer_offset;
-			component_buffer_count++;
-		}
-	}
-}
-
-// ----------------------------------------------------------------------------------------------
-
 void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stream<char> component_name, SpinLock* lock)
 {
 	const ReflectionType* internal_type = internal_manager->GetType(component_name);
 	bool is_component = IsReflectionTypeComponent(internal_type);
 	
-	ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-	unsigned short component_buffer_count = 0;
+	ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
 
 	Component component = { (short)internal_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 	double allocator_size_d = internal_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 	size_t allocator_size = allocator_size_d == DBL_MAX ? 0 : (size_t)allocator_size_d;
 	if (allocator_size > 0) {
-		GetTypeComponentBuffers(internal_type, component_buffers, component_buffer_count);
+		GetReflectionTypeRuntimeBuffers(internal_type, component_buffers);
 	}
 
 	// Lock the small memory manager in order to commit the type
@@ -687,12 +759,12 @@ void EditorComponents::AddComponentToManager(EntityManager* entity_manager, Stre
 	// Check to see if it already exists. If it does, don't commit it
 	if (is_component) {
 		if (!entity_manager->ExistsComponent(component)) {
-			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, { component_buffers, component_buffer_count });
+			entity_manager->RegisterComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, component_buffers);
 		}
 	}
 	else {
 		if (!entity_manager->ExistsSharedComponent(component)) {
-			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, { component_buffers, component_buffer_count });
+			entity_manager->RegisterSharedComponentCommit(component, GetReflectionTypeByteSize(internal_type), allocator_size, component_buffers);
 		}
 	}
 	if (lock != nullptr) {
@@ -751,7 +823,11 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 	{
 		// Update the UIDrawer
 		const ReflectionType* type = reflection_manager->GetType(event.name);
-		ui_drawer->CreateType(type);
+		UIReflectionType* ui_type = ui_drawer->CreateType(type);
+		// Change all buffers to resizable
+		// And disable their writes
+		ui_drawer->ConvertTypeStreamsToResizable(ui_type);
+		ui_drawer->DisableInputWrites(ui_type);
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
@@ -767,24 +843,21 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 	break;
 	case EDITOR_COMPONENT_EVENT_DIFFERENT_COMPONENT_DIFFERENT_ID:
 	{
-		// Update the UIDrawer as well
-		// Destroy the component to invalidate all current instances and then recreate it
-		const ReflectionType* type = reflection_manager->GetType(event.name);
-		ui_drawer->DestroyType(event.name);
-		ui_drawer->CreateType(type);
-
-		UpdateComponent(reflection_manager, event.name);
+		event.type = EDITOR_COMPONENT_EVENT_HAS_CHANGED;
+		FinalizeEvent(reflection_manager, ui_drawer, event);
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
 	{
+		UpdateComponent(reflection_manager, event.name);
+
 		// Update the UIDrawer as well
 		// Destroy the component to invalidate all current instances and then recreate it
-		const ReflectionType* type = reflection_manager->GetType(event.name);
-		ui_drawer->DestroyType(event.name);
-		ui_drawer->CreateType(type);
-
-		UpdateComponent(reflection_manager, event.name);
+		event.type = EDITOR_COMPONENT_EVENT_IS_REMOVED;
+		FinalizeEvent(reflection_manager, ui_drawer, event);
+		
+		event.type = EDITOR_COMPONENT_EVENT_IS_ADDED;
+		FinalizeEvent(reflection_manager, ui_drawer, event);
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
@@ -793,6 +866,41 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 	}
 	break;
 	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::FindComponentModule(Stream<char> name) const
+{
+	for (size_t index = 0; index < loaded_modules.size; index++) {
+		if (function::FindString(name, loaded_modules[index].types) != -1) {
+			return index;
+		}
+		if (function::FindString(name, loaded_modules[index].link_components) != -1) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::FindComponentModuleInReflection(const EditorState* editor_state, Stream<char> name) const
+{
+	unsigned int in_loaded_modules_index = FindComponentModule(name);
+	if (in_loaded_modules_index == -1) {
+		return -1;
+	}
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
+	function::ConvertASCIIToWide(wide_name, name);
+
+	for (size_t index = 0; index < editor_state->project_modules->size; index++) {
+		if (function::CompareStrings(editor_state->project_modules->buffer[index].library_name, wide_name)) {
+			return index;
+		}
+	}
+	return -1;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -855,6 +963,29 @@ bool EditorComponents::HasBuffers(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+Stream<char> EditorComponents::GetLinkComponentForTarget(Stream<char> name) const
+{
+	for (size_t index = 0; index < link_components.size; index++) {
+		if (function::CompareStrings(link_components[index].target, name)) {
+			return link_components[index].name;
+		}
+	}
+	return { nullptr, 0 };
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::GetLinkComponentDLLStatus(Stream<char> name) const
+{
+	ReflectionType type;
+	if (internal_manager->TryGetType(name, type)) {
+		return GetReflectionTypeLinkComponentNeedsDLL(&type);
+	}
+	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool EditorComponents::NeedsUpdate(Stream<char> component, const ReflectionManager* reflection_manager) const
 {
 	ReflectionType type;
@@ -868,9 +999,38 @@ bool EditorComponents::NeedsUpdate(Stream<char> component, const ReflectionManag
 
 // ----------------------------------------------------------------------------------------------
 
+void EditorComponents::PushUserEvent(EditorComponentEvent event)
+{
+	ECS_ASSERT(!IsEditorComponentHandledInternally(event.type));
+	events.Add(event);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 // This works for non components as well
 void EditorComponents::RemoveType(Stream<char> name)
 {
+	bool is_link_component = IsLinkComponent(name);
+	if (is_link_component) {
+		// Remove it from the link streams (module and global)
+		unsigned int global_index = function::FindString(name, link_components.ToStream(), [](LinkComponent link) {
+			return link.name;
+		});
+		ECS_ASSERT(global_index != -1);
+		// Nothing needs to be deallocated, they just reference the names inside the internal ReflectionType
+		link_components.RemoveSwapBack(global_index);
+
+		unsigned int module_index = 0;
+		for (; module_index < loaded_modules.size; module_index++) {
+			unsigned int idx = function::FindString(name, loaded_modules[module_index].link_components);
+			if (idx != -1) {
+				loaded_modules[module_index].link_components.RemoveSwapBack(idx);
+				break;
+			}
+		}
+		ECS_ASSERT(module_index != loaded_modules.size);
+	}
+
 	// Eliminate it from the loaded_modules reference first
 	unsigned int index = 0;
 	for (; index < loaded_modules.size; index++) {
@@ -957,6 +1117,87 @@ void EditorComponents::RemoveTypeFromManager(EntityManager* entity_manager, Comp
 
 // ----------------------------------------------------------------------------------------------
 
+void EditorComponents::ResetComponent(Stream<char> component_name, void* component_data) const
+{
+	const ReflectionType* type = internal_manager->GetType(component_name);
+	internal_manager->SetInstanceDefaultData(type, component_data);
+
+	//// If it is a link component, set the handles for assets to -1
+	//if (IsReflectionTypeLinkComponent(type)) {
+	//	for (size_t index = 0; index < type->fields.size; index++) {
+	//		if (FindAssetMetadataMacro(type->fields[index].tag) != ECS_ASSET_TYPE_COUNT) {
+	//			// It is an asset type
+	//			unsigned int* handle = (unsigned int*)function::OffsetPointer(component_data, type->fields[index].info.pointer_offset);
+	//			*handle = -1;
+	//		}
+	//	}
+	//}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::ResetComponent(ECSEngine::Component component, void* component_data, bool shared) const
+{
+	Stream<char> name = TypeFromID(component, shared);
+	ECS_ASSERT(name.size != 0);
+	ResetComponent(name, component_data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::ResetComponents(ComponentSignature component_signature, void* stack_memory, void** component_buffers) const
+{
+	for (unsigned int index = 0; index < component_signature.count; index++) {
+		Stream<char> component_name = TypeFromID(component_signature[index], false);
+
+		// Determine the byte size
+		unsigned short byte_size = GetComponentByteSize(component_name);
+		component_buffers[index] = stack_memory;
+		stack_memory = function::OffsetPointer(stack_memory, byte_size);
+		ResetComponent(component_name, component_buffers[index]);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::ResetComponentFromManager(EntityManager* entity_manager, Stream<char> component_name, Entity entity) const
+{
+	Component component = GetComponentID(component_name);
+	// If can't find it, fail
+	if (component.value == -1) {
+		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+		EditorSetConsoleWarn(warn_message);
+		return;
+	}
+
+	// If it is not registered, fail
+	if (!entity_manager->ExistsComponent(component)) {
+		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+		EditorSetConsoleWarn(warn_message);
+		return;
+	}
+
+	if (!entity_manager->ExistsEntity(entity)) {
+		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+		EditorSetConsoleWarn(warn_message);
+		return;
+	}
+
+	MemoryArena* arena = entity_manager->GetComponentAllocator(component);
+	void* entity_data = entity_manager->GetComponent(entity, component);
+
+	const ComponentInfo* info = &entity_manager->m_unique_components[component.value];
+
+	// Deallocate the buffers, if any
+	for (unsigned char deallocate_index = 0; deallocate_index < info->component_buffers_count; deallocate_index++) {
+		ComponentBufferDeallocate(info->component_buffers[deallocate_index], arena, entity_data);
+	}
+
+	internal_manager->SetInstanceDefaultData(component_name, entity_data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool EditorComponents::ResolveEvent(EntityManager* entity_manager, const ReflectionManager* reflection_manager, EditorComponentEvent event, Stream<SpinLock> locks)
 {
 	switch (event.type) {
@@ -966,11 +1207,18 @@ bool EditorComponents::ResolveEvent(EntityManager* entity_manager, const Reflect
 			AddComponentToManager(entity_manager, event.name, locks.buffer + locks.size - 1);
 			return true;
 		}
+		if (IsLinkComponent(event.name)) {
+			// Return true, the purpose of the IS_ADDED for link components is to register it for the UI
+			// and inside its structures
+			return true;
+		}
 	}
 		break;
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	{
-		RemoveTypeFromManager(entity_manager, { event.new_id }, event.is_shared, locks.buffer + locks.size - 1);
+		if (!event.is_link_component) {
+			RemoveTypeFromManager(entity_manager, { event.new_id }, event.is_shared, locks.buffer + locks.size - 1);
+		}
 		return true;
 	}
 		break;
@@ -1039,13 +1287,12 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 			double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 			size_t allocator_size = _allocator_size == DBL_MAX ? 0 : (size_t)_allocator_size;
 
-			ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-			unsigned short component_buffer_count = 0;
+			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
 			if (allocator_size > 0) {
-				GetTypeComponentBuffers(type, component_buffers, component_buffer_count);
+				GetReflectionTypeRuntimeBuffers(type, component_buffers);
 			}
  
-			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, { component_buffers, component_buffer_count });
+			data->entity_manager->RegisterComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, component_buffers);
 		}
 	};
 
@@ -1061,12 +1308,11 @@ void EditorComponents::SetManagerComponents(EntityManager* entity_manager)
 			double _allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 			size_t allocator_size = _allocator_size == DBL_MAX ? 0 : (size_t)_allocator_size;
 
-			ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
-			unsigned short component_buffer_count = 0;
+			ECS_STACK_CAPACITY_STREAM(ComponentBuffer, component_buffers, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT);
 			if (allocator_size > 0) {
-				GetTypeComponentBuffers(type, component_buffers, component_buffer_count);
+				GetReflectionTypeRuntimeBuffers(type, component_buffers);
 			}
-			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, { component_buffers, component_buffer_count });
+			data->entity_manager->RegisterSharedComponentCommit(component_id, GetReflectionTypeByteSize(type), allocator_size, component_buffers);
 		}
 	};
 
@@ -1158,6 +1404,7 @@ void EditorComponents::Initialize(AllocatorPolymorphic _allocator)
 	allocator = _allocator;
 	loaded_modules.Initialize(allocator, 0);
 	events.Initialize(_allocator, 0);
+	link_components.Initialize(allocator, 0);
 
 	internal_manager = (ReflectionManager*)Allocate(allocator, sizeof(ReflectionManager));
 	internal_manager->type_definitions.Initialize(allocator, 0);
@@ -1182,6 +1429,73 @@ void EditorComponents::UpdateComponents(
 	ECS_STACK_CAPACITY_STREAM(Stream<char>, temporary_module_types, 512);
 
 	unsigned int module_index = IsModule(module_name);
+
+	ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 512);
+	ECS_STACK_CAPACITY_STREAM(unsigned int, hierarchy_types, ECS_KB * 2);
+
+	ReflectionManagerGetQuery query;
+	query.indices = &hierarchy_types;
+	reflection_manager->GetHierarchyTypes(hierarchy_index, query);
+	hierarchy_types.AssertCapacity();
+
+	// Walk through the list of the types and separate the components (unique and shared) from the rest of the types
+	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {
+		const ReflectionType* type = reflection_manager->GetType(hierarchy_types[index]);
+		if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
+			component_indices.AddSafe(hierarchy_types[index]);
+			hierarchy_types.RemoveSwapBack(index);
+			index--;
+		}
+	}
+
+	auto add_new_type = [&](const ReflectionType* type) {
+		// If it is a link component, generate an add type event which will then be handled
+		// (we need to create an UI type for it)
+		bool is_link_component = IsReflectionTypeLinkComponent(type);
+		Stream<char> link_target = { nullptr, 0 };
+		if (is_link_component) {
+			// If it doesn't have a target, generate an LINK_MISSING_TARGET event
+			link_target = GetReflectionTypeLinkComponentTarget(type);
+			if (link_target.size == 0) {
+				events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET, type->name });
+				return;
+			}
+
+			unsigned int target_index = internal_manager->type_definitions.Find(link_target);
+			if (target_index != -1) {
+				// The target exists. Check to see that it has a valid component
+				const ReflectionType* type_ptr = internal_manager->type_definitions.GetValuePtrFromIndex(target_index);
+				if (IsReflectionTypeComponent(type_ptr) || IsReflectionTypeSharedComponent(type_ptr)) {
+					// Generate an event
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
+				}
+				else {
+					// Generate an invalid event
+					events.Add({ EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET, type->name });
+				}
+			}
+		}
+
+		// Copy the reflection_type into a separate allocation
+		size_t copy_size = type->CopySize();
+		void* allocation = Allocate(allocator, copy_size);
+
+		uintptr_t ptr = (uintptr_t)allocation;
+		ReflectionType copied_type = type->CopyTo(ptr);
+
+		// The name of the copied type is stable
+		InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, copied_type.name);
+		added_types.Add(copied_type.name);
+
+		if (is_link_component) {
+			// Add the copied_type name to the list of link components for the module
+			loaded_modules[module_index].link_components.Add(copied_type.name);
+
+			// Add it to the link stream. This will be revisited later on in order to check that the target exists
+			link_target = function::StringCopy(allocator, link_target);
+			link_components.Add({ copied_type.name, link_target });
+		}
+	};
 
 	// Only for types that don't already exist
 	auto register_types = [&](Stream<unsigned int> indices, auto check_id) {
@@ -1218,16 +1532,8 @@ void EditorComponents::UpdateComponents(
 
 				events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
 			}
-			// Copy the reflection_type into a separate allocation
-			size_t copy_size = type->CopySize();
-			void* allocation = Allocate(allocator, copy_size);
 
-			uintptr_t ptr = (uintptr_t)allocation;
-			ReflectionType copied_type = type->CopyTo(ptr);
-				
-			// The name of the copied type is stable
-			InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, copied_type.name);
-			added_types.Add(copied_type.name);
+			add_new_type(type);
 		}
 	};
 
@@ -1270,19 +1576,10 @@ void EditorComponents::UpdateComponents(
 
 					events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
 				}
-				// Copy the reflection_type into a separate allocation
-				size_t copy_size = type->CopySize();
-				void* allocation = Allocate(allocator, copy_size);
-
-				uintptr_t ptr = (uintptr_t)allocation;
-				ReflectionType copied_type = type->CopyTo(ptr);
-
-				// The name of the copied type is stable
-				InsertIntoDynamicTable(internal_manager->type_definitions, allocator, copied_type, copied_type.name);
-				added_types.Add(copied_type.name);
+				add_new_type(type);
 			}
 			else {
-				const ReflectionType* old_type = internal_manager->type_definitions.GetValuePtrFromIndex(old_type_index);
+				ReflectionType* old_type = internal_manager->type_definitions.GetValuePtrFromIndex(old_type_index);
 				// Remove it from the temporary list of module types
 				unsigned int temporary_list_index = function::FindString(type->name, temporary_module_types);
 				ECS_ASSERT(temporary_list_index != -1);
@@ -1340,27 +1637,17 @@ void EditorComponents::UpdateComponents(
 						continue;
 					}
 				}
+
+				// If it passed all tests, verify if the default values have changed. If they did, then copy them
+				for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
+					if (type->fields[field_index].info.has_default_value) {
+						old_type->fields[field_index].info.has_default_value = true;
+						memcpy(&old_type->fields[field_index].info.default_bool, &type->fields[field_index].info.default_bool, old_type->fields[field_index].info.byte_size);
+					}
+				}
 			}
 		}
 	};
-
-	ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 512);
-	ECS_STACK_CAPACITY_STREAM(unsigned int, hierarchy_types, ECS_KB * 2);
-
-	ReflectionManagerGetQuery query;
-	query.indices = &hierarchy_types;
-	reflection_manager->GetHierarchyTypes(hierarchy_index, query);
-	hierarchy_types.AssertCapacity();
-
-	// Walk through the list of the types and separate the components (unique and shared) from the rest of the types
-	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {
-		const ReflectionType* type = reflection_manager->GetType(hierarchy_types[index]);
-		if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
-			component_indices.AddSafe(hierarchy_types[index]);
-			hierarchy_types.RemoveSwapBack(index);
-			index--;
-		}
-	}
 
 	// Check to see if the module has any components already stored
 	if (module_index != -1) {
@@ -1372,12 +1659,18 @@ void EditorComponents::UpdateComponents(
 
 		for (unsigned int index = 0; index < temporary_module_types.size; index++) {
 			const ReflectionType* type = internal_manager->type_definitions.GetValuePtr(temporary_module_types[index]);
-			if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
+			bool is_link_component = IsReflectionTypeLinkComponent(type);
+			bool is_shared = IsReflectionTypeSharedComponent(type);
+			if (IsReflectionTypeComponent(type) || is_shared || is_link_component) {
 				// Emit a removed event
-				events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, {(short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION)}, IsReflectionTypeSharedComponent(type) });
+				if (!is_link_component) {
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, {(short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION)}, is_shared, false });
+				}
+				else {
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_REMOVED, type->name, type->name, -1, false, true });
+				}
 			}
 			// Even if it is a component we can remove it now since the RemoveTypeFromManager doesn't require the internal component to be alive
-			// Not a component, deallocate it now
 			RemoveType(type->name);
 		}
 
@@ -1391,17 +1684,54 @@ void EditorComponents::UpdateComponents(
 		}
 	}
 	else {
+		module_index = loaded_modules.Add({ function::StringCopy(allocator, module_name) });
+		loaded_modules[module_index].link_components.Initialize(allocator, 0);
 		register_types(component_indices, std::true_type{});
 		register_types(hierarchy_types, std::false_type{});
 
-		module_index = loaded_modules.Add({ function::StringCopy(allocator, module_name) });
 		loaded_modules[module_index].types.InitializeAndCopy(allocator, added_types);
+	}
+
+	auto invalid_link = [&](unsigned int index) {
+		Stream<char> link_name = link_components[index].name;
+		// Invalid target, generate an event
+		events.Add({ EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET, link_name });
+		// Remove this type from the link stream
+		link_components.RemoveSwapBack(index);
+		// Also remove it from the module link stream
+		unsigned int module_link_index = function::FindString(link_name, loaded_modules[module_index].link_components);
+		ECS_ASSERT(module_link_index != -1);
+		loaded_modules[module_index].link_components.RemoveSwapBack(module_link_index);
+	};
+
+	// Verify the link components for links with undetermined targets
+	for (unsigned int index = 0; index < link_components.size; index++) {
+		ReflectionType type;
+		if (internal_manager->TryGetType(link_components[index].target, type)) {
+			bool is_component = IsReflectionTypeComponent(&type) || IsReflectionTypeSharedComponent(&type);
+			if (is_component) {
+				// The target is valid
+				if (type.name.buffer != link_components[index].target.buffer) {
+					Deallocate(allocator, link_components[index].target.buffer);
+					// Previously not determined, now it is
+					link_components[index].target.buffer = type.name.buffer;
+					// Generate an added event
+					events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type.name });
+				}
+			}
+			else {
+				invalid_link(index);
+			}
+		}
+		else {
+			invalid_link(index);
+		}
 	}
 }
 
 // ----------------------------------------------------------------------------------------------
 
-Stream<char> EditorComponents::TypeFromID(short id, bool shared)
+Stream<char> EditorComponents::TypeFromID(short id, bool shared) const
 {
 	Stream<char> name = { nullptr, 0 };
 	internal_manager->type_definitions.ForEachConst<true>([&](const ReflectionType& type, ResourceIdentifier identifier) {
@@ -1440,13 +1770,9 @@ bool IsEditorComponentHandledInternally(EDITOR_COMPONENT_EVENT event_type)
 	case EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED:
 	case EDITOR_COMPONENT_EVENT_SAME_COMPONENT_DIFFERENT_ID:
 		return true;
-	case EDITOR_COMPONENT_EVENT_IS_MISSING_ID:
-	case EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR:
-	case EDITOR_COMPONENT_EVENT_SAME_ID:
-		return false;
-	default:
-		ECS_ASSERT(false);
 	}
+
+	return false;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1465,6 +1791,7 @@ struct ExecuteComponentEventData {
 	// This semaphore is used to deallocate the data when all threads have finished
 	// The allocation is here at the semaphore
 	Semaphore* semaphore;
+	SpinLock* finalize_event_lock;
 };
 
 ECS_THREAD_TASK(ExecuteComponentEvent) {
@@ -1495,7 +1822,9 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		data->unhandled_events->Add(data->event_to_handle);
 	}
 	else {
+		data->finalize_event_lock->lock();
 		data->editor_state->editor_components.FinalizeEvent(data->editor_state->module_reflection->reflection, data->editor_state->module_reflection, data->event_to_handle);
+		data->finalize_event_lock->unlock();
 	}
 
 	unsigned int previous_count = data->semaphore->Exit();
@@ -1548,7 +1877,8 @@ void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initializ
 		"SAME_ID: Modify the source file for the conflicting components such that they have different IDs.",
 		"MISSING_ID: Give the component an ID.",
 		"HAS_BUFFERS_NO_ALLOCATOR: Give the component an allocator size.",
-		"HAS_ALLOCATOR_BUT_NO_BUFFERS: Remove the allocator function."
+		"HAS_ALLOCATOR_BUT_NO_BUFFERS: Remove the allocator function.",
+		"LINK_COMPONENT_MISSING_TARGET: Give the component its target."
 	};
 	drawer.LabelList(UI_CONFIG_LABEL_LIST_NO_NAME, config, "List", { label_lists, std::size(label_lists) });
 	drawer.NextRow();
@@ -1574,6 +1904,9 @@ void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initializ
 		}
 		else if (component_event == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
 			type_string = " HAS_ALLOCATOR_NO_BUFFERS";
+		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET) {
+			type_string = " LINK_MISSING_TARGET";
 		}
 
 		drawer.Text(data->user_events[index].name);	
@@ -1642,7 +1975,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		editor_state->editor_components.GetUserEvents(user_events);
 
 		// For each sandbox we must create its appropriate spin locks
-		size_t total_allocation_size = sizeof(Semaphore) + sizeof(Stream<SpinLock>) * editor_state->sandboxes.size * 2 + 
+		size_t total_allocation_size = sizeof(Semaphore) + sizeof(SpinLock) + sizeof(Stream<SpinLock>) * editor_state->sandboxes.size * 2 + 
 			sizeof(EditorComponentEvent) * editor_state->editor_components.events.size * editor_state->sandboxes.size + sizeof(AtomicStream<EditorComponentEvent>);
 		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
 			if (GetSandboxState(editor_state, index) == EDITOR_SANDBOX_PAUSED) {
@@ -1655,6 +1988,10 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		Semaphore* semaphore = (Semaphore*)allocation;
 		uintptr_t ptr = (uintptr_t)allocation;
 		ptr += sizeof(*semaphore);
+
+		SpinLock* finalize_event_lock = (SpinLock*)ptr;
+		finalize_event_lock->unlock();
+		ptr += sizeof(SpinLock);
 
 		AtomicStream<EditorComponentEvent>* unhandled_events = (AtomicStream<EditorComponentEvent>*)ptr;
 		ptr += sizeof(AtomicStream<EditorComponentEvent>);
@@ -1698,6 +2035,7 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			execute_data.runtime_spin_locks = runtime_locks;
 			execute_data.scene_spin_locks = scene_locks;
 			execute_data.unhandled_events = unhandled_events;
+			execute_data.finalize_event_lock = finalize_event_lock;
 			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(ExecuteComponentEvent, &execute_data, sizeof(execute_data)));
 		}
 
@@ -1782,6 +2120,57 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 					continue;
 				}
 				else if (evaluation == DBL_MAX && is_trivially_copyable) {
+					user_events.Remove(index);
+					index--;
+					continue;
+				}
+			}
+			else {
+				// Remove the event if the type has disapperead from the module reflection
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+		}
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET) {
+			ReflectionType type;
+			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+				if (IsReflectionTypeLinkComponent(&type)) {
+					if (GetReflectionTypeLinkComponentTarget(&type).size > 0) {
+						// Now it has a target
+						user_events.Remove(index);
+						index--;
+						continue;
+					}
+				}
+				else {
+					// Changed type or it doesn't exist no more
+					user_events.Remove(index);
+					index--;
+					continue;
+				}
+			}
+			else {
+				// Remove the event if the type has disapperead from the module reflection
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+		}
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET) {
+			ReflectionType type;
+			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+				if (IsReflectionTypeLinkComponent(&type)) {
+					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
+					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
+						// Now it has a target and a valid one
+						user_events.Remove(index);
+						index--;
+						continue;
+					}
+				}
+				else {
+					// Changed type or it doesn't exist no more
 					user_events.Remove(index);
 					index--;
 					continue;

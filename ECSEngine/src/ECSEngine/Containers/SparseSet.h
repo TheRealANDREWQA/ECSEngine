@@ -269,7 +269,7 @@ namespace ECSEngine {
 		// Returns the handle to the element that was added
 		unsigned int Add(T element) {
 			if (set.size == set.capacity) {
-				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity);
+				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity + 2);
 			}
 
 			return set.Add(element);
@@ -278,7 +278,7 @@ namespace ECSEngine {
 		// Returns the handle to the element that was added
 		unsigned int Add(const T* element) {
 			if (set.size == set.capacity) {
-				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity);
+				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity + 2);
 			}
 
 			return set.Add(element);
@@ -294,7 +294,7 @@ namespace ECSEngine {
 			if (set.buffer != nullptr) {
 				DeallocateEx(allocator, set.buffer);
 			}
-			Clear();
+			set.InitializeFromBuffer(nullptr, 0);
 		}
 
 		ECS_INLINE T& operator [](unsigned int handle) {
@@ -371,12 +371,12 @@ namespace ECSEngine {
 		// Copies the elements before that
 		void Resize(unsigned int new_capacity) {
 			void* new_buffer = AllocateEx(allocator, set.MemoryOf(new_capacity));
-			
+			uint2* new_indirection_buffer = (uint2*)function::OffsetPointer(new_buffer, sizeof(T) * new_capacity);
+
 			if (new_capacity < set.capacity) {
 				// Get only the first new_capacity elements
 				// These can be memcpy'ed directly
 				memcpy(new_buffer, set.buffer, sizeof(T) * new_capacity);
-				uint2* new_indirection_buffer = (uint2*)function::OffsetPointer(new_buffer, sizeof(T) * new_capacity);
 				// The indirection can become invalid if the handles are not in the same range. But it's ok,
 				// because it is impossible to maintain the references to those handles if the number is shrunken down
 				// Remap the indirections such that every handle corresponds to its index
@@ -385,10 +385,9 @@ namespace ECSEngine {
 					new_indirection_buffer[index].y = index;
 				}
 			}
-			else {
+			else if (set.capacity > 0) {
 				// More elements are allocated - the handles can all be copied
 				memcpy(new_buffer, set.buffer, sizeof(T) * set.capacity);
-				uint2* new_indirection_buffer = (uint2*)function::OffsetPointer(new_buffer, sizeof(T) * new_capacity);
 
 				// The indirections can also be copied - the free ones need to be modified
 				memcpy(new_indirection_buffer, set.indirection_buffer, sizeof(uint2) * set.capacity);
@@ -414,12 +413,19 @@ namespace ECSEngine {
 				}
 				new_indirection_buffer[new_capacity - 1].x = -1;
 			}
+			else {
+				// If the size is 0, we need to set the links appropriately
+				for (unsigned int index = 0; index < new_capacity - 1; index++) {
+					new_indirection_buffer[index].x = index + 1;
+				}
+				new_indirection_buffer[new_capacity - 1].x = -1;
+			}
 
 			void* buffer_to_deallocate = set.buffer;
 			set.buffer = (T*)new_buffer;
-			set.indirection_buffer = (uint2*)function::OffsetPointer(new_buffer, sizeof(T) * set.capacity);
+			set.indirection_buffer = new_indirection_buffer;
 			// If the set is full and a resize happenend, for the case that it grew, set the first empty slot to the capacity
-			// of the old set. If the capacity is reduced, it doesn't matter since
+			// of the old set. If the capacity is reduced, it doesn't matter
 			if (set.size == set.capacity) {
 				set.first_empty_slot = set.capacity;
 			}

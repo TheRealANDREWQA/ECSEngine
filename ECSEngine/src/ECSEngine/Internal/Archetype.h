@@ -28,6 +28,14 @@ namespace ECSEngine {
 
 		void CopyOther(const Archetype* other);
 
+		void CopyEntityBuffers(EntityInfo info, unsigned char deallocate_index, void* target_memory) const;
+
+		void CopyEntityBuffers(EntityInfo info, void** target_buffers) const;
+
+		void CopyEntityBuffers(unsigned int stream_index, unsigned int base_index, unsigned char deallocate_index, void* target_memory) const;
+
+		void CopyEntityBuffers(unsigned int stream_index, unsigned int base_index, void** target_buffers) const;
+
 		// It will deallocate all of its base archetypes and then itself
 		void Deallocate();
 

@@ -131,10 +131,9 @@ namespace ECSEngine {
         }
 
         unsigned int child_parent_index = parent_table.Find(child);
-        ECS_CRASH_RETURN(child_parent_index == -1, "EntityHierarchy: Adding pair failed. Trying to add child {#} to parent {#} when the child already exists. "
-            "Use instead ChangeOrSetParent if trying to change or set the parent.", child.value, parent.value);
-
-        InsertIntoDynamicTable(parent_table, allocator, parent, child);
+        if (child_parent_index == -1) {
+            InsertIntoDynamicTable(parent_table, allocator, parent, child);
+        }
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

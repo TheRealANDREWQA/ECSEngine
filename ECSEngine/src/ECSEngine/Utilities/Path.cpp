@@ -267,9 +267,113 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 		
+		template<typename PathType, typename CharacterType>
+		PathType MountPathImpl(PathType base, PathType mount_point, CapacityStream<CharacterType> storage) {
+			if (mount_point.size > 0) {
+				storage.Copy(mount_point);
+				bool is_absolute = PathIsAbsolute(mount_point);
+				CharacterType character_to_check;
+				if (is_absolute) {
+					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
+				}
+				else {
+					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
+				}
+
+				if (mount_point[mount_point.size - 1] != character_to_check) {
+					storage.Add(character_to_check);
+				}
+				storage.AddStreamSafe(base);
+				return storage;
+			}
+			return base;
+		}
+
+		Path MountPath(Path base, Path mount_point, CapacityStream<wchar_t> storage)
+		{
+			return MountPathImpl(base, mount_point, storage);
+		}
+
+		ASCIIPath MountPath(ASCIIPath base, ASCIIPath mount_point, CapacityStream<char> storage)
+		{
+			return MountPathImpl(base, mount_point, storage);
+		}
+
 		// --------------------------------------------------------------------------------------------------
 		
+		template<typename CharacterType, typename PathType>
+		PathType MountPathImpl(PathType base, PathType mount_point, AllocatorPolymorphic allocator) {
+			if (mount_point.size > 0) {
+				void* allocation = Allocate(allocator, sizeof(CharacterType) * (mount_point.size + base.size + 1), alignof(CharacterType));
+				PathType new_path;
+				new_path.buffer = (CharacterType*)allocation;
+
+				new_path.Copy(mount_point);
+				bool is_absolute = PathIsAbsolute(mount_point);
+				CharacterType character_to_check;
+				if (is_absolute) {
+					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
+				}
+				else {
+					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
+				}
+
+				if (mount_point[mount_point.size - 1] != character_to_check) {
+					new_path.Add(character_to_check);
+				}
+				new_path.AddStream(base);
+				return new_path;
+			}
+			return base;
+		}
+
+		Path MountPath(Path base, Path mount_point, AllocatorPolymorphic allocator)
+		{
+			return MountPathImpl<wchar_t>(base, mount_point, allocator);
+		}
+
+		ASCIIPath MountPath(ASCIIPath base, ASCIIPath mount_point, AllocatorPolymorphic allocator)
+		{
+			return MountPathImpl<char>(base, mount_point, allocator);
+		}
+
 		// --------------------------------------------------------------------------------------------------
+
+		template<typename PathType, typename CharacterType>
+		PathType MountPathOnlyRelImpl(PathType base, PathType mount_point, CapacityStream<CharacterType> storage) {
+			if (PathIsRelative(base)) {
+				return MountPath(base, mount_point, storage);
+			}
+			return base;
+		}
+
+		Path MountPathOnlyRel(Path base, Path mount_point, CapacityStream<wchar_t> storage) {
+			return MountPathOnlyRelImpl(base, mount_point, storage);
+		}
+
+		ASCIIPath MountPathOnlyRel(ASCIIPath base, ASCIIPath mount_point, CapacityStream<char> storage) {
+			return MountPathOnlyRelImpl(base, mount_point, storage);
+		}
+
+		// -------------------------------------------------------------------------------------------------
+
+		template<typename PathType>
+		PathType MountPathOnlyRelImpl(PathType base, PathType mount_point, AllocatorPolymorphic allocator) {
+			if (PathIsRelative(base)) {
+				return MountPath(base, mount_point, allocator);
+			}
+			return base;
+		}
+
+		Path MountPathOnlyRel(Path base, Path mount_point, AllocatorPolymorphic allocator) {
+			return MountPathOnlyRelImpl(base, mount_point, allocator);
+		}
+
+		ASCIIPath MountPathOnlyRel(ASCIIPath base, ASCIIPath mount_point, AllocatorPolymorphic allocator) {
+			return MountPathOnlyRelImpl(base, mount_point, allocator);
+		}
+
+		// -------------------------------------------------------------------------------------------------
 
 	}
 

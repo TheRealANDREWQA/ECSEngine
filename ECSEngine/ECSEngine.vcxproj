@@ -242,6 +242,8 @@
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetLoading.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadata.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataHandling.h" />
+    <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataMacros.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\Scene.h" />
@@ -260,6 +262,8 @@
     <ClInclude Include="src\ECSEngine\Rendering\Shader Application Stage\PBR.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderInclude.h" />
     <ClInclude Include="src\ECSEngine\Rendering\ShaderReflection.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Benchmark.h" />
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\Module.h" />
@@ -284,9 +288,10 @@
     <ClInclude Include="src\ECSEngine\Utilities\Console.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Reflection\ReflectionConstants.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Serialization\Binary\SerializationMacro.h" />
     <ClInclude Include="src\ECSEngine\Utilities\TreeIterator.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Crash.h" />
-    <ClInclude Include="src\ECSEngine\Utilities\DefaultCrashHandler.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\CrashHandler.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Encryption.h" />
     <ClInclude Include="src\ECSEngine\Utilities\File.h" />
     <ClInclude Include="src\ECSEngine\Utilities\FilePackaging.h" />
@@ -309,12 +314,15 @@
     <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
+    <ClInclude Include="src\Includes\ECSEngineAssetMacros.h" />
+    <ClInclude Include="src\Includes\ECSEngineAssets.h" />
     <ClInclude Include="src\Includes\ECSEngineBasics.h" />
     <ClInclude Include="src\Includes\ECSEngineBenchmark.h" />
     <ClInclude Include="src\Includes\ECSEngineComponents.h" />
     <ClInclude Include="src\Includes\ECSEngineConcurrentPrimitives.h" />
     <ClInclude Include="src\Includes\ECSEngineConsole.h" />
     <ClInclude Include="src\Includes\ECSEngineContainers.h" />
+    <ClInclude Include="src\Includes\ECSEngineCrash.h" />
     <ClInclude Include="src\Includes\ECSEngineDebugDrawer.h" />
     <ClInclude Include="src\Includes\ECSEngineEntities.h" />
     <ClInclude Include="src\Includes\ECSEngineEntitiesSerialize.h" />
@@ -344,7 +352,7 @@
     <ClInclude Include="src\ECSEngine\Internal\Resources\ResourceManager.h" />
     <ClInclude Include="src\ECSEngine\Internal\Archetype.h" />
     <ClInclude Include="src\ECSEngine\Containers\Queues.h" />
-    <ClInclude Include="src\ECSEngine\Rendering\ColorMacros.h" />
+    <ClInclude Include="src\ECSEngine\Rendering\ColorUtilities.h" />
     <ClInclude Include="src\ECSEngine\Rendering\Graphics.h" />
     <ClInclude Include="src\ECSEngine\Internal\InternalStructures.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManager.h" />
@@ -409,6 +417,7 @@
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetDatabaseReference.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetLoading.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadata.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataHandling.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\ResourceManager.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\Scene.cpp" />
@@ -425,6 +434,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\ECSEngine\Internal\World.cpp" />
+    <ClCompile Include="src\ECSEngine\Rendering\ColorUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\Compression\TextureCompression.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\DirectXTexHelpers.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\GraphicsHelpers.cpp">
@@ -440,6 +450,7 @@
     <ClCompile Include="src\ECSEngine\Rendering\ShaderReflection.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Debug Draw\DebugDraw.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\Module.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawConfig.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawer.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\UI\UIDrawerActions.cpp" />
@@ -468,7 +479,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\Benchmark.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Console.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Crash.cpp" />
-    <ClCompile Include="src\ECSEngine\Utilities\DefaultCrashHandler.cpp" />
+    <ClCompile Include="src\ECSEngine\Utilities\CrashHandler.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\Encryption.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\File.cpp" />
     <ClCompile Include="src\ECSEngine\Utilities\FilePackaging.cpp" />

@@ -7,14 +7,14 @@ using namespace ECSEngine;
 
 const wchar_t* PROJECT_DIRECTORIES[] = {
 	PROJECT_DEBUG_RELATIVE_PATH,
-		PROJECT_UI_RELATIVE_PATH,
-		PROJECT_ASSETS_RELATIVE_PATH,
-		PROJECT_MODULES_RELATIVE_PATH,
-		PROJECT_METAFILES_RELATIVE_PATH,
-		PROJECT_CONFIGURATION_RELATIVE_PATH,
-		PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH,
-		PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH,
-		PROJECT_BACKUP_RELATIVE_PATH
+	PROJECT_UI_RELATIVE_PATH,
+	PROJECT_ASSETS_RELATIVE_PATH,
+	PROJECT_MODULES_RELATIVE_PATH,
+	PROJECT_METADATA_RELATIVE_PATH,
+	PROJECT_CONFIGURATION_RELATIVE_PATH,
+	PROJECT_CONFIGURATION_MODULES_RELATIVE_PATH,
+	PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH,
+	PROJECT_BACKUP_RELATIVE_PATH
 };
 
 size_t PROJECT_DIRECTORIES_SIZE()
@@ -92,7 +92,7 @@ void GetProjectModulesFilePath(const EditorState* editor_state, ECSEngine::Capac
 
 void GetProjectMetafilesFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path)
 {
-	GetProjectOrganizationFolder(editor_state, path, PROJECT_METAFILES_RELATIVE_PATH);
+	GetProjectOrganizationFolder(editor_state, path, PROJECT_METADATA_RELATIVE_PATH);
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -121,6 +121,22 @@ void GetProjectBackupFolder(const EditorState* editor_state, CapacityStream<wcha
 void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, CapacityStream<wchar_t>& path)
 {
 	GetProjectOrganizationFolder(editor_state, path, PROJECT_CONFIGURATION_RUNTIME_RELATIVE_PATH);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void GetProjectRootPath(const EditorState* editor_state, CapacityStream<wchar_t>& path)
+{
+	path.Copy(editor_state->project_file->path);
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+Stream<wchar_t> GetProjectAssetRelativePath(const EditorState* editor_state, Stream<wchar_t> path)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(editor_state, assets_folder);
+	return function::PathRelativeToAbsolute(path, assets_folder);
 }
 
 // -------------------------------------------------------------------------------------------------------------

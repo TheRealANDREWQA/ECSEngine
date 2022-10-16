@@ -602,19 +602,6 @@ namespace ECSEngine {
 		// -------------------------------------------------------------------------------------------------------
 
 		template<typename Element>
-		float GetMinX(const Element* element, size_t size) {
-			float min = element[0].position.x;
-			for (size_t index = 1; index < size; index++) {
-				min = std::min(min, element[index].position.x);
-			}
-			return min;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMinX, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
 		float GetMinXRectangle(const Element* element, size_t size) {
 			float min = element[0].position.x;
 			for (size_t index = 6; index < size; index += 6) {
@@ -624,84 +611,6 @@ namespace ECSEngine {
 		}
 
 		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMinXRectangle, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
-		float GetMaxX(const Element* element, size_t size) {
-			float max = element[0].position.x;
-			for (size_t index = 1; index < size; index++) {
-				max = std::max(max, element[index].position.x);
-			}
-			return max;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMaxX, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
-		float GetMaxXRectangle(const Element* element, size_t size) {
-			float max = element[1].position.x;
-			for (size_t index = 7; index < size; index += 6) {
-				max = std::max(max, element[index].position.x);
-			}
-			return max;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMaxXRectangle, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
-		float GetMinY(const Element* element, size_t size) {
-			float min = element[0].position.y;
-			for (size_t index = 1; index < size; index++) {
-				min = std::min(min, element[index].position.y);
-			}
-			return min;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMinY, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
-		float GetMinYRectangle(const Element* element, size_t size) {
-			float min = element[0].position.y;
-			for (size_t index = 6; index < size; index += 6) {
-				min = std::min(min, element[index].position.y);
-			}
-			return min;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMinYRectangle, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
-		float GetMaxY(const Element* element, size_t size) {
-			float max = element[0].position.y;
-			for (size_t index = 1; index < size; index++) {
-				max = std::max(max, element[index].position.y);
-			}
-			return max;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMaxY, const UIVertexColor*, const UISpriteVertex*, size_t);
-
-		// -------------------------------------------------------------------------------------------------------
-
-		template<typename Element>
-		float GetMaxYRectangle(const Element* element, size_t size) {
-			float max = element[2].position.y;
-			for (size_t index = 8; index < size; index += 6) {
-				max = std::max(max, element[index].position.y);
-			}
-			return max;
-		}
-
-		ECS_TEMPLATE_FUNCTION_2_BEFORE(float, GetMaxYRectangle, const UIVertexColor*, const UISpriteVertex*, size_t);
 
 		// -------------------------------------------------------------------------------------------------------
 

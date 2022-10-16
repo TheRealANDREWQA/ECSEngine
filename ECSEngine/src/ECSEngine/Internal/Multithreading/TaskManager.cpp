@@ -2,8 +2,8 @@
 #include "TaskManager.h"
 #include "../World.h"
 
-// In microseconds
-#define SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL (50'000)
+// In milliseconds
+#define SLEEP_UNTIL_DYNAMIC_TASKS_FINISH_INTERVAL 25
 
 // The allocator size for the data + task.name for dynamic tasks
 // This is per thread
@@ -246,21 +246,29 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::AddDynamicTaskWithAffinity(ThreadTask task, unsigned int thread_id, bool can_be_stolen) {
-		ECS_ASSERT(task.name != nullptr);
-		
-		// Make the name size a multiple of 8 such that the data is always aligned on an 8 byte boundary
-		size_t name_size = strlen(task.name) + 1;
+		if (task.name != nullptr) {
+			// Make the name size a multiple of 8 such that the data is always aligned on an 8 byte boundary
+			size_t name_size = strlen(task.name) + 1;
 
-		size_t total_allocation_size = (name_size + 7) * sizeof(char) + task.data_size;
+			size_t total_allocation_size = (name_size + 7) * sizeof(char) + task.data_size;
 
-		char* name = (char*)m_dynamic_task_allocators[thread_id]->Allocate(total_allocation_size);
-		memcpy(name, task.name, sizeof(char) * name_size);
-		task.name = name;
+			char* name = (char*)m_dynamic_task_allocators[thread_id]->Allocate(total_allocation_size);
+			memcpy(name, task.name, sizeof(char) * name_size);
+			task.name = name;
 
-		if (task.data_size > 0) {
-			const void* old_data = task.data;
-			task.data = (void*)function::AlignPointer((uintptr_t)function::OffsetPointer(name, name_size), 8);
-			memcpy(task.data, old_data, task.data_size);
+			if (task.data_size > 0) {
+				const void* old_data = task.data;
+				task.data = (void*)function::AlignPointer((uintptr_t)function::OffsetPointer(name, name_size), 8);
+				memcpy(task.data, old_data, task.data_size);
+			}
+		}
+		else {
+			if (task.data_size > 0) {
+				const void* old_data = task.data;
+				void* allocation = m_dynamic_task_allocators[thread_id]->Allocate(task.data_size + 7);
+				task.data = (void*)function::AlignPointer((uintptr_t)allocation, 8);
+				memcpy(task.data, old_data, task.data_size);
+			}
 		}
 
 		DynamicThreadTask dynamic_task;
@@ -445,9 +453,16 @@ namespace ECSEngine {
 	void TaskManager::ExecuteDynamicTask(ThreadTask task, unsigned int thread_id)
 	{
 		m_dynamic_wrapper(thread_id, m_world, task, m_dynamic_wrapper_data);
-		// Release the dynamic task allocation
-		size_t allocation_size = (strlen(task.name) + 8) * sizeof(char) + task.data_size;
-		m_dynamic_task_allocators[thread_id]->Finish(task.name, allocation_size);
+		if (task.name != nullptr) {
+			// Release the dynamic task allocation
+			size_t allocation_size = (strlen(task.name) + 8) * sizeof(char) + task.data_size;
+			m_dynamic_task_allocators[thread_id]->Finish(task.name, allocation_size);
+		}
+		else {
+			if (task.data_size > 0) {
+				m_dynamic_task_allocators[thread_id]->Finish(task.data, task.data_size);
+			}
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -648,34 +663,14 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	ECS_THREAD_TASK(ChangeThreadPriorityTask) {
-		int* priority = (int*)_data;
-		BOOL success = SetThreadPriority(GetCurrentThread(), *priority);
-		ECS_ASSERT(success, "Changing thread priority failed.");
+		OS::ECS_THREAD_PRIORITY priority = *(OS::ECS_THREAD_PRIORITY*)_data;
+		OS::ChangeThreadPriority(priority);
 	}
 
-	void TaskManager::SetThreadPriorities(ECS_THREAD_PRIORITY priority)
+	void TaskManager::SetThreadPriorities(OS::ECS_THREAD_PRIORITY priority)
 	{
-		int thread_priority = 0;
-		switch (priority) {
-		case ECS_THREAD_PRIORITY_VERY_LOW:
-			thread_priority = THREAD_PRIORITY_LOWEST;
-			break;
-		case ECS_THREAD_PRIORITY_LOW:
-			thread_priority = THREAD_PRIORITY_BELOW_NORMAL;
-			break;
-		case ECS_THREAD_PRIORITY_NORMAL:
-			thread_priority = THREAD_PRIORITY_NORMAL;
-			break;
-		case ECS_THREAD_PRIORITY_HIGH:
-			thread_priority = THREAD_PRIORITY_ABOVE_NORMAL;
-			break; 
-		case ECS_THREAD_PRIORITY_VERY_HIGH:
-			thread_priority = THREAD_PRIORITY_HIGHEST;
-			break;
-		}
-
 		for (unsigned int index = 0; index < GetThreadCount(); index++) {			
-			AddDynamicTaskAndWakeWithAffinity(ECS_THREAD_TASK_NAME(ChangeThreadPriorityTask, &thread_priority, sizeof(thread_priority)), index, false);
+			AddDynamicTaskAndWakeWithAffinity(ECS_THREAD_TASK_NAME(ChangeThreadPriorityTask, &priority, sizeof(priority)), index, false);
 		}
 	}
 

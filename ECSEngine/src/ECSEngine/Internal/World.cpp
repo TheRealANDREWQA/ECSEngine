@@ -46,8 +46,7 @@ namespace ECSEngine {
 		// Coallesce all the allocations for these objects such that as to not take useful slots from the global memory manager
 		size_t coallesced_allocation_size =
 			sizeof(MemoryManager) + // Entity manager allocator
-			sizeof(MemoryManager) +  // Resource manager allocator
-			sizeof(ResourceManager) +
+			sizeof(EntityPool) +
 			sizeof(EntityManager) +
 			sizeof(SystemManager);
 
@@ -56,6 +55,13 @@ namespace ECSEngine {
 		}
 		else {
 			coallesced_allocation_size += sizeof(TaskManager);
+		}
+
+		if (descriptor.resource_manager == nullptr) {
+			coallesced_allocation_size += sizeof(MemoryManager) + sizeof(ResourceManager);
+		}
+		else {
+			resource_manager = descriptor.resource_manager;
 		}
 
 		void* allocation = memory->Allocate(coallesced_allocation_size);
@@ -68,17 +74,19 @@ namespace ECSEngine {
 			memory
 		);
 		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
-
-		MemoryManager* resource_manager_allocator = (MemoryManager*)allocation;
-		*resource_manager_allocator = DefaultResourceManagerAllocator(memory);
-		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
-
+		
 		unsigned int thread_count = std::thread::hardware_concurrency();
 
-		// resource manager
-		resource_manager = (ResourceManager*)allocation;
-		new (resource_manager) ResourceManager(resource_manager_allocator, graphics, thread_count);
-		allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
+		if (descriptor.resource_manager == nullptr) {
+			MemoryManager* resource_manager_allocator = (MemoryManager*)allocation;
+			*resource_manager_allocator = DefaultResourceManagerAllocator(memory);
+			allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
+
+			// resource manager
+			resource_manager = (ResourceManager*)allocation;
+			new (resource_manager) ResourceManager(resource_manager_allocator, graphics, thread_count);
+			allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
+		}
 
 		EntityPool* entity_pool = (EntityPool*)allocation;
 		new (entity_pool) EntityPool(entity_manager_memory, descriptor.entity_pool_power_of_two);
@@ -118,8 +126,10 @@ namespace ECSEngine {
 			world->task_manager->ClearThreadAllocators();
 		}
 
-		// Destory the graphics object
-		DestroyGraphics(world->graphics);
+		if (world->memory->Belongs(world->graphics)) {
+			// Destory the graphics object
+			DestroyGraphics(world->graphics);
+		}
 
 		// Release the global allocator
 		world->memory->Free();

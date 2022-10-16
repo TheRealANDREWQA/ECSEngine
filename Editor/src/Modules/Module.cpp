@@ -921,67 +921,6 @@ unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, 
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModuleReflectionComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* indices)
-{
-	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	ECS_ASSERT(hierarchy_index != -1);
-
-	Stream<char> tag = ECS_COMPONENT_TAG;
-	Reflection::ReflectionManagerGetQuery query;
-	query.indices = indices;
-	query.strict_compare = true;
-	query.tags = { &tag, 1 };
-	editor_state->module_reflection->reflection->GetHierarchyTypes(hierarchy_index, query);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
-void GetModuleReflectionSharedComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* indices)
-{
-	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	ECS_ASSERT(hierarchy_index != -1);
-
-	Stream<char> tag = ECS_COMPONENT_TAG;
-	Reflection::ReflectionManagerGetQuery query;
-	query.indices = indices;
-	query.strict_compare = true;
-	query.tags = { &tag, 1 };
-	editor_state->module_reflection->reflection->GetHierarchyTypes(hierarchy_index, query);
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
-void GetModuleReflectionAllComponentIndices(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>* unique_indices, CapacityStream<unsigned int>* shared_indices)
-{
-	unsigned int hierarchy_index = GetModuleReflectionHierarchyIndex(editor_state, module_index);
-	ECS_ASSERT(hierarchy_index != -1);
-
-	Stream<char> tags[] = {
-		ECS_COMPONENT_TAG,
-		ECS_SHARED_COMPONENT_TAG
-	};
-
-	CapacityStream<unsigned int> indices[] = {
-		*unique_indices,
-		*shared_indices
-	};
-
-	Stream<char> tag = ECS_COMPONENT_TAG;
-	Reflection::ReflectionManagerGetQuery query;
-	query.stream_indices = { indices, std::size(indices) };
-	query.use_stream_indices = true;
-	query.strict_compare = true;
-	query.tags = { tags, std::size(tags) };
-
-	editor_state->module_reflection->reflection->GetHierarchyTypes(hierarchy_index, query);
-
-	// We need to update the sizes of the indices now
-	unique_indices->size = query.stream_indices[0].size;
-	shared_indices->size = query.stream_indices[1].size;
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 bool CreateEditorModuleTemporaryDLL(CapacityStream<wchar_t> library_path, CapacityStream<wchar_t>& temporary_path) {
 	temporary_path.Copy(library_path);
 	temporary_path.size -= wcslen(ECS_MODULE_EXTENSION);
@@ -1132,6 +1071,24 @@ EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* edit
 	}
 
 	return EDITOR_MODULE_CONFIGURATION_COUNT;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, unsigned int module_index, Stream<char> name)
+{
+	EDITOR_MODULE_CONFIGURATION loaded_configuration = GetModuleLoadedConfiguration(editor_state, module_index);
+	if (loaded_configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
+		// There is no dll loaded, return nullptr
+		return { nullptr, nullptr };
+	}
+	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, loaded_configuration);
+	for (size_t index = 0; index < info->link_components.size; index++) {
+		if (function::CompareStrings(info->link_components[index].component_name, name)) {
+			return info->link_components[index];
+		}
+	}
+	return { nullptr, nullptr };
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

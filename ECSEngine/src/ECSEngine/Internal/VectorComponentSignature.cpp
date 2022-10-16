@@ -842,6 +842,18 @@ namespace ECSEngine {
 
 		LOOP_UNROLL(16, LOOP_ITERATION);
 
+		splatted_component = Broadcast16<0>(components.value); 
+		/* Test to see if the current element is zero */ 
+		is_zero = splatted_component == zero_vector;
+		/* If we get to an element which is 0, that means all components have been matched */
+		if (horizontal_and(is_zero)) {
+				return;
+		}
+		match = splatted_component == value;
+		values[0] = horizontal_find_first(match);
+
+
+
 #undef LOOP_ITERATION
 	}
 

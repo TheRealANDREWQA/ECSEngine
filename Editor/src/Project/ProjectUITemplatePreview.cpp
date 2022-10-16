@@ -14,8 +14,10 @@
 #include "../UI/Inspector.h"
 #include "../UI/NotificationBar.h"
 #include "../UI/Backups.h"
-#include "../UI/Sandbox.h"
+#include "../UI/Scene.h"
+#include "../UI/Game.h"
 #include "../UI/EntitiesUI.h"
+#include "../UI/AssetExplorer.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -278,17 +280,20 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		action_data[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { data->editor_state, FILE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { data->editor_state, MODULE_EXPLORER_WINDOW_NAME, {0.6f, 1.0f} };
 		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { data->editor_state, SANDBOX_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
+		action_data[TOOLBAR_WINDOW_MENU_ASSET_EXPLORER] = { data->editor_state, ASSET_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
+		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
 
 #define CONCAT(a,b) a #b
 
 		const char* inspector_name = CONCAT(INSPECTOR_WINDOW_NAME, 0);
-		const char* sandbox_name = CONCAT(SANDBOX_UI_WINDOW_NAME, 0);
+		const char* game_name = CONCAT(GAME_WINDOW_NAME, 0);
+		const char* scene_name = CONCAT(SCENE_WINDOW_NAME, 0);
 		const char* entities_name = CONCAT(ENTITIES_UI_WINDOW_NAME, 0);
 
 		action_data[TOOLBAR_WINDOW_MENU_INSPECTOR] = { data->editor_state, inspector_name, {0.6f, 1.0f} };
-		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = { data->editor_state, sandbox_name, { 0.6f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { data->editor_state, entities_name, { 0.7f, 1.0f } };
-		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
+		action_data[TOOLBAR_WINDOW_MENU_GAME_UI] = { data->editor_state, game_name, { 0.6f, 1.0f } };
+		action_data[TOOLBAR_WINDOW_MENU_SCENE_UI] = { data->editor_state, scene_name, { 0.6f, 1.0f } };
 
 #undef CONCAT
 
@@ -299,10 +304,12 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_FILE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_MODULE_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_ASSET_EXPLORER);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_INSPECTOR);
-		SET_HANDLER(TOOLBAR_WINDOW_MENU_SANDBOX_UI);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_BACKUPS);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_ENTITIES_UI);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_GAME_UI);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_SCENE_UI);
 
 #undef SET_HANDLER
 	}
@@ -312,7 +319,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 	state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
 	state.left_characters = TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
 	state.separation_lines[0] = TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER - 1;
-	state.separation_lines[1] = TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER;
+	state.separation_lines[1] = TOOLBAR_WINDOW_MENU_ASSET_EXPLORER;
 	state.separation_line_count = 2;
 	state.submenu_index = 0;
 	
@@ -322,7 +329,7 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, void* drawer_descriptor, 
 	UIDrawConfig config;
 	config.AddFlag(size);
 
-	drawer.Menu(UI_CONFIG_WINDOW_DEPENDENT_SIZE, config, "Window", &state);
+	drawer.Menu(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X, config, "Window", &state);
 }
 
 void CreateToolbarUIPlaceholder(EditorState* editor_state) {

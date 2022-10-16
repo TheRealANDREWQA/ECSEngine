@@ -42,6 +42,13 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		bool ReflectionField::Compare(const ReflectionField& field) const
+		{
+			return function::CompareStrings(field.definition, definition);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		ReflectionEvaluation ReflectionEvaluation::CopyTo(uintptr_t& ptr) const {
 			ReflectionEvaluation copy;
 
@@ -152,6 +159,18 @@ namespace ECSEngine {
 		bool ReflectionType::IsTag(Stream<char> string) const
 		{
 			return function::CompareStrings(string, tag);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int ReflectionType::FindField(Stream<char> name) const
+		{
+			for (size_t index = 0; index < fields.size; index++) {
+				if (function::CompareStrings(name, fields[index].name)) {
+					return index;
+				}
+			}
+			return -1;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

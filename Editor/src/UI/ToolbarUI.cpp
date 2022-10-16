@@ -10,13 +10,14 @@
 #include "DirectoryExplorer.h"
 #include "FileExplorer.h"
 #include "MiscellaneousBar.h"
-#include "Game.h"
 #include "ModuleExplorer.h"
 #include "SandboxExplorer.h"
+#include "AssetExplorer.h"
 #include "Inspector.h"
 #include "Backups.h"
-#include "Sandbox.h"
 #include "EntitiesUI.h"
+#include "Game.h"
+#include "Scene.h"
 
 #endif
 
@@ -37,8 +38,9 @@ struct ToolbarData {
 	UIActionHandler window_actions[TOOLBAR_WINDOW_MENU_COUNT];
 	UIActionHandler layout_actions[TOOLBAR_DATA_LAYOUT_ROW_COUNT];
 
-	// This is needed because the sandbox UI can have multiple sub windows
-	Stream<UIActionHandler> sandbox_ui_handlers;
+	// This is needed because the game UI can have multiple sub windows
+	Stream<UIActionHandler> game_ui_handlers;
+	Stream<UIActionHandler> scene_ui_handlers;
 	bool window_has_submenu[TOOLBAR_WINDOW_MENU_COUNT];
 	bool window_submenu_unavailable[TOOLBAR_WINDOW_MENU_COUNT];
 
@@ -116,11 +118,12 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 		data->window_actions[TOOLBAR_WINDOW_MENU_FILE_EXPLORER] = { CreateFileExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_MODULE_EXPLORER] = { CreateModuleExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { CreateSandboxExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		data->window_actions[TOOLBAR_WINDOW_MENU_ASSET_EXPLORER] = { CreateAssetExplorerAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_INSPECTOR] = { CreateInspectorAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_BACKUPS] = { CreateBackupsWindowAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->window_actions[TOOLBAR_WINDOW_MENU_ENTITIES_UI] = { CreateEntitiesUIAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
-		data->sandbox_ui_handlers.size = 0;
+		data->game_ui_handlers.size = 0;
 		
 		// The sandbox UI needs to be handled separately
 		for (size_t index = 0; index < TOOLBAR_WINDOW_MENU_COUNT; index++) {
@@ -128,8 +131,11 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 			data->window_submenu_unavailable[index] = false;
 		}
 
-		data->window_has_submenu[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
-		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
+		data->window_has_submenu[TOOLBAR_WINDOW_MENU_GAME_UI] = true;
+		data->window_has_submenu[TOOLBAR_WINDOW_MENU_SCENE_UI] = true;
+
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_GAME_UI] = true;
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SCENE_UI] = true;
 
 #pragma endregion
 
@@ -250,26 +256,37 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 	}
 
 	// If the number of sandboxes has changed, modify the buffer
-	if (editor_state->sandboxes.size != data->sandbox_ui_handlers.size) {
-		if (data->sandbox_ui_handlers.size != 0) {
+	if (editor_state->sandboxes.size != data->game_ui_handlers.size) {
+		if (data->game_ui_handlers.size != 0) {
 			// Deallocate if valid
-			drawer.RemoveAllocation(data->sandbox_ui_handlers.buffer);
+			drawer.RemoveAllocation(data->game_ui_handlers.buffer);
 		}
 
-		void* allocation = drawer.GetMainAllocatorBuffer((sizeof(UIActionHandler) + sizeof(CreateSandboxUIActionData)) * editor_state->sandboxes.size);
-		data->sandbox_ui_handlers.buffer = (UIActionHandler*)allocation;
+		void* allocation = drawer.GetMainAllocatorBuffer((sizeof(UIActionHandler) * 2 + sizeof(CreateGameUIActionData) + sizeof(CreateSceneUIWindowActionData)) 
+			* editor_state->sandboxes.size);
+		data->game_ui_handlers.buffer = (UIActionHandler*)allocation;
+		allocation = function::OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
+
+		data->scene_ui_handlers.buffer = (UIActionHandler*)allocation;
 		allocation = function::OffsetPointer(allocation, sizeof(UIActionHandler) * editor_state->sandboxes.size);
 
 		// Now initialize the action data
-		CreateSandboxUIActionData* action_data = (CreateSandboxUIActionData*)allocation;
-		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
-			action_data[index] = { editor_state, index };
-			data->sandbox_ui_handlers[index] = { CreateSandboxUIAction, action_data + index, 0, ECS_UI_DRAW_SYSTEM };
-		}
-		data->sandbox_ui_handlers.size = editor_state->sandboxes.size;
+		CreateGameUIActionData* game_action_data = (CreateGameUIActionData*)allocation;
+		allocation = function::OffsetPointer(allocation, sizeof(CreateGameUIActionData) * editor_state->sandboxes.size);
+		CreateSceneUIWindowActionData* scene_action_data = (CreateSceneUIWindowActionData*)allocation;
 
-		if (data->sandbox_ui_handlers.size == 0) {
-			data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
+		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+			game_action_data[index] = { editor_state, index };
+			scene_action_data[index] = { editor_state, index };
+			data->game_ui_handlers[index] = { CreateGameUIWindowAction, game_action_data + index, 0, ECS_UI_DRAW_SYSTEM };
+			data->scene_ui_handlers[index] = { CreateSceneUIWindowAction, scene_action_data + index, 0, ECS_UI_DRAW_SYSTEM };
+		}
+		data->game_ui_handlers.size = editor_state->sandboxes.size;
+		data->scene_ui_handlers.size = editor_state->sandboxes.size;
+
+		if (data->game_ui_handlers.size == 0) {
+			data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_GAME_UI] = true;
+			data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SCENE_UI] = true;
 		}
 	}
 
@@ -309,41 +326,58 @@ void ToolbarDraw(void* window_data, void* drawer_descriptor, bool initialize) {
 
 	current_state.right_characters = { nullptr, 0 };
 	current_state.separation_lines[0] = TOOLBAR_WINDOW_MENU_DIRECTORY_EXPLORER - 1;
-	current_state.separation_lines[1] = TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER;
+	current_state.separation_lines[1] = TOOLBAR_WINDOW_MENU_ASSET_EXPLORER;
 	current_state.separation_line_count = 2;
 	current_state.left_characters = (char*)TOOLBAR_WINDOWS_MENU_CHAR_DESCRIPTION;
 	current_state.click_handlers = data->window_actions;
 	current_state.row_count = TOOLBAR_WINDOW_MENU_COUNT;
 
-	UIDrawerMenuState sandbox_ui_state[TOOLBAR_WINDOW_MENU_COUNT];
+	UIDrawerMenuState toolbar_ui_state[TOOLBAR_WINDOW_MENU_COUNT];
+
 	current_state.row_has_submenu = data->window_has_submenu;
-	ECS_STACK_CAPACITY_STREAM(char, sandbox_ui_characters, 512);
+	ECS_STACK_CAPACITY_STREAM(char, game_ui_characters, 512);
+	ECS_STACK_CAPACITY_STREAM(char, scene_ui_characters, 512);
 
 	current_state.unavailables = data->window_submenu_unavailable;
-	current_state.submenues = sandbox_ui_state;
+	current_state.submenues = toolbar_ui_state;
 
-	if (data->sandbox_ui_handlers.size > 0) {
-		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = false;
+	if (data->game_ui_handlers.size > 0) {
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_GAME_UI] = false;
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SCENE_UI] = false;
 		
 		ECS_STACK_CAPACITY_STREAM(char, current_window_name, 64);
 
-		for (unsigned int index = 0; index < data->sandbox_ui_handlers.size; index++) {
-			GetSandboxUIWindowName(index, current_window_name);
-			sandbox_ui_characters.AddStreamSafe(current_window_name);
-			sandbox_ui_characters.Add('\n');
+		for (unsigned int index = 0; index < data->game_ui_handlers.size; index++) {
+			GetGameUIWindowName(index, current_window_name);
+			game_ui_characters.AddStreamSafe(current_window_name);
+			game_ui_characters.Add('\n');
+
+			GetSceneUIWindowName(index, current_window_name);
+			scene_ui_characters.AddStreamSafe(current_window_name);
+			scene_ui_characters.Add('\n');
 		}
 		// Remove the last '\n' and replace it with '\0'
-		sandbox_ui_characters.size--;
-		sandbox_ui_characters[sandbox_ui_characters.size] = '\0';
+		game_ui_characters.size--;
+		game_ui_characters[game_ui_characters.size] = '\0';
+
+		scene_ui_characters.size--;
+		scene_ui_characters[scene_ui_characters.size] = '\0';
 		
-		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].left_characters = sandbox_ui_characters.buffer;
-		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].row_count = data->sandbox_ui_handlers.size;
-		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].click_handlers = data->sandbox_ui_handlers.buffer;
-		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].row_has_submenu = nullptr;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_GAME_UI].left_characters = game_ui_characters.buffer;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_GAME_UI].row_count = data->game_ui_handlers.size;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_GAME_UI].click_handlers = data->game_ui_handlers.buffer;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_GAME_UI].row_has_submenu = nullptr;
+
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_SCENE_UI].left_characters = scene_ui_characters.buffer;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_SCENE_UI].row_count = data->scene_ui_handlers.size;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_SCENE_UI].click_handlers = data->scene_ui_handlers.buffer;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_SCENE_UI].row_has_submenu = nullptr;
 	}
 	else {
-		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SANDBOX_UI] = true;
-		sandbox_ui_state[TOOLBAR_WINDOW_MENU_SANDBOX_UI].row_count = 0;
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_GAME_UI] = true;
+		data->window_submenu_unavailable[TOOLBAR_WINDOW_MENU_SCENE_UI] = true;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_GAME_UI].row_count = 0;
+		toolbar_ui_state[TOOLBAR_WINDOW_MENU_SCENE_UI].row_count = 0;
 	}
 
 	drawer.Menu(configuration, config, "Window", &current_state);

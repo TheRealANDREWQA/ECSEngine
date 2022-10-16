@@ -161,7 +161,6 @@ namespace ECSEngine {
 
 		// This variant is used by the one without the hash_index to retry finding without
 		// recomputing the hash again for the element
-		template<bool use_compare_function = true>
 		bool Find(Identifier identifier, T& value, unsigned int hash_index) const {
 			void* chunk = GetChunk(hash_index);
 			while (chunk != nullptr) {
@@ -189,20 +188,10 @@ namespace ECSEngine {
 					// Same hash, count is greater than 0, the chunk is valid
 					Identifier* identifiers = GetChunkIdentifier(chunk, 0);
 					for (unsigned char element_index = 0; element_index < count; element_index) {
-						if constexpr (use_compare_function) {
-							if (identifiers[element_index].Compare(identifier)) {
-								// Matches the value
-								value = *GetChunkElement(chunk, element_index);
-								chunk_lock->ExitRead();
-								return true;
-							}
-						}
-						else {
-							if (identifiers[element_index] == identifier) {
-								value = *GetChunkElement(chunk, element_index);
-								chunk_lock->ExitRead();
-								return true;
-							}
+						if (identifiers[element_index] == identifier) {
+							value = *GetChunkElement(chunk, element_index);
+							chunk_lock->ExitRead();
+							return true;
 						}
 					}
 
@@ -220,7 +209,6 @@ namespace ECSEngine {
 
 		// This cannot return indices because the blocks might get shifted around
 		// and the indices will become invalidated
-		template<bool use_compare_function = true>
 		bool Find(Identifier identifier, T& value) const {
 			unsigned int key = ObjectHashFunction::Hash(identifier);
 
@@ -321,7 +309,7 @@ namespace ECSEngine {
 						*GetChunkElement(chunk, count) = value;
 						*GetChunkIdentifier(chunk, count) = identifier;
 
-						header->SetCount(count + 1);
+						chunk_header->SetCount(count + 1);
 						chunk_lock->ExitWrite();
 						return true;
 					}
@@ -388,7 +376,6 @@ namespace ECSEngine {
 		// This variant is used by the one without the hash_index to retry finding without
 		// recomputing the hash again for the element
 		// Returns true if the erase was successful, else false (the element doesn't exist).
-		template<bool use_compare_function = true>
 		bool Erase(Identifier identifier, unsigned int hash_index) {
 			void* chunk = GetChunk(hash_index);
 
@@ -418,17 +405,9 @@ namespace ECSEngine {
 					// The chunk is good, verify it
 					unsigned char element_index = 0;
 					for (; element_index < count; element_index++) {
-						if constexpr (use_compare_function) {
-							if (identifiers[element_index].Compare(identifier)) {
-								// They match
-								break;
-							}
-						}
-						else {
-							if (identifiers[element_index] == identifier) {
-								// They match
-								break;
-							}
+						if (identifiers[element_index] == identifier) {
+							// They match
+							break;
 						}
 					}
 
@@ -542,7 +521,6 @@ namespace ECSEngine {
 		}
 
 		// Returns true if the erase was successful
-		template<bool use_compare_function = true>
 		bool Erase(Identifier identifier) {
 			unsigned int key = ObjectHashFunction::Hash(identifier);
 
@@ -563,7 +541,7 @@ namespace ECSEngine {
 
 		void* GetChunk(unsigned int index) const {
 			// If indirection, check to see if the indirection is set or not
-			if constexpr (indirection) {
+			if constexpr (fixed) {
 				unsigned int chunk = chunk_indirection_index[index].load(ECS_RELAXED);
 				// If the slot is not allocated, return nullptr
 				if (chunk == CHUNK_EMPTY) {
@@ -616,7 +594,7 @@ namespace ECSEngine {
 
 		void* NextChunk(void* chunk) const {
 			Header* header = GetChunkHeader(chunk);
-			if constexpr (indirection) {
+			if constexpr (fixed) {
 				unsigned int index = header->GetNextIndex();
 				return index != CHUNK_EMPTY ? GetChunkRawIndex(index) : nullptr;
 			}
@@ -632,16 +610,16 @@ namespace ECSEngine {
 			capacity = _capacity;
 			hash_function = TableHashFunction(additional_info);
 
-			if constexpr (indirection) {
+			if constexpr (fixed) {
 				allocated_chunk_count = chunk_count;
-				chunk_indirection = (std::atomic<unsigned int>*)function::OffsetPointer(chunks, ECS_CACHE_LINE_SIZE * chunk_count);
-				allocated_chunks = (std::atomic<bool>*)function::OffsetPointer(chunk_indirection, sizeof(unsigned int) * capacity);
+				chunk_indirection_index = (std::atomic<unsigned int>*)function::OffsetPointer(chunks, ECS_CACHE_LINE_SIZE * chunk_count);
+				allocated_chunks = (std::atomic<bool>*)function::OffsetPointer(chunk_indirection_index, sizeof(unsigned int) * capacity);
 
 				// The initial state should be 0 for the allocated chunks
 				memset(allocated_chunks, 0, sizeof(bool) * chunk_count);
 
 				// The indirections needs to be CHUNK_EMPTY
-				memset(chunk_indirection, -1, sizeof(unsigned int) * capacity);
+				memset(chunk_indirection_index, -1, sizeof(unsigned int) * capacity);
 
 				// Go through the chunks and set the counts to 0 and the nexts to nullptr/-1
 				for (unsigned int index = 0; index < chunk_count; index++) {
@@ -649,7 +627,7 @@ namespace ECSEngine {
 					header->SetCount(0);
 					header->SetGeneration(0);
 
-					if constexpr (indirection) {
+					if constexpr (fixed) {
 						header->SetNextIndex(CHUNK_EMPTY);
 					}
 					else {
@@ -670,7 +648,7 @@ namespace ECSEngine {
 			void* allocation = Allocate(_allocator, MemoryOf(_capacity, chunk_count));
 			InitializeFromBuffer(allocation, _capacity, chunk_count, additional_info);
 
-			if constexpr (!indirection) {
+			if constexpr (!fixed) {
 				allocator = _allocator;
 			}
 		}
@@ -692,7 +670,7 @@ namespace ECSEngine {
 		// For the non-indirection type, it is the memory needed for the initial allocation.
 		static size_t MemoryOf(unsigned int capacity, unsigned int allocated_chunk_count) {
 			// Add a cache line in order to align the chunks to cache line boundaries
-			if constexpr (indirection) {
+			if constexpr (fixed) {
 				return (ECS_CACHE_LINE_SIZE + sizeof(bool)) * allocated_chunk_count + sizeof(unsigned int) * capacity + ECS_CACHE_LINE_SIZE;
 			}
 			else {

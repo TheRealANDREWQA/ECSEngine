@@ -13,16 +13,41 @@ constexpr const char* RENAME_FILE_WIZARD_INPUT_NAME = "New File Name";
 constexpr const char* RENAME_FOLDER_WIZARD_NAME = "Rename Folder";
 constexpr const char* RENAME_FOLDER_WIZARD_INPUT_NAME = "New Folder Name";
 
-void CreateDockspaceFromWindow(const char* window_name, EditorState* _editor_state, CreateWindowFunction function)
+void CreateDockspaceFromWindow(const char* window_name, EditorState* editor_state, CreateWindowFunction function)
 {
-	EDITOR_STATE(_editor_state);
+	EDITOR_STATE(editor_state);
 
 	unsigned int window_index = ui_system->GetWindowFromName(window_name);
 	if (window_index == -1) {
-		window_index = function(_editor_state);
+		window_index = function(editor_state);
 
 		UIElementTransform window_transform = { ui_system->GetWindowPosition(window_index), ui_system->GetWindowScale(window_index) };
-		ui_system->CreateDockspace(window_transform, DockspaceType::FloatingVertical, window_index, false);
+		// Alternate the types such that they don't get overused
+		DockspaceType dockspace_type = window_index % 2 == 0 ? DockspaceType::FloatingHorizontal : DockspaceType::FloatingVertical;
+		ui_system->CreateDockspace(window_transform, dockspace_type, window_index, false);
+	}
+	else {
+		ui_system->SetActiveWindow(window_index);
+	}
+}
+
+void CreateDockspaceFromWindowWithIndex(const char* window_name, EditorState* editor_state, unsigned int index, CreateWindowFunctionWithIndex function)
+{
+	EDITOR_STATE(editor_state);
+
+	// Construct the name as well
+	ECS_STACK_CAPACITY_STREAM(char, constructed_name, 128);
+	constructed_name.Copy(window_name);
+	function::ConvertIntToChars(constructed_name, index);
+
+	unsigned int window_index = ui_system->GetWindowFromName(constructed_name);
+	if (window_index == -1) {
+		window_index = function(editor_state, index);
+
+		UIElementTransform window_transform = { ui_system->GetWindowPosition(window_index), ui_system->GetWindowScale(window_index) };
+		// Alternate the types such that they don't get overused
+		DockspaceType dockspace_type = window_index % 2 == 0 ? DockspaceType::FloatingHorizontal : DockspaceType::FloatingVertical;
+		ui_system->CreateDockspace(window_transform, dockspace_type, window_index, false);
 	}
 	else {
 		ui_system->SetActiveWindow(window_index);
@@ -33,24 +58,57 @@ unsigned int CreateDefaultWindow(
 	const char* window_name,
 	EditorState* editor_state,
 	float2 window_size,
-	WindowDraw draw
+	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 )
 {
-	EDITOR_STATE(editor_state);
+	size_t stack_memory[512];
 
 	UIWindowDescriptor descriptor;
-	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, window_size.x);
-	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, window_size.y);
-	descriptor.initial_size_x = window_size.x;
-	descriptor.initial_size_y = window_size.y;
+	descriptor.Center(window_size);
 
-	descriptor.draw = draw;
+	set_descriptor(descriptor, editor_state, stack_memory);
 
-	descriptor.window_name = window_name;
-	descriptor.window_data = editor_state;
-	descriptor.window_data_size = 0;
+	return editor_state->ui_system->Create_Window(descriptor);
+}
 
-	return ui_system->Create_Window(descriptor);
+unsigned int CreateDefaultWindowWithIndex(
+	const char* window_name,
+	EditorState* editor_state,
+	float2 window_size,
+	unsigned int index,
+	void (*set_descriptor)(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
+) {
+	size_t stack_memory[512];
+
+	UIWindowDescriptor descriptor;
+	descriptor.Center(window_size);
+
+	unsigned int* stack_index = (unsigned int*)stack_memory;
+	*stack_index = index;
+
+	set_descriptor(descriptor, editor_state, stack_memory);
+
+	return editor_state->ui_system->Create_Window(descriptor);
+}
+
+unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_name, unsigned int old_index, unsigned int new_index) {
+	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
+	window_name.Copy(base_name);
+	unsigned int base_name_size = window_name.size;
+	function::ConvertIntToChars(window_name, old_index);
+
+	unsigned int window_index = editor_state->ui_system->GetWindowFromName(window_name);
+	if (window_index != -1) {
+		window_name.size = base_name_size;
+		function::ConvertIntToChars(window_name, new_index);
+		editor_state->ui_system->SetWindowName(window_index, window_name);
+	}
+	return window_index;
+}
+
+unsigned int GetWindowNameIndex(Stream<char> name)
+{
+	return function::ConvertCharactersToInt(name);
 }
 
 void ChooseDirectoryOrFileNameButtonAction(ActionData* action_data) {

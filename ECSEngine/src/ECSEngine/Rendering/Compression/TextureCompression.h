@@ -38,10 +38,8 @@ namespace ECSEngine {
 		CompressTextureDescriptor descriptor = {}
 	);
 
-	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data
 	// Data is a stream of data for each of the textures mip levels
-	// GPU codecs should not use this compression function
-	// It returns a null texture if it fails
+	// It returns a null texture if it fails. When using a GPU codec, it will rely on the immediate context
 	// The elements of the data stream must be a Stream<const void> which has as its size the row pitch of the mip level
 	// When mapping the texture for copying the data use the D3D11_MAPPED_RESOURCE RowPitch member to set these streams
 	// The graphics is needed to create the texture object and optionally keep track of it
@@ -55,10 +53,8 @@ namespace ECSEngine {
 		CompressTextureDescriptor descriptor = {}
 	);
 
-	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data
 	// Data is a stream of data for each of the textures mip levels
-	// GPU codecs should not use this compression function
-	// It returns a null texture if it fails
+	// It returns a null texture if it fails. When using a GPU codec, it will rely on the immediate context
 	// The graphics is needed to create the texture object and optionally keep track of it
 	ECSENGINE_API Texture2D CompressTexture(
 		Graphics* graphics,
@@ -72,7 +68,6 @@ namespace ECSEngine {
 
 	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data
 	// Data is a stream of data for each of the textures mip levels
-	// GPU codecs should not use this compression function
 	// It returns a null texture if it fails
 	// In order to deallocate the received data, just deallocate the buffer of the first stream
 	// e.g. new_data[0].buffer
@@ -87,7 +82,6 @@ namespace ECSEngine {
 
 	// It doesn't relly on the immediate context - if no allocator is specified, it will use malloc to generate the temporary data
 	// Data is a stream of data for each of the textures mip levels
-	// GPU codecs should not use this compression function
 	// It returns a null texture if it fails
 	// In order to deallocate the received data, just deallocate the buffer of the first stream
 	// e.g. new_data[0].buffer
@@ -99,5 +93,8 @@ namespace ECSEngine {
 		ECS_TEXTURE_COMPRESSION_EX compression_type,
 		CompressTextureDescriptor descriptor = {}
 	);
+
+	// Converts the extended types to their underlying compression type
+	ECSENGINE_API ECS_TEXTURE_COMPRESSION TextureCompressionFromEx(ECS_TEXTURE_COMPRESSION_EX ex_type);
 
 }

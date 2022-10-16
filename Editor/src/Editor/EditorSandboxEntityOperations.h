@@ -56,6 +56,9 @@ SharedComponentSignature EntitySharedInstances(const EditorState* editor_state, 
 // Returns -1 if it doesn't exist
 Entity GetSandboxEntity(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> name);
 
+// If it doesn't exist, it will create it
+SharedInstance GetSharedComponentDefaultInstance(EditorState* editor_state, unsigned int sandbox_index, Component component);
+
 void ParentSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity child, Entity parent);
 
 void ParentSandboxEntities(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> children, Entity parent);
@@ -66,4 +69,10 @@ void RemoveSandboxEntityComponent(EditorState* editor_state, unsigned int sandbo
 // Does nothing if the entity doesn't exist
 void RemoveSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
 
+// Selects based upon which type the component is (unique or shared)
+void RemoveSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
+
 void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sandbox_index, Entity entity);
+
+// Reverts the unique component to default values
+void ResetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);

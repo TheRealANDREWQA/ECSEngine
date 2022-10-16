@@ -6,6 +6,8 @@
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "ForEachFiles.h"
 
+#include "OSFunctions.h"
+
 namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
@@ -92,6 +94,19 @@ namespace ECSEngine {
 
 		*file_handle = descriptor;
 		return ECS_FILE_STATUS_OK;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool CreateEmptyFile(Stream<wchar_t> path, ECS_FILE_CREATE_FLAGS create_flags, CapacityStream<char>* error_message)
+	{
+		ECS_FILE_HANDLE file_handle;
+		ECS_FILE_STATUS_FLAGS status = FileCreate(path, &file_handle, ECS_FILE_ACCESS_WRITE_ONLY, create_flags, error_message);
+		if (status == ECS_FILE_STATUS_OK) {
+			CloseFile(file_handle);
+			return true;
+		}
+		return false;
 	}
 
 	// --------------------------------------------------------------------------------------------------
@@ -283,7 +298,69 @@ namespace ECSEngine {
 		int64_t value = _filelengthi64(file_handle);
 		return value == -1 ? 0 : value;
 	}
+
+	// --------------------------------------------------------------------------------------------------
 	
+	template<typename T>
+	bool GetFileTimesImpl(ECS_FILE_HANDLE file_handle, T* creation_time, T* access_time, T* last_write_time) {
+		HANDLE handle = (HANDLE)_get_osfhandle(file_handle);
+		if (handle == INVALID_HANDLE_VALUE) {
+			return false;
+		}
+
+		return OS::GetFileTimesInternal(handle, creation_time, access_time, last_write_time);
+	}
+
+	bool GetFileTimes(ECS_FILE_HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+	{
+		return GetFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool GetFileTimes(ECS_FILE_HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+	{
+		return GetFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool GetFileTimes(ECS_FILE_HANDLE file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
+	{
+		return GetFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	template<typename T>
+	bool GetRelativeFileTimesImpl(ECS_FILE_HANDLE file_handle, T* creation_time, T* access_time, T* last_write_time) {
+		HANDLE handle = (HANDLE)_get_osfhandle(file_handle);
+		if (handle == INVALID_HANDLE_VALUE) {
+			return false;
+		}
+
+		return OS::GetRelativeFileTimesInternal(handle, creation_time, access_time, last_write_time);
+	}
+
+	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, wchar_t* creation_time, wchar_t* access_time, wchar_t* last_write_time)
+	{
+		return GetRelativeFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, char* creation_time, char* access_time, char* last_write_time)
+	{
+		return GetRelativeFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
+	}
+	
+	// --------------------------------------------------------------------------------------------------
+
+	bool GetRelativeFileTimes(ECS_FILE_HANDLE file_handle, size_t* creation_time, size_t* access_time, size_t* last_write_time)
+	{
+		return GetRelativeFileTimesImpl(file_handle, creation_time, access_time, last_write_time);
+	}
+
 	// --------------------------------------------------------------------------------------------------
 
 	bool HasSubdirectories(Stream<wchar_t> directory)
@@ -475,6 +552,25 @@ namespace ECSEngine {
 		new_name_stream.AddSafe(L'\0');
 
 		return _wrename(path.buffer, new_name_stream.buffer) == 0;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
+	bool RenameFileAbsolute(Stream<wchar_t> path, Stream<wchar_t> new_absolute_path)
+	{
+		ECS_STACK_CAPACITY_STREAM(wchar_t, temp_path, 512);
+		// If the path and the new absolute path alias each other, then we need to copy
+		// one into a temp buffer
+		bool do_alias = function::AreAliasing(path, new_absolute_path);
+		if (do_alias) {
+			temp_path.Copy(path);
+			path = temp_path;
+		}
+
+		NULL_TERMINATE_WIDE(path);
+		NULL_TERMINATE_WIDE(new_absolute_path);
+
+		return _wrename(path.buffer, new_absolute_path.buffer) == 0;
 	}
 
 	// --------------------------------------------------------------------------------------------------

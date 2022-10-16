@@ -288,6 +288,25 @@ void DeallocateCurrentProject(EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------
 
+void DestroyProjectTemporaryFiles(const ProjectFile* project_file)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, project_folder_parent, 512);
+	GetProjectFilePath(project_file, project_folder_parent);
+	project_folder_parent = function::PathParent(project_folder_parent);
+
+	auto functor = [](Stream<wchar_t> file, void* _data) {
+		RemoveFile(file);
+		return true;
+	};
+
+	Stream<wchar_t> extensions[] = {
+		L".temp"
+	};
+	ForEachFileInDirectoryRecursiveWithExtension(project_folder_parent, { extensions, std::size(extensions) }, nullptr, functor);
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+
 bool ExistsProjectInFolder(const ProjectFile* project_file) {
 	return IsFileWithExtension(project_file->path, PROJECT_EXTENSION);
 }
@@ -544,6 +563,8 @@ bool OpenProject(ProjectOperationData data)
 
 	EditorStateSetFlag(data.editor_state, EDITOR_STATE_DO_NOT_ADD_TASKS);
 
+	DestroyProjectTemporaryFiles(data.file_data);
+
 	// Repair missing folders, if any
 	RepairProjectAuxiliaryDirectories(data);
 
@@ -643,6 +664,9 @@ bool OpenProject(ProjectOperationData data)
 		}
 	};
 	ui_system->PushFrameHandler({ remove_editor_state_do_not_add_tasks, &remove_data, sizeof(remove_data) });
+	
+	// Set the database path
+	EditorStateSetDatabasePath(data.editor_state);
 
 	data.editor_state->editor_tick = EditorStateProjectTick;
 
@@ -680,13 +704,22 @@ void RepairProjectAuxiliaryDirectories(ProjectOperationData data)
 	project_path.Add(ECS_OS_PATH_SEPARATOR);
 	
 	unsigned int path_base_size = project_path.size;
-	for (size_t index = 0; index < PROJECT_DIRECTORIES_SIZE(); index++) {
+	size_t project_directory_count = PROJECT_DIRECTORIES_SIZE();
+	for (size_t index = 0; index < project_directory_count; index++) {
 		project_path.AddStreamSafe(PROJECT_DIRECTORIES[index]);
 		if (!ExistsFileOrFolder(project_path)) {
 			CreateFolder(project_path);
 		}
 		project_path.size = path_base_size;
 	}
+	
+	project_path.AddStream(PROJECT_METADATA_RELATIVE_PATH);
+	project_path.Add(ECS_OS_PATH_SEPARATOR);
+
+	// Now create the metadata folders
+	ECS_ASSERT(data.editor_state->asset_database->CreateMetadataFolders(project_path), "Failed to create metadata folders.");
+
+	project_path.size = path_base_size;
 
 	// Make hidden the .backup folder
 	project_path.AddStreamSafe(PROJECT_BACKUP_RELATIVE_PATH);

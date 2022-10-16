@@ -56,9 +56,6 @@ namespace ECSEngine {
 			unsigned int* TextSize();
 			CapacityStream<UISpriteVertex>* TextStream();
 
-			unsigned int* NonNameTextSize();
-			CapacityStream<UISpriteVertex>* NonNameTextStream();
-
 			float GetLowestX() const;
 			float GetLowestY() const;
 			float2 GetLowest() const;
@@ -73,34 +70,15 @@ namespace ECSEngine {
 			void SetZoomFactor(float2 zoom);
 			bool IsTheSameData(const UIDrawerTextInput* other) const;
 
-			unsigned int GetSpritePositionFromMouse(float2 mouse_position) const;
+			unsigned int GetSpritePositionFromMouse(const UISystem* system, float2 mouse_position) const;
 
-			void SetSpritePositionFromMouse(float2 mouse_position);
+			void SetSpritePositionFromMouse(const UISystem* system, float2 mouse_position);
 
-			unsigned int GetVisibleSpriteCount(float right_bound) const;
+			unsigned int GetVisibleSpriteCount(const UISystem* system, float right_bound) const;
 
-			float2 GetCaretPosition() const;
+			float2 GetCaretPosition(const UISystem* system) const;
 
-			template<bool left = true>
-			float2 GetPositionFromSprite(unsigned int index) const {
-				constexpr unsigned int offset = left == false;
-				if (index < text->size) {
-					if (sprite_render_offset == 0) {
-						return { vertices[index * 6 + offset].position.x, -vertices[index * 6 + offset * 2].position.y };
-					}
-					else {
-						return { vertices[index * 6 + offset].position.x + vertices[0].position.x - vertices[sprite_render_offset * 6 - 5].position.x /*+ character_spacing*/, -vertices[index * 6 + offset * 2].position.y };
-					}
-				}
-				else {
-					if (sprite_render_offset == 0) {
-						return { vertices[vertices.size - 2].position.x, -vertices[vertices.size - 2].position.y };
-					}
-					else {
-						return { vertices[vertices.size - 2].position.x + vertices[0].position.x - vertices[sprite_render_offset * 6 - 5].position.x + character_spacing, -vertices[vertices.size - 2].position.y };
-					}
-				}
-			}
+			float2 GetPositionFromSprite(const UISystem* system, unsigned int index, bool bottom = false, bool left = true) const;
 
 			template<typename Action>
 			void RepeatKeyAction(
@@ -160,7 +138,10 @@ namespace ECSEngine {
 			void InsertCharacters(const char* characters, unsigned int character_count, unsigned int character_position, UISystem* system);
 
 			CapacityStream<char>* text;
-			CapacityStream<UISpriteVertex> vertices;
+			// This buffer is used to determine when a change has occured to the text
+			// outside of the UI
+			CapacityStream<char> previous_text;
+			Stream<char> hint_text;
 			UIDrawerTextElement name;
 			float2 inverse_zoom;
 			float2 current_zoom;
@@ -192,7 +173,6 @@ namespace ECSEngine {
 
 			// This is set by the functions that manipulate the input in order to preserve consistency
 			bool trigger_callback;
-			CapacityStream<UISpriteVertex> hint_vertices;
 			Action callback;
 			void* callback_data;
 		};
@@ -489,14 +469,21 @@ namespace ECSEngine {
 			UIDrawerIntegerInputCallbackData<Integer>* data;
 		};
 
-		using UIDrawerFloatInputDragData = UIDrawerFloatInputCallbackData;
+		struct UIDrawerFloatInputDragData {
+			UIDrawerFloatInputCallbackData callback_data;
+			bool callback_on_release;
+		};
 
-		using UIDrawerDoubleInputDragData = UIDrawerDoubleInputCallbackData;
+		struct UIDrawerDoubleInputDragData {
+			UIDrawerDoubleInputCallbackData callback_data;
+			bool callback_on_release;
+		};
 
 		template<typename Integer>
 		struct UIDrawerIntInputDragData {
 			UIDrawerIntegerInputCallbackData<Integer> data;
 			float last_position;
+			bool callback_on_release;
 		};
 
 		struct UIChangeStateData {
@@ -593,41 +580,30 @@ namespace ECSEngine {
 			bool interpolate_bounds;
 		};
 
-		struct LabelHierarchyChangeStateData {
-			inline Stream<char> GetCurrentLabel() const {
-				return { function::OffsetPointer(this, sizeof(*this)), current_label_size };
-			}
+		struct ECSENGINE_API LabelHierarchyChangeStateData {
+			void GetCurrentLabel(void* storage) const;
 
 			// Returns the total size of the structure with the string embedded
-			inline unsigned int WriteString(Stream<char> string) {
-				memcpy(function::OffsetPointer(this, sizeof(*this)), string.buffer, string.size * sizeof(char));
-				current_label_size = string.size;
-				return string.size * sizeof(char) + sizeof(*this);
-			}
+			unsigned int WriteLabel(const void* untyped_data);
 
-			UIDrawerLabelHierarchyData* hierarchy_data;
-			unsigned int current_label_size;
+			UIDrawerLabelHierarchyData* hierarchy;
+			unsigned int label_size;
 		};
 
-		struct LabelHierarchyClickActionData {
-			inline Stream<char> GetCurrentLabel() const {
-				return { function::OffsetPointer(this, sizeof(*this)), current_label_size };
-			}
+		struct ECSENGINE_API LabelHierarchyClickActionData {
+			void GetCurrentLabel(void* storage) const;
 
-			// Returns the total size of the structure with the string embedded
-			inline unsigned int WriteString(Stream<char> string) {
-				memcpy(function::OffsetPointer(this, sizeof(*this)), string.buffer, string.size * sizeof(char));
-				current_label_size = string.size;
-				return string.size * sizeof(char) + sizeof(*this);
-			}
+			// Returns the total size of the structure with the label embedded (both for normal string
+			// or untyped data). Must set the hierarchy before calling this function
+			unsigned int WriteLabel(const void* untyped_data);
 
 			inline bool IsTheSameData(const LabelHierarchyClickActionData* other) const {
-				return other != nullptr && hierarchy_data == other->hierarchy_data;
+				return other != nullptr && hierarchy == other->hierarchy;
 			}
 
-			UIDrawerLabelHierarchyData* hierarchy_data;
+			UIDrawerLabelHierarchyData* hierarchy;
 			// The characters are written at the end
-			unsigned int current_label_size;
+			unsigned int label_size;
 			unsigned char click_count;
 			Timer timer;
 		};

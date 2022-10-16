@@ -752,4 +752,80 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void ComponentBufferCopy(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination)
+	{
+		if (component_buffer.is_data_pointer) {
+			ComponentBufferCopyDataPointer(component_buffer, allocator, source, destination);
+		}
+		else {
+			ComponentBufferCopyStream(component_buffer, allocator, source, destination);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination)
+	{
+		const DataPointer* data_pointer = (const DataPointer*)function::OffsetPointer(source, component_buffer.pointer_offset);
+		const void* copy_buffer = data_pointer->GetPointer();
+		unsigned int copy_size = data_pointer->GetData();
+		copy_size *= component_buffer.element_byte_size;
+
+		void* allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+		memcpy(allocation, copy_buffer, copy_size);
+
+		DataPointer* destination_pointer = (DataPointer*)function::OffsetPointer(destination, component_buffer.pointer_offset);
+		destination_pointer->SetPointer(allocation);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopyStream(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination)
+	{
+		const void* source_pointer = *(const void**)function::OffsetPointer(source, component_buffer.pointer_offset);
+		unsigned int copy_size = *(unsigned int*)function::OffsetPointer(source, component_buffer.size_offset);
+		copy_size *= component_buffer.element_byte_size;
+
+		void* allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+		memcpy(allocation, source_pointer, copy_size);
+
+		void** destination_pointer = (void**)function::OffsetPointer(destination, component_buffer.pointer_offset);
+		*destination_pointer = allocation;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferDeallocate(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source)
+	{
+		if (component_buffer.is_data_pointer) {
+			ComponentBufferDeallocateDataPointer(component_buffer, allocator, source);
+		}
+		else {
+			ComponentBufferDeallocateNormalPointer(component_buffer, allocator, source);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferDeallocateDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source)
+	{
+		const DataPointer* data_pointer = (const DataPointer*)function::OffsetPointer(source, component_buffer.pointer_offset);
+		const void* buffer = data_pointer->GetPointer();
+		if (buffer != nullptr) {
+			allocator->Deallocate(buffer);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferDeallocateNormalPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source)
+	{
+		const void* buffer = *(void**)function::OffsetPointer(source, component_buffer.pointer_offset);
+		if (buffer != nullptr) {
+			allocator->Deallocate(buffer);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

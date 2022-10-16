@@ -5,31 +5,25 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ResourceIdentifier::ResourceIdentifier() : ptr(nullptr), size(0) {}
-
-	ResourceIdentifier::ResourceIdentifier(const char* _ptr) : ptr(_ptr), size(strlen(_ptr)) {}
-
-	ResourceIdentifier::ResourceIdentifier(const wchar_t* _ptr) : ptr(_ptr), size(wcslen(_ptr) * sizeof(wchar_t)) {}
-
-	ResourceIdentifier::ResourceIdentifier(const void* id, unsigned int size) : ptr(id), size(size) {}
-
-	ResourceIdentifier::ResourceIdentifier(Stream<void> identifier) : ptr(identifier.buffer), size(identifier.size) {}
-
-	ResourceIdentifier::ResourceIdentifier(Stream<char> identifier) : ptr(identifier.buffer), size(identifier.size) {}
-
-	ResourceIdentifier::ResourceIdentifier(Stream<wchar_t> identifier) : ptr(identifier.buffer), size(identifier.size * sizeof(wchar_t)) {}
-
-	// ------------------------------------------------------------------------------------------------------------
-
 	bool ResourceIdentifier::operator == (const ResourceIdentifier& other) const {
 		return Compare(other);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	ResourceIdentifier ResourceIdentifier::Copy(AllocatorPolymorphic allocator) const
+	{
+		void* allocation = Allocate(allocator, size);
+		memcpy(allocation, ptr, size);
+		return { allocation, size };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	bool ResourceIdentifier::Compare(const ResourceIdentifier& other) const {
-		if (size != other.size)
+		if (size != other.size) {
 			return false;
+		}
 		else {
 			size_t index = 0;
 			Vec32uc char_compare, other_char_compare;
@@ -47,6 +41,15 @@ namespace ECSEngine {
 		}
 	}
 
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ResourceIdentifier::Deallocate(AllocatorPolymorphic allocator) const
+	{
+		ECSEngine::Deallocate(allocator, ptr);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	unsigned int ResourceIdentifier::Hash() const
 	{
 		// Value must be clipped to 3 bytes only - that's the precision of the hash tables
@@ -59,6 +62,23 @@ namespace ECSEngine {
 
 		return sum * (unsigned int)size;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ResourceIdentifier ResourceIdentifier::WithSuffix(ResourceIdentifier base, CapacityStream<void> temp_buffer, Stream<void> suffix)
+	{
+		if (suffix.size == 0) {
+			return base;
+		}
+		else {
+			temp_buffer.Copy(base.ptr, base.size);
+			temp_buffer.Add(suffix);
+			temp_buffer.AssertCapacity();
+			return temp_buffer;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 	Vec32cb ECS_VECTORCALL HashTableFindSIMDKernel(unsigned int index, unsigned char* m_metadata, unsigned char key_hash_bits, unsigned char hash_bits_mask) {
 		// The SIMD registers are way slower in non optimized builds
@@ -75,5 +95,7 @@ namespace ECSEngine {
 
 		return match;
 	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 }

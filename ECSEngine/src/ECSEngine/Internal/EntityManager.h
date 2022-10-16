@@ -21,17 +21,28 @@ namespace ECSEngine {
 	struct EntityManager;
 	struct ArchetypeQueryCache;
 
-	/*typedef void (*EntityManagerEventCallback)(EntityManager*, void*);
+	/*typedef void (*EntityManagerEventCallback)(EntityManager*, void*, ECS_ENTITY_MANAGER_EVENT_TYPE);
 
-	struct ECSENGINE_API EntityManagerEvent {
+	struct EntityManagerEvent {
 		EntityManagerEventCallback callback;
 		void* data;
 		size_t data_size;
+		ComponentSignature unique_signature;
+		SharedComponentSignature shared_signature;
 	};
 
-	enum EntityManagerEventType : unsigned char {
-		ECS_ENTITY_MANAGER_EVENT_TRACK_ENTITIES,
-		ECS_ENTITY_MANAGER_EVENT_TRACK
+	enum ECS_ENTITY_MANAGER_EVENT_TYPE {
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_CREATE = 1 << 0,
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_DELETE = 1 << 1,
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_ADD_COMPONENT = 1 << 2,
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_REMOVE_COMPONENT = 1 << 3,
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_ADD_SHARED_COMPONENT = 1 << 4,
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_REMOVE_SHARED_COMPONENT = 1 << 5,
+		ECS_ENTITY_MANAGER_EVENT_ENTITIES_COPY = 1 << 6,
+		ECS_ENTITY_MANAGER_EVENT_ARCHETYPE_CREATE = 1 << 7,
+		ECS_ENTITY_MANAGER_EVENT_ARCHETYPE_DELETE = 1 << 8,
+		ECS_ENTITY_MANAGER_EVENT_ARCHETYPE_BASE_CREATE = 1 << 9,
+		ECS_ENTITY_MANAGER_EVENT_ARCHETYPE_BASE_DELETE = 1 << 10,
 	};*/
 
 	struct EntityManagerDescriptor {
@@ -363,8 +374,13 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// The values inside the entity are assumed to be initialized manually
+		// It will search for an archetype that matches the given signatures
+		// If it doesn't exist, it will create a new one
 		Entity CreateEntityCommit(ComponentSignature unique_components, SharedComponentSignature shared_components, bool exclude_from_hierarchy = false);
 
+		// Deferred Call
+		// The values inside the entity are assumed to be initialized manually
 		// It will search for an archetype that matches the given signatures
 		// If it doesn't exist, it will create a new one
 		void CreateEntity(
@@ -412,6 +428,7 @@ namespace ECSEngine {
 			ComponentSignature components_with_data,
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
+			bool copy_buffers = true,
 			bool exclude_from_hierarchy = false,
 			Entity* entities = nullptr
 		);
@@ -428,6 +445,7 @@ namespace ECSEngine {
 			ComponentSignature components_with_data,
 			const void** data,
 			EntityManagerCopyEntityDataType copy_type,
+			bool copy_buffers = true,
 			bool exclude_from_hierarchy = false,
 			EntityManagerCommandStream* command_stream = nullptr,
 			DebugInfo debug_info = { ECS_LOCATION }
@@ -532,16 +550,6 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------
 
 		// It will look for an exact match
-		// Returns -1 if it doesn't exist
-		unsigned int ECS_VECTORCALL FindArchetypeExclude(ArchetypeQueryExclude query) const;
-
-		// It will look for an exact match
-		// Returns nullptr if it doesn't exist
-		Archetype* ECS_VECTORCALL FindArchetypeExcludePtr(ArchetypeQueryExclude query);
-
-		// ---------------------------------------------------------------------------------------------------
-
-		// It will look for an exact match
 		// Returns -1, -1 if the main archetype cannot be found
 		// Returns main_index, -1 if the main archetype is found but the base is not
 		uint2 ECS_VECTORCALL FindBase(
@@ -558,23 +566,6 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// It will look for an exact match
-		// Returns -1, -1 if the main archetype cannot be found
-		// Returns main_index, -1 if the main archetype is found but the base is not
-		uint2 ECS_VECTORCALL FindArchetypeBaseExclude(
-			ArchetypeQueryExclude query,
-			VectorComponentSignature shared_instances
-		) const;
-
-		// It will look for an exact match
-		// Returns nullptr if the base archetype cannot be found
-		ArchetypeBase* ECS_VECTORCALL FindArchetypeBaseExcludePtr(
-			ArchetypeQueryExclude query,
-			VectorComponentSignature shared_instances
-		);
-
-		// ---------------------------------------------------------------------------------------------------
-
 		// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
 		unsigned int FindOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
 
@@ -583,6 +574,8 @@ namespace ECSEngine {
 			SharedComponentSignature shared_signature,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
+
+		// ---------------------------------------------------------------------------------------------------
 
 		// Executes all deferred calls, including clearing tags and setting them
 		void Flush();
@@ -795,22 +788,20 @@ namespace ECSEngine {
 		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
 		// use because all the allocations will happen from this allocator. If the allocator is needed,
-		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed.
-		// You can specify the buffer being a data pointer in order to save memory or a normal stream (in that case
-		// it will treat the next 4 bytes after the pointer to be a size). Both sizes, that for a stream or data pointer,
-		// need to be expressed in bytes. Provide accessors for the component in order to make usage easier. This last point
-		// about size is only needed if you intend on using the CopyEntities function. Outside of that the runtime doesn't depend on it
+		// alongside it, the buffer offsets must be provided such that destroying an entity its buffers be freed.
+		// You can specify the buffer being a data pointer in order to save on memory. The element byte size and the size offset
+		// are only needed when using the CopyEntities function. Outside of that the runtime doesn't depend on it.
+		// When deallocating if the pointer is nullptr then it will skip the deallocation
 		void RegisterComponentCommit(Component component, unsigned int size, size_t allocator_size = 0, Stream<ComponentBuffer> component_buffers = { nullptr, 0 });
 
 		// Deferred call
 		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
 		// use because all the allocations will happen from this allocator. If the allocator is needed,
-		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed.
-		// You can specify the buffer being a data pointer in order to save memory or a normal stream (in that case
-		// it will treat the next 4 bytes after the pointer to be a size). Both sizes, that for a stream or data pointer,
-		// need to be expressed in bytes. Provide accessors for the component in order to make usage easier. This last point
-		// about size is only needed if you intend on using the CopyEntities function. Outside of that the runtime doesn't depend on it
+		// alongside it, the buffer offsets must be provided such that destroying an entity its buffers be freed.
+		// You can specify the buffer being a data pointer in order to save on memory. The byte size and the size offset
+		// are only needed when using the CopyEntities function. Outside of that the runtime doesn't depend on it
+		// When deallocating if the pointer is nullptr then it will skip the deallocation
 		void RegisterComponent(
 			Component component, 
 			unsigned int size,
@@ -825,14 +816,14 @@ namespace ECSEngine {
 		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
 		// use because all the allocations will happen from this allocator. If the allocator is needed,
-		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed
+		// alongside it, the buffer offsets must be provided such that destroying an entity its buffers be freed
 		void RegisterSharedComponentCommit(Component component, unsigned int size, size_t allocator_size = 0, Stream<ComponentBuffer> buffer_offset = { nullptr, 0 });
 
 		// Deferred call
 		// Each component can have an allocator that can be used to keep the data together
 		// If the size is 0, then no allocator is reserved. This is helpful also for in editor
 		// use because all the allocations will happen from this allocator. If the allocator is needed,
-		// alongside it the buffer offsets must be provided such that destroying an entity its buffers be freed
+		// alongside it, the buffer offsets must be provided such that destroying an entity its buffers be freed
 		void RegisterSharedComponent(
 			Component component, 
 			unsigned int size,
@@ -1000,6 +991,18 @@ namespace ECSEngine {
 		EntityPool* m_entity_pool;
 		ResizableLinearAllocator m_temporary_allocator;
 	};
+
+	// Uses the internal indexing of the entity manager
+	ECSENGINE_API VectorComponentSignature ECS_VECTORCALL GetEntityManagerUniqueVectorSignature(const VectorComponentSignature* signatures, unsigned int index);
+
+	// Uses the internal indexing of the entity manager
+	ECSENGINE_API VectorComponentSignature ECS_VECTORCALL GetEntityManagerSharedVectorSignature(const VectorComponentSignature* signatures, unsigned int index);
+
+	// Uses the internal indexing of the entity manager
+	ECSENGINE_API VectorComponentSignature* GetEntityManagerUniqueVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index);
+
+	// Uses the internal indexing of the entity manager
+	ECSENGINE_API VectorComponentSignature* GetEntityManagerSharedVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index);
 
 	// Creates the allocator for the entity pool, the entity pool itself, the entity manager allocator,
 	// and the entity manager itself

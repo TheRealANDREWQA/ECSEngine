@@ -26,7 +26,7 @@ namespace ECSEngine {
 	*/
 	template<typename T, typename Identifier, typename TableHashFunction, typename ObjectHashFunction = ObjectHashFallthrough>
 	struct ConcurrentHashTable {
-		ConcurrentHashTable() : nodes(nullptr), capacity(0), hash_function(TableHashFunction(0)) {}
+		ConcurrentHashTable() : buffer(nullptr), capacity(0), hash_function(TableHashFunction(0)) {}
 		ConcurrentHashTable(void* buffer, unsigned int _capacity) {
 			InitializeFromBuffer(buffer, _capacity);
 		}

@@ -94,11 +94,7 @@ namespace ECSEngine {
 				const void* allocated_buffer;
 			};
 
-			struct TypeTag {
-				Stream<char> tag_name;
-				ResizableStream<Stream<char>> type_names;
-			};
-
+			ReflectionManager() {}
 			ReflectionManager(MemoryManager* allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
 
 			ReflectionManager(const ReflectionManager& other) = default;
@@ -166,9 +162,6 @@ namespace ECSEngine {
 			// For serialization, use the other function
 			bool HasValidDependencies(const ReflectionType* type) const;
 
-			// Fills in the type indices with the types that correspond to the tag
-			void GetAllFromTypeTag(Stream<char> tag, CapacityStream<unsigned int>& type_indices) const;
-
 			bool TryGetType(Stream<char> name, ReflectionType& type) const;
 			bool TryGetEnum(Stream<char> name, ReflectionEnum& enum_) const;
 
@@ -221,6 +214,10 @@ namespace ECSEngine {
 			// It will set the fields of the data according to the defaults
 			void SetInstanceDefaultData(unsigned int index, void* data) const;
 
+			// It will memset to 0 initially then will set the other fields
+			// It will set the fields of the data according to the defaults
+			void SetInstanceDefaultData(const ReflectionType* type, void* data) const;
+
 			// If ignoring some fields, you can set this value manually in order
 			// to correctly have the byte size
 			void SetTypeByteSize(ReflectionType* type, size_t byte_size);
@@ -229,7 +226,6 @@ namespace ECSEngine {
 			// to correctly have the byte size
 			void SetTypeAlignment(ReflectionType* type, size_t alignment);
 
-			ResizableStream<TypeTag> type_tags;
 			ReflectionTypeTable type_definitions;
 			ReflectionEnumTable enum_definitions;
 			ReflectionFieldTable field_table;
@@ -255,8 +251,14 @@ namespace ECSEngine {
 			unsigned int index
 		);
 
+		enum ECS_REFLECTION_ADD_TYPE_FIELD_RESULT : unsigned char {
+			ECS_REFLECTION_ADD_TYPE_FIELD_FAILED,
+			ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS,
+			ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED
+		};
+
 		// returns whether or not the field read succeded
-		ECSENGINE_API bool AddTypeField(
+		ECSENGINE_API ECS_REFLECTION_ADD_TYPE_FIELD_RESULT AddTypeField(
 			ReflectionManagerParseStructuresThreadTaskData* data,
 			ReflectionType& type,
 			unsigned short& pointer_offset,
@@ -384,8 +386,22 @@ namespace ECSEngine {
 
 		ECSENGINE_API bool IsReflectionTypeSharedComponent(const ReflectionType* type);
 
+		ECSENGINE_API bool IsReflectionTypeLinkComponent(const ReflectionType* type);
+
+		// Returns { nullptr, 0 } if there is no target specified
+		ECSENGINE_API Stream<char> GetReflectionTypeLinkComponentTarget(const ReflectionType* type);
+
+		// If it ends in _Link, it will return the name without that end
+		ECSENGINE_API Stream<char> GetReflectionTypeLinkNamePretty(Stream<char> name);
+
+		// Returns true if the link component needs to be built using DLL functions
+		ECSENGINE_API bool GetReflectionTypeLinkComponentNeedsDLL(const ReflectionType* type);
+
 		// Returns true if the type references in any of its fields the subtype
 		ECSENGINE_API bool DependsUpon(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<char> subtype);
+
+		// Determines all the buffers that the ECS runtime can use
+		ECSENGINE_API void GetReflectionTypeRuntimeBuffers(const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers);
 
 		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;

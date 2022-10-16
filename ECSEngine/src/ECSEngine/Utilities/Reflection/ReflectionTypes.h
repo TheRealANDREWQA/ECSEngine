@@ -71,7 +71,7 @@ namespace ECSEngine {
 			COUNT
 		};
 
-		struct ReflectionFieldInfo {
+		struct ECSENGINE_API ReflectionFieldInfo {
 			ReflectionFieldInfo() {}
 			ReflectionFieldInfo(ReflectionBasicFieldType _basic_type, ReflectionStreamFieldType _extended_type, unsigned short _byte_size, unsigned short _basic_type_count)
 				: stream_type(_extended_type), basic_type(_basic_type), byte_size(_byte_size), basic_type_count(_basic_type_count) {}
@@ -145,6 +145,9 @@ namespace ECSEngine {
 			// Only the buffer size is needed
 			size_t CopySize() const;
 
+			// Returns true if they have the same representation
+			bool Compare(const ReflectionField& field) const;
+
 			Stream<char> name;
 			Stream<char> definition;
 			Stream<char> tag;
@@ -167,6 +170,8 @@ namespace ECSEngine {
 
 			// Does a CompareStrings, not a FindFirstToken
 			bool IsTag(Stream<char> string) const;
+
+			unsigned int FindField(Stream<char> name) const;
 
 			// Returns DBL_MAX if it doesn't exist
 			double GetEvaluation(Stream<char> name) const;

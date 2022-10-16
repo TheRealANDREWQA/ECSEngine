@@ -413,7 +413,7 @@ namespace ECSEngine {
 			UIDrawerTextInput* input = (UIDrawerTextInput*)_data;
 
 			if (!input->is_word_selection) {
-				input->SetSpritePositionFromMouse(mouse_position);
+				input->SetSpritePositionFromMouse(system, mouse_position);
 			}
 			if (mouse_tracker->LeftButton() == MBPRESSED) {
 				size_t initial_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - input->word_click_start).count();
@@ -445,7 +445,7 @@ namespace ECSEngine {
 					input->is_word_selection = false;
 				}
 
-				input->current_selection = input->GetSpritePositionFromMouse(mouse_position);
+				input->current_selection = input->GetSpritePositionFromMouse(system, mouse_position);
 				input->current_sprite_position = input->current_selection;
 				input->suppress_arrow_movement = true;
 				if (input->word_click_count == 0) {
@@ -491,9 +491,9 @@ namespace ECSEngine {
 				}
 			}
 
-			unsigned int visible_sprites = input->GetVisibleSpriteCount(input->bound);
+			unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 			input->current_sprite_position = input->current_sprite_position < input->sprite_render_offset ? input->sprite_render_offset : input->current_sprite_position;
-			input->current_sprite_position = input->current_sprite_position > input->sprite_render_offset + visible_sprites ? input->sprite_render_offset + visible_sprites : input->current_sprite_position;
+			//input->current_sprite_position = input->current_sprite_position > input->sprite_render_offset + visible_sprites ? input->sprite_render_offset + visible_sprites : input->current_sprite_position;
 
 			auto right_action = [&]() {
 				if (input->current_sprite_position < input->text->size) {
@@ -908,75 +908,45 @@ namespace ECSEngine {
 
 		constexpr float INPUT_DRAG_FACTOR = 60.0f;
 
-		void DoubleInputDragValue(ActionData* action_data) {
+		template<typename FloatingPoint, typename DataType>
+		void FloatingPointInputDragValue(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
-			UIDrawerDoubleInputDragData* data = (UIDrawerDoubleInputDragData*)_data;
-			if (mouse_tracker->LeftButton() == MBHELD) {
-				double shift_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 1.0 / 5.0 : 1.0;
-				double ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0 : 1.0;
-				double amount = (double)mouse_delta.x * (double)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+			DataType* data = (DataType*)_data;
+			if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBRELEASED) {
+				FloatingPoint shift_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 1.0f / 5.0f : 1.0f;
+				FloatingPoint ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0f : 1.0f;
+				FloatingPoint amount = (FloatingPoint)mouse_delta.x * (FloatingPoint)INPUT_DRAG_FACTOR * shift_value * ctrl_value;
 
-				*data->number += amount;
-				*data->number = function::Clamp(*data->number, data->min, data->max);
+				*data->callback_data.number += amount;
+				*data->callback_data.number = function::Clamp(*data->callback_data.number, data->callback_data.min, data->callback_data.max);
 
-				if (amount != 0 && data->number_data.input->HasCallback()) {
-					// The text input must also be updated before it
-					char number_characters[64];
-					Stream<char> number_characters_stream(number_characters, 0);
-					function::ConvertDoubleToChars(number_characters_stream, *data->number, 3);
-					data->number_data.input->DeleteAllCharacters();
-					data->number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
-
-					//data->number_data.input->Callback(action_data);
+				if (data->callback_data.number_data.input->HasCallback()) {
+					bool on_release = data->callback_on_release && mouse_tracker->LeftButton() == MBRELEASED;
+					if (amount != 0.0f || on_release) {
+						// The text input must also be updated before it
+						char number_characters[64];
+						Stream<char> number_characters_stream(number_characters, 0);
+						function::ConvertFloatingPointToChars<FloatingPoint>(number_characters_stream, *data->callback_data.number, 3);
+						data->callback_data.number_data.input->DeleteAllCharacters();
+						data->callback_data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+					}
+					if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
+						// Don't trigger the callback for the input
+						data->callback_data.number_data.input->trigger_callback = false;
+					}
 				}
 			}
+		}
+
+		void DoubleInputDragValue(ActionData* action_data) {
+			FloatingPointInputDragValue<double, UIDrawerDoubleInputDragData>(action_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
 		void FloatInputDragValue(ActionData* action_data) {
-			UI_UNPACK_ACTION_DATA;
-
-			UIDrawerFloatInputDragData* data = (UIDrawerFloatInputDragData*)_data;
-			if (mouse_tracker->LeftButton() == MBHELD) {
-				float shift_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 1.0f / 5.0f : 1.0f;
-				float ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0f : 1.0f;
-				float amount = mouse_delta.x * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
-
-				*data->number += amount;
-				*data->number = function::Clamp(*data->number, data->min, data->max);
-
-				if (amount != 0.0f && data->number_data.input->HasCallback()) {
-					// The text input must also be updated before it
-					char number_characters[64];
-					Stream<char> number_characters_stream(number_characters, 0);
-					function::ConvertFloatToChars(number_characters_stream, *data->number, 3);
-					data->number_data.input->DeleteAllCharacters();
-					data->number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
-
-					//data->number_data.input->Callback(action_data);
-				}
-			}
-		}
-
-		// --------------------------------------------------------------------------------------------------------------
-
-		void SliderCopyPaste(ActionData* action_data)
-		{
-			UI_UNPACK_ACTION_DATA;
-
-			UIDrawerSlider* slider = (UIDrawerSlider*)_data;
-			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-				if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
-					system->m_application->WriteTextToClipboard(slider->characters.buffer);
-				}
-				else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
-					slider->characters.size = system->m_application->CopyTextFromClipboard(slider->characters.buffer, slider->characters.capacity);
-					slider->character_value = true;
-					slider->changed_value = true;
-				}
-			}
+			FloatingPointInputDragValue<float, UIDrawerFloatInputDragData>(action_data);
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -989,15 +959,15 @@ namespace ECSEngine {
 			if (mouse_tracker->LeftButton() == MBPRESSED) {
 				data->last_position = mouse_position.x;
 			}
-			else if (mouse_tracker->LeftButton() == MBHELD) {
+			else if (mouse_tracker->LeftButton() == MBHELD || mouse_tracker->LeftButton() == MBRELEASED) {
 				float delta_to_position = mouse_position.x - data->last_position;
 				float shift_value = keyboard->IsKeyDown(HID::Key::LeftShift) ? 1.0f / 5.0f : 1.0f;
 				float ctrl_value = keyboard->IsKeyDown(HID::Key::LeftControl) ? 5.0f : 1.0f;
-
 				float amount = delta_to_position * INPUT_DRAG_FACTOR * shift_value * ctrl_value;
+				
 				bool is_negative = amount < 0.0f;
 				Integer value_before = *data->data.number;
-				
+
 				if (abs(amount) > 1.0f) {
 					*data->data.number += (Integer)amount;
 					if (is_negative) {
@@ -1021,7 +991,10 @@ namespace ECSEngine {
 						data->data.number_data.input->DeleteAllCharacters();
 						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
-						//data->data.number_data.input->Callback(action_data);
+						if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
+							// Don't trigger the callback for the input
+							data->data.number_data.input->trigger_callback = false;
+						}
 					}
 				}
 			}
@@ -1035,6 +1008,25 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		void SliderCopyPaste(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerSlider* slider = (UIDrawerSlider*)_data;
+			if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+				if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
+					system->m_application->WriteTextToClipboard(slider->characters.buffer);
+				}
+				else if (keyboard_tracker->IsKeyPressed(HID::Key::V)) {
+					slider->characters.size = system->m_application->CopyTextFromClipboard(slider->characters.buffer, slider->characters.capacity);
+					slider->character_value = true;
+					slider->changed_value = true;
+				}
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
 		// if a different submenu is being hovered, delay the destruction so all windows can be rendered during that frame
 		void MenuCleanupSystemHandler(ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
@@ -1042,6 +1034,7 @@ namespace ECSEngine {
 			UIDrawerMenuCleanupSystemHandlerData* data = (UIDrawerMenuCleanupSystemHandlerData*)_data;
 			for (int64_t index = 0; index < data->window_count; index++) {
 				system->DestroyWindowIfFound(data->window_names[index]);
+				system->m_memory->Deallocate<false>(data->window_names[index].buffer);
 			}
 			system->PopFrameHandler();
 		}
@@ -1438,6 +1431,7 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerMenuButtonData* data = (UIDrawerMenuButtonData*)_data;
+			data->Read();
 			unsigned int window_index = system->GetWindowFromName(data->descriptor.window_name);
 
 			if (mouse_tracker->LeftButton() == MBPRESSED) {
@@ -1448,8 +1442,8 @@ namespace ECSEngine {
 					system->DestroyWindowIfFound(data->descriptor.window_name);
 				}
 				else if (!data->is_opened_when_pressed) {
-					system->CreateWindowAndDockspace(data->descriptor, data->border_flags | UI_DOCKSPACE_FIXED
-						| UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING | UI_POP_UP_WINDOW_FIT_TO_CONTENT | UI_DOCKSPACE_BORDER_NOTHING);
+					system->CreateWindowAndDockspace(data->descriptor, data->border_flags | UI_DOCKSPACE_FIT_TO_VIEW
+						| UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
 					system->PopUpFrameHandler(data->descriptor.window_name, true);
 				}
 			}
@@ -1627,42 +1621,75 @@ namespace ECSEngine {
 						}
 					}
 					else {
-						if (input->current_sprite_position > 0) {
-							if (input->current_sprite_position == input->sprite_render_offset && input->sprite_render_offset > 0) {
-								input->sprite_render_offset--;
+						if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+							// Jump to the next word
+							unsigned int index = input->current_sprite_position;
+							if (input->text->buffer[index] == ' ') {
+								index--;
 							}
-							input->current_sprite_position--;
+							while (index > 0 && input->text->buffer[index] != ' ') {
+								index--;
+							}
+							input->current_sprite_position = index;
+							input->sprite_render_offset = std::min(input->sprite_render_offset, input->current_sprite_position);
 						}
 						else {
-							if (input->sprite_render_offset == 1)
-								input->sprite_render_offset--;
+							if (input->current_sprite_position > 0) {
+								if (input->current_sprite_position == input->sprite_render_offset && input->sprite_render_offset > 0) {
+									input->sprite_render_offset--;
+								}
+								input->current_sprite_position--;
+							}
+							else {
+								if (input->sprite_render_offset == 1)
+									input->sprite_render_offset--;
+							}
 						}
 						if (keyboard->IsKeyUp(HID::Key::LeftShift)) {
 							input->current_selection = input->current_sprite_position;
 						}
 					}
+
 					input->caret_start = std::chrono::high_resolution_clock::now();
 					input->is_caret_display = true;
 				};
 				auto right_arrow_lambda = [&]() {
-					unsigned int visible_sprites = input->GetVisibleSpriteCount(input->bound);
+					unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 					if (keyboard->IsKeyUp(HID::Key::LeftShift) && input->current_sprite_position < input->current_selection) {
 						input->current_sprite_position = input->current_selection;
-						unsigned int visible_sprites = input->GetVisibleSpriteCount(input->bound);
+						unsigned int visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 						while (input->sprite_render_offset + visible_sprites < input->current_sprite_position) {
 							input->sprite_render_offset++;
-							visible_sprites = input->GetVisibleSpriteCount(input->bound);
+							visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
 						}
 					}
 					else {
-						if (input->current_sprite_position < input->text->size) {
-							if (input->current_sprite_position == input->sprite_render_offset + visible_sprites - 1 && input->sprite_render_offset + visible_sprites < input->text->size) {
-								input->sprite_render_offset++;
-								visible_sprites = input->GetVisibleSpriteCount(input->bound);
-								input->current_sprite_position = input->sprite_render_offset + visible_sprites - 1;
+						if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
+							// Jump to the next word
+							unsigned int index = input->current_sprite_position;
+							if (input->text->buffer[index] == ' ') {
+								index++;
 							}
-							else {
-								input->current_sprite_position++;
+
+							while (index < input->text->size && input->text->buffer[index] != ' ') {
+								index++;
+							}
+							input->current_sprite_position = index;
+							while (input->current_sprite_position >= input->sprite_render_offset + visible_sprites - 1 && input->sprite_render_offset + visible_sprites < input->text->size) {
+								input->sprite_render_offset++;
+								visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
+							}
+						}
+						else {
+							if (input->current_sprite_position < input->text->size) {
+								if (input->current_sprite_position >= input->sprite_render_offset + visible_sprites - 1 && input->sprite_render_offset + visible_sprites < input->text->size) {
+									input->sprite_render_offset++;
+									visible_sprites = input->GetVisibleSpriteCount(system, input->bound);
+									input->current_sprite_position = input->sprite_render_offset + visible_sprites - 1;
+								}
+								else {
+									input->current_sprite_position++;
+								}
 							}
 						}
 						if (keyboard->IsKeyUp(HID::Key::LeftShift)) {
@@ -1698,21 +1725,11 @@ namespace ECSEngine {
 						size_t current_index = input->filter_characters_start + index;
 						system->FindCharacterType(input->text->buffer[current_index], type);
 						bool is_valid = data->filter(input->text->buffer[current_index], type);
-						size_t current_sprite_index = current_index * 6;
-
-						if (index > 0) {
-							push_offsets[index] = push_offsets[index - 1] + !is_valid * (input->vertices[current_sprite_index + 1].position.x - input->vertices[current_sprite_index].position.x);
-						}
 
 						if (is_valid && index != valid_characters) {
 							size_t filter_index = input->filter_characters_start + valid_characters;
 							size_t filter_sprite_index = filter_index * 6;
 							input->text->buffer[input->filter_characters_start + valid_characters] = input->text->buffer[current_index];
-
-							for (size_t subindex = 0; subindex < 6; subindex++) {
-								input->vertices[filter_sprite_index + subindex] = input->vertices[current_sprite_index + subindex];
-								input->vertices[filter_sprite_index + subindex].position.x -= push_offsets[index - 1];
-							}
 						}
 						valid_characters += is_valid;
 					}
@@ -1722,19 +1739,13 @@ namespace ECSEngine {
 					if (push_count > 0) {
 						for (size_t index = input->filter_characters_start + input->filter_character_count; index < input->text->size; index++) {
 							input->text->buffer[index - push_count] = input->text->buffer[index];
-
-							for (size_t subindex = 0; subindex < 6; subindex++) {
-								input->vertices[(index - push_count) * 6 + subindex] = input->vertices[index * 6];
-								input->vertices[(index - push_count) * 6 + subindex].position.x -= push_offsets[input->filter_character_count];
-							}
 						}
 						input->text->size -= push_count;
-						input->vertices.size -= push_count * 6;
 
 						HandlerCommand last_command;
 						system->GetLastRevertCommand(last_command, window_index);
 
-						if (last_command.type == ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REPLACE) {
+						if (last_command.type == ECS_UI_HANDLER_COMMAND_TEXT_REPLACE) {
 							UIDrawerTextInputReplaceCommandInfo* command = (UIDrawerTextInputReplaceCommandInfo*)last_command.handler.data;
 							command->text_count -= push_count;
 						}
@@ -1778,7 +1789,7 @@ namespace ECSEngine {
 							memcpy(info_text, backspace_text, *backspace_text_count);
 							info_text[*backspace_text_count] = '\0';
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
+							AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 						}
 
 						size_t text_size = input->text->size;
@@ -1790,7 +1801,7 @@ namespace ECSEngine {
 							revert_info->text_count = character_count;
 							revert_info->text_position = input->current_sprite_position;
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertAddText, revert_info, sizeof(UIDrawerTextInputAddCommandInfo), ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_ADD);
+							AddWindowHandleCommand(system, window_index, TextInputRevertAddText, revert_info, sizeof(UIDrawerTextInputAddCommandInfo), ECS_UI_HANDLER_COMMAND_TEXT_ADD);
 
 							input->InsertCharacters(characters, character_count, input->current_sprite_position, system);
 						}
@@ -1862,7 +1873,7 @@ namespace ECSEngine {
 						memcpy(info_text, backspace_text, *backspace_text_count);
 						info_text[*backspace_text_count] = '\0';
 
-						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
+						AddWindowHandleCommand(system, window_index, TextInputRevertRemoveText, remove_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REMOVE);
 					}
 					else if (keyboard_tracker->IsKeyPressed(HID::Key::C)) {
 						input->CopyCharacters(system);
@@ -1891,7 +1902,7 @@ namespace ECSEngine {
 							memcpy(info_text, deleted_characters, deleted_character_count);
 							info_text[deleted_character_count] = '\0';
 
-							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, ECS_UI_HANDLER_COMMAND_TYPE::ECS_UI_HANDLER_COMMAND_TEXT_REPLACE);
+							AddWindowHandleCommand(system, window_index, TextInputRevertReplaceText, replace_info, total_size, ECS_UI_HANDLER_COMMAND_TEXT_REPLACE);
 						}
 					}
 					else if (keyboard_tracker->IsKeyPressed(HID::Key::A)) {
@@ -2750,10 +2761,10 @@ namespace ECSEngine {
 						submenu_descriptor.initial_position_y = position.y;
 
 						if (submenu_descriptor.initial_position_x + window_size.x > 1.0f) {
-							submenu_descriptor.initial_position_x = 1.0f - window_size.x;
+							submenu_descriptor.initial_position_x = position.x - window_size.x;
 						}
 						if (submenu_descriptor.initial_position_y + window_size.y > 1.0f) {
-							submenu_descriptor.initial_position_y = 1.0f - window_size.y;
+							submenu_descriptor.initial_position_y = position.y - window_size.y;
 						}
 
 						UIDrawerMenuDrawWindowData window_data;
@@ -2767,7 +2778,16 @@ namespace ECSEngine {
 						submenu_descriptor.window_data = &window_data;
 						submenu_descriptor.window_data_size = sizeof(window_data);
 
-						submenu_descriptor.window_name = state->submenues[data->row_index].left_characters;
+						// Tag the name such that it won't conflict with other windows
+						// For example if we have a Sandbox 0 window and a Sandbox 0 menu window
+						// we want to deallocate the menu window
+						ECS_STACK_CAPACITY_STREAM(char, tagged_name, 512);
+						tagged_name.Copy(state->submenues[data->row_index].left_characters);
+						tagged_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+						tagged_name.AddStream("menu_windows");
+
+						tagged_name = function::StringCopy(GetAllocatorPolymorphic(system->m_memory), tagged_name);
+						submenu_descriptor.window_name = tagged_name;
 
 						system->CreateWindowAndDockspace(submenu_descriptor,
 							UI_DOCKSPACE_FIXED | UI_DOCKSPACE_BORDER_FLAG_NO_CLOSE_X | UI_DOCKSPACE_BORDER_FLAG_COLLAPSED_REGION_HEADER
@@ -2936,23 +2956,6 @@ namespace ECSEngine {
 					is_left_click_released = true;
 					data->initialize_from_right_click = false;
 				}
-				//if (is_left_click_released && data->menu_initializer_index != 255) {
-				//	if (data->destroy_state != nullptr && (data->destroy_state->unavailables == nullptr
-				//		|| (!data->destroy_state->unavailables[data->menu_initializer_index])) && IsPointInRectangle(mouse_position, data->destroy_position, data->destroy_scale)) {
-				//		
-				//		UIDrawerMenuCleanupSystemHandlerData cleanup_data;
-				//		cleanup_data.window_count = (int64_t)menu->windows.size;
-				//		for (int64_t index = 0; index < cleanup_data.window_count; index++) {
-				//			cleanup_data.window_names[index] = menu->windows[index].name;
-				//		}
-				//		menu->windows.size = 0;
-				//		system->PushSystemHandler({ MenuCleanupSystemHandler, &cleanup_data, sizeof(cleanup_data) });
-				//		/*for (int64_t index = (int64_t)menu->window_indices.size - 1; index >= 0; index--) {
-				//			system->DestroyPopUpWindow(menu->window_indices[index], true);
-				//		}
-				//		menu->window_indices.size = 0;*/
-				//	}
-				//}
 				if (IsPointInRectangle(mouse_position, position, scale) && is_left_click_released
 					&& data->menu_initializer_index == 255 && !data->is_opened_when_clicked) {
 					UITooltipBaseData tool_tip_data;
@@ -3533,39 +3536,71 @@ namespace ECSEngine {
 
 			if (IsClickableTrigger(action_data)) {
 				LabelHierarchyChangeStateData* data = (LabelHierarchyChangeStateData*)_data;
-				Stream<char> label = data->GetCurrentLabel();
+				void* label_storage = ECS_STACK_ALLOC(data->hierarchy->CopySize());
+				data->GetCurrentLabel(label_storage);
 
-				data->hierarchy_data->ChangeSelection(label, action_data);
+				data->hierarchy->ChangeSelection(label_storage, action_data);
 
 				unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 
 				// Look to see if we need to remove it or add it
-				unsigned int opened_index = function::FindString(label, data->hierarchy_data->opened_labels);
+				unsigned int opened_index = data->hierarchy->FindOpenedLabel(label_storage);
 				if (opened_index == -1) {
-					data->hierarchy_data->AddOpenedLabel(system, window_index, label);
+					data->hierarchy->AddOpenedLabel(system, window_index, label_storage);
 				}
 				else {
-					data->hierarchy_data->RemoveOpenedLabel(system, window_index, label);
+					data->hierarchy->RemoveOpenedLabel(system, window_index, label_storage);
 				}
 			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
 
+		// Used to remove the input action when clicking outside the label
+		void LabelHierarchyRenameLabelFrameHandler(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			UIDrawerLabelHierarchyRenameFrameHandlerData* data = (UIDrawerLabelHierarchyRenameFrameHandlerData*)_data;
+			if (!IsPointInRectangle(mouse_position, data->label_position, data->label_scale)) {
+				if (mouse_tracker->LeftButton() == MBPRESSED) {
+					// Check to see if the general action was changed. If it was, don't deallocate it
+					if (system->m_focused_window_data.general_handler.action == TextInputAction) {
+						system->HandleFocusedWindowCleanupGeneral(mouse_position, 0);
+						system->DeallocateGeneralHandler();
+						system->m_focused_window_data.ResetGeneralHandler();
+					}
+
+					// We still need to call the callback because it won't have a chance to run
+					// inside the text input
+					action_data->data = data->hierarchy;
+					LabelHierarchyRenameLabel(action_data);
+
+					system->RemoveFrameHandler(LabelHierarchyRenameLabelFrameHandler, data);
+					return;
+				}
+			}
+
+			// Check for enter as well to remove itself. In that case don't call the rename callback
+			if (keyboard->IsKeyDown(HID::Key::Enter)) {
+				system->RemoveFrameHandler(LabelHierarchyRenameLabelFrameHandler, data);
+			}
+		}
+
 		void LabelHierarchyRenameLabel(ActionData* action_data)
 		{
 			UI_UNPACK_ACTION_DATA;
-		
+			
 			UIDrawerLabelHierarchyData* data = (UIDrawerLabelHierarchyData*)_data;
 			UIDrawerLabelHierarchyRenameData rename_data;
 			rename_data.data = data->rename_data;
-			rename_data.new_label = data->rename_label;
-			rename_data.previous_label = data->selected_labels[0];
+			rename_data.new_label = data->rename_label_storage;
+			rename_data.previous_label = data->rename_label;
 
 			action_data->data = &rename_data;
 			data->rename_action(action_data);
-
-			data->is_rename_label = false;
+			if (keyboard->IsKeyDown(HID::Key::Enter) || mouse_tracker->LeftButton() == MBPRESSED) {
+				data->is_rename_label = 0;
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -3574,7 +3609,7 @@ namespace ECSEngine {
 		{
 			UI_UNPACK_ACTION_DATA;
 
-			const size_t double_click_milliseconds = 300;
+			const size_t double_click_milliseconds = 500;
 			const size_t drag_milliseconds = 600;
 
 			LabelHierarchyClickActionData* data = (LabelHierarchyClickActionData*)_data;
@@ -3583,30 +3618,33 @@ namespace ECSEngine {
 			system->SetCleanupGeneralHandler();
 
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
-				Stream<char> label = data->GetCurrentLabel();
+				void* untyped_data = ECS_STACK_ALLOC(data->hierarchy->CopySize());
+				data->GetCurrentLabel(untyped_data);
 
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 						// If it is the same selected label, proceed with the double click action
-						if (data->hierarchy_data->selected_labels.size == 1 && function::CompareStrings(data->hierarchy_data->selected_labels[0], label)) {
+						if (data->hierarchy->selected_labels.size == 1 && data->hierarchy->CompareLabels(untyped_data, data->hierarchy->selected_labels.buffer)) {
 							size_t duration = additional_data->timer.GetDuration_ms();
 							if (duration < double_click_milliseconds) {
 								if (additional_data->click_count == 0) {
-									if (data->hierarchy_data->double_click_action != nullptr) {
-										// Call the double click action - if any
-										UIDrawerLabelHierarchyDoubleClickData double_click_data;
-										double_click_data.data = data->hierarchy_data->double_click_data;
-										double_click_data.label = data->hierarchy_data->selected_labels[0];
-										action_data->data = &double_click_data;
-										data->hierarchy_data->double_click_action(action_data);
-									}
+									data->hierarchy->TriggerDoubleClick(action_data);
 									data->click_count = 1;
 								}
 								else if (additional_data->click_count == 1) {
 									// The rename handler can now be called
-									if (data->hierarchy_data->rename_action != nullptr) {
-										data->hierarchy_data->is_rename_label = true;
+									if (data->hierarchy->rename_action != nullptr) {
+										data->hierarchy->is_rename_label = 1;
+										// Add the frame handler
+										UIDrawerLabelHierarchyRenameFrameHandlerData frame_handler_data;
+										frame_handler_data.hierarchy = data->hierarchy;
+										frame_handler_data.label_position = position;
+										frame_handler_data.label_scale = scale;
+										system->PushFrameHandler({ LabelHierarchyRenameLabelFrameHandler, &frame_handler_data, sizeof(frame_handler_data) });
 									}
+									data->click_count = 0;
+								}
+								else {
 									data->click_count = 0;
 								}
 							}
@@ -3623,45 +3661,34 @@ namespace ECSEngine {
 					// If ctrl is pressed, then add/remove else change the selected label
 					// If shift is pressed, activate the determine_selection
 					if (keyboard->IsKeyDown(HID::Key::LeftShift)) {
-						data->hierarchy_data->determine_selection = true;
-						data->hierarchy_data->last_selected.Copy(label);
+						data->hierarchy->determine_selection = true;
+						data->hierarchy->SetLastSelectedLabel(untyped_data);
 					}
 					else if (keyboard->IsKeyDown(HID::Key::LeftControl)) {
-						unsigned int index = function::FindString(label, data->hierarchy_data->selected_labels);
+						unsigned int index = data->hierarchy->FindSelectedLabel(untyped_data);
 						if (index != -1) {
 							// Remove it
-							data->hierarchy_data->RemoveSelection(label, action_data);
+							data->hierarchy->RemoveSelection(untyped_data, action_data);
 						}
 						else {
 							// Add it
-							data->hierarchy_data->AddSelection(label, action_data);
+							data->hierarchy->AddSelection(untyped_data, action_data);
 						}
 					}
 					else {
-						data->hierarchy_data->ChangeSelection(label, action_data);
+						data->hierarchy->ChangeSelection(untyped_data, action_data);
 					}
 				}
 				else {
-					if (data->hierarchy_data->drag_action != nullptr) {
+					if (data->hierarchy->drag_action != nullptr) {
 						if (data->timer.GetDuration_ms() >= drag_milliseconds && !IsPointInRectangle(mouse_position, position, scale)) {
 							if (mouse_tracker->LeftButton() == MBHELD) {
-								data->hierarchy_data->is_dragging = true;
+								data->hierarchy->is_dragging = true;
 							}
 							else if (mouse_tracker->LeftButton() == MBRELEASED) {
-								data->hierarchy_data->is_dragging = false;
+								data->hierarchy->is_dragging = false;
 								// Call the drag handler now
-								if (!data->hierarchy_data->reject_same_label_drag || function::FindString(data->hierarchy_data->hovered_label, data->hierarchy_data->selected_labels) == -1) {
-									UIDrawerLabelHierarchyDragData drag_data;
-									drag_data.data = data->hierarchy_data->drag_data;
-									drag_data.destination_label = data->hierarchy_data->hovered_label;
-									drag_data.source_labels = data->hierarchy_data->selected_labels;
-
-									action_data->data = &drag_data;
-									data->hierarchy_data->drag_action(action_data);
-
-									// Add the label to the opened_labels
-									data->hierarchy_data->AddOpenedLabel(system, system->GetWindowIndexFromBorder(dockspace, border_index), data->hierarchy_data->hovered_label);
-								}
+								data->hierarchy->TriggerDrag(action_data);
 							}
 						}
 					}
@@ -3677,12 +3704,23 @@ namespace ECSEngine {
 
 			UIDrawerLabelHierarchyRightClickData* data = (UIDrawerLabelHierarchyRightClickData*)_data;
 
+			// Do this before the right click action because it might change the position or the scale
+			// of action_data
+			UIDefaultHoverableData hover_data;
+			hover_data.is_single_action_parameter_draw = true;
+			hover_data.colors[0] = data->hover_color;
+			action_data->data = &hover_data;
+			DefaultHoverableAction(action_data);
+
+			action_data->data = data;
+
 			if (mouse_tracker->RightButton() == MBRELEASED) {
+				void* label_storage = ECS_STACK_ALLOC(data->hierarchy->CopySize());
+				data->GetLabel(label_storage);
 				// Change the selected label to this one
-				Stream<char> label = data->GetLabel();
-				unsigned int selected_index = function::FindString(label, data->hierarchy->selected_labels);
+				unsigned int selected_index = data->hierarchy->FindSelectedLabel(label_storage);
 				if (selected_index == -1) {
-					data->hierarchy->ChangeSelection(label, action_data);
+					data->hierarchy->ChangeSelection(label_storage, action_data);
 				}
 
 				data->data = data->hierarchy->right_click_data;

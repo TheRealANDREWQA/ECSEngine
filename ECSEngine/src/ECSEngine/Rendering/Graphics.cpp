@@ -7,9 +7,15 @@
 #include "../Utilities/Path.h"
 #include "ShaderInclude.h"
 #include "../Allocators/AllocatorPolymorphic.h"
+#include "../Utilities/Crash.h"
+
+// The library won't compile with this macro, microsoft quality btw
+#define FAR 
+#include <dxgi1_6.h>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "D3DCompiler.lib")
+#pragma comment(lib, "dxgi.lib")
 
 namespace ECSEngine {
 	
@@ -57,81 +63,172 @@ namespace ECSEngine {
 
 #define GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT 1024
 
+	void InitializeGraphicsHelpers(Graphics* graphics) {
+		graphics->m_shader_helpers.Initialize(graphics->m_allocator, ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
+
+		auto load_source_code = [&](const wchar_t* path) {
+			return ReadWholeFileText(path, GetAllocatorPolymorphic(graphics->m_allocator));
+		};
+
+		Stream<wchar_t> include_directory = ECS_SHADER_DIRECTORY;
+		ShaderIncludeFiles include(graphics->m_allocator, { &include_directory, 1 });
+		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
+			Stream<char> vertex_source = load_source_code(SHADER_HELPERS_VERTEX[index]);
+			ECS_ASSERT(vertex_source.buffer != nullptr);
+
+			Stream<void> vertex_byte_code;
+			graphics->m_shader_helpers[index].vertex = graphics->CreateVertexShaderFromSource(vertex_source, &include, {}, &vertex_byte_code, true);
+
+			Stream<char> pixel_source = load_source_code(SHADER_HELPERS_PIXEL[index]);
+			ECS_ASSERT(pixel_source.buffer != nullptr);
+
+			graphics->m_shader_helpers[index].pixel = graphics->CreatePixelShaderFromSource(pixel_source, &include, {}, true);
+			graphics->m_shader_helpers[index].input_layout = graphics->ReflectVertexShaderInput(vertex_source, vertex_byte_code, true, true);
+
+			graphics->m_allocator->Deallocate(vertex_source.buffer);
+			graphics->m_allocator->Deallocate(pixel_source.buffer);
+		}
+
+		SamplerDescriptor sampler_descriptor;
+		sampler_descriptor.address_type_u = ECS_SAMPLER_ADDRESS_CLAMP;
+		sampler_descriptor.address_type_v = ECS_SAMPLER_ADDRESS_CLAMP;
+		sampler_descriptor.address_type_w = ECS_SAMPLER_ADDRESS_CLAMP;
+		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
+			graphics->m_shader_helpers[index].pixel_sampler = graphics->CreateSamplerState(sampler_descriptor, true);
+		}
+	}
+
+	void EnumGPU(CapacityStream<IDXGIAdapter1*>& adapters, DXGI_GPU_PREFERENCE preference) {
+		IDXGIAdapter1* adapter;
+		IDXGIFactory6* factory = NULL;
+
+		// Create a DXGIFactory object.
+		if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory6), (void**)&factory))) {
+			return;
+		}
+
+		for (unsigned int index = 0; factory->EnumAdapterByGpuPreference(index, preference, __uuidof(*adapter), (void**)&adapter) != DXGI_ERROR_NOT_FOUND; index++) {
+			DXGI_ADAPTER_DESC1 desc;
+			adapter->GetDesc1(&desc);
+
+			if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
+				continue;
+			}
+
+			adapters.AddSafe(adapter);
+		}
+
+		if (factory != nullptr) {
+			factory->Release();
+		}
+	}
+	
+	void EnumerateDiscreteGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
+		EnumGPU(adapters, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE);
+	}
+
+	void EnumerateIntegratedGPU(CapacityStream<IDXGIAdapter1*>& adapters) {
+		EnumGPU(adapters, DXGI_GPU_PREFERENCE_MINIMUM_POWER);
+	}
+
 	Graphics::Graphics(const GraphicsDescriptor* descriptor) 
 		: m_target_view(nullptr), m_device(nullptr), m_context(nullptr), m_swap_chain(nullptr), m_allocator(descriptor->allocator),
-		m_bound_render_target_count(1), m_copied_graphics(false)
+		m_bound_render_target_count(1)
 	{
 		// The internal resources
 		m_internal_resources.Initialize(descriptor->allocator, GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT);
 		m_internal_resources_lock.unlock();
-
-		const float resize_factor = 1.0f;
-		m_window_size.x = descriptor->window_size.x * resize_factor;
-		m_window_size.y = descriptor->window_size.y * resize_factor;
-
-		DXGI_SWAP_CHAIN_DESC swap_chain_descriptor = {};
-		swap_chain_descriptor.BufferDesc.Width = m_window_size.x;
-		swap_chain_descriptor.BufferDesc.Height = m_window_size.y;
-		swap_chain_descriptor.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		swap_chain_descriptor.BufferDesc.RefreshRate.Numerator = 0;
-		swap_chain_descriptor.BufferDesc.RefreshRate.Denominator = 0;
-		swap_chain_descriptor.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-		swap_chain_descriptor.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-		swap_chain_descriptor.SampleDesc.Count = 1;
-		swap_chain_descriptor.SampleDesc.Quality = 0;
-		swap_chain_descriptor.BufferUsage = descriptor->target_usage == ECS_GRAPHICS_USAGE_NONE ? 
-			DXGI_USAGE_RENDER_TARGET_OUTPUT : DXGI_USAGE_RENDER_TARGET_OUTPUT | GetGraphicsNativeUsage(descriptor->target_usage);
-		swap_chain_descriptor.BufferCount = 2;
-		swap_chain_descriptor.OutputWindow = descriptor->hWnd;
-		swap_chain_descriptor.Windowed = TRUE;
-		swap_chain_descriptor.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-		swap_chain_descriptor.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
 		unsigned int flags = 0;
 //#ifdef ECSENGINE_DEBUG
 		flags |= D3D11_CREATE_DEVICE_DEBUG;
 //#endif
 
-		// create device, front and back buffers, swap chain and rendering context
-		HRESULT result = D3D11CreateDeviceAndSwapChain(
-			nullptr, 
-			D3D_DRIVER_TYPE_HARDWARE,
-			nullptr, 
-			flags, 
-			nullptr, 
-			0, 
-			D3D11_SDK_VERSION,
-			&swap_chain_descriptor,
-			&m_swap_chain,
-			&m_device, 
-			nullptr,
-			&m_context
-		);
+		ECS_STACK_CAPACITY_STREAM(IDXGIAdapter1*, adapters, 64);
+		if (descriptor->discrete_gpu) {
+			EnumerateDiscreteGPU(adapters);
+		}
+		else {
+			EnumerateIntegratedGPU(adapters);
+		}
 
-		IDXGIDevice* pDXGIDevice = nullptr;
-		HRESULT hr = m_device->QueryInterface(__uuidof(IDXGIDevice), (void**)&pDXGIDevice);
+		ECS_ASSERT(adapters.size > 0, "There are no GPUs available");
 
-		IDXGIAdapter* pDXGIAdapter = nullptr;
-		hr = pDXGIDevice->GetAdapter(&pDXGIAdapter);
-		DXGI_ADAPTER_DESC adapter_desc;
-		pDXGIAdapter->GetDesc(&adapter_desc);
+		HRESULT result = S_OK;
+		if (descriptor->create_swap_chain) {
+			const float resize_factor = 1.0f;
+			m_window_size.x = descriptor->window_size.x * resize_factor;
+			m_window_size.y = descriptor->window_size.y * resize_factor;
 
-		pDXGIDevice->Release();
-		pDXGIAdapter->Release();
+			DXGI_SWAP_CHAIN_DESC swap_chain_descriptor = {};
+			swap_chain_descriptor.BufferDesc.Width = m_window_size.x;
+			swap_chain_descriptor.BufferDesc.Height = m_window_size.y;
+			swap_chain_descriptor.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			swap_chain_descriptor.BufferDesc.RefreshRate.Numerator = 0;
+			swap_chain_descriptor.BufferDesc.RefreshRate.Denominator = 0;
+			swap_chain_descriptor.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+			swap_chain_descriptor.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+			swap_chain_descriptor.SampleDesc.Count = 1;
+			swap_chain_descriptor.SampleDesc.Quality = 0;
+			swap_chain_descriptor.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
+			swap_chain_descriptor.BufferCount = 2;
+			swap_chain_descriptor.OutputWindow = descriptor->hWnd;
+			swap_chain_descriptor.Windowed = TRUE;
+			swap_chain_descriptor.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+			swap_chain_descriptor.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-		CapacityStream<char> device_name(DEVICE_NAME, 0, 128);
-		function::ConvertWideCharsToASCII(adapter_desc.Description, device_name);
-		device_name.Add('\0');
+			// create device, front and back buffers, swap chain and rendering context
+			result = D3D11CreateDeviceAndSwapChain(
+				adapters[0],
+				D3D_DRIVER_TYPE_UNKNOWN,
+				nullptr,
+				flags,
+				nullptr,
+				0,
+				D3D11_SDK_VERSION,
+				&swap_chain_descriptor,
+				&m_swap_chain,
+				&m_device,
+				nullptr,
+				&m_context
+			);
+		}
+		else {
+			m_swap_chain = nullptr;
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Initializing device and swap chain failed!", true);
+			// Create a new device and context
+			result = D3D11CreateDevice(
+				adapters[0],
+				D3D_DRIVER_TYPE_UNKNOWN,
+				nullptr,
+				flags,
+				nullptr,
+				0,
+				D3D11_SDK_VERSION,
+				&m_device,
+				nullptr,
+				&m_context
+			);
+		}
+
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Initializing device and swap chain failed!");
 
 		result = m_device->CreateDeferredContext(0, &m_deferred_context);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating deferred context failed!", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating deferred context failed!");
 
-		CreateInitialRenderTargetView(descriptor->gamma_corrected);
-		CreateInitialDepthStencilView();
-		BindRenderTargetView(m_target_view, m_depth_stencil_view);
+		if (descriptor->create_swap_chain) {
+			CreateRenderTargetViewFromSwapChain(descriptor->gamma_corrected);
+			CreateWindowDepthStencilView();
+			BindRenderTargetView(m_target_view, m_depth_stencil_view);
+		}
+		else {
+			if (descriptor->window_size.x != 0 && descriptor->window_size.y != 0) {
+				CreateWindowDepthStencilView();
+				CreateWindowRenderTargetView(descriptor->gamma_corrected);
+				BindRenderTargetView(m_target_view, m_depth_stencil_view);
+			}
+		}
 
 		DepthStencilState depth_stencil_state = CreateDepthStencilStateDefault(true);
 		RasterizerState rasterizer_state = CreateRasterizerStateDefault(true);
@@ -152,101 +249,7 @@ namespace ECSEngine {
 		void* allocation = m_allocator->Allocate(memory_size);
 		m_shader_reflection = new ShaderReflection(allocation);
 
-		m_shader_helpers.Initialize(m_allocator, ECS_GRAPHICS_SHADER_HELPER_COUNT, ECS_GRAPHICS_SHADER_HELPER_COUNT);
-	
-		auto load_source_code = [&](const wchar_t* path) {
-			return ReadWholeFileText(path, GetAllocatorPolymorphic(m_allocator));
-		};
-
-		Stream<wchar_t> include_directory = ECS_SHADER_DIRECTORY;
-		ShaderIncludeFiles include(m_allocator, { &include_directory, 1 });
-		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-			Stream<char> vertex_source = load_source_code(SHADER_HELPERS_VERTEX[index]);
-			ECS_ASSERT(vertex_source.buffer != nullptr);
-
-			m_shader_helpers[index].vertex = CreateVertexShaderFromSource(vertex_source, &include, true);
-
-			Stream<char> pixel_source = load_source_code(SHADER_HELPERS_PIXEL[index]);
-			ECS_ASSERT(pixel_source.buffer != nullptr);
-
-			m_shader_helpers[index].pixel = CreatePixelShaderFromSource(pixel_source, &include, true);
-			m_shader_helpers[index].input_layout = ReflectVertexShaderInput(m_shader_helpers[index].vertex, vertex_source, true);
-
-			m_allocator->Deallocate(vertex_source.buffer);
-			m_allocator->Deallocate(pixel_source.buffer);
-		}
-
-		SamplerDescriptor sampler_descriptor;
-		sampler_descriptor.address_type_u = ECS_SAMPLER_ADDRESS_CLAMP;
-		sampler_descriptor.address_type_v = ECS_SAMPLER_ADDRESS_CLAMP;
-		sampler_descriptor.address_type_w = ECS_SAMPLER_ADDRESS_CLAMP;
-		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-			m_shader_helpers[index].pixel_sampler = CreateSamplerState(sampler_descriptor, true);
-		}
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	Graphics::Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target, DepthStencilView new_depth_view, MemoryManager* new_allocator)
-	{
-		m_copied_graphics = true;
-		m_shader_helpers = graphics_to_copy->m_shader_helpers;
-		m_shader_reflection = graphics_to_copy->m_shader_reflection;
-
-		m_swap_chain = nullptr;
-
-		unsigned int flags = 0;
-		flags |= D3D11_CREATE_DEVICE_DEBUG;
-		
-		// Create a new device and context
-		HRESULT result = D3D11CreateDevice(
-			nullptr,
-			D3D_DRIVER_TYPE_HARDWARE,
-			nullptr,
-			flags,
-			nullptr,
-			0,
-			D3D11_SDK_VERSION,
-			&m_device,
-			nullptr,
-			&m_context
-		);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failing to create a new GPU device.", true);
-
-		result = m_device->CreateDeferredContext(0, &m_deferred_context);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failed to create deferred context for new GPU device.", true);
-
-		if (new_render_target.view != nullptr && new_depth_view.view != nullptr) {
-			m_target_view = new_render_target;
-			m_depth_stencil_view = new_depth_view;
-
-			Texture2D render_texture = new_render_target.GetResource();
-			D3D11_TEXTURE2D_DESC render_descriptor;
-			render_texture.tex->GetDesc(&render_descriptor);
-			m_window_size = { render_descriptor.Width, render_descriptor.Height };
-
-			BindRenderTargetView(new_render_target, new_depth_view);
-		}
-		else {
-			m_target_view.view = nullptr;
-			m_depth_stencil_view.view = nullptr;
-
-			m_window_size = { 0, 0 };
-
-			m_bound_render_targets[0].view = nullptr;
-			m_bound_render_target_count = 0;
-			m_current_depth_stencil = nullptr;
-		}
-
-		if (new_allocator == nullptr) {
-			m_allocator = graphics_to_copy->m_allocator;
-		}
-		else {
-			m_allocator = new_allocator;
-		}
-
-		m_internal_resources.Initialize(m_allocator, GRAPHICS_INTERNAL_RESOURCE_STARTING_COUNT);
+		InitializeGraphicsHelpers(this);
 	}
 
 	Graphics::Graphics(const Graphics& other) {
@@ -702,7 +705,7 @@ namespace ECSEngine {
 		index_buffer_descriptor.StructureByteStride = int_size;
 
 		result = m_device->CreateBuffer(&index_buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating index buffer failed");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -738,7 +741,7 @@ namespace ECSEngine {
 		subresource_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&index_buffer_descriptor, &subresource_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating index buffer failed");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -754,11 +757,23 @@ namespace ECSEngine {
 		const char* target = SHADER_COMPILE_TARGET[type * ECS_SHADER_TARGET_COUNT + options.target];
 
 		unsigned int compile_flags = 0;
-		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_DEBUG) ? D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION : 0;
-		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST) ? D3DCOMPILE_OPTIMIZATION_LEVEL0 : 0;
-		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_LOW) ? D3DCOMPILE_OPTIMIZATION_LEVEL1 : 0;
-		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGH) ? D3DCOMPILE_OPTIMIZATION_LEVEL2 : 0;
-		compile_flags |= function::HasFlag(options.compile_flags, ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST) ? D3DCOMPILE_OPTIMIZATION_LEVEL3 : 0;
+		switch (options.compile_flags) {
+		case ECS_SHADER_COMPILE_DEBUG:
+			compile_flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+			break;
+		case ECS_SHADER_COMPILE_OPTIMIZATION_LOWEST:
+			compile_flags = D3DCOMPILE_OPTIMIZATION_LEVEL0;
+			break;
+		case ECS_SHADER_COMPILE_OPTIMIZATION_LOW:
+			compile_flags = D3DCOMPILE_OPTIMIZATION_LEVEL1;
+			break;
+		case ECS_SHADER_COMPILE_OPTIMIZATION_HIGH:
+			compile_flags = D3DCOMPILE_OPTIMIZATION_LEVEL2;
+			break;
+		case ECS_SHADER_COMPILE_OPTIMIZATION_HIGHEST:
+			compile_flags = D3DCOMPILE_OPTIMIZATION_LEVEL3;
+			break;
+		}
 
 		ID3DBlob* blob;
 		ID3DBlob* error_message_blob = nullptr;
@@ -770,7 +785,7 @@ namespace ECSEngine {
 			error_message_blob->Release();
 		}
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Compiling a shader failed.", true);	
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), blob, "Compiling a shader failed.");
 		return blob;
 	}
 
@@ -782,14 +797,14 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreatePixelShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Pixel shader failed.");
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	PixelShader Graphics::CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, bool temporary, ShaderCompileOptions options, DebugInfo debug_info)
+	PixelShader Graphics::CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options, bool temporary, DebugInfo debug_info)
 	{
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_PIXEL);
 		PixelShader shader = CreatePixelShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
@@ -805,11 +820,8 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateVertexShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Vertex shader failed.");
 		
-		shader.byte_code = { m_allocator->Allocate_ts(byte_code.size), byte_code.size };
-		memcpy(shader.byte_code.buffer, byte_code.buffer, byte_code.size);
-
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -819,11 +831,20 @@ namespace ECSEngine {
 	VertexShader Graphics::CreateVertexShaderFromSource(
 		Stream<char> source_code, 
 		ID3DInclude* include_policy, 
-		bool temporary,
 		ShaderCompileOptions options,
+		Stream<void>* vertex_byte_code,
+		bool temporary,
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_VERTEX);
+
+		if (vertex_byte_code != nullptr) {
+			void* allocation = m_allocator->Allocate_ts(byte_code->GetBufferSize());
+			vertex_byte_code->buffer = allocation;
+			memcpy(allocation, byte_code->GetBufferPointer(), byte_code->GetBufferSize());
+			vertex_byte_code->size = byte_code->GetBufferSize();
+		}
+
 		VertexShader shader = CreateVertexShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
@@ -837,7 +858,7 @@ namespace ECSEngine {
 
 		HRESULT result; 
 		result = m_device->CreateDomainShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true); 
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Domain shader failed."); 
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -847,8 +868,8 @@ namespace ECSEngine {
 	DomainShader Graphics::CreateDomainShaderFromSource(
 		Stream<char> source_code,
 		ID3DInclude* include_policy, 
-		bool temporary, 
 		ShaderCompileOptions options,
+		bool temporary, 
 		DebugInfo debug_info
 	)
 	{
@@ -865,7 +886,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateHullShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Hull shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Hull shader failed.");
 		
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
@@ -876,8 +897,8 @@ namespace ECSEngine {
 	HullShader Graphics::CreateHullShaderFromSource(
 		Stream<char> source_code, 
 		ID3DInclude* include_policy,
-		bool temporary, 
 		ShaderCompileOptions options,
+		bool temporary, 
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_HULL);
@@ -893,7 +914,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateGeometryShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Geometry shader failed.");
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -903,8 +924,8 @@ namespace ECSEngine {
 	GeometryShader Graphics::CreateGeometryShaderFromSource(
 		Stream<char> source_code, 
 		ID3DInclude* include_policy,
-		bool temporary,
 		ShaderCompileOptions options,
+		bool temporary,
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_GEOMETRY);
@@ -920,7 +941,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateComputeShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Compute shader failed.");
 		AddInternalResource(shader, temporary, debug_info);
 		return shader;
 	}
@@ -930,8 +951,8 @@ namespace ECSEngine {
 	ComputeShader Graphics::CreateComputeShaderFromSource(
 		Stream<char> source_code, 
 		ID3DInclude* include_policy,
-		bool temporary, 
 		ShaderCompileOptions options,
+		bool temporary, 
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_COMPUTE);
@@ -942,9 +963,82 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
+	void* Graphics::CreateShader(Stream<void> path, ECS_SHADER_TYPE type, bool temporary, DebugInfo debug_info)
+	{
+		switch (type)
+		{
+		case ECS_SHADER_VERTEX:
+			return CreateVertexShader(path, temporary, debug_info).shader;
+		case ECS_SHADER_PIXEL:
+			return CreatePixelShader(path, temporary, debug_info).shader;
+		case ECS_SHADER_DOMAIN:
+			return CreateDomainShader(path, temporary, debug_info).shader;
+		case ECS_SHADER_HULL:
+			return CreateHullShader(path, temporary, debug_info).shader;
+		case ECS_SHADER_GEOMETRY:
+			return CreateGeometryShader(path, temporary, debug_info).shader;
+		case ECS_SHADER_COMPUTE:
+			return CreateComputeShader(path, temporary, debug_info).shader;
+		default:
+			ECS_ASSERT(false);
+		}
+
+		return nullptr;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void* Graphics::CreateShaderFromSource(
+		Stream<char> source_code, 
+		ECS_SHADER_TYPE type, 
+		ID3DInclude* include_policy,
+		ShaderCompileOptions options,
+		Stream<void>* byte_code,
+		bool temporary, 
+		DebugInfo debug_info
+	)
+	{
+		switch (type)
+		{
+		case ECS_SHADER_VERTEX:
+			return CreateVertexShaderFromSource(source_code, include_policy, options, byte_code, temporary, debug_info).shader;
+		case ECS_SHADER_PIXEL:
+			return CreatePixelShaderFromSource(source_code, include_policy, options, temporary, debug_info).shader;
+		case ECS_SHADER_DOMAIN:
+			return CreateDomainShaderFromSource(source_code, include_policy, options, temporary, debug_info).shader;
+		case ECS_SHADER_HULL:
+			return CreateHullShaderFromSource(source_code, include_policy, options, temporary, debug_info).shader;
+		case ECS_SHADER_GEOMETRY:
+			return CreateGeometryShaderFromSource(source_code, include_policy, options, temporary, debug_info).shader;
+		case ECS_SHADER_COMPUTE:
+			return CreateComputeShaderFromSource(source_code, include_policy, options, temporary, debug_info).shader;
+		default:
+			ECS_ASSERT(false);
+		}
+
+		return nullptr;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	Stream<void> Graphics::CompileShaderToByteCode(Stream<char> source_code, ECS_SHADER_TYPE type, ID3DInclude* include_policy, AllocatorPolymorphic allocator, ShaderCompileOptions options)
+	{
+		if (allocator.allocator == nullptr) {
+			allocator = GetAllocatorPolymorphic(m_allocator, ECS_ALLOCATION_MULTI);
+		}
+
+		ID3DBlob* blob = ShaderByteCode(GetDevice(), source_code, options, include_policy, type);
+		void* allocation = Allocate(allocator, blob->GetBufferSize());
+		memcpy(allocation, blob->GetBufferPointer(), blob->GetBufferSize());
+		return { allocation, blob->GetBufferSize() };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	InputLayout Graphics::CreateInputLayout(
 		Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, 
-		VertexShader vertex_shader,
+		Stream<void> vertex_byte_code,
+		bool deallocate_byte_code,
 		bool temporary,
 		DebugInfo debug_info
 	)
@@ -955,14 +1049,15 @@ namespace ECSEngine {
 		result = m_device->CreateInputLayout(
 			descriptor.buffer, 
 			descriptor.size, 
-			vertex_shader.byte_code.buffer, 
-			vertex_shader.byte_code.size,
+			vertex_byte_code.buffer, 
+			vertex_byte_code.size,
 			&layout.layout
 		);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating input layout failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), layout, "Creating input layout failed");
 		
-		m_allocator->Deallocate_ts(vertex_shader.byte_code.buffer);
-		vertex_shader.byte_code = { nullptr, 0 };
+		if (deallocate_byte_code) {
+			m_allocator->Deallocate_ts(vertex_byte_code.buffer);
+		}
 		AddInternalResource(layout, temporary, debug_info);
 		return layout;
 	}
@@ -993,7 +1088,7 @@ namespace ECSEngine {
 		HRESULT result;
 		result = m_device->CreateBuffer(&vertex_buffer_descriptor, nullptr, &buffer.buffer);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1029,7 +1124,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateBuffer(&vertex_buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1061,7 +1156,7 @@ namespace ECSEngine {
 		initial_data_constant.pSysMem = buffer_data;
 
 		result = m_device->CreateBuffer(&constant_buffer_descriptor, &initial_data_constant, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating pixel constant buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating pixel constant buffer failed.");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1089,7 +1184,7 @@ namespace ECSEngine {
 		constant_buffer_descriptor.StructureByteStride = 0u;
 
 		result = m_device->CreateBuffer(&constant_buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating pixel constant buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating pixel constant buffer failed.");
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
 	}
@@ -1119,7 +1214,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = 0u;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating standard buffer failed.");
 		buffer.count = element_count;
 		
 		AddInternalResource(buffer, temporary, debug_info);
@@ -1155,7 +1250,7 @@ namespace ECSEngine {
 		initial_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating standard buffer failed.");
 		buffer.count = element_count;
 
 		AddInternalResource(buffer, temporary, debug_info);
@@ -1187,7 +1282,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = element_size;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating structred buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating structred buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1222,7 +1317,7 @@ namespace ECSEngine {
 		initial_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Structred Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Structred Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1254,7 +1349,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = 0u;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UA Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating UA Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1290,7 +1385,7 @@ namespace ECSEngine {
 		initial_data.pSysMem = data;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, &initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UA Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating UA Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1329,7 +1424,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = 0;
 
 		result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Indirect Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Indirect Buffer failed.");
 		
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1350,7 +1445,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = element_size;
 
 		HRESULT result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Append Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Append Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1371,7 +1466,7 @@ namespace ECSEngine {
 		buffer_descriptor.StructureByteStride = element_size;
 
 		HRESULT result = m_device->CreateBuffer(&buffer_descriptor, nullptr, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Consume Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating Consume Buffer failed.");
 
 		AddInternalResource(buffer, temporary, debug_info);
 		return buffer;
@@ -1397,7 +1492,7 @@ namespace ECSEngine {
 		SamplerState state;
 		HRESULT result = m_device->CreateSamplerState(&sampler_desc, &state.sampler);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Constructing sampler state failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Constructing sampler state failed!");
 		AddInternalResource(state, temporary, debug_info);
 		return state;
 	}
@@ -1481,14 +1576,28 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::CreateInitialRenderTargetView(bool gamma_corrected)
+	void Graphics::CreateWindowRenderTargetView(bool gamma_corrected)
+	{
+		// gain access to the texture subresource of the back buffer
+		GraphicsTexture2DDescriptor descriptor;
+		descriptor.format = gamma_corrected ? ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB : ECS_GRAPHICS_FORMAT_RGBA8_UNORM;
+		descriptor.bind_flag |= ECS_GRAPHICS_BIND_RENDER_TARGET;
+		descriptor.size = m_window_size;
+
+		Texture2D texture = CreateTexture(&descriptor);
+		m_target_view = CreateRenderTargetView(texture);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	void Graphics::CreateRenderTargetViewFromSwapChain(bool gamma_corrected)
 	{
 		// gain access to the texture subresource of the back buffer
 		HRESULT result;
 		Microsoft::WRL::ComPtr<ID3D11Resource> back_buffer;
 		result = m_swap_chain->GetBuffer(0, __uuidof(ID3D11Resource), &back_buffer);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Acquiring buffer resource failed", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Acquiring buffer resource failed");
 
 		if (gamma_corrected) {
 			D3D11_RENDER_TARGET_VIEW_DESC descriptor;
@@ -1501,12 +1610,12 @@ namespace ECSEngine {
 			result = m_device->CreateRenderTargetView(back_buffer.Get(), nullptr, &m_target_view.view);
 		}
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating render target view failed");
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::CreateInitialDepthStencilView()
+	void Graphics::CreateWindowDepthStencilView()
 	{
 		HRESULT result;
 		// creating depth texture
@@ -1524,7 +1633,7 @@ namespace ECSEngine {
 
 		result = m_device->CreateTexture2D(&depth_texture_descriptor, nullptr, &depth_texture);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating depth texture failed", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating depth texture failed");
 
 		// creating depth stencil texture view
 		D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_descriptor = {};
@@ -1534,7 +1643,7 @@ namespace ECSEngine {
 
 		result = m_device->CreateDepthStencilView(depth_texture, &depth_view_descriptor, &m_depth_stencil_view.view);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating depth stencil view failed", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Creating depth stencil view failed");
 		depth_texture->Release();
 	}
 
@@ -1542,9 +1651,9 @@ namespace ECSEngine {
 
 	GraphicsContext* Graphics::CreateDeferredContext(unsigned int context_flags, DebugInfo debug_info)
 	{
-		GraphicsContext* context;
+		GraphicsContext* context = nullptr;
 		HRESULT result = m_device->CreateDeferredContext(0, &context);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Failed to create deferred context.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), context, "Failed to create deferred context.");
 
 		AddInternalResource(context, debug_info);
 		return context;
@@ -1579,7 +1688,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture1D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 1D failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture 1D failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -1627,9 +1736,61 @@ namespace ECSEngine {
 			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 2D failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture 2D failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ResourceView Graphics::CreateTextureWithMips(Stream<void> first_mip, ECS_GRAPHICS_FORMAT format, uint2 size, bool temporary, DebugInfo debug_info)
+	{
+		D3D11_TEXTURE2D_DESC dx_descriptor;
+		dx_descriptor.SampleDesc.Count = 1;
+		dx_descriptor.SampleDesc.Quality = 0;
+
+		dx_descriptor.Format = GetGraphicsNativeFormat(format);
+		dx_descriptor.ArraySize = 1;
+		dx_descriptor.BindFlags = GetGraphicsNativeBind(ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE);
+		dx_descriptor.CPUAccessFlags = GetGraphicsNativeCPUAccess(ECS_GRAPHICS_CPU_ACCESS_NONE);
+
+		dx_descriptor.MiscFlags = GetGraphicsNativeMiscFlags(ECS_GRAPHICS_MISC_GENERATE_MIPS);
+		dx_descriptor.Usage = GetGraphicsNativeUsage(ECS_GRAPHICS_USAGE_DEFAULT);
+		dx_descriptor.Width = size.x;
+		dx_descriptor.Height = size.y;
+		dx_descriptor.MipLevels = 0;
+
+		ID3D11Texture2D* texture_interface;
+		ID3D11ShaderResourceView* texture_view = nullptr;
+
+		HRESULT result = GetDevice()->CreateTexture2D(&dx_descriptor, nullptr, &texture_interface);
+		ECS_ASSERT(!FAILED(result), "Creating texture from DXTex failed.");
+
+		D3D11_BOX box;
+		box.left = 0;
+		box.right = dx_descriptor.Width;
+		box.top = 0;
+		box.bottom = dx_descriptor.Height;
+		box.front = 0;
+		box.back = 1;
+
+		size_t row_pitch, slice_pitch;
+		row_pitch = first_mip.size / size.y;
+		slice_pitch = first_mip.size;
+		GetContext()->UpdateSubresource(texture_interface, 0, &box, first_mip.buffer, row_pitch, slice_pitch);
+
+		result = GetDevice()->CreateShaderResourceView(texture_interface, nullptr, &texture_view);
+		ECS_ASSERT(!FAILED(result), "Creating texture view from DXTex failed.");
+
+		// Generate mips
+		GetContext()->GenerateMips(texture_view);
+
+		if (!temporary) {
+			AddInternalResource(Texture2D(texture_interface), debug_info);
+			AddInternalResource(ResourceView(texture_view), debug_info);
+		}
+
+		return texture_view;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -1670,7 +1831,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture3D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 3D failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture 3D failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -1708,7 +1869,7 @@ namespace ECSEngine {
 			result = m_device->CreateTexture2D(&descriptor, subresource_data, &resource.tex);
 		}
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture Cube failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), resource, "Creating Texture Cube failed!");
 		AddInternalResource(resource, temporary, debug_info);
 		return resource;
 	}
@@ -1739,7 +1900,8 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 1D Shader View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 1D Shader View failed.");
+		
 		AddInternalResource(view, temporary, debug_info);
 		return view;
 	}
@@ -1751,7 +1913,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"CReating Texture 1D Shader Entire View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 1D Shader Entire View failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1783,7 +1945,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 2D Shader View.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 2D Shader View.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1796,7 +1958,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 2D Shader Entire View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 2D Shader Entire View failed.");
 		AddInternalResource(view, temporary, debug_info);
 		return view;
 	}
@@ -1827,7 +1989,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 3D Shader View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 3D Shader View failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1840,7 +2002,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 3D Shader Entire View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 3D Shader Entire View failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1874,7 +2036,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = m_device->CreateShaderResourceView(texture.tex, &descriptor, &component.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture Cube Shader View.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture Cube Shader View.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1887,7 +2049,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(texture.tex, nullptr, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture Cube Shader Entire View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture Cube Shader Entire View failed.");
 		
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1905,7 +2067,7 @@ namespace ECSEngine {
 		descriptor.Buffer.ElementOffset = 0;
 		descriptor.Buffer.ElementWidth = buffer.count;
 		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer view failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating standard buffer view failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1918,7 +2080,7 @@ namespace ECSEngine {
 		ResourceView view;
 
 		HRESULT result = m_device->CreateShaderResourceView(buffer.buffer, nullptr, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating structured buffer view failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating structured buffer view failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1939,7 +2101,7 @@ namespace ECSEngine {
 		descriptor.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		descriptor.Texture2D.MipSlice = mip_level;
 		result = m_device->CreateRenderTargetView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1962,7 +2124,7 @@ namespace ECSEngine {
 		view_descriptor.Texture2DArray.FirstArraySlice = face;
 		view_descriptor.Texture2DArray.MipSlice = mip_level;
 		result = m_device->CreateRenderTargetView(cube.tex, &view_descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		if (!temporary) {
 			AddInternalResource(view, debug_info);
@@ -1978,7 +2140,7 @@ namespace ECSEngine {
 
 		DepthStencilView view;
 		result = m_device->CreateDepthStencilView(texture.tex, nullptr, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating render target view failed!");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -1998,7 +2160,7 @@ namespace ECSEngine {
 		descriptor.Format = GetGraphicsNativeFormat(format);
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from UABuffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from UABuffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2018,7 +2180,7 @@ namespace ECSEngine {
 		descriptor.Format = DXGI_FORMAT_R32_TYPELESS;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Indirect Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Indirect Buffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2037,7 +2199,7 @@ namespace ECSEngine {
 		descriptor.Format = DXGI_FORMAT_UNKNOWN;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Append Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Append Buffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2056,7 +2218,7 @@ namespace ECSEngine {
 		descriptor.Format = DXGI_FORMAT_UNKNOWN;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(buffer.buffer, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Consume Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Consume Buffer failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2076,7 +2238,7 @@ namespace ECSEngine {
 		descriptor.Format = texture_desc.Format;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Texture 1D failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Texture 1D failed.");
 		
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2096,7 +2258,7 @@ namespace ECSEngine {
 		descriptor.Format = texture_desc.Format;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Texture 2D failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Texture 2D failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2116,7 +2278,7 @@ namespace ECSEngine {
 		descriptor.Format = texture_desc.Format;
 
 		HRESULT result = m_device->CreateUnorderedAccessView(texture.tex, &descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Texture 3D failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView from Texture 3D failed.");
 
 		AddInternalResource(view, temporary, debug_info);
 		return view;
@@ -2129,7 +2291,7 @@ namespace ECSEngine {
 		RasterizerState state;
 
 		HRESULT result = m_device->CreateRasterizerState(&descriptor, &state.state);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Rasterizer state failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2154,7 +2316,7 @@ namespace ECSEngine {
 		DepthStencilState state;
 
 		HRESULT result = m_device->CreateDepthStencilState(&descriptor, &state.state);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Rasterizer state failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2180,7 +2342,7 @@ namespace ECSEngine {
 		BlendState state;
 
 		HRESULT result = m_device->CreateBlendState(&descriptor, &state.state);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Rasterizer state failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Creating Rasterizer state failed.");
 
 		AddInternalResource(state, temporary, debug_info);
 		return state;
@@ -2212,8 +2374,8 @@ namespace ECSEngine {
 
 	void Graphics::FreeMesh(const Mesh& mesh)
 	{
-		if (mesh.name != nullptr) {
-			m_allocator->Deallocate(mesh.name);
+		if (mesh.name.buffer != nullptr) {
+			m_allocator->Deallocate(mesh.name.buffer);
 		}
 		for (size_t index = 0; index < mesh.mapping_count; index++) {
 			if (mesh.vertex_buffers[index].buffer != nullptr) {
@@ -2228,8 +2390,8 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void Graphics::FreeSubmesh(const Submesh& submesh) {
-		if (submesh.name != nullptr) {
-			m_allocator->Deallocate(submesh.name);
+		if (submesh.name.buffer != nullptr) {
+			m_allocator->Deallocate(submesh.name.buffer);
 		}
 	}
 
@@ -2502,30 +2664,11 @@ namespace ECSEngine {
 		HRESULT result;
 		result = m_context->FinishCommandList(restore_state, &list.list);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating command list failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), list, "Creating command list failed!");
 		if (!temporary) {
 			AddInternalResource(list, debug_info);
 		}
 		return list;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	GraphicsDevice* Graphics::GetDevice() {
-		return m_device;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	GraphicsContext* Graphics::GetContext() {
-		return m_context;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------------
-
-	GraphicsContext* Graphics::GetDeferredContext()
-	{
-		return m_deferred_context;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2619,7 +2762,6 @@ namespace ECSEngine {
 		m_allocator->Deallocate_ts(buffer);
 	}
 
-
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	void* Graphics::GetAllocatorBuffer(size_t size)
@@ -2627,9 +2769,34 @@ namespace ECSEngine {
 		return m_allocator->Allocate(size);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------------
+
 	void* Graphics::GetAllocatorBufferTs(size_t size)
 	{
 		return m_allocator->Allocate_ts(size);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ECS_GRAPHICS_DEVICE_ERROR Graphics::GetDeviceError() {
+		HRESULT result = m_device->GetDeviceRemovedReason();
+		switch (result) {
+		case DXGI_ERROR_DEVICE_HUNG:
+			return ECS_GRAPHICS_DEVICE_ERROR_INVALID_CALL;
+		case DXGI_ERROR_DEVICE_REMOVED:
+			return ECS_GRAPHICS_DEVICE_ERROR_REMOVED;
+		case DXGI_ERROR_DEVICE_RESET:
+			return ECS_GRAPHICS_DEVICE_ERROR_RESET;
+		case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
+			return ECS_GRAPHICS_DEVICE_ERROR_DRIVER_INTERNAL_ERROR;
+		case DXGI_ERROR_INVALID_CALL:
+			return ECS_GRAPHICS_DEVICE_ERROR_INVALID_CALL;
+		case S_OK:
+			return ECS_GRAPHICS_DEVICE_ERROR_NONE;
+		}
+
+		// If no code is matched, return a removed reason
+		return ECS_GRAPHICS_DEVICE_ERROR_REMOVED;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2701,7 +2868,7 @@ namespace ECSEngine {
 
 		HRESULT result = m_swap_chain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Resizing swap chain failed!", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Resizing swap chain failed!");
 
 		/*DXGI_MODE_DESC descriptor;
 		descriptor.Width = m_window_size.x;
@@ -2715,13 +2882,13 @@ namespace ECSEngine {
 
 		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Resizing the swap chain failed!", true);*/
 
-		CreateInitialRenderTargetView(descriptor.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+		CreateRenderTargetViewFromSwapChain(descriptor.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 
 		ResizeViewport(0.0f, 0.0f, width, height);
 		BindRenderTargetViewFromInitialViews(m_context);
 		EnableDepth(m_context);
 
-		CreateInitialDepthStencilView();
+		CreateWindowDepthStencilView();
 
 		DisableAlphaBlending(m_context);
 	}
@@ -2743,17 +2910,15 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void Graphics::SwapBuffers(unsigned int sync_interval) {
+	bool Graphics::SwapBuffers(unsigned int sync_interval) {
 		HRESULT result;
 		result = m_swap_chain->Present(sync_interval, 0);
 		if (FAILED(result)) {
 			if (result == DXGI_ERROR_DEVICE_REMOVED) {
-				ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Swapping buffers failed. Device was removed.", true);
-			}
-			else {
-				ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Swapping buffers failed.", false);
+				return true;
 			}
 		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -2822,32 +2987,19 @@ namespace ECSEngine {
 		Material new_material;
 
 		new_material.layout = material->layout;
-		new_material.name = material->name;
 		new_material.pixel_shader = material->pixel_shader;
 		new_material.vertex_shader = material->vertex_shader;
-		new_material.hull_shader = material->hull_shader;
-		new_material.geometry_shader = material->geometry_shader;
-		new_material.domain_shader = material->domain_shader;
 
 		new_material.vertex_buffer_mapping_count = material->vertex_buffer_mapping_count;
 		memcpy(new_material.vertex_buffer_mappings, material->vertex_buffer_mappings, sizeof(ECS_MESH_INDEX) * material->vertex_buffer_mapping_count);
 
-		new_material.dc_buffer_count = material->dc_buffer_count;
-		new_material.domain_texture_count = material->domain_texture_count;
-
-		new_material.gc_buffer_count = material->gc_buffer_count;
-		new_material.geometry_texture_count = material->geometry_texture_count;
-
-		new_material.hc_buffer_count = material->hc_buffer_count;
-		new_material.hull_texture_count = material->hull_texture_count;
-
-		new_material.pc_buffer_count = material->pc_buffer_count;
-		new_material.pixel_texture_count = material->pixel_texture_count;
+		new_material.p_buffer_count = material->p_buffer_count;
+		new_material.p_texture_count = material->p_texture_count;
 
 		new_material.unordered_view_count = material->unordered_view_count;
 
-		new_material.vc_buffer_count = material->vc_buffer_count;
-		new_material.vertex_texture_count = material->vertex_texture_count;
+		new_material.v_buffer_count = material->v_buffer_count;
+		new_material.v_texture_count = material->v_texture_count;
 
 		auto copy_buffers = [&](size_t offset, unsigned char copy_count) {
 			ConstantBuffer* old_buffers = (ConstantBuffer*)function::OffsetPointer(material, offset);
@@ -2870,17 +3022,11 @@ namespace ECSEngine {
 			}
 		};
 
-		copy_buffers(offsetof(Material, dc_buffers), material->dc_buffer_count);
-		copy_buffers(offsetof(Material, gc_buffers), material->gc_buffer_count);
-		copy_buffers(offsetof(Material, hc_buffers), material->hc_buffer_count);
-		copy_buffers(offsetof(Material, pc_buffers), material->pc_buffer_count);
-		copy_buffers(offsetof(Material, vc_buffers), material->vc_buffer_count);
+		copy_buffers(offsetof(Material, p_buffers), material->p_buffer_count);
+		copy_buffers(offsetof(Material, v_buffers), material->v_buffer_count);
 
-		copy_textures(offsetof(Material, domain_textures), material->domain_texture_count);
-		copy_textures(offsetof(Material, vertex_textures), material->vertex_texture_count);
-		copy_textures(offsetof(Material, pixel_textures), material->pixel_texture_count);
-		copy_textures(offsetof(Material, hull_textures), material->hull_texture_count);
-		copy_textures(offsetof(Material, geometry_textures), material->geometry_texture_count);
+		copy_textures(offsetof(Material, v_textures), material->v_texture_count);
+		copy_textures(offsetof(Material, p_textures), material->p_texture_count);;
 
 		// The unordered views need to be handled separately
 		for (unsigned char index = 0; index < material->unordered_view_count; index++) {
@@ -2970,7 +3116,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	InputLayout Graphics::ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code, bool temporary, DebugInfo debug_info)
+	InputLayout Graphics::ReflectVertexShaderInput(
+		Stream<char> source_code,
+		Stream<void> vertex_byte_code,
+		bool deallocate_byte_code,
+		bool temporary,
+		DebugInfo debug_info
+	)
 	{
 		constexpr size_t MAX_INPUT_FIELDS = 128;
 		D3D11_INPUT_ELEMENT_DESC _element_descriptors[MAX_INPUT_FIELDS];
@@ -2980,11 +3132,11 @@ namespace ECSEngine {
 		void* allocation = ECS_STACK_ALLOC(NAME_POOL_SIZE);
 		CapacityStream<char> name_pool(allocation, 0, NAME_POOL_SIZE);
 		bool success = m_shader_reflection->ReflectVertexShaderInputSource(source_code, element_descriptors, name_pool);
-
 		if (!success) {
 			return {};
 		}
-		InputLayout layout = CreateInputLayout(element_descriptors, shader, temporary, debug_info);
+
+		InputLayout layout = CreateInputLayout(element_descriptors, vertex_byte_code, deallocate_byte_code, temporary, debug_info);
 		return layout;
 	}
 
@@ -3127,14 +3279,15 @@ namespace ECSEngine {
 #undef CASE2
 #undef CASE3
 
-		if (!graphics->m_copied_graphics) {
-			for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
-				graphics->m_shader_helpers[index].vertex.Release();
-				graphics->m_shader_helpers[index].pixel.Release();
-				graphics->m_shader_helpers[index].input_layout.Release();
-				graphics->m_shader_helpers[index].pixel_sampler.Release();
-			}
+		for (size_t index = 0; index < ECS_GRAPHICS_SHADER_HELPER_COUNT; index++) {
+			graphics->m_shader_helpers[index].vertex.Release();
+			graphics->m_shader_helpers[index].pixel.Release();
+			graphics->m_shader_helpers[index].input_layout.Release();
+			graphics->m_shader_helpers[index].pixel_sampler.Release();
 		}
+
+		// Deallocate the shader helper array
+		graphics->m_allocator->Deallocate(graphics->m_shader_helpers.buffer);
 
 		graphics->m_context->Flush();
 
@@ -3144,13 +3297,14 @@ namespace ECSEngine {
 		// Deallocate the buffer for the resource tracking
 		graphics->m_allocator->Deallocate(graphics->m_internal_resources.buffer);
 
-		if (!graphics->m_copied_graphics) {
+		if (graphics->m_depth_stencil_view.view != nullptr) {
 			count = graphics->m_depth_stencil_view.Release();
+		}
+		if (graphics->m_target_view.view != nullptr) {
 			count = graphics->m_target_view.Release();
+		}
+		if (graphics->m_swap_chain != nullptr) {
 			count = graphics->m_swap_chain->Release();
-
-			// Deallocate the shader helper array
-			graphics->m_allocator->Deallocate(graphics->m_shader_helpers.buffer);
 		}
 	}
 
@@ -3407,16 +3561,37 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, unsigned int start_slot)
+	void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, unsigned int start_slot, ECS_SHADER_TYPE type)
 	{
+		switch (type) {
+		case ECS_SHADER_PIXEL:
+			context->PSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			break;
+		case ECS_SHADER_VERTEX:
+			context->VSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			break;
+		case ECS_SHADER_COMPUTE:
+			context->CSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			break;
+		case ECS_SHADER_HULL:
+			context->HSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			break;
+		case ECS_SHADER_DOMAIN:
+			context->DSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			break;
+		case ECS_SHADER_GEOMETRY:
+			context->GSSetSamplers(start_slot, 1u, (ID3D11SamplerState**)samplers.buffer);
+			break;
+		}
+
 		context->PSSetSamplers(start_slot, samplers.size, (ID3D11SamplerState**)samplers.buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
 
-	void BindSamplerState(SamplerState sampler, GraphicsContext* context, unsigned int slot)
+	void BindSamplerState(SamplerState sampler, GraphicsContext* context, unsigned int slot, ECS_SHADER_TYPE type)
 	{
-		context->PSSetSamplers(slot, 1u, &sampler.sampler);
+		BindSamplerStates({ &sampler, 1 }, context, slot, type);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -3570,71 +3745,50 @@ namespace ECSEngine {
 		// Bind the input layout
 		BindInputLayout(material.layout, context);
 		
-		// Bind the domain shader if it is not null
-		if (material.domain_shader.shader != nullptr) {
-			BindDomainShader(material.domain_shader, context);
-			
-			// Bind domain resources
-			if (material.dc_buffer_count > 0) {
-				BindDomainConstantBuffers(Stream<ConstantBuffer>(material.dc_buffers, material.dc_buffer_count), context);
-			}
-
-			if (material.domain_texture_count > 0) {
-				BindDomainResourceViews(Stream<ResourceView>(material.domain_textures, material.domain_texture_count), context);
-			}
-		}
-
-		// Bind the hull shader if it is not null
-		if (material.hull_shader.shader != nullptr) {
-			BindHullShader(material.hull_shader, context);
-
-			// Bind hull resources
-			if (material.hc_buffer_count > 0) {
-				BindHullConstantBuffers(Stream<ConstantBuffer>(material.hc_buffers, material.hc_buffer_count), context);
-			}
-
-			if (material.hull_texture_count > 0) {
-				BindHullResourceViews(Stream<ResourceView>(material.hull_textures, material.hull_texture_count), context);
-			}
-		}
-
-		// Bind the geometry shader if it not null 
-		if (material.geometry_shader.shader != nullptr) {
-			BindGeometryShader(material.geometry_shader, context);
-
-			// Bind the geometry resources
-			if (material.gc_buffer_count > 0) {
-				BindGeometryConstantBuffers(Stream<ConstantBuffer>(material.gc_buffers, material.gc_buffer_count), context);
-			}
-
-			if (material.geometry_texture_count > 0) {
-				BindGeometryResourceViews(Stream<ResourceView>(material.geometry_textures, material.geometry_texture_count), context);
-			}
-		}
-
 		// Bind vertex constant buffers
-		if (material.vc_buffer_count > 0) {
-			BindVertexConstantBuffers(Stream<ConstantBuffer>(material.vc_buffers, material.vc_buffer_count), context);
+		if (material.v_buffer_count > 0) {
+			for (unsigned char index = 0; index < material.v_buffer_count; index++) {
+				BindVertexConstantBuffer(material.v_buffers[index], context, material.v_buffer_slot[index]);
+			}
 		}
 
 		// Bind pixel constant buffers
-		if (material.pc_buffer_count > 0) {
-			BindPixelConstantBuffers(Stream<ConstantBuffer>(material.pc_buffers, material.pc_buffer_count), context);
+		if (material.p_buffer_count > 0) {
+			for (unsigned char index = 0; index < material.p_buffer_count; index++) {
+				BindPixelConstantBuffer(material.p_buffers[index], context, material.p_buffer_slot[index]);
+			}
 		}
 
 		// Bind vertex textures
-		if (material.vertex_texture_count > 0) {
-			BindVertexResourceViews(Stream<ResourceView>(material.vertex_textures, material.vertex_texture_count), context);
+		if (material.v_texture_count > 0) {
+			for (unsigned char index = 0; index < material.v_texture_count; index++) {
+				BindVertexResourceView(material.v_textures[index], context, material.v_texture_slot[index]);
+			}
 		}
 
 		// Bind pixel textures
-		if (material.pixel_texture_count > 0) {
-			BindPixelResourceViews(Stream<ResourceView>(material.pixel_textures, material.pixel_texture_count), context);
+		if (material.p_texture_count > 0) {
+			for (unsigned char index = 0; index < material.p_texture_count; index++) {
+				BindPixelResourceView(material.p_textures[index], context, material.p_texture_slot[index]);
+			}
 		}
 
 		// Unordered views
 		if (material.unordered_view_count > 0) {
 			BindPixelUAViews(Stream<UAView>(material.unordered_views, material.unordered_view_count), context);
+		}
+
+		// The samplers
+		if (material.v_sampler_count > 0) {
+			for (unsigned char index = 0; index < material.v_sampler_count; index++) {
+				BindSamplerState(material.v_samplers[index], context, material.v_sampler_slot[index], ECS_SHADER_VERTEX);
+			}
+		}
+
+		if (material.p_sampler_count > 0) {
+			for (unsigned char index = 0; index < material.p_sampler_count; index++) {
+				BindSamplerState(material.p_samplers[index], context, material.p_sampler_slot[index], ECS_SHADER_PIXEL);
+			}
 		}
 	}
 
@@ -3975,7 +4129,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Resource>
-	D3D11_MAPPED_SUBRESOURCE MapResourceInternal(Resource resource, GraphicsContext* context, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags, const wchar_t* error_string) {
+	D3D11_MAPPED_SUBRESOURCE MapResourceInternal(Resource resource, GraphicsContext* context, ECS_GRAPHICS_MAP_TYPE map_type, unsigned int subresource_index, unsigned int map_flags, const char* error_string) {
 		HRESULT result;
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
@@ -3985,7 +4139,7 @@ namespace ECSEngine {
 		else {
 			result = context->Map(resource, subresource_index, GetGraphicsNativeMapType(map_type), map_flags, &mapped_subresource);
 		}
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_string, true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), mapped_subresource, error_string);
 		return mapped_subresource;
 	}
 
@@ -3999,7 +4153,7 @@ namespace ECSEngine {
 		unsigned int map_flags
 	)
 	{
-		return MapResourceInternal(buffer, context, map_type, subresource_index, map_flags, L"Mapping a buffer failed.").pData;
+		return MapResourceInternal(buffer, context, map_type, subresource_index, map_flags, "Mapping a buffer failed.").pData;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4011,7 +4165,7 @@ namespace ECSEngine {
 		unsigned int subresource_index,
 		unsigned int map_flags
 	) {
-		return MapResourceInternal(buffer, context, map_type, subresource_index, map_flags, L"Mapping a buffer failed.");
+		return MapResourceInternal(buffer, context, map_type, subresource_index, map_flags, "Mapping a buffer failed.");
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------
@@ -4025,7 +4179,7 @@ namespace ECSEngine {
 		unsigned int map_flags
 	)
 	{
-		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, L"Mapping a texture failed.").pData;
+		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, "Mapping a texture failed.").pData;
 	}
 
 	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
@@ -4045,7 +4199,7 @@ namespace ECSEngine {
 		unsigned int subresource_index,
 		unsigned int map_flags
 	) {
-		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, L"Mapping a texture failed.");
+		return MapResourceInternal(texture, context, map_type, subresource_index, map_flags, "Mapping a texture failed.");
 	}
 
 	// Cringe bug from intellisense that makes all the file full of errors when in reality everything is fine; instantiations must
@@ -4107,20 +4261,21 @@ namespace ECSEngine {
 
 	ID3D11Resource* TransferGPUResourceImpl(ID3D11Resource* dx_resource, GraphicsDevice* device) {
 		// Acquire the DXGIResource interface from the DX resource
+		ID3D11Resource* new_dx_resource = nullptr;
+
 		IDXGIResource* dxgi_resource;
 		HRESULT result = dx_resource->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Getting the DXGI resource from shared resource failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Getting the DXGI resource from shared resource failed.");
 
 		// Query interface updates the reference count, release it to maintain invariance
-		dxgi_resource->Release();
+		unsigned int count = dxgi_resource->Release();
 
 		HANDLE handle;
 		result = dxgi_resource->GetSharedHandle(&handle);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Acquiring a handle for a shared resource failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Acquiring a handle for a shared resource failed.");
 
-		ID3D11Resource* new_dx_resource;
 		result = device->OpenSharedResource(handle, __uuidof(ID3D11Resource), (void**)&new_dx_resource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Obtaining shared resource from handle failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_dx_resource, "Obtaining shared resource from handle failed.");
 
 		return new_dx_resource;
 	}
@@ -4135,9 +4290,9 @@ namespace ECSEngine {
 
 		// In order to construct the new type, use constexpr if to properly construct the type
 		auto get_buffer_resource = [](ID3D11Resource* resource) {
-			ID3D11Buffer* buffer;
+			ID3D11Buffer* buffer = nullptr;
 			HRESULT result = resource->QueryInterface(__uuidof(ID3D11Buffer), (void**)&buffer);
-			ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting a shared resource to buffer failed.", true);
+			ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Converting a shared resource to buffer failed.");
 
 			buffer->Release();
 			return buffer;
@@ -4222,7 +4377,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(texture.Interface(), subresource_index, GetGraphicsNativeMapType(map_type), map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating texture failed.", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating texture failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(texture.Interface(), subresource_index);
@@ -4242,7 +4397,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(texture.Interface(), subresource_index, D3D11_MAP_WRITE_DISCARD, 0, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating texture failed.", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating texture failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(texture.Interface(), subresource_index);
@@ -4270,7 +4425,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(buffer, subresource_index, GetGraphicsNativeMapType(map_type), map_flags, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating buffer failed.", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating buffer failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(buffer, subresource_index);
@@ -4289,7 +4444,7 @@ namespace ECSEngine {
 
 		D3D11_MAPPED_SUBRESOURCE mapped_subresource;
 		result = context->Map(buffer, subresource_index, D3D11_MAP_WRITE_DISCARD, 0u, &mapped_subresource);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Updating buffer resource failed.", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Updating buffer resource failed.");
 
 		memcpy(mapped_subresource.pData, data, data_size);
 		context->Unmap(buffer, subresource_index);
@@ -4322,65 +4477,30 @@ namespace ECSEngine {
 		// Release the input layout
 		graphics->FreeResource(material->layout);
 
-		// Release the mandatory shaders - pixel and vertex.
+		// Release the shaders
 		graphics->FreeResource(material->vertex_shader);
 		graphics->FreeResource(material->pixel_shader);
-
-		// Release the optional shaders
-		if (material->domain_shader.shader != nullptr) {
-			graphics->FreeResource(material->domain_shader);
-		}
-		if (material->hull_shader.shader != nullptr) {
-			graphics->FreeResource(material->hull_shader);
-		}
-		if (material->geometry_shader.shader != nullptr) {
-			graphics->FreeResource(material->geometry_shader);
-		}
 
 		// Release the constant buffers - each one needs to be released
 		// When they were assigned, their reference count was incremented
 		// in order to avoid checking aliased buffers
-		for (size_t index = 0; index < material->vc_buffer_count; index++) {
-			graphics->FreeResource(material->vc_buffers[index]);
+		for (size_t index = 0; index < material->v_buffer_count; index++) {
+			graphics->FreeResource(material->v_buffers[index]);
 		}
 
-		for (size_t index = 0; index < material->pc_buffer_count; index++) {
-			graphics->FreeResource(material->pc_buffers[index]);
-		}
-
-		for (size_t index = 0; index < material->dc_buffer_count; index++) {
-			graphics->FreeResource(material->dc_buffers[index]);
-		}
-
-		for (size_t index = 0; index < material->hc_buffer_count; index++) {
-			graphics->FreeResource(material->hc_buffers[index]);
-		}
-
-		for (size_t index = 0; index < material->gc_buffer_count; index++) {
-			graphics->FreeResource(material->gc_buffers[index]);
+		for (size_t index = 0; index < material->p_buffer_count; index++) {
+			graphics->FreeResource(material->p_buffers[index]);
 		}
 
 		// Release the resource views - each one needs to be released
 		// Same as constant buffers, their reference count was incremented upon
 		// assignment alongside the resource that they view
-		for (size_t index = 0; index < material->vertex_texture_count; index++) {
-			graphics->FreeResourceView(material->vertex_textures[index]);
+		for (size_t index = 0; index < material->v_texture_count; index++) {
+			graphics->FreeResourceView(material->v_textures[index]);
 		}
 
-		for (size_t index = 0; index < material->pixel_texture_count; index++) {
-			graphics->FreeResourceView(material->pixel_textures[index]);
-		}
-
-		for (size_t index = 0; index < material->domain_texture_count; index++) {
-			graphics->FreeResourceView(material->domain_textures[index]);
-		}
-
-		for (size_t index = 0; index < material->hull_texture_count; index++) {
-			graphics->FreeResourceView(material->hull_textures[index]);
-		}
-
-		for (size_t index = 0; index < material->geometry_texture_count; index++) {
-			graphics->FreeResourceView(material->geometry_textures[index]);
+		for (size_t index = 0; index < material->p_texture_count; index++) {
+			graphics->FreeResourceView(material->p_textures[index]);
 		}
 
 		// Release the UAVs
@@ -4466,11 +4586,11 @@ namespace ECSEngine {
 		for (size_t index = 0; index < mesh_mask.size; index++) {
 			Mesh* current_mesh = &meshes[mesh_mask[index]];
 			// If the mesh has a name, simply repoint the submesh pointer - do not deallocate and reallocate again
-			if (current_mesh->name != nullptr) {
+			if (current_mesh->name.buffer != nullptr) {
 				submeshes[index].name = current_mesh->name;
 			}
 			else {
-				submeshes[index].name = nullptr;
+				submeshes[index].name = { nullptr, 0 };
 			}
 
 			submeshes[index].index_buffer_offset = index_buffer_offset;
