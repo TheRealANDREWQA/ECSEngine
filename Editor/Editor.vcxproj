@@ -1,21 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Distribution|Win32">
-      <Configuration>Distribution</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Distribution|x64">
       <Configuration>Distribution</Configuration>
       <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -34,26 +22,6 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -79,15 +47,6 @@
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -98,15 +57,6 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|Win32'">
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>..\bin\$(Configuration)\$(ProjectName)\</OutDir>
@@ -125,51 +75,6 @@
     <IntDir>..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
     <TargetName>Editor</TargetName>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <Profile>true</Profile>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level1</WarningLevel>
@@ -267,6 +172,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
+    <ClInclude Include="src\Assets\AssetExtensions.h" />
+    <ClInclude Include="src\Assets\AssetManagement.h" />
+    <ClInclude Include="src\Assets\EditorSandboxAssets.h" />
+    <ClInclude Include="src\Assets\EntityAsset.h" />
     <ClInclude Include="src\DrawFunction.h" />
     <ClInclude Include="src\DrawFunction2.h" />
     <ClInclude Include="src\Editor\EditorEvent.h" />
@@ -290,6 +199,9 @@
     <ClInclude Include="src\Project\ProjectUITemplate.h" />
     <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
     <ClInclude Include="src\HelperWindows.h" />
+    <ClInclude Include="src\UI\AssetExplorer.h" />
+    <ClInclude Include="src\UI\AssetOverrides.h" />
+    <ClInclude Include="src\UI\AssetSettingHelper.h" />
     <ClInclude Include="src\UI\Backups.h" />
     <ClInclude Include="src\UI\DirectoryExplorer.h" />
     <ClInclude Include="src\UI\EntitiesUI.h" />
@@ -300,17 +212,27 @@
     <ClInclude Include="src\UI\HubData.h" />
     <ClInclude Include="src\UI\Inspector.h" />
     <ClInclude Include="src\UI\InspectorData.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorMeshFile.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorModule.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorTextFile.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorTextureFile.h" />
+    <ClInclude Include="src\UI\Inspector\InspectorUtilities.h" />
     <ClInclude Include="src\UI\MiscellaneousBar.h" />
     <ClInclude Include="src\UI\ModuleExplorer.h" />
     <ClInclude Include="src\UI\NotificationBar.h" />
-    <ClInclude Include="src\UI\Sandbox.h" />
     <ClInclude Include="src\UI\SandboxExplorer.h" />
+    <ClInclude Include="src\UI\CreateScene.h" />
     <ClInclude Include="src\UI\Scene.h" />
     <ClInclude Include="src\UI\ToolbarUI.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Assets\AssetManagement.cpp" />
+    <ClCompile Include="src\Assets\EditorSandboxAssets.cpp" />
+    <ClCompile Include="src\Assets\EntityAsset.cpp" />
     <ClCompile Include="src\Editor\Editor.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">MaxSpeed</Optimization>
+      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdcpp17</LanguageStandard>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Use</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\Editor\EditorEvent.cpp" />
     <ClCompile Include="src\Editor\EditorFile.cpp" />
@@ -334,6 +256,9 @@
     <ClCompile Include="src\Project\ProjectUITemplate.cpp" />
     <ClCompile Include="src\Project\ProjectUITemplatePreview.cpp" />
     <ClCompile Include="src\HelperWindows.cpp" />
+    <ClCompile Include="src\UI\AssetExplorer.cpp" />
+    <ClCompile Include="src\UI\AssetOverrides.cpp" />
+    <ClCompile Include="src\UI\AssetSettingHelper.cpp" />
     <ClCompile Include="src\UI\Backups.cpp" />
     <ClCompile Include="src\UI\DirectoryExplorer.cpp" />
     <ClCompile Include="src\UI\EntitiesUI.cpp" />
@@ -341,11 +266,18 @@
     <ClCompile Include="src\UI\Game.cpp" />
     <ClCompile Include="src\UI\Hub.cpp" />
     <ClCompile Include="src\UI\Inspector.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorEntity.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorMeshFile.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorModule.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorSandboxSettings.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorTextFile.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorTextureFile.cpp" />
+    <ClCompile Include="src\UI\Inspector\InspectorUtilities.cpp" />
     <ClCompile Include="src\UI\MiscellaneousBar.cpp" />
     <ClCompile Include="src\UI\ModuleExplorer.cpp" />
     <ClCompile Include="src\UI\NotificationBar.cpp" />
-    <ClCompile Include="src\UI\Sandbox.cpp" />
     <ClCompile Include="src\UI\SandboxExplorer.cpp" />
+    <ClCompile Include="src\UI\CreateScene.cpp" />
     <ClCompile Include="src\UI\Scene.cpp" />
     <ClCompile Include="src\UI\ToolbarUI.cpp" />
   </ItemGroup>

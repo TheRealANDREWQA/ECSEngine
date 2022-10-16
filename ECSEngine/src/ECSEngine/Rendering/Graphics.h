@@ -24,12 +24,16 @@ namespace ECSEngine {
 #define ECS_GRAPHICS_MAX_RENDER_TARGETS_BIND 4
 #define ECS_GRAPHICS_INTERNAL_RESOURCE_GROW_FACTOR 1.5f
 
+	// If creating a swap chain the window size needs to be specified
+	// If not then it can be { 0, 0 }, in that case not creating a render target and a depth target
+	// The window size needs to be specified in pixels
 	struct GraphicsDescriptor {
 		HWND hWnd;
 		uint2 window_size;
 		MemoryManager* allocator;
-		ECS_GRAPHICS_USAGE target_usage = ECS_GRAPHICS_USAGE_NONE;
 		bool gamma_corrected = true;
+		bool discrete_gpu = false;
+		bool create_swap_chain = true;
 	};
 
 	// Default arguments all but width; initial_data can be set to fill the texture
@@ -147,6 +151,15 @@ namespace ECSEngine {
 		PixelShader pixel;
 		InputLayout input_layout;
 		SamplerState pixel_sampler;
+	};
+
+	enum ECS_GRAPHICS_DEVICE_ERROR : unsigned char {
+		ECS_GRAPHICS_DEVICE_ERROR_NONE,
+		ECS_GRAPHICS_DEVICE_ERROR_HUNG,
+		ECS_GRAPHICS_DEVICE_ERROR_REMOVED,
+		ECS_GRAPHICS_DEVICE_ERROR_RESET,
+		ECS_GRAPHICS_DEVICE_ERROR_DRIVER_INTERNAL_ERROR,
+		ECS_GRAPHICS_DEVICE_ERROR_INVALID_CALL
 	};
 
 	enum ECS_GRAPHICS_RESOURCE_TYPE : unsigned char {
@@ -333,9 +346,6 @@ namespace ECSEngine {
 	{
 	public:
 		Graphics(const GraphicsDescriptor* descriptor);
-		// If the render target and the depth view are nullptr, it will not create any target or depth view. If the new allocator
-		// is nullptr, it will use the one from the graphics_to_copy
-		Graphics(const Graphics* graphics_to_copy, RenderTargetView new_render_target = { nullptr }, DepthStencilView new_depth_view = { nullptr }, MemoryManager* new_allocator = nullptr);
 
 		Graphics(const Graphics& other);
 		Graphics& operator = (const Graphics& other);
@@ -496,77 +506,107 @@ namespace ECSEngine {
 		PixelShader CreatePixelShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy,
-			bool temporary = false,
 			ShaderCompileOptions options = {}, 
+			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// No source code path will be assigned - so no reflection can be done on it
 		VertexShader CreateVertexShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Source code path will be allocated from the assigned allocator;
-		// Reflection works
+		// The byte code is allocated from the graphics allocator. The reason for that pointer
+		// is such that you can create an input layout from it.
+		// It is automatically deallocated when creating an input layout.
 		VertexShader CreateVertexShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy, 
-			bool temporary = false,
 			ShaderCompileOptions options = {},
+			Stream<void>* byte_code = nullptr,
+			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// No source code path will be assigned - so no reflection can be done on it
 		DomainShader CreateDomainShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
 		DomainShader CreateDomainShaderFromSource(
 			Stream<char> source_code,
 			ID3DInclude* include_policy, 
-			bool temporary = false, 
 			ShaderCompileOptions options = {},
+			bool temporary = false, 
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// No source code path will be assigned - so no reflection can be done on it
 		HullShader CreateHullShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
 		HullShader CreateHullShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy,
-			bool temporary = false,
 			ShaderCompileOptions options = {},
+			bool temporary = false,
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// No source code path will be assigned - so no reflection can be done on it
 		GeometryShader CreateGeometryShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
-		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
 		GeometryShader CreateGeometryShaderFromSource(
 			Stream<char> source_code, 
 			ID3DInclude* include_policy, 
-			bool temporary = false, 
 			ShaderCompileOptions options = {},
+			bool temporary = false, 
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
 		// No source code path will be assigned - so no reflection can be done on it
-		ComputeShader CreateComputeShader(Stream<void> path, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		ComputeShader CreateComputeShader(Stream<void> byte_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		// Source code path will be allocated from the assigned allocator;
 		// Reflection works
 		ComputeShader CreateComputeShaderFromSource(
 			Stream<char> source_code,
 			ID3DInclude* include_policy, 
-			bool temporary = false, 
 			ShaderCompileOptions options = {},
+			bool temporary = false, 
 			DebugInfo debug_info = ECS_DEBUG_INFO
 		);
 
-		InputLayout CreateInputLayout(Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, VertexShader vertex_shader, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// Returns only the interface
+		void* CreateShader(Stream<void> byte_code, ECS_SHADER_TYPE type, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		// Returns only the interface
+		// The byte code is relevant only when the shader is a vertex shader
+		void* CreateShaderFromSource(
+			Stream<char> source_code,
+			ECS_SHADER_TYPE type, 
+			ID3DInclude* include_policy,
+			ShaderCompileOptions options = {},
+			Stream<void>* byte_code = nullptr,
+			bool temporary = false, 
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
+
+		// Compiles the shader source into byte code
+		// If the allocator is nullptr, it will allocate from the internal allocator
+		Stream<void> CompileShaderToByteCode(
+			Stream<char> source_code,
+			ECS_SHADER_TYPE type,
+			ID3DInclude* include_policy,
+			AllocatorPolymorphic allocator = { nullptr },
+			ShaderCompileOptions options = {}
+		);
+
+		InputLayout CreateInputLayout(
+			Stream<D3D11_INPUT_ELEMENT_DESC> descriptor,
+			Stream<void> vertex_shader_byte_code, 
+			bool deallocate_byte_code = true,
+			bool temporary = false,
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		VertexBuffer CreateVertexBuffer(
 			size_t element_size, 
@@ -682,6 +722,10 @@ namespace ECSEngine {
 		Texture1D CreateTexture(const GraphicsTexture1DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		Texture2D CreateTexture(const GraphicsTexture2DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+
+		// Must be called in a single threaded context because it uses the immediate context
+		// Cannot create mips for BC formats directly
+		ResourceView CreateTextureWithMips(Stream<void> first_mip, ECS_GRAPHICS_FORMAT format, uint2 size, bool temporary = false, DebugInfo debug_infp = ECS_DEBUG_INFO);
 
 		Texture3D CreateTexture(const GraphicsTexture3DDescriptor* descriptor, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
 
@@ -869,8 +913,14 @@ namespace ECSEngine {
 
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
-		// Path nullptr means take the path from the shader
-		InputLayout ReflectVertexShaderInput(VertexShader shader, Stream<char> source_code, bool temporary = false, DebugInfo debug_info = ECS_DEBUG_INFO);
+		// The vertex byte code needs to be given from the compilation of the vertex shader
+		InputLayout ReflectVertexShaderInput(
+			Stream<char> source_code, 
+			Stream<void> vertex_byte_code,
+			bool deallocate_byte_code = true,
+			bool temporary = false,
+			DebugInfo debug_info = ECS_DEBUG_INFO
+		);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
 		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers);
@@ -982,18 +1032,20 @@ namespace ECSEngine {
 
 		// If it doesn't find the resource, it does nothing
 		void RemovePossibleResourceFromTracking(void* resource);
-		
+
 		void FreeResourceView(ResourceView view);
 
 		void FreeUAView(UAView view);
 
 		void FreeRenderView(RenderTargetView view);
 
-		void CreateInitialRenderTargetView(bool gamma_corrected);
+		void CreateRenderTargetViewFromSwapChain(bool gamma_corrected);
+		
+		void CreateWindowRenderTargetView(bool gamma_corrected);
 
-		void CreateInitialDepthStencilView();
+		void CreateWindowDepthStencilView();
 
-		GraphicsContext* CreateDeferredContext(UINT context_flags = 0u, DebugInfo debug_info = ECS_DEBUG_INFO);
+		GraphicsContext* CreateDeferredContext(unsigned int context_flags = 0u, DebugInfo debug_info = ECS_DEBUG_INFO);
 
 		void FreeAllocatedBuffer(const void* buffer);
 
@@ -1003,11 +1055,19 @@ namespace ECSEngine {
 
 		void* GetAllocatorBufferTs(size_t size);
 
-		GraphicsDevice* GetDevice();
+		ECS_GRAPHICS_DEVICE_ERROR GetDeviceError();
 
-		GraphicsContext* GetContext();
+		ECS_INLINE GraphicsDevice* GetDevice() {
+			return m_device;
+		}
 
-		GraphicsContext* GetDeferredContext();
+		ECS_INLINE GraphicsContext* GetContext() {
+			return m_context;
+		}
+
+		ECS_INLINE GraphicsContext* GetDeferredContext() {
+			return m_deferred_context;
+		}
 
 		GraphicsPipelineBlendState GetBlendState() const;
 
@@ -1041,7 +1101,8 @@ namespace ECSEngine {
 
 		void ResizeViewport(float top_left_x, float top_left_y, float new_width, float new_height);
 
-		void SwapBuffers(unsigned int sync_interval);
+		// Returns true if the device was removed
+		bool SwapBuffers(unsigned int sync_interval);
 
 		void SetNewSize(HWND hWnd, unsigned int width, unsigned int height);
 
@@ -1077,7 +1138,7 @@ namespace ECSEngine {
 		MemoryManager* m_allocator;
 		CapacityStream<GraphicsShaderHelper> m_shader_helpers;
 		// Keep a track of the created resources, for leaks and for winking out the device
-		// For some reason DX11 does not provide a winking method for the device!!!!!!!!
+		// For some reason DX11 does not provide a winking method for the device!!!
 		AtomicStream<GraphicsInternalResource> m_internal_resources;
 	private:
 		char padding_1[ECS_CACHE_LINE_SIZE - sizeof(std::atomic<unsigned int>)];
@@ -1087,7 +1148,6 @@ namespace ECSEngine {
 		char padding_2[ECS_CACHE_LINE_SIZE - sizeof(SpinLock)];
 	public:
 		SpinLock m_internal_resources_lock;
-		bool m_copied_graphics;
 	};
 
 	// Does not deallocate the entire allocator - care must be taken to make sure that if this graphics is used with a world and
@@ -1175,9 +1235,9 @@ namespace ECSEngine {
 
 	ECSENGINE_API void BindComputeResourceViews(Stream<ResourceView> views, GraphicsContext* context, unsigned int slot = 0u);
 
-	ECSENGINE_API void BindSamplerState(SamplerState sampler, GraphicsContext* context, unsigned int slot = 0u);
+	ECSENGINE_API void BindSamplerState(SamplerState sampler, GraphicsContext* context, unsigned int slot = 0u, ECS_SHADER_TYPE type = ECS_SHADER_PIXEL);
 
-	ECSENGINE_API void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, unsigned int start_slot = 0u);
+	ECSENGINE_API void BindSamplerStates(Stream<SamplerState> samplers, GraphicsContext* context, unsigned int start_slot = 0u, ECS_SHADER_TYPE type = ECS_SHADER_PIXEL);
 
 	ECSENGINE_API void BindPixelUAView(UAView view, GraphicsContext* context, unsigned int start_slot = 0u);
 

@@ -296,10 +296,12 @@ namespace ECSEngine {
 			// using masks, shift to the right to make that bit 0
 			unsigned int vector_index = 0;
 			if  constexpr (reverse_search) {
-				vector_index = function::FirstMSB(match_bits);
+				unsigned long value = 0;
+				vector_index = _BitScanReverse(&value, match_bits) == 0 ? -1 : value;
 			}
 			else {
-				vector_index = function::FirstLSB(match_bits);
+				unsigned long value = 0;
+				vector_index = _BitScanForward(&value, match_bits) == 0 ? -1 : value;
 			}
 			while (vector_index != -1) {
 				unsigned int bit_index = 0;
@@ -340,10 +342,12 @@ namespace ECSEngine {
 				}
 
 				if  constexpr (reverse_search) {
-					vector_index = function::FirstMSB(match_bits);
+					unsigned long value = 0;
+					vector_index = _BitScanReverse(&value, match_bits) == 0 ? -1 : value;
 				}
 				else {
-					vector_index = function::FirstLSB(match_bits);
+					unsigned long value = 0;
+					vector_index = _BitScanForward(&value, match_bits) == 0 ? -1 : value;
 				}
 			}
 		}

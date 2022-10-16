@@ -39,6 +39,7 @@ SerializeEntityManagerComponentTable SerializeComponentTable(
 	}
 
 	CreateSerializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	CreateSerializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -77,6 +78,7 @@ SerializeEntityManagerSharedComponentTable SerializeSharedComponentTable(
 	}
 
 	CreateSerializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	CreateSerializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -114,6 +116,7 @@ DeserializeEntityManagerComponentTable DeserializeComponentTable(
 	}
 
 	CreateDeserializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	CreateDeserializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -151,6 +154,7 @@ DeserializeEntityManagerSharedComponentTable DeserializeSharedComponentTable(
 	}
 
 	CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);

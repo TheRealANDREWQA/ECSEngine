@@ -23,7 +23,7 @@ namespace ECSEngine {
 		ThreadFunction function;
 		void* data;
 		size_t data_size = 0;
-		const char* name;
+		const char* name = nullptr;
 	};
 
 	typedef void (*ThreadFunctionWrapper)(unsigned int thread_id, World* world, ThreadTask task, void* wrapper_data);

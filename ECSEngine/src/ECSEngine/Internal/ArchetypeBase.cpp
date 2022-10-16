@@ -67,13 +67,42 @@ namespace ECSEngine {
 		// E.g. don't call copy other if they are from different archetypes
 
 		unsigned int other_size = other->m_size;
+		m_size = other->m_size;
 		// Copy the entities
 		memcpy(m_entities, other->m_entities, sizeof(Entity) * other_size);
 		// Copy the components now
 		for (size_t index = 0; index < m_components.count; index++) {
-			memcpy(m_buffers[index], other->m_buffers[index], m_infos[m_components.indices[index].value].size * other_size);
+			unsigned short component_byte_size = m_infos[m_components.indices[index].value].size;
+			memcpy(m_buffers[index], other->m_buffers[index], component_byte_size * other_size);
+			// If the component has buffers, we need to make a deep copy of them
+			unsigned int buffer_count = m_infos[m_components.indices[index]].component_buffers_count;
+			if (buffer_count > 0) {
+				const ComponentBuffer* component_buffers = m_infos[m_components.indices[index]].component_buffers;
+				for (unsigned int buffer_index = 0; buffer_index < buffer_count; buffer_index++) {
+					MemoryArena* component_allocator = m_infos[m_components.indices[index]].allocator;
+					void* current_buffer = m_buffers[index];
+
+					auto entity_loop = [=](auto is_data_pointer) {
+						for (unsigned int entity_index = 0; entity_index < m_size; entity_index++) {
+							void* current_component = function::OffsetPointer(current_buffer, component_byte_size * entity_index);
+							if constexpr (is_data_pointer) {
+								ComponentBufferCopyDataPointer(component_buffers[buffer_index], component_allocator, current_component, current_component);
+							}
+							else {
+								ComponentBufferCopyStream(component_buffers[buffer_index], component_allocator, current_component, current_component);
+							}
+						}
+					};
+
+					if (component_buffers[buffer_index].is_data_pointer) {
+						entity_loop(std::true_type{});
+					}
+					else {
+						entity_loop(std::false_type{});
+					}
+				}
+			}
 		}
-		m_size = other->m_size;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -332,12 +361,12 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void ArchetypeBase::Resize(unsigned int count) {
-		const size_t STACK_LIMIT = ECS_KB * 128;
-		// If the size of the components to be copied is small, copy to a temporary stack buffer,
-		// deallocate the allocation and reallocate. In this way, the fragmentation is reduced and 
-		// it will lower the pressure on the allocator		
+		// TODO: Small copies could be handled by first copying into a temporary stack buffer,
+		// deallocating the buffers and then allocate the new block. But the problem is that because
+		// of different alignment it might copy invalid blocks. Aligning the stack buffer to the same
+		// current alignment of the buffer is a solution but it might not be worthwhile doing that if
+		// so much work is required
 
-		size_t current_total_byte_size = sizeof(Entity) * m_size + sizeof(void*) * m_components.count;
 		size_t per_entity_size = 0;
 
 		size_t new_total_byte_size = sizeof(Entity) * count + sizeof(void*) * m_components.count;
@@ -345,53 +374,41 @@ namespace ECSEngine {
 			per_entity_size += m_infos[m_components.indices[component_index].value].size;
 		}
 		// Add a cache line for component alignment
-		current_total_byte_size += per_entity_size * m_size + m_components.count * ECS_CACHE_LINE_SIZE;
 		new_total_byte_size += per_entity_size * count + m_components.count * ECS_CACHE_LINE_SIZE;
 
-		void* stack_buffer = ECS_STACK_ALLOC(current_total_byte_size);
-		void* copy_buffer = m_buffers;
 		void** old_buffers = m_buffers;
-
-		if (current_total_byte_size < STACK_LIMIT && m_size > 0) {
-			copy_buffer = stack_buffer;
-			memcpy(stack_buffer, m_buffers, current_total_byte_size);
-
-			m_memory_manager->Deallocate(m_buffers);
-		}
 
 		void* allocation = m_memory_manager->Allocate(new_total_byte_size);
 		uintptr_t ptr = (uintptr_t)allocation;
 		m_buffers = (void**)ptr;
 		ptr += sizeof(void*) * m_components.count;
-		uintptr_t ptr_to_copy = (uintptr_t)copy_buffer;
-		ptr_to_copy += sizeof(void*) * m_components.count;
 
 		// Copy the entities first
 		m_entities = (Entity*)ptr;
-		memcpy(m_entities, (void*)ptr_to_copy, sizeof(Entity) * m_size);
 
 		ptr += sizeof(Entity) * count;
 		ptr = function::AlignPointer(ptr, ECS_CACHE_LINE_SIZE);
-		ptr_to_copy += sizeof(Entity) * m_capacity;
-		ptr_to_copy = function::AlignPointer(ptr_to_copy, ECS_CACHE_LINE_SIZE);
+
+		if (m_size > 0) {
+			memcpy(m_entities, function::OffsetPointer(old_buffers, sizeof(void*) * m_components.count), sizeof(Entity) * m_size);
+		}
 
 		// Now copy the components
 		for (size_t component_index = 0; component_index < m_components.count; component_index++) {
 			unsigned short component_size = m_infos[m_components.indices[component_index].value].size;
 			m_buffers[component_index] = (void*)ptr;
-			memcpy(m_buffers[component_index], (void*)ptr_to_copy, component_size * m_size);
+			if (m_size > 0) {
+				memcpy(m_buffers[component_index], old_buffers[component_index], component_size * m_size);
+			}
 
 			ptr = function::AlignPointer(ptr + component_size * count, ECS_CACHE_LINE_SIZE);
-			ptr_to_copy = function::AlignPointer(ptr_to_copy + component_size * m_capacity, ECS_CACHE_LINE_SIZE);
 		}
 
 		// Now set the new capacity
-		m_capacity = count;
-
-		// If it is not the stack buffer, deallocate the buffer
-		if (current_total_byte_size >= STACK_LIMIT) {
+		if (m_capacity > 0) {
 			m_memory_manager->Deallocate(old_buffers);
 		}
+		m_capacity = count;
 	}
 
 	unsigned int ArchetypeBase::Reserve(unsigned int count)

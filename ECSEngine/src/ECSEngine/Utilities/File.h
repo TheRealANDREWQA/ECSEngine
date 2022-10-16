@@ -94,6 +94,8 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr
 	);
 
+	ECSENGINE_API bool CreateEmptyFile(Stream<wchar_t> path, ECS_FILE_CREATE_FLAGS create_flags = ECS_FILE_CREATE_READ_WRITE, CapacityStream<char>* error_message = nullptr);
+
 	// Closes a file
 	ECSENGINE_API bool CloseFile(ECS_FILE_HANDLE handle);
 
@@ -159,6 +161,60 @@ namespace ECSEngine {
 	// If it fails, it returns 0
 	ECSENGINE_API size_t GetFileByteSize(ECS_FILE_HANDLE file_handle);
 
+	// A pointer null means I don't care; returns whether or not succeeded
+	// Works for directories too
+	ECSENGINE_API bool GetFileTimes(
+		ECS_FILE_HANDLE file_handle,
+		wchar_t* creation_time = nullptr,
+		wchar_t* access_time = nullptr,
+		wchar_t* last_write_time = nullptr
+	);
+
+	// A pointer null means I don't care; returns whether or not succeeded
+	// Works for directories too
+	ECSENGINE_API bool GetFileTimes(
+		ECS_FILE_HANDLE file_handle,
+		char* creation_time = nullptr,
+		char* access_time = nullptr,
+		char* last_write_time = nullptr
+	);
+
+	// A pointer null means I don't care; returns whether or not succeeded
+	// Works for directories too
+	ECSENGINE_API bool GetFileTimes(
+		ECS_FILE_HANDLE file_handle,
+		size_t* creation_time = nullptr,
+		size_t* access_time = nullptr,
+		size_t* last_write_time = nullptr
+	);
+
+	// A pointer null means I don't care; returns whether or not succeeded
+	// Works for directories too
+	ECSENGINE_API bool GetRelativeFileTimes(
+		ECS_FILE_HANDLE file_handle,
+		wchar_t* creation_time = nullptr,
+		wchar_t* access_time = nullptr,
+		wchar_t* last_write_time = nullptr
+	);
+
+	// A pointer null means I don't care; returns whether or not succeeded
+	// Works for directories too
+	ECSENGINE_API bool GetRelativeFileTimes(
+		ECS_FILE_HANDLE file_handle,
+		char* creation_time = nullptr,
+		char* access_time = nullptr,
+		char* last_write_time = nullptr
+	);
+
+	// A pointer null means I don't care; returns whether or not succeeded
+	// Works for directories too
+	ECSENGINE_API bool GetRelativeFileTimes(
+		ECS_FILE_HANDLE file_handle,
+		size_t* creation_time = nullptr,
+		size_t* access_time = nullptr,
+		size_t* last_write_time = nullptr
+	);
+
 	ECSENGINE_API bool HasSubdirectories(Stream<wchar_t> directory);
 
 	ECSENGINE_API bool ClearFile(Stream<wchar_t> path);
@@ -183,6 +239,9 @@ namespace ECSEngine {
 
 	// New name must only be the directory name, not the fully qualified path
 	ECSENGINE_API bool RenameFolderOrFile(Stream<wchar_t> path, Stream<wchar_t> new_name);
+	
+	// This version takes the name as an absolute path
+	ECSENGINE_API bool RenameFileAbsolute(Stream<wchar_t> path, Stream<wchar_t> new_absolute_path);
 
 	ECSENGINE_API bool ResizeFile(Stream<wchar_t> file, int size);
 
@@ -234,6 +293,6 @@ namespace ECSEngine {
 		ECS_FILE_HANDLE handle;
 	};
 
-	using ScopedFile = StackScope<FileScopeDeleter>;
+	typedef StackScope<FileScopeDeleter> ScopedFile;
 
 }

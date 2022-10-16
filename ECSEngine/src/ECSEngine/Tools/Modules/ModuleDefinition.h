@@ -97,26 +97,24 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	enum ECS_MODULE_BUILD_COMMAND_DEPENDENCY : unsigned char {
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_MESH,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_TEXTURE,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_GPU_BUFFER,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_GPU_SAMPLER,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_SHADER,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_MATERIAL,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_FILE,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_SETTING,
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY_COUNT
+	enum ECS_MODULE_BUILD_DEPENDENCY : unsigned char {
+		ECS_MODULE_BUILD_DEPENDENCY_MESH,
+		ECS_MODULE_BUILD_DEPENDENCY_TEXTURE,
+		ECS_MODULE_BUILD_DEPENDENCY_GPU_SAMPLER,
+		ECS_MODULE_BUILD_DEPENDENCY_SHADER,
+		ECS_MODULE_BUILD_DEPENDENCY_MATERIAL,
+		ECS_MODULE_BUILD_DEPENDENCY_MISC_ASSET,
+		ECS_MODULE_BUILD_DEPENDENCY_SETTING,
+		ECS_MODULE_BUILD_DEPENDENCY_COUNT
 	};
 
 	// Only the path or the name can be active a time
-	// Use the use_path flag to indicate which one to use
 	// If the path is used (for files this is always the case), then whenever that file changes, 
 	// the dependency will trigger
 	// If the name is used (for assets that support this - the material - and the setting),
 	// the dependecy will trigger when the metadata associated to that file or the file itself changes
 	struct ModuleBuildDependencyType {
-		ECS_MODULE_BUILD_COMMAND_DEPENDENCY dependency;
+		ECS_MODULE_BUILD_DEPENDENCY dependency;
 		union {
 			Stream<char> name;
 			Stream<wchar_t> path;
@@ -131,10 +129,10 @@ namespace ECSEngine {
 	union ModuleBuildAssetDependencyMetadata {
 		MeshMetadata mesh;
 		TextureMetadata texture;
-		GPUBufferMetadata gpu_buffer;
 		GPUSamplerMetadata gpu_sampler;
 		ShaderMetadata shader;
-		Material material;
+		PBRMaterial material;
+		MiscAsset misc_asset;
 	};
 
 	struct ModuleBuildAssetDependencyData {
@@ -186,19 +184,15 @@ namespace ECSEngine {
 
 	struct ModuleBuildAssetType {
 		// This is the name when searching for the metadata name
-		// It can be nullptr if there is no metadata needed. Only the dependencies
-		const char* asset_metadata_name = nullptr;
-
-		// This is an optional field. If the type can be understood by the reflection system,
-		// then the serialization and deserialization can be done in automatic way. (using the binary version)
-		const char* asset_type_name = nullptr;
+		// It can be nullptr if there is no metadata needed, only the dependencies
+		Stream<char> asset_metadata_name = { nullptr, 0 };
 
 		// This is the name that will be displayed in the Editor
 		// If nullptr, the type name must be specified
-		const char* asset_editor_name = nullptr;
+		Stream<char> asset_editor_name = { nullptr, 0 };
 
 		// This is the extension that will be used to identify this type of asset
-		const wchar_t* extension;
+		Stream<wchar_t> extension;
 		
 		// This function is mandatory
 		ModuleBuildAssetFunction build_function;
@@ -218,7 +212,7 @@ namespace ECSEngine {
 		ModuleWriteAssetFunction metadata_write_function = nullptr;
 
 		// The types of dependencies that this asset has
-		Stream<ECS_MODULE_BUILD_COMMAND_DEPENDENCY> dependencies;
+		Stream<ECS_MODULE_BUILD_DEPENDENCY> dependencies;
 	};
 
 	struct ModuleBuildFunctionsData {
@@ -232,30 +226,39 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	union ModuleLinkComponentEntityArchetype {
-		ushort2 archetype_indices;
-		Entity entity;
-	};
-
+	// The assets are given in the order of the link component's fields. They are given
+	// such that the component can be easily created. All types besides the misc type have only the buffer set.
+	// The size is set only for the misc type. Use the ExtractLinkComponentFunctionAsset functions
+	// to type cast the pointers (in ModuleUtilities.h)
 	struct ModuleLinkComponentFunctionData {
 		const void* link_component;
 		void* component;
-		ModuleLinkComponentEntityArchetype entity_archetype;
-		World* world;
+		Stream<Stream<void>> assets;
 	};
 
 	typedef void (*ModuleLinkComponentFunction)(ModuleLinkComponentFunctionData* data);
+
+	// The asset handles are in order of the target component's fields. They are given
+	// such that they can be easily replaced
+	struct ModuleLinkComponentReverseFunctionData {
+		const void* component;
+		void* link_component;
+		Stream<unsigned int> asset_handles;
+	};
+
+	typedef void (*ModuleLinkComponentReverseFunction)(ModuleLinkComponentReverseFunctionData* data);
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleLinkComponentTarget {
 		ModuleLinkComponentFunction build_function;
-		const char* component_name;
+		ModuleLinkComponentReverseFunction reverse_function;
+		Stream<char> component_name;
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData {
 		CapacityStream<ModuleLinkComponentTarget>* functions;
-		// The name of the functions either have to be stable - i.e. hard coded - or allocated from this stream
+		// The name of the functions either have to be stable - i.e. hard coded - or allocated from this allocator
 		AllocatorPolymorphic allocator;
 	};
 

@@ -20,19 +20,19 @@ constexpr size_t PER_THREAD_RESOURCES = 128;
 #define DECK_CHUNK_SIZE 128
 #define DECK_POWER_OF_TWO 7
 
-// In consort with DebugVertexBuffers
-constexpr const wchar_t* PRIMITIVE_MESH_FILES[] = {
-	L"Resources/DebugPrimitives/Sphere.glb",
-	L"Resources/DebugPrimitives/Point.glb",
-	L"Resources/DebugPrimitives/Cross.glb",
-	L"Resources/DebugPrimitives/ArrowCylinder.glb",
-	L"Resources/DebugPrimitives/ArrowHead.glb",
-	L"Resources/DebugPrimitives/Cube.glb"
-};
-
-constexpr const wchar_t* STRING_MESH_FILE = L"Resources/DebugPrimitives/Alphabet.glb";
-
 namespace ECSEngine {
+
+	// In consort with DebugVertexBuffers
+	const wchar_t* ECS_DEBUG_PRIMITIVE_MESH_FILE[] = {
+		L"Resources/DebugPrimitives/Sphere.glb",
+		L"Resources/DebugPrimitives/Point.glb",
+		L"Resources/DebugPrimitives/Cross.glb",
+		L"Resources/DebugPrimitives/ArrowCylinder.glb",
+		L"Resources/DebugPrimitives/ArrowHead.glb",
+		L"Resources/DebugPrimitives/Cube.glb"
+	};
+
+	const wchar_t* STRING_MESH_FILE = L"Resources/DebugPrimitives/Alphabet.glb";
 
 	enum ElementType {
 		WIREFRAME_DEPTH,
@@ -2823,10 +2823,11 @@ namespace ECSEngine {
 		instanced_structured_view = graphics->CreateBufferView(instanced_small_structured_buffer);
 
 		Stream<char> shader_source;
+		Stream<void> byte_code;
 
-#define REGISTER_SHADER(index, name) vertex_shaders[index] = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(name), &shader_source); \
+#define REGISTER_SHADER(index, name) vertex_shaders[index] = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(name), &shader_source, &byte_code); \
 		pixel_shaders[index] = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(name)); \
-		layout_shaders[index] = resource_manager->m_graphics->ReflectVertexShaderInput(vertex_shaders[index], shader_source); \
+		layout_shaders[index] = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code); \
 		resource_manager->Deallocate(shader_source.buffer);
 
 		// Initialize the shaders and input layouts
@@ -3049,7 +3050,7 @@ namespace ECSEngine {
 		staging_buffer.Release();
 
 		for (size_t index = 0; index < ECS_DEBUG_VERTEX_BUFFER_COUNT; index++) {
-			primitive_meshes[index] = ((Stream<Mesh>*)resource_manager->LoadMeshes(PRIMITIVE_MESH_FILES[index]))->buffer;
+			primitive_meshes[index] = ((Stream<Mesh>*)resource_manager->LoadMeshes(ECS_DEBUG_PRIMITIVE_MESH_FILE[index]))->buffer;
 		}
 
 		float3 circle_positions[CIRCLE_TESSELATION + 1];

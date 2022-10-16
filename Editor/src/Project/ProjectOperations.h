@@ -35,6 +35,8 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project);
 
 void DeallocateCurrentProject(EditorState* editor_state);
 
+void DestroyProjectTemporaryFiles(const ProjectFile* project_file);
+
 bool ExistsProjectInFolder(const ProjectFile* project_file);
 
 void GetProjectCurrentUI(wchar_t* characters, const ProjectFile* project_file, size_t max_character_count = 256);

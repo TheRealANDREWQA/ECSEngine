@@ -70,14 +70,24 @@ namespace ECSEngine {
 
 		unsigned int Exit(unsigned int count = 1);
 
+		// The difference between the two variants is that this uses
+		// a futex call to wake any waiting threads
+		unsigned int ExitEx(unsigned int count = 1);
+
 		// Default behaviour - waits until count is the same as target
 		// If one of the parameters is not -1, then it will wait until that value is reached
 		void SpinWait(unsigned int count_value = -1, unsigned int target_value = -1);
 
+		// One of the parameters needs to be different from -1 and the other -1
+		// It can wait only on a single address at a time
+		// The difference between the two variants is that this uses
+		// a futex call to wait for threads to exit
+		void SpinWaitEx(unsigned int count_value, unsigned int target_value);
+
 		// It will check a value at certain intervals. In between it will sleep.
 		// Default behaviour - wait until count is the same as target
 		// If one of the parameters is not -1, then it will wait until the value is reached
-		void TickWait(size_t sleep_microseconds, unsigned int count_value = -1, unsigned int target_value = -1);
+		void TickWait(size_t sleep_milliseconds, unsigned int count_value = -1, unsigned int target_value = -1);
 
 		std::atomic<unsigned int> count;
 		std::atomic<unsigned int> target;
@@ -225,7 +235,7 @@ namespace ECSEngine {
 	}
 
 	template<char WaitType, typename IntType>
-	void TickWait(size_t microseconds, const std::atomic<IntType>& variable, IntType value_to_compare) {
+	void TickWait(size_t milliseconds, const std::atomic<IntType>& variable, IntType value_to_compare) {
 		const size_t SPIN_COUNTER = 64;
 
 		auto loop = [=](auto condition) {
@@ -236,7 +246,7 @@ namespace ECSEngine {
 					}
 					_mm_pause();
 				}
-				std::this_thread::sleep_for(std::chrono::microseconds(microseconds));
+				std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
 			}
 		};
 

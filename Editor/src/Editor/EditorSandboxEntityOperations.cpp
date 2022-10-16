@@ -43,9 +43,10 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 		if (entity_manager->ExistsEntity(entity)) {
 			unsigned short byte_size = entity_manager->ComponentSize(component);
 			// Default initialize the component with zeroes
-			size_t storage[512];
-			memset(storage, 0, byte_size);
-			entity_manager->AddComponentCommit(entity, component, storage);
+			// Assume a max of ECS_KB for a unique component
+			void* stack_allocation = ECS_STACK_ALLOC(ECS_KB);
+			editor_state->editor_components.ResetComponent(component_name, stack_allocation);
+			entity_manager->AddComponentCommit(entity, component, stack_allocation);
 			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
@@ -63,7 +64,9 @@ void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int san
 	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
-			entity_manager->AddSharedComponentCommit(entity, component, SharedInstance{ 0 });
+			SharedInstance default_instance = GetSharedComponentDefaultInstance(editor_state, sandbox_index, component);
+
+			entity_manager->AddSharedComponentCommit(entity, component, default_instance);
 			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
@@ -77,7 +80,7 @@ void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int san
 
 void AddSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
 {
-	if (editor_state->editor_components.IsComponent(component_name)) {
+	if (editor_state->editor_components.IsUniqueComponent(component_name)) {
 		AddSandboxEntityComponent(editor_state, sandbox_index, entity, component_name);
 	}
 	else {
@@ -141,6 +144,22 @@ Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	Entity entity = entity_manager->CreateEntityCommit(unique, shared);
+	
+	for (size_t index = 0; index < unique.count; index++) {
+		void* component_data = entity_manager->GetComponent(entity, unique[index]);
+		editor_state->editor_components.ResetComponent(unique[index], component_data, false);
+	}
+	
+	// For every shared component, check to see if the instance exists
+	for (size_t index = 0; index < shared.count; index++) {
+		bool exists = entity_manager->ExistsSharedInstance(shared.indices[index], shared.instances[index]);
+		if (!exists) {
+			// Look for a default component and associate it
+			size_t _component_storage[512];
+			editor_state->editor_components.ResetComponent(shared.indices[index], _component_storage, true);
+			entity_manager->RegisterSharedInstanceCommit(shared.indices[index], _component_storage);
+		}
+	}
 
 	ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
 	EntityToString(entity, entity_name);
@@ -158,7 +177,7 @@ Entity CopySandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 
 	if (entity_manager->ExistsEntity(entity)) {
 		Entity destination_entity;
-		entity_manager->CopyEntityCommit(entity, 1, &destination_entity);
+		entity_manager->CopyEntityCommit(entity, 1, true, &destination_entity);
 		SetSandboxSceneDirty(editor_state, sandbox_index);
 		return destination_entity;
 	}
@@ -248,6 +267,20 @@ Entity GetSandboxEntity(const EditorState* editor_state, unsigned int sandbox_in
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+SharedInstance GetSharedComponentDefaultInstance(EditorState* editor_state, unsigned int sandbox_index, Component component)
+{
+	size_t component_storage[ECS_KB * 8];
+	editor_state->editor_components.ResetComponent(component, component_storage, true);
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	SharedInstance instance = entity_manager->GetSharedComponentInstance(component, component_storage);
+	if (instance.value == -1) {
+		instance = entity_manager->RegisterSharedInstanceCommit(component, component_storage);
+	}
+	return instance;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void ParentSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, Entity child, Entity parent)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -309,6 +342,17 @@ void RemoveSandboxEntitySharedComponent(EditorState* editor_state, unsigned int 
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
+void RemoveSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name) {
+	if (editor_state->editor_components.IsUniqueComponent(component_name)) {
+		RemoveSandboxEntityComponent(editor_state, sandbox_index, entity, component_name);
+	}
+	else {
+		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
+	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
 void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sandbox_index, Entity entity)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -316,6 +360,15 @@ void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sa
 	if (entity_manager->ExistsEntity(entity)) {
 		entity_manager->RemoveEntityFromHierarchyCommit({ &entity, 1 });
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+void ResetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+{
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	// It has built in checks for not crashing
+	editor_state->editor_components.ResetComponentFromManager(entity_manager, component_name, entity);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

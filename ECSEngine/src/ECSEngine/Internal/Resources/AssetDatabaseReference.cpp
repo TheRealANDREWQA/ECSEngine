@@ -21,7 +21,6 @@ namespace ECSEngine {
 	{
 		mesh_metadata.Initialize(allocator, 0);
 		texture_metadata.Initialize(allocator, 0);
-		gpu_buffer_metadata.Initialize(allocator, 0);
 		gpu_sampler_metadata.Initialize(allocator, 0);
 		shader_metadata.Initialize(allocator, 0);
 		material_asset.Initialize(allocator, 0);
@@ -40,13 +39,6 @@ namespace ECSEngine {
 	void AssetDatabaseReference::AddTexture(unsigned int handle)
 	{
 		AddAsset(handle, ECS_ASSET_TEXTURE);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	void AssetDatabaseReference::AddGPUBuffer(unsigned int handle)
-	{
-		AddAsset(handle, ECS_ASSET_GPU_BUFFER);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -87,13 +79,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabaseReference::AddAsset(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool* loaded_now)
+	{
+		unsigned int handle = database->AddAsset(name, file, type, loaded_now);
+		if (handle != -1) {
+			AddAsset(handle, type);
+		}
+		return handle;
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	AssetDatabaseReference AssetDatabaseReference::Copy(AllocatorPolymorphic allocator) const
 	{
 		AssetDatabaseReference copy;
 		
 		copy.mesh_metadata.InitializeAndCopy(allocator, mesh_metadata);
 		copy.texture_metadata.InitializeAndCopy(allocator, texture_metadata);
-		copy.gpu_buffer_metadata.InitializeAndCopy(allocator, gpu_buffer_metadata);
 		copy.gpu_sampler_metadata.InitializeAndCopy(allocator, gpu_sampler_metadata);
 		copy.shader_metadata.InitializeAndCopy(allocator, shader_metadata);
 		copy.material_asset.InitializeAndCopy(allocator, material_asset);
@@ -115,13 +117,6 @@ namespace ECSEngine {
 	TextureMetadata* AssetDatabaseReference::GetTexture(unsigned int index)
 	{
 		return (TextureMetadata*)GetAsset(index, ECS_ASSET_TEXTURE);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	GPUBufferMetadata* AssetDatabaseReference::GetGPUBuffer(unsigned int index)
-	{
-		return (GPUBufferMetadata*)GetAsset(index, ECS_ASSET_GPU_BUFFER);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -161,10 +156,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	unsigned int AssetDatabaseReference::GetHandle(unsigned int index, ECS_ASSET_TYPE type)
+	unsigned int AssetDatabaseReference::GetHandle(unsigned int index, ECS_ASSET_TYPE type) const
 	{
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 		return streams[type][index];
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabaseReference::GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const
+	{
+		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+		return function::SearchBytes(streams[type].buffer, streams[type].size, handle, sizeof(handle));
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -186,13 +189,6 @@ namespace ECSEngine {
 	bool AssetDatabaseReference::RemoveTexture(unsigned int index)
 	{
 		return RemoveAsset(index, ECS_ASSET_TEXTURE);
-	}
-
-	// ------------------------------------------------------------------------------------------------
-
-	bool AssetDatabaseReference::RemoveGPUBuffer(unsigned int index)
-	{
-		return RemoveAsset(index, ECS_ASSET_GPU_BUFFER);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -227,8 +223,17 @@ namespace ECSEngine {
 
 	bool AssetDatabaseReference::RemoveAsset(unsigned int index, ECS_ASSET_TYPE type)
 	{
+		RemoveAssetThisOnly(index, type);
 		unsigned int handle = GetHandle(index, type);
 		return database->RemoveAsset(handle, type);
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	void AssetDatabaseReference::RemoveAssetThisOnly(unsigned int index, ECS_ASSET_TYPE type)
+	{
+		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+		streams[type].RemoveSwapBack(index);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -237,7 +242,6 @@ namespace ECSEngine {
 	{
 		mesh_metadata.FreeBuffer();
 		texture_metadata.FreeBuffer();
-		gpu_buffer_metadata.FreeBuffer();
 		gpu_sampler_metadata.FreeBuffer();
 		shader_metadata.FreeBuffer();
 		material_asset.FreeBuffer();
@@ -268,7 +272,6 @@ namespace ECSEngine {
 		out_database->SetFileLocation({ nullptr, 0 });
 		out_database->mesh_metadata.ResizeNoCopy(mesh_metadata.size);
 		out_database->texture_metadata.ResizeNoCopy(texture_metadata.size);
-		out_database->gpu_buffer_metadata.ResizeNoCopy(gpu_buffer_metadata.size);
 		out_database->gpu_sampler_metadata.ResizeNoCopy(gpu_sampler_metadata.size);
 		out_database->shader_metadata.ResizeNoCopy(shader_metadata.size);
 		out_database->material_asset.ResizeNoCopy(material_asset.size);
@@ -282,7 +285,6 @@ namespace ECSEngine {
 
 		set_value(mesh_metadata, ECS_ASSET_MESH);
 		set_value(texture_metadata, ECS_ASSET_TEXTURE);
-		set_value(gpu_buffer_metadata, ECS_ASSET_GPU_BUFFER);
 		set_value(gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
 		set_value(shader_metadata, ECS_ASSET_SHADER);
 		set_value(material_asset, ECS_ASSET_MATERIAL);
@@ -294,7 +296,6 @@ namespace ECSEngine {
 	void AssetDatabaseReference::FromStandalone(const AssetDatabase* standalone_database) {
 		mesh_metadata.ResizeNoCopy(standalone_database->mesh_metadata.set.size);
 		texture_metadata.ResizeNoCopy(standalone_database->texture_metadata.set.size);
-		gpu_buffer_metadata.ResizeNoCopy(standalone_database->gpu_buffer_metadata.set.size);
 		gpu_sampler_metadata.ResizeNoCopy(standalone_database->gpu_sampler_metadata.set.size);
 		shader_metadata.ResizeNoCopy(standalone_database->shader_metadata.set.size);
 		material_asset.ResizeNoCopy(standalone_database->material_asset.set.size);
@@ -303,22 +304,17 @@ namespace ECSEngine {
 		auto set_values = [&](const auto& metadata, auto& stream_metadata, ECS_ASSET_TYPE asset_type) {
 			auto stream = metadata.set.ToStream();
 			for (size_t index = 0; index < stream.size; index++) {
-				stream_metadata[index] = database->AddAsset(stream[index].value.name, asset_type);
+				Stream<wchar_t> file = GetAssetFile(&stream[index].value, asset_type);
+				stream_metadata[index] = database->AddAsset(stream[index].value.name, file, asset_type);
 			}
 		};
 
 		set_values(standalone_database->mesh_metadata, mesh_metadata, ECS_ASSET_MESH);
 		set_values(standalone_database->texture_metadata, texture_metadata, ECS_ASSET_TEXTURE);
-		set_values(standalone_database->gpu_buffer_metadata, gpu_buffer_metadata, ECS_ASSET_GPU_BUFFER);
 		set_values(standalone_database->gpu_sampler_metadata, gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
 		set_values(standalone_database->shader_metadata, shader_metadata, ECS_ASSET_SHADER);
 		set_values(standalone_database->material_asset, material_asset, ECS_ASSET_MATERIAL);
-
-		// The misc asset needs to be handled separately because the member name is path
-		auto misc_stream = standalone_database->misc_asset.set.ToStream();
-		for (size_t index = 0; index < misc_stream.size; index++) {
-			misc_asset[index] = database->AddMisc(misc_stream[index].value.path);
-		}
+		set_values(standalone_database->misc_asset, misc_asset, ECS_ASSET_MISC);
 	}
 
 	// ------------------------------------------------------------------------------------------------

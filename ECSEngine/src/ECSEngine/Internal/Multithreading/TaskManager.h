@@ -8,6 +8,7 @@
 #include "../../Allocators/MemoryManager.h"
 #include "../../Allocators/LinearAllocator.h"
 #include "RingBuffer.h"
+#include "../../Utilities/OSFunctions.h"
 
 #ifndef ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD
 #define ECS_MAXIMUM_TASK_MANAGER_TASKS_PER_THREAD 64
@@ -53,14 +54,6 @@ namespace ECSEngine {
 	struct ThreadPartition {
 		unsigned int offset;
 		unsigned int size;
-	};
-
-	enum ECS_THREAD_PRIORITY : unsigned char {
-		ECS_THREAD_PRIORITY_VERY_LOW,
-		ECS_THREAD_PRIORITY_LOW,
-		ECS_THREAD_PRIORITY_NORMAL,
-		ECS_THREAD_PRIORITY_HIGH,
-		ECS_THREAD_PRIORITY_VERY_HIGH
 	};
 
 	// Will distribute the task evenly across the threads taking into account the remainder
@@ -208,7 +201,7 @@ namespace ECSEngine {
 		ThreadTask StealTask(unsigned int thread_id);
 
 		// Elevates or reduces the priority of the threads
-		void SetThreadPriorities(ECS_THREAD_PRIORITY priority);
+		void SetThreadPriorities(OS::ECS_THREAD_PRIORITY priority);
 
 		// Spin waits until someone pushes something into the thread's queue
 		void SpinThread(unsigned int thread_id);

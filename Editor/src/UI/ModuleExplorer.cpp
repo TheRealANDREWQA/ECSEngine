@@ -50,7 +50,6 @@ const Color MODULE_COLORS[] = {
 struct ModuleExplorerData {
 	EditorState* editor_state;
 	unsigned int selected_module;
-	unsigned int selected_module_configuration_group;
 	EDITOR_MODULE_CONFIGURATION* configurations;
 };
 
@@ -539,7 +538,6 @@ void ModuleExplorerDraw(void* window_data, void* drawer_descriptor, bool initial
 			sizeof(ModuleExplorerData)
 		);
 		explorer_data->selected_module = -1;
-		explorer_data->selected_module_configuration_group = -1;
 		explorer_data->editor_state = editor_state;
 
 		const size_t ALLOCATE_COUNT = 32;
@@ -845,23 +843,8 @@ void CreateModuleExplorerAction(ActionData* action_data) {
 
 // --------------------------------------------------------------------------------------------------------
 
-unsigned int CreateModuleExplorerWindow(EditorState* _editor_state) {
-	EDITOR_STATE(_editor_state);
-
-	constexpr float window_size_x = 0.7f;
-	constexpr float window_size_y = 0.7f;
-	float2 window_size = { window_size_x, window_size_y };
-
-	UIWindowDescriptor descriptor;
-	descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, window_size.x);
-	descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, window_size.y);
-	descriptor.initial_size_x = window_size.x;
-	descriptor.initial_size_y = window_size.y;
-
-	size_t stack_memory[128];
-	ModuleExplorerSetDescriptor(descriptor, _editor_state, stack_memory);
-
-	return ui_system->Create_Window(descriptor);
+unsigned int CreateModuleExplorerWindow(EditorState* editor_state) {
+	return CreateDefaultWindow(MODULE_EXPLORER_WINDOW_NAME, editor_state, { 0.6f, 0.7f }, ModuleExplorerSetDescriptor);
 }
 
 // --------------------------------------------------------------------------------------------------------

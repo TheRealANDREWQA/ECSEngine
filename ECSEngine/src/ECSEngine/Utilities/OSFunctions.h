@@ -23,59 +23,121 @@ namespace ECSEngine {
 #pragma region Basic APIs
 
 		ECSENGINE_API bool LaunchFileExplorer(Stream<wchar_t> folder);
-
-		// A pointer null means I don't care; returns whether or not succeeded
-		// Works for directories too
-		ECSENGINE_API bool GetFileTimes(
-			Stream<wchar_t> path,
-			char* ECS_RESTRICT creation_time = nullptr,
-			char* ECS_RESTRICT access_time = nullptr,
-			char* ECS_RESTRICT last_write_time = nullptr
+		
+		// Should prefer the other variants. This can be used when getting OS handles for files
+		// Works on directories too
+		ECSENGINE_API bool GetFileTimesInternal(
+			HANDLE file_handle, 
+			char* creation_time = nullptr,
+			char* access_time = nullptr,
+			char* last_write_time = nullptr
 		);
 
-		// A pointer null means I don't care; returns whether or not succeeded
-		// Works for directories too
-		ECSENGINE_API bool GetFileTimes(
-			Stream<wchar_t> path,
-			wchar_t* ECS_RESTRICT creation_time = nullptr,
-			wchar_t* ECS_RESTRICT access_time = nullptr,
-			wchar_t* ECS_RESTRICT last_write_time = nullptr
+		// Should prefer the other variants. This can be used when getting OS handles for files
+		// Works on directories too
+		ECSENGINE_API bool GetFileTimesInternal(
+			HANDLE file_handle,
+			wchar_t* creation_time = nullptr,
+			wchar_t* access_time = nullptr,
+			wchar_t* last_write_time = nullptr
 		);
 
+		// Should prefer the other variants. This can be used when getting OS handles for files
+		// Works on directories too
+		ECSENGINE_API bool GetFileTimesInternal(
+			HANDLE file_handle,
+			size_t* creation_time = nullptr,
+			size_t* access_time = nullptr,
+			size_t* last_write_time = nullptr
+		);
+
+		// Should prefer the other variants. This can be used when getting OS handles for files
+		// Works on directories too
+		ECSENGINE_API bool GetRelativeFileTimesInternal(
+			HANDLE file_handle,
+			char* creation_time = nullptr,
+			char* access_time = nullptr,
+			char* last_write_time = nullptr
+		);
+
+		// Should prefer the other variants. This can be used when getting OS handles for files
+		// Works on directories too
+		ECSENGINE_API bool GetRelativeFileTimesInternal(
+			HANDLE file_handle,
+			wchar_t* creation_time = nullptr,
+			wchar_t* access_time = nullptr,
+			wchar_t* last_write_time = nullptr
+		);
+
+		// Should prefer the other variants. This can be used when getting OS handles for files
+		// Works on directories too
+		ECSENGINE_API bool GetRelativeFileTimesInternal(
+			HANDLE file_handle,
+			size_t* creation_time = nullptr,
+			size_t* access_time = nullptr,
+			size_t* last_write_time = nullptr
+		);
+
+		// This is the absolute date (like dd/ww/yyyy)
+		// Works on directories too
+		ECSENGINE_API bool GetFileTimes(
+			Stream<wchar_t> path,
+			char* creation_time = nullptr,
+			char* access_time = nullptr,
+			char* last_write_time = nullptr
+		);
+
+		// This is the absolute date (like dd/ww/yyyy)
+		// A pointer null means I don't care; returns whether or not succeeded
+		// Works on directories too
+		ECSENGINE_API bool GetFileTimes(
+			Stream<wchar_t> path,
+			wchar_t* creation_time = nullptr,
+			wchar_t* access_time = nullptr,
+			wchar_t* last_write_time = nullptr
+		);
+
+		// This is like an absolute date (like dd/ww/yyyy)
 		// A pointer null means I don't care; returns whether or not it succeeded
-		// Works for directories too; It will conver the dates into a number;
+		// Works on directories too; It will convert the dates into a number;
 		ECSENGINE_API bool GetFileTimes(
 			Stream<wchar_t> path,
-			size_t* ECS_RESTRICT creation_time = nullptr,
-			size_t* ECS_RESTRICT access_time = nullptr,
-			size_t* ECS_RESTRICT last_write_time = nullptr
+			size_t* creation_time = nullptr,
+			size_t* access_time = nullptr,
+			size_t* last_write_time = nullptr
 		);
 
+		// This is relative in the sense that reports what is the difference between the time
+		// of the file and the current system time (for example it reports that a file was created one month ago)
 		// A pointer null means I don't care; returns whether or not succeeded; output is in milliseconds
-		// Works for directories too
+		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			size_t* ECS_RESTRICT creation_time = nullptr,
-			size_t* ECS_RESTRICT access_time = nullptr,
-			size_t* ECS_RESTRICT last_write_time = nullptr
+			size_t* creation_time = nullptr,
+			size_t* access_time = nullptr,
+			size_t* last_write_time = nullptr
 		);
 
+		// This is relative in the sense that reports what is the difference between the time
+		// of the file and the current system time (for example it reports that a file was created one month ago)
 		// A pointer null means I don't care; returns whether or not succeeded
-		// Works for directories too
+		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			char* ECS_RESTRICT creation_time = nullptr,
-			char* ECS_RESTRICT access_time = nullptr,
-			char* ECS_RESTRICT last_write_time = nullptr
+			char* creation_time = nullptr,
+			char* access_time = nullptr,
+			char* last_write_time = nullptr
 		);
 
+		// This is relative in the sense that reports what is the difference between the time
+		// of the file and the current system time (for example it reports that a file was created one month ago)
 		// A pointer null means I don't care; returns whether or not succeeded
-		// Works for directories too
+		// Works on directories too
 		ECSENGINE_API bool GetRelativeFileTimes(
 			Stream<wchar_t> path,
-			wchar_t* ECS_RESTRICT creation_time = nullptr,
-			wchar_t* ECS_RESTRICT access_time = nullptr,
-			wchar_t* ECS_RESTRICT last_write_time = nullptr
+			wchar_t* creation_time = nullptr,
+			wchar_t* access_time = nullptr,
+			wchar_t* last_write_time = nullptr
 		);
 
 		ECSENGINE_API bool OpenFileWithDefaultApplication(
@@ -94,6 +156,16 @@ namespace ECSEngine {
 
 		// Assumes that SymInitialize has been called
 		ECSENGINE_API void GetCallStackFunctionNames(CapacityStream<char>& string);
+
+		enum ECS_THREAD_PRIORITY : unsigned char {
+			ECS_THREAD_PRIORITY_VERY_LOW,
+			ECS_THREAD_PRIORITY_LOW,
+			ECS_THREAD_PRIORITY_NORMAL,
+			ECS_THREAD_PRIORITY_HIGH,
+			ECS_THREAD_PRIORITY_VERY_HIGH
+		};
+
+		ECSENGINE_API void ChangeThreadPriority(ECS_THREAD_PRIORITY priority);
 
 #pragma endregion
 

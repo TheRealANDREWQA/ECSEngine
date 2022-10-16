@@ -86,7 +86,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		relative_transform.offset.y = (NOTIFICATION_BAR_WINDOW_SIZE - TEXT_LABEL_Y_SIZE) * 0.5f;
 		config.AddFlag(relative_transform);
 		Color sprite_color = ECS_COLOR_WHITE;
-		if (message->type != ECS_CONSOLE_MESSAGE_TYPE::ECS_CONSOLE_ERROR) {
+		if (message->type != ECS_CONSOLE_ERROR) {
 			sprite_color = CONSOLE_COLORS[(unsigned int)message->type];
 		}
 
@@ -103,19 +103,17 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 		config.AddFlag(text_params);
 
 		UIConfigTextAlignment text_alignment;
-		text_alignment.horizontal = ECS_UI_ALIGN::ECS_UI_ALIGN_LEFT;
+		text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
 		config.AddFlag(text_alignment);
 
-		char* new_line = strchr(message->message.buffer, '\n');
+		Stream<char> new_line = function::FindFirstCharacter(message->message.buffer, '\n');
+		Stream<char> draw_message = message->message;
 		// Only display a single line
-		if (new_line != nullptr) {
-			*new_line = '\0';
+		if (new_line.buffer != nullptr) {
+			draw_message.size = new_line.buffer - message->message.buffer;
 		}
 		drawer.TextLabel(UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_PARAMETERS
-			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT, config, message->message.buffer);
-		if (new_line != nullptr) {
-			*new_line = '\n';
-		}
+			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT, config, draw_message);
 
 		float2 action_scale = { drawer.current_x - action_position.x, TEXT_LABEL_Y_SIZE };
 		drawer.AddClickable(action_position, action_scale, { FocusConsole, data->editor_state, 0 });

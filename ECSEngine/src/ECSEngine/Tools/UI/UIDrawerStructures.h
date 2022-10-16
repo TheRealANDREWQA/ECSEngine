@@ -6,7 +6,7 @@
 #include "../../Containers/Queues.h"
 #include "UIStructures.h"
 #include "UIDrawConfigs.h"
-#include "../../Rendering/ColorMacros.h"
+#include "../../Rendering/ColorUtilities.h"
 #include "UISystem.h"
 
 namespace ECSEngine {
@@ -15,7 +15,7 @@ namespace ECSEngine {
 
 		struct UIDrawConfig;
 
-		using UIDrawerTextInputFilter = bool (*)(char, CharacterType);
+		typedef bool (*UIDrawerTextInputFilter)(char, CharacterType);
 
 		typedef void (*UIDrawerSliderInterpolate)(const void* lower_bound, const void* upper_bound, void* value, float percentage);
 		typedef void (*UIDrawerSliderFromFloat)(void* value, float factor);
@@ -288,6 +288,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler handler;
+			bool copy_on_initialization = false;
 		};
 
 		struct ECSENGINE_API UIConfigSliderChangedValueCallback {
@@ -296,6 +297,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler handler;
+			bool copy_on_initialization = false;
 		};
 
 		struct ECSENGINE_API UIConfigHoverableAction {
@@ -851,7 +853,14 @@ namespace ECSEngine {
 			unsigned int max_x_scale;
 		};
 
-		struct UIDrawerMenuButtonData {
+		struct ECSENGINE_API UIDrawerMenuButtonData {
+			// Embedds after it all the data for the actions and the name
+			// Returns the total write size
+			unsigned int Write() const;
+
+			// Retrieves all the data for the actions (when relative offsets are in place)
+			void Read();
+
 			UIWindowDescriptor descriptor;
 			size_t border_flags;
 			bool is_opened_when_pressed;
@@ -1049,7 +1058,7 @@ namespace ECSEngine {
 				return UI_CONFIG_MENU_BUTTON_SPRITE;
 			}
 
-			const wchar_t* texture;
+			Stream<wchar_t> texture;
 			float2 top_left_uv = { 0.0f, 0.0f };
 			float2 bottom_right_uv = { 1.0f, 1.0f };
 			Color color = ECS_COLOR_WHITE;
@@ -1244,6 +1253,7 @@ namespace ECSEngine {
 		struct UIDrawerInitializeLabelHierarchy {
 			const UIDrawConfig* config;
 			Stream<char> name;
+			unsigned int storage_type_size;
 		};
 
 		struct UIDrawerLabelList {
@@ -1257,6 +1267,58 @@ namespace ECSEngine {
 			}
 
 			bool is_selected;
+		};
+
+		union UIConfigCollapsingHeaderButtonData {
+			UIConfigCollapsingHeaderButtonData() {}
+
+			// Image based (both button and display only)
+			struct {
+				Stream<wchar_t> image_texture;
+				Color image_color;
+			};
+			// Check box.
+			struct {
+				bool* check_box_flag;
+			};
+			// Menu
+			struct {
+				UIDrawerMenuState* menu_state;
+				Stream<wchar_t> menu_texture;
+				Color menu_texture_color;
+				bool menu_copy_states;
+			};
+			// Menu general
+			struct {
+				UIWindowDescriptor* menu_general_descriptor;
+				Stream<wchar_t> menu_general_texture;
+				Color menu_general_texture_color;
+				size_t border_flags;
+			};
+		};
+
+		enum UIConfigCollapsingHeaderButtonType : unsigned char {
+			ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_DISPLAY, // Only displays, no action
+			ECS_UI_COLLAPSING_HEADER_BUTTON_IMAGE_BUTTON,
+			ECS_UI_COLLAPSING_HEADER_BUTTON_CHECK_BOX,
+			ECS_UI_COLLAPSING_HEADER_BUTTON_MENU, // Default menu, the one where you can have submenues and list which labels can be choosen
+			ECS_UI_COLLAPSING_HEADER_BUTTON_MENU_GENERAL // The one where you give a window descriptor to be spawned
+		};
+
+		struct UIConfigCollapsingHeaderButton {
+			UIConfigCollapsingHeaderButtonData data;
+			UIConfigCollapsingHeaderButtonType type;
+			UIActionHandler handler = { nullptr }; // The handler can be missing for check box, menu or menu general. It is needed only for image button or check box
+			ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT; // Can be only left or right aligned
+		};
+
+		// There can be at max 6 buttons
+		struct ECSENGINE_API UIConfigCollapsingHeaderButtons {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_COLLAPSING_HEADER_BUTTONS;
+			}
+
+			Stream<UIConfigCollapsingHeaderButton> buttons;
 		};
 
 		struct ECSENGINE_API UIConfigGetTransform {
@@ -1275,6 +1337,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler handler;
+			bool copy_on_initialization = false;
 		};
 
 		struct UIDrawerInitializeArrayElementData {
@@ -1345,6 +1408,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler handler;
+			bool copy_on_initialization = false;
 		};
 
 		// In the additional data field it will receive a pointer to
@@ -1357,6 +1421,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler handler;
+			bool copy_on_initialization = false;
 		};
 
 		// The background is centered at the center of the sprite
@@ -1427,6 +1492,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler callback;
+			bool copy_on_initialization = false;
 		};
 
 		// Receives the path as CapacityStream<wchar_t>* to the additional_data parameter
@@ -1436,6 +1502,7 @@ namespace ECSEngine {
 			}
 
 			UIActionHandler callback;
+			bool copy_on_initialization = false;
 		};
 
 		struct ECSENGINE_API UIConfigPathInputSpriteTexture {
@@ -1473,31 +1540,60 @@ namespace ECSEngine {
 			ECS_UI_ALIGN vertical = ECS_UI_ALIGN_TOP;
 		};
 
-		// Keeps a list with all the opened labels and any user callbacks
+		// Can be used polymorphically. The basic functionality is that of a label but the hierarchy can store different types
+		// such that when giving the data to all callbacks is easier for them to process which thing actually was selected, dragged etc
+		// then trying to figure it out from the strings (if the strings are the same it might be impossible). There is a limitation tho:
+		// This type needs to be blittable (stable if it has streams) otherwise it would add too much complexity to deep copy the data
+		// All functions take the label as a pointer because the data is handled polymorphically and would be impossible to
+		// take it by value. Pretty much wherever there is void you can replace it with Stream<char> to get the default behaviour
+		// (Stream<void> -> Stream<Stream<char>>, const void* -> const Stream<char>*)
 		struct ECSENGINE_API UIDrawerLabelHierarchyData {
 			// If the action_data is nullptr, then it will skip the callback
-			void AddSelection(Stream<char> label, ActionData* action_data);
+			void AddSelection(const void* label, ActionData* action_data);
 
-			void AddOpenedLabel(UISystem* system, unsigned int window_index, Stream<char> label);
+			void AddOpenedLabel(UISystem* system, unsigned int window_index, const void* label);
 
 			// If the action_data is nullptr, then it will skip the callback
-			void ChangeSelection(Stream<char> label, ActionData* action_data);
+			void ChangeSelection(const void* label, ActionData* action_data);
 
-			void ChangeSelection(Stream<Stream<char>> labels, ActionData* action_data);
+			void ChangeSelection(Stream<void> labels, ActionData* action_data);
 
 			void ClearSelection(ActionData* action_data);
 
+			bool CompareFirstLabel(const void* label) const;
+
+			bool CompareLastLabel(const void* label) const;
+
+			bool CompareLabels(const void* first, const void* second) const;
+
+			// If the default char labels are used, it will return 16
+			unsigned int CopySize() const;
+
 			unsigned int DynamicIndex(const UISystem* system, unsigned int window_index) const;
+
+			unsigned int FindSelectedLabel(const void* label) const;
+
+			unsigned int FindOpenedLabel(const void* label) const;
+
+			unsigned int FindCopiedLabel(const void* label) const;
 
 			// For copy/cut
 			void RecordSelection(ActionData* action_data);
 
 			// If the action_data is nullptr, then it will skip the callback
-			void RemoveSelection(Stream<char> label, ActionData* action_data);
+			void RemoveSelection(const void* label, ActionData* action_data);
 
-			void RemoveOpenedLabel(UISystem* system, unsigned int window_index, Stream<char> label);
+			void RemoveOpenedLabel(UISystem* system, unsigned int window_index, const void* label);
+
+			void ResetCopiedLabels(ActionData* action_data);
 
 			void SetSelectionCut(bool is_cut = true);
+
+			void SetFirstSelectedLabel(const void* label);
+
+			void SetLastSelectedLabel(const void* label);
+
+			void SetHoveredLabel(const void* label);
 
 			void TriggerSelectable(ActionData* action_data);
 
@@ -1507,23 +1603,37 @@ namespace ECSEngine {
 			
 			void TriggerDelete(ActionData* action_data);
 
-			Stream<Stream<char>> opened_labels;
-			CapacityStream<char> hovered_label;
-			// Filled in by the text input
-			CapacityStream<char> rename_label;
+			void TriggerDoubleClick(ActionData* action_data);
 
-			CapacityStream<char> first_selected;
-			CapacityStream<char> last_selected;
-			Stream<Stream<char>> selected_labels;
+			void TriggerDrag(ActionData* action_data);
+
+			Stream<void> opened_labels;
+			CapacityStream<void> hovered_label;
+
+			// We need to keep separate the renamed label because when renaming
+			// and then clicking on another label it will apply the renaming to the newly clicked label
+			// instead of the original one
+			void* rename_label;
+			// Filled in by the text input
+			CapacityStream<char> rename_label_storage;
+			// These are untyped
+			CapacityStream<void> first_selected_label;
+			CapacityStream<void> last_selected_label;
+
+			Stream<void> selected_labels;
 
 			// These are coallesced into a single allocation
-			Stream<Stream<char>> copied_labels;
+			Stream<void> copied_labels;
 
-			bool is_rename_label;
+			// Value of 0 means no rename, 1 means just selected, 2 the label was copied
+			unsigned char is_rename_label;
 			bool is_dragging;
 			bool reject_same_label_drag;
 			bool determine_selection;
 			bool is_selection_cut;
+
+			// The byte size of the label. If default behaviour is used, this will be 0
+			unsigned short label_size;
 
 			// Used for the dynamic identifier
 			Stream<char> identifier;
@@ -1554,62 +1664,105 @@ namespace ECSEngine {
 			void* delete_data;
 		};
 
-		// The label is embedded in it
-		struct UIDrawerLabelHierarchyRightClickData {
-			inline Stream<char> GetLabel() const {
-				return { function::OffsetPointer(this, sizeof(*this)), label_size };
+		template<typename UIDrawerLabelHierarchyActionData>
+		void UIDrawerLabelHierarchyGetEmbeddedLabel(const UIDrawerLabelHierarchyActionData* data, void* storage) {
+			if (data->hierarchy->label_size == 0) {
+				Stream<char> string_label = { function::OffsetPointer(data, sizeof(*data)), data->label_size };
+				Stream<char>* storage_string = (Stream<char>*)storage;
+				*storage_string = string_label;
+			}
+			else {
+				memcpy(storage, function::OffsetPointer(data, sizeof(*data)), data->hierarchy->label_size);
+			}
+		}
+
+		// Returns the total write size
+		template<typename UIDrawerLabelHierarchyActionData>
+		unsigned int UIDrawerLabelHierarchySetEmbeddedLabel(UIDrawerLabelHierarchyActionData* data, const void* untyped_label) {
+			unsigned int total_size = sizeof(*data);
+
+			if (data->hierarchy->label_size == 0) {
+				Stream<char> label = *(Stream<char>*)untyped_label;
+				memcpy(function::OffsetPointer(data, sizeof(*data)), label.buffer, label.size);
+				data->label_size = label.size;
+
+				total_size += label.size;
+			}
+			else {
+				memcpy(function::OffsetPointer(data, sizeof(*data)), untyped_label, data->hierarchy->label_size);
+				data->label_size = 0;
+				total_size += data->hierarchy->label_size;
 			}
 
-			inline unsigned int WriteLabel(Stream<char> label) {
-				memcpy(function::OffsetPointer(this, sizeof(*this)), label.buffer, label.size);
-				label_size = label.size;
-				return sizeof(*this) + label_size;
-			}
+			return total_size;
+		}
+
+		// The label is embedded in it
+		struct ECSENGINE_API UIDrawerLabelHierarchyRightClickData {
+			void GetLabel(void* storage) const;
+
+			// Set the hierarchy before it
+			unsigned int WriteLabel(const void* untyped_label);
 
 			UIDrawerLabelHierarchyData* hierarchy;
 			void* data;
 			unsigned int label_size;
+			Color hover_color;
 		};
 
 		struct UIDrawerLabelHierarchyDragData {
 			void* data;
-			Stream<Stream<char>> source_labels; // The ones being dragged
-			Stream<char> destination_label; // The one where they are being dragged
+			Stream<void> source_labels; // The ones being dragged
+			void* destination_label; // The one where they are being dragged
 		};
 
 		struct UIDrawerLabelHierarchyDoubleClickData {
 			void* data;
-			Stream<char> label;
+			void* label;
 		};
 
 		struct UIDrawerLabelHierarchySelectableData {
 			void* data;
-			Stream<Stream<char>> labels;
+			Stream<void> labels;
 		};
 
 		struct UIDrawerLabelHierarchyRenameData {
 			void* data;
-			Stream<char> previous_label;
+			void* previous_label;
 			Stream<char> new_label;
+		};
+
+		struct UIDrawerLabelHierarchyRenameFrameHandlerData {
+			UIDrawerLabelHierarchyData* hierarchy;
+			float2 label_position;
+			float2 label_scale;
 		};
 
 		// If the destination label is empty, it means that the labels are copied as roots
 		struct UIDrawerLabelHierarchyCopyData {
 			void* data;
-			Stream<Stream<char>> source_labels;
-			Stream<char> destination_label;
+			Stream<void> source_labels;
+			void* destination_label;
 		};
 
 		// If the destination label is empty, it means that the labels are cut as roots
 		struct UIDrawerLabelHierarchyCutData {
 			void* data;
-			Stream<Stream<char>> source_labels;
-			Stream<char> destination_label;
+			Stream<void> source_labels;
+			void* destination_label;
 		};
 
 		struct UIDrawerLabelHierarchyDeleteData {
 			void* data;
-			Stream<Stream<char>> source_labels;
+			Stream<void> source_labels;
+		};
+
+		struct UIDrawerAcquireDragDrop {
+			Stream<void> payload;
+			Stream<Stream<char>> names;
+			bool highlight_element;
+			Color highlight_color;
+			unsigned int matched_name;
 		};
 
 	}

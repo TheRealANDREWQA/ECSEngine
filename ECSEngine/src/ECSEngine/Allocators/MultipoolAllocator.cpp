@@ -34,7 +34,15 @@ namespace ECSEngine {
 		// Calculating the start index of the block by reading the byte metadata 
 
 		uintptr_t byte_offset_position = (uintptr_t)block - (uintptr_t)m_buffer - 1;
-		ECS_ASSERT(m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
+		if constexpr (trigger_error_if_not_found) {
+			ECS_ASSERT(m_buffer[byte_offset_position] < ECS_CACHE_LINE_SIZE);
+		}
+		else {
+			if (m_buffer[byte_offset_position] >= ECS_CACHE_LINE_SIZE) {
+				// Exit if the alignment is very high
+				return;
+			}
+		}
 		m_range.Free<trigger_error_if_not_found>((unsigned int)(byte_offset_position - m_buffer[byte_offset_position]));
 	}
 

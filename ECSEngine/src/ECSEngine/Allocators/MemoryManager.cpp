@@ -145,7 +145,7 @@ namespace ECSEngine {
 
 	MemoryManager::MemoryManager(size_t size, size_t maximum_pool_count, size_t new_allocation_size, GlobalMemoryManager* backup) : m_allocator_count(0) {
 		m_backup = backup;
-		void* allocation = backup->Allocate((sizeof(MultipoolAllocator) + sizeof(void*) + sizeof(size_t)) * ECS_MEMORY_MANAGER_SIZE, alignof(MultipoolAllocator));
+		void* allocation = backup->Allocate_ts((sizeof(MultipoolAllocator) + sizeof(void*) + sizeof(size_t)) * ECS_MEMORY_MANAGER_SIZE, alignof(MultipoolAllocator));
 		m_allocators = (MultipoolAllocator*)allocation;
 		m_new_allocation_size = new_allocation_size;
 		m_maximum_pool_count = maximum_pool_count;
@@ -170,7 +170,7 @@ namespace ECSEngine {
 
 	void MemoryManager::CreateAllocator(size_t size, size_t maximum_pool_count) {
 		ECS_ASSERT(m_allocator_count < ECS_MEMORY_MANAGER_SIZE);
-		void* allocation = m_backup->Allocate(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
+		void* allocation = m_backup->Allocate_ts(MultipoolAllocator::MemoryOf(maximum_pool_count, size));
 		m_allocators[m_allocator_count] = MultipoolAllocator((unsigned char*)allocation, size, maximum_pool_count);
 		m_allocator_count++;
 	}

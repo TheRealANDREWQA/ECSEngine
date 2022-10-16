@@ -120,8 +120,8 @@ namespace ECSEngine {
 	) : m_backup(backup), m_new_allocator_count(allocator_count), m_new_arena_capacity(arena_capacity),
 		m_new_blocks_per_allocator(blocks_per_allocator) 
 	{
-		void* arena_allocation = backup->Allocate(MemoryArena::MemoryOf(initial_arena_capacity, initial_allocator_count, initial_blocks_per_allocator));
-		m_arenas = (MemoryArena*)backup->Allocate(sizeof(MemoryArena) * ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE);
+		void* arena_allocation = backup->Allocate_ts(MemoryArena::MemoryOf(initial_arena_capacity, initial_allocator_count, initial_blocks_per_allocator));
+		m_arenas = (MemoryArena*)backup->Allocate_ts(sizeof(MemoryArena) * ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE);
 		m_arenas[0] = MemoryArena(arena_allocation, initial_arena_capacity, initial_allocator_count, initial_blocks_per_allocator);
 		m_arena_size = 1;
 		m_arena_capacity = ECS_MEMORY_ARENA_DEFAULT_STREAM_SIZE;
@@ -155,7 +155,7 @@ namespace ECSEngine {
 		uintptr_t block_reinterpretation = (uintptr_t)block;
 		for (int64_t index = m_arena_size - 1; index >= 0; index--) {
 			uintptr_t arena_buffer = (uintptr_t)m_arenas[index].m_initial_buffer;
-			if (arena_buffer <= block_reinterpretation && arena_buffer + m_arenas[index].m_allocator_count * m_arenas[index].m_size_per_allocator >= block_reinterpretation) {
+			if (m_arenas[index].Belongs(block)) {
 				m_arenas[index].Deallocate<trigger_error_if_not_found>(block);
 				return;
 			}
@@ -192,12 +192,12 @@ namespace ECSEngine {
 	}
 
 	void ResizableMemoryArena::CreateArena(size_t arena_capacity, size_t allocator_count, size_t blocks_per_allocator) {
-		void* arena_allocation = m_backup->Allocate(MemoryArena::MemoryOf(arena_capacity, allocator_count, blocks_per_allocator));
+		void* arena_allocation = m_backup->Allocate_ts(MemoryArena::MemoryOf(arena_capacity, allocator_count, blocks_per_allocator));
 
 		ECS_ASSERT(arena_allocation != nullptr);
 		if (m_arena_size == m_arena_capacity) {
 			size_t new_capacity = (size_t)((float)m_arena_capacity * 1.5f + 1);
-			MemoryArena* new_arenas = (MemoryArena*)m_backup->Allocate(sizeof(MemoryArena) * new_capacity);
+			MemoryArena* new_arenas = (MemoryArena*)m_backup->Allocate_ts(sizeof(MemoryArena) * new_capacity);
 			memcpy(new_arenas, m_arenas, sizeof(MemoryArena) * m_arena_capacity);
 			m_arena_capacity = new_capacity;
 			m_arenas = new_arenas;

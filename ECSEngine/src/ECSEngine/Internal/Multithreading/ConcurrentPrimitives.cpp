@@ -3,6 +3,8 @@
 
 namespace ECSEngine {
 
+#define GLOBAL_SPIN_COUNT 1'000
+
 	// ----------------------------------------------------------------------------------------------
 
 	SpinLock& SpinLock::operator=(const SpinLock& other) {
@@ -33,7 +35,7 @@ namespace ECSEngine {
 
 	void SpinLock::wait_locked()
 	{
-		const size_t SPIN_COUNT_UNTIL_WAIT = 2'000;
+		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
 
 		// Wait for lock to be released without generating cache misses
 		while (is_locked()) {
@@ -55,7 +57,7 @@ namespace ECSEngine {
 
 	void SpinLock::wait_signaled()
 	{
-		const size_t SPIN_COUNT_UNTIL_WAIT = 2'000;
+		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
 
 		while (!is_locked()) {
 			for (size_t index = 0; index < SPIN_COUNT_UNTIL_WAIT; index++) {
@@ -129,7 +131,7 @@ namespace ECSEngine {
 
 	void BitWaitLocked(std::atomic<unsigned char>& byte, unsigned char bit_index)
 	{
-		const size_t SPIN_COUNT_UNTIL_WAIT = 2'000;
+		const size_t SPIN_COUNT_UNTIL_WAIT = GLOBAL_SPIN_COUNT;
 
 		// Wait for lock to be released without generating cache misses
 		while (BitIsLocked(byte, bit_index)) {
@@ -174,6 +176,13 @@ namespace ECSEngine {
 		return count.fetch_sub(exit_count, ECS_ACQ_REL);
 	}
 
+	unsigned int Semaphore::ExitEx(unsigned int exit_count)
+	{
+		unsigned int value = count.fetch_sub(exit_count, ECS_ACQ_REL);
+		WakeByAddressAll(&count);
+		return value;
+	}
+
 	unsigned int Semaphore::Enter(unsigned int enter_count) {
 		return count.fetch_add(enter_count, ECS_ACQ_REL);
 	}
@@ -188,11 +197,9 @@ namespace ECSEngine {
 
 	void Semaphore::SpinWait(unsigned int count_value, unsigned int target_value)
 	{
-#define SPIN_COUNT_UNTIL_SLEEP (2'000)
-
 		auto loop = [](auto condition) {
 			while (condition()) {
-				for (size_t index = 0; index < SPIN_COUNT_UNTIL_SLEEP; index++) {
+				for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
 					if (!condition()) {
 						return;
 					}
@@ -222,11 +229,40 @@ namespace ECSEngine {
 				return target.load(ECS_RELAXED) != target_value;
 			});
 		}
-
-#undef SPIN_COUNT_UNTIL_SLEEP
 	}
 
-	void Semaphore::TickWait(size_t sleep_microseconds, unsigned int count_value, unsigned int target_value)
+	void Semaphore::SpinWaitEx(unsigned int count_value, unsigned int target_value)
+	{
+		auto loop = [](std::atomic<unsigned int>* wait_address, auto condition) {
+			while (condition()) {
+				for (size_t index = 0; index < GLOBAL_SPIN_COUNT; index++) {
+					if (!condition()) {
+						return;
+					}
+					_mm_pause();
+				}
+				
+				// Do this in a loop since the WaitOnAddress can wake the thread spuriously
+				unsigned int current_value = wait_address->load(ECS_RELAXED);
+				while (condition()) {
+					BOOL success = WaitOnAddress(wait_address, &current_value, sizeof(unsigned int), INFINITE);
+				}
+			}
+		};
+
+		if (count_value != -1) {
+			loop(&count, [&]() {
+				return count.load(ECS_RELAXED) != count_value;
+				});
+		}
+		else {
+			loop(&target, [&]() {
+				return target.load(ECS_RELAXED) != target_value;
+			});
+		}
+	}
+
+	void Semaphore::TickWait(size_t sleep_milliseconds, unsigned int count_value, unsigned int target_value)
 	{
 		const size_t SPIN_COUNT = 64;
 
@@ -237,14 +273,14 @@ namespace ECSEngine {
 						return;
 					}
 				}
-				std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_microseconds));
+				std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_milliseconds));
 			}
 		}
 		else if (count_value != -1) {
-			ECSEngine::TickWait<'!'>(sleep_microseconds, count, count_value);
+			ECSEngine::TickWait<'!'>(sleep_milliseconds, count, count_value);
 		}
 		else {
-			ECSEngine::TickWait<'!'>(sleep_microseconds, target, count_value);
+			ECSEngine::TickWait<'!'>(sleep_milliseconds, target, count_value);
 		}
 	}
 

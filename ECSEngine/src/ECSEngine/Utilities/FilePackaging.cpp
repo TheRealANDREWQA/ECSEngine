@@ -2,6 +2,9 @@
 #include "FilePackaging.h"
 #include "Encryption.h"
 
+#include "Serialization/SerializationHelpers.h"
+#include "FunctionInterfaces.h"
+
 #define TEMPORARY_BUFFER_SIZE ECS_MB * 50
 
 namespace ECSEngine {
@@ -249,16 +252,116 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------
 
-	Stream<void> UnpackFile(Stream<wchar_t> file, const PackFilesLookupTable* table, ECS_FILE_HANDLE file_handle, AllocatorPolymorphic allocator)
+	unsigned int GetMultiPackedFileIndex(Stream<wchar_t> file, const MultiPackedFile* multi_packed_file)
+	{
+		return multi_packed_file->lookup_table.GetValue(file);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+#define MULTI_PACKED_FILE_VERSION (0)
+#define MULTI_PACKED_FILE_MAX_COUNT (64)
+#define MULTI_PACKED_FILE_MAX_INPUT_COUNT ECS_KB * 16
+
+	struct MultiPackedFileHeader {
+		unsigned int version;
+		// The number of packed files (the number of output files)
+		unsigned int element_count;
+		// The total count of individual input file (those that are packed)
+		unsigned int input_file_count;
+	};
+
+	MultiPackedFile LoadMultiPackedFile(Stream<wchar_t> file, AllocatorPolymorphic allocator)
+	{
+		// Use the heap for the file
+		Stream<void> data = ReadWholeFileBinary(file);
+		if (data.size > 0) {
+			uintptr_t ptr = (uintptr_t)data.buffer;
+			MultiPackedFile result = LoadMultiPackedFile(&ptr, data.size, allocator);
+			free(data.buffer);
+			return result;
+		}
+		MultiPackedFile failed_file;
+		failed_file.packed_files = { nullptr, 0 };
+		return failed_file;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	MultiPackedFile LoadMultiPackedFile(uintptr_t* file, size_t size, AllocatorPolymorphic allocator)
+	{
+		MultiPackedFile packed_file;
+		packed_file.packed_files = { nullptr, 0 };
+
+		// Decrypt the buffer first
+		void* buffer = (void*)*file;
+		DecryptBuffer({ buffer, size }, size);
+
+		MultiPackedFileHeader header;
+		Read<true>(file, &header, sizeof(header));
+
+		if (header.version != MULTI_PACKED_FILE_VERSION || header.element_count > MULTI_PACKED_FILE_MAX_COUNT) {
+			return packed_file;
+		}
+
+		packed_file.packed_files.Initialize(allocator, header.element_count);
+		size_t table_capacity = function::PowerOfTwoGreater(HashTableCapacityForElements(header.input_file_count));
+		packed_file.lookup_table.Initialize(allocator, table_capacity);
+
+		for (size_t index = 0; index < header.element_count; index++) {
+			// Read the count
+			unsigned int current_count = 0;
+			Read<true>(file, &current_count, sizeof(current_count));
+			if (current_count > MULTI_PACKED_FILE_MAX_INPUT_COUNT) {
+				memset(&packed_file, 0, sizeof(packed_file));
+				return packed_file;
+			}
+
+			// Read the name
+			unsigned short name_size = 0;
+			Read<true>(file, &name_size, sizeof(name_size));
+			name_size /= sizeof(wchar_t);
+			ECS_STACK_CAPACITY_STREAM(wchar_t, current_name, 512);
+			if (name_size > 512) {
+				memset(&packed_file, 0, sizeof(packed_file));
+				return packed_file;
+			}
+
+			Read<true>(file, current_name.buffer, name_size * sizeof(wchar_t));
+			current_name.size = name_size;
+			Stream<wchar_t> allocated_name = function::StringCopy(allocator, current_name);
+			packed_file.packed_files[index] = allocated_name;
+
+			for (unsigned int input_index = 0; input_index < current_count; input_index++) {
+				Read<true>(file, &name_size, sizeof(name_size));
+				name_size /= sizeof(wchar_t);
+				if (name_size > 512) {
+					memset(&packed_file, 0, sizeof(packed_file));
+					return packed_file;
+				}
+
+				Read<true>(file, current_name.buffer, name_size * sizeof(wchar_t));
+				current_name.size = name_size;
+				allocated_name = function::StringCopy(allocator, current_name);
+				ECS_ASSERT(!packed_file.lookup_table.Insert(index, allocated_name));
+			}
+		}
+
+		return packed_file;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	Stream<void> UnpackFile(Stream<wchar_t> file, const PackedFile* packed_file, AllocatorPolymorphic allocator)
 	{
 		ResourceIdentifier identifier(file);
 
-		size_t file_size = GetFileByteSize(file_handle);
+		size_t file_size = GetFileByteSize(packed_file->file_handle);
 		if (file_size == 0) {
 			return { nullptr, 0 };
 		}
 		uint2 file_offsets;
-		if (table->TryGetValue(identifier, file_offsets)) {
+		if (packed_file->lookup_table.TryGetValue(identifier, file_offsets)) {
 			size_t size_t_offset = file_offsets.x;
 			size_t size_t_size = file_offsets.y;
 			if (size_t_offset + size_t_size >= file_size) {
@@ -267,7 +370,7 @@ namespace ECSEngine {
 			}
 
 			// Seek to that position
-			size_t status = SetFileCursor(file_handle, size_t_offset, ECS_FILE_SEEK_BEG);
+			size_t status = SetFileCursor(packed_file->file_handle, size_t_offset, ECS_FILE_SEEK_BEG);
 			if (status == -1) {
 				return { nullptr , 0 };
 			}
@@ -278,7 +381,7 @@ namespace ECSEngine {
 				return { nullptr, 0 };
 			}
 
-			unsigned int bytes_read = ReadFromFile(file_handle, { allocation, size_t_size });
+			unsigned int bytes_read = ReadFromFile(packed_file->file_handle, { allocation, size_t_size });
 			if (bytes_read != file_offsets.y) {
 				DeallocateEx(allocator, allocation);
 				return { nullptr , 0 };
@@ -288,6 +391,117 @@ namespace ECSEngine {
 		}
 
 		return { nullptr, 0 };
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	bool WriteMultiPackedFile(Stream<wchar_t> file, Stream<MultiPackedFileElement> elements)
+	{
+		size_t allocation_size = WriteMultiPackedFileSize(elements);
+		void* buffer = nullptr;
+
+		// Use the stack
+		if (allocation_size < ECS_KB * 128) {
+			buffer = ECS_STACK_ALLOC(allocation_size);
+		}
+		// Use the heap
+		else {
+			buffer = malloc(allocation_size);
+		}
+
+		uintptr_t ptr = (uintptr_t)buffer;
+		WriteMultiPackedFile(&ptr, elements);
+
+		bool success = WriteBufferToFileBinary(file, { buffer, allocation_size }) ==  ECS_FILE_STATUS_OK;
+		if (allocation_size >= ECS_KB * 128) {
+			// Free the heap allocation
+			free(buffer);
+		}
+
+		return success;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	void WriteMultiPackedFile(uintptr_t* ptr, Stream<MultiPackedFileElement> elements)
+	{
+		ECS_ASSERT(elements.size < MULTI_PACKED_FILE_MAX_COUNT, "Too many packed files for multi packed file.");
+
+		MultiPackedFileHeader header;
+		header.version = MULTI_PACKED_FILE_VERSION;
+		header.element_count = elements.size;
+
+		uintptr_t initial_ptr = *ptr;
+		Write<true>(ptr, &header, sizeof(header));
+
+		for (size_t index = 0; index < elements.size; index++) {
+			ECS_ASSERT(elements[index].input.size < MULTI_PACKED_FILE_MAX_INPUT_COUNT, "Too many input files per packed file when writing multi packed file.");
+
+			// Write it only as a uint
+			Write<true>(ptr, &elements[index].input.size, sizeof(unsigned int));
+			// This will be written as a byte size, will be divided upon load
+			WriteWithSizeShort<true>(ptr, elements[index].output.buffer, elements[index].output.size * sizeof(wchar_t));
+			ECS_ASSERT(elements[index].output.size < 512, "Output file name too large when writing multi packed file.");
+
+			for (size_t input_index = 0; input_index < elements[index].input.size; input_index++) {
+				WriteWithSizeShort<true>(ptr, elements[index].input[input_index].buffer, elements[index].input[input_index].size);
+				ECS_ASSERT(elements[index].input[input_index].size < 512, "Input file name too large when writing multi packed file.");
+			}
+		}
+
+		uintptr_t final_ptr = *ptr;
+		size_t difference = final_ptr - initial_ptr;
+		// Encrypt the entire data with the total written size
+		EncryptBuffer({ (void*)initial_ptr, difference }, difference);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	size_t WriteMultiPackedFileSize(Stream<MultiPackedFileElement> elements)
+	{
+		size_t total_size = sizeof(MultiPackedFileHeader);
+
+		for (size_t index = 0; index < elements.size; index++) {
+			total_size += elements[index].output.MemoryOf(elements[index].output.size) + sizeof(unsigned short) + sizeof(unsigned int);
+			for (size_t input_index = 0; input_index < elements[index].input.size; input_index++) {
+				total_size += sizeof(unsigned short) + sizeof(wchar_t) * elements[index].input[input_index].size;
+			}
+		}
+
+		return total_size;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	MultiPackedFile MultiPackedFile::Copy(AllocatorPolymorphic allocator) const
+	{
+		MultiPackedFile result;
+
+		HashTableCopyWithIdentifiers(lookup_table, result.lookup_table, allocator);
+
+		// Copy the stream now - can't use a deep copy because the call does a coallescing
+		// allocation and the deallocate does not. (in the main case it is segragated)
+		result.packed_files.Initialize(allocator, packed_files.size);
+		for (size_t index = 0; index < packed_files.size; index++) {
+			result.packed_files[index] = function::StringCopy(allocator, packed_files[index]);
+		}
+		
+		return result;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------
+
+	void MultiPackedFile::Deallocate(AllocatorPolymorphic allocator)
+	{
+		lookup_table.ForEachConst([&](unsigned int index, ResourceIdentifier identifier) {
+			ECSEngine::Deallocate(allocator, identifier.ptr);
+		});
+		for (size_t index = 0; index < packed_files.size; index++) {
+			ECSEngine::Deallocate(allocator, packed_files[index].buffer);
+		}
+
+		ECSEngine::Deallocate(allocator, packed_files.buffer);
+		ECSEngine::Deallocate(allocator, lookup_table.GetAllocatedBuffer());
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------

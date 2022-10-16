@@ -37,6 +37,9 @@ namespace ECSEngine {
 		// without having to reinitialize it, this is the way to do it
 		TaskManager* task_manager = nullptr; ECS_SKIP_REFLECTION(static_assert(sizeof(TaskManager*) == 8))
 		GraphicsDescriptor* graphics_descriptor = nullptr; ECS_SKIP_REFLECTION(static_assert(sizeof(GraphicsDescriptor*) == 8))
+		// The resource manager is optional. If you want to give one from the outside can do.
+		// If it is nullptr then it will create an internal one
+		ResourceManager* resource_manager = nullptr; ECS_SKIP_REFLECTION(static_assert(sizeof(ResourceManager*) == 8))
 	};
 
 	struct ECSENGINE_API World
@@ -66,7 +69,8 @@ namespace ECSEngine {
 		HID::Keyboard* keyboard;
 	};
 
-	// Unloads all resources from the resource manager, destroys the graphics and deallocate the global memory manager
+	// Destroys the graphics object if it was created internally, deallocates the global memory manager
+	// And terminates the threads if the task manager was created internally
 	ECSENGINE_API void DestroyWorld(World* world);
 
 	// It does not set the graphics, mouse, keyboard, task manager or task scheduler

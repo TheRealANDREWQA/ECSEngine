@@ -562,7 +562,6 @@ namespace ECSEngine {
 			rounded_int = static_cast<int64_t>(new_value);
 
 			return ConvertFloatingPointIntegerToChars<Stream>(chars, rounded_int, precision);
-			//chars.size = sprintf(chars.buffer, "%f", value);
 		}
 
 		ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertFloatToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, float, size_t);

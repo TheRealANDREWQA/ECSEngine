@@ -2,6 +2,7 @@
 #include "Benchmark.h"
 #include "Function.h"
 #include "FunctionInterfaces.h"
+#include "ECSEngineReflectionMacros.h"
 
 namespace ECSEngine {
 

@@ -8,7 +8,7 @@ struct ProjectFile;
 #define PROJECT_MODULES_RELATIVE_PATH L"Modules"
 #define PROJECT_DEBUG_RELATIVE_PATH L"Debug"
 #define PROJECT_UI_RELATIVE_PATH L"UI"
-#define PROJECT_METAFILES_RELATIVE_PATH L"Metafiles"
+#define PROJECT_METADATA_RELATIVE_PATH L"Metadata"
 #define PROJECT_CONFIGURATION_RELATIVE_PATH L"Configuration"
 #define PROJECT_BACKUP_RELATIVE_PATH L".backup"
 
@@ -50,3 +50,8 @@ void GetProjectConfigurationModuleFolder(const EditorState* editor_state, ECSEng
 void GetProjectBackupFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
 
 void GetProjectConfigurationRuntimeFolder(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
+void GetProjectRootPath(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& path);
+
+// Returns { nullptr, 0 } if the path is not relative to the assets folder
+ECSEngine::Stream<wchar_t> GetProjectAssetRelativePath(const EditorState* editor_state, ECSEngine::Stream<wchar_t> path);

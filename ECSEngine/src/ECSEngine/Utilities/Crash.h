@@ -4,7 +4,7 @@
 
 namespace ECSEngine {
 
-	typedef void (*CrashHandlerFunction)(void* data, const char* error_string);
+	typedef void (*CrashHandlerFunction)(void* data, Stream<char> error_string);
 
 	struct CrashHandler {
 		CrashHandlerFunction function;
@@ -12,7 +12,6 @@ namespace ECSEngine {
 	};
 
 	extern CrashHandler ECS_GLOBAL_CRASH_HANDLER;
-	extern CrashHandler ECS_GLOBAL_DEFERRED_CRASH_HANDLER;
 	extern const char* ECS_GLOBAL_DEFERRED_FILE;
 	extern const char* ECS_GLOBAL_DEFERRED_FUNCTION;
 	extern unsigned int ECS_GLOBAL_DEFERRED_LINE;
@@ -20,9 +19,9 @@ namespace ECSEngine {
 	ECSENGINE_API void SetCrashHandler(CrashHandlerFunction handler, void* data);
 
 	// It will __debugbreak() only
-	ECSENGINE_API void DefaultCrashHandler(void* data, const char* error_string);
+	ECSENGINE_API void DebugbreakCrashHandler(void* data, Stream<char> error_string);
 
-	ECSENGINE_API void Crash(const char* error_string);
+	ECSENGINE_API void Crash(Stream<char> error_string);
 
 	ECSENGINE_API void SetCrashHandlerCaller(const char* file, const char* function, unsigned int line);
 

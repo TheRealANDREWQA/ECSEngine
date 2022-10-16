@@ -1,35 +1,33 @@
 #pragma once
 #include "ECSEngineUI.h"
 
+#define SCENE_WINDOW_NAME "Scene "
+#define MAX_SCENE_WINDOWS 8
+
 struct EditorState;
 
-enum SAVE_SCENE_POP_UP_STATUS {
-	SAVE_SCENE_POP_UP_SUCCESSFUL,
-	SAVE_SCENE_POP_UP_FAILED,
-	SAVE_SCENE_POP_UP_ABORTED
-};
+// Stack memory size should be at least 512
+// In the stack memory the first 4 bytes need to be the sandbox index
+void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory);
 
-struct SaveScenePopUpResult {
-	unsigned int sandbox_indices[16];
-	SAVE_SCENE_POP_UP_STATUS statuses[16];
-	unsigned int count;
+void SceneUIWindowDraw(void* window_data, void* drawer_descriptor, bool initialize);
 
-	// Set to true when pressed by cancel
-	bool cancel_call;
-};
+// It creates the dockspace and the window
+void CreateSceneUIWindow(EditorState* editor_state, unsigned int index);
 
-// The continue_handler receives in the additional_data a SaveScenePopUpResult* that describes what the state last
-// operation was and its status. There will be as many SAVE_SCENE_POP_UP_STATUS as unique scenes provided. If the don't save
-// button is pressed then all SAVE_SCENE_POP_UP_STATUS will be ABORTED. Also it is called on cancel and sets the cancel_call to true
-void CreateSaveScenePopUp(EditorState* editor_state, ECSEngine::Stream<unsigned int> sandbox_indices, ECSEngine::Tools::UIActionHandler continue_handler);
-
-// It includes the wizard that selects the name. The data must be an EditorState*
-void CreateEmptySceneAction(ECSEngine::Tools::ActionData* action_data);
-
-struct ChangeSandboxSceneActionData {
+struct CreateSceneUIWindowActionData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int index;
 };
 
-// Needs to receive as data a ChangeSandboxSceneActionData*
-void ChangeSandboxSceneAction(ECSEngine::Tools::ActionData* action_data);
+// It creates the dockspace and the window
+// It must have as data a CreateSceneUIWindowActionData*
+void CreateSceneUIWindowAction(ActionData* action_data);
+
+// It only creates the window, it will not be assigned to any dockspace and returns the window index
+unsigned int CreateSceneUIWindowOnly(EditorState* editor_state, unsigned int index);
+
+void GetSceneUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
+
+// Does nothing if the old_index doesn't exist
+void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);

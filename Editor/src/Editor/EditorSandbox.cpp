@@ -7,9 +7,11 @@
 
 #include "EditorScene.h"
 #include "ECSEngineSerializationHelpers.h"
+#include "ECSEngineAssets.h"
 
 // The UI needs to be included because we need to notify it when we destroy a sandbox
-#include "../UI/Sandbox.h"
+#include "../UI/Game.h"
+#include "../UI/Scene.h"
 #include "../UI/EntitiesUI.h"
 
 using namespace ECSEngine;
@@ -120,22 +122,6 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxAssetReference(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE asset_type)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->database.AddAsset(handle, asset_type);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
-void AddSandboxAssetReference(EditorState* editor_state, unsigned int sandbox_index, Stream<char> asset_name_or_path, ECS_ASSET_TYPE asset_type)
-{
-	unsigned int handle = editor_state->asset_database.AddAsset(asset_name_or_path, asset_type);
-	AddSandboxAssetReference(editor_state, sandbox_index, handle, asset_type);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name)
 {
 	unsigned int sandbox_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
@@ -221,7 +207,7 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
-	AssetDatabaseReference database_reference(&editor_state->asset_database, stack_allocator);
+	AssetDatabaseReference database_reference(editor_state->asset_database, stack_allocator);
 
 	bool success = LoadEditorSceneCore(editor_state, &entity_manager, &database_reference, absolute_path);
 	if (success) {
@@ -302,14 +288,6 @@ void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void CopyCachedResourcesIntoSandbox(EditorState* editor_state, unsigned int sandbox_index)
-{
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	sandbox->sandbox_world.resource_manager->InheritResources(editor_state->cache_resource_manager);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -363,6 +341,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 		sandbox->runtime_descriptor.graphics = nullptr;
 		sandbox->runtime_descriptor.task_manager = nullptr;
 		sandbox->runtime_descriptor.task_scheduler = nullptr;
+		sandbox->runtime_descriptor.resource_manager = nullptr;
 	}
 
 	sandbox->copy_world_status.unlock();
@@ -427,7 +406,8 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
 	// Notify the UI and the inspector
 	if (editor_state->sandboxes.size > 0) {
 		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
-		UpdateSandboxUIWindowIndex(editor_state, previous_count, sandbox_index);
+		UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
+		UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
 		UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
 	}
 
@@ -558,27 +538,8 @@ bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigne
 
 void InitializeSandboxes(EditorState* editor_state)
 {
-	const size_t GRAPHICS_ALLOCATOR_CAPACITY = ECS_KB * 50;
-	const size_t GRAPHICS_ALLOCATOR_BLOCK_COUNT = 1024;
-
 	// Set the allocator for the resizable strema
 	editor_state->sandboxes.Initialize(editor_state->EditorAllocator(), 0);
-
-	// Use separate allocator for them. Coallesce all the types into a single allocation
-	MemoryManager* cache_graphics_allocator = (MemoryManager*)editor_state->editor_allocator->Allocate(sizeof(MemoryManager) * 2 + sizeof(Graphics) + sizeof(ResourceManager));
-	MemoryManager* cache_resource_manager_allocator = (MemoryManager*)function::OffsetPointer(cache_graphics_allocator, sizeof(MemoryManager));
-
-	*cache_graphics_allocator = MemoryManager(GRAPHICS_ALLOCATOR_CAPACITY, GRAPHICS_ALLOCATOR_BLOCK_COUNT, GRAPHICS_ALLOCATOR_CAPACITY, editor_state->GlobalMemoryManager());
-	*cache_resource_manager_allocator = DefaultResourceManagerAllocator(editor_state->GlobalMemoryManager());
-
-	// Create the cache graphics
-	// We can just create a separate allocator for it and copy the UI graphics
-	editor_state->cache_graphics = (Graphics*)function::OffsetPointer(cache_resource_manager_allocator, sizeof(MemoryManager));
-	*editor_state->cache_graphics = Graphics(editor_state->UIGraphics(), nullptr, nullptr, cache_graphics_allocator);
-
-	// Create the resource manager
-	editor_state->cache_resource_manager = (ResourceManager*)function::OffsetPointer(editor_state->cache_graphics, sizeof(Graphics));
-	*editor_state->cache_resource_manager = ResourceManager(cache_resource_manager_allocator, editor_state->CacheGraphics(), editor_state->task_manager->GetThreadCount());
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -593,14 +554,6 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 		PreinitializeSandboxRuntime(editor_state, sandbox_index);
 	}
 	else {
-		// The graphics object must be manually recreated
-		*sandbox->runtime_descriptor.graphics = Graphics(
-			editor_state->cache_graphics,
-			sandbox->viewport_render_target,
-			sandbox->viewport_texture_depth,
-			sandbox->runtime_descriptor.graphics->m_allocator
-		);
-
 		// The task manager doesn't need to be recreated
 
 		// Recreate the world
@@ -821,7 +774,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
 			}
 
-			sandbox->database = AssetDatabaseReference(&editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
+			sandbox->database = AssetDatabaseReference(editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
 
 			// Now the modules
 			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {
@@ -925,14 +878,11 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->task_dependencies.elements.Initialize(sandbox_allocator, 0);
 
 	sandbox->modules_in_use.Initialize(sandbox_allocator, 0);
-	sandbox->database = AssetDatabaseReference(&editor_state->asset_database, sandbox_allocator);
+	sandbox->database = AssetDatabaseReference(editor_state->asset_database, sandbox_allocator);
 
 	// Create a graphics object that will inherit all the resources
-	Graphics* sandbox_graphics = (Graphics*)allocator->Allocate(sizeof(Graphics));
-	MemoryManager* sandbox_graphics_allocator = (MemoryManager*)allocator->Allocate(sizeof(MemoryManager));
-	*sandbox_graphics_allocator = DefaultGraphicsAllocator(allocator);
-	*sandbox_graphics = Graphics(editor_state->CacheGraphics(), nullptr, nullptr, sandbox_graphics_allocator);
-	sandbox->runtime_descriptor.graphics = sandbox_graphics;
+	sandbox->runtime_descriptor.graphics = editor_state->RuntimeGraphics();
+	sandbox->runtime_descriptor.resource_manager = editor_state->RuntimeResourceManager();
 
 	// Create the scene entity manager
 	sandbox->scene_entities = CreateEntityManagerWithPool(

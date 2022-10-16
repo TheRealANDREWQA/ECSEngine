@@ -11,8 +11,8 @@ namespace ECSEngine {
 
 	struct DecodedTexture {
 		Stream<void> data;
-		size_t width;
-		size_t height;
+		unsigned int width;
+		unsigned int height;
 		ECS_GRAPHICS_FORMAT format;
 	};
 
@@ -178,14 +178,18 @@ namespace ECSEngine {
 		size_t resize_flags = ECS_RESIZE_TEXTURE_FILTER_LINEAR
 	);
 
+#define ECS_DECODE_TEXTURE_HDR_TONEMAP (1 << 0)
+
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
-	// decompressed data; Momentarly there are no flags
+	// decompressed data;
 	// If it fails it returns a { nullptr, 0 } 
+	// FLAGS: ECS_DECODE_TEXTURE_HDR_TONEMAP
 	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, TextureExtension extension, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// Returns the section of the texture without the header - it will do internally another allocation for the 
-	// decompressed data; Momentarly there are no flags. The filename is needed in for the texture extension
+	// decompressed data; The filename is needed in for the texture extension
 	// If it fails it returns a { nullptr, 0 } 
+	// FLAGS: ECS_DECODE_TEXTURE_HDR_TONEMAP
 	ECSENGINE_API DecodedTexture DecodeTexture(Stream<void> data, Stream<wchar_t> filename, AllocatorPolymorphic allocator, size_t flags = 0);
 
 	// It will invert the mesh on the Z axis

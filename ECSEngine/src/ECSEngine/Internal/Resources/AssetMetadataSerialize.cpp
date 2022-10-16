@@ -36,33 +36,58 @@ namespace ECSEngine {
 		
 		write_size += WriteWithSizeShort(data->stream, asset->name.buffer, asset->name.size * sizeof(char), data->write_data);
 		write_size += Write(data->stream, &asset->textures.size, sizeof(unsigned short), data->write_data);
-		write_size += Write(data->stream, &asset->buffers.size, sizeof(unsigned short), data->write_data);
 		write_size += Write(data->stream, &asset->samplers.size, sizeof(unsigned short), data->write_data);
-		write_size += Write(data->stream, &asset->shaders.size, sizeof(unsigned short), data->write_data);
+		write_size += Write(data->stream, &asset->buffers.size, sizeof(unsigned short), data->write_data);
+		write_size += Write(data->stream, &asset->vertex_shader_handle, sizeof(asset->vertex_shader_handle), data->write_data);
+		write_size += Write(data->stream, &asset->pixel_shader_handle, sizeof(asset->pixel_shader_handle), data->write_data);
 
 		// Get the names of the resources being referenced and serialize these as well
 		for (size_t index = 0; index < asset->textures.size; index++) {
-			Stream<char> current_name = database->GetTextureConst(asset->textures[index].metadata_handle)->name;
-			write_size += WriteWithSizeShort(data->stream, current_name.buffer, current_name.size, data->write_data);
+			const auto* texture = database->GetTextureConst(asset->textures[index].metadata_handle);
+			Stream<char> current_name = texture->name;
+			Stream<wchar_t> file = texture->file;
+			write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
+			write_size += WriteWithSizeShort(data->stream, file, data->write_data);
+			write_size += Write(data->stream, &asset->textures[index].slot, sizeof(asset->textures[index].slot), data->write_data);
+		}
+
+		// Get the names of the resources being referenced and serialize these as well
+		for (size_t index = 0; index < asset->samplers.size; index++) {
+			const auto* sampler = database->GetGPUSamplerConst(asset->samplers[index].metadata_handle);
+			Stream<char> current_name = sampler->name;
+			write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
 			write_size += Write(data->stream, &asset->textures[index].slot, sizeof(asset->textures[index].slot), data->write_data);
 		}
 
 		for (size_t index = 0; index < asset->buffers.size; index++) {
-			Stream<char> current_name = database->GetGPUBufferConst(asset->buffers[index].metadata_handle)->name;
-			write_size += WriteWithSizeShort(data->stream, current_name.buffer, current_name.size, data->write_data);
+			write_size += Write(data->stream, &asset->buffers[index].shader_type, sizeof(asset->buffers[index].shader_type), data->write_data);
 			write_size += Write(data->stream, &asset->buffers[index].slot, sizeof(asset->buffers[index].slot), data->write_data);
+			write_size += Write(data->stream, &asset->buffers[index].dynamic, sizeof(asset->buffers[index].dynamic), data->write_data);
+			if (!asset->buffers[index].dynamic) {
+				// If static, the data needs to be specified
+				ECS_ASSERT(asset->buffers[index].data.buffer != nullptr);
+				write_size += WriteWithSizeShort(data->stream, asset->buffers[index].data, data->write_data);
+			}
+			else {
+				// Write a bool indicating whether or not there is data
+				bool has_data = asset->buffers[index].data.buffer != nullptr;
+				write_size += Write(data->stream, &has_data, sizeof(has_data), data->write_data);
+				if (has_data) {
+					write_size += WriteWithSizeShort(data->stream, asset->buffers[index].data, data->write_data);
+				}
+				else {
+					write_size += Write(data->stream, &asset->buffers[index].data.size, sizeof(unsigned short), data->write_data);
+				}
+			}
 		}
 
-		for (size_t index = 0; index < asset->samplers.size; index++) {
-			Stream<char> current_name = database->GetGPUSamplerConst(asset->samplers[index].metadata_handle)->name;
-			write_size += WriteWithSizeShort(data->stream, current_name.buffer, current_name.size, data->write_data);
-			write_size += Write(data->stream, &asset->samplers[index].slot, sizeof(asset->samplers[index].slot), data->write_data);
-		}
+		const auto* vertex_shader = database->GetShaderConst(asset->vertex_shader_handle);
+		write_size += WriteWithSizeShort(data->stream, vertex_shader->name, data->write_data);
+		write_size += WriteWithSizeShort(data->stream, vertex_shader->file, data->write_data);
 
-		for (size_t index = 0; index < asset->shaders.size; index++) {
-			Stream<char> current_name = database->GetShaderConst(asset->shaders[index])->name;
-			write_size += WriteWithSizeShort(data->stream, current_name.buffer, current_name.size, data->write_data);
-		}
+		const auto* pixel_shader = database->GetShaderConst(asset->vertex_shader_handle);
+		write_size += WriteWithSizeShort(data->stream, pixel_shader->name, data->write_data);
+		write_size += WriteWithSizeShort(data->stream, pixel_shader->file, data->write_data);
 
 		return write_size;
 	}
@@ -83,82 +108,129 @@ namespace ECSEngine {
 		MaterialAsset* asset = (MaterialAsset*)data->data;
 
 		size_t read_size = 0;
-		unsigned short name_size = 0;
-		read_size += ReferenceDataWithSizeShort(data->stream, (void**)&asset->name.buffer, name_size, data->read_data);
-		asset->name.size = name_size;
-		
-		unsigned short texture_size = 0;
-		unsigned short buffer_size = 0;
-		unsigned short sampler_size = 0;
-		unsigned short shader_size = 0;
-		Read<true>(data->stream, &texture_size, sizeof(unsigned short));
-		Read<true>(data->stream, &buffer_size, sizeof(unsigned short));
-		Read<true>(data->stream, &sampler_size, sizeof(unsigned short));
-		Read<true>(data->stream, &shader_size, sizeof(unsigned short));
-
-		ECS_STACK_CAPACITY_STREAM(char, name_buffer, 256);
+		AllocatorPolymorphic allocator = data->options->field_allocator;
 
 		if (data->read_data) {
-			AllocatorPolymorphic allocator = data->options->backup_allocator;
+			Stream<void> name = ReadAllocateDataShort<true>(data->stream, allocator);
+		}
+		else {
+			read_size += IgnoreWithSizeShort(data->stream);
+		}
+		
+		unsigned short texture_size = 0;
+		unsigned short sampler_size = 0;
+		unsigned short buffer_size = 0;
+		Read<true>(data->stream, &texture_size, sizeof(unsigned short));
+		Read<true>(data->stream, &sampler_size, sizeof(unsigned short));
+		Read<true>(data->stream, &buffer_size, sizeof(unsigned short));
+
+		ECS_STACK_CAPACITY_STREAM(char, name_buffer, 256);
+		ECS_STACK_CAPACITY_STREAM(wchar_t, file_buffer, 256);
+
+		if (data->read_data) {
 			// Allocate the buffers;
-			asset->textures.Initialize(allocator, texture_size);
-			asset->buffers.Initialize(allocator, buffer_size);
-			asset->samplers.Initialize(allocator, sampler_size);
-			asset->shaders.Initialize(allocator, shader_size);
+			memset(asset, 0, sizeof(*asset));
+			asset->Resize(texture_size, sampler_size, buffer_size, allocator);
+		}
+		Read(data->stream, &asset->vertex_shader_handle, sizeof(asset->vertex_shader_handle), data->read_data);
+		Read(data->stream, &asset->pixel_shader_handle, sizeof(asset->pixel_shader_handle), data->read_data);
 
-			// Read the names now. Then use the database to get the handles for those resources
-			for (size_t index = 0; index < texture_size; index++) {
-				unsigned short name_size = 0;
-				ReadWithSizeShort<true>(data->stream, name_buffer.buffer, name_size);
-				name_buffer.size = name_size;
+		// Read the names now. Then use the database to get the handles for those resources
+		for (unsigned short index = 0; index < texture_size; index++) {
+			unsigned short name_size = 0;
+			read_size += ReadWithSizeShort(data->stream, name_buffer.buffer, name_size, data->read_data);
+			name_buffer.size = name_size / sizeof(char);
 
-				unsigned char slot = 0;
-				unsigned int handle = database->AddTexture(name_buffer);
-				Read<true>(data->stream, &slot, sizeof(slot));
+			unsigned short file_size = 0;
+			read_size += ReadWithSizeShort(data->stream, file_buffer.buffer, file_size, data->read_data);
+			file_buffer.size = file_size / sizeof(wchar_t);
+
+			unsigned char slot = 0;
+			Read(data->stream, &slot, sizeof(slot), data->read_data);
+			if (data->read_data) {
+				unsigned int handle = database->AddTexture(name_buffer, file_buffer);
 				asset->textures[index].metadata_handle = handle;
 				asset->textures[index].slot = slot;
 			}
+		}
 
-			for (size_t index = 0; index < buffer_size; index++) {
-				unsigned short name_size = 0;
-				ReadWithSizeShort<true>(data->stream, name_buffer.buffer, name_size);
-				name_buffer.size = name_size;
+		for (unsigned short index = 0; index < sampler_size; index++) {
+			unsigned short name_size = 0;
+			read_size += ReadWithSizeShort(data->stream, name_buffer.buffer, name_size, data->read_data);
+			name_buffer.size = name_size / sizeof(char);
 
-				unsigned char slot = 0;
-				unsigned int handle = database->AddGPUBuffer(name_buffer);
-				Read<true>(data->stream, &slot, sizeof(slot));
-				asset->buffers[index].metadata_handle = handle;
-				asset->buffers[index].slot = slot;
-			}
-
-			for (size_t index = 0; index < sampler_size; index++) {
-				unsigned short name_size = 0;
-				ReadWithSizeShort<true>(data->stream, name_buffer.buffer, name_size);
-				name_buffer.size = name_size;
-
-				unsigned char slot = 0;
+			unsigned char slot = 0;
+			Read(data->stream, &slot, sizeof(slot), data->read_data);
+			if (data->read_data) {
 				unsigned int handle = database->AddGPUSampler(name_buffer);
-				Read<true>(data->stream, &slot, sizeof(slot));
 				asset->samplers[index].metadata_handle = handle;
-				asset->samplers[index].slot = slot;
-			}
-
-			for (size_t index = 0; index < shader_size; index++) {
-				unsigned short name_size = 0;
-				ReadWithSizeShort<true>(data->stream, name_buffer.buffer, name_size);
-				name_buffer.size = name_size;
-
-				unsigned int handle = database->AddTexture(name_buffer);
-				asset->shaders[index] = handle;
+				asset->textures[index].slot = slot;
 			}
 		}
+
+		for (unsigned short index = 0; index < buffer_size; index++) {
+			ECS_SHADER_TYPE shader_type;
+			unsigned char slot;
+			bool dynamic;
+			Read<true>(data->stream, &shader_type, sizeof(shader_type));
+			Read<true>(data->stream, &slot, sizeof(slot));
+			Read<true>(data->stream, &dynamic, sizeof(dynamic));
+
+			Stream<void> current_data = { nullptr, 0 };
+			if (!dynamic) {
+				current_data = ReadAllocateDataShort(data->stream, allocator, data->read_data);
+			}
+			else {
+				bool has_data;
+				Read<true>(data->stream, &has_data, sizeof(has_data));
+				if (has_data) {
+					current_data = ReadAllocateDataShort(data->stream, allocator, data->read_data);
+				}
+				else {
+					unsigned short data_size;
+					Read<true>(data->stream, &data_size, sizeof(data_size));
+					Ignore(data->stream, data_size);
+					current_data.size = data_size;
+				}
+			}
+
+			if (data->read_data) {
+				asset->buffers[index].data = current_data;
+				asset->buffers[index].dynamic = dynamic;
+				asset->buffers[index].shader_type = shader_type;
+				asset->buffers[index].slot = slot;
+			}
+			read_size += current_data.size;
+		}
+
+		if (data->read_data) {
+			unsigned short vertex_shader_name_size = 0;
+			read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, vertex_shader_name_size);
+			name_buffer.size = vertex_shader_name_size / sizeof(char);
+
+			unsigned short vertex_shader_file_size = 0;
+			read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, vertex_shader_file_size);
+			file_buffer.size = vertex_shader_file_size / sizeof(wchar_t);
+
+			unsigned int vertex_handle = database->AddShader(name_buffer, file_buffer);
+			asset->vertex_shader_handle = vertex_handle;
+
+			unsigned short pixel_shader_name_size = 0;
+			read_size += ReadWithSizeShort<true>(data->stream, name_buffer.buffer, pixel_shader_name_size);
+			name_buffer.size = pixel_shader_name_size;
+
+			unsigned short pixel_shader_file_size = 0;
+			read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, pixel_shader_file_size);
+			file_buffer.size = pixel_shader_file_size / sizeof(wchar_t);
+
+			unsigned int pixel_handle = database->AddShader(name_buffer, file_buffer);
+			asset->pixel_shader_handle = pixel_handle;
+		}
 		else {
-			MaterialAsset temp_asset;
-			temp_asset.textures.size = texture_size;
-			temp_asset.buffers.size = buffer_size;
-			temp_asset.samplers.size = sampler_size;
-			temp_asset.shaders.size = shader_size;
-			read_size += temp_asset.CopySize();
+			// The vertex shader name
+			IgnoreWithSizeShort(data->stream);
+			// The pixel shader name
+			IgnoreWithSizeShort(data->stream);
 		}
 
 		return read_size;

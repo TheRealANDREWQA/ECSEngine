@@ -6,7 +6,7 @@
 #include "../../Application.h"
 #include "../../Utilities/Mouse.h"
 #include "../../Utilities/Keyboard.h"
-#include "../../Rendering/ColorMacros.h"
+#include "../../Rendering/ColorUtilities.h"
 #include "../../Internal/Multithreading/ThreadTask.h"
 
 namespace ECSEngine {
@@ -85,7 +85,17 @@ namespace ECSEngine {
 				);
 			}
 
+			// Returns { nullptr, 0 } if there is no drag data. If there is, it returns it.
+			// If highlight element is given, it will set it to true if it should highlight, else to fale
+			Stream<void> AcquireDragDrop(float2 position, float2 scale, Stream<Stream<char>> name, bool* highlight_element = nullptr, unsigned int* matched_name = nullptr);
+
 			void AddDefaultHoverable(const UISystemDefaultHoverableData& data);
+
+			void AddFrameHandler(UIActionHandler handler);
+
+			// If the resource size is 0, it will just reference the pointer
+			// Returns the pointer stored internally (useful if size != 0)
+			void* AddGlobalResource(Stream<void> resource, Stream<char> name);
 
 			void AddHoverableToDockspaceRegion(
 				unsigned int thread_id,
@@ -133,7 +143,7 @@ namespace ECSEngine {
 
 			void AddDefaultClickable(const UISystemDefaultClickableData& data);
 
-			void AddDefaultHoverableClickable(UISystemDefaultHoverableClickableData& data);
+			void AddDefaultHoverableClickable(const UISystemDefaultHoverableClickableData& data);
 
 			void AddClickableToDockspaceRegion(
 				unsigned int thread_id,
@@ -354,8 +364,6 @@ namespace ECSEngine {
 
 			void AddWindowDynamicElementAllocation(unsigned int window_index, unsigned int index, void* allocation);
 
-			void AddFrameHandler(UIActionHandler handler);
-
 			void BindWindowHandler(Action action, Action data_initializer, size_t data_size);
 
 			void CalculateDockspaceRegionHeaders(
@@ -376,6 +384,10 @@ namespace ECSEngine {
 			// Changes the name with the current index appended to the base name into the new index
 			// E.g. Inspector 0 -> Inspector 1
 			void ChangeWindowNameFromIndex(Stream<char> base_name, unsigned int current_index, unsigned int new_index);
+
+			void ChangeFocusedWindowHoverable(UIActionHandler handler, float2 mouse_position = { -2.0f, -2.0f });
+
+			void ChangeFocusedWindowGeneral(UIActionHandler handler, float2 mouse_position = { -2.0f, -2.0f });
 
 			// it will automatically set the event if a border is hovered
 			bool CheckDockspaceInnerBorders(
@@ -801,6 +813,9 @@ namespace ECSEngine {
 			bool ExistsWindowResource(unsigned int window_index, Stream<char> name) const;
 
 			void EvictOutdatedTextures();
+			
+			// Removes the given drag drop and deallocates everything used
+			void EndDragDrop(Stream<char> name);
 
 			void FillActionDataSystemParameters(ActionData* action_data);
 
@@ -826,6 +841,10 @@ namespace ECSEngine {
 
 			void* FindWindowResource(unsigned int window_index, const void* identifier, unsigned int identifier_size) const;
 
+			// Returns -1 if it doesn't find it. If the data is nullptr, then it will return the first frame handler
+			// that has that function
+			unsigned int FindFrameHandler(Action action, void* data = nullptr) const;
+
 			void FixFixedDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer);
 
 			void FixBackgroundDockspace(UIDockspaceLayer old, UIDockspaceLayer new_layer);
@@ -836,6 +855,17 @@ namespace ECSEngine {
 				float font_size_x,
 				float font_size_y,
 				float character_spacing
+			) const;
+
+			// It fills in the positions of the text sprites and their scale when positioned at the given translation
+			template<bool horizontal = true>
+			ECSENGINE_API void GetTextCharacterPositions(
+				Stream<char> characters,
+				float2 font_size, 
+				float character_spacing, 
+				float2* positions,
+				float2* scales, 
+				float2 translation = { 0.0f, 0.0f }
 			) const;
 
 			float GetSpaceXSpan(float font_size_x);
@@ -915,6 +945,9 @@ namespace ECSEngine {
 				DockspaceType& type,
 				unsigned int& border_index
 			) const;
+
+			// Returns nullptr if it doesn't exist
+			Stream<void> GetGlobalResource(Stream<char> name) const;
 
 			bool GetLastRevertCommand(HandlerCommand& command, unsigned int window_index);
 
@@ -1297,9 +1330,17 @@ namespace ECSEngine {
 			void RemoveFrameHandler(Action action, void* handler_data);
 
 			void RemoveFrameHandler(unsigned int index);
+
+			void RemoveGlobalResource(Stream<char> name);
 			
 			// removes the last sprite texture written
 			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL);
+
+			UIReservedHandler ReserveHoverable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase);
+
+			UIReservedHandler ReserveClickable(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase);
+
+			UIReservedHandler ReserveGeneral(unsigned int thread_id, UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE);
 
 			// returns whether or not the parent can continue resizing
 			bool ResizeDockspace(
@@ -1349,6 +1390,8 @@ namespace ECSEngine {
 				DockspaceType* border_mask_index,
 				unsigned int& parent_count
 			);
+
+			void SetActiveWindowForDockspaceBorder(UIDockspace* dockspace, unsigned int border_index, unsigned int window_index);
 
 			void SetActiveWindow(unsigned int index);
 
@@ -1512,6 +1555,10 @@ namespace ECSEngine {
 
 			void SetWindowOSSize(uint2 new_size);
 
+			// Used for inter window communication
+			// The interested elements need to use AcquireDragDrop() to be notified if they received something
+			void StartDragDrop(Stream<void> data, Stream<char> name);
+
 			void TranslateDockspace(UIDockspace* dockspace, float2 translation);
 
 			LinearAllocator* TemporaryAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase);
@@ -1558,20 +1605,20 @@ namespace ECSEngine {
 				dockspace->transform.position = position;
 				if (type == DockspaceType::FloatingHorizontal) {
 					dockspace->transform.scale.y = scale.y;
-					ResizeDockspace(dockspace_index, scale.x - dockspace->transform.scale.x, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT, type);
+					ResizeDockspace(dockspace_index, scale.x - dockspace->transform.scale.x, ECS_UI_BORDER_RIGHT, type);
 				}
 				else {
 					dockspace->transform.scale.x = scale.x;
-					ResizeDockspace(dockspace_index, scale.y - dockspace->transform.scale.y, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_BOTTOM, type);
+					ResizeDockspace(dockspace_index, scale.y - dockspace->transform.scale.y, ECS_UI_BORDER_BOTTOM, type);
 				}
 
 				if constexpr (~flags & UI_TRIM_POP_UP_WINDOW_NO_HORIZONTAL_LEFT) {
 					if (position.x < parent_position.x) {
 						float difference = parent_position.x - position.x;
 						dockspace->transform.position.x = parent_position.x;
-						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
+						difference = difference > dockspace->transform.scale.x ? dockspace->transform.scale.x : difference;
 						if (type == DockspaceType::FloatingHorizontal) {
-							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_TYPE::ECS_UI_BORDER_RIGHT, type);
+							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_RIGHT, type);
 						}
 						else {
 							dockspace->transform.scale.x -= difference;
@@ -1587,7 +1634,7 @@ namespace ECSEngine {
 
 					if (position.x + scale.x > right_border) {
 						float difference = position.x + scale.x - right_border;
-						difference = function::Select(difference > dockspace->transform.scale.x, dockspace->transform.scale.x, difference);
+						difference = difference > dockspace->transform.scale.x ? dockspace->transform.scale.x : difference;
 						if (type == DockspaceType::FloatingHorizontal) {
 							ResizeDockspace(dockspace_index, -difference, ECS_UI_BORDER_RIGHT, type);
 						}
@@ -1606,7 +1653,7 @@ namespace ECSEngine {
 					if (position.y < top_border) {
 						float difference = top_border - position.y;
 						dockspace->transform.position.y = top_border;
-						difference = function::Select(difference > dockspace->transform.scale.y, dockspace->transform.scale.y, difference);
+						difference = difference > dockspace->transform.scale.y ? dockspace->transform.scale.y : difference;
 						if (type == DockspaceType::FloatingHorizontal) {
 							dockspace->transform.scale.y -= difference;
 						}
@@ -1624,7 +1671,7 @@ namespace ECSEngine {
 
 					if (position.y + scale.y > bottom_border) {
 						float difference = position.y + scale.y - bottom_border;
-						difference = function::Select(difference > dockspace->transform.scale.y, dockspace->transform.scale.y, difference);
+						difference = difference > dockspace->transform.scale.y ? dockspace->transform.scale.y : difference;
 						if (type == DockspaceType::FloatingHorizontal) {
 							dockspace->transform.scale.y -= difference;
 						}
@@ -1642,6 +1689,10 @@ namespace ECSEngine {
 			void UpdateFocusedWindowCleanupLocation();
 
 			bool WriteDescriptorsFile(Stream<wchar_t> filename) const;
+
+			void WriteReservedDefaultClickable(UIReservedHandler hoverable_reservation, UIReservedHandler clickable_reservation, const UISystemDefaultClickableData& data);
+
+			void WriteResevedDefaultHoverableClickable(UIReservedHandler hoverable_reservation, UIReservedHandler clickable_reservation, const UISystemDefaultHoverableClickableData& data);
 
 			bool WriteUIFile(Stream<wchar_t> filename, CapacityStream<char>& error_message) const;
 
@@ -1670,6 +1721,9 @@ namespace ECSEngine {
 			CapacityStream<unsigned int> m_pop_up_windows;
 			ThreadSafeQueue<ThreadTask> m_thread_tasks;
 			UIRenderResources m_resources;
+			// The intended purpose of the global resources is to ease inter-window communication
+			// For example draggables across windows
+			UIGlobalResources m_global_resources;
 			float2 m_previous_mouse_position;
 			// this is used to set the default handler for windows
 			UIActionHandler m_window_handler;

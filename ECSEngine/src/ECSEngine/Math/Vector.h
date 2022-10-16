@@ -159,6 +159,10 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_INLINE void StoreFloat3(float3* destination) const {
+			StorePartialConstant<3>(destination);
+		}
+
 		ECS_INLINE float First() const {
 			return _mm_cvtss_f32(value);
 		}
@@ -301,20 +305,34 @@ namespace ECSEngine {
 			value.store_partial(count, (float*)destination);
 		}
 
-		template<int count>
+		// If the count is <= 4, the low parameter tells which part to write
+		// For count >= 5, low is irrelevant
+		template<int count, bool low = true>
 		void StorePartialConstant(void* destination) const {
 			float* float_destination = (float*)destination;
 			
 			if constexpr (count <= 4) {
-				Vector4 low = value.get_low();
-				low.StorePartialConstant<count>(destination);
+				if constexpr (low) {
+					Vector4 low_data = value.get_low();
+					low_data.StorePartialConstant<count>(destination);
+				}
+				else {
+					Vector4 high_data = value.get_high();
+					high_data.StorePartialConstant<count>(destination);
+				}
 			}
 			else if constexpr (count <= 8) {
-				Vector4 low = value.get_low();
-				low.Store(destination);
-				Vector4 high = value.get_high();
-				high.StorePartialConstant<count - 4>(float_destination + 4);
+				Vector4 low_data = value.get_low();
+				low_data.Store(destination);
+				Vector4 high_data = value.get_high();
+				high_data.StorePartialConstant<count - 4>(float_destination + 4);
 			}
+		}
+
+		// Stores both the low and the high part
+		ECS_INLINE void StoreFloat3(float3* destination) const {
+			StorePartialConstant<3, true>(destination);
+			StorePartialConstant<3, false>(destination + 1);
 		}
 
 		ECS_INLINE float First() const {

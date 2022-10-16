@@ -1,5 +1,4 @@
 #pragma once
-#include "../../Rendering/ColorMacros.h"
 
 namespace ECSEngine {
 
@@ -102,6 +101,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COMBO_BOX_DISABLE_X_SCALING = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_COMBO_BOX_PREFIX = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_COMBO_BOX_CALLBACK = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_COMBO_BOX_NAME_WITH_SCALE = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_CHECK_BOX_NO_NAME = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_CHECK_BOX_CALLBACK = (size_t)1 << 46;
@@ -111,7 +111,7 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_NO_NAME = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_DO_NOT_INFER = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_SELECTION = (size_t)1 << 47;
-		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_GET_TRANSFORM = (size_t)1 << 48;
+		constexpr size_t UI_CONFIG_COLLAPSING_HEADER_BUTTONS = (size_t)1 << 48;
 
 		constexpr size_t UI_CONFIG_HIERARCHY_DO_NOT_OFFSET = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_HIERARCHY_DO_NOT_REDUCE_Y = (size_t)1 << 46;
@@ -165,6 +165,8 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_RANGE = (size_t)1 << 46;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_DEFAULT = (size_t)1 << 47;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE = (size_t)1 << 48;
+		// The callback will be triggered only when the value is released
+		constexpr size_t UI_CONFIG_NUMBER_INPUT_DRAG_CALLBACK_ON_RELEASE = (size_t)1 << 49;
 
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_NUMBER_INPUT_GROUP_UNIFORM_BOUNDS = (size_t)1 << 51;
@@ -209,8 +211,6 @@ namespace ECSEngine {
 
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 51;
-		
-		const Color MULTI_GRAPH_COLORS[] = {Color(40, 180, 40), Color(35, 150, 35), Color(40, 120, 30), Color(30, 100, 40)};
 	}
 
 }

@@ -165,16 +165,29 @@ namespace ECSEngine {
 			return string.size == other.size && (memcmp(string.buffer, other.buffer, sizeof(char) * other.size) == 0);
 		}
 
-		inline bool CompareStrings(const wchar_t* ECS_RESTRICT string, const wchar_t* ECS_RESTRICT other) {
-			size_t string_size = wcslen(string);
-			size_t other_size = wcslen(other);
-			return CompareStrings(Stream<wchar_t>(string, string_size), Stream<wchar_t>(other, other_size));
+		// This is an implementation version because if use this version then we can't have
+		// conversions between capacity streams and normal streams.
+		template<typename CharacterType>
+		inline bool StringIsLessImpl(Stream<CharacterType> string, Stream<CharacterType> comparator) {
+			for (size_t index = 0; index < string.size && index < comparator.size; index++) {
+				if (string[index] < comparator[index]) {
+					return true;
+				}
+				if (string[index] > comparator[index]) {
+					return false;
+				}
+			}
+
+			// If the string has fewer characters than the other, than it is less
+			return string.size < comparator.size;
 		}
 
-		inline bool CompareStrings(const char* ECS_RESTRICT string, const char* ECS_RESTRICT other) {
-			size_t string_size = strlen(string);
-			size_t other_size = strlen(string);
-			return CompareStrings(Stream<char>(string, string_size), Stream<char>(other, other_size));
+		inline bool StringIsLess(Stream<char> string, Stream<char> comparator) {
+			return StringIsLessImpl(string, comparator);
+		}
+
+		inline bool StringIsLess(Stream<wchar_t> string, Stream<wchar_t> comparator) {
+			return StringIsLessImpl(string, comparator);
 		}
 
 		inline void* OffsetPointer(const void* pointer, int64_t offset) {
@@ -197,6 +210,13 @@ namespace ECSEngine {
 		// Returns true if the pointer >= base && pointer < base + size
 		inline bool IsPointerRange(const void* base, size_t size, const void* pointer) {
 			return pointer >= base && PointerDifference(pointer, base) < size;
+		}
+
+		inline bool AreAliasing(Stream<void> first, Stream<void> second) {
+			auto test = [](Stream<void> first, Stream<void> second) {
+				return first.buffer >= second.buffer && (first.buffer < function::OffsetPointer(second.buffer, second.size));
+			};
+			return test(first, second) || test(second, first);
 		}
 
 		inline void* RemapPointerIfInRange(const void* base, size_t size, const void* new_base, const void* pointer) {
@@ -315,24 +335,6 @@ namespace ECSEngine {
 			wide_string.size += ascii_string.size;
 		}
 
-		inline void ConcatenateCharPointers(
-			char* pointer_to_store, 
-			const char* pointer_to_add, 
-			size_t offset, 
-			size_t size_of_pointer_to_add = 0
-		) {
-			memcpy(pointer_to_store + offset, pointer_to_add, size_of_pointer_to_add == 0 ? strlen(pointer_to_add) : size_of_pointer_to_add);
-		}
-
-		inline void ConcatenateWideCharPointers(
-			wchar_t* pointer_to_store,
-			const wchar_t* pointer_to_add,
-			size_t offset,
-			size_t size_of_pointer_to_add = 0
-		) {
-			memcpy(pointer_to_store + offset, pointer_to_add, (size_of_pointer_to_add == 0 ? wcsnlen_s(pointer_to_add, 4096) : size_of_pointer_to_add) * sizeof(wchar_t));
-		}
-
 		// Can use the increment to go backwards by setting it to -1
 		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
@@ -340,9 +342,6 @@ namespace ECSEngine {
 			}
 			return pointer;
 		}
-
-		ECSENGINE_API void CheckWindowsFunctionErrorCode(HRESULT hr, LPCWSTR box_name, const char* filename, unsigned int line, bool do_exit);
-#define ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(hr, box_name, do_exit) function::CheckWindowsFunctionErrorCode(hr, box_name, __FILE__, __LINE__, do_exit)
 
 		// returns the count of decoded numbers
 		ECSENGINE_API size_t ParseNumbersFromCharString(Stream<char> character_buffer, unsigned int* number_buffer);
@@ -399,6 +398,21 @@ namespace ECSEngine {
 		// Can use the increment to go backwards by setting it to -1
 		inline const wchar_t* SkipWhitespace(const wchar_t* pointer, int increment = 1) {
 			while (*pointer == L' ' || *pointer == L'\t') {
+				pointer += increment;
+			}
+			return pointer;
+		}
+
+		// Tabs, spaces and new lines
+		inline const char* SkipWhitespaceEx(const char* pointer, int increment = 1) {
+			while (*pointer == ' ' || *pointer == '\t' || *pointer == '\n') {
+				pointer += increment;
+			}
+			return pointer;
+		}
+
+		inline const wchar_t* SkipWhitespaceEx(const wchar_t* pointer, int increment = 1) {
+			while (*pointer == L' ' || *pointer == L'\t' || *pointer == L'\n') {
 				pointer += increment;
 			}
 			return pointer;
@@ -482,9 +496,9 @@ namespace ECSEngine {
 		}
 
 		constexpr ECS_INLINE double CalculateDoublePrecisionPower(size_t precision) {
-			double value = 1.0f;
+			double value = 1.0;
 			for (size_t index = 0; index < precision; index++) {
-				value *= 10.0f;
+				value *= 10.0;
 			}
 			return value;
 		}
@@ -543,11 +557,22 @@ namespace ECSEngine {
 
 		ECSENGINE_API unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other);
 
+		// Looks up into a stream at the given offset to look for the string.
+		// Also needs to specify if capacity or not
+		ECSENGINE_API unsigned int FindStringOffset(Stream<char> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
+
+		// Looks up into a stream at the given offset to look for the string.
+		// Also needs to specify if capacity or not
+		ECSENGINE_API unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
+
 		// If allocating a stream alongside its data, this function sets it up
 		ECSENGINE_API void* CoallesceStreamWithData(void* allocation, size_t size);
 
 		// If allocating a capacity stream alongside its data, this function sets it up
 		ECSENGINE_API void* CoallesceCapacityStreamWithData(void* allocation, size_t size, size_t capacity);
+
+		// Returns a stream allocated alongside its data
+		ECSENGINE_API void* CoallesceStreamWithData(AllocatorPolymorphic allocator, Stream<void> data, size_t element_size);
 
 		// Verifies if the characters form a valid floating point number: 
 		// consisting of at maximum a dot and only number characters and at max a minus or plus as the first character
@@ -566,6 +591,11 @@ namespace ECSEngine {
 		// and return the value into stream.buffer + stream.size. Example |value  \n | ->
 		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
 		ECSENGINE_API Stream<char> SkipWhitespace(Stream<char> characters, int increment = 1);
+
+		// If the increment is negative, it will start from the last character to the first
+		// and return the value into stream.buffer + stream.size. Example |value  \n | ->
+		// will be returned as |value| -> stream.buffer = 'v', stream.buffer + stream.size = 'e'
+		ECSENGINE_API Stream<char> SkipWhitespaceEx(Stream<char> characters, int increment = 1);
 
 		// If the increment is negative, it will start from the last character to the first
 		// and return the value into stream.buffer + stream.size. Example |hey   value| ->
@@ -603,6 +633,10 @@ namespace ECSEngine {
 
 		// If the pointer is null, it will commit the message
 		ECSENGINE_API void SetErrorMessage(CapacityStream<char>* error_message, const char* message);
+
+		ECSENGINE_API void ReplaceCharacter(Stream<char> string, char token_to_be_replaced, char replacement);
+
+		ECSENGINE_API void ReplaceCharacter(Stream<wchar_t> string, wchar_t token_to_be_replaced, wchar_t replacement);
 
 		template<typename CharacterType>
 		struct ReplaceOccurence {
@@ -703,6 +737,14 @@ namespace ECSEngine {
 		// compiler to generate for you the SIMD search. Returns -1 if it doesn't
 		// find the value. Only types of 1, 2, 4 or 8 bytes are accepted
 		ECSENGINE_API size_t SearchBytesReversed(const void* data, size_t element_count, size_t value_to_search, size_t byte_size);
+
+		// Uses a more generalized approach to comparing. It will use the fast SIMD compare for sizes of 1, 2, 4 and 8
+		// but for all the others is going to fall back on memcmp. Returns -1 if it doesn't find the value
+		ECSENGINE_API size_t SearchBytesEx(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
+
+		// Uses a more generalized approach to comparing. It will use the fast SIMD compare for sizes of 1, 2, 4 and 8
+		// but for all the others is going to fall back on memcmp. Returns -1 if it doesn't find the value
+		ECSENGINE_API size_t SearchBytesExReversed(const void* data, size_t element_count, const void* value_to_search, size_t byte_size);
 
 	}
 

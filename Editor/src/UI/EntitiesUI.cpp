@@ -7,7 +7,7 @@
 
 #include "ECSEngineComponents.h"
 
-#include "Scene.h"
+#include "CreateScene.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -48,8 +48,9 @@ struct HierarchyIteratorImpl {
 		Entity entity = implementation.GetReturnValue(value, allocator);
 		entity_label.size = 0;
 		const void* component = entity_manager->TryGetComponent(entity, name_component);
+		const Name* name = (const Name*)component;
 		if (component != nullptr) {
-			return ((Name*)component)->name;
+			return name->name;
 		}
 			
 		EntityToString(entity, entity_label);
@@ -75,57 +76,6 @@ struct HierarchyIteratorImpl {
 };
 
 typedef DFSIterator<HierarchyIteratorImpl> DFSUIHierarchy;
-
-struct AllEntitiesIteratorImpl {
-	using storage_type = Entity;
-
-	using return_type = Stream<char>;
-
-	Stream<storage_type> GetChildren(storage_type value, AllocatorPolymorphic allocator) {
-		return { nullptr, 0 };
-	}
-
-	bool HasChildren(storage_type value) const {
-		return false;
-	}
-
-	Stream<storage_type> GetRoots(AllocatorPolymorphic allocator) {
-		// Need to return all entities
-		unsigned int entities_count = entity_pool->GetCount();
-		Stream<storage_type> entities;
-		entities.Initialize(allocator, entities_count);
-		entities.size = 0;
-
-		entity_pool->ForEach([&](Entity entity, EntityInfo info) {
-			entities.Add(entity);
-		});
-
-		return entities;
-	}
-
-	return_type GetReturnValue(storage_type value, AllocatorPolymorphic allocator) {
-		Entity entity = value;
-		entity_label.size = 0;
-		EntityToString(entity, entity_label);
-
-		return entity_label;
-	}
-
-	void Initialize(EntityPool* pool) {
-		entity_pool = pool;
-		// Allocate the buffer here
-		entity_label.Initialize(pool->m_memory_manager, 0, ITERATOR_LABEL_CAPACITY);
-	};
-
-	void Free() {
-		entity_pool->m_memory_manager->Deallocate(entity_label.buffer);
-	}
-
-	EntityPool* entity_pool;
-	CapacityStream<char> entity_label;
-};
-
-typedef DFSIterator<AllEntitiesIteratorImpl> DFSUIAllEntities;
 
 #pragma region Callbacks
 
@@ -154,6 +104,16 @@ void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
 	drawer.AddRightClickAction(drawer.GetRegionPosition(), drawer.GetRegionScale(), "Entities Right Click", &state);
 }
 
+void RenameCallback(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	UIDrawerLabelHierarchyRenameData* rename_data = (UIDrawerLabelHierarchyRenameData*)_data;
+	EntitiesUIData* data = (EntitiesUIData*)rename_data->data;
+
+	Entity entity = *(Entity*)rename_data->previous_label;
+	ChangeEntityName(data->editor_state, data->sandbox_index, entity, rename_data->new_label);
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 void SelectableCallback(ActionData* action_data) {
@@ -163,8 +123,8 @@ void SelectableCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)select_data->data;
 	
 	if (select_data->labels.size == 1) {
-		Entity entity = StringToEntity(select_data->labels[0]);
-		ChangeInspectorToEntity(data->editor_state, data->sandbox_index, entity);
+		Entity* first_entity = (Entity*)select_data->labels.buffer;
+		ChangeInspectorToEntity(data->editor_state, data->sandbox_index, *first_entity);
 	}
 }
 
@@ -186,14 +146,9 @@ void DragCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyDragData* drag_data = (UIDrawerLabelHierarchyDragData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)drag_data->data;
 
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(Entity, dragged_entities, drag_data->source_labels.size);
-	dragged_entities.size = drag_data->source_labels.size;
-	for (size_t index = 0; index < dragged_entities.size; index++) {
-		dragged_entities[index] = StringToEntity(drag_data->source_labels[index]);
-	}
-
-	Entity parent = drag_data->destination_label.size > 0 ? StringToEntity(drag_data->destination_label) : Entity{ (unsigned int)-1 };
-	ParentSandboxEntities(data->editor_state, data->sandbox_index, dragged_entities, parent);
+	Entity* given_parent = (Entity*)drag_data->destination_label;
+	Entity parent = given_parent != nullptr ? *given_parent : Entity{ (unsigned int)-1 };
+	ParentSandboxEntities(data->editor_state, data->sandbox_index, drag_data->source_labels.AsIs<Entity>(), parent);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -204,9 +159,12 @@ void CopyEntityCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyCopyData* copy_data = (UIDrawerLabelHierarchyCopyData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)copy_data->data;
 
-	Entity parent = copy_data->destination_label.size > 0 ? StringToEntity(copy_data->destination_label) : Entity((unsigned int)-1);
+	Entity* given_parent = (Entity*)copy_data->destination_label;
+	Entity parent = given_parent != nullptr ? *given_parent : Entity((unsigned int)-1);
+
+	Stream<Entity> source_labels = copy_data->source_labels.AsIs<Entity>();
 	for (size_t index = 0; index < copy_data->source_labels.size; index++) {
-		Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, StringToEntity(copy_data->source_labels[index]));
+		Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
 		if (parent.value != -1) {
 			ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
 		}
@@ -215,27 +173,14 @@ void CopyEntityCallback(ActionData* action_data) {
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DeleteEntityCallback(ActionData*);
-
 void CutEntityCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	UIDrawerLabelHierarchyCutData* cut_data = (UIDrawerLabelHierarchyCutData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)cut_data->data;
 
-	// Copy them first and then delete them
-	UIDrawerLabelHierarchyCopyData copy_data;
-	copy_data.data = data;
-	copy_data.destination_label = cut_data->destination_label;
-	copy_data.source_labels = cut_data->source_labels;
-	action_data->data = &copy_data;
-	CopyEntityCallback(action_data);
-
-	UIDrawerLabelHierarchyDeleteData delete_data;
-	delete_data.data = cut_data->data;
-	delete_data.source_labels = cut_data->source_labels;
-	action_data->data = &delete_data;
-	DeleteEntityCallback(action_data);
+	const Entity* entities = (const Entity*)cut_data->source_labels.buffer;
+	ParentSandboxEntities(data->editor_state, data->sandbox_index, { entities, cut_data->source_labels.size }, *(Entity*)cut_data->destination_label);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -246,9 +191,9 @@ void DeleteEntityCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchyDeleteData* delete_data = (UIDrawerLabelHierarchyDeleteData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)delete_data->data;
 
+	Stream<Entity> source_labels = delete_data->source_labels.AsIs<Entity>();
 	for (size_t index = 0; index < delete_data->source_labels.size; index++) {
-		Entity entity = StringToEntity(delete_data->source_labels[index]);
-		DeleteSandboxEntity(data->editor_state, data->sandbox_index, entity);
+		DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
 	}
 }
 
@@ -266,7 +211,16 @@ void RightClickCopy(ActionData* action_data) {
 	RightClickHandlerData* data = (RightClickHandlerData*)_data;
 	data->label_hierarchy->RecordSelection(action_data);
 	data->label_hierarchy->SetSelectionCut(false);
-	PinWindowVerticalSliderPosition(system, system->GetWindowIndexFromBorder(dockspace, border_index));
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+void RightClickCut(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	RightClickHandlerData* data = (RightClickHandlerData*)_data;
+	data->label_hierarchy->RecordSelection(action_data);
+	data->label_hierarchy->SetSelectionCut(true);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -288,6 +242,7 @@ void RightClickCallback(ActionData* action_data) {
 
 	enum HANDLER_INDEX {
 		COPY,
+		CUT,
 		DELETE_,
 		HANDLER_COUNT
 	};
@@ -299,10 +254,11 @@ void RightClickCallback(ActionData* action_data) {
 	handler_data.label_hierarchy = right_click_data->hierarchy;
 	handler_data.sandbox_index = ui_data->sandbox_index;
 	handlers[COPY] = { RightClickCopy, &handler_data, sizeof(handler_data) };
+	handlers[CUT] = { RightClickCut, &handler_data, sizeof(handler_data) };
 	handlers[DELETE_] = { RightClickDelete, &handler_data, sizeof(handler_data) };
 
 	UIDrawerMenuState menu_state;
-	menu_state.left_characters = "Copy\nDelete";
+	menu_state.left_characters = "Copy\nCut\nDelete";
 	menu_state.row_count = HANDLER_COUNT;
 	menu_state.click_handlers = handlers;
 
@@ -375,6 +331,7 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 		drawer.SetCurrentPositionToHeader();
 
 		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+		row_layout.SetOffsetRenderRegion({ true, false });
 		row_layout.AddSquareLabel();
 		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
 		row_layout.CombineLastElements();
@@ -405,16 +362,6 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 
 		size_t HEADER_CONFIGURATION = UI_CONFIG_BORDER | UI_CONFIG_DO_NOT_UPDATE_RENDER_BOUNDS | UI_CONFIG_DO_NOT_VALIDATE_POSITION;
 
-		UIConfigBorder border;
-		border.is_interior = true;
-		border.color = drawer.color_theme.borders;
-
-		config.AddFlag(border);
-
-		UIConfigComboBoxPrefix prefix;
-		prefix.prefix = "Sandbox: ";
-		config.AddFlag(prefix);
-
 		ECS_STACK_CAPACITY_STREAM(char, sandbox_labels, 512);
 		unsigned int sandbox_count = editor_state->sandboxes.size;
 
@@ -443,20 +390,35 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 			combo_labels.size = sandbox_count;
 		}
 
+		UIConfigBorder border;
+		border.is_interior = true;
+		border.color = drawer.color_theme.borders;
+
+		UIConfigComboBoxPrefix prefix;
+		prefix.prefix = "Sandbox: ";
+
+		row_layout = drawer.GenerateRowLayout();
+		row_layout.SetOffsetRenderRegion({ true, false });
+		row_layout.AddComboBox(combo_labels, { nullptr, 0 }, prefix.prefix);
+		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+		row_layout.CombineLastElements();
+
+		config.AddFlag(border);
+		config.AddFlag(prefix);
+		row_layout.GetTransform(config, combo_configuration);
+
 		drawer.ComboBox(combo_configuration, config, "Sandbox Combo", combo_labels, combo_labels.size, &data->sandbox_index);
-		drawer.Indent(-1.0f);
 
-		UIConfigWindowDependentSize dependent_size;
-		dependent_size.scale_factor.x = drawer.GetWindowSizeScaleUntilBorder(true).x;
-		config.AddFlag(dependent_size);
-
+		config.flag_count = 0;
 		UIConfigTextInputHint hint;
 		hint.characters = "Search";
 		config.AddFlag(hint);
+		config.AddFlag(border);
 
 		size_t text_input_configuration = HEADER_CONFIGURATION | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_TEXT_INPUT_HINT | UI_CONFIG_TEXT_INPUT_NO_NAME;
-		drawer.TextInput(text_input_configuration, config, "Search filter", &data->filter_string);
+		row_layout.GetTransform(config, text_input_configuration);
 
+		drawer.TextInput(text_input_configuration, config, "Search filter", &data->filter_string);
 		drawer.NextRow();
 
 		if (!initialize) {
@@ -471,7 +433,7 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 				config.AddFlag(filter);
 
 				size_t LABEL_HIERARCHY_CONFIGURATION = UI_CONFIG_LABEL_HIERARCHY_FILTER | UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK | UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK
-					| UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS;
+					| UI_CONFIG_LABEL_HIERARCHY_BASIC_OPERATIONS | UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL;
 
 				UIConfigLabelHierarchySelectableCallback selectable;
 				selectable.callback = SelectableCallback;
@@ -490,6 +452,12 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 				basic_operations.cut_handler = { CutEntityCallback, data, 0 };
 				basic_operations.delete_handler = { DeleteEntityCallback, data, 0 };
 				config.AddFlag(basic_operations);
+
+				UIConfigLabelHierarchyRenameCallback rename_callback;
+				rename_callback.callback = RenameCallback;
+				rename_callback.data = data;
+				rename_callback.data_size = 0;
+				config.AddFlag(rename_callback);
 
 				const EntityManager* entity_manager = ActiveEntityManager(editor_state, data->sandbox_index);
 
@@ -510,7 +478,9 @@ void EntitiesUIDraw(void* window_data, void* drawer_descriptor, bool initialize)
 				drag_callback.reject_same_label_drag = true;
 				config.AddFlag(drag_callback);
 
-				drawer.LabelHierarchy(LABEL_HIERARCHY_CONFIGURATION, config, "Hierarchy", iterator);
+				IteratorPolymorphic iterator_polymorphic = iterator.AsPolymorphic();
+
+				drawer.LabelHierarchy(LABEL_HIERARCHY_CONFIGURATION, config, "Hierarchy", &iterator_polymorphic, true);
 				iterator.Free();
 			}
 		}

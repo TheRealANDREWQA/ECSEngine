@@ -27,8 +27,6 @@ void CreateInspectorAction(ActionData* action_data);
 // Inspector index means default behaviour - first round robin inspector
 void ChangeInspectorToNothing(EditorState* editor_state, unsigned int inspector_index = -1);
 
-void ChangeInspectorToFolder(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index = -1);
-
 void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index = -1);
 
 void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsigned int inspector_index = -1);

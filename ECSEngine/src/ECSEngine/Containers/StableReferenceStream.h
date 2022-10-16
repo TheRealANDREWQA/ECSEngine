@@ -144,10 +144,10 @@ namespace ECSEngine {
 					}
 
 					if (current_index == index) {
-						return false;
+						return true;
 					}
 				}
-				return true;
+				return false;
 			}
 		}
 

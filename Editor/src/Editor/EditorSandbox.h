@@ -103,16 +103,6 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 
 // -------------------------------------------------------------------------------------------------------------
 
-// The handle must be the one given from the database
-void AddSandboxAssetReference(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECSEngine::ECS_ASSET_TYPE asset_type);
-
-// -------------------------------------------------------------------------------------------------------------
-
-// This will take a handle from the database and assign it to this sandbox
-void AddSandboxAssetReference(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<char> asset_name_or_path, ECSEngine::ECS_ASSET_TYPE asset_type);
-
-// -------------------------------------------------------------------------------------------------------------
-
 void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, ECSEngine::Stream<wchar_t> settings_name);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -147,10 +137,6 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 // -------------------------------------------------------------------------------------------------------------
 
 void CopySceneEntitiesIntoSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index);
-
-// -------------------------------------------------------------------------------------------------------------
-
-void CopyCachedResourcesIntoSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

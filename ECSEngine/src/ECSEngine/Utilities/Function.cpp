@@ -67,40 +67,6 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
-		void CheckWindowsFunctionErrorCode(HRESULT hr, LPCWSTR box_name, const char* filename, unsigned int line, bool do_exit) {
-			if (FAILED(hr)) {
-				_com_error error(hr);
-				ECS_TEMP_ASCII_STRING(temp_string, 512);
-				temp_string.Copy("[File] ");
-				temp_string.AddStream(filename);
-				temp_string.AddStreamSafe("\n[Line] ");
-				function::ConvertIntToChars(temp_string, line);
-				temp_string.Add('\n');
-				temp_string.AssertCapacity();
-
-				ECS_STACK_CAPACITY_STREAM(wchar_t, wide_string, ECS_KB * 4);
-				function::ConvertASCIIToWide(wide_string, temp_string);
-				wide_string.AddStream(error.ErrorMessage());
-				wide_string[wide_string.size] = L'\0';
-				wide_string.AssertCapacity();
-
-#ifdef ECSENGINE_DEBUG
-				__debugbreak();
-#endif
-				if (do_exit) {
-					MessageBox(nullptr, wide_string.buffer, box_name, MB_OK | MB_ICONERROR);
-					__debugbreak();
-					exit(0);
-				}
-				else {
-					MessageBox(nullptr, wide_string.buffer, box_name, MB_OK | MB_ICONWARNING);
-					__debugbreak();
-				}
-			}
-		}
-
-		// --------------------------------------------------------------------------------------------------
-
 		// returns the count of decoded numbers
 		size_t ParseNumbersFromCharString(Stream<char> characters, unsigned int* number_buffer) {
 			size_t count = 0, index = 0;
@@ -449,6 +415,8 @@ namespace ECSEngine {
 		
 		// --------------------------------------------------------------------------------------------------
 
+		ECS_OPTIMIZE_END;
+
 		// Unfortunately, cannot set the template to optimization, since probably it won't be taken into account
 		// correctly. Must put the optimization pragmas at the instantiation
 		template<bool reverse, typename VectorType, typename CharacterType>
@@ -469,7 +437,7 @@ namespace ECSEngine {
 					const CharacterType* character = characters.buffer + last_character_to_check - index + simd_count;
 					if (*character == token[0]) {
 						if (memcmp(character, token.buffer, token.size * sizeof(CharacterType)) == 0) {
-							return { character, characters.size - function::PointerDifference(character, characters.buffer) };
+							return { character, characters.size - function::PointerDifference(character, characters.buffer) / sizeof(CharacterType) };
 						}
 					}
 				}
@@ -498,7 +466,7 @@ namespace ECSEngine {
 					});
 
 					if (found_match != -1) {
-						return { character + found_match, characters.size - function::PointerDifference(character + found_match, characters.buffer) };
+						return { character + found_match, characters.size - function::PointerDifference(character + found_match, characters.buffer) / sizeof(CharacterType) };
 					}
 				}
 
@@ -510,7 +478,7 @@ namespace ECSEngine {
 					const CharacterType* character = characters.buffer + index;
 					if (*character == token[0]) {
 						if (memcmp(character, token.buffer, token.size * sizeof(CharacterType)) == 0) {
-							return { character, characters.size - function::PointerDifference(character, characters.buffer) };
+							return { character, characters.size - function::PointerDifference(character, characters.buffer) / sizeof(CharacterType) };
 						}
 					}
 				}
@@ -569,40 +537,6 @@ namespace ECSEngine {
 
 		Stream<char> FindCharacterReverse(Stream<char> characters, char character)
 		{
-			//size_t index = 0;
-			//size_t simd_bound = characters.size >= 32 ? characters.size - 31 : 0;
-
-			//const char* last_character = characters.buffer + characters.size;
-			//if (simd_bound > 0) {
-			//	Vec32c simd_vector(character);
-
-			//	for (; index < simd_bound; index++) {
-			//		const char* data_to_load = last_character - simd_vector.size() - index + 1;
-			//		Vec32c string_chars = Vec32c().load(data_to_load);
-			//		auto is_match = simd_vector == string_chars;
-
-			//		// At least one character was found
-			//		if (horizontal_or(is_match)) {
-			//			unsigned int bit_mask = to_bits(is_match);
-			//			unsigned long highest_bit = -1;
-			//			if (_BitScanReverse(&highest_bit, bit_mask)) {
-			//				const char* position = data_to_load + highest_bit;
-			//				return { position, function::PointerDifference(last_character, position) + 1 };
-			//			}
-			//		}
-			//	}
-			//}
-			//
-			//// Do a bytewise check
-			//for (; index < characters.size; index++) {
-			//	if (last_character[-index] == character) {
-			//		const char* position = last_character - index;
-			//		return { position, function::PointerDifference(last_character, position) + 1 };
-			//	}
-			//}
-
-			//return { nullptr, 0 };
-
 			size_t index = SearchBytesReversed(characters.buffer, characters.size, character, sizeof(character));
 			if (index == -1) {
 				return { nullptr, 0 };
@@ -678,6 +612,46 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		template<typename CharacterType>
+		unsigned int FindStringOffsetImpl(Stream<CharacterType> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity) {
+			auto loop = [=](auto is_capacity) {
+				for (unsigned int index = 0; index < strings_count; index++) {
+					Stream<CharacterType> current_string;
+					if constexpr (is_capacity) {
+						current_string = *(CapacityStream<CharacterType>*)function::OffsetPointer(strings_buffer, index * string_byte_size + offset);
+					}
+					else {
+						current_string = *(Stream<CharacterType>*)function::OffsetPointer(strings_buffer, index * string_byte_size + offset);
+					}
+					if (CompareStrings(string, current_string)) {
+						return index;
+					}
+				}
+				return (unsigned int)-1;
+			};
+
+			if (capacity) {
+				return loop(std::true_type{});
+			}
+			else {
+				return loop(std::false_type{});
+			}
+		}
+
+		unsigned int FindStringOffset(Stream<char> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity)
+		{
+			return FindStringOffsetImpl(string, strings_buffer, strings_count, string_byte_size, offset, capacity);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity)
+		{
+			return FindStringOffsetImpl(string, strings_buffer, strings_count, string_byte_size, offset, capacity);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
 		void* CoallesceStreamWithData(void* allocation, size_t size)
 		{
 			uintptr_t buffer = (uintptr_t)allocation;
@@ -699,13 +673,28 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		void* CoallesceStreamWithData(AllocatorPolymorphic allocator, Stream<void> data, size_t element_size)
+		{
+			size_t allocation_size = sizeof(Stream<void>) + data.size;
+			void* allocation = Allocate(allocator, allocation_size);
+			Stream<void>* stream = (Stream<void>*)allocation;
+			stream->InitializeFromBuffer(function::OffsetPointer(stream, sizeof(*stream)), data.size / element_size);
+			memcpy(stream->buffer, data.buffer, data.size);
+			return allocation;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
 		bool IsFloatingPointNumber(Stream<char> characters)
 		{
 			unsigned int dot_count = 0;
 			size_t starting_index = characters[0] == '+' || characters[0] == '-';
 			for (size_t index = starting_index; index < characters.size; index++) {
 				if ((characters[index] < '0' || characters[index] > '9') && characters[index] != '.') {
-					return false;
+					// For the floating point if it has a trailing f allow it
+					if (index != characters.size - 1 || characters[index] != 'f') {
+						return false;
+					}
 				}
 
 				dot_count += characters[index] == '.';
@@ -753,6 +742,13 @@ namespace ECSEngine {
 		Stream<char> SkipWhitespace(Stream<char> characters, int increment)
 		{
 			return SkipStream<SkipWhitespace>(characters, increment);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> SkipWhitespaceEx(Stream<char> characters, int increment)
+		{
+			return SkipStream<SkipWhitespaceEx>(characters, increment);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1192,6 +1188,32 @@ namespace ECSEngine {
 			if (error_message != nullptr) {
 				error_message->AddStreamSafe(message);
 			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void ReplaceCharacterImpl(Stream<CharacterType> string, CharacterType token_to_be_replaced, CharacterType replacement) {
+			auto character = function::FindFirstCharacter(string, token_to_be_replaced);
+			while (character.size > 0) {
+				character[0] = replacement;
+				character.buffer += 1;
+				character.size -= 1;
+
+				character = function::FindFirstCharacter(character, token_to_be_replaced);
+			}
+		}
+
+		void ReplaceCharacter(Stream<char> string, char token_to_be_replaced, char replacement)
+		{
+			ReplaceCharacterImpl(string, token_to_be_replaced, replacement);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void ReplaceCharacter(Stream<wchar_t> string, wchar_t token_to_be_replaced, wchar_t replacement)
+		{
+			ReplaceCharacterImpl(string, token_to_be_replaced, replacement);
 		}
 
 		// --------------------------------------------------------------------------------------------------
@@ -1970,6 +1992,9 @@ namespace ECSEngine {
 				return (size_t)-1;
 			};
 
+			if (element_count == 0) {
+				return -1;
+			}
 
 			if (byte_size == 1) {
 				Vec32uc values;
@@ -2012,6 +2037,39 @@ namespace ECSEngine {
 		size_t SearchBytesReversed(const void* data, size_t element_count, size_t value_to_search, size_t byte_size)
 		{
 			return SearchBytesImpl<true>(data, element_count, value_to_search, byte_size);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<bool reversed>
+		size_t SearchBytesExImpl(const void* data, size_t element_count, const void* value_to_search, size_t byte_size) {
+			if (byte_size == 1 || byte_size == 2 || byte_size == 4 || byte_size == 8) {
+				return SearchBytesImpl<reversed>(data, element_count, *(size_t*)value_to_search, byte_size);
+			}
+
+			// Not in the fast case, use memcmp
+			for (size_t index = 0; index < element_count; index++) {
+				size_t current_index = index;
+				if constexpr (reversed) {
+					current_index = element_count - 1 - index;
+				}
+
+				const void* pointer = function::OffsetPointer(data, byte_size * current_index);
+				if (memcmp(pointer, value_to_search, byte_size) == 0) {
+					return current_index;
+				}
+			}
+			return -1;
+		}
+
+		size_t SearchBytesEx(const void* data, size_t element_count, const void* value_to_search, size_t byte_size)
+		{
+			return SearchBytesExImpl<false>(data, element_count, value_to_search, byte_size);
+		}
+
+		size_t SearchBytesExReversed(const void* data, size_t element_count, const void* value_to_search, size_t byte_size)
+		{
+			return SearchBytesExImpl<true>(data, element_count, value_to_search, byte_size);
 		}
 
 		// --------------------------------------------------------------------------------------------------

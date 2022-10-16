@@ -21,8 +21,6 @@ namespace ECSEngine {
 
 		void AddTexture(unsigned int handle);
 
-		void AddGPUBuffer(unsigned int handle);
-
 		void AddGPUSampler(unsigned int handle);
 
 		void AddShader(unsigned int handle);
@@ -33,14 +31,14 @@ namespace ECSEngine {
 
 		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
 
+		unsigned int AddAsset(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool* loaded_now = nullptr);
+
 		// Copies the current contents into a new database using the allocator given
 		AssetDatabaseReference Copy(AllocatorPolymorphic allocator) const;
 
 		MeshMetadata* GetMesh(unsigned int index);
 
 		TextureMetadata* GetTexture(unsigned int index);
-
-		GPUBufferMetadata* GetGPUBuffer(unsigned int index);
 
 		GPUSamplerMetadata* GetGPUSampler(unsigned int index);
 
@@ -52,7 +50,10 @@ namespace ECSEngine {
 
 		void* GetAsset(unsigned int index, ECS_ASSET_TYPE type);
 
-		unsigned int GetHandle(unsigned int index, ECS_ASSET_TYPE type);
+		unsigned int GetHandle(unsigned int index, ECS_ASSET_TYPE type) const;
+
+		// It returns -1 if it doesn't find it
+		unsigned int GetIndex(unsigned int handle, ECS_ASSET_TYPE type) const;
 
 		AssetDatabase* GetDatabase() const;
 
@@ -61,9 +62,6 @@ namespace ECSEngine {
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		bool RemoveTexture(unsigned int index);
-
-		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveGPUBuffer(unsigned int index);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		bool RemoveGPUSampler(unsigned int index);
@@ -79,6 +77,9 @@ namespace ECSEngine {
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
 		bool RemoveAsset(unsigned int index, ECS_ASSET_TYPE type);
+
+		// It removes it only from this internal storage, not doing it for the main database
+		void RemoveAssetThisOnly(unsigned int index, ECS_ASSET_TYPE type);
 
 		// Clears all the assets that are inside. It doesn't decrement the reference count of the assets
 		// that are alive inside.
@@ -117,7 +118,6 @@ namespace ECSEngine {
 
 		ResizableStream<unsigned int> mesh_metadata;
 		ResizableStream<unsigned int> texture_metadata;
-		ResizableStream<unsigned int> gpu_buffer_metadata;
 		ResizableStream<unsigned int> gpu_sampler_metadata;
 		ResizableStream<unsigned int> shader_metadata;
 		ResizableStream<unsigned int> material_asset;

@@ -1,0 +1,2 @@
+#pragma once
+#define ECS_SERIALIZATION_OMIT_FIELD

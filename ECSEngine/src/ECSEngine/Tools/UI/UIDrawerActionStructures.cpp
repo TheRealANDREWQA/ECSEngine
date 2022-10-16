@@ -45,16 +45,6 @@ namespace ECSEngine {
 			return name.TextStream();
 		}
 
-		unsigned int* UIDrawerTextInput::NonNameTextSize()
-		{
-			return &vertices.size;
-		}
-
-		CapacityStream<UISpriteVertex>* UIDrawerTextInput::NonNameTextStream()
-		{
-			return &vertices;
-		}
-
 		float UIDrawerTextInput::GetLowestX() const
 		{
 			return name.GetLowestX();
@@ -90,55 +80,116 @@ namespace ECSEngine {
 			return name.TextSize();
 		}
 
-		unsigned int UIDrawerTextInput::GetSpritePositionFromMouse(float2 mouse_position) const
+		unsigned int UIDrawerTextInput::GetSpritePositionFromMouse(const UISystem* system, float2 mouse_position) const
 		{
+			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+
+			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+
 			if (sprite_render_offset > 0) {
-				mouse_position.x += vertices[sprite_render_offset * 6 - 5].position.x - vertices[0].position.x;
+				mouse_position.x += positions[sprite_render_offset].x - positions[0].x;
 			}
-			if (mouse_position.x < vertices[0].position.x) {
+
+			if (mouse_position.x < positions[0].x) {
 				return sprite_render_offset;
 			}
-			for (size_t index = 1; index < vertices.size; index += 6) {
-				if (mouse_position.x < vertices[index].position.x) {
-					return (index - 1) / 6;
+			for (size_t index = 1; index < text->size; index++) {
+				if (mouse_position.x < positions[index].x) {
+					return index;
 				}
 			}
+
 			return text->size;
 
 		}
 
-		void UIDrawerTextInput::SetSpritePositionFromMouse(float2 mouse_position) {
-			current_sprite_position = GetSpritePositionFromMouse(mouse_position);
+		void UIDrawerTextInput::SetSpritePositionFromMouse(const UISystem* system, float2 mouse_position) {
+			current_sprite_position = GetSpritePositionFromMouse(system, mouse_position);
 		}
 
-		unsigned int UIDrawerTextInput::GetVisibleSpriteCount(float right_bound) const {
+		unsigned int UIDrawerTextInput::GetVisibleSpriteCount(const UISystem* system, float right_bound) const {
 			size_t index;
+
+			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+
+			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+
 			if (sprite_render_offset > 0) {
-				right_bound += vertices[sprite_render_offset * 6 - 5].position.x - vertices[0].position.x + character_spacing;
+				right_bound += positions[sprite_render_offset].x - positions[0].x;
 			}
 			for (index = sprite_render_offset; index < text->size; index++) {
 				unsigned int sprite_index = index * 6;
-				if (vertices[sprite_index + 1].position.x > right_bound)
+				if (positions[index].x + scales[index].x > right_bound)
 					break;
 			}
 			return index - sprite_render_offset;
 		}
 
-		float2 UIDrawerTextInput::GetCaretPosition() const
+		float2 UIDrawerTextInput::GetCaretPosition(const UISystem* system) const
 		{
 			float2 caret_position;
-			if (current_sprite_position > 0) {
-				if (sprite_render_offset == 0) {
-					caret_position = { vertices[current_sprite_position * 6 - 5].position.x, -vertices[0].position.y };
+
+			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+
+			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+
+			if (current_sprite_position == 0) {
+				caret_position = position + padding;
+			}
+			else {
+				caret_position.y = positions[0].y;
+
+				if (current_sprite_position == text->size) {
+					caret_position.x = positions[current_sprite_position - 1].x + scales[current_sprite_position - 1].x;
 				}
 				else {
-					caret_position = { vertices[current_sprite_position * 6 - 5].position.x - vertices[sprite_render_offset * 6 - 5].position.x + vertices[0].position.x, -vertices[0].position.y };
+					caret_position.x = positions[current_sprite_position].x;
+				}
+			}
+
+			if (sprite_render_offset > 0) {
+				caret_position.x -= positions[sprite_render_offset].x - positions[0].x;
+			}
+
+			caret_position.x = std::min(caret_position.x, bound);
+			return caret_position;
+		}
+
+		float2 UIDrawerTextInput::GetPositionFromSprite(const UISystem* system, unsigned int index, bool bottom, bool left) const
+		{
+			unsigned int offset = left == false;
+			index += offset;
+
+			float2* positions = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+			float2* scales = (float2*)ECS_STACK_ALLOC(sizeof(float2) * text->size);
+
+			system->GetTextCharacterPositions(*text, font_size, character_spacing, positions, scales, position + padding);
+
+			float2 sprite_position = { 0.0f, 0.0f };
+			if (index < text->size) {
+				sprite_position = positions[index];
+				if (bottom) {
+					sprite_position.y = positions[index].y + scales[index].y;
 				}
 			}
 			else {
-				caret_position = { position.x + padding.x, position.y + padding.y };
+				sprite_position = positions[text->size - 1] + scales[text->size - 1];
+				if (bottom) {
+					sprite_position.y = positions[text->size - 1].y + scales[text->size - 1].y;
+				}
+				else {
+					sprite_position.y = positions[0].y;
+				}
 			}
-			return caret_position;
+
+			if (sprite_render_offset > 0) {
+				sprite_position.x -= positions[sprite_render_offset].x - positions[0].x;
+			}
+
+			return sprite_position;
 		}
 
 		void UIDrawerTextInput::SetNewZoom(float2 new_zoom)
@@ -208,20 +259,11 @@ namespace ECSEngine {
 				output_text[0] = text->buffer[current_sprite_position - 1];
 				output_text[1] = '\0';
 
-				float deleted_sprite_span = vertices[current_sprite_position * 6 - 5].position.x - vertices[current_sprite_position * 6 - 6].position.x + character_spacing;
 				for (size_t index = current_sprite_position; index < text->size; index++) {
-
-					unsigned int sprite_index = index * 6;
-					unsigned int destination_index = sprite_index - 6;
 					text->buffer[index - 1] = text->buffer[index];
-					for (size_t subindex = destination_index; subindex < sprite_index; subindex++) {
-						vertices[subindex] = vertices[subindex + 6];
-						vertices[subindex].position.x -= deleted_sprite_span;
-					}
 				}
 				current_sprite_position--;
 				text->size--;
-				vertices.size -= 6;
 				current_selection = current_sprite_position;
 				if (sprite_render_offset > 0)
 					sprite_render_offset--;
@@ -260,20 +302,11 @@ namespace ECSEngine {
 					memcpy(output_text, text->buffer + *output_text_position, *output_text_count);
 					output_text[*output_text_count] = '\0';
 
-					float deleted_sprite_span = vertices[highest_index].position.x - vertices[lowest_index].position.x /*+ character_spacing*/;
-					unsigned int sprite_displacement = displacement * 6;
 					for (size_t index = start_iteration; index < text->size; index++) {
-						unsigned int sprite_index = index * 6 + 6;
-						unsigned int destination_index = sprite_index - 6;
 						text->buffer[index - displacement] = text->buffer[index];
-						for (size_t subindex = destination_index; subindex < sprite_index; subindex++) {
-							vertices[subindex - sprite_displacement] = vertices[subindex];
-							vertices[subindex - sprite_displacement].position.x -= deleted_sprite_span;
-						}
 					}
 
 					text->size -= displacement;
-					vertices.size -= sprite_displacement;
 					current_selection = current_sprite_position;
 					if (sprite_render_offset > 0) {
 						if (sprite_render_offset < displacement) {
@@ -317,7 +350,6 @@ namespace ECSEngine {
 
 			text->buffer[0] = '\0';
 			text->size = 0;
-			vertices.size = 0;
 			current_sprite_position = 0;
 			current_selection = 0;
 			sprite_render_offset = 0;
@@ -331,53 +363,17 @@ namespace ECSEngine {
 				character_count = text->capacity - text->size;
 			}
 
-			float2 current_position;
-			if (current_sprite_position > 0) {
-				current_position = {
-				vertices[current_sprite_position * 6 - 5].position.x + character_spacing,
-				-vertices[current_sprite_position * 6 - 6].position.y
-				};
-			}
-			else {
-				float y_position = system->AlignMiddleTextY(position.y, solid_color_y_scale, font_size.y, padding.y);
-				current_position = {
-					position.x + padding.x,
-					y_position
-				};
-			}
-
 			filter_characters_start = current_sprite_position;
 			filter_character_count = character_count;
 			text->DisplaceElements(current_sprite_position, character_count);
-			vertices.DisplaceElements(current_sprite_position * 6, character_count * 6);
 			memcpy(text->buffer + current_selection, characters, sizeof(unsigned char) * character_count);
-			system->ConvertCharactersToTextSprites(
-				{ characters, character_count },
-				current_position,
-				vertices.buffer,
-				text_color,
-				current_sprite_position * 6,
-				font_size,
-				character_spacing
-			);
-
-			Stream<UISpriteVertex> new_vertices = Stream<UISpriteVertex>(vertices.buffer + current_sprite_position * 6, character_count * 6);
-			float2 text_span = GetTextSpan(new_vertices);
-			float translation = text_span.x + character_spacing;
-			if (current_sprite_position == 0) {
-				translation -= character_spacing;
-			}
 
 			current_sprite_position += character_count;
 			text->size += character_count;
-			vertices.size += character_count * 6;
 
 			current_selection = current_sprite_position;
-			for (size_t index = current_sprite_position * 6; index < vertices.size; index++) {
-				vertices[index].position.x += translation;
-			}
 
-			unsigned int visible_sprites = GetVisibleSpriteCount(bound);
+			unsigned int visible_sprites = GetVisibleSpriteCount(system, bound);
 			if (sprite_render_offset + visible_sprites < current_sprite_position) {
 				if (character_count >= visible_sprites) {
 					sprite_render_offset += character_count - visible_sprites;
@@ -555,6 +551,25 @@ namespace ECSEngine {
 			return other != nullptr && slider->IsTheSameData(other->slider);
 		}
 
-}
+		void LabelHierarchyChangeStateData::GetCurrentLabel(void* storage) const {
+			UIDrawerLabelHierarchyGetEmbeddedLabel(this, storage);
+		}
+
+		// Returns the total size of the structure with the string embedded
+		unsigned int LabelHierarchyChangeStateData::WriteLabel(const void* untyped_data) {
+			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data);
+		}
+
+		void LabelHierarchyClickActionData::GetCurrentLabel(void* storage) const {
+			UIDrawerLabelHierarchyGetEmbeddedLabel(this, storage);
+		}
+
+		// Returns the total size of the structure with the label embedded (both for normal string
+		// or untyped data)
+		unsigned int LabelHierarchyClickActionData::WriteLabel(const void* untyped_data) {
+			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data);
+		}
+
+	}
 
 }

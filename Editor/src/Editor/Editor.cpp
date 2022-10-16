@@ -23,8 +23,6 @@
 #define ERROR_BOX_MESSAGE WM_USER + 1
 #define ERROR_BOX_CODE -2
 
-//#define TEST_C_ARRAYS
-
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
 
@@ -33,10 +31,14 @@ using namespace ECSEngine::Tools;
 
 //ECS_OPTIMIZE_START;
 
+struct ECS_REFLECT MyComponent {
+	void* data; ECS_SKIP_REFLECTION(static_assert(sizeof(void*) == 8))
+};
+
 class Editor : public ECSEngine::Application {
 public:
 	Editor(int width, int height, LPCWSTR name);
-	Editor() : timer("Editor")/*, width(0), height(0)*/ {};
+	Editor() : timer("Editor") {};
 	~Editor();
 	Editor(const Editor&) = delete;
 	Editor& operator = (const Editor&) = delete;
@@ -95,11 +97,11 @@ public:
 	int Run() override {
 		using namespace ECSEngine;
 		using namespace ECSEngine::Tools;
-		
+
 		EditorState editor_state;
 		EditorStateInitialize(this, &editor_state, hWnd, mouse, keyboard);
-		
-		ResourceManager* resource_manager = editor_state.resource_manager;
+
+		ResourceManager* resource_manager = editor_state.ui_resource_manager;
 		Graphics* graphics = editor_state.UIGraphics();
 
 		Hub(&editor_state);
@@ -138,9 +140,9 @@ public:
 		//FreeGLTFFile(gltf_data);
 
 		//PBRMaterial created_material = CreatePBRMaterialFromName("Cerberus"), ToStream("Cerberus"), ToStream(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets"), allocator;
-		////Material cerberus_material = PBRToMaterial(resource_manager, created_material, L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets");
+		////PBRMaterial cerberus_material = PBRToMaterial(resource_manager, created_material, L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets");
 		//PBRMesh* cerberus = resource_manager->LoadPBRMesh(L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets\\cerberus_textures.glb");
-		//Material cerberus_material = PBRToMaterial(resource_manager, cerberus->materials[0], L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets");
+		//PBRMaterial cerberus_material = PBRToMaterial(resource_manager, cerberus->materials[0], L"C:\\Users\\Andrei\\ECSEngineProjects\\Assets");
 
 		//Stream<char> shader_source;
 
@@ -657,8 +659,28 @@ public:
 		//bench_string[bench_string.size] = '\0';
 		//OutputDebugStringA(bench_string.buffer);
 
-		while (true) {
+		//ResourceManagerTextureDesc texture_desc;
+		//texture_desc.misc_flags = ECS_GRAPHICS_MISC_SHARED | ECS_GRAPHICS_MISC_GENERATE_MIPS;
+		//texture_desc.context = graphics->GetContext();
+		//ResourceView view = resource_manager->LoadTexture(L"Resources/FileText.png", &texture_desc);
 
+		//Graphics graphics_copy(graphics);
+		//VertexBuffer buffer = graphics->CreateVertexBuffer(sizeof(float3), 1000, false, ECS_GRAPHICS_USAGE_DEFAULT, ECS_GRAPHICS_CPU_ACCESS_NONE, ECS_GRAPHICS_MISC_SHARED);
+		//VertexBuffer new_buffer = TransferGPUResource(buffer, graphics_copy.GetDevice());
+
+		//graphics->BindVertexBuffer(buffer);
+		//graphics_copy.BindVertexBuffer(new_buffer);
+
+		//ResourceView new_view = TransferGPUView(view, graphics_copy.GetDevice());
+		//graphics_copy.BindPixelResourceView(new_view);
+		////graphics_copy.BindSamplerState(graphics_copy.m_shader_helpers[0].pixel_sampler);
+		//PixelShader pixel_shader = graphics_copy.m_shader_helpers[0].pixel;
+
+		//IDXGIResource* dxgi_resource;
+		//HRESULT resultssss = pixel_shader.shader->QueryInterface(__uuidof(IDXGIResource), (void**)&dxgi_resource);
+		//graphics_copy.BindPixelShader(pixel_shader);
+
+		while (true) {
 			auto run_application = [&](char application_quit_value) {
 				while (result == 0 && application_quit == application_quit_value) {
 					while (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -900,7 +922,10 @@ public:
 						frame_pacing = editor_state.ui_system->DoFrame();
 						frame_pacing = std::max(frame_pacing, VALUE);
 
-						graphics->SwapBuffers(0);
+						bool removed = graphics->SwapBuffers(0);
+						if (removed) {
+							__debugbreak();
+						}
 						mouse.SetPreviousPositionAndScroll();
 					}
 
@@ -926,7 +951,7 @@ public:
 			DestroySandbox(&editor_state, 0);
 		}
 		DestroyGraphics(editor_state.UIGraphics());
-		DestroyGraphics(editor_state.CacheGraphics());
+		DestroyGraphics(editor_state.RuntimeGraphics());
 
 		if (result == -1)
 			return -1;
@@ -999,6 +1024,7 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 
 Editor::Editor(int _width, int _height, LPCWSTR name) : timer("Editor")
 {
+	timer.SetNewStart();
 	application_quit = 0;
 
 	// calculate window size based on desired client region
@@ -1063,8 +1089,6 @@ Editor::Editor(int _width, int _height, LPCWSTR name) : timer("Editor")
 	// show window since default is hidden
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
-	RECT rect;
-	GetClientRect(hWnd, &rect);
 }
 Editor::~Editor() {
 	delete[] cursors.buffer;

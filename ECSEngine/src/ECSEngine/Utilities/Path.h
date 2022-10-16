@@ -129,6 +129,46 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------
 
+		// If mount point has size greater than 0, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API Path MountPath(Path base, Path mount_point, CapacityStream<wchar_t> storage);
+
+		// If mount point has size greater than 0, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base
+		ECSENGINE_API ASCIIPath MountPath(ASCIIPath base, ASCIIPath mount_point, CapacityStream<char> storage);
+
+		// -------------------------------------------------------------------------------------------------
+
+		// If mount point has size greater than 0, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API Path MountPath(Path base, Path mount_point, AllocatorPolymorphic allocator);
+
+		// If mount point has size greater than 0, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API ASCIIPath MountPath(ASCIIPath base, ASCIIPath mount_point, AllocatorPolymorphic allocator);
+
+		// -------------------------------------------------------------------------------------------------
+
+		// If mount point has size greater than 0 and the base is a relative path, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API Path MountPathOnlyRel(Path base, Path mount_point, CapacityStream<wchar_t> storage);
+
+		// If mount point has size greater than 0 and the base is a relative path, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API ASCIIPath MountPathOnlyRel(ASCIIPath base, ASCIIPath mount_point, CapacityStream<char> storage);
+
+		// -------------------------------------------------------------------------------------------------
+
+		// If mount point has size greater than 0 and the base is a relative path, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API Path MountPathOnlyRel(Path base, Path mount_point, AllocatorPolymorphic allocator);
+
+		// If mount point has size greater than 0 and the base is a relative path, it will concatenate the mount point with the base
+		// into the given storage buffer, else return the base.
+		ECSENGINE_API ASCIIPath MountPathOnlyRel(ASCIIPath base, ASCIIPath mount_point, AllocatorPolymorphic allocator);
+
+		// -------------------------------------------------------------------------------------------------
+
 	}
 
 }

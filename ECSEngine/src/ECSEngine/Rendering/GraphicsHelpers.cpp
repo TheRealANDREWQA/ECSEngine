@@ -5,6 +5,7 @@
 #include "../../Dependencies/DirectXTex/DirectXTex/DirectXTex.h"
 #include "../Utilities/Path.h"
 #include "../Allocators/AllocatorPolymorphic.h"
+#include "../Utilities/Crash.h"
 
 namespace ECSEngine {
 
@@ -31,7 +32,7 @@ namespace ECSEngine {
 		com_tex.Attach(texture.tex);
 		HRESULT result = com_tex.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Texture1D to resource failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting Texture1D to resource failed!");
 
 		return _resource.Detach();
 	}
@@ -45,7 +46,7 @@ namespace ECSEngine {
 		com_tex.Attach(texture.tex);
 		HRESULT result = com_tex.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Texture2D to resource failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting Texture2D to resource failed!");
 
 		return _resource.Detach();
 	}
@@ -59,7 +60,7 @@ namespace ECSEngine {
 		com_tex.Attach(texture.tex);
 		HRESULT result = com_tex.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting Texture3D to resource failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting Texture3D to resource failed!");
 
 		return _resource.Detach();
 	}
@@ -73,7 +74,7 @@ namespace ECSEngine {
 		com_tex.Attach(texture.tex);
 		HRESULT result = com_tex.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting TextureCube to resource failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, "Converting TextureCube to resource failed!");
 
 		return _resource.Detach();
 	}
@@ -175,7 +176,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, nullptr, &_new_buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Could not create a staging buffer!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_buffer, "Could not create a staging buffer!");
 
 		new_buffer.buffer = _new_buffer;
 
@@ -245,6 +246,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 	template<typename Buffer>
 	Buffer BufferToImmutableWithStaging(Graphics* graphics, Buffer buffer, bool temporary) {
 		Buffer new_buffer;
+		new_buffer = nullptr;
 
 		GraphicsDevice* device = graphics->GetDevice();
 		D3D11_BUFFER_DESC buffer_descriptor;
@@ -266,7 +268,7 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 
 		ID3D11Buffer* _new_buffer = nullptr;
 		HRESULT result = device->CreateBuffer(&buffer_descriptor, &subresource_data, &_new_buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting a buffer to immutable with staging buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), new_buffer, "Converting a buffer to immutable with staging buffer failed.");
 
 		UnmapBuffer(staging_buffer.buffer, graphics->GetContext());
 		staging_buffer.Release();
@@ -535,7 +537,8 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		HRESULT result;
 		DirectX::TexMetadata metadata;
 		if (extension == ECS_TEXTURE_EXTENSION_HDR) {
-			result = DirectX::LoadFromHDRMemory(data.buffer, data.size, &metadata, image);
+			bool apply_tonemapping = function::HasFlag(flags, ECS_DECODE_TEXTURE_HDR_TONEMAP);
+			result = DirectX::LoadFromHDRMemory(data.buffer, data.size, &metadata, image, apply_tonemapping);
 		}
 		else if (extension == ECS_TEXTURE_EXTENSION_TGA) {
 			result = DirectX::LoadFromTGAMemory(data.buffer, data.size, &metadata, image);
@@ -834,8 +837,11 @@ ECS_TEMPLATE_FUNCTION(Texture3D, function_name, Graphics*, Texture3D, bool); \
 		texture_descriptor.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE | D3D11_RESOURCE_MISC_GENERATE_MIPS;
 		ID3D11Texture2D* texture = nullptr;
 		HRESULT result = graphics->GetDevice()->CreateTexture2D(&texture_descriptor, nullptr, &texture);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting textures to cube textures failed.", true);
-		TextureCube cube_texture(texture);
+		TextureCube cube_texture;
+		cube_texture.tex = nullptr;
+
+		ECS_CRASH_RETURN_VALUE(result, cube_texture, "Converting textures to cube textures failed.");
+		cube_texture = { texture };
 
 		GraphicsContext* context = graphics->GetContext();
 		// For every mip, copy the mip into the corresponding array resource

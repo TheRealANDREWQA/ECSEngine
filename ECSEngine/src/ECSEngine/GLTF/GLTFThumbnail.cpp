@@ -198,7 +198,7 @@ namespace ECSEngine {
 
 		// Create the texture
 		GraphicsTexture2DDescriptor texture_desc;
-		texture_desc.bind_flag = GetGraphicsBindFromNative((D3D11_BIND_FLAG)(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET));
+		texture_desc.bind_flag = ECS_GRAPHICS_BIND_SHADER_RESOURCE | ECS_GRAPHICS_BIND_RENDER_TARGET;
 		texture_desc.usage = ECS_GRAPHICS_USAGE_DEFAULT;
 		texture_desc.mip_levels = 1;
 		texture_desc.size = data->texture_size;

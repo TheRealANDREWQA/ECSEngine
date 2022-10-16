@@ -4,6 +4,7 @@
 #include "../Allocators/AllocatorPolymorphic.h"
 #include "../Utilities/File.h"
 #include "../Utilities/ForEachFiles.h"
+#include "../Utilities/Crash.h"
 
 namespace ECSEngine {
 
@@ -58,13 +59,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Buffer>
-	ID3D11Resource* GetResourceBuffer(Buffer buffer, const wchar_t* error_message) {
+	ID3D11Resource* GetResourceBuffer(Buffer buffer, const char* error_message) {
 		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> com_buffer;
 		com_buffer.Attach(buffer.buffer);
 		HRESULT result = com_buffer.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_message, true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, error_message);
 
 		return _resource.Detach();
 	}
@@ -72,13 +73,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Texture>
-	ID3D11Resource* GetResourceTexture(Texture* texture, const wchar_t* error_message) {
+	ID3D11Resource* GetResourceTexture(Texture* texture, const char* error_message) {
 		Microsoft::WRL::ComPtr<ID3D11Resource> _resource;
 		Microsoft::WRL::ComPtr<Texture> com_tex;
 		com_tex.Attach(texture);
 		HRESULT result = com_tex.As(&_resource);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, error_message, true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), nullptr, error_message);
 
 		return _resource.Detach();
 	}
@@ -95,16 +96,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	VertexBuffer::VertexBuffer() : stride(0), buffer(nullptr) {}
-
-	VertexBuffer::VertexBuffer(UINT _stride, UINT _size, ID3D11Buffer* _buffer) 
-		: stride(_stride), size(_size), buffer(_buffer) {}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	ID3D11Resource* VertexBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting VertexBuffer to resource failed.");
+		return GetResourceBuffer(*this, "Converting VertexBuffer to resource failed.");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -114,20 +108,16 @@ namespace ECSEngine {
 		VertexBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating vertex buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating vertex buffer failed");
 
 		return buffer;	
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	IndexBuffer::IndexBuffer() : count(0), buffer(nullptr) {}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	ID3D11Resource* IndexBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting IndexBuffer to resource failed.");
+		return GetResourceBuffer(*this, "Converting IndexBuffer to resource failed.");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -137,14 +127,12 @@ namespace ECSEngine {
 		IndexBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating index buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating index buffer failed");
 
 		return buffer;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	InputLayout::InputLayout() : layout(nullptr) {}
 
 	InputLayout InputLayout::RawCreate(GraphicsDevice* device, Stream<D3D11_INPUT_ELEMENT_DESC> descriptor, Stream<void> byte_code)
 	{
@@ -158,14 +146,12 @@ namespace ECSEngine {
 			byte_code.size,
 			&layout.layout
 		);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating input layout failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), layout, "Creating input layout failed");
 
 		return layout;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	VertexShader::VertexShader() : byte_code(nullptr, 0), shader(nullptr) {}
 
 	VertexShader VertexShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
 	{
@@ -173,14 +159,12 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateVertexShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Vertex shader failed.");
 
 		return shader;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	PixelShader::PixelShader() : shader(nullptr) {}
 
 	PixelShader PixelShader::RawCreate(GraphicsDevice* device, Stream<void> byte_code)
 	{
@@ -188,7 +172,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreatePixelShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Pixel shader failed.");
 
 		return shader;
 	}
@@ -201,7 +185,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateGeometryShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Geometry shader failed.");
 
 		return shader;
 	}
@@ -214,7 +198,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateDomainShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Domain shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Domain shader failed.");
 		return shader;
 	}
 
@@ -226,7 +210,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateHullShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Hull shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Hull shader failed.");
 
 		return shader;
 	}
@@ -239,22 +223,10 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateComputeShader(byte_code.buffer, byte_code.size, nullptr, &shader.shader);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Geometry shader failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), shader, "Creating Compute shader failed.");
 
 		return shader;
 	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	Topology::Topology() : value(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST) {}
-
-	Topology::Topology(D3D11_PRIMITIVE_TOPOLOGY topology) : value(topology) {}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	ResourceView::ResourceView() : view(nullptr) {}
-
-	ResourceView::ResourceView(ID3D11ShaderResourceView* _view) : view(_view) {}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
@@ -271,7 +243,7 @@ namespace ECSEngine {
 
 		HRESULT result;
 		result = device->CreateShaderResourceView(resource, descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture 1D Shader View failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating Texture 1D Shader View failed.");
 
 		return view;
 	}
@@ -288,15 +260,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	ConstantBuffer::ConstantBuffer() : buffer(nullptr) {}
-
-	ConstantBuffer::ConstantBuffer(ID3D11Buffer* _buffer) : buffer(_buffer) {}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
 	ID3D11Resource* ConstantBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting ConstantBuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting ConstantBuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -306,23 +272,18 @@ namespace ECSEngine {
 		ConstantBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating pixel constant buffer failed", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating ConstantBuffer failed!");
 
 		return buffer;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	SamplerState::SamplerState() : sampler(nullptr) {}
-
-	SamplerState::SamplerState(ID3D11SamplerState* _sampler) : sampler(_sampler) {}
-
 	SamplerState SamplerState::RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor)
 	{
 		SamplerState state;
 		HRESULT result = device->CreateSamplerState(descriptor, &state.sampler);
-
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Constructing sampler state failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), state, "Constructing SamplerState failed!");
 
 		return state;
 	}
@@ -341,7 +302,7 @@ namespace ECSEngine {
 		UAView view;
 
 		HRESULT result = device->CreateUnorderedAccessView(resource, descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating UAView from Append Buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating UAView failed.");
 
 		return view;
 	}
@@ -369,7 +330,7 @@ namespace ECSEngine {
 	{
 		RenderTargetView view;
 		HRESULT result = device->CreateRenderTargetView(resource, descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating RenderTargetView failed!");
 
 		return view;
 	}
@@ -398,7 +359,7 @@ namespace ECSEngine {
 		DepthStencilView view;
 
 		HRESULT result = device->CreateDepthStencilView(resource, descriptor, &view.view);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating render target view failed!", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), view, "Creating DepthStencilView failed!");
 
 		return view;
 	}
@@ -417,7 +378,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* StandardBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting StandardBuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting StandardBuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -427,7 +388,7 @@ namespace ECSEngine {
 		StandardBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating StandardBuffer failed.");
 
 		return buffer;
 	}
@@ -436,7 +397,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* StructuredBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting StructedBuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting StructedBuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -446,7 +407,7 @@ namespace ECSEngine {
 		StructuredBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating StructuredBuffer failed.");
 
 		return buffer;
 	}
@@ -455,7 +416,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* IndirectBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting IndirectBuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting IndirectBuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -465,7 +426,7 @@ namespace ECSEngine {
 		IndirectBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating IndirectBuffer failed.");
 
 		return buffer;
 	}
@@ -474,7 +435,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* UABuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting UABuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting UABuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -484,7 +445,7 @@ namespace ECSEngine {
 		UABuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating UABuffer failed.");
 
 		return buffer;
 	}
@@ -493,7 +454,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* AppendStructuredBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting AppendStructuredBuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting AppendStructuredBuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -503,7 +464,7 @@ namespace ECSEngine {
 		AppendStructuredBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating AppendStructuredBuffer failed.");
 
 		return buffer;
 	}
@@ -512,7 +473,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* ConsumeStructuredBuffer::GetResource() const
 	{
-		return GetResourceBuffer(*this, L"Converting ConsumeStructuredBuffer to resource failed!");
+		return GetResourceBuffer(*this, "Converting ConsumeStructuredBuffer to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -522,14 +483,12 @@ namespace ECSEngine {
 		ConsumeStructuredBuffer buffer;
 
 		HRESULT result = device->CreateBuffer(descriptor, initial_data, &buffer.buffer);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating standard buffer failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), buffer, "Creating ConsumeStructuredBuffer failed.");
 
 		return buffer;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	Texture1D::Texture1D() : tex(nullptr) {}
 
 	Texture1D::Texture1D(ID3D11Resource* _resource)
 	{
@@ -538,17 +497,15 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Texture1D> com_tex;
 		HRESULT result = ptr.As(&com_tex);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture1D failed!", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture1D failed!");
 		tex = com_tex.Detach();
 	}
-
-	Texture1D::Texture1D(ID3D11Texture1D* _tex) : tex(_tex) {}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
 	ID3D11Resource* Texture1D::GetResource() const
 	{
-		return GetResourceTexture(tex, L"Converting Texture1D into a resource failed.");
+		return GetResourceTexture(tex, "Converting Texture1D into a resource failed.");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -557,16 +514,12 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture1D(descriptor, initial_data, &interface_);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture1D failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating Texture1D failed.");
 
 		return interface_;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	Texture2D::Texture2D() : tex(nullptr) {}
-
-	Texture2D::Texture2D(ID3D11Texture2D* _tex) : tex(_tex) {}
 
 	Texture2D::Texture2D(ID3D11Resource* _resource)
 	{
@@ -575,7 +528,7 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
 		HRESULT result = ptr.As(&com_tex);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture2D failed!", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture2D failed!");
 		tex = com_tex.Detach();
 	}
 
@@ -583,7 +536,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* Texture2D::GetResource() const
 	{
-		return GetResourceTexture(tex, L"Converting Texture2D to resource failed!");
+		return GetResourceTexture(tex, "Converting Texture2D to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -592,16 +545,12 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture2D(descriptor, initial_data, &interface_);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture2D failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating Texture2D failed.");
 
 		return interface_;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	Texture3D::Texture3D() : tex(nullptr) {}
-
-	Texture3D::Texture3D(ID3D11Texture3D* _tex) : tex(_tex) {}
 
 	Texture3D::Texture3D(ID3D11Resource* _resource)
 	{
@@ -610,7 +559,7 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Texture3D> com_tex;
 		HRESULT result = ptr.As(&com_tex);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture3D failed!", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to Texture3D failed!");
 		tex = com_tex.Detach();
 	}
 
@@ -618,7 +567,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* Texture3D::GetResource() const
 	{
-		return GetResourceTexture(tex, L"Converting Texture3D to resource failed!");
+		return GetResourceTexture(tex, "Converting Texture3D to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -627,14 +576,12 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture3D(descriptor, initial_data, &interface_);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating Texture3D failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating Texture3D failed.");
 
 		return interface_;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
-
-	TextureCube::TextureCube() : tex(nullptr) {}
 
 	TextureCube::TextureCube(ID3D11Resource* _resource) {
 		Microsoft::WRL::ComPtr<ID3D11Resource> ptr;
@@ -642,7 +589,7 @@ namespace ECSEngine {
 		Microsoft::WRL::ComPtr<ID3D11Texture2D> com_tex;
 		HRESULT result = ptr.As(&com_tex);
 
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Converting resource to Texture3D failed!", true);
+		ECS_CRASH_RETURN(SUCCEEDED(result), "Converting resource to TextureCube failed!");
 		tex = com_tex.Detach();
 	}
 
@@ -650,7 +597,7 @@ namespace ECSEngine {
 
 	ID3D11Resource* TextureCube::GetResource() const
 	{
-		return GetResourceTexture(tex, L"Converting TextureCube to resource failed!");
+		return GetResourceTexture(tex, "Converting TextureCube to resource failed!");
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -659,154 +606,9 @@ namespace ECSEngine {
 	{
 		RawInterface* interface_;
 		HRESULT result = device->CreateTexture2D(descriptor, initial_data, &interface_);
-		ECS_CHECK_WINDOWS_FUNCTION_ERROR_CODE(result, L"Creating TextureCube failed.", true);
+		ECS_CRASH_RETURN_VALUE(SUCCEEDED(result), interface_, "Creating TextureCube failed.");
 
 		return interface_;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	TextureCube::TextureCube(ID3D11Texture2D* _tex) : tex(_tex) {}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	Color::Color() : red(0), green(0), blue(0), alpha(255) {}
-
-	Color::Color(unsigned char _red) : red(_red), green(0), blue(0), alpha(255) {}
-
-	Color::Color(unsigned char _red, unsigned char _green) : red(_red), green(_green), blue(0), alpha(255) {}
-
-	Color::Color(unsigned char _red, unsigned char _green, unsigned char _blue) : red(_red), green(_green), blue(_blue), alpha(255) {}
-
-	Color::Color(unsigned char _red, unsigned char _green, unsigned char _blue, unsigned char _alpha)
-	 : red(_red), green(_green), blue(_blue), alpha(_alpha) {}
-
-	constexpr float COLOR_RANGE = 255;
-
-	Color::Color(float _red, float _green, float _blue, float _alpha)
-	{
-		red = _red * COLOR_RANGE;
-		green = _green * COLOR_RANGE;
-		blue = _blue * COLOR_RANGE;
-		alpha = _alpha * COLOR_RANGE;
-	}
-
-	Color::Color(ColorFloat color)
-	{
-		red = color.red * COLOR_RANGE;
-		green = color.green * COLOR_RANGE;
-		blue = color.blue * COLOR_RANGE;
-		alpha = color.alpha * COLOR_RANGE;
-	}
-
-	Color::Color(const unsigned char* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
- 
-	Color::Color(const float* values) : red(values[0] * COLOR_RANGE), green(values[1] * COLOR_RANGE), blue(values[2] * COLOR_RANGE), alpha(values[3] * COLOR_RANGE) {}
-
-	bool Color::operator==(const Color& other) const
-	{
-		return red == other.red && green == other.green && blue == other.blue && alpha == other.alpha;
-	}
-
-	bool Color::operator != (const Color& other) const {
-		return red != other.red || green != other.green || blue != other.blue || alpha != other.alpha;
-	}
-
-	Color Color::operator+(const Color& other) const
-	{
-		return Color(red + other.red, green + other.green, blue + other.blue);
-	}
-
-	Color Color::operator*(const Color& other) const
-	{
-		constexpr float inverse_range = 1.0f / 65535;
-		Color new_color;
-
-		float current_red = static_cast<float>(red);
-		new_color.red = current_red * other.red * inverse_range;
-
-		float current_green = static_cast<float>(green);
-		new_color.green = current_green * other.green * inverse_range;
-
-		float current_blue = static_cast<float>(blue);
-		new_color.blue = current_blue * other.blue * inverse_range;
-
-		float current_alpha = static_cast<float>(alpha);
-		new_color.alpha = current_alpha * other.alpha * inverse_range;
-
-		return new_color;
-	}
-
-	Color Color::operator*(float percentage) const
-	{
-		Color new_color;
-		new_color.red = static_cast<float>(red) * percentage;
-		new_color.green = static_cast<float>(green) * percentage;
-		new_color.blue = static_cast<float>(blue) * percentage;
-		new_color.alpha = static_cast<float>(alpha) * percentage;
-		return new_color;
-	}
-
-	void Color::Normalize(float* values) const
-	{
-		constexpr float inverse = 1.0f / 255.0f;
-		values[0] = (float)red * inverse;
-		values[1] = (float)green * inverse;
-		values[2] = (float)blue * inverse;
-		values[3] = (float)alpha * inverse;
-	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
-
-	ColorFloat::ColorFloat() : red(0.0f), green(0.0f), blue(0.0f), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red) : red(_red), green(0.0f), blue(0.0f), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red, float _green) : red(_red), green(_green), blue(0.0f), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red, float _green, float _blue)
-		: red(_red), green(_green), blue(_blue), alpha(1.0f) {}
-
-	ColorFloat::ColorFloat(float _red, float _green, float _blue, float _alpha)
-		: red(_red), green(_green), blue(_blue), alpha(_alpha) {}
-
-	ColorFloat::ColorFloat(Color color)
-	{
-		constexpr float inverse_range = 1.0f / Color::GetRange();
-		red = static_cast<float>(color.red) * inverse_range;
-		green = static_cast<float>(color.green) * inverse_range;
-		blue = static_cast<float>(color.blue) * inverse_range;
-		alpha = static_cast<float>(color.alpha) * inverse_range;
-	}
-
-	ColorFloat::ColorFloat(const float* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
-
-	ColorFloat ColorFloat::operator*(const ColorFloat& other) const
-	{
-		return ColorFloat(red * other.red, green * other.green, blue * other.blue, alpha * other.alpha);
-	}
-
-	ColorFloat ColorFloat::operator*(float percentage) const
-	{
-		return ColorFloat(red * percentage, green * percentage, blue * percentage, alpha * percentage);
-	}
-
-	ColorFloat ColorFloat::operator+(const ColorFloat& other) const
-	{
-		return ColorFloat(red + other.red, green + other.green, blue + other.blue, alpha + other.alpha);
-	}
-
-	ColorFloat ColorFloat::operator-(const ColorFloat& other) const
-	{
-		return ColorFloat(red - other.red, green - other.green, blue - other.blue, alpha - other.alpha);
-	}
-
-	void ColorFloat::Normalize(float* values) const
-	{
-		values[0] = red;
-		values[1] = green;
-		values[2] = blue;
-		values[3] = alpha;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
@@ -887,8 +689,8 @@ namespace ECSEngine {
 	// Everything is coallesced into a single allocation
 	void FreePBRMaterial(const PBRMaterial& material, AllocatorPolymorphic allocator)
 	{
-		if (material.name != nullptr) {
-			Deallocate(allocator, material.name);
+		if (material.name.buffer != nullptr) {
+			Deallocate(allocator, material.name.buffer);
 		}
 	}
 
@@ -1026,9 +828,13 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
-	Material::Material() : vertex_buffer_mapping_count(0), vc_buffer_count(0), pc_buffer_count(0), dc_buffer_count(0), hc_buffer_count(0),
-		gc_buffer_count(0), vertex_texture_count(0), pixel_texture_count(0), domain_texture_count(0), hull_texture_count(0),
-		geometry_texture_count(0), unordered_view_count(0), domain_shader(nullptr), hull_shader(nullptr), geometry_shader(nullptr) {}
+	void UserMaterialTexture::GenerateSettingsSuffix(CapacityStream<void>& suffix) const {
+		suffix.Add(&shader_type);
+		suffix.Add(&slot);
+		suffix.Add(&srgb);
+		suffix.Add(&generate_mips);
+		suffix.Add(&compression);
+	}
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
@@ -1053,8 +859,6 @@ namespace ECSEngine {
 			}
 		}
 	}
-
-	// --------------------------------------------------------------------------------------------------------------------------------
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 

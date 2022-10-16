@@ -1,6 +1,6 @@
 #include "ecspch.h"
 #include "UIStructures.h"
-#include "../../Rendering/ColorMacros.h"
+#include "../../Rendering/ColorUtilities.h"
 #include "../../Utilities/Function.h"
 #include "../../Utilities/FunctionInterfaces.h"
 #include "../../Rendering/Graphics.h"
@@ -133,6 +133,15 @@ namespace ECSEngine {
 			return Add(position.x, position.y, scale.x, scale.y, handler);
 		}
 
+		unsigned int UIHandler::AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler) {
+			unsigned int current_size = position_x.size;
+			if (!Add(position, scale, handler)) {
+				Resize(allocator, position_x.capacity * 1.5f);
+				Add(position, scale, handler);
+			}
+			return current_size;
+		}
+
 		void UIHandler::Execute(unsigned int action_index, ActionData* action_data) const {
 			action_data->data = action[action_index].data;
 			action_data->position = { position_x[action_index], position_y[action_index] };
@@ -144,6 +153,31 @@ namespace ECSEngine {
 		{
 			unsigned int index = position_x.size - 1;
 			return action + index;
+		}
+
+		void UIHandler::Resize(AllocatorPolymorphic allocator, size_t new_count)
+		{
+			void* allocation = Allocate(allocator, MemoryOf(new_count));
+			UIHandler old_handler = *this;
+			SetBuffer(allocation, new_count);
+			memcpy(position_x.buffer, old_handler.position_x.buffer, sizeof(float) * position_x.size);
+			memcpy(position_y, old_handler.position_y, sizeof(float) * position_x.size);
+			memcpy(scale_x, old_handler.scale_x, sizeof(float) * position_x.size);
+			memcpy(scale_y, old_handler.scale_y, sizeof(float) * position_x.size);
+			memcpy(action, old_handler.action, sizeof(UIActionHandler) * position_x.size);
+			position_x.capacity = new_count;
+
+			DeallocateIfBelongs(allocator, old_handler.position_x.buffer);
+		}
+
+		unsigned int UIHandler::ReserveOne(AllocatorPolymorphic allocator)
+		{
+			if (position_x.size == position_x.capacity) {
+				Resize(allocator, position_x.size * 1.5f);
+			}
+			unsigned int index = position_x.size;
+			position_x.size++;
+			return index;
 		}
 
 		void UIHandler::Reset() {
@@ -166,6 +200,13 @@ namespace ECSEngine {
 
 		size_t UIHandler::MemoryOf(size_t count) {
 			return (sizeof(float) * 4 + sizeof(UIActionHandler) + sizeof(bool)) * count + 8;
+		}
+
+		void UIWindowDescriptor::Center(float2 size) {
+			initial_size_x = size.x;
+			initial_size_y = size.y;
+			initial_position_x = AlignMiddle(-1.0f, 2.0f, size.x);
+			initial_position_y = AlignMiddle(-1.0f, 2.0f, size.y);
 		}
 
 		bool UIFocusedWindowData::ExecuteHoverableHandler(ActionData* action_data)
@@ -789,6 +830,21 @@ namespace ECSEngine {
 				ptr += bytes_read;
 			}
 			return ptr - (uintptr_t)buffer;
+		}
+
+		void UIReservedHandler::Write(float2 position, float2 scale, UIActionHandler action_handler)
+		{
+			action_handler.data = function::CopyNonZero(allocator, action_handler.data, action_handler.data_size);
+			handler->action[index] = action_handler;
+			handler->position_x[index] = position.x;
+			handler->position_y[index] = position.y;
+			handler->scale_x[index] = scale.x;
+			handler->scale_y[index] = scale.y;
+		}
+
+		void* UIReservedHandler::WrittenBuffer() const
+		{
+			return handler->action[index].data;
 		}
 
 	}

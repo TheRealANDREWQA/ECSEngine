@@ -1,8 +1,6 @@
 #include "editorpch.h"
 #include "Game.h"
 #include "..\Editor\EditorState.h"
-#include "ToolbarUI.h"
-#include "MiscellaneousBar.h"
 #include "..\HelperWindows.h"
 
 using namespace ECSEngine;
@@ -25,7 +23,9 @@ void GameWindowDraw(void* window_data, void* drawer_descriptor, bool initialize)
 	UI_PREPARE_DRAWER(initialize);
 
 	GameData* data = (GameData*)window_data;
-	EDITOR_STATE(data->editor_state);
+	EditorState* editor_state = data->editor_state;
+
+	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
 
 	if (!initialize) {
 		//drawer.system->SetSprite(drawer.dockspace, drawer.border_index, data->editor_state->viewport_texture, drawer.region_position, drawer.region_scale, drawer.buffers, drawer.counts);
@@ -62,33 +62,45 @@ void GamePrivateAction(ActionData* action_data) {
 
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)
 {
-	GameData* game_data = (GameData*)stack_memory;
+	unsigned int index = *(unsigned int*)stack_memory;
+
+	GameData* game_data = (GameData*)function::OffsetPointer(stack_memory, sizeof(unsigned int));
 	
 	memset(game_data, 0, sizeof(*game_data));
 	game_data->editor_state = editor_state;
 
 	descriptor.draw = GameWindowDraw;
+	descriptor.private_action = GamePrivateAction;
 
-	descriptor.window_name = GAME_WINDOW_NAME;
+	CapacityStream<char> window_name(function::OffsetPointer(game_data, sizeof(*game_data)), 0, 128);
+	GetGameUIWindowName(index, window_name);
+
+	descriptor.window_name = window_name;
 	descriptor.window_data = game_data;
 	descriptor.window_data_size = sizeof(*game_data);
 }
 
-void CreateGame(EditorState* editor_state) {
-	CreateDockspaceFromWindow(GAME_WINDOW_NAME, editor_state, CreateGameWindow);
+void CreateGameUIWindow(EditorState* editor_state, unsigned int index) {
+	CreateDockspaceFromWindowWithIndex(GAME_WINDOW_NAME, editor_state, index, CreateGameUIWindowOnly);
 }
 
-void CreateGameAction(ActionData* action_data) {
+void CreateGameUIWindowAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
-	CreateGame((EditorState*)action_data->data);
+	CreateGameUIActionData* data = (CreateGameUIActionData*)_data;
+	CreateGameUIWindow(data->editor_state, data->index);
 }
 
-unsigned int CreateGameWindow(EditorState* editor_state) {
-	EDITOR_STATE(editor_state);
+unsigned int CreateGameUIWindowOnly(EditorState* editor_state, unsigned int index) {
+	return CreateDefaultWindowWithIndex(GAME_WINDOW_NAME, editor_state, { 0.7f, 0.8f }, index, GameSetDecriptor);
+}
 
-	float window_size_y = 0.7f;
-	float2 window_size = ui_system->GetSquareScale(window_size_y);
+void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)
+{
+	name.Copy(GAME_WINDOW_NAME);
+	function::ConvertIntToChars(name, index);
+}
 
-	return CreateDefaultWindow(GAME_WINDOW_NAME, editor_state, window_size, GameWindowDraw);
+void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
+	UpdateUIWindowIndex(editor_state, GAME_WINDOW_NAME, old_index, new_index);
 }

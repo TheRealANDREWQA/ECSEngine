@@ -35,6 +35,7 @@ namespace ECSEngine {
 		unsigned char version;
 		void* components;
 		void* extra_data;
+		AllocatorPolymorphic component_allocator;
 	};
 
 	// This functor is used to reconstruct the data from the file. It must return true if the data is valid, else false
@@ -85,6 +86,7 @@ namespace ECSEngine {
 		unsigned char version;
 		void* component;
 		void* extra_data;
+		AllocatorPolymorphic component_allocator;
 	};
 
 	// This functor is used to reconstruct the data from the file. It must return true if the data is valid, else false
@@ -147,6 +149,13 @@ namespace ECSEngine {
 		Stream<char> name = { nullptr, 0 };
 	};
 
+	struct DeserializeEntityManagerComponentFixup {
+		size_t allocator_size = 0;
+		ComponentBuffer component_buffers[ECS_COMPONENT_INFO_MAX_BUFFER_COUNT];
+		unsigned short component_buffer_count = 0;
+		unsigned short component_byte_size = 0;
+	};
+
 	// If the name is specified, then it will match the component using the name instead of the index
 	struct DeserializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
@@ -165,7 +174,8 @@ namespace ECSEngine {
 
 		DeserializeEntityManagerComponent function;
 		DeserializeEntityManagerHeaderComponent header_function = nullptr;
-		void* extra_data;
+		void* extra_data;	
+		DeserializeEntityManagerComponentFixup component_fixup;
 		Stream<char> name = { nullptr, 0 };
 	};
 
@@ -188,6 +198,7 @@ namespace ECSEngine {
 		DeserializeEntityManagerSharedComponent function;
 		DeserializeEntityManagerHeaderSharedComponent header_function = nullptr;
 		void* extra_data;
+		DeserializeEntityManagerComponentFixup component_fixup;
 		Stream<char> name = { nullptr, 0 };
 	};
 
@@ -200,12 +211,14 @@ namespace ECSEngine {
 	typedef HashTable<DeserializeEntityManagerSharedComponentInfo, Component, HashFunctionPowerOfTwo> DeserializeEntityManagerSharedComponentTable;
 
 	enum ECS_DESERIALIZE_ENTITY_MANAGER_STATUS {
-		ECS_DESERIALIZE_ENTITY_MANAGER_OK = 0,
-		ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_OPEN_FILE = 1 << 0,
-		ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ = 1 << 1,
-		ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID = 1 << 2,
-		ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID = 1 << 3,
-		ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING = 1 << 4
+		ECS_DESERIALIZE_ENTITY_MANAGER_OK,
+		ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_OPEN_FILE,
+		ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ,
+		ECS_DESERIALIZE_ENTITY_MANAGER_HEADER_IS_INVALID,
+		ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID,
+		ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING,
+		ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING,
+		ECS_DESERIALIZE_ENTITY_MANAGER_FILE_IS_CORRUPT
 	};
 
 	ECS_ENUM_BITWISE_OPERATIONS(ECS_DESERIALIZE_ENTITY_MANAGER_STATUS);

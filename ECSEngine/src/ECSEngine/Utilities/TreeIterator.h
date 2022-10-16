@@ -20,6 +20,89 @@ namespace ECSEngine {
 	// 
 	// void Free();
 
+	struct IteratorPolymorphic {
+		inline bool Valid() const {
+			return valid(iterator);
+		}
+
+		inline void Next(void* return_type, unsigned int* level = nullptr) {
+			next(iterator, return_type, level);
+		}
+
+		inline void Peek(void* return_type, unsigned int* level = nullptr, bool* has_children = nullptr) {
+			peek(iterator, return_type, level, has_children);
+		}
+
+		inline void PeekStorage(void* storage_type) {
+			peek_storage(iterator, storage_type);
+		}
+
+		inline void Skip() {
+			skip(iterator);
+		}
+
+		inline void Deallocate(const void* buffer) {
+			deallocate(iterator, buffer);
+		}
+
+		void* iterator;
+		bool (*valid)(const void* iterator);
+		void (*next)(void* iterator, void* return_type, unsigned int* level);
+		void (*peek)(const void* iterator, void* return_type, unsigned int* level, bool* has_children);
+		void (*peek_storage)(const void* iterator, void* storage_type);
+		void (*skip)(void* iterator);
+		void (*deallocate)(void* iterator, const void* buffer);
+		unsigned int storage_type_size;
+		unsigned int return_type_size;
+	};
+
+	template<typename Type>
+	IteratorPolymorphic IteratorToPolymorphic(Type* type) {
+		IteratorPolymorphic iterator;
+
+		iterator.iterator = type;
+
+		auto valid = [](const void* iterator) {
+			return ((Type*)iterator)->Valid();
+		};
+
+		auto next = [](void* iterator, void* return_type, unsigned int* level) {
+			auto value = ((Type*)iterator)->Next(level);
+			if (return_type != nullptr) {
+				memcpy(return_type, &value, sizeof(value));
+			}
+		};
+
+		auto peek = [](const void* iterator, void* return_type, unsigned int* level, bool* has_children) {
+			auto value = ((Type*)iterator)->Peek(level, has_children);
+			memcpy(return_type, &value, sizeof(value));
+		};
+
+		auto peek_storage = [](const void* iterator, void* storage_type) {
+			auto storage = ((Type*)iterator)->PeekStorage();
+			memcpy(storage_type, &storage, sizeof(storage));
+		};
+
+		auto skip = [](void* iterator) {
+			((Type*)iterator)->Skip();
+		};
+
+		auto deallocate = [](void* iterator, const void* buffer) {
+			((Type*)iterator)->Deallocate(buffer);
+		};
+
+		iterator.deallocate = deallocate;
+		iterator.next = next;
+		iterator.peek = peek;
+		iterator.peek_storage = peek_storage;
+		iterator.skip = skip;
+		iterator.valid = valid;
+		iterator.storage_type_size = sizeof(typename Type::storage_type);
+		iterator.return_type_size = sizeof(typename Type::return_type);
+
+		return iterator;
+	}
+
 	// The handler needs to have as typedefs return_type and storage_type
 	// As functions:	Stream<storage_type> GetChildren(storage_type, AllocatorPolymorphic allocator) - returns a stream of elements to be added from a certain node 
 	// 					bool HasChildren(storage_type) const - returns true if the value has children, false otherwise
@@ -86,6 +169,12 @@ namespace ECSEngine {
 			return handler.GetReturnValue(current_value.value, resizable_storage.m_queue.allocator);
 		}
 
+		storage_type PeekStorage() const {
+			Node node;
+			resizable_storage.Peek(node);
+			return node.value;
+		}
+
 		// Skips the next node without visiting its children
 		void Skip() {
 			Node temp;
@@ -116,6 +205,10 @@ namespace ECSEngine {
 			handler = _handler;
 
 			Roots();
+		}
+
+		IteratorPolymorphic AsPolymorphic() {
+			return IteratorToPolymorphic(this);
 		}
 
 		ResizableQueue<Node> resizable_storage;
@@ -180,6 +273,12 @@ namespace ECSEngine {
 			return handler.GetReturnValue(current_node.value, stack_frames.m_stack.allocator);
 		}
 
+		storage_type PeekStorage() const {
+			Node node;
+			stack_frames.Peek(node);
+			return node.value;
+		}
+
 		// Skips the next node, without visiting its children
 		void Skip() {
 			Node temp;
@@ -217,6 +316,10 @@ namespace ECSEngine {
 			handler = _handler;
 
 			Roots();
+		}
+
+		IteratorPolymorphic AsPolymorphic() {
+			return IteratorToPolymorphic(this);
 		}
 
 		ResizableStack<Node> stack_frames;

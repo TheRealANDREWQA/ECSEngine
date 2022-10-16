@@ -160,6 +160,9 @@ namespace ECSEngine {
 		}
 
 		// Const variant
+		// For the early exit it must return true when to exit, else false.
+		// Else void return.
+		// First parameter - the value, the second one - the identifier
 		template<bool early_exit = false, typename Functor>
 		void ForEachConst(Functor&& functor) const {
 			unsigned int extended_capacity = GetExtendedCapacity();
@@ -716,5 +719,33 @@ namespace ECSEngine {
 
 	template<typename T>
 	using HashTableDefault = HashTable<T, ResourceIdentifier, HashFunctionPowerOfTwo>;
+
+	template<typename Table>
+	void HashTableCopyIdentifiers(const Table& source, Table& destination, AllocatorPolymorphic allocator) {
+		source.ForEachIndexConst([&](unsigned int index) {
+			auto current_identifier = source.GetIdentifierFromIndex(index);
+			auto* identifier = destination.GetIdentifierPtrFromIndex(index);
+			*identifier = current_identifier.Copy(allocator);
+		});
+	}
+
+	template<typename Table>
+	void HashTableDeallocateIdentifiers(const Table& source, AllocatorPolymorphic allocator) {
+		source.ForEachConst([&](auto value, auto identifier) {
+			identifier.Deallocate(allocator);
+		});
+	}
+
+	template<typename Table>
+	void HashTableCopyWithIdentifiers(const Table& source, Table& destination, AllocatorPolymorphic allocator) {
+		destination.Copy(allocator, &source);
+		HashTableCopyIdentifiers(source, destination, allocator);
+	}
+
+	template<typename Table>
+	void HashTableDeallocateWithIdentifiers(const Table& source, AllocatorPolymorphic allocator) {
+		HashTableDeallocateIdentifiers(source, allocator);
+		Deallocate(allocator, source.GetAllocatedBuffer());
+	}
 
 }

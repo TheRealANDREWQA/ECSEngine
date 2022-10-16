@@ -59,7 +59,6 @@ namespace ECSEngine {
 
 #define ECS_FILE_LINE __FILE__, (unsigned int)__LINE__
 #define ECS_LOCATION __builtin_FILE(), __builtin_FUNCTION(), __builtin_LINE()
-#define ECS_DEBUG_INFO { ECS_LOCATION } 
 
 #define ECS_STACK_ALLOC(size) _alloca(size)
 #define ECS_MALLOCA(size) _malloca(size)

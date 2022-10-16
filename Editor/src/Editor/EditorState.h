@@ -25,10 +25,12 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS : unsigned char {
 	EDITOR_LAZY_EVALUATION_DIRECTORY_EXPLORER,
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_TEXTURES,
 	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MESH_THUMBNAIL,
+	EDITOR_LAZY_EVALUATION_FILE_EXPLORER_MATERIAL_THUMBNAIL,
 	EDITOR_LAZY_EVALUATION_UPDATE_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_RESET_TASK_MANAGER,
 	EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS,
+	EDITOR_LAZY_EVALUATION_DEFAULT_METADATA_FOR_ASSETS,
 	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT,
 };
 
@@ -39,6 +41,15 @@ enum EDITOR_STATE_FLAGS : unsigned char {
 	EDITOR_STATE_IS_STEP,
 	EDITOR_STATE_FREEZE_TICKS,
 	EDITOR_STATE_PREVENT_LAUNCH,
+	// This is for runtime only - it doesn't affect the UI loads
+	EDITOR_STATE_PREVENT_RESOURCE_LOADING,
+	// This is a one off flag. Used when creating the dedicated GPU device
+	// such that if it is the first time a device is created on a dedicated GPU
+	// and it is asleep (like it a laptop) then it will do the creation deferred
+	// in another thread and this signals when that creation has finished (this
+	// usually takes 1 second and if the user doesn't open up a project quicker than
+	// this then there should be no problem.
+	EDITOR_STATE_RUNTIME_GRAPHICS_INITIALIZATION_FINISHED,
 	EDITOR_STATE_FLAG_COUNT
 };
 
@@ -51,8 +62,12 @@ struct EditorState {
 		return ui_system->m_graphics;
 	}
 
-	inline ECSEngine::Graphics* CacheGraphics() {
-		return cache_graphics;
+	inline ECSEngine::Graphics* RuntimeGraphics() {
+		return runtime_graphics;
+	}
+
+	inline ECSEngine::ResourceManager* RuntimeResourceManager() {
+		return runtime_resource_manager;
 	}
 
 	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
@@ -85,7 +100,7 @@ struct EditorState {
 
 	EditorStateTick editor_tick;
 	ECSEngine::Tools::UISystem* ui_system;
-	ECSEngine::ResourceManager* resource_manager;
+	ECSEngine::ResourceManager* ui_resource_manager;
 
 	ECSEngine::Tools::UIReflectionDrawer* ui_reflection;
 	ECSEngine::Tools::UIReflectionDrawer* module_reflection;
@@ -94,9 +109,14 @@ struct EditorState {
 	ECSEngine::MemoryManager* multithreaded_editor_allocator;
 	ECSEngine::TaskManager* task_manager;
 
-	ECSEngine::AssetDatabase asset_database;
-	ECSEngine::ResourceManager* cache_resource_manager;
-	ECSEngine::Graphics* cache_graphics;
+	// All sandboxes will refer to these. Cannot make a separate GPU runtime for each 
+	// sandbox because of technical D3D issues which don't allow resource sharing
+	// across multiple devices (for shaders, input layouts etc. and for buffers (might not even be possible)
+	// and textures it is complicated to get right). So instead rely on the fact that when the device gets
+	// removed due to a crash we can recover it.
+	ECSEngine::AssetDatabase* asset_database;
+	ECSEngine::ResourceManager* runtime_resource_manager;
+	ECSEngine::Graphics* runtime_graphics;
 	
 	ECSEngine::ResizableStream<ECSEngine::Stream<wchar_t>> launched_module_compilation[EDITOR_MODULE_CONFIGURATION_COUNT];
 	// Needed to syncronize the threads when removing the launched module compilation
@@ -146,6 +166,9 @@ void EditorStateClearFlag(EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
 bool EditorStateHasFlag(const EditorState* editor_state, EDITOR_STATE_FLAGS flag);
 
+// Waits until the flag is set or cleared
+void EditorStateWaitFlag(size_t sleep_milliseconds, const EditorState* editor_state, EDITOR_STATE_FLAGS flag, bool set = true);
+
 void EditorStateProjectTick(EditorState* editor_state);
 
 void EditorStateHubTick(EditorState* editor_state);
@@ -178,6 +201,9 @@ void EditorStateLazyEvaluationSet(EditorState* editor_state, unsigned int index,
 // before quitting like saving scenes. Query the response for 0 if the user wants to continue the application,
 // 1 if the quit can be done and -1 if the response is not yet ready
 void EditorStateApplicationQuit(EditorState* editor_state, char* quit_response);
+
+// Updates the asset database path from the current active project
+void EditorStateSetDatabasePath(EditorState* editor_state);
 
 #define EDITOR_STATE(editor_state) UIReflectionDrawer* ui_reflection = ((EditorState*)editor_state)->ui_reflection; \
 UISystem* ui_system = ((EditorState*)editor_state)->ui_system; \

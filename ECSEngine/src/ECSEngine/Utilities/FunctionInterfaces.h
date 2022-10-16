@@ -107,6 +107,19 @@ string_name.AssertCapacity();
 		// Returns the count of characters written
 		template<typename Stream>
 		size_t ConvertDoubleToChars(Stream& chars, double value, size_t precision = 2);
+		
+		// Just forwards to the appropriate floating point variant
+		template<typename FloatingType, typename Stream>
+		size_t ConvertFloatingPointToChars(Stream& chars, FloatingType value, size_t precision = 2) {
+			static_assert(std::is_floating_point_v<FloatingType>);
+
+			if constexpr (std::is_same_v<FloatingType, float>) {
+				return ConvertFloatToChars(chars, value, precision);
+			}
+			else {
+				return ConvertDoubleToChars(chars, value, precision);
+			}
+		}
 
 		// Works with decimal digits that then get pushed into the stream;
 		// Adds apostrophes ' in order to have an easier way of distinguishing powers of 10
@@ -831,6 +844,60 @@ string_name.AssertCapacity();
 
 		// -----------------------------------------------------------------------------------------------------------------------
 
+		// Writes the stream data right after the type and sets the size
+		// Returns the total write size
+		template<typename Type>
+		unsigned int CoallesceStreamIntoType(Type* type, Stream<void> stream) {
+			void* location = function::OffsetPointer(type, sizeof(*type));
+			memcpy(location, stream.buffer, stream.size);
+			*type->Size() = stream.size;
+			return sizeof(*type) + stream.size;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		template<typename Type>
+		inline Stream<void> GetCoallescedStreamFromType(Type* type) {
+			void* location = function::OffsetPointer(type, sizeof(*type));
+			return { location, *type->Size() };
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		template<typename Type>
+		inline Type* CreateCoallescedStreamIntoType(void* buffer, Stream<void> stream, unsigned int* write_size) {
+			Type* type = (Type*)buffer;
+			*write_size = CoallesceStreamIntoType(type, stream);
+			return type;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// Does not set the data size inside the type
+		template<typename Type>
+		Type* CreateCoallescedStreamsIntoType(void* buffer, Stream<Stream<void>> buffers, unsigned int* write_size) {
+			Type* type = (Type*)buffer;
+			unsigned int offset = 0;
+			for (size_t index = 0; index < buffers.size; index++) {
+				buffers[index].CopyTo(function::OffsetPointer(buffer, sizeof(*type) + offset));
+				offset += buffers[index].size;
+			}
+			*write_size = sizeof(*type) + offset;
+			return type;
+		}
+
+		// Sizes needs to be byte sizes of the coallesced streams
+		template<typename Type>
+		Stream<void> GetCoallescedStreamFromType(Type* type, unsigned int stream_index, unsigned int* sizes) {
+			unsigned int offset = 0;
+			for (unsigned int index = 0; index < stream_index; index++) {
+				offset += sizes[index];
+			}
+			return { function::OffsetPointer(type, sizeof(*type) + offset), sizes[stream_index] };
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
 		// Allocates a single chunk of memory and then partitions the buffer to each stream
 		// without copying the data from the streams
 		template<typename Stream0, typename Stream1>
@@ -945,6 +1012,19 @@ string_name.AssertCapacity();
 			allocation = function::OffsetPointer(allocation, stream2.MemoryOf(stream2.size));
 			stream3.CopyTo(allocation);
 			memcpy(&stream3, &allocation, sizeof(allocation));
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------
+
+		// The functor needs to return the string from the type
+		template<typename Type, typename CharacterType, typename Functor>
+		unsigned int FindString(Stream<CharacterType> string, Stream<Type> other, Functor&& functor) {
+			for (unsigned int index = 0; index < other.size; index++) {
+				if (function::CompareStrings(string, functor(other[index]))) {
+					return index;
+				}
+			}
+			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------

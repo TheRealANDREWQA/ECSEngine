@@ -5,7 +5,7 @@
 
 namespace ECSEngine {
 
-	void CreateGraphicsForProcess(Graphics* graphics, HWND hWnd, GlobalMemoryManager* global_manager)
+	void CreateGraphicsForProcess(Graphics* graphics, HWND hWnd, GlobalMemoryManager* global_manager, bool discrete_gpu)
 	{
 		GraphicsDescriptor graphics_descriptor;
 		RECT window_rectangle;
@@ -39,6 +39,8 @@ namespace ECSEngine {
 		graphics_descriptor.gamma_corrected = false;
 		graphics_descriptor.allocator = graphics_allocator;
 		graphics_descriptor.hWnd = hWnd;
+		graphics_descriptor.discrete_gpu = discrete_gpu;
+		graphics_descriptor.create_swap_chain = true;
 		new (graphics) Graphics(&graphics_descriptor);
 	}
 

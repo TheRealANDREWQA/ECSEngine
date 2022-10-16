@@ -8,17 +8,275 @@ namespace ECSEngine {
 
 	using namespace Reflection;
 
-	Stream<char> BasicTypeNames[] = {
-		"x",
-		"y",
-		"z",
-		"w",
-		"t",
-		"u",
-		"v"
-	};
-
 	namespace Tools {
+
+		// ------------------------------------------------------------ Basic ----------------------------------------------------------------------
+
+		void UIReflectionFloatSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionDoubleSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionIntSlider(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionDirectoryInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionFileInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionFloatSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionDoubleSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionIntSliderGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionUserDefined(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionOverride(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		// ------------------------------------------------------------ Basic ----------------------------------------------------------------------
+
+		// ------------------------------------------------------------ Stream ----------------------------------------------------------------------
+
+		void UIReflectionStreamFloatInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamDoubleInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamIntInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamColor(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamColorFloat(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamCheckBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		// It doesn't make too much sense to have a stream of combo boxes
+		void UIReflectionStreamComboBox(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamDirectoryInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamFileInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamFloatInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamDoubleInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		void UIReflectionStreamIntInputGroup(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+
+		// ------------------------------------------------------------ Stream ----------------------------------------------------------------------
+
+		typedef void (*UIReflectionSetLowerBound)(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetFloatLowerBound(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetDoubleLowerBound(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetIntLowerBound(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetGroupLowerBound(UIReflectionTypeField* field, const void* data);
+
+		typedef UIReflectionSetLowerBound UIReflectionSetUpperBound;
+
+		void UIReflectionSetFloatUpperBound(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetDoubleUpperBound(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetIntUpperBound(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetGroupUpperBound(UIReflectionTypeField* field, const void* data);
+
+		typedef UIReflectionSetLowerBound UIReflectionSetDefaultData;
+
+		void UIReflectionSetFloatDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetDoubleDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetIntDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetGroupDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetColorDefaultData(UIReflectionTypeField* field, const void* data);
+
+		// Currently it does nothing. It serves as a placeholder for the jump table. Maybe add support for it later on.
+		void UIReflectionSetTextInputDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetColorFloatDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetCheckBoxDefaultData(UIReflectionTypeField* field, const void* data);
+
+		void UIReflectionSetComboBoxDefaultData(UIReflectionTypeField* field, const void* data);
+
+		typedef void (*UIReflectionSetRange)(UIReflectionTypeField* field, const void* min, const void* max);
+
+		void UIReflectionSetFloatRange(UIReflectionTypeField* field, const void* min, const void* max);
+
+		void UIReflectionSetDoubleRange(UIReflectionTypeField* field, const void* min, const void* max);
+
+		void UIReflectionSetIntRange(UIReflectionTypeField* field, const void* min, const void* max);
+
+		void UIReflectionSetGroupRange(UIReflectionTypeField* field, const void* min, const void* max);
+
+#pragma region Jump Tables
+
+		UIReflectionFieldDraw UI_REFLECTION_FIELD_BASIC_DRAW[] = {
+			UIReflectionFloatSlider,
+			UIReflectionDoubleSlider,
+			UIReflectionIntSlider,
+			UIReflectionFloatInput,
+			UIReflectionDoubleInput,
+			UIReflectionIntInput,
+			UIReflectionFloatSliderGroup,
+			UIReflectionDoubleSliderGroup,
+			UIReflectionIntSliderGroup,
+			UIReflectionFloatInputGroup,
+			UIReflectionDoubleInputGroup,
+			UIReflectionIntInputGroup,
+			UIReflectionTextInput,
+			UIReflectionColor,
+			UIReflectionColorFloat,
+			UIReflectionCheckBox,
+			UIReflectionComboBox,
+			UIReflectionDirectoryInput,
+			UIReflectionFileInput,
+			UIReflectionUserDefined,
+			UIReflectionOverride
+		};
+
+		UIReflectionFieldDraw UI_REFLECTION_FIELD_STREAM_DRAW[] = {
+			UIReflectionStreamFloatInput,
+			UIReflectionStreamDoubleInput,
+			UIReflectionStreamIntInput,
+			UIReflectionStreamFloatInput,
+			UIReflectionStreamDoubleInput,
+			UIReflectionStreamIntInput,
+			UIReflectionStreamFloatInputGroup,
+			UIReflectionStreamDoubleInputGroup,
+			UIReflectionStreamIntInputGroup,
+			UIReflectionStreamFloatInputGroup,
+			UIReflectionStreamDoubleInputGroup,
+			UIReflectionStreamIntInputGroup,
+			UIReflectionStreamTextInput,
+			UIReflectionStreamColor,
+			UIReflectionStreamColorFloat,
+			UIReflectionStreamCheckBox,
+			UIReflectionStreamComboBox,
+			UIReflectionStreamDirectoryInput,
+			UIReflectionStreamFileInput
+		};
+
+		UIReflectionSetLowerBound UI_REFLECTION_SET_LOWER_BOUND[] = {
+			UIReflectionSetFloatLowerBound,
+			UIReflectionSetDoubleLowerBound,
+			UIReflectionSetIntLowerBound,
+			UIReflectionSetFloatLowerBound,
+			UIReflectionSetDoubleLowerBound,
+			UIReflectionSetIntLowerBound,
+			UIReflectionSetGroupLowerBound,
+			UIReflectionSetGroupLowerBound,
+			UIReflectionSetGroupLowerBound,
+			UIReflectionSetGroupLowerBound,
+			UIReflectionSetGroupLowerBound,
+			UIReflectionSetGroupLowerBound
+		};
+
+		UIReflectionSetUpperBound UI_REFLECTION_SET_UPPER_BOUND[] = {
+			UIReflectionSetFloatUpperBound,
+			UIReflectionSetDoubleUpperBound,
+			UIReflectionSetIntUpperBound,
+			UIReflectionSetFloatUpperBound,
+			UIReflectionSetDoubleUpperBound,
+			UIReflectionSetIntUpperBound,
+			UIReflectionSetGroupUpperBound,
+			UIReflectionSetGroupUpperBound,
+			UIReflectionSetGroupUpperBound,
+			UIReflectionSetGroupUpperBound,
+			UIReflectionSetGroupUpperBound,
+			UIReflectionSetGroupUpperBound
+		};
+
+		UIReflectionSetDefaultData UI_REFLECTION_SET_DEFAULT_DATA[] = {
+			UIReflectionSetFloatDefaultData,
+			UIReflectionSetDoubleDefaultData,
+			UIReflectionSetIntDefaultData,
+			UIReflectionSetFloatDefaultData,
+			UIReflectionSetDoubleDefaultData,
+			UIReflectionSetIntDefaultData,
+			UIReflectionSetGroupDefaultData,
+			UIReflectionSetGroupDefaultData,
+			UIReflectionSetGroupDefaultData,
+			UIReflectionSetGroupDefaultData,
+			UIReflectionSetGroupDefaultData,
+			UIReflectionSetGroupDefaultData,
+			UIReflectionSetTextInputDefaultData,
+			UIReflectionSetColorDefaultData,
+			UIReflectionSetColorFloatDefaultData,
+			UIReflectionSetCheckBoxDefaultData,
+			UIReflectionSetComboBoxDefaultData
+		};
+
+		UIReflectionSetRange UI_REFLECTION_SET_RANGE[] = {
+			UIReflectionSetFloatRange,
+			UIReflectionSetDoubleRange,
+			UIReflectionSetIntRange,
+			UIReflectionSetFloatRange,
+			UIReflectionSetDoubleRange,
+			UIReflectionSetIntRange,
+			UIReflectionSetGroupRange,
+			UIReflectionSetGroupRange,
+			UIReflectionSetGroupRange,
+			UIReflectionSetGroupRange,
+			UIReflectionSetGroupRange,
+			UIReflectionSetGroupRange
+		};
+
+#pragma endregion
+
+		Stream<char> BasicTypeNames[] = {
+			"x",
+			"y",
+			"z",
+			"w",
+			"t",
+			"u",
+			"v"
+		};
+
+		
+		// ------------- Structures for the draw part - They need to have as the first member a pointer to the field value ----------------
+
+		// The data needed by the override will be placed immediately after this
+		struct OverrideAllocationData {
+			void* GetData() {
+				return function::OffsetPointer(this, sizeof(*this));
+			}
+
+			void* field_data;
+			UIReflectionInstanceDrawCustom draw_function;
+			Stream<char> field_name;
+			unsigned int override_index;
+		};
 
 		// The first field must always be the pointer to the field
 		struct UIReflectionFloatSliderData {
@@ -124,8 +382,8 @@ namespace ECSEngine {
 			unsigned int byte_size;
 			unsigned int int_flags;
 		};
-		
-		struct UIReflectionDrawer;
+
+		// ------------- Structures for the draw part - They need to have as the first member a pointer to the field value ----------------
 
 		struct UIReflectionUserDefinedData {
 			Stream<char> instance_name;
@@ -135,6 +393,7 @@ namespace ECSEngine {
 		// All the streams struct contain this as the first member variable
 		struct UIInstanceFieldStream {
 			// Mirrors the fields inside the stream into the target
+			// Needs to be used in conjunction with CopyTarget()
 			void WriteTarget() {
 				// It is ok to alias the resizable stream with the capacity stream
 				*target_memory = capacity->buffer;
@@ -156,6 +415,8 @@ namespace ECSEngine {
 				previous_size = capacity->size;
 			}
 
+			// Needs to be used in conjunction with the WriteTarget. If not using that function, call
+			// CopyTargetStandalone()
 			void CopyTarget() {
 				if (!is_resizable) {
 					if (previous_size == capacity->size) {
@@ -172,24 +433,15 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					auto resize = [=](unsigned int new_count) {
-						resizable->size *= element_byte_size;
-						resizable->capacity *= element_byte_size;
-						resizable->ResizeNoCopy(new_count * element_byte_size);
-						resizable->capacity /= element_byte_size;
-						resizable->size /= element_byte_size;
-
-						memcpy(resizable->buffer, *target_memory, new_count * element_byte_size);
-					};
-
 					if (target_capacity) {
 						unsigned int current_capacity = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*) + sizeof(unsigned int));
 						if (current_capacity != resizable->capacity) {
-							resize(current_capacity);
+							resizable->ResizeNoCopy(current_capacity, element_byte_size);
+							memcpy(resizable->buffer, *target_memory, current_capacity * element_byte_size);
 						}
 					}
 
-					size_t size = resizable->size;
+					unsigned int size = resizable->size;
 					if (previous_size == capacity->size) {
 						if (target_size_t_size) {
 							size = *(size_t*)function::OffsetPointer(target_memory, sizeof(void*));
@@ -199,11 +451,77 @@ namespace ECSEngine {
 						}
 
 						if (size > resizable->capacity) {
-							resize(size);
+							resizable->ResizeNoCopy(size, element_byte_size);
+							memcpy(resizable->buffer, *target_memory, size * element_byte_size);
 						}
 						resizable->size = size;
 					}
 				}
+			}
+
+			// Should be used when wanting to keep a separate UI stream from the targeted stream
+			void CopyTargetStandalone() {
+				unsigned int target_size = 0;
+				if (target_size_t_size) {
+					target_size = *(size_t*)function::OffsetPointer(target_memory, sizeof(void*));
+				}
+				else if (target_uint_size) {
+					target_size = *(unsigned int*)function::OffsetPointer(target_memory, sizeof(void*));
+				}
+
+				if (previous_size == capacity->size) {
+					if (!is_resizable) {
+						target_size = std::min(target_size, capacity->capacity);
+
+						// The UI side hasn't changed
+						// Check the standalone data
+						if (standalone_data.size != target_size) {
+							// It changed
+							capacity->size = target_size;
+							memcpy(capacity->buffer, *target_memory, element_byte_size * target_size);
+							// Resize the standalone data
+							standalone_data.ResizeNoCopy(target_size, element_byte_size);
+							standalone_data.size = target_size;
+							memcpy(standalone_data.buffer, *target_memory, element_byte_size * target_size);
+						}
+						else {
+							if (memcmp(standalone_data.buffer, *target_memory, element_byte_size * target_size) != 0) {
+								// It changed
+								capacity->size = target_size;
+								memcpy(capacity->buffer, *target_memory, element_byte_size * target_size);
+
+								// Copy the new data
+								memcpy(standalone_data.buffer, *target_memory, element_byte_size * target_size);
+							}
+						}
+					}
+					else {
+						if (target_size != standalone_data.size) {
+							// It changed
+							resizable->ResizeNoCopy(target_size, element_byte_size);
+							memcpy(resizable->buffer, *target_memory, target_size * element_byte_size);
+							standalone_data.ResizeNoCopy(target_size, element_byte_size);
+							standalone_data.size = target_size;
+							memcpy(standalone_data.buffer, *target_memory, target_size * element_byte_size);
+						}
+						else {
+							if (memcmp(standalone_data.buffer, *target_memory, element_byte_size * target_size) != 0) {
+								// It changed
+								resizable->size = target_size;
+								memcpy(resizable->buffer, *target_memory, element_byte_size * target_size);
+
+								// Copy the new data
+								memcpy(standalone_data.buffer, *target_memory, element_byte_size * target_size);
+							}
+						}
+					}
+				}
+				else {
+					// The UI has changed
+					// But we should not copy into it
+				}
+
+				previous_size = capacity->size;
 			}
 
 			union {
@@ -219,8 +537,12 @@ namespace ECSEngine {
 			unsigned short element_byte_size;
 			// This is the size of the resizable/capacity that was recorded before
 			// Calling Update(). It is used to determine if the change was done from the UI
-			// or from the C++ side.
+			// or from the C++ side. In the CopyTarget and WriteTarget pair there is no need
+			// for the standalone data. But when using the standalone copy it is needed because
+			// there is no way to make the distinction when the data is changed on the C++ side
+			// or UI side.
 			unsigned int previous_size;
+			ResizableStream<void> standalone_data;
 		};
 
 		struct UIReflectionStreamBaseData {
@@ -477,6 +799,217 @@ namespace ECSEngine {
 
 		}
 
+		size_t UIReflectionDrawConfigSplatCallback(
+			Stream<UIReflectionDrawConfig> ui_config, 
+			UIActionHandler handler, 
+			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT splat_type,
+			void* stack_memory
+		)
+		{
+			size_t index = 0;
+
+			ECS_STACK_CAPACITY_STREAM(size_t, used_indices, 32);
+			size_t last_index = 0;
+
+			auto find_index = [&](Stream<UIReflectionIndex> indices) {
+				size_t count_type = -1;
+				for (size_t config_index = 0; config_index < ui_config.size; config_index++) {
+					if (ui_config[config_index].index_count > 0) {
+						if (function::SearchBytes(indices.buffer, indices.size, (size_t)ui_config[config_index].index[0], sizeof(indices[0])) != -1) {
+							count_type = config_index;
+							break;
+						}
+					}
+				}
+
+				if (count_type == -1) {
+					count_type = index;
+				}
+				ECS_ASSERT(count_type <= ui_config.size);
+				last_index = std::max(last_index, count_type);
+				index++;
+
+				return count_type;
+			};
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_ADD)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::Count
+				};
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index[0] = UIReflectionIndex::Count;
+				ui_config[count_type].index_count = 1;
+
+				UIConfigArrayAddCallback* add_callback = (UIConfigArrayAddCallback*)stack_memory;
+				add_callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*add_callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, add_callback);
+
+				if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
+					UIConfigArrayRemoveCallback remove_callback;
+					remove_callback.handler = handler;
+					UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, &remove_callback);
+					splat_type = (ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT)function::ClearFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE);
+				}
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::Count
+				};
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index[0] = UIReflectionIndex::Count;
+				ui_config[count_type].index_count = 1;
+
+				UIConfigArrayRemoveCallback* remove_callback = (UIConfigArrayRemoveCallback*)stack_memory;
+				remove_callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*remove_callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, remove_callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_CHECK_BOX)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::CheckBox
+				};
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index[0] = UIReflectionIndex::CheckBox;
+				ui_config[count_type].index_count = 1;
+				
+				UIConfigCheckBoxCallback* callback = (UIConfigCheckBoxCallback*)stack_memory;
+				callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_FLOAT)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::ColorFloat
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index[0] = UIReflectionIndex::ColorFloat;
+				ui_config[count_type].index_count = 1;
+
+				UIConfigColorFloatCallback* callback = (UIConfigColorFloatCallback*)stack_memory;
+				callback->callback = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COLOR_INPUT)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::Color
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index[0] = UIReflectionIndex::Color;
+				ui_config[count_type].index_count = 1;
+
+				UIConfigColorInputCallback* callback = (UIConfigColorInputCallback*)stack_memory;
+				callback->callback = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_COMBO_BOX)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::ComboBox
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index[0] = UIReflectionIndex::ComboBox;
+				ui_config[count_type].index_count = 1;
+
+				UIConfigComboBoxCallback* callback = (UIConfigComboBoxCallback*)stack_memory;
+				callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_NUMBER_INPUTS)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::IntegerInput,
+					UIReflectionIndex::FloatInput,
+					UIReflectionIndex::DoubleInput,
+					UIReflectionIndex::IntegerInputGroup,
+					UIReflectionIndex::FloatInputGroup,
+					UIReflectionIndex::DoubleInputGroup
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index_count = std::size(indices);
+				memcpy(ui_config[count_type].index, indices, sizeof(indices));
+
+				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
+				callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_SLIDERS)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::IntegerSlider,
+					UIReflectionIndex::FloatSlider,
+					UIReflectionIndex::DoubleSlider,
+					UIReflectionIndex::IntegerSliderGroup,
+					UIReflectionIndex::FloatSliderGroup,
+					UIReflectionIndex::DoubleSliderGroup
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index_count = std::size(indices);
+				memcpy(ui_config[count_type].index, indices, sizeof(indices));
+
+				UIConfigSliderChangedValueCallback* callback = (UIConfigSliderChangedValueCallback*)stack_memory;
+				callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_PATH_INPUT)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::DirectoryInput,
+					UIReflectionIndex::FileInput
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index_count = std::size(indices);
+				memcpy(ui_config[count_type].index, indices, sizeof(indices));
+
+				UIConfigPathInputCallback* callback = (UIConfigPathInputCallback*)stack_memory;
+				callback->callback = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			if (function::HasFlag(splat_type, ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_TEXT_INPUT)) {
+				UIReflectionIndex indices[] = {
+					UIReflectionIndex::TextInput,
+				};
+
+				size_t count_type = find_index({ indices, std::size(indices) });
+				ui_config[count_type].index_count = std::size(indices);
+				memcpy(ui_config[count_type].index, indices, sizeof(indices));
+
+				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
+				callback->handler = handler;
+				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
+
+				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
+			}
+
+			return last_index + 1;
+		}
+
 		void UIReflectionDrawField(
 			UIDrawer& drawer,
 			UIDrawConfig& config, 
@@ -626,9 +1159,19 @@ namespace ECSEngine {
 		void UIReflectionTextInput(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data) {
 			UIReflectionTextInputData* data = (UIReflectionTextInputData*)_data;
 
-			//data->stream.CopyTarget();
+			bool disable_write = function::HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			configuration = function::ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+
+			if (!disable_write) {
+				data->stream.CopyTarget();
+			}
+			else {
+				data->stream.CopyTargetStandalone();
+			}
 			drawer.TextInput(configuration, config, data->name, (CapacityStream<char>*)data->stream.capacity);
-			//data->stream.WriteTarget();
+			if (!disable_write) {
+				data->stream.WriteTarget();
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -666,9 +1209,19 @@ namespace ECSEngine {
 		{
 			UIReflectionDirectoryInputData* data = (UIReflectionDirectoryInputData*)_data;
 
-			data->stream.CopyTarget();
+			bool disable_write = function::HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			configuration = function::ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+
+			if (!disable_write) {
+				data->stream.CopyTarget();
+			}
+			else {
+				data->stream.CopyTargetStandalone();
+			}
 			drawer.DirectoryInput(configuration, config, data->name, (CapacityStream<wchar_t>*)data->stream.capacity);
-			data->stream.WriteTarget();
+			if (!disable_write) {
+				data->stream.WriteTarget();
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -677,9 +1230,19 @@ namespace ECSEngine {
 		{
 			UIReflectionFileInputData* data = (UIReflectionFileInputData*)_data;
 
-			data->stream.CopyTarget();
+			bool disable_write = function::HasFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+			configuration = function::ClearFlag(configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM);
+
+			if (!disable_write) {
+				data->stream.CopyTarget();
+			}
+			else {
+				data->stream.CopyTargetStandalone();
+			}
 			drawer.FileInput(configuration, config, data->name, (CapacityStream<wchar_t>*)data->stream.capacity);
-			data->stream.WriteTarget();
+			if (!disable_write) {
+				data->stream.WriteTarget();
+			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -817,9 +1380,22 @@ namespace ECSEngine {
 
 			Stream<char> original_instance_name = instance->name;
 			instance->name = { instance->name.buffer, function::PointerDifference(string_pattern.buffer, instance->name.buffer) };
-			data->ui_drawer->DrawInstance(instance, drawer, config, configuration);
+			UIReflectionDrawInstanceOptions options;
+			options.drawer = &drawer;
+			options.config = &config;
+			options.global_configuration = configuration;
+			data->ui_drawer->DrawInstance(instance, &options);
 
 			instance->name = original_instance_name;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionOverride(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* _data)
+		{
+			OverrideAllocationData* data = (OverrideAllocationData*)_data;
+			void* override_data = data->GetData();
+			data->draw_function(&drawer, &config, configuration, data->field_data, data->field_name, UIReflectionStreamType::None, override_data);
 		}
 
 		// -------------------------------------------------------------  Basic ----------------------------------------------------------
@@ -858,9 +1434,7 @@ namespace ECSEngine {
 
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
-
 			STREAM_SELECT_RESIZABLE(ArrayFloat, float);
-			//drawer.ArrayFloat(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -872,7 +1446,6 @@ namespace ECSEngine {
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
 			STREAM_SELECT_RESIZABLE(ArrayDouble, double);
-			//drawer.ArrayDouble(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -908,7 +1481,6 @@ namespace ECSEngine {
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
 			STREAM_SELECT_RESIZABLE(ArrayTextInput, CapacityStream<char>);
-			//drawer.ArrayTextInput(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -920,7 +1492,6 @@ namespace ECSEngine {
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
 			STREAM_SELECT_RESIZABLE(ArrayColor, Color);
-			//drawer.ArrayColor(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -933,7 +1504,6 @@ namespace ECSEngine {
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
 			STREAM_SELECT_RESIZABLE(ArrayColorFloat, ColorFloat);
-			//drawer.ArrayColorFloat(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -945,7 +1515,6 @@ namespace ECSEngine {
 			size_t array_configuration = 0;
 			GetArrayCallback(array_config, array_configuration, config, configuration);
 			STREAM_SELECT_RESIZABLE(ArrayCheckBox, bool);
-			//drawer.ArrayCheckBox(UI_CONFIG_DO_NOT_CACHE, temp_config, data->name, data->values, configuration, &config);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1359,6 +1928,7 @@ namespace ECSEngine {
 			ECS_ASSERT(function::IsPowerOfTwo(instance_table_count));
 			type_definition.Initialize(allocator, type_table_count);
 			instances.Initialize(allocator, instance_table_count);
+			overrides.Initialize(GetAllocatorPolymorphic(allocator), 0);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -1734,7 +2304,8 @@ namespace ECSEngine {
 			ReflectionStreamFieldType stream_type, 
 			uintptr_t ptr,
 			unsigned int basic_type_count,
-			unsigned int element_byte_size
+			unsigned int element_byte_size,
+			bool disable_writes
 		) {
 			UIInstanceFieldStream field_value;
 
@@ -1771,8 +2342,16 @@ namespace ECSEngine {
 				}
 			}
 
+			field_value.previous_size = 0;
 			field_value.element_byte_size = element_byte_size;
 			field_value.CopyTarget();
+			if (!disable_writes) {
+				field_value.standalone_data.Initialize({ nullptr }, 0);
+			}
+			else {
+				field_value.standalone_data.Initialize(GetAllocatorPolymorphic(drawer->allocator), 0);
+			}
+
 			return field_value;
 		}
 
@@ -1848,7 +2427,8 @@ namespace ECSEngine {
 								reflect_stream_type,
 								ptr, 
 								reflect->fields[index].info.basic_type_count,
-								field_value->element_byte_size
+								field_value->element_byte_size,
+								function::HasFlag(type.fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 							);
 						}
 						break;
@@ -1879,7 +2459,8 @@ namespace ECSEngine {
 							reflect_stream_type,
 							ptr, 
 							reflect->fields[index].info.basic_type_count,
-							field_value->element_byte_size
+							field_value->element_byte_size,
+							function::HasFlag(type.fields[index].configuration, UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM)
 						);
 					}
 					else {
@@ -1940,6 +2521,20 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::BindInstanceTextInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<char>* inputs)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				if (type.fields[field_indices[index]].reflection_index == UIReflectionIndex::TextInput) {
+					CapacityStream<char>** input_data = (CapacityStream<char>**)instance->data[field_index];
+					*input_data = inputs + index;
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		void UIReflectionDrawer::BindInstanceDirectoryInput(Stream<char> instance_name, Stream<UIReflectionBindDirectoryInput> data)
 		{
 			BindInstanceDirectoryInput(GetInstancePtr(instance_name), data);
@@ -1959,6 +2554,20 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::BindInstanceDirectoryInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<wchar_t>* inputs)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				if (type.fields[field_index].reflection_index == UIReflectionIndex::DirectoryInput) {
+					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
+					*input_data = inputs + index;
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		void UIReflectionDrawer::BindInstanceFileInput(Stream<char> instance_name, Stream<UIReflectionBindFileInput> data)
 		{
 			BindInstanceFileInput(GetInstancePtr(instance_name), data);
@@ -1972,6 +2581,20 @@ namespace ECSEngine {
 				if (type.fields[field_index].reflection_index == UIReflectionIndex::FileInput) {
 					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
 					*input_data = data[index].stream;
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceFileInput(UIReflectionInstance* instance, Stream<unsigned int> field_indices, CapacityStream<wchar_t>* inputs)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				if (type.fields[field_index].reflection_index == UIReflectionIndex::FileInput) {
+					CapacityStream<wchar_t>** input_data = (CapacityStream<wchar_t>**)instance->data[field_index];
+					*input_data = inputs + index;
 				}
 			}
 		}
@@ -2002,6 +2625,22 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::BindInstanceStreamCapacity(UIReflectionInstance* instance, Stream<unsigned int> field_indices, unsigned int* capacities)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				ECS_ASSERT(IsStream(type.fields[field_index].stream_type) || IsStreamInput(type.fields[field_index].reflection_index));
+
+				// It is ok to alias the resizable stream with the capacity stream, same layout
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				field_stream->capacity->capacity = capacities[index];
+				field_stream->WriteTarget();
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		void UIReflectionDrawer::BindInstanceStreamSize(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data)
 		{
 			UIReflectionInstance* instance = GetInstancePtr(instance_name);
@@ -2026,6 +2665,22 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::BindInstanceStreamSize(UIReflectionInstance* instance, Stream<unsigned int> field_indices, unsigned int* sizes)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				ECS_ASSERT(IsStream(type.fields[field_index].stream_type));
+
+				// It is ok to alias the capacity stream with the resizable stream, same layout
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				field_stream->capacity->size = sizes[index];
+				field_stream->WriteTarget();
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		void UIReflectionDrawer::BindInstanceStreamBuffer(Stream<char> instance_name, Stream<UIReflectionBindStreamBuffer> data) {
 			UIReflectionInstance* instance = GetInstancePtr(instance_name);
 			BindInstanceStreamBuffer(instance, data);
@@ -2042,6 +2697,22 @@ namespace ECSEngine {
 				// It is ok to alias the resizable stream with the capacity stream, same layout
 				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
 				field_stream->capacity->buffer = data[index].new_buffer;
+				field_stream->WriteTarget();
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceStreamBuffer(UIReflectionInstance* instance, Stream<unsigned int> field_indices, void** buffers)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				ECS_ASSERT(IsStream(type.fields[field_index].stream_type));
+
+				// It is ok to alias the resizable stream with the capacity stream, same layout
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				field_stream->capacity->buffer = buffers[index];
 				field_stream->WriteTarget();
 			}
 		}
@@ -2072,6 +2743,30 @@ namespace ECSEngine {
 					field_stream->resizable->capacity = 0;
 				}
 				field_stream->resizable->allocator = data[index].allocator;
+				field_stream->is_resizable = true;
+				field_stream->WriteTarget();
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, Stream<unsigned int> field_indices, AllocatorPolymorphic allocator)
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			for (size_t index = 0; index < field_indices.size; index++) {
+				unsigned int field_index = field_indices[index];
+				ECS_ASSERT(type.fields[field_index].stream_type == UIReflectionStreamType::Resizable);
+
+				UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[field_index];
+				if (field_stream->resizable->allocator.allocator != nullptr) {
+					field_stream->resizable->FreeBuffer();
+				}
+				else {
+					field_stream->resizable->buffer = nullptr;
+					field_stream->resizable->size = 0;
+					field_stream->resizable->capacity = 0;
+				}
+				field_stream->resizable->allocator = allocator;
 				field_stream->is_resizable = true;
 				field_stream->WriteTarget();
 			}
@@ -2110,6 +2805,36 @@ namespace ECSEngine {
 					field_stream->resizable->size = data[index].data.size;
 				}
 				field_stream->WriteTarget();
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::BindInstanceFieldOverride(Stream<char> instance_name, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data) {
+			BindInstanceFieldOverride(GetInstancePtr(instance_name), tag, modify_override, user_data);
+		}
+		
+
+		void UIReflectionDrawer::BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data) {
+			unsigned int override_index = -1;
+			for (unsigned int index = 0; index < overrides.size; index++) {
+				if (function::CompareStrings(overrides[index].tag, tag)) {
+					override_index = index;
+					break;
+				}
+			}
+			ECS_ASSERT(override_index != -1);
+
+			UIReflectionType type = GetType(instance->type_name);
+
+			for (size_t index = 0; index < type.fields.size; index++) {
+				if (type.fields[index].reflection_index == UIReflectionIndex::Override) {
+					OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
+					if (data->override_index == override_index) {
+						// Same type can proceed
+						modify_override(GetAllocatorPolymorphic(allocator), data->GetData(), overrides[override_index].global_data, user_data);
+					}
+				}
 			}
 		}
 
@@ -2752,6 +3477,32 @@ namespace ECSEngine {
 				}
 			};
 
+			// Returns true if it found an override, else false.
+			// It allocates a structure of type OverrideAllocationData as storage because extra metadata needs to
+			// be kept about the index of the override and the name of the field which it will alias
+			auto check_override_type = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
+				for (size_t index = 0; index < overrides.size; index++) {
+					if (reflection_field.Is(overrides[index].tag)) {
+						// We found a match
+						unsigned int allocate_size = overrides[index].draw_data_size + sizeof(OverrideAllocationData);
+						OverrideAllocationData* allocated_data = (OverrideAllocationData*)allocator->Allocate(allocate_size);;
+						field.data = allocated_data;
+						allocated_data->field_name = reflection_field.name;
+						allocated_data->override_index = index;
+						// At the moment we don't know the field data
+						allocated_data->field_data = nullptr;
+						allocated_data->draw_function = overrides[index].draw_function;
+
+						field.reflection_index = UIReflectionIndex::Override;
+						field.byte_size = sizeof(OverrideAllocationData) + overrides[index].draw_data_size;
+						field.configuration = 0;
+						field.stream_type = UIReflectionStreamType::None;
+						return true;
+					}
+				}
+				return false;
+			};
+
 			auto integer_stream_convert_single = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				ConvertStreamSingleForType(this, reflection_field, field, UIReflectionIndex::IntegerInput, 1 << (UI_INT_BASE + (unsigned int)reflection_field.info.basic_type));
 			};
@@ -2844,6 +3595,11 @@ namespace ECSEngine {
 			auto test_basic_type = [&](unsigned int index, ReflectionFieldInfo field_info, bool& value_written) {
 				const ReflectionField* field = &reflected_type->fields[index];
 
+				// Check the override first
+				value_written = check_override_type(*field, type.fields[type.fields.size]);
+				if (value_written) {
+					return;
+				}
 				if (function::CompareStrings(field->definition, "Color")) {
 					color_convert(*field, type.fields[type.fields.size]);
 					value_written = true;
@@ -2992,8 +3748,8 @@ namespace ECSEngine {
 				}
 
 				if (value_written && field_info.has_default_value) {
-					UIReflectionIndex ui_index = type.fields[type.fields.size - 1].reflection_index;
-					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)ui_index](type.fields.buffer + type.fields.size - 1, &field_info.default_bool);
+					UIReflectionIndex ui_index = type.fields[type.fields.size].reflection_index;
+					UI_REFLECTION_SET_DEFAULT_DATA[(unsigned int)ui_index](type.fields.buffer + type.fields.size, &field_info.default_bool);
 				}
 
 				type.fields.size += value_written;
@@ -3075,16 +3831,31 @@ namespace ECSEngine {
 
 						CreateInstance(instance_name, type_name);
 					}
-						break;
+					break;
+					case UIReflectionIndex::Override:
+					{
+						OverrideAllocationData* allocated_data = (OverrideAllocationData*)instance.data[index];
+
+						void* override_data = allocated_data->GetData();
+						if (overrides[index].draw_data_size > 0) {
+							memset(override_data, 0, overrides[index].draw_data_size);
+							if (overrides[index].initialize_function != nullptr) {
+								overrides[index].initialize_function(this, type->fields[index].name, override_data, overrides[index].global_data);
+							}
+						}
+					}
+					break;
 					}
 				}
 			}
 
 			instance.name.InitializeAndCopy(buffer, name);
 			instance.data.size = type->fields.size;
+			identifier = instance.name;
 
-			ECS_ASSERT(!instances.Insert(instance, identifier));
-			return instances.GetValuePtr(identifier);
+			unsigned int position = 0;
+			ECS_ASSERT(!instances.Insert(instance, identifier, position));
+			return instances.GetValuePtrFromIndex(position);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -3256,10 +4027,34 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::DestroyInstance(unsigned int index) {
-			UIReflectionInstance instance = instances.GetValueFromIndex(index);
+		void UIReflectionDrawer::DisableInputWrites(UIReflectionType* type, bool all_writes)
+		{
+			for (size_t index = 0; index < type->fields.size; index++) {
+				UIReflectionIndex reflection_index = type->fields[index].reflection_index;
+				if (reflection_index == UIReflectionIndex::TextInput || reflection_index == UIReflectionIndex::DirectoryInput
+					|| reflection_index == UIReflectionIndex::FileInput) {
+					type->fields[index].configuration |= UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM;
+				}
+				else if (all_writes) {
+					if (IsStream(type->fields[index].stream_type)) {
+						type->fields[index].configuration |= UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM;
+					}
+				}
+			}
+		}
 
-			UIReflectionType type = GetType(instance.type_name);
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::DeallocateInstance(UIReflectionInstance* instance) {
+			DeallocateInstanceFields(instance);
+			allocator->Deallocate(instance->data.buffer);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::DeallocateInstanceFields(UIReflectionInstance* instance)
+		{
+			UIReflectionType type = GetType(instance->type_name);
 			// The individual instance.data[index] must not be deallocated
 			// since they were coallesced into a single allocation
 			for (size_t index = 0; index < type.fields.size; index++) {
@@ -3273,7 +4068,7 @@ namespace ECSEngine {
 					case UIReflectionIndex::FloatInputGroup:
 					case UIReflectionIndex::FloatSliderGroup:
 					{
-						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)instance.data[index];
+						UIReflectionGroupData<void>* data = (UIReflectionGroupData<void>*)instance->data[index];
 						allocator->Deallocate(data->values);
 					}
 					break;
@@ -3281,10 +4076,23 @@ namespace ECSEngine {
 					case UIReflectionIndex::DirectoryInput:
 					case UIReflectionIndex::TextInput:
 					{
-						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance.data[index];
+						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance->data[index];
 						if (data->capacity != (CapacityStream<void>*)data->target_memory) {
 							// It might get bound from outside so do a deallocate without assert
-							allocator->Deallocate<false>(data->capacity);
+							if (allocator->Belongs(data->capacity)) {
+								allocator->Deallocate(data->capacity);
+							}
+						}
+						if (data->standalone_data.allocator.allocator != nullptr) {
+							data->standalone_data.FreeBuffer();
+						}
+					}
+					break;
+					case UIReflectionIndex::Override:
+					{
+						OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
+						if (overrides[data->override_index].deallocate_function != nullptr) {
+							overrides[data->override_index].deallocate_function(GetAllocatorPolymorphic(allocator), data, overrides[data->override_index].global_data);
 						}
 					}
 					break;
@@ -3296,7 +4104,7 @@ namespace ECSEngine {
 						// All the structs contain this as the first member variable
 						// Safe to alias with UIInstanceFieldStream
 
-						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance.data[index];
+						UIInstanceFieldStream* data = (UIInstanceFieldStream*)instance->data[index];
 						// if a buffer is allocated, deallocate it only for non aliasing streams
 						if (type.fields[index].stream_type == UIReflectionStreamType::Resizable && data->resizable != (ResizableStream<void>*)data->target_memory) {
 							if (data->resizable->buffer != nullptr) {
@@ -3305,15 +4113,23 @@ namespace ECSEngine {
 						}
 
 						if (data->capacity != (CapacityStream<void>*)data->target_memory) {
-							// It might get bound from outside, so do a deallocate without assert
-							// Do this when we get such an assert
-							allocator->Deallocate(data->capacity);
+							if (allocator->Belongs(data->capacity)) {
+								allocator->Deallocate(data->capacity);
+							}
+							if (data->standalone_data.allocator.allocator != nullptr) {
+								data->standalone_data.FreeBuffer();
+							}
 						}
 					}
 				}
 			}
+		}
 
-			allocator->Deallocate(instance.data.buffer);
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::DestroyInstance(unsigned int index) {
+			UIReflectionInstance instance = instances.GetValueFromIndex(index);
+			DeallocateInstance(&instance);
 			instances.EraseFromIndex(index);
 		}
 
@@ -3389,7 +4205,9 @@ namespace ECSEngine {
 				}
 				allocator->Deallocate(type.fields[index].data);
 			}
-			allocator->Deallocate(type.fields.buffer);
+			if (type.fields.size > 0) {
+				allocator->Deallocate(type.fields.buffer);
+			}
 
 			ResourceIdentifier identifier(name);
 			type_definition.Erase(identifier);
@@ -3399,106 +4217,106 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::DrawInstance(
 			Stream<char> instance_name,
-			UIDrawer& drawer,
-			UIDrawConfig& config,
-			size_t global_configuration,
-			Stream<UIReflectionDrawConfig> additional_configs,
-			const UIReflectionInstanceDrawCustomFunctors* custom_draw,
-			Stream<char> default_value_button
+			const UIReflectionDrawInstanceOptions* options
 		) {
-			DrawInstance(GetInstancePtr(instance_name), drawer, config, global_configuration, additional_configs, custom_draw, default_value_button);
+			DrawInstance(GetInstancePtr(instance_name), options);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		void UIReflectionDrawer::DrawInstance(
 			UIReflectionInstance* instance,
-			UIDrawer& drawer,
-			UIDrawConfig& config,
-			size_t global_configuration,
-			Stream<UIReflectionDrawConfig> additional_configs,
-			const UIReflectionInstanceDrawCustomFunctors* custom_draw,
-			Stream<char> default_value_button
+			const UIReflectionDrawInstanceOptions* options
 		) {
 			UIReflectionType type = GetType(instance->type_name);
 
-			ECS_UI_DRAWER_MODE draw_mode = drawer.draw_mode;
-			unsigned int draw_mode_target = drawer.draw_mode_target;
+			UIDrawer* drawer = options->drawer;
 
-			bool pushed_string_identifier = drawer.PushIdentifierStackStringPattern();
-			drawer.PushIdentifierStackEx(instance->name);
+			ECS_UI_DRAWER_MODE draw_mode = drawer->draw_mode;
+			unsigned int draw_mode_target = drawer->draw_mode_target;
 
-			drawer.SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+			bool pushed_string_identifier = drawer->PushIdentifierStackStringPattern();
+			drawer->PushIdentifierStackEx(instance->name);
 
-			if (default_value_button.size > 0) {
+			drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
+
+			if (options->default_value_button.size > 0) {
 				UIReflectionDefaultValueData default_data;
 				default_data.instance = *instance;
 				default_data.type = type;
-				drawer.Button(default_value_button, { UIReflectionDefaultValueAction, &default_data, sizeof(default_data) });
+				drawer->Button(options->default_value_button, { UIReflectionDefaultValueAction, &default_data, sizeof(default_data) });
 			}
 
 			for (size_t index = 0; index < type.fields.size; index++) {
-				if (custom_draw != nullptr) {
+				void* custom_draw_data = nullptr;
+				UIReflectionInstanceDrawCustom custom_drawer = nullptr;
+
+				if (options->custom_draw != nullptr) {
 					// Check to see if a custom functor is provided for the type
-					if (custom_draw->functions[(unsigned char)type.fields[index].reflection_index] != nullptr) {
-						UIReflectionIndex reflection_index = type.fields[index].reflection_index;
-
-						bool is_instance_field_stream = type.fields[index].stream_type != UIReflectionStreamType::None || IsStreamInput(reflection_index);
-						if (is_instance_field_stream) 
-						{
-							UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
-							field_stream->CopyTarget();
-						}
-
-						// Call the custom functor
-						// The struct data always contains as the first field the pointer to the data
-						// It can be provided directly to the function
-						void** field_data = (void**)instance->data[index];
-						custom_draw->functions[(unsigned char)type.fields[index].reflection_index](
-							drawer,
-							config,
-							*field_data,
-							type.fields[index].name,
-							type.fields[index].stream_type,
-							custom_draw->extra_data
-						);
-
-						if (is_instance_field_stream) {
-							// Mirror the stream values
-							UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
-							field_stream->WriteTarget();
-						}
-						// Abort the continuation of this loop iteration
-						continue;
+					if (options->custom_draw->functions[(unsigned char)type.fields[index].reflection_index] != nullptr) {
+						custom_drawer = options->custom_draw->functions[(unsigned char)type.fields[index].reflection_index];
+						custom_draw_data = options->custom_draw->extra_data;
 					}
-					// Proceed normally
 				}
 
-				size_t config_flag_count = config.flag_count;
+				if (custom_drawer != nullptr) {
+					UIReflectionIndex reflection_index = type.fields[index].reflection_index;
+
+					bool is_instance_field_stream = type.fields[index].stream_type != UIReflectionStreamType::None || IsStreamInput(reflection_index);
+					if (is_instance_field_stream)
+					{
+						UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
+						field_stream->CopyTarget();
+					}
+
+					// Call the custom functor
+					// The struct data always contains as the first field the pointer to the data
+					// It can be provided directly to the function
+					void** field_data = (void**)instance->data[index];
+					custom_drawer(
+						drawer,
+						options->config,
+						options->global_configuration,
+						*field_data,
+						type.fields[index].name,
+						type.fields[index].stream_type,
+						custom_draw_data
+					);
+
+					if (is_instance_field_stream) {
+						// Mirror the stream values
+						UIInstanceFieldStream* field_stream = (UIInstanceFieldStream*)instance->data[index];
+						field_stream->WriteTarget();
+					}
+					// Go to the next field since it was overriden
+					continue;
+				}
+
+				size_t config_flag_count = options->config->flag_count;
 				size_t current_configuration = type.fields[index].configuration;
-				for (size_t subindex = 0; subindex < additional_configs.size; subindex++) {
-					for (size_t type_index = 0; type_index < additional_configs[subindex].index_count; type_index++) {
-						if (additional_configs[subindex].index[type_index] == type.fields[index].reflection_index || 
-							additional_configs[subindex].index[type_index] == UIReflectionIndex::Count) {
-							current_configuration |= additional_configs[subindex].configurations;
+				for (size_t subindex = 0; subindex < options->additional_configs.size; subindex++) {
+					for (size_t type_index = 0; type_index < options->additional_configs[subindex].index_count; type_index++) {
+						if (options->additional_configs[subindex].index[type_index] == type.fields[index].reflection_index || 
+							options->additional_configs[subindex].index[type_index] == UIReflectionIndex::Count) {
+							current_configuration |= options->additional_configs[subindex].configurations;
 
-							UIReflectionDrawConfigCopyToNormalConfig(additional_configs.buffer + subindex, config);
+							UIReflectionDrawConfigCopyToNormalConfig(options->additional_configs.buffer + subindex, *options->config);
 						}
 					}
 				}
 
-				current_configuration |= global_configuration;
-				UIReflectionDrawField(drawer, config, current_configuration, instance->data[index], type.fields[index].reflection_index, type.fields[index].stream_type);
+				current_configuration |= options->global_configuration;
+				UIReflectionDrawField(*drawer, *options->config, current_configuration, instance->data[index], type.fields[index].reflection_index, type.fields[index].stream_type);
 
-				config.flag_count = config_flag_count;
+				options->config->flag_count = config_flag_count;
 			}
 
 			if (pushed_string_identifier) {
-				drawer.PopIdentifierStack();
+				drawer->PopIdentifierStack();
 			}
-			drawer.PopIdentifierStack();
+			drawer->PopIdentifierStack();
 
-			drawer.SetDrawMode(draw_mode, draw_mode_target);
+			drawer->SetDrawMode(draw_mode, draw_mode_target);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -3748,6 +4566,41 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
+		void UIReflectionDrawer::GetTypeMatchingFields(UIReflectionType type, UIReflectionIndex reflection_index, CapacityStream<unsigned int>& indices) const {
+			for (unsigned int index = 0; index < type.fields.size; index++) {
+				if (type.fields[index].reflection_index == reflection_index) {
+					indices.AddSafe(index);
+				}
+			}
+		}
+		
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::GetTypeMatchingFields(UIReflectionType type, UIReflectionStreamType stream_type, CapacityStream<unsigned int>& indices) const {
+			for (unsigned int index = 0; index < type.fields.size; index++) {
+				if (type.fields[index].stream_type == stream_type) {
+					indices.AddSafe(index);
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		CapacityStream<void> UIReflectionDrawer::GetInputStream(const UIReflectionInstance* instance, unsigned int field_index) const
+		{
+			UIReflectionType type = GetType(instance->type_name);
+			ECS_ASSERT(
+				type.fields[field_index].reflection_index == UIReflectionIndex::TextInput ||
+				type.fields[field_index].reflection_index == UIReflectionIndex::DirectoryInput ||
+				type.fields[field_index].reflection_index == UIReflectionIndex::FileInput
+			);
+
+			CapacityStream<void>* field_stream = *(CapacityStream<void>**)instance->data[field_index];
+			return *field_stream;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		unsigned int UIReflectionDrawer::GetTypeFieldIndex(UIReflectionType type, Stream<char> field_name) const
 		{
 			unsigned int field_index = 0;
@@ -3812,6 +4665,27 @@ namespace ECSEngine {
 				allocator->Deallocate(type->fields[field_index].data);
 				type->fields.Remove(field_index);
 			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::RebindInstancePtrs(UIReflectionInstance* instance, void* data)
+		{
+			DeallocateInstanceFields(instance);
+			BindInstancePtrs(instance, data);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
+		void UIReflectionDrawer::SetFieldOverride(const UIReflectionFieldOverride* override)
+		{
+			Stream<char> tag = function::StringCopy(GetAllocatorPolymorphic(allocator), override->tag);
+			UIReflectionFieldOverride new_override;
+			memcpy(&new_override, override, sizeof(new_override));
+			new_override.tag = tag;
+			new_override.global_data = function::CopyNonZero(GetAllocatorPolymorphic(allocator), new_override.global_data, new_override.global_data_size);
+
+			overrides.Add(&new_override);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
