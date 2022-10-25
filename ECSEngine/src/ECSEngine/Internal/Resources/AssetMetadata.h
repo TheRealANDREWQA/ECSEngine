@@ -21,9 +21,24 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE_COUNT
 	};
 
+	ECSENGINE_API bool AssetHasFile(ECS_ASSET_TYPE type);
+
 	ECSENGINE_API extern Stream<char> ECS_ASSET_METADATA_MACROS[];
 
+	ECSENGINE_API size_t ECS_ASSET_METADATA_MACROS_SIZE();
+
+	struct AssetFieldTarget {
+		Stream<char> name;
+		ECS_ASSET_TYPE asset_type;
+	};
+
+	ECSENGINE_API extern AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[];
+
+	ECSENGINE_API size_t ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
+
 	ECSENGINE_API ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string);
+
+	ECSENGINE_API ECS_ASSET_TYPE FindAssetTargetField(Stream<char> string);
 
 	// The string is read-only from the global memory (it is a constant)
 	ECSENGINE_API const char* ConvertAssetTypeString(ECS_ASSET_TYPE type);
@@ -56,7 +71,6 @@ namespace ECSEngine {
 		bool invert_z_axis;
 		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
 
-		Stream<void> data;
 		CoallescedMesh* mesh_pointer; ECS_SKIP_REFLECTION(static_assert(sizeof(CoallescedMesh*) == 8))
 	};
 
@@ -107,7 +121,7 @@ namespace ECSEngine {
 		ShaderMetadata();
 		ShaderMetadata(Stream<char> name, Stream<ShaderMacro> macros, AllocatorPolymorphic allocator);
 
-		void AddMacro(const char* name, const char* definition, AllocatorPolymorphic allocator);
+		void AddMacro(Stream<char> name, Stream<char> definition, AllocatorPolymorphic allocator);
 
 		ShaderMetadata Copy(AllocatorPolymorphic allocator) const;
 
@@ -118,16 +132,16 @@ namespace ECSEngine {
 		// Sets default values and aliases the name
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
-		void RemoveMacro(size_t index, AllocatorPolymorphic allocator);
-
-		void RemoveMacro(const char* name, AllocatorPolymorphic allocator);
-
-		void UpdateMacro(size_t index, const char* new_definition, AllocatorPolymorphic allocator);
-
-		void UpdateMacro(const char* name, const char* new_definition, AllocatorPolymorphic allocator);
-
 		// Returns -1 if the macro is not found
-		size_t SearchMacro(const char* name) const;
+		unsigned int FindMacro(Stream<char> name) const;
+
+		void RemoveMacro(unsigned int index, AllocatorPolymorphic allocator);
+
+		void RemoveMacro(Stream<char> name, AllocatorPolymorphic allocator);
+
+		void UpdateMacro(unsigned int index, Stream<char> new_definition, AllocatorPolymorphic allocator);
+
+		void UpdateMacro(Stream<char> name, Stream<char> new_definition, AllocatorPolymorphic allocator);
 
 		ECS_INLINE void* Pointer() const {
 			return shader_interface;
@@ -228,6 +242,8 @@ namespace ECSEngine {
 
 	// Returns { nullptr, 0 } for materials and samplers
 	ECSENGINE_API Stream<wchar_t> GetAssetFile(const void* asset, ECS_ASSET_TYPE type);
+
+	ECSENGINE_API Stream<char> GetAssetName(const void* asset, ECS_ASSET_TYPE type);
 
 	ECSENGINE_API void CreateDefaultAsset(void* asset, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
 

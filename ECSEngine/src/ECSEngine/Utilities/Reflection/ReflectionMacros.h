@@ -7,7 +7,14 @@
 #define ECS_FIELDS_END_REFLECT
 
 // Used to skip fields for determination of byte size and alignment
+// Use a static assert in order to be sure that the size is correct
 #define ECS_SKIP_REFLECTION(byte_size) byte_size;
+
+// Used to omit fields which are user defined types but don't want to reflect these
+// but at the same time want to keep them. Use static assert in order to be
+// sure that the size is correct. Can optionally give the alignment, otherwise
+// it is assumed to be 8
+#define ECS_GIVE_SIZE_REFLECTION(byte_size, ...) byte_size;
 
 // The value should be placed in its parenthesis. Used in conjuction with a macro
 #define ECS_CONSTANT_REFLECT(value) value

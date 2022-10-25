@@ -14,6 +14,7 @@
 #define PATH_SEPARATOR L"___"
 
 #define SEPARATOR_CHAR '~'
+#define COLON_CHAR_REPLACEMENT '`'
 
 namespace ECSEngine {
 
@@ -371,7 +372,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindMesh(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return mesh_metadata.FindFunctor([&](const ReferenceCounted<MeshMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name);
+			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
 		});
 	}
 
@@ -380,7 +381,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindTexture(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return texture_metadata.FindFunctor([&](const ReferenceCounted<TextureMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name);
+			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
 		});
 	}
 
@@ -398,7 +399,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindShader(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return shader_metadata.FindFunctor([&](const ReferenceCounted<ShaderMetadata>& compare) {
-			return function::CompareStrings(compare.value.name, name);
+			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
 		});
 	}
 
@@ -416,7 +417,7 @@ namespace ECSEngine {
 	unsigned int AssetDatabase::FindMisc(Stream<char> name, Stream<wchar_t> file) const
 	{
 		return misc_asset.FindFunctor([&](const ReferenceCounted<MiscAsset>& compare) {
-			return function::CompareStrings(compare.value.name, name);
+			return function::CompareStrings(compare.value.name, name) && function::CompareStrings(compare.value.file, file);
 		});
 	}
 
@@ -568,10 +569,25 @@ namespace ECSEngine {
 	{
 		AssetDatabaseFileDirectory(metadata_file_location, path, type);
 		if (file.size > 0) {
-			// Place the file first separated from the name by 3 _
-			// Also replace the '/' and '\\' from the file with '_'
 			ECS_STACK_CAPACITY_STREAM(wchar_t, temp_file, 512);
-			temp_file.Copy(file);
+			// If the file is an absolute file, then we must replace the drive qualification
+			// such that the OS doesn't think we try to use the current path of the given drive
+			// so for C:\... replace it with a pair of separators C~`~ and the colon replaced since
+			// it can make the OS fail
+			if (function::PathIsAbsolute(file)) {
+				temp_file.Add(file[0]);
+				temp_file.Add(SEPARATOR_CHAR);
+				temp_file.Add(COLON_CHAR_REPLACEMENT);
+				temp_file.Add(SEPARATOR_CHAR);
+				temp_file.AddStream({ file.buffer + 2, file.size - 2 });
+			}
+			else {
+				temp_file.Copy(file);
+			}
+
+			// Place the file first separated from the name by 3 _
+			// Also replace the '/' and '\\' from the file with '~'
+
 			function::ReplaceCharacter(temp_file, ECS_OS_PATH_SEPARATOR_ASCII, SEPARATOR_CHAR);
 			function::ReplaceCharacter(temp_file, ECS_OS_PATH_SEPARATOR_ASCII_REL, SEPARATOR_CHAR);
 			path.AddStream(temp_file);
@@ -765,7 +781,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	Stream<char> AssetDatabase::GetAssetName(unsigned int handle, ECS_ASSET_TYPE type) const {
-		return *(Stream<char>*)GetAssetConst(handle, type);
+		return ECSEngine::GetAssetName(GetAssetConst(handle, type), type);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -854,6 +870,37 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
+	unsigned int AssetDatabase::GetAssetCount(ECS_ASSET_TYPE type) const
+	{
+		ResizableSparseSet<char>* sparse_sets = (ResizableSparseSet<char>*)this;
+		return sparse_sets[type].set.size;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabase::GetAssetHandleFromIndex(unsigned int index, ECS_ASSET_TYPE type) const
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+			return mesh_metadata.GetHandleFromIndex(index);
+		case ECS_ASSET_TEXTURE:
+			return texture_metadata.GetHandleFromIndex(index);
+		case ECS_ASSET_GPU_SAMPLER:
+			return gpu_sampler_metadata.GetHandleFromIndex(index);
+		case ECS_ASSET_SHADER:
+			return shader_metadata.GetHandleFromIndex(index);
+		case ECS_ASSET_MATERIAL:
+			return material_asset.GetHandleFromIndex(index);
+		case ECS_ASSET_MISC:
+			return misc_asset.GetHandleFromIndex(index);
+		}
+
+		ECS_ASSERT(false, "Invalid asset type");
+		return -1;
+	}
+
+	// --------------------------------------------------------------------------------------
+
 	template<typename AssetType>
 	bool RemoveAssetImpl(AssetType& type, unsigned int handle) {
 		auto& metadata = type[handle];
@@ -875,7 +922,11 @@ namespace ECSEngine {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
 			database->FileLocationAsset(name, file, path, asset_type);
 
-			ECS_DESERIALIZE_CODE serialize_code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(asset_string), asset, path);
+			DeserializeOptions deserialize_options;
+			deserialize_options.file_allocator = database->Allocator();
+			deserialize_options.field_allocator = database->Allocator();
+			deserialize_options.backup_allocator = database->Allocator();
+			ECS_DESERIALIZE_CODE serialize_code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(asset_string), asset, path, &deserialize_options);
 			if (serialize_code == ECS_DESERIALIZE_OK) {
 				return true;
 			}
@@ -903,7 +954,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	bool AssetDatabase::ReadShaderFile(Stream<char> name, Stream<wchar_t> file, ShaderMetadata* metadata) const {
-		return ReadAssetFileImpl(this, name, file, metadata, STRING(ShaderMetadata), ECS_ASSET_MESH);
+		return ReadAssetFileImpl(this, name, file, metadata, STRING(ShaderMetadata), ECS_ASSET_SHADER);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1156,21 +1207,31 @@ namespace ECSEngine {
 	
 	template<typename T>
 	bool UpdateAssetImpl(AssetDatabase* database, unsigned int handle, const void* metadata, ECS_ASSET_TYPE type, bool update_files) {
-		Stream<char> previous_name;
-		Stream<wchar_t> previous_file;
-		if (update_files) {
-			previous_name = database->GetAssetName(handle, type);
-			previous_file = database->GetAssetPath(handle, type);
-		}
+		Stream<char> previous_name = database->GetAssetName(handle, type);
+		Stream<wchar_t> previous_file = database->GetAssetPath(handle, type);
 
+		Stream<char> new_name = GetAssetName(metadata, type);
+		Stream<wchar_t> new_file = GetAssetFile(metadata, type);
+
+		// Check to see that an identical asset doesn't already exist
+		unsigned int count = database->GetAssetCount(type);
+		for (unsigned int subindex = 0; subindex < count; subindex++) {
+			unsigned int subindex_handle = database->GetAssetHandleFromIndex(subindex, type);
+			const void* subindex_metadata = database->GetAssetConst(subindex_handle, type);
+			Stream<char> subindex_name = GetAssetName(subindex_metadata, type);
+			Stream<wchar_t> subindex_file = GetAssetFile(subindex_metadata, type);
+			if (function::CompareStrings(subindex_name, new_name) && function::CompareStrings(subindex_file, new_file)) {
+				// An identical asset already exists
+				return false;
+			}
+		}
+		
 		T* old = (T*)database->GetAsset(handle, type);
 		old->DeallocateMemory(database->Allocator());
 		*old = ((T*)metadata)->Copy(database->Allocator());
 
 		if (update_files) {
 			// Get the update name and file
-			Stream<char> new_name = database->GetAssetName(handle, type);
-			Stream<wchar_t> new_file = database->GetAssetPath(handle, type);
 
 			// If the name has changed, try writing to the new file before destroying the old one
 			ECS_STACK_CAPACITY_STREAM(wchar_t, existing_file, 512);
@@ -1481,14 +1542,26 @@ namespace ECSEngine {
 			// No file
 			return;
 		}
-		file.Copy({ filename.buffer, (unsigned int)(separator.buffer - filename.buffer) });
-		// If the first character is drive letter, then convert to an absolute path
-		if ((file[0] >= L'C' || file[0] <= L'Z') && file[1] == L':') {
-			function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR);
+		Stream<wchar_t> file_slice = { filename.buffer, (unsigned int)(separator.buffer - filename.buffer) };
+
+		if (file_slice.size > 3) {
+			// If the first character is drive letter with a pair of separators and a colon then convert to an absolute path
+			if ((file_slice[0] >= L'C' && file_slice[0] <= L'Z') && file_slice[1] == SEPARATOR_CHAR && file_slice[2] == COLON_CHAR_REPLACEMENT && file_slice[3] == SEPARATOR_CHAR) {
+				file.Add(file_slice[0]);
+				file.Add(L':');
+				file.AddStreamSafe({ file_slice.buffer + 4, file_slice.size - 4 });
+				function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR);
+			}
+			else {
+				file.AddStreamSafe(file_slice);
+				// Relative path, replace with '\'
+				function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
+			}
 		}
 		else {
-			// Relative path, replace with '\'
-			function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_REL);
+			// Can only be a relative path
+			file.AddStreamSafe(file_slice);
+			function::ReplaceCharacter(file, function::Character<wchar_t>(SEPARATOR_CHAR), ECS_OS_PATH_SEPARATOR_ASCII_REL);
 		}
 	}
 

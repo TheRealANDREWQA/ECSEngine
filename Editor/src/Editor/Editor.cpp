@@ -38,7 +38,7 @@ struct ECS_REFLECT MyComponent {
 class Editor : public ECSEngine::Application {
 public:
 	Editor(int width, int height, LPCWSTR name);
-	Editor() : timer("Editor") {};
+	Editor() {}
 	~Editor();
 	Editor(const Editor&) = delete;
 	Editor& operator = (const Editor&) = delete;
@@ -1022,7 +1022,7 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 	return editorClassName;
 }
 
-Editor::Editor(int _width, int _height, LPCWSTR name) : timer("Editor")
+Editor::Editor(int _width, int _height, LPCWSTR name)
 {
 	timer.SetNewStart();
 	application_quit = 0;

@@ -171,8 +171,17 @@ namespace ECSEngine {
 			HID::Key repeat_key;
 			bool is_currently_selected;
 
+			bool display_tooltip;
+
 			// This is set by the functions that manipulate the input in order to preserve consistency
-			bool trigger_callback;
+			enum TRIGGER_CALLBACK : unsigned char {
+				TRIGGER_CALLBACK_NONE,
+				TRIGGER_CALLBACK_MODIFY,
+				TRIGGER_CALLBACK_EXIT
+			};
+
+			TRIGGER_CALLBACK trigger_callback;
+			bool trigger_callback_on_release;
 			Action callback;
 			void* callback_data;
 		};
@@ -307,15 +316,25 @@ namespace ECSEngine {
 
 		struct UIDrawerComboBox {
 			unsigned char* active_label;
+			
 			unsigned int label_display_count;
 			unsigned int biggest_label_x_index;
+			
 			float label_y_scale;
+			float prefix_x_scale;
+
 			UIDrawerTextElement name;
 			Stream<Stream<char>> labels;
+			
 			Stream<char> prefix;
-			float prefix_x_scale;
+			
 			Action callback;
 			void* callback_data;
+
+			unsigned short mapping_byte_size;
+			// The number of mappings reserved
+			unsigned short mapping_capacity;
+			void* mappings;
 		};
 
 		struct UIDrawerComboBoxClickable {
@@ -607,6 +626,24 @@ namespace ECSEngine {
 			unsigned char click_count;
 			Timer timer;
 		};
+
+		// Wrapps a base data with a user supplied callback
+		struct ECSENGINE_API ActionWrapperWithCallbackData {
+			unsigned int WriteCallback(UIActionHandler handler);
+
+			UIActionHandler GetCallback() const;
+
+			void* GetBaseData() const;
+
+			Action base_action;
+			// Only used if the base action references directly a pointer
+			void* base_action_data;
+			unsigned int base_action_data_size;
+			UIActionHandler user_callback;
+		};
+
+		ECSENGINE_API void ActionWrapperWithCallback(ActionData* action_data);
+
 
 	}
 

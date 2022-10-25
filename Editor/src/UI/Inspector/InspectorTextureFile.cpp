@@ -54,13 +54,13 @@ void InspectorDrawTextureFile(EditorState* editor_state, unsigned int inspector_
 
 	// Change the relative path separator from absolute into relative
 	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
-
+	
+	data->current_metadata.file = relative_path;
 	data->helper_data.metadata = &data->current_metadata;
-	bool has_settings = AssetSettingsHelper(drawer, editor_state, &data->helper_data, relative_path, ECS_ASSET_TEXTURE);
+	bool has_settings = AssetSettingsHelper(drawer, editor_state, &data->helper_data, ECS_ASSET_TEXTURE);
 
 	if (has_settings) {
 		data->current_metadata.name = data->helper_data.SelectedName();
-		data->current_metadata.file = relative_path;
 
 		UIDrawConfig config;
 		size_t base_configuration = AssetSettingsHelperBaseConfiguration();
@@ -68,14 +68,13 @@ void InspectorDrawTextureFile(EditorState* editor_state, unsigned int inspector_
 
 		size_t base_config_size = config.flag_count;
 
-		AssetSettingsHelperChangedBaseActionData changed_base_data;
+		AssetSettingsHelperChangedActionData changed_base_data;
 		changed_base_data.asset_type = ECS_ASSET_TEXTURE;
 		changed_base_data.editor_state = editor_state;
-		changed_base_data.file = relative_path;
 		changed_base_data.helper_data = &data->helper_data;
 
 		UIConfigCheckBoxCallback check_box_callback;
-		check_box_callback.handler = { AssetSettingsHelperChangedBaseAction, &changed_base_data, sizeof(changed_base_data) };
+		check_box_callback.handler = { AssetSettingsHelperChangedAction, &changed_base_data, sizeof(changed_base_data) };
 		config.AddFlag(check_box_callback);
 
 		drawer->CheckBox(base_configuration | UI_CONFIG_CHECK_BOX_CALLBACK, config, "sRGB (Color Texture)", &data->current_metadata.sRGB);

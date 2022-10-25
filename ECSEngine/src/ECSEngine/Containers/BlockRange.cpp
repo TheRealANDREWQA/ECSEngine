@@ -15,7 +15,6 @@ namespace ECSEngine {
 		}
 	}
 
-
 	template<bool assert_if_not_found>
 	void BlockRange::Free(unsigned int start) {
 		Vec8ui section, temp = start;

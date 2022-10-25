@@ -282,12 +282,14 @@ namespace ECSEngine {
 			CapacityStream<char> error_message = { nullptr, 0, 0 };
 			Stream<Stream<wchar_t>> extensions = { nullptr, 0 };
 			HWND hWnd = NULL;
+			bool user_cancelled = false;
 		};
 
 		// The path must be initialized
 		struct FileExplorerGetDirectoryData {
 			CapacityStream<wchar_t> path;
 			CapacityStream<char> error_message = { nullptr, 0, 0 };
+			bool user_cancelled = false;
 		};
 
 		ECSENGINE_API bool FileExplorerGetFile(FileExplorerGetFileData* data);

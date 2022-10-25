@@ -2432,6 +2432,12 @@ namespace ECSEngine {
 							);
 						}
 						break;
+						case UIReflectionIndex::Override:
+						{
+							OverrideAllocationData* allocated_data = (OverrideAllocationData*)instance->data[index];
+							allocated_data->override_index = allocated_data->override_index;
+						}
+						break;
 						}
 					}
 					else {
@@ -3588,6 +3594,8 @@ namespace ECSEngine {
 				}
 			};
 
+			ECS_ASSERT(type_definition.Find(reflected_type->name) == -1);
+
 			UIReflectionType type;
 			type.name = reflected_type->name;
 			type.fields.Initialize(allocator, 0, reflected_type->fields.size);
@@ -3645,8 +3653,11 @@ namespace ECSEngine {
 					}
 				}
 				else if (field_info.basic_type == ReflectionBasicFieldType::UserDefined) {
-					user_defined_convert(*field, type.fields[type.fields.size]);
-					value_written = true;
+					// Only if it doesn't have the ECS_GIVE_SIZE_REFLECTION macro
+					if (!field->Has(STRING(ECS_GIVE_SIZE_REFLECTION))) {
+						user_defined_convert(*field, type.fields[type.fields.size]);
+						value_written = true;
+					}
 				}
 			};
 
@@ -3870,8 +3881,15 @@ namespace ECSEngine {
 			if (options.include_tags.size > 0) {
 				include_index = 0;
 				for (; include_index < options.include_tags.size; include_index++) {
-					if (type->HasTag(options.include_tags[include_index])) {
-						break;
+					if (options.include_tags[include_index].has_compare) {
+						if (type->HasTag(options.include_tags[include_index].tag)) {
+							break;
+						}
+					}
+					else {
+						if (type->IsTag(options.include_tags[include_index].tag)) {
+							break;
+						}
 					}
 				}
 
@@ -3888,9 +3906,17 @@ namespace ECSEngine {
 			if (options.exclude_tags.size > 0) {
 				exclude_index = 0;
 				for (; exclude_index < options.exclude_tags.size; exclude_index++) {
-					if (type->HasTag(options.exclude_tags[exclude_index])) {
-						// Exit the loop, after it will be -1
-						exclude_index = -2;
+					if (options.exclude_tags[exclude_index].has_compare) {
+						if (type->HasTag(options.exclude_tags[exclude_index].tag)) {
+							exclude_index = -1;
+							break;
+						}
+					}
+					else {
+						if (type->IsTag(options.exclude_tags[exclude_index].tag)) {
+							exclude_index = -1;
+							break;
+						}
 					}
 				}
 			}
@@ -3904,8 +3930,8 @@ namespace ECSEngine {
 			size_t include_index = options.include_tags.size;
 			size_t exclude_index = options.exclude_tags.size;
 
-			CreateForHierarchyCheckExcludeIndex(type, include_index, options);
-			CreateForHierarchyCheckIncludeIndex(type, exclude_index, options);
+			CreateForHierarchyCheckExcludeIndex(type, exclude_index, options);
+			CreateForHierarchyCheckIncludeIndex(type, include_index, options);
 
 			return CreateForHierarchyIsValid(include_index, exclude_index, options);
 		}

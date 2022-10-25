@@ -129,8 +129,16 @@ void DrawSandboxSelectionWindow(void* window_data, void* drawer_descriptor, bool
 	config.flag_count = 0;
 	config.AddFlag(active_state);
 
-	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ACTIVE_STATE, config, "Confirm", { confirm_data, data, 0, ECS_UI_DRAW_SYSTEM });
-	drawer.Button(UI_CONFIG_ALIGN_ELEMENT_BOTTOM | UI_CONFIG_ALIGN_ELEMENT_RIGHT, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+	UIConfigAlignElement align_element;
+	align_element.vertical = ECS_UI_ALIGN_BOTTOM;
+	config.AddFlag(align_element);
+
+	drawer.Button(UI_CONFIG_ACTIVE_STATE | UI_CONFIG_ALIGN_ELEMENT, config, "Confirm", { confirm_data, data, 0, ECS_UI_DRAW_SYSTEM });
+	config.flag_count--;
+
+	align_element.horizontal = ECS_UI_ALIGN_RIGHT;
+	config.AddFlag(align_element);
+	drawer.Button(UI_CONFIG_ALIGN_ELEMENT, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 }
 
 struct CreateAddSandboxWindowData {
@@ -171,7 +179,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
 
 	auto get_name = [](unsigned int index, CapacityStream<char>& name) {
-		name.Copy("SANDBOX");
+		name.Copy("Sandbox ");
 		function::ConvertIntToChars(name, index);
 	};
 
@@ -410,14 +418,19 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 			drawer->PushIdentifierStackRandom(index);
 
+			UIConfigAlignElement align_element;
+			align_element.horizontal = ECS_UI_ALIGN_RIGHT;
+			module_config.AddFlag(align_element);
+
 			drawer->ComboBox(
-				UI_CONFIG_ALIGN_ELEMENT_RIGHT | UI_CONFIG_COMBO_BOX_NO_NAME,
+				UI_CONFIG_ALIGN_ELEMENT | UI_CONFIG_COMBO_BOX_NO_NAME,
 				module_config,
 				"configuration",
 				{ MODULE_CONFIGURATIONS, EDITOR_MODULE_CONFIGURATION_COUNT },
 				EDITOR_MODULE_CONFIGURATION_COUNT,
 				(unsigned char*)&sandbox->modules_in_use[in_stream_index].module_configuration
 			);
+			module_config.flag_count--;
 
 			drawer->PopIdentifierStack();
 

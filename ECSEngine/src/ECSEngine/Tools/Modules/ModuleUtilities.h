@@ -61,4 +61,12 @@ namespace ECSEngine {
 		void* target_data
 	);
 	
+	// If the link component is a default linked component, it verifies that the target
+	// can be obtained from the linked component. For user supplied linked components it assumes
+	// that it is always the case.
+	ECSENGINE_API bool ModuleValidateLinkComponent(
+		const Reflection::ReflectionType* link_type,
+		const Reflection::ReflectionType* target_type
+	);
+	
 }

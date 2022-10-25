@@ -37,4 +37,6 @@ void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_inde
 
 // -------------------------------------------------------------------------------------------------------------
 
+void UnloadSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name);
+
 // -------------------------------------------------------------------------------------------------------------

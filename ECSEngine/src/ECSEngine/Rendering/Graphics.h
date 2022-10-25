@@ -928,6 +928,8 @@ namespace ECSEngine {
 		// The memory needed for the buffer names will be allocated from the assigned allocator
 		bool ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures);
 
+		bool ReflectShaderMacros(Stream<char> source_code, CapacityStream<Stream<char>>* defined_macros, CapacityStream<Stream<char>>* conditional_macros, AllocatorPolymorphic allocator);
+		
 		// No memory needs to be allocated
 		bool ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping);
 

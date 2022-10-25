@@ -212,6 +212,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 
 	ECS_STACK_CAPACITY_STREAM(char, ascii_name, 256);
 	function::ConvertWideCharsToASCII(data->module_name, ascii_name);
+	unsigned int base_ascii_name_size = ascii_name.size;
 	if (editor_state->project_modules->buffer[module_index].is_graphics_module) {
 		ascii_name.AddStream(" (Graphics Type)");
 	}
@@ -222,8 +223,12 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 	ECS_STACK_CAPACITY_STREAM(unsigned int, reflected_components, 32);
 	ECS_STACK_CAPACITY_STREAM(unsigned int, reflected_shared_components, 32);
 
-	editor_state->editor_components.GetModuleComponentIndices(module_index, &reflected_components);
-	editor_state->editor_components.GetModuleSharedComponentIndices(module_index, &reflected_shared_components);
+	unsigned int editor_components_index = editor_state->editor_components.FindModule({ ascii_name.buffer, base_ascii_name_size });
+	if (editor_components_index != -1) {
+		editor_state->editor_components.GetModuleComponentIndices(editor_components_index, &reflected_components);
+		editor_state->editor_components.GetModuleSharedComponentIndices(editor_components_index, &reflected_shared_components);
+	}
+
 	if (reflected_components.size == 0) {
 		drawer->Text("The module does not have any components.");
 		drawer->NextRow();
@@ -238,7 +243,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		for (unsigned int index = 0; index < reflected_components.size; index++) {
 			labels[index].buffer = label_list_characters.buffer + label_list_characters.size;
 
-			const Reflection::ReflectionType* type = editor_state->editor_components.GetType(module_index, reflected_components[index]);
+			const Reflection::ReflectionType* type = editor_state->editor_components.GetType(editor_components_index, reflected_components[index]);
 			size_t byte_size = Reflection::GetReflectionTypeByteSize(type);
 
 			// The component might be lacking an ID
@@ -272,7 +277,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 		for (unsigned int index = 0; index < reflected_shared_components.size; index++) {
 			labels[index].buffer = label_list_characters.buffer + label_list_characters.size;
 
-			const Reflection::ReflectionType* type = editor_state->editor_components.GetType(module_index, reflected_shared_components[index]);;
+			const Reflection::ReflectionType* type = editor_state->editor_components.GetType(editor_components_index, reflected_shared_components[index]);;
 			size_t byte_size = Reflection::GetReflectionTypeByteSize(type);
 
 			// The component might be lacking an ID
@@ -561,7 +566,7 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 					UIReflectionDrawInstanceOptions options;
 					options.drawer = drawer;
 					options.config = &config;
-					options.global_configuration = 0;
+					options.global_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 					options.additional_configs = { ui_reflection_configs, used_count };
 					editor_state->module_reflection->DrawInstance(
 						instance,

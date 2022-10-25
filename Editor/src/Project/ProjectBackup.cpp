@@ -22,7 +22,7 @@ Stream<char> PROJECT_BACKUP_FILES_NAMES[] = {
 
 bool ProjectNeedsBackup(EditorState* editor_state)
 {
-	return editor_state->lazy_evalution_timer.GetDuration_ms() > BACKUP_PROJECT_LAZY_COUNTER;
+	return editor_state->lazy_evalution_timer.GetDuration(ECS_TIMER_DURATION_MS) > BACKUP_PROJECT_LAZY_COUNTER;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ void ResetProjectNeedsBackup(EditorState* editor_state)
 
 void AddProjectNeedsBackupTime(EditorState* editor_state, size_t second_count)
 {
-	editor_state->lazy_evalution_timer.DelayStart(second_count * 1'000'000'000);
+	editor_state->lazy_evalution_timer.DelayStart(second_count, ECS_TIMER_DURATION_S);
 }
 
 // -------------------------------------------------------------------------------------------------

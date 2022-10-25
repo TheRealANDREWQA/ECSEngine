@@ -29,7 +29,7 @@ namespace ECSEngine {
 
 	// Returns true if it has the associated DLL task function
 	// The other are optional and do not need to be present in order for the module to be valid
-	ECSENGINE_API bool IsModule(Stream<wchar_t> path);
+	ECSENGINE_API bool FindModule(Stream<wchar_t> path);
 
 	// It does not load any stream from the functions. Use the corresponding load functions for that
 	// The function LoadModuleTasks can be used to load them at a later time

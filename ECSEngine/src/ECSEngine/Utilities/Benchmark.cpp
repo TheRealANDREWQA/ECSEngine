@@ -292,7 +292,7 @@ namespace ECSEngine {
 
     void BenchmarkState::EndTimer()
     {
-        size_t duration = timer.GetDurationSinceMarker_ns();
+        size_t duration = timer.GetDurationSinceMarker(ECS_TIMER_DURATION_NS);
         if (options.timed_run) {
             size_t last = durations[durations.size].size - 1;
             durations[durations.size][last]++;

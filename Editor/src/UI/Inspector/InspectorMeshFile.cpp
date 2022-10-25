@@ -98,21 +98,24 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ECS_TOOLS_UI_TEXTURE_FILE_MESH, drawer->color_theme.text, drawer->color_theme.theme);
 	}
 
+	if (data->current_metadata.file.size == 0) {
+		// Retrieve the target file
+		Stream<wchar_t> relative_path = GetProjectAssetRelativePath(editor_state, data->path);
+		ECS_ASSERT(relative_path.size > 0);
+		data->current_metadata.file = relative_path;
+	}
+
 	InspectorIconNameAndPath(drawer, data->path);
 	InspectorDrawFileTimes(drawer, data->path);
 	InspectorOpenAndShowButton(drawer, data->path);
 	drawer->CrossLine();
 
-	Stream<wchar_t> relative_path = GetProjectAssetRelativePath(editor_state, data->path);
-	ECS_ASSERT(relative_path.size > 0);
-
 	// Convert the absolute separator into relative
-	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
+	function::ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR, ECS_OS_PATH_SEPARATOR_REL);
 
 	data->helper_data.metadata = &data->current_metadata;
 	data->current_metadata.name = data->helper_data.SelectedName();
-	data->current_metadata.file = relative_path;
-	bool has_path = AssetSettingsHelper(drawer, editor_state, &data->helper_data, relative_path, ECS_ASSET_MESH);
+	bool has_path = AssetSettingsHelper(drawer, editor_state, &data->helper_data, ECS_ASSET_MESH);
 
 	// Draw the settings, if there is one
 	if (has_path) {
@@ -120,20 +123,19 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		AssetSettingsHelperBaseConfig(&config);
 		size_t base_configuration = AssetSettingsHelperBaseConfiguration();
 
-		AssetSettingsHelperChangedBaseActionData changed_base_data;
+		AssetSettingsHelperChangedActionData changed_base_data;
 		changed_base_data.editor_state = editor_state;
-		changed_base_data.file = relative_path;
 		changed_base_data.asset_type = ECS_ASSET_MESH;
 		changed_base_data.helper_data = &data->helper_data;
 
 		UIConfigTextInputCallback float_input_callback;
-		float_input_callback.handler = { AssetSettingsHelperChangedBaseAction, &changed_base_data, sizeof(changed_base_data) };
+		float_input_callback.handler = { AssetSettingsHelperChangedAction, &changed_base_data, sizeof(changed_base_data) };
+		float_input_callback.trigger_only_on_release = true;
 
 		config.AddFlag(float_input_callback);
 
 		// Display the values
-		drawer->FloatInput(base_configuration | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_RANGE
-			| UI_CONFIG_NUMBER_INPUT_DRAG_CALLBACK_ON_RELEASE,
+		drawer->FloatInput(base_configuration | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_NUMBER_INPUT_DEFAULT | UI_CONFIG_NUMBER_INPUT_RANGE,
 			config, "Scale factor", &data->current_metadata.scale_factor, 1.0f, -100.0f, 100.0f);
 		drawer->NextRow();
 
@@ -163,7 +165,7 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 	}
 
 	// Convert back to absolute separator
-	function::ReplaceCharacter(relative_path, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
+	function::ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
 	auto calculate_texture_size_from_region = [](uint2 window_size, float2 region_scale) {
 		return uint2(

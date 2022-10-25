@@ -16,6 +16,7 @@
 #include "CreateScene.h"
 #include "../Assets/AssetManagement.h"
 #include "../Assets/AssetExtensions.h"
+#include "AssetIcons.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Tools;
@@ -82,10 +83,8 @@ constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_FALLBACK_SIZE = ECS_MB * 600;
 
 constexpr size_t FILE_EXPLORER_PRELOAD_TEXTURE_LAZY_EVALUATION = 1'500;
 constexpr size_t FILE_EXPLORER_MESH_THUMBNAIL_LAZY_EVALUATION = 500;
-constexpr size_t FILE_EXPLORER_MATERIAL_THUMBNAIL_LAZY_EVALUATION = 500;
 
 #define MAX_MESH_THUMBNAILS_PER_FRAME 2
-#define MAX_MATERIAL_THUMBNAILS_PER_FRAME 2
 
 enum FILE_RIGHT_CLICK_INDEX {
 	FILE_RIGHT_CLICK_OPEN,
@@ -274,7 +273,7 @@ void FileExplorerDirectorySelectable(ActionData* action_data) {
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 		if (mouse_tracker->LeftButton() == MBPRESSED) {
 			if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
-				if (additional_data->timer.GetDurationSinceMarker_ms() < DOUBLE_CLICK_DURATION && keyboard->IsKeyUp(HID::Key::LeftControl)) {
+				if (additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) < DOUBLE_CLICK_DURATION && keyboard->IsKeyUp(HID::Key::LeftControl)) {
 					FileExplorerSetNewDirectory(data->editor_state, data->selection, data->index);
 				}
 			}
@@ -318,7 +317,7 @@ void FileExplorerLabelRenameCallback(ActionData* action_data) {
 	if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 		if (mouse_tracker->LeftButton() == MBPRESSED) {
 			if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
-				if (additional_data->timer.GetDurationSinceMarker_ms() < DOUBLE_CLICK_DURATION) {
+				if (additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) < DOUBLE_CLICK_DURATION) {
 					bool is_file = IsFile(data->selection);
 					if (is_file) {
 						CreateRenameFileWizard(data->selection, system);
@@ -596,9 +595,10 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 		UIConfigBorder border;
 		border.thickness = drawer->GetDefaultBorderThickness();
 		border.color = EDITOR_GREEN_COLOR;
+		border.draw_phase = ECS_UI_DRAW_NORMAL;
 		config->AddFlag(border);
 
-		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL, *config, ascii_stream.buffer);
+		drawer->TextLabel(LABEL_CONFIGURATION | UI_CONFIG_BORDER, *config, ascii_stream.buffer);
 		config->flag_count--;
 	}
 	else {
@@ -626,16 +626,17 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	ascii_stream.size = path_filename.size + extension_size;
 
 	float2 font_size = drawer->GetFontSize();
-	float2 text_span = drawer->TextSpan(ascii_stream, font_size, drawer->font.character_spacing);
-	text_span.x += 2.0f * drawer->system->m_descriptors.misc.tool_tip_padding.x;
+	//float2 text_span = drawer->TextSpan(ascii_stream, font_size, drawer->font.character_spacing);
+	//text_span.x += 2.0f * drawer->system->m_descriptors.misc.tool_tip_padding.x;
 
-	float position_x = AlignMiddle(current_position.x, label_horizontal_scale, text_span.x);
+	//float position_x = AlignMiddle(current_position.x, label_horizontal_scale, text_span.x);
 
 	UITextTooltipHoverableData tooltip_data;
 	tooltip_data.characters = ascii_stream.buffer;
 	tooltip_data.base.offset_scale.y = true;
 	tooltip_data.base.offset.y = TOOLTIP_OFFSET;
-	tooltip_data.base.offset.x = position_x - current_position.x;
+	//tooltip_data.base.offset.x = position_x - current_position.x;
+	tooltip_data.base.center_horizontal_x = true;
 	tooltip_data.base.font_size = font_size;
 	
 	drawer->AddTextTooltipHoverable(current_position, { label_horizontal_scale, drawer->layout.default_element_y }, &tooltip_data);
@@ -730,15 +731,15 @@ void FileSceneDraw(ActionData* action_data) {
 }
 
 void FileAssetShaderDraw(ActionData* action_data) {
-	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_PAINTBRUSH);
+	FileOverlayDraw(action_data, ASSET_SHADER_ICON);
 }
 
 void FileAssetGPUSamplerDraw(ActionData* action_data) {
-	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_COLOR_PICKER);
+	FileOverlayDraw(action_data, ASSET_GPU_SAMPLER_ICON);
 }
 
 void FileAssetMiscDraw(ActionData* action_data) {
-	FileOverlayDraw(action_data, ECS_TOOLS_UI_TEXTURE_MODULE);
+	FileOverlayDraw(action_data, ASSET_MISC_ICON);
 }
 
 void FileMaterialDraw(ActionData* action_data) {
@@ -752,7 +753,7 @@ void FileMaterialDraw(ActionData* action_data) {
 		UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
 		*config,
 		ECS_TOOLS_UI_TEXTURE_FILE_BLANK,
-		ECS_TOOLS_UI_TEXTURE_SHADED_SPHERE,
+		ASSET_MATERIAL_ICON,
 		overlay_color,
 		base_color
 	);
@@ -1692,8 +1693,8 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 			ADD_FUNCTOR(FileConfigDraw, L".config");
 			ADD_FUNCTOR(FileTextDraw, L".txt");
 			ADD_FUNCTOR(FileTextDraw, L".doc");
-			ADD_FUNCTOR(FileShaderDraw, L".hlsl");
-			ADD_FUNCTOR(FileShaderDraw, L".hlsli");
+			ADD_FUNCTOR(FileShaderDraw, ECS_SHADER_EXTENSION);
+			ADD_FUNCTOR(FileShaderDraw, ECS_SHADER_INCLUDE_EXTENSION);
 			for (size_t index = 0; index < std::size(ASSET_SHADER_EXTENSIONS); index++) {
 				ADD_FUNCTOR(FileAssetShaderDraw, ASSET_SHADER_EXTENSIONS[index]);
 			}
@@ -2024,9 +2025,10 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					UIConfigBorder border;
 					border.thickness = drawer->GetDefaultBorderThickness();
 					border.color = EDITOR_GREEN_COLOR;
+					border.draw_phase = ECS_UI_DRAW_NORMAL;
 					config->AddFlag(border);
 
-					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_COLOR | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL, *config);
+					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_COLOR | UI_CONFIG_BORDER, *config);
 
 					config->flag_count -= 2;
 				}
@@ -2175,9 +2177,10 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 					UIConfigBorder border;
 					border.color = EDITOR_GREEN_COLOR;
 					border.thickness = drawer->GetDefaultBorderThickness();
+					border.draw_phase = ECS_UI_DRAW_NORMAL;
 					config->AddFlag(border);
 
-					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER | UI_CONFIG_BORDER_DRAW_NORMAL, *config);
+					drawer->Rectangle(RECTANGLE_CONFIGURATION | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_BORDER, *config);
 
 					Color theme_color = drawer->color_theme.theme;
 					theme_color.alpha = 100;

@@ -2752,7 +2752,7 @@ namespace ECSEngine {
 
 			// check to see if it is a pop up dockspace or a fixed dockspace
 			if (type == DockspaceType::FloatingHorizontal || type == DockspaceType::FloatingVertical) {
-				unsigned int pop_index = IsPopUpWindow(border);
+				unsigned int pop_index = FindPopUpWindow(border);
 				if (pop_index != -1) {
 					m_pop_up_windows.RemoveSwapBack(pop_index);
 				}
@@ -4567,7 +4567,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		float2  UISystem::DrawToolTipSentence(
+		float2 UISystem::DrawToolTipSentence(
 			ActionData* action_data,
 			Stream<char> characters,
 			UITooltipBaseData* data
@@ -4678,7 +4678,15 @@ namespace ECSEngine {
 			max_bounds.x += m_descriptors.misc.tool_tip_padding.x;
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = max_bounds.x > 0.99f ? max_bounds.x - 0.99f : 0.0f;
+			
+			float2 tooltip_scale = max_bounds - initial_position;
+			if (data->center_horizontal_x) {
+				float aligned_position = AlignMiddle(position.x, scale.x, tooltip_scale.x);
+				translation.x = initial_position.x - aligned_position;
+				max_bounds.x -= translation.x;
+			}
+
+			translation.x += max_bounds.x > 0.99f ? max_bounds.x - 0.99f : 0.0f;
 			translation.y = max_bounds.y > 0.99f ? max_bounds.y - 0.99f : 0.0f;
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
@@ -4690,8 +4698,8 @@ namespace ECSEngine {
 			initial_position -= translation;
 			max_bounds -= translation;
 
-			SetSolidColorRectangle(initial_position, max_bounds - initial_position, data->background_color, buffers, counts, 0);
-			CreateSolidColorRectangleBorder<false>(initial_position, max_bounds - initial_position, data->border_size, data->border_color, counts, buffers);
+			SetSolidColorRectangle(initial_position, tooltip_scale, data->background_color, buffers, counts, 0);
+			CreateSolidColorRectangleBorder<false>(initial_position, tooltip_scale, data->border_size, data->border_color, counts, buffers);
 		
 			return max_bounds - initial_position;
 		}
@@ -4872,7 +4880,15 @@ namespace ECSEngine {
 #pragma region Translation if needed
 
 			float2 translation = { 0.0f, 0.0f };
-			translation.x = max_bounds.x > 0.99f ? max_bounds.x - 0.99f : 0.0f;
+			float2 tooltip_scale = max_bounds - initial_position;
+
+			if (data->center_horizontal_x) {
+				float aligned_position = AlignMiddle(position.x, scale.x, tooltip_scale.x);
+				translation.x = initial_position.x - aligned_position;
+				max_bounds.x -= translation.x;
+			}
+
+			translation.x += max_bounds.x > 0.99f ? max_bounds.x - 0.99f : 0.0f;
 			translation.y = max_bounds.y > 0.99f ? max_bounds.y - 0.99f : 0.0f;
 
 			if (translation.x != 0.0f || translation.y != 0.0f) {
@@ -4881,13 +4897,14 @@ namespace ECSEngine {
 					text_vertices[index].position.y += translation.y;
 				}
 			}
+
 			initial_position -= translation;
 			max_bounds -= translation;
 
 #pragma endregion
 
-			SetSolidColorRectangle(initial_position, max_bounds - initial_position, data->background_color, buffers, counts, 0);
-			CreateSolidColorRectangleBorder<false>(initial_position, max_bounds - initial_position, data->border_size, data->border_color, counts, buffers);
+			SetSolidColorRectangle(initial_position, tooltip_scale, data->background_color, buffers, counts, 0);
+			CreateSolidColorRectangleBorder<false>(initial_position, tooltip_scale, data->border_size, data->border_color, counts, buffers);
 
 			return max_bounds - initial_position;
 		}
@@ -8099,7 +8116,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::IsPopUpWindow(unsigned int window_index) const
+		unsigned int UISystem::FindPopUpWindow(unsigned int window_index) const
 		{
 			for (size_t index = 0; index < m_pop_up_windows.size; index++) {
 				const UIDockspace* dockspace = GetConstDockspace(m_dockspace_layers[m_pop_up_windows[index]]);
@@ -8112,20 +8129,20 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::IsPopUpWindow(const UIDockspace* dockspace) const {
+		unsigned int UISystem::FindPopUpWindow(const UIDockspace* dockspace) const {
 			if (dockspace->borders.size == 2 && dockspace->borders[0].window_indices.size == 1 && !dockspace->borders[0].is_dock) {
-				return IsPopUpWindow(dockspace->borders[0].window_indices[0]);
+				return FindPopUpWindow(dockspace->borders[0].window_indices[0]);
 			}
 			return -1;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UISystem::IsPopUpWindow(const UIDockspaceBorder* border) const
+		unsigned int UISystem::FindPopUpWindow(const UIDockspaceBorder* border) const
 		{
 			if (border[0].window_indices.size == 1 && !border[0].is_dock) {
 				unsigned int window_index = border[0].window_indices[0];
-				return IsPopUpWindow(window_index);
+				return FindPopUpWindow(window_index);
 			}
 			return -1;
 		}
@@ -10316,7 +10333,7 @@ namespace ECSEngine {
 			UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, type);
 
 			if (dockspace != nullptr) {
-				bool is_pop_up = IsPopUpWindow(window_index) != -1;
+				bool is_pop_up = FindPopUpWindow(window_index) != -1;
 				if (is_pop_up) {
 					DestroyDockspace(dockspace->borders.buffer, type);
 				}
@@ -11390,6 +11407,15 @@ namespace ECSEngine {
 				state = MBRELEASED;
 			}
 			if (mouse_tracker->LeftButton() == state) {
+				if (system->m_pop_up_windows.size > 1) {
+					// Check to see if this is the top most pop up window
+					unsigned int window_index = system->GetWindowFromName(data->name);
+					unsigned int pop_up_index = system->FindPopUpWindow(window_index);
+					if (pop_up_index != system->m_pop_up_windows.size - 1) {
+						return;
+					}
+				}
+
 				if (data->is_initialized) {
 					auto destroy_lambda = [&]() {
 						DockspaceType type;
@@ -11808,7 +11834,7 @@ namespace ECSEngine {
 			if (UI_ACTION_IS_NOT_CLEAN_UP_CALL) {
 				if (mouse_tracker->LeftButton() == MBPRESSED) {
 					if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
-						size_t duration = additional_data->timer.GetDurationSinceMarker_ms();
+						size_t duration = additional_data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS);
 						if (duration < data->max_duration_between_clicks) {
 							// The data must be inferred
 							void* double_click_data = data->double_click_handler.data_size == 0 ? data->double_click_handler.data :
@@ -12231,7 +12257,8 @@ namespace ECSEngine {
 
 			UITextTooltipHoverableData* data = (UITextTooltipHoverableData*)_data;
 			system->m_focused_window_data.always_hoverable = true;
-			system->DrawToolTipSentence(action_data, data->characters, &data->base);
+			Stream<char> characters = data->GetCharacters();
+			system->DrawToolTipSentence(action_data, characters, &data->base);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

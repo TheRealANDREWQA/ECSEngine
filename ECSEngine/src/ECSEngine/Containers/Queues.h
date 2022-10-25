@@ -184,10 +184,18 @@ namespace ECSEngine {
 			if (m_queue.size == m_queue.capacity) {
 				unsigned int old_capacity = m_queue.capacity;
 				T* old_buffer = m_queue.buffer;
-				m_queue.FreeBuffer();
-				m_queue.ResizeNoCopy((size_t)((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
+				unsigned int new_capacity = (unsigned int)((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR);
+				void* new_buffer = Allocate(m_queue.allocator, m_queue.MemoryOf(new_capacity));
+				m_queue.buffer = (T*)new_buffer;
+
 				memcpy(m_queue.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 				memcpy(m_queue.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
+
+				if (old_buffer != nullptr && m_queue.capacity > 0) {
+					Deallocate(m_queue.allocator, old_buffer);
+				}
+				m_queue.capacity = new_capacity;
+
 				m_first_item = 0;
 				m_queue.Add(element);
 			}
@@ -203,10 +211,18 @@ namespace ECSEngine {
 			if (m_queue.size == m_queue.capacity) {
 				unsigned int old_capacity = m_queue.capacity;
 				T* old_buffer = m_queue.buffer;
-				m_queue.FreeBuffer();
-				m_queue.ResizeNoCopy((size_t)((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR));
+				unsigned int new_capacity = (unsigned int)((m_queue.capacity + 1) * ECS_CIRCULAR_QUEUE_RESIZE_FACTOR);
+				void* new_buffer = Allocate(m_queue.allocator, m_queue.MemoryOf(new_capacity));
+				m_queue.buffer = (T*)new_buffer;
+
 				memcpy(m_queue.buffer, old_buffer + m_first_item, sizeof(T) * (old_capacity - m_first_item));
 				memcpy(m_queue.buffer + old_capacity - m_first_item, old_buffer, sizeof(T) * m_first_item);
+
+				if (old_buffer != nullptr && m_queue.capacity > 0) {
+					Deallocate(m_queue.allocator, old_buffer);
+				}
+				m_queue.capacity = new_capacity;
+
 				m_first_item = 0;
 				m_queue.Add(element);
 			}
@@ -227,7 +243,6 @@ namespace ECSEngine {
 			return m_queue.buffer;
 		}
 
-	//private:
 		ResizableStream<T> m_queue;
 		unsigned int m_first_item;
 	};

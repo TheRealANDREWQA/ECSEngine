@@ -6,6 +6,8 @@
 #include "ECSEngineComponents.h"
 #include "../../Modules/Module.h"
 
+#include "ECSEngineModule.h"
+
 using namespace ECSEngine;
 ECS_TOOLS;
 
@@ -92,34 +94,10 @@ struct InspectorDrawEntityData {
 
 		unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(name);
 		link_components[write_index].data = editor_state->editor_allocator->Allocate(byte_size);
-		//editor_state->editor_components.ResetComponent(name, link_components[write_index].data);
 
-		//// Extract the data from the entity manager and reverse it
-		//// But first try to get the reverse function
-		//ModuleLinkComponentTarget link_functions = GetModuleLinkComponentTarget(
-		//	editor_state,
-		//	editor_state->editor_components.FindComponentModuleInReflection(editor_state, name),
-		//	name
-		//);
-		//bool needs_dll = editor_state->editor_components.GetLinkComponentDLLStatus(name);
-		//if (needs_dll) {
-		//	if (link_functions.build_function == nullptr) {
-		//		// There is no build function but it requires a function. Send a warning
-		//		ECS_FORMAT_TEMP_STRING(console_message, "Link Component {#} doesn't have a DLL ready for use.", name);
-		//		EditorSetConsoleWarn(console_message);
-		//	}
-		//	else {
-		//		// extract the target data and convert it into a link component
-		//		ModuleLinkComponentReverseFunctionData reverse_data;
-		//		reverse_data.component = target_data;
-		//		reverse_data.link_component = link_components[write_index].data;
-		//		
-		//		link_functions.reverse_function(&reverse_data);
-		//	}
-		//}
-		//else {
-		//	// Just do the normal conversion
-		//}
+		const auto* reflection_manager = editor_state->ModuleReflectionManager();
+		const Reflection::ReflectionType* link_type = reflection_manager->GetType(name);
+		ModuleResetLinkComponent(reflection_manager, link_type, link_components[write_index].data);
 
 		link_components.size++;
 		return write_index;
@@ -161,8 +139,25 @@ struct InspectorDrawEntityData {
 			editor_state->editor_allocator->Deallocate(matching_inputs[index].capacity_inputs[buffer_index]);
 			matching_inputs[index].capacity_inputs[buffer_index]->size = 0;
 		}
-		editor_state->editor_allocator->Deallocate(matching_inputs[index].capacity_inputs.buffer);
+		if (matching_inputs[index].capacity_inputs.size > 0) {
+			editor_state->editor_allocator->Deallocate(matching_inputs[index].capacity_inputs.buffer);
+		}
 		matching_inputs[index].capacity_inputs.size = 0;
+	}
+
+	void ClearLinkComponent(EditorState* editor_state, unsigned int index) {
+		unsigned int matching_input_index = FindMatchingInput(link_components[index].name);
+		ClearComponent(editor_state, matching_input_index);
+		// Reallocate the link component - since it might have changed byte size
+		unsigned short new_byte_size = editor_state->editor_components.GetComponentByteSize(link_components[index].name);
+		ECS_ASSERT(new_byte_size != USHORT_MAX);
+
+		editor_state->editor_allocator->Deallocate(link_components[index].data);
+		link_components[index].data = editor_state->editor_allocator->Allocate(new_byte_size);
+
+		const auto* reflection_manager = editor_state->ModuleReflectionManager();
+		const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_components[index].name);
+		ModuleResetLinkComponent(reflection_manager, link_type, link_components[index].data);
 	}
 
 	unsigned int FindMatchingInput(Stream<char> component_name) const {
@@ -181,9 +176,7 @@ struct InspectorDrawEntityData {
 	void RemoveComponent(EditorState* editor_state, Stream<char> component_name) {
 		unsigned int index = FindMatchingInput(component_name);
 		ECS_ASSERT(index != -1);
-		for (size_t buffer_index = 0; buffer_index < matching_inputs[index].capacity_inputs.size; buffer_index++) {
-			editor_state->editor_allocator->Deallocate(matching_inputs[index].capacity_inputs[buffer_index]);
-		}
+		ClearComponent(editor_state, index);
 		matching_inputs.RemoveSwapBack(index);
 	}
 
@@ -471,6 +464,11 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			if (link_component.size > 0) {
 				// Replace the name with the link name
 				current_component_name = link_component;
+				unsigned int link_index = data->FindLinkComponent(link_component);
+				// The component is initialized down bellow
+				if (link_index != -1) {
+					current_component = data->link_components[link_index].data;
+				}
 			}
 			else {
 				// Get the data from the entity manager if not a link component
@@ -503,10 +501,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 						data->ClearComponent(editor_state, exists_component);
 					}
 					else {
-						if (link_component.size > 0) {
-							data->AddLinkComponent(editor_state, link_component);
-						}
-						else {
+						// The link component needs to be initialized before this call
+						if (link_component.size == 0) {
 							data->AddComponent(editor_state, current_component_name);
 						}
 					}
@@ -573,6 +569,18 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 					data->created_instances[created_instance_index].pointer_bound = current_component;
 				}
 
+				if (link_component.size > 0) {
+					// Check to see if it already exists
+					unsigned int link_index = data->FindLinkComponent(link_component);
+
+					if (link_index == -1) {
+						link_index = data->AddLinkComponent(editor_state, link_component);
+					}
+					else {
+						data->ClearLinkComponent(editor_state, link_index);
+					}
+					current_component = data->link_components[link_index].data;
+				}
 				ui_drawer->BindInstancePtrs(instance, current_component);
 				set_instance_inputs();
 			}

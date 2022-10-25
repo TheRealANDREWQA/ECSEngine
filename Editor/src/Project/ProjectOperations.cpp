@@ -929,7 +929,7 @@ void SaveProjectUIAutomatically(ActionData* action_data)
 	UI_UNPACK_ACTION_DATA;
 
 	SaveProjectUIAutomaticallyData* data = (SaveProjectUIAutomaticallyData*)_data;
-	if (data->timer.GetDurationSinceMarker_ms() > SAVE_PROJECT_AUTOMATICALLY_TICK) {
+	if (data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) > SAVE_PROJECT_AUTOMATICALLY_TICK) {
 		EDITOR_STATE(data->editor_state);
 		ThreadTask task = ECS_THREAD_TASK_NAME(SaveProjectThreadTask, data->editor_state, 0);
 		task_manager->AddDynamicTaskAndWake(task);

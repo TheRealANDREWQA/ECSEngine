@@ -86,7 +86,7 @@ namespace ECSEngine {
 		size_t serializable_field_count = type->fields.size;
 
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD));
+			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 			if (!skip_serializable && omit_fields.size > 0) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].definition, omit_fields);
 			}
@@ -96,7 +96,7 @@ namespace ECSEngine {
 		// Then write all its fields - and the count
 		total_size += Write<write_data>(&stream, &serializable_field_count, sizeof(serializable_field_count));
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD));
+			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable) {
 				if (omit_fields.size > 0) {
@@ -166,7 +166,7 @@ namespace ECSEngine {
 
 		// Now write all the nested types
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD));
+			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable && type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
@@ -324,7 +324,7 @@ namespace ECSEngine {
 		bool custom_serializer_success = true;
 
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool skip_serializable = type->fields[index].Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
+			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD_REFLECT));
 			if (!skip_serializable) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
 			}
@@ -428,7 +428,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < type->fields.size; index++) {
 			const ReflectionField* field = &type->fields[index];
 
-			bool skip_serializable = field->Skip(STRING(ECS_SERIALIZATION_OMIT_FIELD));
+			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable && omit_fields.size > 0) {
 				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
@@ -954,7 +954,7 @@ namespace ECSEngine {
 				}
 
 				void* field_data = function::OffsetPointer(address, type->fields[subindex].info.pointer_offset);
-				Stream<char> field_definition = type->fields[index].definition;
+				Stream<char> field_definition = type->fields[subindex].definition;
 
 				// Verify the basic and the stream type
 				ReflectionFieldInfo type_field_info = type->fields[subindex].info;

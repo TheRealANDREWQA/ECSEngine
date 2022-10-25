@@ -8,7 +8,7 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-        bool ReflectionField::Skip(Stream<char> string) const
+        bool ReflectionField::Has(Stream<char> string) const
         {
 			if (tag.size > 0) {
 				return function::FindFirstToken(tag, string).buffer != nullptr;
@@ -16,9 +16,29 @@ namespace ECSEngine {
 			return false;
         }
 
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		bool ReflectionField::Is(Stream<char> string) const
 		{
 			return function::CompareStrings(tag, string);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> ReflectionField::GetTag(Stream<char> string) const
+		{
+			Stream<char> token = function::FindFirstToken(tag, string);
+			if (token.size == 0) {
+				return token;
+			}
+
+			// Find the separation character
+			Stream<char> separator = function::FindFirstCharacter(token, '~');
+			if (separator.size == 0) {
+				return token;
+			}
+
+			return { token.buffer, token.size - (separator.buffer - token.buffer) };
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -197,13 +217,6 @@ namespace ECSEngine {
 			for (size_t index = 0; index < fields.size; index++) {
 				copy.fields[index].info = fields[index].info;
 				copy.fields[index].name.InitializeAndCopy(ptr, fields[index].name);
-
-				if (fields[index].tag.size > 0) {
-					copy.fields[index].tag.InitializeAndCopy(ptr, fields[index].tag);
-				}
-				else {
-					copy.fields[index].tag = { nullptr, 0 };
-				}
 
 				ReflectionStreamFieldType stream_type = fields[index].info.stream_type;
 				ReflectionBasicFieldType basic_type = fields[index].info.basic_type;

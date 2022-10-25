@@ -103,8 +103,8 @@ void InspectorTextFileAddFunctors(InspectorTable* table)
 	AddInspectorTableFunction(table, { InspectorDrawCppTextFile, InspectorCleanNothing }, L".h");
 	AddInspectorTableFunction(table, { InspectorDrawCppTextFile, InspectorCleanNothing }, L".hpp");
 	AddInspectorTableFunction(table, { InspectorDrawCTextFile, InspectorCleanNothing }, L".c");
-	AddInspectorTableFunction(table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, L".hlsl");
-	AddInspectorTableFunction(table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, L".hlsli");
+	AddInspectorTableFunction(table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, ECS_SHADER_EXTENSION);
+	AddInspectorTableFunction(table, { InspectorDrawHlslTextFile, InspectorCleanNothing }, ECS_SHADER_INCLUDE_EXTENSION);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

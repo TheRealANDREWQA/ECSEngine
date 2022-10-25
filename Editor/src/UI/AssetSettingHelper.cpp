@@ -10,7 +10,7 @@
 
 #define LAZY_TIMER_RELOAD_MS 200
 
-bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSettingsHelperData* helper_data, Stream<wchar_t> file, ECS_ASSET_TYPE asset_type)
+bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSettingsHelperData* helper_data, ECS_ASSET_TYPE asset_type)
 {
 	// The initialization part
 	bool initialize = helper_data->new_name.capacity == 0;
@@ -25,7 +25,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 		const size_t ALLOCATOR_CAPACITY = ECS_KB * 32;
 		void* allocator_buffer = editor_state->editor_allocator->Allocate(ALLOCATOR_CAPACITY);
 		helper_data->temp_allocator = LinearAllocator(allocator_buffer, ALLOCATOR_CAPACITY);
-		helper_data->lazy_timer.DelayStart(LAZY_TIMER_RELOAD_MS * ECS_MB_10);
+		helper_data->lazy_timer.DelayStart(LAZY_TIMER_RELOAD_MS, ECS_TIMER_DURATION_MS);
 	}
 
 	const char* COMBO_NAME = "Settings";
@@ -34,7 +34,9 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 	// Display a selection box for the available settings
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&helper_data->temp_allocator);
 
-	if (helper_data->lazy_timer.GetDuration_ms() > LAZY_TIMER_RELOAD_MS) {
+	Stream<wchar_t> file = GetAssetFile(helper_data->metadata, asset_type);
+
+	if (helper_data->lazy_timer.GetDuration(ECS_TIMER_DURATION_MS) > LAZY_TIMER_RELOAD_MS) {
 		helper_data->temp_allocator.Clear();
 		helper_data->current_names = GetAssetCorrespondingMetadata(editor_state, file, asset_type, allocator);
 	}
@@ -238,12 +240,71 @@ void AssetSettingsHelperDestroy(EditorState* editor_state, AssetSettingsHelperDa
 	}
 }
 
-void AssetSettingsHelperChangedBaseAction(ActionData* action_data)
+void AssetSettingsHelperChangedWithFileAction(ActionData* action_data)
 {
 	UI_UNPACK_ACTION_DATA;
 
-	AssetSettingsHelperChangedBaseActionData* data = (AssetSettingsHelperChangedBaseActionData*)_data;
-	unsigned int handle = data->editor_state->asset_database->FindAsset(data->helper_data->SelectedName(), data->file, data->asset_type);
+	AssetSettingsHelperChangedWithFileActionData* data = (AssetSettingsHelperChangedWithFileActionData*)_data;
+	Stream<wchar_t> previous_file = data->previous_target_file;
+	Stream<char> previous_name = data->previous_name;
+
+	Stream<wchar_t> current_file = GetAssetFile(data->asset, data->asset_type);
+	Stream<char> current_name = GetAssetName(data->asset, data->asset_type);
+
+	bool same_file_and_name = function::CompareStrings(current_name, previous_name) && function::CompareStrings(current_file, previous_file);
+	// If the file is empty, then the target is not yet asigned, so can't do anything
+	if (current_file.size > 0) {
+		unsigned int handle = data->editor_state->asset_database->FindAsset(previous_name, previous_file, data->asset_type);
+		bool success = true;
+		if (handle != -1) {
+			success = data->editor_state->asset_database->UpdateAsset(handle, data->asset, data->asset_type);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
+				EditorSetConsoleWarn(error_message);
+			}
+		}
+		else {
+			success = data->editor_state->asset_database->WriteAssetFile(data->asset, data->asset_type);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", previous_name, previous_file, ConvertAssetTypeString(data->asset_type));
+				EditorSetConsoleWarn(error_message);
+
+				// If we failed to write the asset file don't remove the previous one
+			}
+			else {
+				// Only remove it if the target file or the name has changed				
+				if (!same_file_and_name) {
+					// Remove the previous asset file
+					ECS_STACK_CAPACITY_STREAM(wchar_t, previous_metadata_file, 512);
+					data->editor_state->asset_database->FileLocationShader(previous_name, previous_file, previous_metadata_file);
+					if (!RemoveFile(previous_metadata_file)) {
+						ECS_FORMAT_TEMP_STRING(console_message, "Failed to remove metadata file {#}.", previous_metadata_file);
+						EditorSetConsoleWarn(console_message);
+					}
+				}
+			}
+		}
+
+		// Check the thunk file - only if the write succeeded
+		if (data->thunk_file_path.size > 0 && success && !same_file_and_name) {
+			// Write the thunk file
+			success = WriteForwardingFile(data->thunk_file_path, current_file);
+			if (!success) {
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write forwarding file for asset {#} with target {#}.", current_name, current_file);
+				EditorSetConsoleWarn(console_message);
+			}
+		}
+	}
+}
+
+void AssetSettingsHelperChangedAction(ActionData* action_data)
+{
+	UI_UNPACK_ACTION_DATA;
+
+	AssetSettingsHelperChangedActionData* data = (AssetSettingsHelperChangedActionData*)_data;
+	Stream<wchar_t> file = GetAssetFile(data->helper_data->metadata, data->asset_type);
+	Stream<char> name = data->helper_data->SelectedName();
+	unsigned int handle = data->editor_state->asset_database->FindAsset(name, file, data->asset_type);
 	bool success = true;
 	if (handle != -1) {
 		success = data->editor_state->asset_database->UpdateAsset(handle, &data->helper_data->metadata, data->asset_type);
@@ -253,8 +314,28 @@ void AssetSettingsHelperChangedBaseAction(ActionData* action_data)
 	}
 
 	if (!success) {
-		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for mesh {#}, file {#}.", data->helper_data->SelectedName(), data->file);
+		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write new metadata values for asset {#}, file {#}, type {#}.", name, file, ConvertAssetTypeString(data->asset_type));
 		EditorSetConsoleWarn(error_message);
+	}
+}
+
+void AssetSettingsHelperChangedNoFileAction(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	AssetSettingsHelperChangedNoFileActionData* data = (AssetSettingsHelperChangedNoFileActionData*)_data;
+	Stream<char> name = GetAssetName(data->asset, data->asset_type);
+	unsigned int handle = data->editor_state->asset_database->FindAsset(name, { nullptr, 0 }, data->asset_type);
+	bool success = true;
+	if (handle != -1) {
+		success = data->editor_state->asset_database->UpdateAsset(handle, data->asset, data->asset_type);
+	}
+	else {
+		success = data->editor_state->asset_database->WriteAssetFile(data->asset, data->asset_type);
+	}
+
+	if (!success) {
+		ECS_FORMAT_TEMP_STRING(error_message, "Failed to write asset file for {#}, type {#}.", name, ConvertAssetTypeString(data->asset_type));
+		EditorSetConsoleError(error_message);
 	}
 }
 

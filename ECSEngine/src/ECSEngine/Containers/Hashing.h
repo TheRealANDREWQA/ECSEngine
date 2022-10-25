@@ -28,6 +28,10 @@ namespace ECSEngine {
 
 		bool operator == (const ResourceIdentifier& other) const;
 
+		size_t CopySize() const;
+
+		ResourceIdentifier CopyTo(uintptr_t& ptr) const;
+
 		ResourceIdentifier Copy(AllocatorPolymorphic allocator) const;
 
 		bool Compare(const ResourceIdentifier& other) const;

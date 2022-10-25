@@ -14,6 +14,10 @@
 #include "Inspector/InspectorMeshFile.h"
 #include "Inspector/InspectorTextFile.h"
 #include "Inspector/InspectorTextureFile.h"
+#include "Inspector/InspectorGPUSamplerFile.h"
+#include "Inspector/InspectorMaterialFile.h"
+#include "Inspector/InspectorMiscFile.h"
+#include "Inspector/InspectorShaderFile.h"
 
 constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 constexpr size_t FUNCTION_TABLE_CAPACITY = 32;
@@ -95,7 +99,7 @@ void InspectorWindowDraw(void* window_data, void* drawer_descriptor, bool initia
 	const float REDUCE_FONT_SIZE = 1.0f;
 
 	UI_PREPARE_DRAWER(initialize);
-	drawer.DisablePaddingForRenderRegion();
+	//drawer.DisablePaddingForRenderRegion();
 	//drawer.DisablePaddingForRenderSliders();
 
 	EditorState* editor_state = (EditorState*)window_data;
@@ -386,13 +390,35 @@ void ChangeInspectorToFile(EditorState* editor_state, Stream<wchar_t> path, unsi
 		functions.clean_function = InspectorCleanNothing;
 	}
 
-	if (functions.draw_function == InspectorDrawMeshFile) {
-		ChangeInspectorToMeshFile(editor_state, path, inspector_index);
+	InspectorDrawFunction asset_draws[] = {
+		InspectorDrawMeshFile,
+		InspectorDrawTextureFile,
+		InspectorDrawGPUSamplerFile,
+		InspectorDrawShaderFile,
+		InspectorDrawMaterialFile,
+		InspectorDrawMiscFile
+	};
+
+	void (*change_functions[])(EditorState*, Stream<wchar_t>, unsigned int) = {
+		ChangeInspectorToMeshFile,
+		ChangeInspectorToTextureFile,
+		ChangeInspectorToGPUSamplerFile,
+		ChangeInspectorToShaderFile,
+		ChangeInspectorToMaterialFile,
+		ChangeInspectorToMiscFile
+	};
+	
+	size_t index = 0;
+	size_t asset_draw_count = std::size(asset_draws);
+	for (; index < asset_draw_count; index++) {
+		if (functions.draw_function == asset_draws[index]) {
+			change_functions[index](editor_state, path, inspector_index);
+			break;
+		}
 	}
-	else if (functions.draw_function == InspectorDrawTextureFile) {
-		ChangeInspectorToTextureFile(editor_state, path, inspector_index);
-	}
-	else {
+	
+	// If it didn't match an asset
+	if (index == asset_draw_count) {
 		ChangeInspectorDrawFunction(editor_state, inspector_index, functions, null_terminated_path.buffer, sizeof(wchar_t) * (path.size + 1));
 	}
 }
@@ -498,6 +524,10 @@ void InitializeInspectorTable(EditorState* editor_state) {
 	InspectorTextFileAddFunctors(&editor_state->inspector_manager.function_table);
 	InspectorTextureFileAddFunctors(&editor_state->inspector_manager.function_table);
 	InspectorMeshFileAddFunctors(&editor_state->inspector_manager.function_table);
+	InspectorMiscFileAddFunctors(&editor_state->inspector_manager.function_table);
+	InspectorShaderFileAddFunctors(&editor_state->inspector_manager.function_table);
+	InspectorMaterialFileAddFunctors(&editor_state->inspector_manager.function_table);
+	InspectorGPUSamplerFileAddFunctors(&editor_state->inspector_manager.function_table);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

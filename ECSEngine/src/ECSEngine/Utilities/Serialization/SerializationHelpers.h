@@ -50,6 +50,7 @@ namespace ECSEngine {
 	struct SerializeCustomTypeIsTriviallyCopyableData {
 		Stream<char> definition;
 		const Reflection::ReflectionManager* reflection_manager;
+		Stream<Stream<char>> exceptions;
 	};
 
 	typedef bool (*SerializeCustomTypeIsTriviallyCopyable)(SerializeCustomTypeIsTriviallyCopyableData* data);
@@ -164,11 +165,21 @@ namespace ECSEngine {
 
 	ECSENGINE_API unsigned int SerializeCustomTypeCount();
 
-	ECSENGINE_API bool IsTriviallyCopyable(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type);
+	// Can optionally give field definitions to be considered as trivially copyable
+	ECSENGINE_API bool IsTriviallyCopyable(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type, 
+		Stream<Stream<char>> exceptions = { nullptr, 0 }
+	);
 
 	// Returns true if it can be copied with memcpy, else false
 	// It returns true when all fields are fundamental types non pointer
-	ECSENGINE_API bool IsTriviallyCopyable(const Reflection::ReflectionManager* reflection_manager, Stream<char> definition);
+	// Can optionally give field definitions to be considered as trivially copyable
+	ECSENGINE_API bool IsTriviallyCopyable(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		Stream<Stream<char>> exceptions = { nullptr, 0 }
+	);
 
 #pragma region User defined influence
 
@@ -543,10 +554,15 @@ namespace ECSEngine {
 						size_t byte_size = 0;
 						Read<true>(&stream, &byte_size, sizeof(byte_size));
 						if constexpr (read_data) {
+							size_t element_byte_size = info.basic_type == Reflection::ReflectionBasicFieldType::Int8 ? sizeof(char) : sizeof(wchar_t);
+							size_t allocate_size = byte_size + element_byte_size;
 							if (allocator.allocator != nullptr) {
 								if (byte_size > 0) {
-									void* allocation = Allocate(allocator, byte_size);
+									void* allocation = Allocate(allocator, allocate_size);
 									Read<true>(&stream, allocation, byte_size);
+
+									void* null_terminator = function::OffsetPointer(allocation, byte_size);
+									memset(null_terminator, 0, element_byte_size);
 
 									void** pointer = (void**)data;
 									*pointer = allocation;
@@ -558,8 +574,11 @@ namespace ECSEngine {
 								}
 								else {
 									if (byte_size > 0) {
-										void* allocation = AllocateEx(allocator, byte_size);
+										void* allocation = AllocateEx(allocator, allocate_size);
 										Read<true>(&stream, allocation, byte_size);
+
+										void* null_terminator = function::OffsetPointer(allocation, byte_size);
+										memset(null_terminator, 0, element_byte_size);
 
 										void** pointer = (void**)data;
 										*pointer = allocation;

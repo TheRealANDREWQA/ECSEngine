@@ -3129,9 +3129,8 @@ namespace ECSEngine {
 		CapacityStream<D3D11_INPUT_ELEMENT_DESC> element_descriptors(_element_descriptors, 0, MAX_INPUT_FIELDS);
 
 		constexpr size_t NAME_POOL_SIZE = 8192;
-		void* allocation = ECS_STACK_ALLOC(NAME_POOL_SIZE);
-		CapacityStream<char> name_pool(allocation, 0, NAME_POOL_SIZE);
-		bool success = m_shader_reflection->ReflectVertexShaderInputSource(source_code, element_descriptors, name_pool);
+		ECS_STACK_LINEAR_ALLOCATOR(allocator, NAME_POOL_SIZE);
+		bool success = m_shader_reflection->ReflectVertexShaderInputSource(source_code, element_descriptors, GetAllocatorPolymorphic(&allocator));
 		if (!success) {
 			return {};
 		}
@@ -3144,10 +3143,9 @@ namespace ECSEngine {
 
 	bool Graphics::ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers) {
 		constexpr size_t NAME_POOL_SIZE = 8192;
-		char* name_allocation = (char*)ECS_STACK_ALLOC(NAME_POOL_SIZE);
-		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
+		ECS_STACK_LINEAR_ALLOCATOR(name_allocator, NAME_POOL_SIZE);
 
-		bool success = m_shader_reflection->ReflectShaderBuffersSource(source_code, buffers, name_pool);
+		bool success = m_shader_reflection->ReflectShaderBuffersSource(source_code, buffers, GetAllocatorPolymorphic(&name_allocator));
 		if (!success) {
 			return false;
 		}
@@ -3170,12 +3168,10 @@ namespace ECSEngine {
 	bool Graphics::ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures)
 	{
 		constexpr size_t NAME_POOL_SIZE = 8192;
-		char* name_allocation = (char*)ECS_STACK_ALLOC(NAME_POOL_SIZE);
-		CapacityStream<char> name_pool(name_allocation, 0, NAME_POOL_SIZE);
+		ECS_STACK_LINEAR_ALLOCATOR(name_allocator, NAME_POOL_SIZE);
 
-		bool success = m_shader_reflection->ReflectShaderTexturesSource(source_code, textures, name_pool);
+		bool success = m_shader_reflection->ReflectShaderTexturesSource(source_code, textures, GetAllocatorPolymorphic(&name_allocator));
 		if (!success) {
-			//_freea(name_allocation);
 			return false;
 		}
 
@@ -3189,8 +3185,18 @@ namespace ECSEngine {
 		for (size_t index = 0; index < textures.size; index++) {
 			textures[index].name.CopyTo(buffer);
 		}
-		//_freea(name_allocation);
 		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	bool Graphics::ReflectShaderMacros(
+		Stream<char> source_code, 
+		CapacityStream<Stream<char>>* defined_macros, 
+		CapacityStream<Stream<char>>* conditional_macros, 
+		AllocatorPolymorphic allocator
+	) {
+		return m_shader_reflection->ReflectShaderMacros(source_code, defined_macros, conditional_macros, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

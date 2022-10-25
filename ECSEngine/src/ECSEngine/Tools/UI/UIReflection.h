@@ -254,9 +254,14 @@ namespace ECSEngine {
 			void* global_data = nullptr;
 		};
 
+		struct UIReflectionDrawerTag {
+			Stream<char> tag;
+			bool has_compare;
+		};
+
 		struct UIReflectionDrawerSearchOptions {
-			Stream<Stream<char>> include_tags = { nullptr, 0 };
-			Stream<Stream<char>> exclude_tags = { nullptr, 0 };
+			Stream<UIReflectionDrawerTag> include_tags = { nullptr, 0 };
+			Stream<UIReflectionDrawerTag> exclude_tags = { nullptr, 0 };
 			Stream<char> suffix = { nullptr, 0 };
 			CapacityStream<unsigned int>* indices = nullptr;
 		};

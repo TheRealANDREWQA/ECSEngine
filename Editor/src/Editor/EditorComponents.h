@@ -40,6 +40,8 @@ enum EDITOR_COMPONENT_EVENT : unsigned char {
 	EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET,
 	// Handled by the user
 	EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET,
+	// Handled by the user
+	EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT,
 	EDITOR_COMPONENT_EVENT_COUNT
 };
 
@@ -126,7 +128,7 @@ struct EditorComponents {
 	bool HasBuffers(ECSEngine::Stream<char> component_name) const;
 
 	// Returns the index inside the loaded_modules if the module has components recorded here, else -1.
-	unsigned int IsModule(ECSEngine::Stream<char> name) const;
+	unsigned int FindModule(ECSEngine::Stream<char> name) const;
 
 	// Returns true if the component (unique or shared) exists or not
 	bool IsComponent(ECSEngine::Stream<char> name) const;
