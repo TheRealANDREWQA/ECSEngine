@@ -3,6 +3,7 @@
 #include "Binary/Serialization.h"
 #include "../Reflection/ReflectionStringFunctions.h"
 #include "../Reflection/Reflection.h"
+#include "../Reflection/ReflectionMacros.h"
 #include "../ReferenceCountSerialize.h"
 #include "../../Containers/SparseSet.h"
 
@@ -1048,10 +1049,21 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool IsTriviallyCopyable(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type) {
+	bool IsTriviallyCopyable(
+		const Reflection::ReflectionManager* reflection_manager, 
+		const Reflection::ReflectionType* type,
+		Stream<Stream<char>> exceptions
+	) {
 		for (size_t index = 0; index < type->fields.size; index++) {
+			// Check exceptions
+			unsigned int exception_index = function::FindString(type->fields[index].definition, exceptions);
+			if (exception_index != -1) {
+				// Go to the next iteration
+				continue;
+			}
+
 			if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Basic && type->fields[index].info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-				// Stream type, not trivially copyable
+				// Stream type or pointer type, not trivially copyable
 				return false;
 			}
 
@@ -1066,13 +1078,18 @@ namespace ECSEngine {
 				else {
 					// Check container type
 					unsigned int container_type = FindReflectionCustomType(type->fields[index].definition);
-					ECS_ASSERT(container_type != -1);
-
-					SerializeCustomTypeIsTriviallyCopyableData data;
-					data.reflection_manager = reflection_manager;
-					data.definition = type->fields[index].definition;
-					if (!ECS_SERIALIZE_CUSTOM_TYPES[container_type].is_trivially_copyable(&data)) {
-						return false;
+					if (container_type != -1) {
+						SerializeCustomTypeIsTriviallyCopyableData data;
+						data.reflection_manager = reflection_manager;
+						data.definition = type->fields[index].definition;
+						if (!ECS_SERIALIZE_CUSTOM_TYPES[container_type].is_trivially_copyable(&data)) {
+							return false;
+						}
+					}
+					else {
+						// Check for ECS_GIVE_SIZE_REFLECTION tag. If it present, assume it is trivially copyable
+						// because we don't know its fields
+						ECS_ASSERT(type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION)));
 					}
 				}
 			}
@@ -1083,12 +1100,16 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	bool IsTriviallyCopyable(const Reflection::ReflectionManager* reflection_manager, Stream<char> definition)
+	bool IsTriviallyCopyable(
+		const Reflection::ReflectionManager* reflection_manager, 
+		Stream<char> definition,
+		Stream<Stream<char>> exceptions
+	)
 	{
 		ReflectionType type;
 		if (reflection_manager->TryGetType(definition, type)) {
 			// If we have the type, return its trivial status
-			return IsTriviallyCopyable(reflection_manager, &type);
+			return IsTriviallyCopyable(reflection_manager, &type, exceptions);
 		}
 		else {
 			// Might be another container type
@@ -1097,6 +1118,7 @@ namespace ECSEngine {
 				SerializeCustomTypeIsTriviallyCopyableData is_data;
 				is_data.definition = definition;
 				is_data.reflection_manager = reflection_manager;
+				is_data.exceptions = exceptions;
 				return ECS_SERIALIZE_CUSTOM_TYPES[container_index].is_trivially_copyable(&is_data);
 			}
 			else {
@@ -1117,6 +1139,12 @@ namespace ECSEngine {
 		}
 
 		if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
+			// Check exceptions
+			unsigned int exception_index = function::FindString(definition, exceptions);
+			if (exception_index != -1) {
+				return true;
+			}
+			
 			// Pointer or stream type
 			return false;
 		}

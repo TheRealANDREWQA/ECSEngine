@@ -14,16 +14,19 @@ namespace ECSEngine {
 
 		void* Allocate(size_t size, size_t alignment = 8);
 
-		template<bool trigger_error_if_not_found = true>
-		void Deallocate(const void* block);
-
 		// Deallocates all the "extra allocators" and keeps only the first one with no allocations
 		// After the function the allocator is as if there was no allocation made
 		void Clear();
 
 		void CreateAllocator(size_t size, size_t maximum_pool_count);
 
+		template<bool trigger_error_if_not_found = true>
+		void Deallocate(const void* block);
+		
 		void DeallocateAllocator(size_t index);
+
+		// Returns true if it did deallocate it
+		bool DeallocateIfBelongs(const void* block);
 
 		// Removes the allocators that have currently no allocations active
 		void Trim();
@@ -55,10 +58,13 @@ namespace ECSEngine {
 		
 		void* Allocate(size_t size, size_t alignment = 8);
 
+		void CreateAllocator(size_t size, size_t maximum_pool_count);
+
 		template<bool trigger_error_if_not_found = true>
 		void Deallocate(const void* block);
 
-		void CreateAllocator(size_t size, size_t maximum_pool_count);
+		// Returns true if it did deallocate it
+		bool DeallocateIfBelongs(const void* block);
 
 		void DeallocateAllocator(size_t index);
 

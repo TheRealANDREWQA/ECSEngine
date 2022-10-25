@@ -214,7 +214,7 @@ namespace ECSEngine {
 			unsigned int* delete_position
 		)
 		{
-			trigger_callback = true;
+			trigger_callback = TRIGGER_CALLBACK_MODIFY;
 
 			if (current_selection > current_sprite_position) {
 				*delete_position = current_sprite_position;
@@ -242,6 +242,7 @@ namespace ECSEngine {
 		void UIDrawerTextInput::Callback(ActionData* action_data)
 		{
 			action_data->data = callback_data;
+			action_data->additional_data = this;
 			callback(action_data);
 		}
 
@@ -251,7 +252,7 @@ namespace ECSEngine {
 		}
 
 		bool UIDrawerTextInput::Backspace(unsigned int* output_text_count, unsigned int* output_text_position, char* output_text) {
-			trigger_callback = true;
+			trigger_callback = TRIGGER_CALLBACK_MODIFY;
 			if (current_sprite_position == current_selection && current_sprite_position > 0) {
 				*output_text_count = 1;
 				*output_text_position = current_sprite_position;
@@ -346,7 +347,7 @@ namespace ECSEngine {
 
 		void UIDrawerTextInput::DeleteAllCharacters()
 		{
-			trigger_callback = true;
+			trigger_callback = TRIGGER_CALLBACK_MODIFY;
 
 			text->buffer[0] = '\0';
 			text->size = 0;
@@ -357,7 +358,7 @@ namespace ECSEngine {
 
 		void UIDrawerTextInput::InsertCharacters(const char* characters, unsigned int character_count, unsigned int character_position, UISystem* system)
 		{
-			trigger_callback = true;
+			trigger_callback = TRIGGER_CALLBACK_MODIFY;
 
 			if (character_count + text->size > text->capacity) {
 				character_count = text->capacity - text->size;
@@ -568,6 +569,48 @@ namespace ECSEngine {
 		// or untyped data)
 		unsigned int LabelHierarchyClickActionData::WriteLabel(const void* untyped_data) {
 			return UIDrawerLabelHierarchySetEmbeddedLabel(this, untyped_data);
+		}
+
+		unsigned int ActionWrapperWithCallbackData::WriteCallback(UIActionHandler handler) {
+			unsigned int write_size = sizeof(*this) + base_action_data_size;
+
+			user_callback = handler;
+			if (handler.data_size > 0) {
+				memcpy(function::OffsetPointer(this, write_size), handler.data, handler.data_size);
+				write_size += handler.data_size;
+			}
+
+			return write_size;
+		}
+
+		UIActionHandler ActionWrapperWithCallbackData::GetCallback() const {
+			UIActionHandler handler = user_callback;
+
+			if (user_callback.data_size > 0) {
+				handler.data = function::OffsetPointer(this, sizeof(*this) + base_action_data_size);
+			}
+			
+			return handler;
+		}
+
+		void* ActionWrapperWithCallbackData::GetBaseData() const {
+			if (base_action_data_size == 0) {
+				return base_action_data;
+			}
+			return function::OffsetPointer(this, sizeof(*this));
+		}
+
+		void ActionWrapperWithCallback(ActionData* action_data)
+		{
+			UI_UNPACK_ACTION_DATA;
+
+			ActionWrapperWithCallbackData* data = (ActionWrapperWithCallbackData*)_data;
+			action_data->data = data->GetBaseData();
+			data->base_action(action_data);
+
+			UIActionHandler handler = data->GetCallback();
+			action_data->data = handler.data;
+			handler.action(action_data);
 		}
 
 	}

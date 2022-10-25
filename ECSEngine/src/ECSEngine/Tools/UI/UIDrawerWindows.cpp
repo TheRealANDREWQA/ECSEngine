@@ -19,15 +19,15 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData* data = (UIParameterWindowReturnToDefaultButtonData*)_data;
 			if (data->is_system_theme) {
 				memcpy(data->system_descriptor, data->default_descriptor, data->descriptor_size);
-				if ((unsigned int)data->descriptor_index < (unsigned int)ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT) {
+				if (data->descriptor_index < ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COUNT) {
 					switch (data->descriptor_index) {
-					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME:
+					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME:
 						system->FinalizeColorTheme();
 						break;
-					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT:
+					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_LAYOUT:
 						system->FinalizeLayout();
 						break;
-					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT:
+					case ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT:
 						system->FinalizeElementDescriptor();
 						break;
 					}
@@ -57,7 +57,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.color_theme;
 			button_data.descriptor_size = sizeof(UIColorThemeDescriptor);
-			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_COLOR_THEME;
 			button_data.is_system_theme = false;
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##0", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -119,7 +119,7 @@ namespace ECSEngine {
 			UIParameterWindowReturnToDefaultButtonData button_data;
 			button_data.default_descriptor = &system->m_descriptors.element_descriptor;
 			button_data.descriptor_size = sizeof(UIElementDescriptor);
-			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_INDEX::ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT;
+			button_data.descriptor_index = ECS_UI_WINDOW_DRAWER_DESCRIPTOR_ELEMENT;
 			button_data.is_system_theme = false;
 			button_data.window_descriptor = descriptor;
 			drawer.Button("Default values##2", { WindowParameterReturnToDefaultButton, &button_data, sizeof(button_data) });
@@ -792,7 +792,7 @@ namespace ECSEngine {
 			UI_PREPARE_DRAWER(initialize);
 
 			UISystemDescriptors* descriptors = &drawer.GetSystem()->m_descriptors;
-			drawer.SetDrawMode(ECS_UI_DRAWER_MODE::ECS_UI_DRAWER_NEXT_ROW);
+			drawer.SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 
 			auto color_theme_lambda = [&]() {
 				SystemParametersColorTheme(drawer);

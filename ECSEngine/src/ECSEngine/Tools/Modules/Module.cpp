@@ -10,7 +10,7 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	bool IsModule(Stream<wchar_t> path)
+	bool FindModule(Stream<wchar_t> path)
 	{
 		auto module = LoadModule(path);
 		if (module.code == ECS_GET_MODULE_OK) {

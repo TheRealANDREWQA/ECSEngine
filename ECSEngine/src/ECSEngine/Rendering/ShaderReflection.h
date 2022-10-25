@@ -92,28 +92,38 @@ namespace ECSEngine {
 		ShaderReflection& operator = (const ShaderReflection& other) = default;
 
 		// Returns whether or not it succeded
-		bool ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool);
+		bool ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
-		bool ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool);;
+		bool ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
-		bool ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers, CapacityStream<char> name_pool);
+		bool ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
-		bool ReflectShaderBuffersSource(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, CapacityStream<char> name_pool);
+		bool ReflectShaderBuffersSource(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
-		bool ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, CapacityStream<char> name_pool);
+		bool ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const;
 
 		// Returns whether or not it succeded
-		bool ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, CapacityStream<char> name_pool);
+		bool ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const;
+
+		// Returns whether or not it succeeded. It only fills in the name of the macros defined in file. Set the pointer to
+		// nullptr if you are not interested in that type of macro.
+		// If the allocator is nullptr, then it will only reference the source code, it will not make an allocation
+		bool ReflectShaderMacros(
+			Stream<char> source_code, 
+			CapacityStream<Stream<char>>* defined_macros, 
+			CapacityStream<Stream<char>>* conditional_macros,
+			AllocatorPolymorphic allocator
+		) const;
 
 		// Returns whether or not it succeded
-		bool ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping);
+		bool ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping) const;
 
 		// Returns whether or not it succeded
-		bool ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping);
+		bool ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const;
 
 		// Returns the amount of bytes necessary to create an instance of this class
 		static size_t MemoryOf();

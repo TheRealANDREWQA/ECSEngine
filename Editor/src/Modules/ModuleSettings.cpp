@@ -22,7 +22,7 @@ size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, Stream<char>
 
 #define SEARCH_OPTIONS(settings_id, options_name, indices_name) ECS_STACK_CAPACITY_STREAM(char, suffix_stream, 256); \
 																ECS_STACK_CAPACITY_STREAM(unsigned int, indices_name, 64); \
-																Stream<char> settings_tag = MODULE_SETTINGS_REFLECT_TAG; \
+																UIReflectionDrawerTag settings_tag = { MODULE_SETTINGS_REFLECT_TAG, false }; \
 																\
 																suffix_stream.AddStreamSafe(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT); \
 																function::ConvertIntToChars(suffix_stream, settings_id); \
@@ -33,7 +33,7 @@ size_t SearchSetting(Stream<EditorModuleReflectedSetting> settings, Stream<char>
 																options_name.include_tags = { &settings_tag, 1 };
 
 #define SEARCH_OPTIONS_NO_SETTINGS(options_name, indices_name)  ECS_STACK_CAPACITY_STREAM(unsigned int, indices_name, 64); \
-																Stream<char> settings_tag = MODULE_SETTINGS_REFLECT_TAG; \
+																UIReflectionDrawerTag settings_tag = { MODULE_SETTINGS_REFLECT_TAG, false}; \
 																\
 																UIReflectionDrawerSearchOptions options_name; \
 																options_name.indices = &indices_name; \

@@ -172,7 +172,7 @@ void TickEvents(EditorState* editor_state) {
 // -----------------------------------------------------------------------------------------------------------------
 
 void TickLazyEvaluationCounters(EditorState* editor_state) {
-	size_t frame_difference = editor_state->lazy_evalution_timer.GetDurationSinceMarker_ms();
+	size_t frame_difference = editor_state->lazy_evalution_timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS);
 
 	for (size_t index = 0; index < EDITOR_LAZY_EVALUATION_COUNTERS_COUNT; index++) {
 		// Clamp the difference such that it won't wrapp arround

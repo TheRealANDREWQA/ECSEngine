@@ -37,7 +37,7 @@ namespace ECSEngine {
 			peek_storage(iterator, storage_type);
 		}
 
-		inline void Skip() {
+		inline void Has() {
 			skip(iterator);
 		}
 
@@ -84,7 +84,7 @@ namespace ECSEngine {
 		};
 
 		auto skip = [](void* iterator) {
-			((Type*)iterator)->Skip();
+			((Type*)iterator)->Has();
 		};
 
 		auto deallocate = [](void* iterator, const void* buffer) {
@@ -176,7 +176,7 @@ namespace ECSEngine {
 		}
 
 		// Skips the next node without visiting its children
-		void Skip() {
+		void Has() {
 			Node temp;
 			resizable_storage.Pop(temp);
 		}
@@ -280,7 +280,7 @@ namespace ECSEngine {
 		}
 
 		// Skips the next node, without visiting its children
-		void Skip() {
+		void Has() {
 			Node temp;
 			stack_frames.Pop(temp);
 		}

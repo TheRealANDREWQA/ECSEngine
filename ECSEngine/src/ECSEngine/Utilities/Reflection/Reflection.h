@@ -403,6 +403,9 @@ namespace ECSEngine {
 		// Determines all the buffers that the ECS runtime can use
 		ECSENGINE_API void GetReflectionTypeRuntimeBuffers(const ReflectionType* type, CapacityStream<ComponentBuffer>& component_buffers);
 
+		// Returns the byte size and the alignment for the field
+		ECSENGINE_API ulong2 GetReflectionTypeGivenFieldTag(const ReflectionField* field);
+
 		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;
 		}

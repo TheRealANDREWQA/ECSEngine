@@ -11,6 +11,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	size_t ResourceIdentifier::CopySize() const
+	{
+		return size;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ResourceIdentifier ResourceIdentifier::CopyTo(uintptr_t& ptr_to_copy) const
+	{
+		void* initial_ptr = (void*)ptr_to_copy;
+		memcpy(initial_ptr, ptr, size);
+		ptr_to_copy += size;
+		return { initial_ptr, size };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	ResourceIdentifier ResourceIdentifier::Copy(AllocatorPolymorphic allocator) const
 	{
 		void* allocation = Allocate(allocator, size);

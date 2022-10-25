@@ -749,6 +749,7 @@ namespace ECSEngine {
 			bool default_background = true;
 			bool default_border = true;
 			bool default_font = true;
+			bool center_horizontal_x = false;
 			bool2 offset_scale = {false, false}; // With this you can offset with the scale of the hoverable region
 			Color background_color = Color(0, 0, 0); // Uses default
 			Color border_color = Color(0, 0, 0); // Uses default
@@ -763,7 +764,25 @@ namespace ECSEngine {
 			unsigned int* previous_hoverable = nullptr;
 		};
 
+		// If the characters pointer is nullptr, it means that the data is relative
 		struct UITextTooltipHoverableData {
+			unsigned int Write(Stream<char> copy_characters) {
+				memcpy(function::OffsetPointer(this, sizeof(*this)), copy_characters.buffer, copy_characters.size * sizeof(char));
+				characters = { nullptr, copy_characters.size };
+				return sizeof(*this) + copy_characters.size * sizeof(char);
+			}
+
+			Stream<char> GetCharacters() const {
+				if (characters.buffer == nullptr) {
+					return { function::OffsetPointer(this, sizeof(*this)), characters.size };
+				}
+				return characters;
+			}
+
+			unsigned int WriteSize() const {
+				return characters.buffer != nullptr ? sizeof(*this) : sizeof(*this) + characters.size;
+			}
+
 			Stream<char> characters;
 			UITooltipBaseData base;
 		};
@@ -867,10 +886,15 @@ namespace ECSEngine {
 			// if it wraps around, it returns a copy to the deleted item, the action will be replaced with the pointer 
 			// to the data
 			HandlerCommand PushRevertCommand(const HandlerCommand& command);
+
 			bool PopRevertCommand(HandlerCommand& command);
+
 			bool PeekRevertCommand(HandlerCommand& command);
+
 			HandlerCommand* GetLastCommand();
+
 			void ChangeLastCommand(const HandlerCommand& command);
+
 			void ChangeCursor(ECS_CURSOR_TYPE cursor);
 
 			void* vertical_slider;

@@ -9,6 +9,12 @@
 
 namespace ECSEngine {
 
+	template<typename Value, typename Identifier>
+	struct TablePair {
+		Value value;
+		Identifier identifier;
+	};
+
 	/* Robin Hood hashing identifier hash table that stores in separate buffers keys and values. Keys are
 	* unsigned chars that have stored in the highest 5 bits the robin hood distance in order to not create an
 	* additional metadata buffer, not get an extra cache miss and use SIMD probing and in the other 3 bits the last bits of the hash key. 
@@ -579,7 +585,7 @@ namespace ECSEngine {
 
 		// It will set the internal hash buffers accordingly to the new hash buffer. It does not modify anything
 		// This function is used mostly for serialization, deserialization purposes
-		void SetBuffers(void* buffer, const unsigned int capacity) {
+		void SetBuffers(void* buffer, unsigned int capacity) {
 			unsigned int extended_capacity = capacity + 31;
 
 			uintptr_t ptr = (uintptr_t)buffer;
@@ -720,6 +726,7 @@ namespace ECSEngine {
 	template<typename T>
 	using HashTableDefault = HashTable<T, ResourceIdentifier, HashFunctionPowerOfTwo>;
 
+	// The identifier 
 	template<typename Table>
 	void HashTableCopyIdentifiers(const Table& source, Table& destination, AllocatorPolymorphic allocator) {
 		source.ForEachIndexConst([&](unsigned int index) {
@@ -748,4 +755,93 @@ namespace ECSEngine {
 		Deallocate(allocator, source.GetAllocatedBuffer());
 	}
 
+	// Both the Value and the Identifier need to have the functions for single allocations
+	// size_t CopySize() const;
+	// Type CopyTo(uintptr_t& ptr) const;
+	// For multiple allocations only the Type Copy(AllocatorPolymorphic) const; function is needed
+	template<typename Table>
+	void HashTableDeepCopy(const Table& source, Table& destination, AllocatorPolymorphic allocator, bool single_allocation) {	
+		size_t table_copy_size = source.MemoryOf(source.GetCapacity());
+
+		if (single_allocation) {
+			size_t total_size = table_copy_size;
+			source.ForEachConst([&](const auto& value, const auto& identifier) {
+				total_size += value.CopySize();
+				total_size += identifier.CopySize();
+			});
+
+			void* allocation = Allocate(allocator, total_size);
+			memcpy(allocation, source.GetAllocatedBuffer(), table_copy_size);
+			destination.SetBuffers(allocation, source.GetCapacity());
+			allocation = function::OffsetPointer(allocation, table_copy_size);
+			uintptr_t ptr = (uintptr_t)allocation;
+			source.ForEachIndexConst([&](unsigned int index) {
+				const auto* value = source.GetValuePtrFromIndex(index);
+				auto* copy_value = destination.GetValuePtrFromIndex(index);
+				*copy_value = value->CopyTo(ptr);
+
+				const auto* identifier = source.GetIdentifierPtrFromIndex(index);
+				auto* copy_identifier = destination.GetIdentifierPtrFromIndex(index);
+				*copy_identifier = identifier->CopyTo(ptr);
+
+				return false;
+			});
+		}
+		else {
+			void* allocation = Allocate(allocator, table_copy_size);
+			memcpy(allocation, source.GetAllocatedBuffer(), table_copy_size);
+			destination.SetBuffers(allocation, source.GetCapacity());
+
+			source.ForEachIndexConst([&](unsigned int index) {
+				const auto* value = source.GetValuePtrFromIndex(index);
+				auto* copy_value = destination.GetValuePtrFromIndex(index);
+				*copy_value = value->Copy(allocator);
+
+				const auto* identifier = source.GetIdentifierPtrFromIndex(index);
+				auto* copy_identifier = destination.GetIdentifierPtrFromIndex(index);
+				*copy_identifier = identifier->Copy(allocator);
+
+				return false;
+			});
+		}
+	}
+
+	// Same constraints as HashTableDeepCopy
+	// Both the Value and the Identifier need to have the functions for single allocations
+	// size_t CopySize() const;
+	// Type CopyTo(uintptr_t& ptr) const;
+	// For multiple allocations only the Type Copy(AllocatorPolymorphic) const; function is needed
+	/*template<typename Table>
+	Stream<TablePair<Table::T, Table::Identifier>> HashTableDeepCopyToStream(const Table& table, AllocatorPolymorphic allocator, bool single_allocation) {
+		Stream<TablePair<Table::T, Table::Identifier>> result; 
+
+		size_t stream_size = result.MemoryOf(table.m_size);
+
+		if (single_allocation) {
+			size_t total_size = stream_size;
+			table.ForEachConst([&](const auto& value, const auto& identifier) {
+				total_size += value.CopySize();
+				total_size += identifier.CopySize();
+			});
+
+			void* allocation = Allocate(allocator, total_size);
+			uintptr_t ptr = (uintptr_t)allocation;
+			result.InitializeFromBuffer(ptr, table.m_size);
+			result.size = 0;
+
+			table.ForEachConst([&](const auto& value, const auto& identifier) {
+				result.Add({ value.CopyTo(ptr), identifier.CopyTo(ptr) });
+			});
+		}
+		else {
+			void* allocation = Allocate(allocator, stream_size);
+			result.InitializeFromBuffer(allocation, 0);
+
+			table.ForEachConst([&](const auto& value, const auto& identifier) {
+				result.Add({ value.Copy(allocator), identifier.Copy(allocator) });
+			});
+		}
+
+		return result;
+	}*/
 }

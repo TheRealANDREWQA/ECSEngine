@@ -49,7 +49,7 @@ namespace ECSEngine {
 
 			unsigned int handle = first_empty_slot;
 			// Update the new head
-			first_empty_slot = next_empty_slot - capacity;
+			first_empty_slot = next_empty_slot == -1 ? -1 : next_empty_slot - capacity;
 			size++;
 			
 			return handle;
@@ -404,9 +404,11 @@ namespace ECSEngine {
 					new_indirection_buffer[head].x += new_capacity;
 					head = next_link;
 				}
-
-				// Point the last element to the starting of the new capacity
-				new_indirection_buffer[last_link].x = set.capacity + new_capacity;
+				
+				if (last_link != -1) {
+					// Point the last element to the starting of the new capacity
+					new_indirection_buffer[last_link].x = set.capacity + new_capacity;
+				}
 				// For all the other values, just set the link to the increment position
 				for (unsigned int index = set.capacity; index < new_capacity - 1; index++) {
 					new_indirection_buffer[index].x = index + new_capacity + 1;
@@ -416,7 +418,7 @@ namespace ECSEngine {
 			else {
 				// If the size is 0, we need to set the links appropriately
 				for (unsigned int index = 0; index < new_capacity - 1; index++) {
-					new_indirection_buffer[index].x = index + 1;
+					new_indirection_buffer[index].x = index + new_capacity + 1;
 				}
 				new_indirection_buffer[new_capacity - 1].x = -1;
 			}

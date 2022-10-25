@@ -50,6 +50,9 @@ namespace ECSEngine {
 		ECS_SHADER_TYPE_COUNT
 	};
 
+#define ECS_SHADER_EXTENSION L".hlsl"
+#define ECS_SHADER_INCLUDE_EXTENSION L".hlsli"
+
 	// At the moment, map the values directly to their DXGI equivalents for "fast" retrieval
 	enum ECS_GRAPHICS_FORMAT {
 		ECS_GRAPHICS_FORMAT_UNKNOWN = DXGI_FORMAT_UNKNOWN,
@@ -324,8 +327,8 @@ namespace ECSEngine {
 		ECS_SHADER_COMPILE_FLAGS compile_flags = ECS_SHADER_COMPILE_NONE;
 	};
 	
-	using GraphicsContext = ID3D11DeviceContext;
-	using GraphicsDevice = ID3D11Device;
+	typedef ID3D11DeviceContext GraphicsContext;
+	typedef ID3D11Device GraphicsDevice;
 
 	struct ECSENGINE_API VertexBuffer {
 		ECS_INLINE VertexBuffer() : buffer(nullptr), stride(0), size(0) {}

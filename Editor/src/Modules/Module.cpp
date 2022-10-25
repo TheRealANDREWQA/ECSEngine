@@ -1025,14 +1025,19 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			EditorSetConsoleWarn(console_message);
 		}
 		else {
-			unsigned int types_created = editor_state->module_reflection->CreateTypesForHierarchy(folder_hierarchy);
+			// Don't create the UI types here for components because they might contain references to assets and fail
+			UIReflectionDrawerTag component_tags[] = {
+				{ ECS_COMPONENT_TAG, false },
+				{ ECS_SHARED_COMPONENT_TAG, false },
+				{ ECS_LINK_COMPONENT_TAG, true }
+			};
+			ECS_STACK_CAPACITY_STREAM(unsigned int, type_indices, 512);
+			UIReflectionDrawerSearchOptions search_options;
+			search_options.exclude_tags = { component_tags, std::size(component_tags) };
+			search_options.indices = &type_indices;
+			unsigned int types_created = editor_state->module_reflection->CreateTypesForHierarchy(folder_hierarchy, search_options);
 
 			// Convert all stream types to resizable
-			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, type_indices, types_created);
-			UIReflectionDrawerSearchOptions options;
-			options.indices = &type_indices;
-			editor_state->module_reflection->GetHierarchyTypes(folder_hierarchy, options);
-
 			for (unsigned int index = 0; index < type_indices.size; index++) {
 				UIReflectionType* type = editor_state->module_reflection->GetTypePtr(type_indices[index]);
 				editor_state->module_reflection->ConvertTypeStreamsToResizable(type);
@@ -1097,7 +1102,7 @@ bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_
 {
 	ECS_TEMP_STRING(library_path, 256);
 	GetModulePath(editor_state, library_name, configuration, library_path);
-	return IsModule(library_path);
+	return FindModule(library_path);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

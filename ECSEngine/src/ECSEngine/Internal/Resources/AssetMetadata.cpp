@@ -18,6 +18,35 @@ namespace ECSEngine {
 		STRING(ECS_MISC_HANDLE)
 	};
 
+	size_t ECS_ASSET_METADATA_MACROS_SIZE() {
+		return std::size(ECS_ASSET_METADATA_MACROS);
+	}
+
+	AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[] = {
+		{ STRING(CoallescedMesh), ECS_ASSET_MESH },
+		{ STRING(ResourceView), ECS_ASSET_TEXTURE },
+		{ STRING(SamplerState), ECS_ASSET_GPU_SAMPLER },
+		{ STRING(VertexShader), ECS_ASSET_SHADER },
+		{ STRING(PixelShader), ECS_ASSET_SHADER },
+		{ STRING(ComputeShader), ECS_ASSET_SHADER },
+		{ STRING(Material), ECS_ASSET_MATERIAL },
+		{ STRING(Stream<void>), ECS_ASSET_MISC }
+	};
+
+	size_t ECS_ASSET_TARGET_FIELD_NAMES_SIZE()
+	{
+		return std::size(ECS_ASSET_TARGET_FIELD_NAMES);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool AssetHasFile(ECS_ASSET_TYPE type)
+	{
+		return type == ECS_ASSET_MESH || type == ECS_ASSET_TEXTURE || type == ECS_ASSET_SHADER || type == ECS_ASSET_MISC;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string) {
 		size_t count = sizeof(ECS_ASSET_METADATA_MACROS) / sizeof(Stream<char>);
 		for (size_t index = 0; index < count; index++) {
@@ -27,7 +56,39 @@ namespace ECSEngine {
 		}
 		return ECS_ASSET_TYPE_COUNT;
 	}
-	
+
+	// ------------------------------------------------------------------------------------------------------
+
+	ECS_ASSET_TYPE FindAssetTargetField(Stream<char> string)
+	{
+		size_t count = sizeof(ECS_ASSET_TARGET_FIELD_NAMES) / sizeof(AssetFieldTarget);
+		for (size_t index = 0; index < count; index++) {
+			if (string.size == ECS_ASSET_TARGET_FIELD_NAMES[index].name.size &&
+				memcmp(string.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.size) == 0) {
+				return ECS_ASSET_TARGET_FIELD_NAMES[index].asset_type;
+			}
+		}
+		return ECS_ASSET_TYPE_COUNT;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	const char* ECS_ASSET_TYPE_CONVERSION[] = {
+		"Mesh",
+		"Texture",
+		"GPUSampler",
+		"Shader",
+		"Material",
+		"Misc"
+	};
+
+	static_assert(std::size(ECS_ASSET_TYPE_CONVERSION) == ECS_ASSET_TYPE_COUNT);
+
+	const char* ConvertAssetTypeString(ECS_ASSET_TYPE type)
+	{
+		return ECS_ASSET_TYPE_CONVERSION[type];
+	}
+
 	// ------------------------------------------------------------------------------------------------------
 
 	// Meant to be used only with an increment of 1 for the new counts
@@ -201,7 +262,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::AddMacro(const char* name, const char* definition, AllocatorPolymorphic allocator)
+	void ShaderMetadata::AddMacro(Stream<char> name, Stream<char> definition, AllocatorPolymorphic allocator)
 	{
 		// Copy the string pointers to a temporary stack such that the memory can be freed first and then
 		// reallocated
@@ -290,7 +351,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::RemoveMacro(size_t index, AllocatorPolymorphic allocator)
+	void ShaderMetadata::RemoveMacro(unsigned int index, AllocatorPolymorphic allocator)
 	{
 		DeallocateEx(allocator, (void*)macros[index].name);
 		DeallocateEx(allocator, (void*)macros[index].definition);
@@ -304,16 +365,16 @@ namespace ECSEngine {
 		memcpy(macros.buffer, temp_macros, sizeof(ShaderMacro) * macros.size);
 	}
 
-	void ShaderMetadata::RemoveMacro(const char* name, AllocatorPolymorphic allocator)
+	void ShaderMetadata::RemoveMacro(Stream<char> name, AllocatorPolymorphic allocator)
 	{
-		size_t index = SearchMacro(name);
+		unsigned int index = FindMacro(name);
 		ECS_ASSERT(index != -1);
 		RemoveMacro(index, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::UpdateMacro(size_t index, const char* new_definition, AllocatorPolymorphic allocator)
+	void ShaderMetadata::UpdateMacro(unsigned int index, Stream<char> new_definition, AllocatorPolymorphic allocator)
 	{
 		DeallocateEx(allocator, (void*)macros[index].definition);
 		macros[index].definition = function::StringCopy(allocator, new_definition).buffer;
@@ -321,16 +382,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void ShaderMetadata::UpdateMacro(const char* name, const char* new_definition, AllocatorPolymorphic allocator)
+	void ShaderMetadata::UpdateMacro(Stream<char> name, Stream<char> new_definition, AllocatorPolymorphic allocator)
 	{
-		size_t index = SearchMacro(name);
+		unsigned int index = FindMacro(name);
 		ECS_ASSERT(index != -1);
 		UpdateMacro(index, new_definition, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	size_t ShaderMetadata::SearchMacro(const char* name) const
+	unsigned int ShaderMetadata::FindMacro(Stream<char> name) const
 	{
 		for (size_t index = 0; index < macros.size; index++) {
 			if (function::CompareStrings(macros[index].name, name)) {
@@ -478,24 +539,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	const char* ECS_ASSET_TYPE_CONVERSION[] = {
-		"Mesh",
-		"Texture",
-		"GPUSampler",
-		"Shader",
-		"Material",
-		"Misc"
-	};
-
-	static_assert(std::size(ECS_ASSET_TYPE_CONVERSION) == ECS_ASSET_TYPE_COUNT);
-
-	const char* ConvertAssetTypeString(ECS_ASSET_TYPE type)
-	{
-		return ECS_ASSET_TYPE_CONVERSION[type];
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
 	void DeallocateAssetBase(const void* asset, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
 	{
 		switch (type) {
@@ -564,6 +607,12 @@ namespace ECSEngine {
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	Stream<char> GetAssetName(const void* asset, ECS_ASSET_TYPE type) {
+		return *(Stream<char>*)asset;
 	}
 
 	// ------------------------------------------------------------------------------------------------------

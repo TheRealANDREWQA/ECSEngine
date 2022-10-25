@@ -49,7 +49,7 @@ namespace ECSEngine {
 			ECS_UI_WINDOW_DEPENDENT_BOTH
 		};
 
-		struct ECSENGINE_API UIConfigAbsoluteTransform {
+		struct UIConfigAbsoluteTransform {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_ABSOLUTE_TRANSFORM;
 			}
@@ -58,7 +58,7 @@ namespace ECSEngine {
 			float2 scale;
 		};
 
-		struct ECSENGINE_API UIConfigRelativeTransform {
+		struct UIConfigRelativeTransform {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_RELATIVE_TRANSFORM;
 			}
@@ -67,7 +67,7 @@ namespace ECSEngine {
 			float2 scale = { 1.0f, 1.0f };
 		};
 
-		struct ECSENGINE_API UIConfigWindowDependentSize {
+		struct UIConfigWindowDependentSize {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_WINDOW_DEPENDENT_SIZE;
 			}
@@ -77,7 +77,7 @@ namespace ECSEngine {
 			float2 scale_factor = { 1.0f, 1.0f };
 		};
 
-		struct ECSENGINE_API UIConfigTextParameters {
+		struct UIConfigTextParameters {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_PARAMETERS;
 			}
@@ -87,7 +87,7 @@ namespace ECSEngine {
 			float character_spacing = ECS_TOOLS_UI_FONT_CHARACTER_SPACING;
 		};
 
-		struct ECSENGINE_API UIConfigTextAlignment {
+		struct UIConfigTextAlignment {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_ALIGNMENT;
 			}
@@ -96,7 +96,7 @@ namespace ECSEngine {
 			ECS_UI_ALIGN vertical = ECS_UI_ALIGN_MIDDLE;
 		};
 
-		struct ECSENGINE_API UIConfigColor {
+		struct UIConfigColor {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR;
 			}
@@ -104,7 +104,7 @@ namespace ECSEngine {
 			Color color = ECS_TOOLS_UI_THEME_COLOR;
 		};
 
-		struct ECSENGINE_API UIConfigDoNotAdvance {
+		struct UIConfigDoNotAdvance {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_DO_NOT_ADVANCE;
 			}
@@ -114,7 +114,7 @@ namespace ECSEngine {
 			bool handle_draw_mode = true;
 		};
 
-		struct ECSENGINE_API UIConfigButtonHoverable {
+		struct UIConfigButtonHoverable {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_BUTTON_HOVERABLE;
 			}
@@ -122,7 +122,7 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
-		struct ECSENGINE_API UIConfigSliderColor {
+		struct UIConfigSliderColor {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_COLOR;
 			}
@@ -130,7 +130,7 @@ namespace ECSEngine {
 			Color color = ToneColor(ECS_TOOLS_UI_THEME_COLOR, ECS_TOOLS_UI_SLIDER_LIGHTEN_FACTOR);
 		};
 
-		struct ECSENGINE_API UIConfigSliderShrink {
+		struct UIConfigSliderShrink {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_SHRINK;
 			}
@@ -138,7 +138,7 @@ namespace ECSEngine {
 			float2 value = { ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_X, ECS_TOOLS_UI_SLIDER_SHRINK_FACTOR_Y };
 		};
 
-		struct ECSENGINE_API UIConfigSliderPadding {
+		struct UIConfigSliderPadding {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_PADDING;
 			}
@@ -146,7 +146,7 @@ namespace ECSEngine {
 			float value = ECS_TOOLS_UI_LABEL_HORIZONTAL_PADD;
 		};
 
-		struct ECSENGINE_API UIConfigSliderLength {
+		struct UIConfigSliderLength {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_LENGTH;
 			}
@@ -154,14 +154,15 @@ namespace ECSEngine {
 			float value = ECS_TOOLS_UI_SLIDER_LENGTH_X;
 		};
 
-		struct ECSENGINE_API UIConfigBorder {
+		struct UIConfigBorder {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_BORDER;
 			}
 
-			bool is_interior = false;
 			Color color;
 			float thickness = ECS_TOOLS_UI_DOCKSPACE_BORDER_SIZE;
+			bool is_interior = false;
+			ECS_UI_DRAW_PHASE draw_phase = ECS_UI_DRAW_LATE;
 		};
 
 		struct ECSENGINE_API UIDrawerTextElement {
@@ -274,7 +275,7 @@ namespace ECSEngine {
 
 		ECSENGINE_API UIDrawerSliderFunctions UIDrawerGetDoubleSliderFunctions(unsigned int& precision);
 
-		struct ECSENGINE_API UIConfigTextInputHint {
+		struct UIConfigTextInputHint {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_INPUT_HINT;
 			}
@@ -282,16 +283,17 @@ namespace ECSEngine {
 			const char* characters;
 		};
 
-		struct ECSENGINE_API UIConfigTextInputCallback {
+		struct UIConfigTextInputCallback {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_TEXT_INPUT_CALLBACK;
 			}
 
 			UIActionHandler handler;
 			bool copy_on_initialization = false;
+			bool trigger_only_on_release = false;
 		};
 
-		struct ECSENGINE_API UIConfigSliderChangedValueCallback {
+		struct UIConfigSliderChangedValueCallback {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 			}
@@ -300,7 +302,7 @@ namespace ECSEngine {
 			bool copy_on_initialization = false;
 		};
 
-		struct ECSENGINE_API UIConfigHoverableAction {
+		struct UIConfigHoverableAction {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_HOVERABLE_ACTION;
 			}
@@ -308,7 +310,7 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
-		struct ECSENGINE_API UIConfigClickableAction {
+		struct UIConfigClickableAction {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_CLICKABLE_ACTION;
 			}
@@ -316,7 +318,7 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
-		struct ECSENGINE_API UIConfigGeneralAction {
+		struct UIConfigGeneralAction {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_GENERAL_ACTION;
 			}
@@ -324,7 +326,7 @@ namespace ECSEngine {
 			UIActionHandler handler;
 		};
 
-		struct ECSENGINE_API UIConfigRectangleVertexColor {
+		struct UIConfigRectangleVertexColor {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_VERTEX_COLOR;
 			}
@@ -332,7 +334,7 @@ namespace ECSEngine {
 			Color colors[4];
 		};
 
-		struct ECSENGINE_API UIConfigSpriteGradient {
+		struct UIConfigSpriteGradient {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_SPRITE_GRADIENT;
 			}
@@ -510,7 +512,7 @@ namespace ECSEngine {
 		};
 
 		// if using this for list, override closed uvs
-		struct ECSENGINE_API UIConfigHierarchySpriteTexture {
+		struct UIConfigHierarchySpriteTexture {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_SPRITE_TEXTURE;
 			}
@@ -525,7 +527,7 @@ namespace ECSEngine {
 			bool keep_triangle = false;
 		};
 
-		struct ECSENGINE_API UIConfigHierarchyNoAction {
+		struct UIConfigHierarchyNoAction {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_NO_ACTION_NO_NAME;
 			}
@@ -534,7 +536,7 @@ namespace ECSEngine {
 			float row_y_scale;
 		};
 
-		struct ECSENGINE_API UIConfigHierarchyChild {
+		struct UIConfigHierarchyChild {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_CHILD;
 			}
@@ -544,7 +546,7 @@ namespace ECSEngine {
 
 		// The callback receives the hierarchy into additional data parameter
 		// Pointer or callback can miss
-		struct ECSENGINE_API UIConfigHierarchySelectable {
+		struct UIConfigHierarchySelectable {
 			static inline size_t GetAssociatedBit() {
 				return UI_CONFIG_HIERARCHY_SELECTABLE;
 			}
@@ -619,7 +621,7 @@ namespace ECSEngine {
 			float2 inverse_zoom;
 		};
 
-		struct ECSENGINE_API UIConfigGraphKeepResolutionX {
+		struct UIConfigGraphKeepResolutionX {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_KEEP_RESOLUTION_X;
 			}
@@ -628,7 +630,7 @@ namespace ECSEngine {
 			float min_y_scale = 0.2f;
 		};
 
-		struct ECSENGINE_API UIConfigGraphKeepResolutionY {
+		struct UIConfigGraphKeepResolutionY {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_KEEP_RESOLUTION_Y;
 			}
@@ -637,7 +639,7 @@ namespace ECSEngine {
 			float min_x_scale = 0.2f;
 		};
 
-		struct ECSENGINE_API UIConfigGraphColor {
+		struct UIConfigGraphColor {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_DROP_COLOR;
 			}
@@ -645,7 +647,7 @@ namespace ECSEngine {
 			Color color;
 		};
 
-		struct ECSENGINE_API UIConfigHistogramColor {
+		struct UIConfigHistogramColor {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_HISTOGRAM_COLOR;
 			}
@@ -660,7 +662,7 @@ namespace ECSEngine {
 			float2 graph_scale;
 		};
 
-		struct ECSENGINE_API UIConfigGraphMinY {
+		struct UIConfigGraphMinY {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_MIN_Y;
 			}
@@ -668,7 +670,7 @@ namespace ECSEngine {
 			float value;
 		};
 
-		struct ECSENGINE_API UIConfigGraphMaxY {
+		struct UIConfigGraphMaxY {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_MAX_Y;
 			}
@@ -676,7 +678,7 @@ namespace ECSEngine {
 			float value;
 		};
 
-		struct ECSENGINE_API UIConfigGraphTags {
+		struct UIConfigGraphTags {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GRAPH_TAGS;
 			}
@@ -718,7 +720,7 @@ namespace ECSEngine {
 			// ----------------------------------- Reserved -----------------------------
 		};
 
-		struct ECSENGINE_API UIDrawerMenu {
+		struct UIDrawerMenu {
 			inline bool IsTheSameData(const UIDrawerMenu* other) const {
 				return other != nullptr && name == other->name;
 			}
@@ -775,7 +777,7 @@ namespace ECSEngine {
 		};
 
 
-		struct ECSENGINE_API UIDrawerSubmenuHoverable {
+		struct UIDrawerSubmenuHoverable {
 			inline bool IsTheSameData(const UIDrawerSubmenuHoverable* other) const {
 				return other != nullptr && draw_data.GetState() == other->draw_data.GetState() && row_index == other->row_index;
 			}
@@ -804,7 +806,7 @@ namespace ECSEngine {
 		using UIDrawerMultiGraphSample6 = UIDrawerMultiGraphSample<6>;
 		using UIDrawerMultiGraphSample7 = UIDrawerMultiGraphSample<7>;
 
-		struct ECSENGINE_API UIConfigColorInputCallback {
+		struct UIConfigColorInputCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR_INPUT_CALLBACK;
 			}
@@ -812,7 +814,7 @@ namespace ECSEngine {
 			UIActionHandler callback;
 		};
 
-		struct ECSENGINE_API UIConfigColorFloatCallback {
+		struct UIConfigColorFloatCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_COLOR_FLOAT_CALLBACK;
 			}
@@ -839,7 +841,7 @@ namespace ECSEngine {
 			unsigned int descriptor_size;
 		};
 
-		struct ECSENGINE_API UIConfigToolTip {
+		struct UIConfigToolTip {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_RECTANGLE_TOOL_TIP;
 			}
@@ -897,7 +899,7 @@ namespace ECSEngine {
 			size_t general_count;
 		};
 
-		struct ECSENGINE_API UIConfigStateTableNotify {
+		struct UIConfigStateTableNotify {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_STATE_TABLE_NOTIFY_ON_CHANGE;
 			}
@@ -912,7 +914,7 @@ namespace ECSEngine {
 			bool* state;
 		};
 
-		struct ECSENGINE_API UIConfigComboBoxPrefix {
+		struct UIConfigComboBoxPrefix {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_COMBO_BOX_PREFIX;
 			}
@@ -925,7 +927,7 @@ namespace ECSEngine {
 			unsigned char activation_count;
 		};
 
-		struct ECSENGINE_API UIConfigFilesystemHierarchyHashTableCapacity {
+		struct UIConfigFilesystemHierarchyHashTableCapacity {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_FILESYSTEM_HIERARCHY_HASH_TABLE_CAPACITY;
 			}
@@ -944,7 +946,7 @@ namespace ECSEngine {
 			void* right_click_callback_data;
 		};
 
-		struct ECSENGINE_API UIConfigLabelHierarchySpriteTexture {
+		struct UIConfigLabelHierarchySpriteTexture {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_SPRITE_TEXTURE;
 			}
@@ -965,7 +967,7 @@ namespace ECSEngine {
 
 		// The callback receives the label char* in the additional action data member; if copy_on_initialization is set,
 		//  then the data parameter will be copied only in the initializer pass
-		struct ECSENGINE_API UIConfigLabelHierarchySelectableCallback {
+		struct UIConfigLabelHierarchySelectableCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_SELECTABLE_CALLBACK;
 			}
@@ -982,7 +984,7 @@ namespace ECSEngine {
 		// The callback must cast to UIDrawerLabelHierarchyRightClickData the _data pointer in order to get access to the 
 		// label stream; if copy_on_initialization is set, then the data parameter will be copied only in the initializer
 		// pass
-		struct ECSENGINE_API UIConfigLabelHierarchyRightClick {
+		struct UIConfigLabelHierarchyRightClick {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_RIGHT_CLICK;
 			}
@@ -996,7 +998,7 @@ namespace ECSEngine {
 
 		typedef UIConfigLabelHierarchyRightClick UIConfigFilesystemHierarchyRightClick;
 
-		struct ECSENGINE_API UIConfigLabelHierarchyDragCallback {
+		struct UIConfigLabelHierarchyDragCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_DRAG_LABEL;
 			}
@@ -1009,7 +1011,7 @@ namespace ECSEngine {
 			bool reject_same_label_drag = true;
 		};
 
-		struct ECSENGINE_API UIConfigLabelHierarchyRenameCallback {
+		struct UIConfigLabelHierarchyRenameCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_RENAME_LABEL;
 			}
@@ -1022,7 +1024,7 @@ namespace ECSEngine {
 		};
 
 		// Needs to take as data parameter a UIDrawerLabelHierarchyDoubleClickData
-		struct ECSENGINE_API UIConfigLabelHierarchyDoubleClickCallback {
+		struct UIConfigLabelHierarchyDoubleClickCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_LABEL_HIERARCHY_DOUBLE_CLICK_ACTION;
 			}
@@ -1053,20 +1055,22 @@ namespace ECSEngine {
 			UIActionHandler delete_handler = { nullptr };
 		};
 
-		struct ECSENGINE_API UIConfigMenuButtonSprite {
+		// One of the texture or resource view must be specified
+		struct UIConfigMenuButtonSprite {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_MENU_BUTTON_SPRITE;
 			}
 
-			Stream<wchar_t> texture;
+			Stream<wchar_t> texture = { nullptr, 0 };
+			ResourceView resource_view = nullptr;
 			float2 top_left_uv = { 0.0f, 0.0f };
 			float2 bottom_right_uv = { 1.0f, 1.0f };
 			Color color = ECS_COLOR_WHITE;
 		};
 
-		using UIConfigMenuSprite = UIConfigMenuButtonSprite;
+		typedef UIConfigMenuButtonSprite UIConfigMenuSprite;
 
-		struct ECSENGINE_API UIConfigActiveState {
+		struct UIConfigActiveState {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_ACTIVE_STATE;
 			}
@@ -1159,10 +1163,10 @@ namespace ECSEngine {
 			size_t count;
 			Stream<char> group_name;
 			Stream<char>* names;
-			float** ECS_RESTRICT values;
-			const float* ECS_RESTRICT default_values;
-			const float* ECS_RESTRICT lower_bound;
-			const float* ECS_RESTRICT upper_bound;
+			float** values;
+			const float* default_values;
+			const float* lower_bound;
+			const float* upper_bound;
 		};
 
 		struct UIDrawerInitializeDoubleInputGroup {
@@ -1170,10 +1174,10 @@ namespace ECSEngine {
 			size_t count;
 			Stream<char> group_name;
 			Stream<char>* names;
-			double** ECS_RESTRICT values;
-			const double* ECS_RESTRICT default_values;
-			const double* ECS_RESTRICT lower_bound;
-			const double* ECS_RESTRICT upper_bound;
+			double** values;
+			const double* default_values;
+			const double* lower_bound;
+			const double* upper_bound;
 		};
 
 		template<typename Integer>
@@ -1182,10 +1186,10 @@ namespace ECSEngine {
 			size_t count;
 			Stream<char> group_name;
 			Stream<char>* names;
-			Integer** ECS_RESTRICT values;
-			const Integer* ECS_RESTRICT default_values;
-			const Integer* ECS_RESTRICT lower_bound;
-			const Integer* ECS_RESTRICT upper_bound;
+			Integer** values;
+			const Integer* default_values;
+			const Integer* lower_bound;
+			const Integer* upper_bound;
 		};
 
 		struct UIDrawerInitializeSlider {
@@ -1261,7 +1265,7 @@ namespace ECSEngine {
 			Stream<UIDrawerTextElement> labels;
 		};
 
-		struct ECSENGINE_API UIConfigCollapsingHeaderSelection {
+		struct UIConfigCollapsingHeaderSelection {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_COLLAPSING_HEADER_SELECTION;
 			}
@@ -1313,7 +1317,7 @@ namespace ECSEngine {
 		};
 
 		// There can be at max 6 buttons
-		struct ECSENGINE_API UIConfigCollapsingHeaderButtons {
+		struct UIConfigCollapsingHeaderButtons {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_COLLAPSING_HEADER_BUTTONS;
 			}
@@ -1321,7 +1325,7 @@ namespace ECSEngine {
 			Stream<UIConfigCollapsingHeaderButton> buttons;
 		};
 
-		struct ECSENGINE_API UIConfigGetTransform {
+		struct UIConfigGetTransform {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_GET_TRANSFORM;
 			}
@@ -1331,13 +1335,26 @@ namespace ECSEngine {
 		};
 
 		// Phase will always be UIDrawPhase::System
-		struct ECSENGINE_API UIConfigComboBoxCallback {
+		struct UIConfigComboBoxCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_COMBO_BOX_CALLBACK;
 			}
 
 			UIActionHandler handler;
 			bool copy_on_initialization = false;
+		};
+
+		// The mapping can be any arbitrary blittable type
+		// The mapping values will be written into the given pointer instead of the normal indices
+		// If the stable bool is true, then it will reference the given mapping instead of copying it
+		struct UIConfigComboBoxMapping {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_COMBO_BOX_MAPPING;
+			}
+
+			bool stable = false;
+			unsigned short byte_size;
+			void* mappings;
 		};
 
 		struct UIDrawerInitializeArrayElementData {
@@ -1351,6 +1368,7 @@ namespace ECSEngine {
 			bool drag_is_released;
 			ECS_UI_DRAW_PHASE add_callback_phase;
 			ECS_UI_DRAW_PHASE remove_callback_phase;
+			ECS_UI_DRAW_PHASE remove_anywhere_callback_phase;
 			unsigned int drag_index;
 			float drag_current_position;
 			float row_y_scale;
@@ -1359,6 +1377,9 @@ namespace ECSEngine {
 			void* add_callback_data;
 			Action remove_callback;
 			void* remove_callback_data;
+			Action remove_anywhere_callback;
+			void* remove_anywhere_callback_data;
+			unsigned int remove_anywhere_index;
 		};
 
 		struct UIDrawerArrayDrawData {
@@ -1376,33 +1397,11 @@ namespace ECSEngine {
 			ColorFloat default_color;
 		};
 
-		struct UIConfigArrayProvideNameActionData {
-			char** name;
-			unsigned int index;
-		};
-
-		// The names must be unique for the window
-		// All fields are optional - at least one must be filled
-		// The action receives the data it wants in _data and a UIConfigArrayProvideNameActionData to
-		// retrieve the index from. It will default to Element + index
-		// for elements that are outside the boundary of the capacity
-		struct ECSENGINE_API UIConfigArrayProvideNames {
-			inline static size_t GetAssociatedBit() {
-				return UI_CONFIG_ARRAY_PROVIDE_NAMES;
-			}
-
-			Stream<const char*> char_names = { nullptr, 0 };
-			Stream<Stream<char>> stream_names = { nullptr, 0 };
-			Action select_name_action = nullptr;
-			void* select_name_action_data = nullptr;
-			unsigned int select_name_action_capacity = 0;
-		};
-
 		// In the additional data field it will receive a pointer to
 		// UIDrawerArrayAddRemoveData* and can use it to do initialization 
 		// of new elements or some other tasks. In the UIDrawerArrayAddRemoveData* the new size 
 		// will actually be the old size. The new size can be looked into the streams
-		struct ECSENGINE_API UIConfigArrayAddCallback {
+		struct UIConfigArrayAddCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_ARRAY_ADD_CALLBACK;
 			}
@@ -1415,7 +1414,7 @@ namespace ECSEngine {
 		// UIDrawerArrayAddRemoveData* and can use it to do initialization 
 		// of new elements or some other tasks. In the UIDrawerArrayAddRemoveData* the new size 
 		// will actually be the old size. The new size can be looked into the streams
-		struct ECSENGINE_API UIConfigArrayRemoveCallback {
+		struct UIConfigArrayRemoveCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_ARRAY_REMOVE_CALLBACK;
 			}
@@ -1426,7 +1425,7 @@ namespace ECSEngine {
 
 		// The background is centered at the center of the sprite
 		// Overwrite color black means ignore it - use the theme color
-		struct ECSENGINE_API UIConfigSpriteButtonBackground {
+		struct UIConfigSpriteButtonBackground {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_SPRITE_BUTTON_BACKGROUND;
 			}
@@ -1435,7 +1434,20 @@ namespace ECSEngine {
 			Color overwrite_color = ECS_COLOR_BLACK;
 		};
 
-		struct ECSENGINE_API UIConfigCheckBoxCallback {
+		// If the colors is not specified, then it will just use ECS_COLOR_WHITE
+		struct UIConfigSpriteButtonMultiTexture {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_SPRITE_BUTTON_MULTI_TEXTURE;
+			}
+
+			Stream<Stream<wchar_t>> textures = { nullptr, 0 };
+			Stream<ResourceView> resource_views = { nullptr, 0 };
+			Color* texture_colors = nullptr;
+			Color* resource_view_colors = nullptr;
+			bool draw_before_main_texture = false;
+		};
+
+		struct UIConfigCheckBoxCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_CHECK_BOX_CALLBACK;
 			}
@@ -1445,7 +1457,7 @@ namespace ECSEngine {
 		};
 
 		// With this config the path input can be restricted to only paths that start from the given roots
-		struct ECSENGINE_API UIConfigPathInputRoot {
+		struct UIConfigPathInputRoot {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_PATH_INPUT_ROOT;
 			}
@@ -1458,7 +1470,7 @@ namespace ECSEngine {
 		// The callback will receive as parameter in the additional_data a ResizableStream<Stream<wchar_t>>*
 		// in order to make visible to the external function the files. The strings must be allocated
 		// from that buffer such that they are visible to the outer scope
-		struct ECSENGINE_API UIConfigPathInputGiveFiles {
+		struct UIConfigPathInputGiveFiles {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_PATH_INPUT_GIVE_FILES;
 			}
@@ -1486,7 +1498,7 @@ namespace ECSEngine {
 		// The action receives in the additional_data field an UIConfigPathInputCustomFilesystemDrawData*
 		// When finishing, it can either signal a flag or directly add a destroy window handler
 		// with the index from the UIDrawer. Change the input in order to reflect the modification
-		struct ECSENGINE_API UIConfigPathInputCustomFilesystem {
+		struct UIConfigPathInputCustomFilesystem {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_PATH_INPUT_CUSTOM_FILESYSTEM;
 			}
@@ -1495,17 +1507,18 @@ namespace ECSEngine {
 			bool copy_on_initialization = false;
 		};
 
-		// Receives the path as CapacityStream<wchar_t>* to the additional_data parameter
-		struct ECSENGINE_API UIConfigPathInputCallback {
+		// Receives the previous path as CapacityStream<wchar_t>* to the additional_data parameter
+		struct UIConfigPathInputCallback {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_PATH_INPUT_CALLBACK;
 			}
 
 			UIActionHandler callback;
 			bool copy_on_initialization = false;
+			bool trigger_on_release = true;
 		};
 
-		struct ECSENGINE_API UIConfigPathInputSpriteTexture {
+		struct UIConfigPathInputSpriteTexture {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_PATH_INPUT_SPRITE_TEXTURE;
 			}
@@ -1513,7 +1526,7 @@ namespace ECSEngine {
 			const wchar_t* texture;
 		};
 
-		struct ECSENGINE_API UIConfigNamePadding {
+		struct UIConfigNamePadding {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_NAME_PADDING;
 			}
@@ -1523,7 +1536,16 @@ namespace ECSEngine {
 			float offset_size = 0.0f;
  		};
 
-		struct ECSENGINE_API UIConfigSliderMouseDraggable {
+		struct UIConfigSelectionInputOverrideHoverable {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_SELECTION_INPUT_OVERRIDE_HOVERABLE;
+			}
+
+			Stream<char> text;
+			bool stable = false;
+		};
+
+		struct UIConfigSliderMouseDraggable {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_SLIDER_MOUSE_DRAGGABLE;
 			}
@@ -1531,7 +1553,7 @@ namespace ECSEngine {
 			bool interpolate_bounds = true;
 		};
 
-		struct ECSENGINE_API UIConfigAlignElement {
+		struct UIConfigAlignElement {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_ALIGN_ELEMENT;
 			}
@@ -1763,6 +1785,61 @@ namespace ECSEngine {
 			bool highlight_element;
 			Color highlight_color;
 			unsigned int matched_name;
+		};
+
+		struct UIConfigElementNameAction {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_ELEMENT_NAME_ACTION;
+			}
+
+			UIActionHandler hoverable_handler = { nullptr };
+			UIActionHandler clickable_handler = { nullptr };
+			UIActionHandler general_handler = { nullptr };
+		};
+
+		// The handler receives the index to be deleted before the deletion actually takes place
+		// in the additional data parameter
+		struct UIConfigArrayRemoveAnywhere {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_ARRAY_REMOVE_ANYWHERE;
+			}
+
+			UIActionHandler handler;
+		};
+
+		struct UIConfigElementNameBackground {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_ELEMENT_NAME_BACKGROUND;
+			}
+
+			Color color;
+		};
+
+		struct UIDrawer;
+
+		typedef void (*UIConfigArrayPrePostDrawFunction)(UIDrawer* drawer, void* draw_data);
+
+		struct UIConfigArrayPrePostDraw {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_ARRAY_PRE_POST_DRAW;
+			}
+
+			UIConfigArrayPrePostDrawFunction pre_function = nullptr;
+			void* pre_data;
+			UIConfigArrayPrePostDrawFunction post_function = nullptr;
+			void* post_data;
+		};
+
+		typedef void (*UIConfigTextInputDisplayFunction)(Stream<char> text, CapacityStream<char>& formatted_message, void* data);
+
+		struct UIConfigTextInputMisc {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_TEXT_INPUT_MISC;
+			}
+
+			bool display_tooltip = false;
+			UIConfigTextInputDisplayFunction display_function = nullptr;
+			void* display_data = nullptr;
 		};
 
 	}

@@ -188,23 +188,15 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	Stream<char> SetName(char* starting_ptr, char* ending_ptr, CapacityStream<char>& name_pool) {
-		size_t name_size = ending_ptr - starting_ptr;
-		char* current_name = name_pool.buffer + name_pool.size;
-		memcpy(current_name, starting_ptr, name_size);
-		current_name[name_size] = '\0';
-		name_pool.size += name_size + 1;
-		return { current_name, name_size };
+	Stream<char> SetName(const char* name, size_t size, AllocatorPolymorphic allocator) {
+		return function::StringCopy(allocator, Stream<char>(name, size));
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	Stream<char> SetName(char* name, size_t size, CapacityStream<char>& name_pool) {
-		char* current_name = name_pool.buffer + name_pool.size;
-		memcpy(current_name, name, size);
-		current_name[size] = '\0';
-		name_pool.size += size + 1;
-		return { current_name, size };
+	Stream<char> SetName(const char* starting_ptr, const char* ending_ptr, AllocatorPolymorphic allocator) {
+		size_t name_size = ending_ptr - starting_ptr;
+		return SetName(starting_ptr, name_size, allocator);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
@@ -226,7 +218,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns whether or not the register is a default one
-	bool ParseNameAndRegister(char* type_start, CapacityStream<char>& name_pool, Stream<char>& output_name, unsigned short& register_index) {
+	bool ParseNameAndRegister(char* type_start, AllocatorPolymorphic allocator, Stream<char>& output_name, unsigned short& register_index) {
 		char* current_character = type_start;
 		// Get the buffer name
 		while (*current_character != ' ' && *current_character != '\t') {
@@ -239,7 +231,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		while (function::IsCodeIdentifierCharacter(*current_character)) {
 			current_character++;
 		}
-		output_name = SetName(name_start, current_character, name_pool);
+		output_name = SetName(name_start, current_character, allocator);
 
 		// Get the buffer register
 		char* register_ptr = strstr(current_character, REGISTER_STRING);
@@ -484,7 +476,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	bool ReflectProperty(ShaderReflection* reflection, Stream<wchar_t> path, Functor&& functor) {
+	bool ReflectProperty(const ShaderReflection* reflection, Stream<wchar_t> path, Functor&& functor) {
 		Stream<char> file_contents = ReadWholeFileText(path);
 		if (file_contents.buffer != nullptr) {
 			// Make \0 the last character
@@ -497,14 +489,14 @@ ECS_ASSERT(!table.Insert(format, identifier));
 		return false;
 	}
 
-	bool ShaderReflection::ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool)
+	bool ShaderReflection::ReflectVertexShaderInput(Stream<wchar_t> path, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const
 	{
 		return ReflectProperty(this, path, [&](Stream<char> data) {
-			return ReflectVertexShaderInputSource(data, elements, semantic_name_pool);
+			return ReflectVertexShaderInputSource(data, elements, allocator);
 		});
 	}
 
-	bool ShaderReflection::ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, CapacityStream<char> semantic_name_pool)
+	bool ShaderReflection::ReflectVertexShaderInputSource(Stream<char> source_code, CapacityStream<D3D11_INPUT_ELEMENT_DESC>& elements, AllocatorPolymorphic allocator) const
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';
@@ -658,7 +650,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				elements[current_index].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
 
 				// Semantic name
-				elements[current_index].SemanticName = SetName(semantic_name, semantic_name_size, semantic_name_pool).buffer;
+				elements[current_index].SemanticName = SetName(semantic_name, semantic_name_size, allocator).buffer;
 
 				// Input slot - only do the check if increment input slot has not been specified
 				if (!is_increment_input_slot) {
@@ -726,7 +718,6 @@ ECS_ASSERT(!table.Insert(format, identifier));
 				*end_line = '\n';
 				last_character = end_line + 1;
 			}
-			semantic_name_pool.AssertCapacity();
 
 			return true;
 		}
@@ -736,13 +727,13 @@ ECS_ASSERT(!table.Insert(format, identifier));
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	// Returns whether or not it succeded
-	bool ShaderReflection::ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers, CapacityStream<char> name_pool) {
+	bool ShaderReflection::ReflectShaderBuffers(Stream<wchar_t> path, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) const {
 		return ReflectProperty(this, path, [&](Stream<char> data) {
-			return ReflectShaderBuffersSource(data, buffers, name_pool);
+			return ReflectShaderBuffersSource(data, buffers, allocator);
 		});
 	}
 
-	bool ShaderReflection::ReflectShaderBuffersSource(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, CapacityStream<char> name_pool)
+	bool ShaderReflection::ReflectShaderBuffersSource(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator) const
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';
@@ -764,7 +755,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 			// Name and type
 			size_t current_index = buffers.size;
-			buffers[current_index].name = SetName(name_start, cbuffer_ptr, name_pool);
+			buffers[current_index].name = SetName(name_start, cbuffer_ptr, allocator);
 			buffers[current_index].type = ECS_SHADER_BUFFER_CONSTANT;
 
 			// Register index
@@ -820,7 +811,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 				Stream<char> name;
 				unsigned short register_index;
-				bool default_register = ParseNameAndRegister(current_buffer, name_pool, name, register_index);
+				bool default_register = ParseNameAndRegister(current_buffer, allocator, name, register_index);
 				buffers[current_index].name = name;
 				buffers[current_index].register_index = default_register ? current_index - constant_buffer_count : register_index;
 
@@ -830,20 +821,19 @@ ECS_ASSERT(!table.Insert(format, identifier));
 			}
 		}
 
-		name_pool.AssertCapacity();
 		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, CapacityStream<char> name_pool)
+	bool ShaderReflection::ReflectShaderTextures(Stream<wchar_t> path, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
 	{
 		return ReflectProperty(this, path, [&](Stream<char> data) {
-			return ReflectShaderTexturesSource(data, textures, name_pool);
+			return ReflectShaderTexturesSource(data, textures, allocator);
 		});
 	}
 
-	bool ShaderReflection::ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, CapacityStream<char> name_pool)
+	bool ShaderReflection::ReflectShaderTexturesSource(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator) const
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';
@@ -857,7 +847,7 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 				Stream<char> name;
 				unsigned short register_index;
-				bool default_value = ParseNameAndRegister(texture_ptr, name_pool, name, register_index);
+				bool default_value = ParseNameAndRegister(texture_ptr, allocator, name, register_index);
 
 				size_t current_index = textures.size;
 				textures[current_index].name = name;
@@ -875,14 +865,80 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping)
+	bool ShaderReflection::ReflectShaderMacros(
+		Stream<char> source_code, 
+		CapacityStream<Stream<char>>* defined_macro,
+		CapacityStream<Stream<char>>* conditional_macros,
+		AllocatorPolymorphic allocator
+	) const
+	{
+		auto get_name = [allocator](Stream<char> name) {
+			if (allocator.allocator != nullptr) {
+				return function::StringCopy(allocator, name);
+			}
+			return name;
+		};
+
+		// Make the last character \0 - it will be a non important character
+		source_code[source_code.size - 1] = '\0';
+		ECS_STACK_CAPACITY_STREAM(unsigned int, macro_positions, 512);
+
+		if (defined_macro != nullptr) {
+			// Find all #define
+			function::FindToken(source_code, "#define", macro_positions);
+
+			// Exclude the function argument macros
+			for (unsigned int index = 0; index < macro_positions.size; index++) {
+				const char* macro_start = source_code.buffer + macro_positions[index];
+				macro_start = function::SkipCodeIdentifier(macro_start + 1);
+				const char* macro_name_start = function::SkipWhitespace(macro_start);
+				const char* macro_name_end = function::SkipCodeIdentifier(macro_name_start);
+				macro_name_end = function::SkipWhitespace(macro_name_end);
+				if (*macro_name_end == '(') {
+					// Function macro, exclude it
+					continue;
+				}
+
+				size_t name_size = function::PointerDifference(macro_name_end, macro_name_end);
+				defined_macro->AddSafe(get_name(Stream<char>(macro_name_start, name_size)));
+			}
+		}
+
+		// Determine all the conditional macros now
+		macro_positions.size = 0;
+
+		if (conditional_macros != nullptr) {
+			function::FindToken(source_code, "#ifdef", macro_positions);
+
+			for (unsigned int index = 0; index < macro_positions.size; index++) {
+				const char* macro_start = source_code.buffer + macro_positions[index];
+				macro_start = function::SkipCodeIdentifier(macro_start + 1);
+				const char* macro_name_start = function::SkipWhitespace(macro_start);
+				const char* macro_name_end = function::SkipCodeIdentifier(macro_name_start);
+				size_t name_size = function::PointerDifference(macro_name_end, macro_name_start);
+
+				Stream<char> macro = { macro_name_start, name_size };
+				// Check to see if it already exists in the set, such that we don't write it multiple times
+				unsigned int exists_index = function::FindString(macro, *conditional_macros);
+				if (exists_index == -1) {
+					conditional_macros->AddSafe(get_name(macro));
+				}
+			}
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	bool ShaderReflection::ReflectVertexBufferMapping(Stream<wchar_t> path, CapacityStream<ECS_MESH_INDEX>& mapping) const
 	{
 		return ReflectProperty(this, path, [&](Stream<char> data) {
 			return ReflectVertexBufferMappingSource(data, mapping);
 		});
 	}
 
-	bool ShaderReflection::ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping)
+	bool ShaderReflection::ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const
 	{
 		// Make the last character \0 - it will be a non important character
 		source_code[source_code.size - 1] = '\0';

@@ -136,9 +136,12 @@ namespace ECSEngine {
 
 		struct ECSENGINE_API ReflectionField {
 			// It returns true if the string appears in the tag, else returns false in both cases
-			bool Skip(Stream<char> string) const;
+			bool Has(Stream<char> string) const;
 
 			bool Is(Stream<char> string) const;
+
+			// Returns the tag isolated from others
+			Stream<char> GetTag(Stream<char> string) const;
 
 			ReflectionField CopyTo(uintptr_t& ptr) const;
 

@@ -573,6 +573,21 @@ namespace ECSEngine {
 			unsigned int window_index = system->GetWindowIndexFromBorder(dockspace, border_index);
 			float2 region_offset = system->GetWindowRenderRegion(window_index);
 			if (IsPointInRectangle(mouse_position, position, scale)) {
+				if (data->display_tooltip) {
+					unsigned int visible_sprite_count = data->GetVisibleSpriteCount(system, data->bound);
+					if (visible_sprite_count < data->text->size) {
+						const float VERTICAL_OFFSET = 0.01f;
+
+						UITooltipBaseData base_data;
+						base_data.offset_scale.y = true;
+						base_data.offset.y = VERTICAL_OFFSET;
+						base_data.center_horizontal_x = true;
+
+						// Display a tooltip
+						system->DrawToolTipSentence(action_data, *data->text, &base_data);
+					}
+				}
+
 				system->m_focused_window_data.always_hoverable = true;
 				UIDefaultWindowHandler* default_handler_data = system->GetDefaultWindowHandlerData(window_index);
 				default_handler_data->ChangeCursor(ECS_CURSOR_IBEAM);
@@ -650,7 +665,12 @@ namespace ECSEngine {
 			UI_UNPACK_ACTION_DATA;
 
 			UIDrawerComboBoxLabelClickable* data = (UIDrawerComboBoxLabelClickable*)_data;
-			*data->box->active_label = data->index;
+			if (data->box->mappings != nullptr) {
+				memcpy(data->box->active_label, function::OffsetPointer(data->box->mappings, data->box->mapping_byte_size * data->index), data->box->mapping_byte_size);
+			}
+			else {
+				*data->box->active_label = data->index;
+			}
 
 			if (data->box->callback != nullptr) {
 				action_data->data = data->box->callback_data;
@@ -727,7 +747,7 @@ namespace ECSEngine {
 					data->timer.SetNewStart();
 				}
 				else if (mouse_tracker->LeftButton() == MBHELD) {
-					if (data->timer.GetDuration_ms() > system->m_descriptors.misc.hierarchy_drag_node_time) {
+					if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_time) {
 						size_t index = 0;
 
 						bool has_selected_hierarchy_been_found = false;
@@ -775,7 +795,7 @@ namespace ECSEngine {
 						if (data->previous_index != index) {
 							data->timer.SetMarker();
 						}
-						else if (data->timer.GetDurationSinceMarker_ms() > system->m_descriptors.misc.hierarchy_drag_node_hover_drop) {
+						else if (data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_hover_drop) {
 							unsigned int element_index = index - (index == data->hierarchies_data->elements.size);
 							element_index -= (element_index != 0);
 							UIDrawerHierarchy* hovered_hierarchy = (UIDrawerHierarchy*)data->hierarchies_data->elements[element_index].hierarchy;
@@ -790,7 +810,7 @@ namespace ECSEngine {
 					}
 				}
 				else if (mouse_tracker->LeftButton() == MBRELEASED) {
-					if (data->timer.GetDuration_ms() > system->m_descriptors.misc.hierarchy_drag_node_time) {
+					if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) > system->m_descriptors.misc.hierarchy_drag_node_time) {
 						size_t index = 0;
 
 						bool has_selected_hierarchy_been_found = false;
@@ -933,7 +953,7 @@ namespace ECSEngine {
 					}
 					if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
 						// Don't trigger the callback for the input
-						data->callback_data.number_data.input->trigger_callback = false;
+						data->callback_data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 					}
 				}
 			}
@@ -993,7 +1013,7 @@ namespace ECSEngine {
 
 						if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
 							// Don't trigger the callback for the input
-							data->data.number_data.input->trigger_callback = false;
+							data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 						}
 					}
 				}
@@ -1034,7 +1054,6 @@ namespace ECSEngine {
 			UIDrawerMenuCleanupSystemHandlerData* data = (UIDrawerMenuCleanupSystemHandlerData*)_data;
 			for (int64_t index = 0; index < data->window_count; index++) {
 				system->DestroyWindowIfFound(data->window_names[index]);
-				system->m_memory->Deallocate<false>(data->window_names[index].buffer);
 			}
 			system->PopFrameHandler();
 		}
@@ -1926,7 +1945,7 @@ namespace ECSEngine {
 				input->is_caret_display = false;
 				input->current_selection = input->current_sprite_position;
 				input->is_currently_selected = false;
-				input->trigger_callback = true;
+				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 
 				system->DeallocateGeneralHandler();
 				system->m_focused_window_data.ChangeGeneralHandler({ 0.0f, 0.0f }, { 0.0f, 0.0f }, nullptr, nullptr, 0, ECS_UI_DRAW_NORMAL);
@@ -1936,10 +1955,7 @@ namespace ECSEngine {
 				input->is_caret_display = false;
 				input->current_selection = input->current_sprite_position;
 				input->is_currently_selected = false;
-
-				/*if (input->HasCallback()) {
-					input->Callback(action_data);
-				}*/
+				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 			}
 		}
 
@@ -2396,7 +2412,7 @@ namespace ECSEngine {
 			window_descriptor.window_data = &window_data;
 			window_descriptor.window_data_size = sizeof(window_data);
 
-			unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_NO_DOCKING);
+			unsigned int window_index = system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
 
 			// if it is desired to be destroyed when going out of focus
 			UIPopUpWindowData system_handler_data;
@@ -3227,7 +3243,9 @@ namespace ECSEngine {
 			get_data.extensions = data->extensions;
 
 			if (!OS::FileExplorerGetFile(&get_data)) {
-				CreateErrorMessageWindow(system, get_data.error_message);
+				if (!get_data.user_cancelled) {
+					CreateErrorMessageWindow(system, get_data.error_message);
+				}
 			}
 			else {
 				bool is_valid = true;
@@ -3253,6 +3271,9 @@ namespace ECSEngine {
 					if (data->path->size < data->path->capacity) {
 						data->path->buffer[data->path->size] = L'\0';
 					}
+
+					// Change the trigger callback to exit, such that it will always get triggered
+					data->input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 				}
 			}
 		}
@@ -3275,7 +3296,9 @@ namespace ECSEngine {
 			get_data.error_message.InitializeFromBuffer(error_message, 0, ERROR_MESSAGE_SIZE);
 
 			if (!OS::FileExplorerGetDirectory(&get_data)) {
-				CreateErrorMessageWindow(system, get_data.error_message);
+				if (!get_data.user_cancelled) {
+					CreateErrorMessageWindow(system, get_data.error_message);
+				}
 			}
 			else {
 				bool is_valid = true;
@@ -3625,7 +3648,7 @@ namespace ECSEngine {
 					if (UI_ACTION_IS_THE_SAME_AS_PREVIOUS) {
 						// If it is the same selected label, proceed with the double click action
 						if (data->hierarchy->selected_labels.size == 1 && data->hierarchy->CompareLabels(untyped_data, data->hierarchy->selected_labels.buffer)) {
-							size_t duration = additional_data->timer.GetDuration_ms();
+							size_t duration = additional_data->timer.GetDuration(ECS_TIMER_DURATION_MS);
 							if (duration < double_click_milliseconds) {
 								if (additional_data->click_count == 0) {
 									data->hierarchy->TriggerDoubleClick(action_data);
@@ -3681,7 +3704,7 @@ namespace ECSEngine {
 				}
 				else {
 					if (data->hierarchy->drag_action != nullptr) {
-						if (data->timer.GetDuration_ms() >= drag_milliseconds && !IsPointInRectangle(mouse_position, position, scale)) {
+						if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= drag_milliseconds && !IsPointInRectangle(mouse_position, position, scale)) {
 							if (mouse_tracker->LeftButton() == MBHELD) {
 								data->hierarchy->is_dragging = true;
 							}

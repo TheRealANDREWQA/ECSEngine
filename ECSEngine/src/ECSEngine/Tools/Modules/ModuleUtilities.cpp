@@ -5,6 +5,8 @@
 
 namespace ECSEngine {
 
+	// ---------------------------------------------------------------------------------------------------------------------
+
 	// Returns true if the type has conformant field types else false
 	bool ConvertTargetAssetsToHandles(
 		const AssetDatabase* database,
@@ -13,91 +15,23 @@ namespace ECSEngine {
 		CapacityStream<unsigned int>& handles,
 		CapacityStream<ECS_ASSET_TYPE>& types
 	) {
-		auto get_pointer_from_field = [target_data](const Reflection::ReflectionFieldInfo* info, const void** pointer) {
-			if (info->stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
-				unsigned int indirection = Reflection::GetReflectionFieldPointerIndirection(*info);
-				if (indirection > 1) {
-					// Fail
-					return false;
-				}
-				*pointer = *(void**)function::OffsetPointer(target_data, info->pointer_offset);
-			}
-			else if (info->stream_type == Reflection::ReflectionStreamFieldType::Basic) {
-				*pointer = (void*)function::OffsetPointer(target_data, info->pointer_offset);
-			}
-			else {
-				// Fail
-				return false;
-			}
-			return true;
-		};
-
 		for (size_t index = 0; index < target_type->fields.size; index++) {
-			const void* pointer = nullptr;
-			size_t pointer_size = 0;
-			ECS_ASSET_TYPE asset_type = ECS_ASSET_TYPE_COUNT;
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(target_type, index, target_data);
 
-			// 2 means there is no match. It will be set to 1 if there is a match with a succesful
-			// type or 0 if there is match but incorrect field type
-			bool success = true;
-
-			Stream<char> definition = target_type->fields[index].definition;
-			const Reflection::ReflectionFieldInfo* info = &target_type->fields[index].info;
-			if (function::CompareStrings(definition, STRING(CoallescedMesh))) {
-				success = get_pointer_from_field(info, &pointer);
-				asset_type = ECS_ASSET_MESH;
-			}
-			else if (function::CompareStrings(definition, STRING(ResourceView))) {
-				success = get_pointer_from_field(info, &pointer);
-				if (success) {
-					// The interface is one level deeper
-					pointer = *(const void**)pointer;
-				}
-				asset_type = ECS_ASSET_TEXTURE;
-			}
-			else if (function::CompareStrings(definition, STRING(SamplerState))) {
-				success = get_pointer_from_field(info, &pointer);
-				if (success) {
-					// The interface is one level deeper
-					pointer = *(const void**)pointer;
-				}
-				asset_type = ECS_ASSET_GPU_SAMPLER;
-			}
-			else if (function::CompareStrings(definition, STRING(VertexShader)) || function::CompareStrings(definition, STRING(PixelShader))
-				|| function::CompareStrings(definition, STRING(ComputeShader))) {
-				success = get_pointer_from_field(info, &pointer);
-				if (success) {
-					// The interface is one level deeper
-					pointer = *(const void**)pointer;
-				}
-				asset_type = ECS_ASSET_SHADER;
-			}
-			else if (function::CompareStrings(definition, STRING(Material))) {
-				success = get_pointer_from_field(info, &pointer);
-				asset_type = ECS_ASSET_MATERIAL;
-			}
-			else if (function::CompareStrings(definition, STRING(Stream<void>))) {
-				success = get_pointer_from_field(info, &pointer);
-				if (success) {
-					// Extract the size and the pointer is deeper
-					pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
-					pointer = *(void**)pointer;
-				}
-				asset_type = ECS_ASSET_MISC;
-			}
-
-			if (!success) {
+			if (!asset_field.success) {
 				return false;
 			}
-			else if (asset_type != ECS_ASSET_TYPE_COUNT) {
-				handles.AddSafe(database->FindAssetEx({ pointer, pointer_size }, asset_type));
-				types.AddSafe(asset_type);
+			else if (asset_field.type != ECS_ASSET_TYPE_COUNT) {
+				handles.AddSafe(database->FindAssetEx(asset_field.asset, asset_field.type));
+				types.AddSafe(asset_field.type);
 			}
 		}
+		return true;
 	}
 
-	// Returns true if the type has conformant field types else false
-	bool ConvertHandlesToAssets(
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	void ConvertHandlesToAssets(
 		const AssetDatabase* database,
 		const Reflection::ReflectionType* link_type,
 		const void* link_data,
@@ -116,6 +50,8 @@ namespace ECSEngine {
 			}
 		}
 	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
 
 	void ModuleResetLinkComponent(
 		const Reflection::ReflectionManager* reflection_manager,
@@ -234,6 +170,8 @@ namespace ECSEngine {
 		return true;
 	}
 
+	// ---------------------------------------------------------------------------------------------------------------------
+
 	bool ModuleLinkComponentToTarget(
 		ModuleLinkComponentTarget module_link, 
 		const Reflection::ReflectionManager* reflection_manager, 
@@ -253,10 +191,7 @@ namespace ECSEngine {
 
 		ECS_STACK_CAPACITY_STREAM(Stream<void>, assets, 512);
 		ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, asset_types, 512);
-		bool success = ConvertHandlesToAssets(asset_database, link_type, link_data, assets, asset_types);
-		if (!success) {
-			return false;
-		}
+		ConvertHandlesToAssets(asset_database, link_type, link_data, assets, asset_types);
 
 		if (needs_dll) {
 			// Build it using the function
@@ -290,16 +225,81 @@ namespace ECSEngine {
 
 			StackScope<RestoreTarget> restore_stack({ target_data, target_data_storage, target_size });
 
+			size_t asset_index = 0;
+			auto copy_field = [&](size_t index) {
+				memcpy(
+					function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset),
+					function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset),
+					target_type->fields[index].info.byte_size
+				);
+			};
 			for (size_t index = 0; index < target_type->fields.size; index++) {
-				if (function::CompareStrings(target_type->fields.size))
+				if (asset_index < assets.size) {
+					ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflection(target_type, index, target_data, assets[asset_index], asset_types[asset_index]);
+					if (result == ECS_SET_ASSET_TARGET_FIELD_FAILED) {
+						return false;
+					}
+					else if (result == ECS_SET_ASSET_TARGET_FIELD_OK) {
+						asset_index++;
+					}
+					else {
+						if (target_type->fields[index].Compare(link_type->fields[index])) {
+							return false;
+						}
+						copy_field(index);
+					}
+				}
+				else {
+					ECS_ASSET_TYPE type = FindAssetTargetField(target_type->fields[index].definition);
+					if (type != ECS_ASSET_TYPE_COUNT) {
+						// Too many asset types
+						return false;
+					}
+					copy_field(index);
+				}
 			}
 
 
 			restore_stack.deallocator.copy_size = 0;
 		}
 		
+		return true;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
+
+	bool ModuleValidateLinkComponent(const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type)
+	{
+		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);
+		if (needs_dll) {
+			// If user supplied then assume true
+			return true;
+		}
+
+		if (link_type->fields.size != target_type->fields.size) {
+			return false;
+		}
+
+		for (size_t index = 0; index < link_type->fields.size; index++) {
+			ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(link_type->fields[index].tag);
+			if (asset_type != ECS_ASSET_TYPE_COUNT) {
+				// We have an asset handle - verify that the corresponding asset is in the target
+				AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(target_type, index, nullptr);
+				if (!target_field.success || target_field.type != asset_type) {
+					return false;
+				}
+			}
+			else {
+				// Not an asset. Verify that they are identical.
+				if (!link_type->fields[index].Compare(target_type->fields[index])) {
+					return false;
+				}
+			}
+		}
 
 		return true;
 	}
+
+	// ---------------------------------------------------------------------------------------------------------------------
 
 }

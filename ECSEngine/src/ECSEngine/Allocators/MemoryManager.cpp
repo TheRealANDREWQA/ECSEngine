@@ -43,6 +43,15 @@ namespace ECSEngine {
 		free(m_allocators[index].GetAllocatedBuffer());
 	}
 
+	bool GlobalMemoryManager::DeallocateIfBelongs(const void* block)
+	{
+		if (Belongs(block)) {
+			Deallocate(block);
+			return true;
+		}
+		return false;
+	}
+
 	void GlobalMemoryManager::Trim()
 	{
 		for (size_t index = 1; index < m_allocator_count; index++) {
@@ -212,6 +221,15 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, MemoryManager::Deallocate, const void*);
+
+	bool MemoryManager::DeallocateIfBelongs(const void* block)
+	{
+		if (Belongs(block)) {
+			Deallocate(block);
+			return true;
+		}
+		return false;
+	}
 
 	void MemoryManager::Lock()
 	{

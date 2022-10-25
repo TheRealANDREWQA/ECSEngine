@@ -6,7 +6,7 @@
 #include "../Modules/Module.h"
 #include "ECSEngineSerialization.h"
 #include "ECSEngineSerializationHelpers.h"
-#include "ECSEngineAssets.h"
+#include "ECSEngineModule.h"
 
 using namespace ECSEngine;
 using namespace ECSEngine::Reflection;
@@ -98,7 +98,7 @@ void EditorComponents::GetUserEvents(CapacityStream<EditorComponentEvent>& user_
 
 // ----------------------------------------------------------------------------------------------
 
-unsigned int EditorComponents::IsModule(Stream<char> name) const
+unsigned int EditorComponents::FindModule(Stream<char> name) const
 {
 	for (unsigned int index = 0; index < loaded_modules.size; index++) {
 		if (function::CompareStrings(loaded_modules[index].name, name)) {
@@ -174,7 +174,7 @@ bool EditorComponents::IsLinkComponentTarget(ECSEngine::Stream<char> name) const
 
 unsigned int EditorComponents::ModuleComponentCount(Stream<char> name) const
 {
-	unsigned int module_index = IsModule(name);
+	unsigned int module_index = FindModule(name);
 	ECS_ASSERT(module_index != -1);
 	return ModuleComponentCount(module_index);
 }
@@ -195,7 +195,7 @@ unsigned int EditorComponents::ModuleComponentCount(unsigned int module_index) c
 
 unsigned int EditorComponents::ModuleSharedComponentCount(ECSEngine::Stream<char> name) const
 {
-	unsigned int module_index = IsModule(name);
+	unsigned int module_index = FindModule(name);
 	ECS_ASSERT(module_index != -1);
 	return ModuleSharedComponentCount(module_index);
 }
@@ -1162,38 +1162,45 @@ void EditorComponents::ResetComponents(ComponentSignature component_signature, v
 
 void EditorComponents::ResetComponentFromManager(EntityManager* entity_manager, Stream<char> component_name, Entity entity) const
 {
-	Component component = GetComponentID(component_name);
-	// If can't find it, fail
-	if (component.value == -1) {
-		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
-		EditorSetConsoleWarn(warn_message);
-		return;
+	Stream<char> target = GetComponentFromLink(component_name);
+	if (target.size > 0) {
+		// This needs to be handled separately
+		// Unregister all handles to the resources
 	}
+	else {
+		Component component = GetComponentID(component_name);
+		// If can't find it, fail
+		if (component.value == -1) {
+			ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+			EditorSetConsoleWarn(warn_message);
+			return;
+		}
 
-	// If it is not registered, fail
-	if (!entity_manager->ExistsComponent(component)) {
-		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
-		EditorSetConsoleWarn(warn_message);
-		return;
+		// If it is not registered, fail
+		if (!entity_manager->ExistsComponent(component)) {
+			ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+			EditorSetConsoleWarn(warn_message);
+			return;
+		}
+
+		if (!entity_manager->ExistsEntity(entity)) {
+			ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
+			EditorSetConsoleWarn(warn_message);
+			return;
+		}
+
+		MemoryArena* arena = entity_manager->GetComponentAllocator(component);
+		void* entity_data = entity_manager->GetComponent(entity, component);
+
+		const ComponentInfo* info = &entity_manager->m_unique_components[component.value];
+
+		// Deallocate the buffers, if any
+		for (unsigned char deallocate_index = 0; deallocate_index < info->component_buffers_count; deallocate_index++) {
+			ComponentBufferDeallocate(info->component_buffers[deallocate_index], arena, entity_data);
+		}
+
+		internal_manager->SetInstanceDefaultData(component_name, entity_data);
 	}
-
-	if (!entity_manager->ExistsEntity(entity)) {
-		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
-		EditorSetConsoleWarn(warn_message);
-		return;
-	}
-
-	MemoryArena* arena = entity_manager->GetComponentAllocator(component);
-	void* entity_data = entity_manager->GetComponent(entity, component);
-
-	const ComponentInfo* info = &entity_manager->m_unique_components[component.value];
-
-	// Deallocate the buffers, if any
-	for (unsigned char deallocate_index = 0; deallocate_index < info->component_buffers_count; deallocate_index++) {
-		ComponentBufferDeallocate(info->component_buffers[deallocate_index], arena, entity_data);
-	}
-
-	internal_manager->SetInstanceDefaultData(component_name, entity_data);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1428,7 +1435,7 @@ void EditorComponents::UpdateComponents(
 	ECS_STACK_CAPACITY_STREAM(Stream<char>, added_types, 512);
 	ECS_STACK_CAPACITY_STREAM(Stream<char>, temporary_module_types, 512);
 
-	unsigned int module_index = IsModule(module_name);
+	unsigned int module_index = FindModule(module_name);
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, component_indices, 512);
 	ECS_STACK_CAPACITY_STREAM(unsigned int, hierarchy_types, ECS_KB * 2);
@@ -1438,7 +1445,7 @@ void EditorComponents::UpdateComponents(
 	reflection_manager->GetHierarchyTypes(hierarchy_index, query);
 	hierarchy_types.AssertCapacity();
 
-	// Walk through the list of the types and separate the components (unique and shared) from the rest of the types
+	// Walk through the list of the types and separate the components (unique, shared and link) from the rest of the types
 	for (int32_t index = 0; index < (int32_t)hierarchy_types.size; index++) {
 		const ReflectionType* type = reflection_manager->GetType(hierarchy_types[index]);
 		if (IsReflectionTypeComponent(type) || IsReflectionTypeSharedComponent(type)) {
@@ -1464,10 +1471,17 @@ void EditorComponents::UpdateComponents(
 			unsigned int target_index = internal_manager->type_definitions.Find(link_target);
 			if (target_index != -1) {
 				// The target exists. Check to see that it has a valid component
-				const ReflectionType* type_ptr = internal_manager->type_definitions.GetValuePtrFromIndex(target_index);
-				if (IsReflectionTypeComponent(type_ptr) || IsReflectionTypeSharedComponent(type_ptr)) {
-					// Generate an event
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
+				const ReflectionType* target_type = internal_manager->type_definitions.GetValuePtrFromIndex(target_index);
+				if (IsReflectionTypeComponent(target_type) || IsReflectionTypeSharedComponent(target_type)) {
+					// Verify that the types are matched
+					if (!ModuleValidateLinkComponent(type, target_type)) {
+						// Generate a mismatch event
+						events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, type->name });
+					}
+					else {
+						// Generate an event
+						events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type->name });
+					}
 				}
 				else {
 					// Generate an invalid event
@@ -1516,7 +1530,12 @@ void EditorComponents::UpdateComponents(
 				}
 
 				double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
-				bool has_buffers = !IsTriviallyCopyable(reflection_manager, type);
+
+				Stream<char> exceptions[] = {
+					STRING(Stream<void>)
+				};
+
+				bool has_buffers = !IsTriviallyCopyable(reflection_manager, type, { exceptions, std::size(exceptions) });
 				if (allocator_size != DBL_MAX) {
 					if (!has_buffers) {
 						events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name });
@@ -1542,7 +1561,11 @@ void EditorComponents::UpdateComponents(
 			const ReflectionType* type = reflection_manager->GetType(indices[index]);
 			unsigned int old_type_index = internal_manager->type_definitions.Find(type->name);
 
-			bool is_trivially_copyable = IsTriviallyCopyable(reflection_manager, type);
+			Stream<char> exceptions[] = {
+				STRING(Stream<void>)
+			};
+
+			bool is_trivially_copyable = IsTriviallyCopyable(reflection_manager, type, { exceptions, std::size(exceptions) });
 			double buffer_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 
 			if (!is_trivially_copyable) {
@@ -1715,8 +1738,6 @@ void EditorComponents::UpdateComponents(
 					Deallocate(allocator, link_components[index].target.buffer);
 					// Previously not determined, now it is
 					link_components[index].target.buffer = type.name.buffer;
-					// Generate an added event
-					events.Add({ EDITOR_COMPONENT_EVENT_IS_ADDED, type.name });
 				}
 			}
 			else {
@@ -1878,7 +1899,9 @@ void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initializ
 		"MISSING_ID: Give the component an ID.",
 		"HAS_BUFFERS_NO_ALLOCATOR: Give the component an allocator size.",
 		"HAS_ALLOCATOR_BUT_NO_BUFFERS: Remove the allocator function.",
-		"LINK_COMPONENT_MISSING_TARGET: Give the component its target."
+		"LINK_COMPONENT_MISSING_TARGET: Give the component its target.",
+		"LINK_COMPONENT_INVALID_TARGET: The target of the link is not a component.",
+		"LINK_MISMATCH_FOR_DEFAULT: The link component has default conversion but the target cannot be converted to."
 	};
 	drawer.LabelList(UI_CONFIG_LABEL_LIST_NO_NAME, config, "List", { label_lists, std::size(label_lists) });
 	drawer.NextRow();
@@ -1907,6 +1930,12 @@ void UserEventsWindow(void* window_data, void* drawer_descriptor, bool initializ
 		}
 		else if (component_event == EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET) {
 			type_string = " LINK_MISSING_TARGET";
+		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET) {
+			type_string = " LINK_INVALID_TARGET";
+		}
+		else if (component_event == EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT) {
+			type_string = " LINK_MISMATCH_FOR_DEFAULT";
 		}
 
 		drawer.Text(data->user_events[index].name);	
@@ -2136,8 +2165,16 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 			ReflectionType type;
 			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
 				if (IsReflectionTypeLinkComponent(&type)) {
-					if (GetReflectionTypeLinkComponentTarget(&type).size > 0) {
-						// Now it has a target
+					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
+					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
+						// Add an invalid target event if the target is invalid
+						if (!editor_state->editor_components.IsComponent(target)) {
+							user_events.Add({ EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET, component_event.name });
+						}
+						// If the validation fails, add a mismatch event
+						else if (!ModuleValidateLinkComponent(&type, editor_state->editor_components.GetType(target))) {
+							user_events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, component_event.name });
+						}
 						user_events.Remove(index);
 						index--;
 						continue;
@@ -2164,9 +2201,42 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
 					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
 						// Now it has a target and a valid one
+						// If the validation fails, add a mismatch event
+						if (!ModuleValidateLinkComponent(&type, editor_state->editor_components.GetType(target))) {
+							user_events.Add({ EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, component_event.name });
+						}
 						user_events.Remove(index);
 						index--;
 						continue;
+					}
+				}
+				else {
+					// Changed type or it doesn't exist no more
+					user_events.Remove(index);
+					index--;
+					continue;
+				}
+			}
+			else {
+				// Remove the event if the type has disapperead from the module reflection
+				user_events.Remove(index);
+				index--;
+				continue;
+			}
+		}
+		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT) {
+			ReflectionType type;
+			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
+				if (IsReflectionTypeLinkComponent(&type)) {
+					Stream<char> target = GetReflectionTypeLinkComponentTarget(&type);
+					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
+						// Now it has a target and a valid one
+						// Verify that the type can be converted to
+						if (ModuleValidateLinkComponent(&type, editor_state->editor_components.GetType(target))) {
+							user_events.Remove(index);
+							index--;
+							continue;
+						}
 					}
 				}
 				else {

@@ -1214,13 +1214,13 @@ namespace ECSEngine {
 			bool IsBackgroundDockspace(const UIDockspaceBorder* border) const;
 
 			// Returns the index in the pop_up_windows stream
-			unsigned int IsPopUpWindow(unsigned int window_index) const;
+			unsigned int FindPopUpWindow(unsigned int window_index) const;
 
 			// Returns the index in the pop_up_windows stream
-			unsigned int IsPopUpWindow(const UIDockspace* dockspace) const;
+			unsigned int FindPopUpWindow(const UIDockspace* dockspace) const;
 
 			// Returns the index in the pop_up_windows stream
-			unsigned int IsPopUpWindow(const UIDockspaceBorder* border) const;
+			unsigned int FindPopUpWindow(const UIDockspaceBorder* border) const;
 
 			// Returns whether or not the window is currently drawing
 			bool IsWindowDrawing(unsigned int window_index);

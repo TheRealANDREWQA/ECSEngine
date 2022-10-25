@@ -1164,6 +1164,8 @@ namespace ECSEngine {
 		}
 
 		bool FileExplorerGetFile(FileExplorerGetFileData* data) {
+			data->user_cancelled = false;
+
 			IFileOpenDialog* dialog = nullptr;
 			HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 			if (result != S_OK && result != S_FALSE) {
@@ -1202,14 +1204,28 @@ namespace ECSEngine {
 
 						ECS_STACK_CAPACITY_STREAM(wchar_t, modified_extensions, 512);
 
-						COMDLG_FILTERSPEC* filters = (COMDLG_FILTERSPEC*)ECS_STACK_ALLOC(sizeof(COMDLG_FILTERSPEC) * data->extensions.size);
+						size_t extension_count = data->extensions.size > 1 ? data->extensions.size + 1 : 1;
+
+						// Have an extra field with the all extensions allowed
+						COMDLG_FILTERSPEC* filters = (COMDLG_FILTERSPEC*)ECS_STACK_ALLOC(sizeof(COMDLG_FILTERSPEC) * extension_count);
 						for (size_t index = 0; index < data->extensions.size; index++) {
 							filters[index] = { L"", modified_extensions.buffer + modified_extensions.size };
 							modified_extensions.Add(L'*');
 							modified_extensions.AddStream(data->extensions[index]);
 							modified_extensions.Add(L'\0');
 						}
-						result = dialog->SetFileTypes(data->extensions.size, filters);
+						
+						if (extension_count > 1) {
+							// Create the last all filter
+							filters[data->extensions.size] = { L"", modified_extensions.buffer + modified_extensions.size };
+							for (size_t index = 0; index < data->extensions.size; index++) {
+								modified_extensions.AddStream(data->extensions[index]);
+								modified_extensions.Add(L';');
+							}
+							modified_extensions[modified_extensions.size] = L'\0';
+						}
+
+						result = dialog->SetFileTypes(extension_count, filters);
 
 						if (FAILED(result)) {
 							SetBasicErrorMessage("Setting dialog extensions failed!", data->error_message);
@@ -1265,12 +1281,15 @@ namespace ECSEngine {
 			}
 
 			SetBasicErrorMessage("The user cancelled the search.", data->error_message);
+			data->user_cancelled = true;
 			return false;
 		}
 
 		// -----------------------------------------------------------------------------------------------------
 
 		bool FileExplorerGetDirectory(FileExplorerGetDirectoryData* data) {
+			data->user_cancelled = false;
+
 			IFileDialog* dialog = nullptr;
 			HRESULT result = CoCreateInstance(
 				CLSID_FileOpenDialog,
@@ -1308,10 +1327,11 @@ namespace ECSEngine {
 								return false;
 							}
 						}
-						/*else {
-							SetBasicErrorMessage("Showing dialog failed!", data->error_message);
+						else {
+							SetBasicErrorMessage("The user cancelled the selection.", data->error_message);
+							data->user_cancelled = true;
 							return false;
-						}*/
+						}
 					}
 					else {
 						SetBasicErrorMessage("Setting dialog options failed!", data->error_message);

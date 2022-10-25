@@ -197,6 +197,9 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 		descriptor.window_data = draw_data;
 		descriptor.window_data_size = sizeof(*draw_data);
 
+		descriptor.initial_position_x = 0.0f;
+		descriptor.initial_position_y = 0.0f;
+
 		if (continue_handler.data_size > 0) {
 			memcpy(function::OffsetPointer(draw_data, sizeof(*draw_data)), continue_handler.data, continue_handler.data_size);
 			descriptor.window_data_size += continue_handler.data_size;

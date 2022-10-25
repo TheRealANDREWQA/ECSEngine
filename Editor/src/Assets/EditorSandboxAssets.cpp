@@ -168,6 +168,8 @@ EDITOR_EVENT(RegisterEvent) {
 		
 		bool loaded_now = false;
 		unsigned int handle = sandbox->database.AddAsset(name, file, data->type, &loaded_now);
+		*data->handle = handle;
+
 		if (handle == -1) {
 			// Set a warning
 			ECS_FORMAT_TEMP_STRING(warning, "Failed to load asset {#} metadata, type {#}.", name, ConvertAssetTypeString(data->type));
@@ -193,6 +195,11 @@ EDITOR_EVENT(RegisterEvent) {
 // The registration needs to be moved into an event in case the resource manager is locked
 bool RegisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int* handle)
 {
+	ECS_ASSERT(name.size > 0);
+	if (AssetHasFile(type)) {
+		ECS_ASSERT(file.size > 0);
+	}
+
 	unsigned int existing_handle = FindAsset(editor_state, name, file, type);
 	if (existing_handle == -1) {
 		size_t storage[128];
@@ -257,6 +264,11 @@ void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_inde
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
+
+void UnloadSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name)
+{
+	
+}
 
 // -----------------------------------------------------------------------------------------------------------------------------
 

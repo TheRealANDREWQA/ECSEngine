@@ -215,6 +215,10 @@ namespace ECSEngine {
 		// Retrieves all the metadata files for a certain type. You need to extract the name and the file manually
 		Stream<Stream<wchar_t>> GetMetadatasForType(ECS_ASSET_TYPE type, AllocatorPolymorphic allocator) const;
 
+		unsigned int GetAssetCount(ECS_ASSET_TYPE type) const;
+
+		unsigned int GetAssetHandleFromIndex(unsigned int index, ECS_ASSET_TYPE type) const;
+
 		// It does not set the name or the file
 		bool ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata) const;
 

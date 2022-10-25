@@ -70,6 +70,8 @@ namespace ECSEngine {
 
 		ECSENGINE_API void UIDrawerArrayIntInputAction(ActionData* action_data);
 
+		ECSENGINE_API void UIDrawerArrayRemoveAnywhereAction(ActionData* action_data);
+
 		struct UIDrawer;
 
 		// It supports at max 12 elements
@@ -819,6 +821,15 @@ namespace ECSEngine {
 						*callback_pointer = number;
 					}
 
+					// If we have an exterior callback that needs update do it before
+					if (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+						const UIConfigTextInputCallback* callback = (const UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
+						if (callback->handler.data_size > 0 && !callback->copy_on_initialization) {
+							UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)input->callback_data;
+							memcpy(base_data->user_action_data, callback->handler.data, callback->handler.data_size);
+						}
+					}
+
 					size_t text_count_before = *HandleTextSpriteCount(configuration);
 					// The callback will still be triggered. In this way we avoid having the text input recopying the data
 					TextInputDrawer(function::ClearFlag(configuration, UI_CONFIG_TEXT_INPUT_CALLBACK), config, input, position, scale, UIDrawerTextInputFilterNumbers);
@@ -886,12 +897,55 @@ namespace ECSEngine {
 						void** temp_reinterpretation = (void**)tool_tip_reinterpretation;
 						*temp_reinterpretation = input->callback_data;
 
-						AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
+						// We need to intercept the name draw, if any
+						if (configuration & UI_CONFIG_ELEMENT_NAME_ACTION) {
+							const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
 
-						if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
-							UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
-							base_data->input = input;
-							AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+							if (name_action->hoverable_handler.action != nullptr) {
+								size_t hoverable_data_storage[256];
+								ActionWrapperWithCallbackData* wrapper_data = (ActionWrapperWithCallbackData*)hoverable_data_storage;
+								wrapper_data->base_action_data_size = sizeof(hoverable_data);
+								void* base_data = wrapper_data->GetBaseData();
+								memcpy(base_data, &hoverable_data, sizeof(hoverable_data));
+
+								unsigned int write_size = wrapper_data->WriteCallback(name_action->hoverable_handler);
+								AddHoverable(text_position, text_span, { ActionWrapperWithCallback, hoverable_data_storage, write_size, ECS_UI_DRAW_SYSTEM });
+							}
+							else {
+								AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
+							}
+
+							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
+								UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
+								base_data->input = input;
+								if (name_action->clickable_handler.action != nullptr) {
+									size_t clickable_data_storage[256];
+									ActionWrapperWithCallbackData* wrapper_data = (ActionWrapperWithCallbackData*)clickable_data_storage;
+									wrapper_data->base_action_data_size = draggable_data_size;
+									wrapper_data->base_action = draggable_action;
+									if (draggable_data_size == 0) {
+										wrapper_data->base_action_data = draggable_data;
+									}
+									else {
+										void* base_data = wrapper_data->GetBaseData();
+										memcpy(base_data, draggable_data, draggable_data_size);
+									}
+									unsigned int write_size = wrapper_data->WriteCallback(name_action->clickable_handler);
+									AddClickable(text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, name_action->clickable_handler.phase });
+								}
+								else {
+									AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+								}
+							}
+						}
+						else {
+							AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
+
+							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
+								UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
+								base_data->input = input;
+								AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+							}
 						}
 					}
 				}
@@ -1097,6 +1151,7 @@ namespace ECSEngine {
 				UIDrawerMenuState* state,
 				uintptr_t& buffer,
 				CapacityStream<UIDrawerMenuWindow>* stream,
+				unsigned int submenu_index,
 				bool copy_states
 			);
 
@@ -1106,6 +1161,7 @@ namespace ECSEngine {
 				UIDrawerMenuState* state,
 				uintptr_t& buffer,
 				CapacityStream<UIDrawerMenuWindow>* stream,
+				unsigned int submenu_index,
 				bool copy_states
 			);
 
@@ -1547,7 +1603,7 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_SYSTEM);
+			void AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, bool stable = false, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_SYSTEM);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1619,6 +1675,8 @@ namespace ECSEngine {
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			UIDrawerMenuRightClickData PrepareRightClickActionData(Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler = { nullptr });
 
 			// This will always have the system phase
 			void AddRightClickAction(
@@ -1730,11 +1788,11 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			// Only draw function, no initialization; data is the per element data; additional_data can be used to access data outside the element
-			using UIDrawerArrayDrawFunction = void (*)(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data);
+			typedef void (*UIDrawerArrayDrawFunction)(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data);
 
 			// Optional handler for when an element has been dragged to a new position
 			// The new order points indicates elements in the new order
-			using UIDrawerArrayDragFunction = void (*)(UIDrawer& drawer, void* elements, unsigned int element_count, unsigned int* new_order, void* additional_data);
+			typedef void (*UIDrawerArrayDragFunction)(UIDrawer& drawer, void* elements, unsigned int element_count, unsigned int* new_order, void* additional_data);
 
 			// Only accepts CapacityStream or ResizableStream as StreamType
 			// The collapsing header will go to the next row after every element - no need to call NextRow() inside draw_function
@@ -1834,10 +1892,11 @@ namespace ECSEngine {
 					if (config.associated_bits[index] != UI_CONFIG_ABSOLUTE_TRANSFORM && config.associated_bits[index] != UI_CONFIG_RELATIVE_TRANSFORM
 						&& config.associated_bits[index] != UI_CONFIG_WINDOW_DEPENDENT_SIZE && config.associated_bits[index] != UI_CONFIG_MAKE_SQUARE) {
 						size_t header_config_count = header_config.flag_count;
-						size_t config_byte_size = (config.parameter_start[index + 1] - config.parameter_start[index]) * sizeof(float);
+						size_t config_float_size = config.parameter_start[index + 1] - config.parameter_start[index];
+						size_t config_byte_size = config_float_size * sizeof(float);
 						header_config.associated_bits[header_config_count] = config.associated_bits[index];
 						header_config.parameter_start[header_config_count + 1] = header_config.parameter_start[header_config_count]
-							+ config_byte_size;
+							+ config_float_size;
 						memcpy(
 							header_config.parameters + header_config.parameter_start[header_config_count],
 							config.parameters + config.parameter_start[index],
@@ -1876,6 +1935,14 @@ namespace ECSEngine {
 					name, 
 					&data->collapsing_header_state, 
 				[&]() {
+					// If it has any pre draw, make sure to draw it
+					if (configuration & UI_CONFIG_ARRAY_PRE_POST_DRAW) {
+						const UIConfigArrayPrePostDraw* custom_draw = (const UIConfigArrayPrePostDraw*)config.GetParameter(UI_CONFIG_ARRAY_PRE_POST_DRAW);
+						if (custom_draw->pre_function != nullptr) {
+							custom_draw->pre_function(this, custom_draw->pre_data);
+						}
+					}
+
 					ECS_TEMP_ASCII_STRING(temp_name, 64);
 					temp_name.Copy("Element ");
 					size_t base_name_size = temp_name.size;
@@ -1911,53 +1978,48 @@ namespace ECSEngine {
 						}
 					}
 
-					const char* draw_element_name = temp_name.buffer;
+					UIDrawConfig internal_element_config;
+					memcpy(&internal_element_config, element_config, sizeof(internal_element_config));
 
-					auto select_name = [&](unsigned int index, CapacityStream<char> temporary_provided_name_string) {
-						if (configuration & UI_CONFIG_ARRAY_PROVIDE_NAMES) {
-							const UIConfigArrayProvideNames* provided_names = (const UIConfigArrayProvideNames*)config.GetParameter(UI_CONFIG_ARRAY_PROVIDE_NAMES);
-							// Check each option
-							if (provided_names->char_names.buffer != nullptr) {
-								if (provided_names->char_names.size >= index) {
-									draw_element_name = provided_names->char_names[index];
-								}
-								else {
-									draw_element_name = temp_name.buffer;
-								}
-							}
-							else if (provided_names->stream_names.buffer != nullptr) {
-								if (provided_names->stream_names.size >= index) {
-									temporary_provided_name_string.Copy(provided_names->stream_names[index]);
-									temporary_provided_name_string.AddSafe('\0');
-								}
-								else {
-									draw_element_name = temp_name.buffer;
-								}
-							}
-							else if (provided_names->select_name_action != nullptr) {
-								if (provided_names->select_name_action_capacity >= index) {
-									UIConfigArrayProvideNameActionData config_action_data = { (char**)&draw_element_name, index };
-									ActionData action_data = GetDummyActionData();
-									action_data.data = provided_names->select_name_action_data;
-									action_data.additional_data = &config_action_data;
-									draw_element_name = temporary_provided_name_string.buffer;
-									provided_names->select_name_action(&action_data);
-								}
-								else {
-									draw_element_name = temp_name.buffer;
-								}
-							}
-						}
-						else {
-							draw_element_name = temp_name.buffer;
+					struct SelectElementData {
+						UIDrawerArrayData* array_data;
+						unsigned int index;
+					};
+
+					auto select_element = [](ActionData* action_data) {
+						UI_UNPACK_ACTION_DATA;
+
+						if (IsClickableTrigger(action_data)) {
+							SelectElementData* data = (SelectElementData*)_data;
+							data->array_data->remove_anywhere_index = data->index;
 						}
 					};
 
+					SelectElementData select_element_data;
+
+					if (configuration & UI_CONFIG_ARRAY_REMOVE_ANYWHERE) {
+						element_configuration |= UI_CONFIG_ELEMENT_NAME_ACTION;
+						select_element_data.array_data = data;
+
+						UIConfigElementNameAction name_action;
+						name_action.clickable_handler = { select_element, &select_element_data, sizeof(select_element_data) };
+						internal_element_config.AddFlag(name_action);
+					}
+
+					const char* draw_element_name = temp_name.buffer;
+					bool has_drag = !function::HasFlag(configuration, UI_CONFIG_ARRAY_DISABLE_DRAG);
+
+					auto select_name = [&](unsigned int index, CapacityStream<char> temporary_provided_name_string) {
+						draw_element_name = temp_name.buffer;
+					};
+
 					auto draw_row = [&](unsigned int index) {
-						arrow_transform.position.x = current_x;
-						// Indent the arrow position in order to align to row Y
-						Indent();
-						OffsetX(ARROW_SIZE.x);
+						if (has_drag) {
+							arrow_transform.position.x = current_x;
+							// Indent the arrow position in order to align to row Y
+							Indent();
+							OffsetX(ARROW_SIZE.x);
+						}
 
 						ECS_TEMP_ASCII_STRING(provided_name_string, 256);
 
@@ -1966,48 +2028,74 @@ namespace ECSEngine {
 						
 						select_name(index, provided_name_string);
 
+						bool has_name_action = function::HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_ACTION);
+						if (has_name_action) {
+							// Check the selected item
+							if (index == data->remove_anywhere_index) {
+								element_configuration |= UI_CONFIG_ELEMENT_NAME_BACKGROUND;
+								UIConfigElementNameBackground background;
+								background.color = color_theme.theme;
+								internal_element_config.AddFlag(background);
+							}
+						}
+
 						UIDrawerArrayDrawData function_data;
 						function_data.additional_data = additional_data;
 						function_data.current_index = index;
 						// MemoryOf(1) gives us the byte size of an element
 						function_data.element_data = function::OffsetPointer(elements->buffer, index * elements->MemoryOf(1));
 						function_data.configuration = element_configuration;
-						function_data.config = (UIDrawConfig*)element_config;
+						function_data.config = &internal_element_config;
+
+						select_element_data.index = index;
+
+						float previous_current_y = current_y;
 
 						draw_function(*this, draw_element_name, function_data);
 
+						if (has_name_action) {
+							if (function::HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND)) {
+								internal_element_config.flag_count--;
+								element_configuration = function::ClearFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND);
+							}
+						}
+
 						// Get the row y scale
-						float row_y_scale = current_row_y_scale;
+						float row_y_scale = current_y - previous_current_y;
 						data->row_y_scale = row_y_scale;
 
-						arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
-						arrow_config.AddFlag(arrow_transform);
-						SpriteRectangle(
-							UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
-							arrow_config,
-							ECS_TOOLS_UI_TEXTURE_ARROW,
-							color_theme.text
-						);
-						arrow_config.flag_count--;
+						if (has_drag) {
+							arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
+							arrow_config.AddFlag(arrow_transform);
+							SpriteRectangle(
+								UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
+								arrow_config,
+								ECS_TOOLS_UI_TEXTURE_ARROW,
+								color_theme.text
+							);
+							arrow_config.flag_count--;
 
-						drag_data.index = index;
-						drag_data.row_y_scale = row_y_scale;
-						float2 action_position = arrow_transform.position - region_render_offset;
-						float2 action_scale;
-						action_position = ExpandRectangle(action_position, arrow_transform.scale, { 1.25f, 1.25f }, action_scale);
-						AddClickable(action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
-						AddDefaultHoverable(action_position, action_scale, color_theme.theme);
-
+							drag_data.index = index;
+							drag_data.row_y_scale = row_y_scale;
+							float2 action_position = arrow_transform.position - region_render_offset;
+							float2 action_scale;
+							action_position = ExpandRectangle(action_position, arrow_transform.scale, { 1.25f, 1.25f }, action_scale);
+							AddClickable(action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
+							AddDefaultHoverable(action_position, action_scale, color_theme.theme);
+						}
+						
 						NextRow();
 						temp_name.size = base_name_size;
 						PopIdentifierStack();
 					};
 
 					auto draw_row_no_action = [&](unsigned int index) {
-						arrow_transform.position.x = current_x;
-						// Indent the arrow position in order to align to row Y
-						Indent();
-						OffsetX(ARROW_SIZE.x);
+						if (has_drag) {
+							arrow_transform.position.x = current_x;
+							// Indent the arrow position in order to align to row Y
+							Indent();
+							OffsetX(ARROW_SIZE.x);
+						}
 
 						ECS_TEMP_ASCII_STRING(provided_name_string, 256);
 
@@ -2021,23 +2109,27 @@ namespace ECSEngine {
 						function_data.current_index = index;
 						function_data.element_data = elements->buffer + index;
 						function_data.configuration = element_configuration;
-						function_data.config = (UIDrawConfig*)element_config;
+						function_data.config = &internal_element_config;
+
+						float previous_current_y = current_y;
 
 						draw_function(*this, draw_element_name, function_data);
 
 						// Get the row y scale
-						float row_y_scale = current_row_y_scale;
+						float row_y_scale = current_y - previous_current_y;
 						data->row_y_scale = row_y_scale;
 
-						arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
-						arrow_config.AddFlag(arrow_transform);
-						SpriteRectangle(
-							UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
-							arrow_config,
-							ECS_TOOLS_UI_TEXTURE_ARROW,
-							color_theme.text
-						);
-						arrow_config.flag_count--;
+						if (has_drag) {
+							arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
+							arrow_config.AddFlag(arrow_transform);
+							SpriteRectangle(
+								UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
+								arrow_config,
+								ECS_TOOLS_UI_TEXTURE_ARROW,
+								color_theme.text
+							);
+							arrow_config.flag_count--;
+						}
 
 						NextRow();
 						temp_name.size = base_name_size;
@@ -2240,13 +2332,11 @@ namespace ECSEngine {
 					get_transform.scale = &button_scale;
 					header_config.AddFlag(get_transform);
 
-					size_t COLOR_RECTANGLE_CONFIGURATION = function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM, UI_CONFIG_ABSOLUTE_TRANSFORM)
-						| UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_GET_TRANSFORM;
+					size_t COLOR_RECTANGLE_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_GET_TRANSFORM;
 
 					SolidColorRectangle(COLOR_RECTANGLE_CONFIGURATION, header_config, color_theme.theme);
 
-					size_t BUTTON_CONFIGURATION = function::ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM, UI_CONFIG_WINDOW_DEPENDENT_SIZE) |
-						UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE;
+					size_t BUTTON_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE;
 
 					float2 square_scale = GetSquareScale(layout.default_element_y);
 					UIConfigAbsoluteTransform sprite_button_transform;
@@ -2260,6 +2350,7 @@ namespace ECSEngine {
 					UIDrawerArrayAddRemoveData add_remove_data;
 					add_remove_data.array_data = data;
 					add_remove_data.new_size = elements->size + 1;
+					add_remove_data.element_byte_size = elements->MemoryOf(1);
 					bool is_capacity_stream = sizeof(*elements) == sizeof(CapacityStream<void>);
 					if (is_capacity_stream) {
 						add_remove_data.is_resizable_data = false;
@@ -2268,7 +2359,6 @@ namespace ECSEngine {
 					else {
 						add_remove_data.is_resizable_data = true;
 						add_remove_data.resizable_data = (ResizableStream<void>*)elements;
-						add_remove_data.element_byte_size = elements->MemoryOf(1);
 					}
 
 					// Update the user callback data if needed
@@ -2347,6 +2437,14 @@ namespace ECSEngine {
 						sprite_color
 					);
 
+					if (configuration & UI_CONFIG_ARRAY_REMOVE_ANYWHERE) {
+						if (system->m_keyboard->IsKeyPressed(HID::Key::Delete) && data->remove_anywhere_index != -1) {
+							ActionData action_data = GetDummyActionData();
+							action_data.data = &add_remove_data;
+							UIDrawerArrayRemoveAnywhereAction(&action_data);
+						}
+					}
+
 					// One for the window dependent size and one for the absolute transform
 					header_config.flag_count -= 2;
 					NextRow();
@@ -2360,6 +2458,14 @@ namespace ECSEngine {
 						PopIdentifierStack();
 					}
 					PopIdentifierStack();
+
+					// If it has a post draw, make sure to draw it
+					if (configuration & UI_CONFIG_ARRAY_PRE_POST_DRAW) {
+						const UIConfigArrayPrePostDraw* custom_draw = (const UIConfigArrayPrePostDraw*)config.GetParameter(UI_CONFIG_ARRAY_PRE_POST_DRAW);
+						if (custom_draw->post_function != nullptr) {
+							custom_draw->post_function(this, custom_draw->post_data);
+						}
+					}
 				}
 				);
 
@@ -3261,7 +3367,8 @@ namespace ECSEngine {
 				size_t configuration,
 				UIDrawConfig& config,
 				Stream<char> name,
-				CapacityStream<wchar_t>* path
+				CapacityStream<wchar_t>* path,
+				Stream<Stream<wchar_t>> extensions
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------

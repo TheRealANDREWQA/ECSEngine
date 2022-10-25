@@ -436,78 +436,87 @@ namespace ECSEngine {
 			auto update_type_field_user_defined = [&](Stream<char> definition, size_t data_index, size_t index, size_t field_index) {
 				type = type_definitions.GetValuePtr(data[data_index].types[index].name);
 
-				// If its a stream type, we need to update its stream_byte_size
-				// Else we need to update the whole current structure
 				ReflectionStreamFieldType stream_type = type->fields[field_index].info.stream_type;
-				struct RestoreTemplateEnd {
-					void operator() () {
-						if (end != nullptr) {
-							*end = previous_char;
-						}
-					}
-					char* end;
-					char previous_char;
-				};
-
-				StackScope<RestoreTemplateEnd> restore_template_end({ nullptr, '\0' });
-
-				if (stream_type != ReflectionStreamFieldType::Basic) {
-					// Extract the new definition
-					if (IsStream(stream_type)) {
-						Stream<char> template_start = function::FindFirstCharacter(definition, '<');
-						Stream<char> template_end = function::FindCharacterReverse(definition, '>');
-						ECS_ASSERT(template_start.buffer != nullptr);
-						ECS_ASSERT(template_end.buffer != nullptr);
-
-						if (memcmp(template_start.buffer + 1, STRING(void), sizeof(STRING(void)) - 1) == 0) {
-							// It is a void stream, don't do anything
-							return true;
-						}
-
-						restore_template_end.deallocator.end = template_end.buffer;
-						restore_template_end.deallocator.previous_char = '>';
-
-						template_end[0] = '\0';
-						char* new_definition = (char*)function::SkipWhitespace(template_start.buffer + 1);
-						definition.size = function::PointerDifference(function::SkipWhitespace(template_end.buffer - 1, -1), new_definition) + 1;
-						definition.buffer = new_definition;
-					}
-				}
-
-				unsigned int container_type_index = FindReflectionCustomType(definition);
 
 				size_t byte_size = -1;
 				size_t alignment = -1;
-				if (container_type_index != -1) {
-					// Get its byte size
-					ReflectionCustomTypeByteSizeData byte_size_data;
-					byte_size_data.definition = definition;
-					byte_size_data.reflection_manager = this;
-					ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_type_index].byte_size(&byte_size_data);
-					byte_size = byte_size_alignment.x;
-					alignment = byte_size_alignment.y;
-
-					if (byte_size == 0) {
-						retry_fields.AddSafe({ (unsigned int)data_index, (unsigned int)index, (unsigned int)field_index });
-						return true;
-					}
+				bool given_data = type->fields[field_index].Has(STRING(ECS_GIVE_SIZE_REFLECTION));
+				if (given_data) {
+					ulong2 result = GetReflectionTypeGivenFieldTag(&type->fields[field_index]);
+					byte_size = result.x;
+					alignment = result.y;
 				}
 				else {
-					// Try to get the user defined type
-					ReflectionType nested_type;
-					if (TryGetType(definition, nested_type)) {
-						byte_size = GetReflectionTypeByteSize(&nested_type);
-						alignment = GetReflectionTypeAlignment(&nested_type);
+					// If its a stream type, we need to update its stream_byte_size
+					// Else we need to update the whole current structure
+					struct RestoreTemplateEnd {
+						void operator() () {
+							if (end != nullptr) {
+								*end = previous_char;
+							}
+						}
+						char* end;
+						char previous_char;
+					};
+
+					StackScope<RestoreTemplateEnd> restore_template_end({ nullptr, '\0' });
+
+					if (stream_type != ReflectionStreamFieldType::Basic) {
+						// Extract the new definition
+						if (IsStream(stream_type)) {
+							Stream<char> template_start = function::FindFirstCharacter(definition, '<');
+							Stream<char> template_end = function::FindCharacterReverse(definition, '>');
+							ECS_ASSERT(template_start.buffer != nullptr);
+							ECS_ASSERT(template_end.buffer != nullptr);
+
+							if (memcmp(template_start.buffer + 1, STRING(void), sizeof(STRING(void)) - 1) == 0) {
+								// It is a void stream, don't do anything
+								return true;
+							}
+
+							restore_template_end.deallocator.end = template_end.buffer;
+							restore_template_end.deallocator.previous_char = '>';
+
+							template_end[0] = '\0';
+							char* new_definition = (char*)function::SkipWhitespace(template_start.buffer + 1);
+							definition.size = function::PointerDifference(function::SkipWhitespace(template_end.buffer - 1, -1), new_definition) + 1;
+							definition.buffer = new_definition;
+						}
+					}
+
+					unsigned int container_type_index = FindReflectionCustomType(definition);
+
+					if (container_type_index != -1) {
+						// Get its byte size
+						ReflectionCustomTypeByteSizeData byte_size_data;
+						byte_size_data.definition = definition;
+						byte_size_data.reflection_manager = this;
+						ulong2 byte_size_alignment = ECS_REFLECTION_CUSTOM_TYPES[container_type_index].byte_size(&byte_size_data);
+						byte_size = byte_size_alignment.x;
+						alignment = byte_size_alignment.y;
+
+						if (byte_size == 0) {
+							retry_fields.AddSafe({ (unsigned int)data_index, (unsigned int)index, (unsigned int)field_index });
+							return true;
+						}
 					}
 					else {
-						// Look to see if it is an enum
-						ReflectionEnum reflection_enum;
-						if (TryGetEnum(definition, reflection_enum)) {
-							byte_size = sizeof(unsigned char);
-							alignment = alignof(unsigned char);
+						// Try to get the user defined type
+						ReflectionType nested_type;
+						if (TryGetType(definition, nested_type)) {
+							byte_size = GetReflectionTypeByteSize(&nested_type);
+							alignment = GetReflectionTypeAlignment(&nested_type);
+						}
+						else {
+							// Look to see if it is an enum
+							ReflectionEnum reflection_enum;
+							if (TryGetEnum(definition, reflection_enum)) {
+								byte_size = sizeof(unsigned char);
+								alignment = alignof(unsigned char);
 
-							// Update the field type to enum
-							type->fields[field_index].info.basic_type = ReflectionBasicFieldType::Enum;
+								// Update the field type to enum
+								type->fields[field_index].info.basic_type = ReflectionBasicFieldType::Enum;
+							}
 						}
 					}
 				}
@@ -558,7 +567,7 @@ namespace ECSEngine {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					for (size_t field_index = 0; field_index < data[data_index].types[index].fields.size; field_index++) {
 						const ReflectionField* field = &data[data_index].types[index].fields[field_index];
-						if (field->info.basic_type == ReflectionBasicFieldType::UserDefined && !field->Skip(STRING(ECS_SKIP_REFLECTION))) 
+						if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) 
 						{
 							if (!update_type_field_user_defined(field->definition, data_index, index, field_index)) {
 								// Fail
@@ -1752,7 +1761,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 							unsigned int word_offset = words[word_index];
 
-#pragma region Skip macro definitions
+#pragma region Has macro definitions
 							// Skip macro definitions - that define tags
 							const char* verify_define_char = file_contents + word_offset - 1;
 							verify_define_char = function::SkipWhitespace(verify_define_char, -1);
@@ -1763,7 +1772,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							}
 #pragma endregion
 
-#pragma region Skip Comments
+#pragma region Has Comments
 							// Skip comments that contain ECS_REFLECT
 							const char* verify_comment_char = file_contents + word_offset - 1;
 							verify_comment_char = function::SkipWhitespace(verify_comment_char, -1);
@@ -1981,9 +1990,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 
-			// If the last value is COUNT/MAX_COUNT
-			// discard it
-			if (function::CompareStrings(enum_.fields[enum_.fields.size - 1], "COUNT") || function::CompareStrings(enum_.fields[enum_.fields.size - 1], "MAX_COUNT")) {
+			// If the last value is contains COUNT discard it
+			if (function::FindFirstToken(enum_.fields[enum_.fields.size - 1], "COUNT").size > 0) {
 				enum_.fields.size--;
 			}
 
@@ -2360,7 +2368,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									WriteErrorMessage(data, "An error occured during field type determination.", file_index);
 									return false;
 								}
-								else if (ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
+								else if (result == ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED) {
 									omitted_fields = true;
 								}
 							}
@@ -2449,7 +2457,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				// Check comments at the end of the line
 				if (parsed_tag_character[0] != '/' || (parsed_tag_character[1] != '/' && parsed_tag_character[1] != '*')) {
 					// Look for tag - there can be more tags separated by a space - change the space into a
-					// _ when writing the tag
+					// ~ when writing the tag
 					
 					// A special case to handle is the ECS_SKIP_REFLECTION
 					if (memcmp(parsed_tag_character, STRING(ECS_SKIP_REFLECTION), sizeof(STRING(ECS_SKIP_REFLECTION)) - 1) == 0) {
@@ -2464,14 +2472,43 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					char* skipped_ending_tag_character = (char*)function::SkipWhitespace(ending_tag_character);
 
 					// If there are more tags separated by spaces, then transform the spaces or the tabs into
-					// _ when writing the tag
+					// ~ when writing the tag
 					while (skipped_ending_tag_character != next_line_character) {
+						if (*skipped_ending_tag_character == '(') {
+							// Parameter macro - find all opened pairs
+							unsigned int opened_count = 1;
+							const char* last_opened = skipped_ending_tag_character;
+							const char* last_closed = skipped_ending_tag_character;
+							while (opened_count > 0) {
+								// Search for ')' and '('
+								const char* opened = strchr(last_opened + 1, '(');
+								if (opened != nullptr && opened < next_line_character) {
+									last_opened = opened;
+									opened_count++;
+								}
+
+								const char* closed = strchr(last_closed + 1, ')');
+								if (closed == nullptr) {
+									return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+								}
+
+								if (closed < next_line_character) {
+									opened_count--;
+								}
+								last_closed = closed;
+							}
+							skipped_ending_tag_character = (char*)last_closed + 1;
+							ending_tag_character = (char*)function::SkipWhitespace(skipped_ending_tag_character);
+						}
+
 						while (ending_tag_character != skipped_ending_tag_character) {
-							*ending_tag_character = '_';
+							*ending_tag_character = '~';
 							ending_tag_character++;
 						}
 
-						ending_tag_character = (char*)function::SkipCodeIdentifier(skipped_ending_tag_character);
+						if (*skipped_ending_tag_character != '\n') {
+							ending_tag_character = (char*)function::SkipCodeIdentifier(skipped_ending_tag_character);
+						}
 						skipped_ending_tag_character = (char*)function::SkipWhitespace(ending_tag_character);
 					}
 
@@ -3027,8 +3064,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						}
 						else {
 							// Assert false or assume alignment of 8
-							ECS_ASSERT(false);
-							alignment = alignof(void*);
+							// Check for ECS_GIVE_SIZE_REFLECTION
+							if (type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION))) {
+								alignment = GetReflectionTypeGivenFieldTag(&type->fields[index]).y;
+							}
+							else {
+								ECS_ASSERT(false);
+								alignment = alignof(void*);
+							}
 						}
 					}
 				}
@@ -3168,6 +3211,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					return GetReflectionTypeAlignment(&nested_type);
 				}
 				else {
+					// Check for enums
+					ReflectionEnum enum_;
+					if (reflection_manager->TryGetEnum(field.definition, enum_)) {
+						return alignof(unsigned char);
+					}
+
 					// Assume its a container type - which should always have an alignment of alignof(void*)
 					return alignof(void*);
 				}
@@ -3562,6 +3611,26 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 			component_buffers.AssertCapacity();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ulong2 GetReflectionTypeGivenFieldTag(const ReflectionField* field)
+		{
+			Stream<char> tag = field->GetTag(STRING(ECS_GIVE_SIZE_REFLECTION));
+			Stream<char> comma = function::FindFirstCharacter(tag, ',');
+
+			ulong2 result;
+			result.y = 8; // assume alignment 8
+			if (comma.size > 0) {
+				// Parse the alignment
+				result.y = function::ConvertCharactersToInt(comma);
+				ECS_ASSERT(result.y == 1 || result.y == 2 || result.y == 4 || result.y == 8);
+				tag = { tag.buffer, tag.size - comma.size };
+			}
+			
+			result.x = function::ConvertCharactersToInt(tag);
+			return result;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
