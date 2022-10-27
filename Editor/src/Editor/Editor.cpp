@@ -290,7 +290,6 @@ public:
 		float3 LIGHT_DIRECTION(0.0f, -1.0f, 0.0f);
 		ColorFloat LIGHT_INTENSITY(1.0f, 1.0f, 1.0f, 0.0f);
 
-
 		static bool normal_map = true;
 		static float normal_strength = 0.0f;
 		static float metallic = 1.0f;

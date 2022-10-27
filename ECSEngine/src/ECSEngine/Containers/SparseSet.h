@@ -198,6 +198,18 @@ namespace ECSEngine {
 			size--;
 		}
 
+		SparseSet<T> Copy(AllocatorPolymorphic allocator) const {
+			SparseSet<T> result;
+
+			result.Initialize(allocator, capacity);
+			size_t copy_size = MemoryOf(capacity);
+			memcpy(result.buffer, buffer, copy_size);
+			result.first_empty_slot = first_empty_slot;
+			result.size = size;
+
+			return result;
+		}
+
 		template<typename Allocator>
 		void Initialize(Allocator* allocator, unsigned int _capacity) {
 			void* allocation = allocator->Allocate(MemoryOf(_capacity));
@@ -251,6 +263,18 @@ namespace ECSEngine {
 		unsigned int size;
 		unsigned int capacity;
 	};
+
+	// Copies a sparse set with its type unknown. Based only upon the byte size this can be performed
+	ECSENGINE_API void SparseSetCopyTypeErased(const void* source, void* destination, size_t element_byte_size, AllocatorPolymorphic allocator);
+
+	ECSENGINE_API void SparseSetCopyTypeErasedFunction(
+		const void* source,
+		void* destination,
+		size_t element_byte_size,
+		AllocatorPolymorphic allocator,
+		void (*copy_function)(const void* source_element, void* destination_element, AllocatorPolymorphic allocator, void* extra_data),
+		void* extra_data
+	);
 
 	template<typename T>
 	struct ResizableSparseSet {

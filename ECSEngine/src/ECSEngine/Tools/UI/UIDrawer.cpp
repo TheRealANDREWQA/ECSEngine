@@ -12718,7 +12718,7 @@ namespace ECSEngine {
 				void* allocation = GetMainAllocatorBuffer(sizeof(char) * MAX_CAPACITY * 4);
 				uintptr_t ptr = (uintptr_t)allocation;
 				data->first_selected_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
-				data->first_selected_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
+				data->last_selected_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
 				data->hovered_label.InitializeFromBuffer(ptr, 0, MAX_CAPACITY);
 
 				data->label_size = storage_type_size;

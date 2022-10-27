@@ -35,7 +35,7 @@ void* AllocateErrorMessage(EditorState* editor_state, Stream<char> error_message
 	return allocation;
 }
 
-void EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size) {
+void* EditorAddEvent(EditorState* editor_state, EditorEventFunction function, void* event_data, size_t event_data_size) {
 	EDITOR_STATE(editor_state);
 
 	EditorEvent editor_event;
@@ -47,6 +47,8 @@ void EditorAddEvent(EditorState* editor_state, EditorEventFunction function, voi
 		std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_FOR_QUEUE_SPACE_SLEEP_TICK));
 	}
 	editor_state->event_queue.Push(editor_event);
+
+	return editor_event.data;
 }
 
 void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction function, void* event_data) {

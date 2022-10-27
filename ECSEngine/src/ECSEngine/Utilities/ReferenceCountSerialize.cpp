@@ -38,7 +38,26 @@ namespace ECSEngine {
 
 	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
-		return IsTriviallyCopyable(data->reflection_manager, template_type);
+		return IsTriviallyCopyable(data->reflection_manager, template_type, data->exceptions);
+	}
+
+	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(ReferenceCounted) {
+		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
+		CopyReflectionType(data->reflection_manager, template_type, data->source, data->destination, data->allocator, data->blittable_exceptions, data->blittable_byte_sizes);
+
+		// Also copy the reference count
+		size_t byte_size = 0;
+		unsigned int exception_index = function::FindString(template_type, data->blittable_exceptions);
+		if (exception_index != -1) {
+			byte_size = data->blittable_byte_sizes[exception_index];
+		}
+		else {
+			byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
+		}
+
+		unsigned int* source_value = (unsigned int*)function::OffsetPointer(data->source, byte_size);
+		unsigned int* destination_value = (unsigned int*)function::OffsetPointer(data->destination, byte_size);
+		*destination_value = *source_value;
 	}
 
 	// --------------------------------------------------------------------------------------

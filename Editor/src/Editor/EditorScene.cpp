@@ -15,11 +15,12 @@ using namespace ECSEngine;
 
 SerializeEntityManagerComponentTable SerializeComponentTable(
 	const EditorState* editor_state,
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	Stream<const Reflection::ReflectionType*> link_types
 ) {
 	SerializeEntityManagerComponentTable table;
 
-	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerComponentInfo, overrides, 256);
+	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerComponentInfo, overrides, 512);
 
 	// Walk through the module reflection and retrieve their overrides
 	ProjectModules project_modules = *editor_state->project_modules;
@@ -38,8 +39,16 @@ SerializeEntityManagerComponentTable SerializeComponentTable(
 		}
 	}
 
-	CreateSerializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	CreateSerializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	// Get the link types
+	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
+	ConvertLinkTypesToSerializeEntityManagerUnique(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
+	overrides.size += link_types.size;
+
+	CreateSerializeEntityManagerComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
+
+	//CreateSerializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	//CreateSerializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -54,7 +63,8 @@ SerializeEntityManagerComponentTable SerializeComponentTable(
 
 SerializeEntityManagerSharedComponentTable SerializeSharedComponentTable(
 	const EditorState* editor_state,
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	Stream<const Reflection::ReflectionType*> link_types
 ) {
 	SerializeEntityManagerSharedComponentTable table;
 
@@ -77,8 +87,15 @@ SerializeEntityManagerSharedComponentTable SerializeSharedComponentTable(
 		}
 	}
 
-	CreateSerializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	CreateSerializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
+	ConvertLinkTypesToSerializeEntityManagerShared(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
+	overrides.size += link_types.size;
+
+	CreateSerializeEntityManagerSharedComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
+
+	//CreateSerializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	//CreateSerializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -92,7 +109,8 @@ SerializeEntityManagerSharedComponentTable SerializeSharedComponentTable(
 
 DeserializeEntityManagerComponentTable DeserializeComponentTable(
 	const EditorState* editor_state,
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	Stream<const Reflection::ReflectionType*> link_types
 ) {
 	DeserializeEntityManagerComponentTable table;
 
@@ -115,8 +133,15 @@ DeserializeEntityManagerComponentTable DeserializeComponentTable(
 		}
 	}
 
-	CreateDeserializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	CreateDeserializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
+	ConvertLinkTypesToDeserializeEntityManagerUnique(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
+	overrides.size += link_types.size;
+
+	CreateDeserializeEntityManagerComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
+
+	//CreateDeserializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	//CreateDeserializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -130,7 +155,8 @@ DeserializeEntityManagerComponentTable DeserializeComponentTable(
 
 DeserializeEntityManagerSharedComponentTable DeserializeSharedComponentTable(
 	const EditorState* editor_state,
-	AllocatorPolymorphic allocator
+	AllocatorPolymorphic allocator,
+	Stream<const Reflection::ReflectionType*> link_types
 ) {
 	DeserializeEntityManagerSharedComponentTable table;
 
@@ -153,8 +179,15 @@ DeserializeEntityManagerSharedComponentTable DeserializeSharedComponentTable(
 		}
 	}
 
-	CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
+	ConvertLinkTypesToDeserializeEntityManagerShared(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
+	overrides.size += link_types.size;
+
+	CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
+	
+	//CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
+	//CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
+	
 	// Add the overrides manually
 	for (unsigned int index = 0; index < overrides.size; index++) {
 		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
@@ -224,9 +257,14 @@ bool LoadEditorSceneCore(EditorState* editor_state, EntityManager* entity_manage
 		return true;
 	}
 
+	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, unique_link_types, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, shared_link_types, ECS_KB);
+
+	editor_state->editor_components.GetLinkComponents(unique_link_types, shared_link_types);
+
 	// Create the 2 serialize table
-	auto unique_table = DeserializeComponentTable(editor_state, stack_allocator);
-	auto shared_table = DeserializeSharedComponentTable(editor_state, stack_allocator);
+	auto unique_table = DeserializeComponentTable(editor_state, stack_allocator, unique_link_types);
+	auto shared_table = DeserializeSharedComponentTable(editor_state, stack_allocator, shared_link_types);
 
 	// The entity manager first
 	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(entity_manager, file_handle, &unique_table, &shared_table);
@@ -235,9 +273,6 @@ bool LoadEditorSceneCore(EditorState* editor_state, EntityManager* entity_manage
 		CloseFile(file_handle);
 		return false;
 	}
-
-	// The hierarchy names need to be restored
-	// At the moment there is no way for the modules to signal if they acquire a hierarchy
 
 	// Read the database reference now
 	// Read whatever its left in the file now and send it to the asset database
@@ -328,10 +363,14 @@ bool SaveEditorScene(const EditorState* editor_state, const EntityManager* entit
 	}
 
 	stack_deallocator.deallocator.file_handle = file_handle;
+	
+	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, unique_link_types, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, shared_link_types, ECS_KB);
+	editor_state->editor_components.GetLinkComponents(unique_link_types, shared_link_types);
 
 	// Create the 2 serialize table
-	auto unique_table = SerializeComponentTable(editor_state, stack_allocator);
-	auto shared_table = SerializeSharedComponentTable(editor_state, stack_allocator);
+	auto unique_table = SerializeComponentTable(editor_state, stack_allocator, unique_link_types);
+	auto shared_table = SerializeSharedComponentTable(editor_state, stack_allocator, shared_link_types);
 
 	bool success = SerializeEntityManager(entity_manager, file_handle, &unique_table, &shared_table);
 	if (!success) {

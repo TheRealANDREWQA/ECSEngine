@@ -57,17 +57,34 @@ namespace ECSEngine {
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name) bool SerializeCustomTypeIsTriviallyCopyable_##name(SerializeCustomTypeIsTriviallyCopyableData* data)
 
+	struct SerializeCustomTypeCopyData {
+		const Reflection::ReflectionManager* reflection_manager;
+		Stream<char> definition;
+		const void* source;
+		void* destination;
+		AllocatorPolymorphic allocator;
+
+		Stream<Stream<char>> blittable_exceptions;
+		Stream<unsigned int> blittable_byte_sizes;
+	};
+
+	typedef void (*SerializeCustomTypeCopy)(SerializeCustomTypeCopyData* data);
+
+#define ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(name) void SerializeCustomTypeCopy_##name(SerializeCustomTypeCopyData* data)
+
 #define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
 														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name); \
-														ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name);
+														ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name); \
+														ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(name);
 
-#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, SerializeCustomTypeIsTriviallyCopyable_##name, version, nullptr } 
+#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, SerializeCustomTypeIsTriviallyCopyable_##name, SerializeCustomTypeCopy_##name, version, nullptr } 
 
 	struct SerializeCustomType {
 		Reflection::ReflectionCustomType container_type;
 		SerializeCustomTypeWriteFunction write;
 		SerializeCustomTypeReadFunction read;
 		SerializeCustomTypeIsTriviallyCopyable is_trivially_copyable;
+		SerializeCustomTypeCopy copy_function;
 		unsigned int version;
 
 		// Can modify the behaviour of the serializer
@@ -160,6 +177,8 @@ namespace ECSEngine {
 	// into a single step. Returns what DeserializeCustomReadHelper would return, the number of buffer bytes
 	ECSENGINE_API size_t DeserializeCustomReadHelperEx(DeserializeCustomReadHelperExData* data);
 
+	ECSENGINE_API void SerializeCustomTypeCopyBlit(SerializeCustomTypeCopyData* data, size_t byte_size);
+
 	// Returns -1 if it doesn't exist
 	ECSENGINE_API unsigned int FindSerializeCustomType(Stream<char> definition);
 
@@ -179,6 +198,28 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		Stream<char> definition,
 		Stream<Stream<char>> exceptions = { nullptr, 0 }
+	);
+
+	// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
+	ECSENGINE_API void CopyReflectionType(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		const void* source,
+		void* destination,
+		AllocatorPolymorphic field_allocator,
+		Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
+		Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 }
+	);
+
+	// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
+	ECSENGINE_API void CopyReflectionType(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> definition,
+		const void* source,
+		void* destination,
+		AllocatorPolymorphic field_allocator,
+		Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
+		Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 }
 	);
 
 #pragma region User defined influence

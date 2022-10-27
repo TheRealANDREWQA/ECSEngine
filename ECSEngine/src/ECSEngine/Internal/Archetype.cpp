@@ -379,6 +379,19 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	SharedInstance Archetype::GetBaseInstance(Component component, unsigned int base_index) const
+	{
+		SharedComponentSignature signature = GetSharedSignature(base_index);
+		for (unsigned int index = 0; index < signature.count; index++) {
+			if (component == signature.indices[index]) {
+				return signature.instances[index];
+			}
+		}
+		return { -1 };
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	ArchetypeBase* Archetype::GetBase(unsigned int index)
 	{
 		ECS_CRASH_RETURN_VALUE(index < m_base_archetypes.size, nullptr, "Incorrect base index {#} when trying to retrieve archetype base pointer from archetype.", index);

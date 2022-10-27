@@ -7,7 +7,6 @@
 #include "ReflectionStringFunctions.h"
 #include "../ReferenceCountSerialize.h"
 #include "../../Containers/SparseSet.h"
-
 #include "../../Internal/Resources/AssetMetadataSerialize.h"
 
 namespace ECSEngine {
@@ -54,7 +53,7 @@ namespace ECSEngine {
 		Stream<char> ReflectionCustomTypeGetTemplateArgument(Stream<char> definition)
 		{
 			Stream<char> opened_bracket = function::FindFirstCharacter(definition, '<');
-			Stream<char> closed_bracket = function::FindFirstCharacter(definition, '>');
+			Stream<char> closed_bracket = function::FindCharacterReverse(definition, '>');
 			ECS_ASSERT(opened_bracket.buffer != nullptr && closed_bracket.buffer != nullptr);
 
 			Stream<char> type = { opened_bracket.buffer + 1, function::PointerDifference(closed_bracket.buffer, opened_bracket.buffer) - 1 };
@@ -918,43 +917,71 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::GetHierarchyTypes(unsigned int hierarchy_index, ReflectionManagerGetQuery options) const {
+		void ReflectionManager::GetHierarchyTypes(ReflectionManagerGetQuery options, unsigned int hierarchy_index) const {
 			if (options.tags.size == 0) {
-				type_definitions.ForEachIndexConst([&](unsigned int index) {
-					const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
-					if (type->folder_hierarchy_index == hierarchy_index) {
-						options.indices->AddSafe(index);
-					}
-				});
-			}
-			else {
-				type_definitions.ForEachIndexConst([&](unsigned int index) {
-					const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
-					if (type->folder_hierarchy_index == hierarchy_index) {
-						size_t tag_index = 0;
-						for (; tag_index < options.tags.size; tag_index++) {
-							if (options.strict_compare) {
-								if (type->IsTag(options.tags[tag_index])) {
-									break;
-								}
-							}
-							else {
-								if (type->HasTag(options.tags[tag_index])) {
-									break;
-								}
-							}
-						}
-
-						if (tag_index < options.tags.size) {
-							if (options.use_stream_indices) {
-								options.stream_indices[tag_index].AddSafe(index);
-							}
-							else {
+				auto loop = [&](auto check_index) {
+					type_definitions.ForEachIndexConst([&](unsigned int index) {
+						const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
+						if constexpr (check_index.value) {
+							if (type->folder_hierarchy_index == hierarchy_index) {
 								options.indices->AddSafe(index);
 							}
 						}
-					}
-				});
+						else {
+							options.indices->AddSafe(index);
+						}
+					});
+				};
+
+				if (hierarchy_index == -1) {
+					loop(std::false_type{});
+				}
+				else {
+					loop(std::true_type{});
+				}
+			}
+			else {
+				auto loop = [&](auto check_index) {
+					type_definitions.ForEachIndexConst([&](unsigned int index) {
+						const ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
+						bool valid_index = true;
+						if constexpr (check_index.value) {
+							valid_index = type->folder_hierarchy_index == hierarchy_index;;
+						}
+
+						if (valid_index) {
+							size_t tag_index = 0;
+							for (; tag_index < options.tags.size; tag_index++) {
+								if (options.strict_compare) {
+									if (type->IsTag(options.tags[tag_index])) {
+										break;
+									}
+								}
+								else {
+									if (type->HasTag(options.tags[tag_index])) {
+										break;
+									}
+								}
+							}
+
+							if (tag_index < options.tags.size) {
+								if (options.use_stream_indices) {
+									options.stream_indices[tag_index].AddSafe(index);
+								}
+								else {
+									options.indices->AddSafe(index);
+								}
+							}
+						}
+						});
+				};
+
+				if (hierarchy_index == -1) {
+					loop(std::false_type{});
+				}
+				else {
+					loop(std::true_type{});
+				}
 			}
 		}
 
@@ -992,7 +1019,7 @@ namespace ECSEngine {
 			query_options.strict_compare = true;
 			query_options.use_stream_indices = true;
 
-			GetHierarchyTypes(hierarchy_index, query_options);
+			GetHierarchyTypes(query_options, hierarchy_index);
 
 			component_indices->size = stream_of_indices[0].size;
 			shared_indices->size = stream_of_indices[1].size;
@@ -3105,15 +3132,34 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		size_t SearchReflectionUserDefinedTypeByteSize(const ReflectionManager* reflection_manager, Stream<char> definition)
+		size_t SearchReflectionUserDefinedTypeByteSize(
+			const ReflectionManager* reflection_manager, 
+			Stream<char> definition,
+			Stream<Stream<char>> blittable_exceptions,
+			Stream<unsigned int> blittable_byte_sizes
+		)
 		{
-			return SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, definition).x;
+			return SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, definition, blittable_exceptions, blittable_byte_sizes).x;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(const ReflectionManager* reflection_manager, Stream<char> definition)
+		ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			Stream<Stream<char>> blittable_exceptions,
+			Stream<unsigned int> blittable_byte_sizes,
+			Stream<unsigned int> blittable_alignments
+		)
 		{
+			unsigned int exception_index = function::FindString(definition, blittable_exceptions);
+			if (exception_index != -1) {
+				return { 
+					blittable_byte_sizes[exception_index],
+					blittable_alignments.size > 0 ? blittable_alignments[exception_index] : std::max(blittable_byte_sizes[exception_index], (unsigned int)alignof(void*)) 
+				};
+			}
+
 			ReflectionType type;
 			ReflectionEnum enum_;
 			unsigned int container_index = -1;
@@ -3130,6 +3176,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			else if (enum_.name.size > 0) {
 				return { sizeof(unsigned char), alignof(unsigned char) };
+			}
+			else {
+				// Check fundamental type
+				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
+				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+					return { field.info.byte_size, GetFieldTypeAlignment(field.info.basic_type) };
+				}
 			}
 
 			// Signal an error
@@ -3156,6 +3209,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			else if (enum_.name.size > 0) {
 				return alignof(unsigned char);
+			}
+			else {
+				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
+				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+					return GetFieldTypeAlignment(field.info.basic_type);
+				}
 			}
 
 			// Signal an error
@@ -3224,6 +3283,57 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			
 			// Should not reach here
 			return 0;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void CopyReflectionFieldBasic(const ReflectionFieldInfo* info, const void* source, void* destination, AllocatorPolymorphic allocator)
+		{
+			ReflectionStreamFieldType stream_type = info->stream_type;
+			if (stream_type == ReflectionStreamFieldType::Basic || stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+				memcpy(destination, source, info->byte_size);
+			}
+			else {
+				// Here the source needs to be passed in, it will offset it manually
+				if (stream_type == ReflectionStreamFieldType::Stream) {
+					Stream<void>* source_stream = (Stream<void>*)source;
+					Stream<void>* destination_stream = (Stream<void>*)destination;
+
+					size_t copy_size = source_stream->size * GetReflectionFieldStreamElementByteSize(*info);
+					void* allocation = nullptr;
+					if (copy_size > 0) {
+						allocation = Allocate(allocator, copy_size);
+						memcpy(allocation, source_stream->buffer, copy_size);
+					}
+
+					destination_stream->buffer = allocation;
+					destination_stream->size = source_stream->size;
+				}
+				else if (stream_type == ReflectionStreamFieldType::CapacityStream || stream_type == ReflectionStreamFieldType::ResizableStream) {
+					CapacityStream<void>* source_stream = (CapacityStream<void>*)source;
+					CapacityStream<void>* destination_stream = (CapacityStream<void>*)destination;
+
+					size_t copy_size = source_stream->capacity * GetReflectionFieldStreamElementByteSize(*info);
+					void* allocation = nullptr;
+					if (copy_size > 0) {
+						allocation = Allocate(allocator, copy_size);
+						memcpy(allocation, source_stream->buffer, copy_size);
+					}
+
+					destination_stream->buffer = allocation;
+					destination_stream->size = source_stream->size;
+					destination_stream->capacity = source_stream->capacity;
+				}
+				else if (stream_type == ReflectionStreamFieldType::Pointer) {
+					// Just copy the pointer
+					const void** source_ptr = (const void**)source;
+					const void** destination_ptr = (const void**)destination;
+					*destination_ptr = *source_ptr;
+				}
+				else {
+					ECS_ASSERT(false, "Unknown stream type");
+				}
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

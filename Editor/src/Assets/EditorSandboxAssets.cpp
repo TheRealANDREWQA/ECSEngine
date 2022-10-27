@@ -1,10 +1,11 @@
 #include "editorpch.h"
-#include "../Editor/EditorState.h"
-#include "../Editor/EditorEvent.h"
 #include "ECSEngineAssets.h"
+#include "ECSEngineComponents.h"
+
+#include "../Editor/EditorEvent.h"
+#include "../Editor/EditorState.h"
 #include "../Project/ProjectFolders.h"
 #include "EditorSandboxAssets.h"
-
 #include "AssetManagement.h"
 
 using namespace ECSEngine;
@@ -227,29 +228,36 @@ bool RegisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index,
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct UnregisterEventData {
-	unsigned int handle;
 	unsigned int sandbox_index;
-	ECS_ASSET_TYPE type;
+	Stream<UnregisterSandboxAssetElement> elements;
 };
 
 EDITOR_EVENT(UnregisterEvent) {
 	UnregisterEventData* data = (UnregisterEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		Stream<char> asset_name = editor_state->asset_database->GetAssetName(data->handle, data->type);
+		for (size_t index = 0; index < data->elements.size; index++) {
+			unsigned int handle = data->elements[index].handle;
+			ECS_ASSET_TYPE type = data->elements[index].type;
 
-		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		unsigned int database_reference_index = sandbox->database.GetIndex(data->handle, data->type);
-		bool removed_now = sandbox->database.RemoveAsset(database_reference_index, data->type);
+			Stream<char> asset_name = editor_state->asset_database->GetAssetName(handle, type);
 
-		if (removed_now) {
-			bool success = DeallocateAsset(editor_state, data->handle, data->type);
-			if (!success) {
-				const char* type_string = ConvertAssetTypeString(data->type);
-				ECS_FORMAT_TEMP_STRING(error_message, "Failed to remove asset {#}, type {#}. Possible causes: internal error or the asset was not loaded in the first place.", asset_name, type_string);
-				EditorSetConsoleError(error_message);
+			EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+			unsigned int database_reference_index = sandbox->database.GetIndex(handle, type);
+			bool removed_now = sandbox->database.RemoveAsset(database_reference_index, type);
+
+			if (removed_now) {
+				bool success = DeallocateAsset(editor_state, handle, type);
+				if (!success) {
+					const char* type_string = ConvertAssetTypeString(type);
+					ECS_FORMAT_TEMP_STRING(error_message, "Failed to remove asset {#}, type {#}. Possible causes: internal error or the asset was not loaded in the first place.", asset_name, type_string);
+					EditorSetConsoleError(error_message);
+				}
 			}
 		}
+
+		// Deallocate the buffer of data
+		editor_state->editor_allocator->Deallocate(data->elements.buffer);
 		return false;
 	}
 	else {
@@ -257,17 +265,51 @@ EDITOR_EVENT(UnregisterEvent) {
 	}
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE type)
 {
-	UnregisterEventData event_data = { sandbox_index, handle, type };
-	EditorAddEvent(editor_state, UnregisterEvent, &event_data, sizeof(event_data));
+	UnregisterSandboxAssetElement element = { handle, type };
+	UnregisterSandboxAsset(editor_state, sandbox_index, { &element, 1 });
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnloadSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name)
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<UnregisterSandboxAssetElement> elements)
 {
-	
+	// No elements to unload
+	if (elements.size == 0) {
+		return;
+	}
+
+	UnregisterEventData event_data = { sandbox_index, { nullptr, 0} };
+	UnregisterEventData* allocated_data = (UnregisterEventData*)EditorAddEvent(editor_state, UnregisterEvent, &event_data, sizeof(event_data));
+	allocated_data->elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name)
+{
+	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
+	ECS_ASSERT(type != nullptr);
+
+	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 128);
+	GetAssetFieldsFromLinkComponent(type, asset_fields);
+
+	ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 128);
+	GetLinkComponentHandles(type, link_component, asset_fields, handles);
+
+	ECS_STACK_CAPACITY_STREAM(UnregisterSandboxAssetElement, unload_elements, 128);
+
+	for (unsigned int index = 0; index < handles.size; index++) {
+		if (handles[index] != -1) {
+			// Unload it
+			unload_elements.Add({ handles[index], asset_fields[index].type });
+		}
+	}
+
+	UnregisterSandboxAsset(editor_state, sandbox_index, unload_elements);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

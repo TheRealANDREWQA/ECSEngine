@@ -428,11 +428,19 @@ namespace ECSEngine {
 		};
 
 		struct UIDrawerNumberInputCallbackData {
+			inline void* GetUserData() const {
+				return relative_user_data ? function::OffsetPointer(this, user_action_data_offset) : user_action_data;
+			}
+
 			Action user_action;
-			void* user_action_data;
+			union {
+				void* user_action_data;
+				size_t user_action_data_offset;
+			};
 			UIDrawerTextInput* input;
 			bool return_to_default;
 			bool display_range;
+			bool relative_user_data;
 		};
 
 		// input, return_to_default and display_range must be the first data members

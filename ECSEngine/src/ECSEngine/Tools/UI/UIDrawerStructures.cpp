@@ -609,7 +609,7 @@ namespace ECSEngine {
 				return function::CompareStrings(*(Stream<char>*)label, first_selected_label.AsIs<char>());
 			}
 			else {
-				return memcmp(label, first_selected_label.buffer, label_size);
+				return memcmp(label, first_selected_label.buffer, label_size) == 0;
 			}
 		}
 
@@ -619,7 +619,7 @@ namespace ECSEngine {
 				return function::CompareStrings(*(Stream<char>*)label, last_selected_label.AsIs<char>());
 			}
 			else {
-				return memcmp(label, last_selected_label.buffer, label_size);
+				return memcmp(label, last_selected_label.buffer, label_size) == 0;
 			}
 		}
 

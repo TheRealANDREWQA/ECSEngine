@@ -132,7 +132,7 @@ struct EditorState {
 
 	// These will be played back on the main thread. If multithreaded tasks are desired,
 	// use the AddBackgroundTask function
-	ECSEngine::ThreadSafeQueue<EditorEvent> event_queue;
+	ECSEngine::Queue<EditorEvent> event_queue;
 
 	ECSEngine::ResizableStream<EditorSandbox> sandboxes;
 	

@@ -92,6 +92,9 @@ namespace ECSEngine {
 
 		const SharedInstance* GetBaseInstances(unsigned int index) const;
 
+		// Does not use the SIMD search. Returns -1 if the component doesn't exist
+		SharedInstance GetBaseInstance(Component component, unsigned int base_index) const;
+
 		ArchetypeBase* GetBase(unsigned int index);
 
 		const ArchetypeBase* GetBase(unsigned int index) const;

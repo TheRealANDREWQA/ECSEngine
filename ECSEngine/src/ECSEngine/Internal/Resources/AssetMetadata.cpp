@@ -48,7 +48,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------
 
 	ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string) {
-		size_t count = sizeof(ECS_ASSET_METADATA_MACROS) / sizeof(Stream<char>);
+		size_t count = std::size(ECS_ASSET_METADATA_MACROS);
 		for (size_t index = 0; index < count; index++) {
 			if (string.size == ECS_ASSET_METADATA_MACROS[index].size && memcmp(string.buffer, ECS_ASSET_METADATA_MACROS[index].buffer, string.size * sizeof(char)) == 0) {
 				return (ECS_ASSET_TYPE)index;
@@ -61,7 +61,7 @@ namespace ECSEngine {
 
 	ECS_ASSET_TYPE FindAssetTargetField(Stream<char> string)
 	{
-		size_t count = sizeof(ECS_ASSET_TARGET_FIELD_NAMES) / sizeof(AssetFieldTarget);
+		size_t count = std::size(ECS_ASSET_TARGET_FIELD_NAMES);
 		for (size_t index = 0; index < count; index++) {
 			if (string.size == ECS_ASSET_TARGET_FIELD_NAMES[index].name.size &&
 				memcmp(string.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.buffer, ECS_ASSET_TARGET_FIELD_NAMES[index].name.size) == 0) {

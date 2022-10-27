@@ -1,7 +1,9 @@
 #include "ecspch.h"
 #include "ModuleUtilities.h"
 #include "../../Utilities/Reflection/Reflection.h"
+#include "../../Utilities/Serialization/SerializationHelpers.h"
 #include "../../Internal/Resources/AssetDatabase.h"
+#include "../../Internal/LinkComponents.h"
 
 namespace ECSEngine {
 
@@ -53,23 +55,6 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------
 
-	void ModuleResetLinkComponent(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		void* link_component
-	)
-	{
-		reflection_manager->SetInstanceDefaultData(type, link_component);
-		// Make all handles -1
-		for (size_t index = 0; index < type->fields.size; index++) {
-			if (FindAssetMetadataMacro(type->fields[index].tag) != ECS_ASSET_TYPE_COUNT) {
-				// It is a handle
-				unsigned int* handle = (unsigned int*)function::OffsetPointer(link_component, type->fields[index].info.pointer_offset);
-				*handle = -1;
-			}
-		}
-	}
-
 	bool ModuleFromTargetToLinkComponent(
 		ModuleLinkComponentTarget module_link, 
 		const Reflection::ReflectionManager* reflection_manager, 
@@ -77,7 +62,8 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* link_type, 
 		const AssetDatabase* asset_database, 
 		const void* target_data, 
-		void* link_data
+		void* link_data,
+		AllocatorPolymorphic allocator
 	)
 	{
 		// Determine if the link component has a DLL function
@@ -155,11 +141,24 @@ namespace ECSEngine {
 						return false;
 					}
 
-					memcpy(
-						function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset),
-						function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset),
-						link_type->fields[index].info.byte_size
-					);
+					const void* source = function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset);
+					void* destination = function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset);
+					if (allocator.allocator != nullptr) {
+						CopyReflectionType(
+							reflection_manager,
+							link_type->fields[index].definition,
+							source,
+							destination,
+							allocator
+						);
+					}
+					else {
+						memcpy(
+							destination,
+							source,
+							link_type->fields[index].info.byte_size
+						);
+					}
 				}
 			}
 
@@ -179,7 +178,8 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* target_type,
 		const AssetDatabase* asset_database,
 		const void* link_data, 
-		void* target_data
+		void* target_data,
+		AllocatorPolymorphic allocator
 	)
 	{
 		// Determine if the link component has a DLL function
@@ -227,11 +227,25 @@ namespace ECSEngine {
 
 			size_t asset_index = 0;
 			auto copy_field = [&](size_t index) {
-				memcpy(
-					function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset),
-					function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset),
-					target_type->fields[index].info.byte_size
-				);
+				const void* source = function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset);
+				void* destination = function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset);
+
+				if (allocator.allocator != nullptr) {
+					CopyReflectionType(
+						reflection_manager,
+						target_type->fields[index].definition,
+						source,
+						destination,
+						allocator
+					);
+				}
+				else {
+					memcpy(
+						destination,
+						source,
+						target_type->fields[index].info.byte_size
+					);
+				}
 			};
 			for (size_t index = 0; index < target_type->fields.size; index++) {
 				if (asset_index < assets.size) {
@@ -263,40 +277,6 @@ namespace ECSEngine {
 			restore_stack.deallocator.copy_size = 0;
 		}
 		
-		return true;
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	bool ModuleValidateLinkComponent(const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type)
-	{
-		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);
-		if (needs_dll) {
-			// If user supplied then assume true
-			return true;
-		}
-
-		if (link_type->fields.size != target_type->fields.size) {
-			return false;
-		}
-
-		for (size_t index = 0; index < link_type->fields.size; index++) {
-			ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(link_type->fields[index].tag);
-			if (asset_type != ECS_ASSET_TYPE_COUNT) {
-				// We have an asset handle - verify that the corresponding asset is in the target
-				AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(target_type, index, nullptr);
-				if (!target_field.success || target_field.type != asset_type) {
-					return false;
-				}
-			}
-			else {
-				// Not an asset. Verify that they are identical.
-				if (!link_type->fields[index].Compare(target_type->fields[index])) {
-					return false;
-				}
-			}
-		}
-
 		return true;
 	}
 

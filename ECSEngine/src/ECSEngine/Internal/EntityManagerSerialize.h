@@ -7,6 +7,7 @@ namespace ECSEngine {
 
 	namespace Reflection {
 		struct ReflectionManager;
+		struct ReflectionType;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
@@ -49,6 +50,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
+	// It will fill in the overrides
+	ECSENGINE_API void ConvertLinkTypesToSerializeEntityManagerUnique(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		SerializeEntityManagerComponentInfo* overrides
+	);
+
 	// Creates and allocates all the necesarry handlers for all the reflected types
 	// If the indices are unspecified, it will go through all hierarchies
 	// Can specify overrides such that they get ignored when searching. Both overrides and override_components
@@ -64,6 +73,14 @@ namespace ECSEngine {
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	// It will fill in the overrides
+	ECSENGINE_API void ConvertLinkTypesToSerializeEntityManagerShared(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		SerializeEntityManagerSharedComponentInfo* overrides
+	);
 
 	// Creates and allocates all the necesarry handlers for all the reflected types
 	// If the indices are unspecified, it will go through all hierarchies
@@ -81,6 +98,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
+	// It will fill in the overrides
+	ECSENGINE_API void ConvertLinkTypesToDeserializeEntityManagerUnique(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		DeserializeEntityManagerComponentInfo* overrides
+	);
+
 	// Creates and allocates all the necesarry handlers for all the reflected types
 	// If the indices are unspecified, it will go through all hierarchies
 	// Can specify overrides such that they get ignored when searching. Both overrides and override_components
@@ -96,6 +121,14 @@ namespace ECSEngine {
 	);
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	// It will fill in the overrides
+	ECSENGINE_API void ConvertLinkTypesToDeserializeEntityManagerShared(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		DeserializeEntityManagerSharedComponentInfo* overrides
+	);
 
 	// Creates and allocates all the necesarry handlers for all the reflected types
 	// If the indices are unspecified, it will go through all hierarchies

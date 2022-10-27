@@ -722,9 +722,12 @@ namespace ECSEngine {
 				stream->InitializeFromBuffer(GetMainAllocatorBuffer(sizeof(char) * 64, alignof(char)), 0, 63);
 				initial_value_init(stream);
 
-				// implement callback - if it already has one, catch it and wrapp it
+				UIConfigTextInputCallback initial_user_callback;
+				// Implement callback - if it already has one, catch it and wrapp it
 				if (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
 					UIConfigTextInputCallback* user_callback = (UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
+					initial_user_callback = *user_callback;
+
 					// Coallesce the allocation
 					void* allocation = GetMainAllocatorBuffer(callback_data_size + user_callback->handler.data_size);
 					memcpy(allocation, callback_data, callback_data_size);
@@ -734,10 +737,13 @@ namespace ECSEngine {
 					if (user_callback->handler.data_size > 0) {
 						void* user_data = function::OffsetPointer(base_data, callback_data_size);
 						memcpy(user_data, user_callback->handler.data, user_callback->handler.data_size);
-						base_data->user_action_data = user_data;
+						// Indicate that the user data is relative
+						base_data->user_action_data_offset = callback_data_size;
+						base_data->relative_user_data = true;
 					}
 					else {
 						base_data->user_action_data = user_callback->handler.data;
+						base_data->relative_user_data = false;
 					}
 
 					user_callback->handler.action = callback_action;
@@ -753,6 +759,7 @@ namespace ECSEngine {
 					base_data->user_action_data = nullptr;
 					config.AddFlag(callback);
 				}
+				
 				UIDrawerTextInput* input = TextInputInitializer(
 					configuration | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN,
 					config,
@@ -761,6 +768,13 @@ namespace ECSEngine {
 					position, 
 					scale
 				);
+				
+				// Restore the previous text input callback
+				if (configuration & UI_CONFIG_TEXT_INPUT_CALLBACK) {
+					UIConfigTextInputCallback* user_callback = (UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
+					*user_callback = initial_user_callback;
+				}
+
 				// Type pun all types - they all have as the third data member the text input followed by the bool to indicate
 				// whether or not return to default is allowed
 				UIDrawerNumberInputCallbackData* callback_input_ptr = (UIDrawerNumberInputCallbackData*)input->callback_data;
@@ -826,7 +840,8 @@ namespace ECSEngine {
 						const UIConfigTextInputCallback* callback = (const UIConfigTextInputCallback*)config.GetParameter(UI_CONFIG_TEXT_INPUT_CALLBACK);
 						if (callback->handler.data_size > 0 && !callback->copy_on_initialization) {
 							UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)input->callback_data;
-							memcpy(base_data->user_action_data, callback->handler.data, callback->handler.data_size);
+							void* user_data = base_data->GetUserData();
+							memcpy(user_data, callback->handler.data, callback->handler.data_size);
 						}
 					}
 
