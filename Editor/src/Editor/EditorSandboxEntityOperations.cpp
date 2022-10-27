@@ -2,6 +2,7 @@
 #include "EditorSandboxEntityOperations.h"
 #include "EditorSandbox.h"
 #include "EditorState.h"
+#include "../Modules/Module.h"
 
 #include "ECSEngineComponents.h"
 #include "ECSEngineForEach.h"
@@ -58,15 +59,17 @@ void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_i
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
+void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name, SharedInstance instance)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
 	Component component = editor_state->editor_components.GetComponentID(component_name);
 	if (component.value != -1) {
 		if (entity_manager->ExistsEntity(entity)) {
-			SharedInstance default_instance = GetSharedComponentDefaultInstance(editor_state, sandbox_index, component);
+			if (instance.value == -1) {
+				instance = GetSharedComponentDefaultInstance(editor_state, sandbox_index, component);
+			}
 
-			entity_manager->AddSharedComponentCommit(entity, component, default_instance);
+			entity_manager->AddSharedComponentCommit(entity, component, instance);
 			SetSandboxSceneDirty(editor_state, sandbox_index);
 		}
 	}
@@ -200,6 +203,106 @@ bool CopySandboxEntities(EditorState* editor_state, unsigned int sandbox_index, 
 	else {
 		return false;
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+struct ConvertToOrFromLinkData {
+	ModuleLinkComponentTarget module_link;
+	const Reflection::ReflectionManager* reflection_manager;
+	const Reflection::ReflectionType* target_type;
+	const Reflection::ReflectionType* link_type;
+	const AssetDatabase* asset_database;
+	void* target_data;
+	AllocatorPolymorphic allocator;
+};
+
+ConvertToOrFromLinkData GetConvertToOrFromLinkData(
+	EditorState* editor_state, 
+	unsigned int sandbox_index,
+	Entity entity,
+	Stream<char> link_component, 
+	AllocatorPolymorphic allocator
+) {
+	ConvertToOrFromLinkData convert_data;
+
+	Stream<char> target = editor_state->editor_components.GetComponentFromLink(link_component);
+	ECS_ASSERT(target.size > 0);
+
+	unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, link_component);
+	ECS_ASSERT(module_index != -1);
+	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, module_index, link_component);
+
+	const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_component);
+	const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target);
+
+	bool is_shared = Reflection::IsReflectionTypeSharedComponent(target_type);
+	void* target_data = nullptr;
+
+	Component target_id = { (short)target_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+	EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	if (is_shared) {
+		target_data = active_entity_manager->GetComponent(entity, target_id);
+	}
+	else {
+		target_data = active_entity_manager->GetSharedData(target_id, active_entity_manager->GetSharedComponentInstance(target_id, entity));
+	}
+
+	convert_data.allocator = allocator;
+	convert_data.asset_database = editor_state->asset_database;
+	convert_data.link_type = link_type;
+	convert_data.module_link = link_target;
+	convert_data.reflection_manager = editor_state->editor_components.internal_manager;
+	convert_data.target_data = target_data;
+	convert_data.target_type = target_type;
+
+	return convert_data;
+}
+
+bool ConvertTargetToLinkComponent(
+	EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity,
+	Stream<char> link_component,
+	void* link_data, 
+	AllocatorPolymorphic allocator
+)
+{
+	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, sandbox_index, entity, link_component, allocator);
+	return ModuleFromTargetToLinkComponent(
+		convert_data.module_link,
+		convert_data.reflection_manager,
+		convert_data.target_type,
+		convert_data.link_type,
+		convert_data.asset_database,
+		convert_data.target_data,
+		link_data,
+		convert_data.allocator
+	);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+bool ConvertLinkComponentToTarget(
+	EditorState* editor_state, 
+	unsigned int sandbox_index,
+	Entity entity, 
+	Stream<char> link_component, 
+	const void* link_data, 
+	AllocatorPolymorphic allocator
+)
+{
+	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, sandbox_index, entity, link_component, allocator);
+	return ModuleLinkComponentToTarget(
+		convert_data.module_link,
+		convert_data.reflection_manager,
+		convert_data.link_type,
+		convert_data.target_type,
+		convert_data.asset_database,
+		link_data,
+		convert_data.target_data,
+		convert_data.allocator
+	);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -367,8 +470,23 @@ void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sa
 void ResetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name)
 {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	// It has built in checks for not crashing
-	editor_state->editor_components.ResetComponentFromManager(entity_manager, component_name, entity);
+
+	Stream<char> target = editor_state->editor_components.GetComponentFromLink(component_name);
+	bool is_shared = editor_state->editor_components.IsSharedComponent(target.size > 0 ? target : component_name);
+	Stream<char> initial_component = component_name;
+	if (target.size > 0) {
+		component_name = target;
+	}
+
+	if (!is_shared) {
+		// It has built in checks for not crashing
+		editor_state->editor_components.ResetComponentFromManager(entity_manager, component_name, entity);
+	}
+	else {
+		// Remove it and then add it again with the default component
+		RemoveSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
+		AddSandboxEntitySharedComponent(editor_state, sandbox_index, entity, component_name);
+	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

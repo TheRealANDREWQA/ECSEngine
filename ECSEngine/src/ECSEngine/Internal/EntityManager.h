@@ -516,6 +516,16 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// It will destroy all the archetypes that are empty (they don't contain any entities)
+		// Single threaded
+		void DestroyArchetypesEmpty();
+
+		// It will destroy all the base archetype that are empty (that don't contain any entities)
+		// Single threaded
+		void DestroyArchetypesBaseEmpty(bool destroy_main_archetypes = false);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		void EndFrame();
 
 		// ---------------------------------------------------------------------------------------------------
@@ -694,9 +704,15 @@ namespace ECSEngine {
 
 		void* GetSharedData(Component component, SharedInstance instance);
 
+		const void* GetSharedData(Component component, SharedInstance instance) const;
+
 		void* GetNamedSharedData(Component component, ResourceIdentifier identifier);
 
+		const void* GetNamedSharedData(Component component, ResourceIdentifier identifier) const;
+
 		SharedInstance GetSharedComponentInstance(Component component, const void* data) const;
+
+		SharedInstance GetSharedComponentInstance(Component component, Entity entity) const;
 
 		SharedInstance GetNamedSharedComponentInstance(Component component, ResourceIdentifier identifier) const;
 

@@ -86,9 +86,8 @@ struct EditorComponents {
 	// It does clean up job like updating the internal component after applying the changes
 	void FinalizeEvent(const ECSEngine::Reflection::ReflectionManager* reflection_manager, ECSEngine::Tools::UIReflectionDrawer* ui_drawer, EditorComponentEvent event);
 
-	// Returns the index of the module that contains that component. The index references the loaded_modules. 
-	// Returns -1 if it doesn't exist
-	unsigned int FindComponentModule(ECSEngine::Stream<char> name) const;
+	// Returns the index inside the loaded_modules if the module has components recorded here, else -1.
+	unsigned int FindModule(ECSEngine::Stream<char> name) const;
 
 	// Returns the index of the module that contains that component. The index references the module index that can be used
 	// with the other module function (inside Module.h)
@@ -120,15 +119,22 @@ struct EditorComponents {
 
 	const ECSEngine::Reflection::ReflectionType* GetType(unsigned int module_index, unsigned int type_index) const;
 
+	void GetUniqueLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const;
+
+	void GetSharedLinkComponents(ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& link_types) const;
+
+	// Both unique and shared types
+	void GetLinkComponents(
+		ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& unique_types, 
+		ECSEngine::CapacityStream<const ECSEngine::Reflection::ReflectionType*>& shared_types
+	) const;
+
 	// Fills in the events which must be handled by the user
 	// It will eliminate these events from the internal buffer
 	void GetUserEvents(ECSEngine::CapacityStream<EditorComponentEvent>& events);
 
 	// Returns true if the component name contains non trivially copyable types
 	bool HasBuffers(ECSEngine::Stream<char> component_name) const;
-
-	// Returns the index inside the loaded_modules if the module has components recorded here, else -1.
-	unsigned int FindModule(ECSEngine::Stream<char> name) const;
 
 	// Returns true if the component (unique or shared) exists or not
 	bool IsComponent(ECSEngine::Stream<char> name) const;
@@ -202,7 +208,8 @@ struct EditorComponents {
 	// and sets the data to its default values. The buffers will be set to 0.
 	void ResetComponents(ECSEngine::ComponentSignature component_signature, void* stack_memory, void** component_buffers) const;
 
-	// Only works for unique!!!
+	// For link components it does will reset the target component, without doing anything to the link component.
+	// It works only for unique and link components to unique components
 	// Sets the component to default values. If it has buffers, it will deallocate them.
 	void ResetComponentFromManager(ECSEngine::EntityManager* entity_manager, ECSEngine::Stream<char> component_name, ECSEngine::Entity entity) const;
 

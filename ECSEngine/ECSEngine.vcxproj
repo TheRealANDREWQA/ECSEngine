@@ -234,6 +234,7 @@
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerialize.h" />
     <ClInclude Include="src\ECSEngine\Internal\EntityManagerSerializeTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\ForEach.h" />
+    <ClInclude Include="src\ECSEngine\Internal\LinkComponents.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\RingBuffer.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskSchedulerTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\Multithreading\TaskStealing.h" />
@@ -396,6 +397,7 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <InlineFunctionExpansion Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AnySuitable</InlineFunctionExpansion>
     </ClCompile>
+    <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
     <ClCompile Include="src\ECSEngine\GLTF\cgtlf.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">NotUsing</PrecompiledHeader>
@@ -408,6 +410,7 @@
     <ClCompile Include="src\ECSEngine\Internal\EntityHierarchy.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\EntityManagerSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\ForEach.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\LinkComponents.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\AtomicLinearAllocator.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\RingBuffer.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Multithreading\TaskScheduler.cpp" />

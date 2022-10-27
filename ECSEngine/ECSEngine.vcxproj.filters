@@ -192,6 +192,7 @@
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataMacros.h" />
     <ClInclude Include="src\Includes\ECSEngineAssetMacros.h" />
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
+    <ClInclude Include="src\ECSEngine\Internal\LinkComponents.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -298,6 +299,8 @@
     <ClCompile Include="src\ECSEngine\Rendering\ColorUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataHandling.cpp" />
     <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
+    <ClCompile Include="src\ECSEngine\Internal\LinkComponents.cpp" />
+    <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

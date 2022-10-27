@@ -3409,6 +3409,52 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
+	void EntityManager::DestroyArchetypesEmpty()
+	{
+		for (unsigned int index = 0; index < GetArchetypeCount(); index++) {
+			Archetype* archetype = GetArchetype(index);
+			unsigned int base_count = archetype->GetBaseCount();
+			bool has_entities = false;
+			for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+				ArchetypeBase* base = archetype->GetBase(base_index);
+				if (base->EntityCount() > 0) {
+					has_entities = true;
+					break;
+				}
+			}
+
+			if (!has_entities) {
+				DestroyArchetypeCommit(index);
+				index--;
+			}
+		}
+	}
+
+	void EntityManager::DestroyArchetypesBaseEmpty(bool destroy_main_archetypes)
+	{
+		unsigned int count = GetArchetypeCount();
+		for (unsigned int index = 0; index < count; index++) {
+			Archetype* archetype = GetArchetype(index);
+			for (unsigned int base_index = 0; base_index < archetype->GetBaseCount(); base_index++) {
+				ArchetypeBase* base = archetype->GetBase(base_index);
+				if (base->EntityCount() == 0) {
+					DestroyArchetypeBaseCommit(index, base_index);
+					base_index--;
+				}
+			}
+
+			if (destroy_main_archetypes) {
+				unsigned int base_count = archetype->GetBaseCount();
+				if (base_count == 0) {
+					DestroyArchetypeCommit(index);
+					index--;
+				}
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
 	void EntityManager::EndFrame()
 	{
 		Flush();
@@ -3937,6 +3983,11 @@ namespace ECSEngine {
 
 	void* EntityManager::GetSharedData(Component component, SharedInstance instance)
 	{
+		return (void*)((const EntityManager*)this)->GetSharedData(component, instance);
+	}
+
+	const void* EntityManager::GetSharedData(Component component, SharedInstance instance) const
+	{
 		ECS_CRASH_RETURN_VALUE(ExistsSharedComponent(component), nullptr, "EntityManager: Shared component {#} is invalid when trying to retrieve instance {#} data.",
 			component.value, instance.value);
 		ECS_CRASH_RETURN_VALUE(m_shared_components[component.value].instances.stream.ExistsItem(instance.value), nullptr, "EntityManager: Shared instance {#} for component"
@@ -3947,6 +3998,13 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------------------------------------
 
 	void* EntityManager::GetNamedSharedData(Component component, ResourceIdentifier identifier)
+	{
+		return (void*)((const EntityManager*)this)->GetNamedSharedData(component, identifier);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	const void* EntityManager::GetNamedSharedData(Component component, ResourceIdentifier identifier) const
 	{
 		SharedInstance instance;
 		if (m_shared_components[component.value].named_instances.TryGetValue(identifier, instance)) {
@@ -3976,6 +4034,17 @@ namespace ECSEngine {
 		});
 
 		return { (short)instance_index };
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	SharedInstance EntityManager::GetSharedComponentInstance(Component component, Entity entity) const
+	{
+		ECS_CRASH_RETURN_VALUE(HasSharedComponent(entity, component), { -1 }, "EntityManager: The entity {#} doesn't have the shared component {#}.", entity, component);
+
+		EntityInfo info = GetEntityInfo(entity);
+		const Archetype* archetype = GetArchetype(info.main_archetype);
+		return archetype->GetBaseInstance(component, info.base_archetype);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -4103,7 +4172,7 @@ namespace ECSEngine {
 
 	bool EntityManager::HasSharedComponent(Entity entity, Component component) const
 	{
-		EntityInfo info = m_entity_pool->GetInfo(entity);
+		EntityInfo info = GetEntityInfo(entity);
 		return m_archetypes[info.main_archetype].FindSharedComponentIndex(component) != UCHAR_MAX;
 	}
 
@@ -4111,7 +4180,7 @@ namespace ECSEngine {
 
 	bool EntityManager::HasSharedComponents(Entity entity, VectorComponentSignature components) const
 	{
-		EntityInfo info = m_entity_pool->GetInfo(entity);
+		EntityInfo info = GetEntityInfo(entity);
 		return GetArchetypeSharedComponents(info.main_archetype).HasComponents(components);
 	}
 
@@ -4119,7 +4188,7 @@ namespace ECSEngine {
 
 	bool EntityManager::HasSharedInstance(Entity entity, Component component, SharedInstance shared_instance) const
 	{
-		EntityInfo info = m_entity_pool->GetInfo(entity);
+		EntityInfo info = GetEntityInfo(entity);
 		unsigned char component_index = m_archetypes[info.main_archetype].FindSharedComponentIndex(component);
 		if (component_index == UCHAR_MAX) {
 			return false;
@@ -4132,7 +4201,7 @@ namespace ECSEngine {
 
 	bool EntityManager::HasSharedInstances(Entity entity, VectorComponentSignature components, const SharedInstance* instances, unsigned char component_count) const
 	{
-		EntityInfo info = m_entity_pool->GetInfo(entity);
+		EntityInfo info = GetEntityInfo(entity);
 		VectorComponentSignature archetype_components = GetArchetypeSharedComponents(info.main_archetype);
 
 		unsigned char component_indices[ECS_ARCHETYPE_MAX_SHARED_COMPONENTS];

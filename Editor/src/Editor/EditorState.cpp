@@ -159,11 +159,11 @@ void TickEvents(EditorState* editor_state) {
 	EditorEvent editor_event;
 	unsigned int event_index = 0;
 	while (event_index < event_count) {
-		editor_state->event_queue.PopNonAtomic(editor_event);
+		editor_state->event_queue.Pop(editor_event);
 		EditorEventFunction event_function = (EditorEventFunction)editor_event.function;
 		bool needs_push = event_function(editor_state, editor_event.data);
 		if (needs_push) {
-			editor_state->event_queue.PushNonAtomic(editor_event);
+			editor_state->event_queue.Push(editor_event);
 		}
 		event_index++;
 	}

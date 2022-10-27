@@ -14,8 +14,8 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 // Does nothing if the entity doesn't exist
 void AddSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
 
-// Does nothing if the entity doesn't exist
-void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
+// Does nothing if the entity doesn't exist. If the shared instance is -1 it will add it with the default shared instance
+void AddSandboxEntitySharedComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name, SharedInstance instance = { -1 });
 
 // It forwards to the unique or shared variant
 void AddSandboxEntityComponentEx(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);
@@ -36,6 +36,28 @@ Entity CopySandboxEntity(EditorState* editor_state, unsigned int sandbox_index, 
 // Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist
 // false (else true). Can give an entity buffer such that you can do some other operations on the newly copied entities
 bool CopySandboxEntities(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int count, Entity* copied_entities = nullptr);
+
+// Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
+// mismatch between the types. The allocator is used for the buffer allocations
+bool ConvertTargetToLinkComponent(
+	EditorState* editor_state,
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<char> link_component, 
+	void* link_data, 
+	AllocatorPolymorphic allocator
+);
+
+// Returns true if it succeeded in the conversion. It can fail if the necessary DLL function is not yet loaded or there is a
+// mismatch between the types. The allocator is used for the buffer allocations
+bool ConvertLinkComponentToTarget(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	Entity entity,
+	Stream<char> link_component,
+	const void* link_data,
+	AllocatorPolymorphic allocator
+);
 
 // Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist
 // it returns -1
@@ -74,5 +96,5 @@ void RemoveSandboxEntityComponentEx(EditorState* editor_state, unsigned int sand
 
 void RemoveSandboxEntityFromHierarchy(EditorState* editor_state, unsigned int sandbox_index, Entity entity);
 
-// Reverts the unique component to default values
+// Reverts the componet to default values
 void ResetSandboxEntityComponent(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<char> component_name);

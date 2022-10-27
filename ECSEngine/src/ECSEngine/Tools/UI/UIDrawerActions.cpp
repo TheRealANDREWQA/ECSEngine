@@ -1136,7 +1136,7 @@ namespace ECSEngine {
 				*data->number = number;
 
 				if (data->number_data.user_action != nullptr) {
-					action_data->data = data->number_data.user_action_data;
+					action_data->data = data->number_data.GetUserData();
 					data->number_data.user_action(action_data);
 				}
 			}
@@ -1168,7 +1168,7 @@ namespace ECSEngine {
 				*data->number = number;
 
 				if (data->number_data.user_action != nullptr) {
-					action_data->data = data->number_data.user_action_data;
+					action_data->data = data->number_data.GetUserData();
 					data->number_data.user_action(action_data);
 				}
 			}
@@ -1201,7 +1201,7 @@ namespace ECSEngine {
 				*data->number = number;
 
 				if (data->number_data.user_action != nullptr) {
-					action_data->data = data->number_data.user_action_data;
+					action_data->data = data->number_data.GetUserData();
 					data->number_data.user_action(action_data);
 				}
 			}
@@ -1945,7 +1945,13 @@ namespace ECSEngine {
 				input->is_caret_display = false;
 				input->current_selection = input->current_sprite_position;
 				input->is_currently_selected = false;
-				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
+				//input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
+
+				if (input->HasCallback()) {
+					input->Callback(action_data);
+				}
+
+				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 
 				system->DeallocateGeneralHandler();
 				system->m_focused_window_data.ChangeGeneralHandler({ 0.0f, 0.0f }, { 0.0f, 0.0f }, nullptr, nullptr, 0, ECS_UI_DRAW_NORMAL);
@@ -1955,7 +1961,13 @@ namespace ECSEngine {
 				input->is_caret_display = false;
 				input->current_selection = input->current_sprite_position;
 				input->is_currently_selected = false;
-				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
+				//input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
+
+				if (input->HasCallback()) {
+					input->Callback(action_data);
+				}
+
+				input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
 			}
 		}
 

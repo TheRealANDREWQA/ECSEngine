@@ -280,9 +280,9 @@ namespace ECSEngine {
 		}
 
 		bool Pop(T& element) {
-			m_lock.lock();
+			Lock();
 			bool succeded = PopNonAtomic(element);
-			m_lock.unlock();
+			Unlock();
 			return succeded;
 		}
 
@@ -291,15 +291,22 @@ namespace ECSEngine {
 		}
 
 		void Push(T element) {
-			m_lock.lock();
+			Lock();
 			PushNonAtomic(element);
-			m_lock.unlock();
+			Unlock();
 		}
 
 		void Push(const T* element) {
-			m_lock.lock();
+			Lock();
 			PushNonAtomic(element);
-			m_lock.unlock();
+			Unlock();
+		}
+
+		// Returns true if it could peek an element
+		bool Peek(T& element) {
+			Lock();
+			bool has_element = PeekNonAtomic(element);
+			Unlock();
 		}
 
 		ECS_INLINE void PushNonAtomic(T element) {
@@ -310,6 +317,10 @@ namespace ECSEngine {
 		ECS_INLINE void PushNonAtomic(const T* element) {
 			ECS_ASSERT(m_queue.GetSize() < m_queue.GetCapacity());
 			m_queue.Push(element);
+		}
+
+		ECS_INLINE bool PeekNonAtomic(T& element) const {
+			return m_queue.Peek(element);
 		}
 
 		ECS_INLINE void Unlock() {
@@ -347,7 +358,6 @@ namespace ECSEngine {
 			m_lock.value.store(false);
 		}
 
-	//private:
 		Queue<T> m_queue;
 		SpinLock m_lock;
 	};

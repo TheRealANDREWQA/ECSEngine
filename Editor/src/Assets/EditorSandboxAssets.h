@@ -37,6 +37,15 @@ void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_inde
 
 // -------------------------------------------------------------------------------------------------------------
 
-void UnloadSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name);
+struct UnregisterSandboxAssetElement {
+	unsigned int handle;
+	ECS_ASSET_TYPE type;
+};
+
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<UnregisterSandboxAssetElement> elements);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name);
 
 // -------------------------------------------------------------------------------------------------------------

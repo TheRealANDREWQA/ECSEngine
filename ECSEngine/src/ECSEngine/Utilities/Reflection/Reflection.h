@@ -14,10 +14,10 @@ namespace ECSEngine {
 	struct World;
 
 	namespace Reflection {
-
-		using ReflectionFieldTable = HashTableDefault<ReflectionFieldInfo>;
-		using ReflectionTypeTable = HashTableDefault<ReflectionType>;
-		using ReflectionEnumTable = HashTableDefault<ReflectionEnum>;
+		
+		typedef HashTableDefault<ReflectionFieldInfo> ReflectionFieldTable;
+		typedef HashTableDefault<ReflectionType> ReflectionTypeTable;
+		typedef HashTableDefault<ReflectionEnum> ReflectionEnumTable;
 
 #define ECS_REFLECTION_MAX_TYPE_COUNT (128)
 #define ECS_REFLECTION_MAX_ENUM_COUNT (32)
@@ -138,7 +138,8 @@ namespace ECSEngine {
 			unsigned int GetHierarchyIndex(Stream<wchar_t> hierarchy) const;
 			
 			// If the tag is specified it will include only those types that have at least one tag
-			void GetHierarchyTypes(unsigned int hierarchy_index, ReflectionManagerGetQuery options) const;
+			// If the hierarchy index is -1, then it will add all types from all hierarchies
+			void GetHierarchyTypes(ReflectionManagerGetQuery options, unsigned int hierarchy_index = -1) const;
 
 			unsigned int GetHierarchyCount() const;
 			unsigned int GetTypeCount() const;
@@ -325,11 +326,22 @@ namespace ECSEngine {
 
 		// Returns -1 if no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet.
-		ECSENGINE_API size_t SearchReflectionUserDefinedTypeByteSize(const ReflectionManager* reflection_manager, Stream<char> definition);
+		ECSENGINE_API size_t SearchReflectionUserDefinedTypeByteSize(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition, 
+			Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
+			Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 }
+		);
 
 		// Returns -1 if no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet.
-		ECSENGINE_API ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(const ReflectionManager* reflection_manager, Stream<char> definition);
+		ECSENGINE_API ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
+			Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 },
+			Stream<unsigned int> blittable_alignments = { nullptr, 0 }
+		);
 
 		// Returns -1 if the no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet. 
@@ -349,6 +361,9 @@ namespace ECSEngine {
 
 		// Works for user defined types aswell
 		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, ReflectionField field);
+
+		// Copies non used defined field
+		ECSENGINE_API void CopyReflectionFieldBasic(const ReflectionFieldInfo* info, const void* source, void* destination, AllocatorPolymorphic allocator);
 
 		// Checks for single, double, triple and quadruple component integers
 		ECSENGINE_API bool IsIntegral(ReflectionBasicFieldType type);

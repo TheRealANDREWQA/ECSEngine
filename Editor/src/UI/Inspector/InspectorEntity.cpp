@@ -2,6 +2,7 @@
 #include "../Inspector.h"
 #include "../../Editor/EditorState.h"
 #include "../../Editor/EditorSandboxEntityOperations.h"
+#include "../../Assets/EditorSandboxAssets.h"
 #include "InspectorUtilities.h"
 #include "ECSEngineComponents.h"
 #include "../../Modules/Module.h"
@@ -97,7 +98,7 @@ struct InspectorDrawEntityData {
 
 		const auto* reflection_manager = editor_state->ModuleReflectionManager();
 		const Reflection::ReflectionType* link_type = reflection_manager->GetType(name);
-		ModuleResetLinkComponent(reflection_manager, link_type, link_components[write_index].data);
+		ResetLinkComponent(reflection_manager, link_type, link_components[write_index].data);
 
 		link_components.size++;
 		return write_index;
@@ -145,7 +146,10 @@ struct InspectorDrawEntityData {
 		matching_inputs[index].capacity_inputs.size = 0;
 	}
 
-	void ClearLinkComponent(EditorState* editor_state, unsigned int index) {
+	void ClearLinkComponent(EditorState* editor_state, unsigned int index, unsigned int sandbox_index) {
+		// Unregister the asset handles
+		UnregisterSandboxLinkComponent(editor_state, sandbox_index, link_components[index].data, link_components[index].name);
+
 		unsigned int matching_input_index = FindMatchingInput(link_components[index].name);
 		ClearComponent(editor_state, matching_input_index);
 		// Reallocate the link component - since it might have changed byte size
@@ -155,9 +159,8 @@ struct InspectorDrawEntityData {
 		editor_state->editor_allocator->Deallocate(link_components[index].data);
 		link_components[index].data = editor_state->editor_allocator->Allocate(new_byte_size);
 
-		const auto* reflection_manager = editor_state->ModuleReflectionManager();
-		const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_components[index].name);
-		ModuleResetLinkComponent(reflection_manager, link_type, link_components[index].data);
+		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_components[index].name);
+		ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[index].data);
 	}
 
 	unsigned int FindMatchingInput(Stream<char> component_name) const {
@@ -252,6 +255,7 @@ void RemoveComponentCallback(ActionData* action_data) {
 // ----------------------------------------------------------------------------------------------------------------------------
 
 struct ResetComponentCallbackData {
+	InspectorDrawEntityData* draw_data;
 	EditorState* editor_state;
 	unsigned int sandbox_index;
 	Entity entity;
@@ -262,6 +266,22 @@ void ResetComponentCallback(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ResetComponentCallbackData* data = (ResetComponentCallbackData*)_data;
+	Stream<char> target = data->editor_state->editor_components.GetComponentFromLink(data->component_name);
+	if (target.size > 0) {
+		// Clear the link component
+		unsigned int link_index = data->draw_data->FindLinkComponent(data->component_name);
+		ECS_ASSERT(link_index != -1);
+		data->draw_data->ClearLinkComponent(data->editor_state, link_index, data->sandbox_index);
+		
+		// Make the reset on the target
+		data->component_name = target;
+	}
+	else {
+		// Clear the normal component
+		unsigned int matching_index = data->draw_data->FindMatchingInput(data->component_name);
+		data->draw_data->ClearComponent(data->editor_state, matching_index);
+	}
+
 	ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, data->entity, data->component_name);
 }
 
@@ -285,8 +305,9 @@ void InspectorComponentCallback(ActionData* action_data) {
 
 // There must be HEADER_BUTTON_COUNT of buttons. Stack memory should be at least ECS_KB in size
 void InspectorEntityHeaderConstructButtons(
+	InspectorDrawEntityData* draw_data,
 	UIDrawer* drawer, 
-	EditorState* editor_state, 
+	EditorState* editor_state,
 	unsigned int sandbox_index,
 	Entity entity,
 	Stream<char> component_name,
@@ -298,6 +319,7 @@ void InspectorEntityHeaderConstructButtons(
 	reset_data->entity = entity;
 	reset_data->sandbox_index = sandbox_index;
 	reset_data->editor_state = editor_state;
+	reset_data->draw_data = draw_data;
 
 	stack_memory = function::OffsetPointer(stack_memory, sizeof(*reset_data));
 	RemoveComponentCallbackData* remove_data = (RemoveComponentCallbackData*)stack_memory;
@@ -577,9 +599,14 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 						link_index = data->AddLinkComponent(editor_state, link_component);
 					}
 					else {
-						data->ClearLinkComponent(editor_state, link_index);
+						data->ClearLinkComponent(editor_state, link_index, sandbox_index);
 					}
 					current_component = data->link_components[link_index].data;
+
+					// Convert the underlying storage into the link component
+					unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, link_component);
+					ModuleLinkComponentTarget link_target_functions = GetModuleLinkComponentTarget(editor_state, module_index, link_component);
+					//ModuleFromTargetToLinkComponent(link_target_functions, ui_drawer->reflection, )
 				}
 				ui_drawer->BindInstancePtrs(instance, current_component);
 				set_instance_inputs();
@@ -596,6 +623,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 			void* button_stack_allocation = ECS_STACK_ALLOC(ECS_KB);
 			UIConfigCollapsingHeaderButton header_buttons[HEADER_BUTTON_COUNT];
 			InspectorEntityHeaderConstructButtons(
+				data,
 				drawer,
 				editor_state,
 				sandbox_index,

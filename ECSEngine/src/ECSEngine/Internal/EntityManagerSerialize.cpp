@@ -7,6 +7,7 @@
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
+#include "LinkComponents.h"
 
 #include "../Utilities/CrashHandler.h"
 #include "../Utilities/Crash.h"
@@ -584,9 +585,7 @@ namespace ECSEngine {
 
 		unsigned int total_size_to_read = sizeof(NamedSharedInstanceHeader) * named_shared_instances_count + component_name_total_size
 			+ shared_component_name_total_size + header_component_total_size + header_shared_component_total_size;
-		buffering_size += total_size_to_read;
-
-		void* unique_name_characters = function::OffsetPointer(buffering, buffering_size);
+		void* unique_name_characters = ECS_STACK_ALLOC(total_size_to_read);
 		success = ReadFile(file_handle, { unique_name_characters, total_size_to_read });
 		if (!success) {
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
@@ -1182,6 +1181,8 @@ namespace ECSEngine {
 			if (component_exists[index]) {
 				Component current_component = { (short)index };
 				auto info = search_matching_shared_component(current_component);
+
+				ECS_ASSERT(info.found_at != -1);
 				short new_id = info.found_at;
 				if (new_id != index) {
 					entity_manager->m_shared_components[new_id].info.allocator = shared_component_arena_pointers[index];
@@ -1483,23 +1484,19 @@ namespace ECSEngine {
 		// Calculate the total count
 		size_t total_count = table.GetCount() + overrides.size;
 
-		unsigned int hierarchy_count = reflection_manager->GetHierarchyCount();
 		unsigned int type_count = reflection_manager->GetTypeCount();
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, all_indices, hierarchy_count);
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, type_indices, type_count);
 
+		Reflection::ReflectionManagerGetQuery query;
+		query.indices = &type_indices;
 		if (hierarchy_indices.size == 0) {
-			for (unsigned int index = 0; index < hierarchy_count; index++) {
-				all_indices[index] = index;
-			}
-			hierarchy_indices = { all_indices.buffer, hierarchy_count };
+			reflection_manager->GetHierarchyTypes(query);
 		}
-
-		// Get the indices of all types and then allocate the table
-		for (unsigned int index = 0; index < hierarchy_indices.size; index++) {
-			Reflection::ReflectionManagerGetQuery query;
-			query.indices = &type_indices;
-			reflection_manager->GetHierarchyTypes(hierarchy_indices[index], query);
+		else {
+			// Get the indices of all types and then allocate the table
+			for (unsigned int index = 0; index < hierarchy_indices.size; index++) {
+				reflection_manager->GetHierarchyTypes(query, hierarchy_indices[index]);
+			}
 		}
 
 		// Allocate a table of this capacity
@@ -1558,6 +1555,34 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	void ConvertLinkTypesToSerializeEntityManagerUnique(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator, 
+		Stream<const Reflection::ReflectionType*> link_types,
+		SerializeEntityManagerComponentInfo* overrides
+	)
+	{
+		for (size_t index = 0; index < link_types.size; index++) {
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
+
+			SerializeEntityManagerComponentInfo info;
+			info.function = ReflectionSerializeEntityManagerComponent;
+			info.header_function = ReflectionSerializeEntityManagerHeaderComponent;
+			ReflectionSerializeComponentData* data = (ReflectionSerializeComponentData*)Allocate(allocator, sizeof(ReflectionSerializeComponentData));
+			data->reflection_manager = reflection_manager;
+			data->type = link_types[index];
+
+			info.extra_data = data;
+			info.name = target_type->name;
+			// The version is not really needed
+			info.version = 0;
+
+			overrides[index] = info;
+		}
+	}
+
+
 	void CreateSerializeEntityManagerComponentTable(
 		SerializeEntityManagerComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager,
@@ -1590,6 +1615,33 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	void ConvertLinkTypesToSerializeEntityManagerShared(
+		const Reflection::ReflectionManager* reflection_manager, 
+		AllocatorPolymorphic allocator, 
+		Stream<const Reflection::ReflectionType*> link_types,
+		SerializeEntityManagerSharedComponentInfo* overrides
+	)
+	{
+		for (size_t index = 0; index < link_types.size; index++) {
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
+
+			SerializeEntityManagerSharedComponentInfo info;
+			info.function = ReflectionSerializeEntityManagerSharedComponent;
+			info.header_function = ReflectionSerializeEntityManagerHeaderSharedComponent;
+			ReflectionSerializeSharedComponentData* data = (ReflectionSerializeSharedComponentData*)Allocate(allocator, sizeof(ReflectionSerializeSharedComponentData));
+			data->reflection_manager = reflection_manager;
+			data->type = link_types[index];
+
+			info.extra_data = data;
+			info.name = target_type->name;
+			// The version is not really needed
+			info.version = 0;
+
+			overrides[index] = info;
+		}
+	}
+
 	void CreateSerializeEntityManagerSharedComponentTable(
 		SerializeEntityManagerSharedComponentTable& table,
 		const Reflection::ReflectionManager* reflection_manager, 
@@ -1621,6 +1673,41 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	void ConvertLinkTypesToDeserializeEntityManagerUnique(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types,
+		DeserializeEntityManagerComponentInfo* overrides
+	)
+	{
+		for (size_t index = 0; index < link_types.size; index++) {
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
+
+			DeserializeEntityManagerComponentInfo info;
+			info.function = ReflectionDeserializeEntityManagerComponent;
+			info.header_function = ReflectionDeserializeEntityManagerHeaderComponent;
+			ReflectionDeserializeComponentData* data = (ReflectionDeserializeComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeComponentData));
+			data->reflection_manager = reflection_manager;
+			data->type = link_types[index];
+			data->allocator = allocator;
+
+			info.extra_data = data;
+			info.name = target_type->name;
+			info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(target_type);
+			double _allocator_size = target_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+			info.component_fixup.allocator_size = _allocator_size != DBL_MAX ? (size_t)_allocator_size : 0;
+			if (info.component_fixup.allocator_size > 0) {
+				// Look for the buffers
+				CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
+				Reflection::GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
+				info.component_fixup.component_buffer_count = component_buffers.size;
+			}
+
+			overrides[index] = info;
+		}
+	}
 
 	void CreateDeserializeEntityManagerComponentTable(
 		DeserializeEntityManagerComponentTable& table,
@@ -1660,6 +1747,41 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
+
+	void ConvertLinkTypesToDeserializeEntityManagerShared(
+		const Reflection::ReflectionManager* reflection_manager,
+		AllocatorPolymorphic allocator,
+		Stream<const Reflection::ReflectionType*> link_types, 
+		DeserializeEntityManagerSharedComponentInfo* overrides
+	)
+	{
+		for (size_t index = 0; index < link_types.size; index++) {
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_types[index]);
+			const Reflection::ReflectionType* target_type = reflection_manager->GetType(target);
+
+			DeserializeEntityManagerSharedComponentInfo info;
+			info.function = ReflectionDeserializeEntityManagerSharedComponent;
+			info.header_function = ReflectionDeserializeEntityManagerHeaderSharedComponent;
+			ReflectionDeserializeSharedComponentData* data = (ReflectionDeserializeSharedComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeSharedComponentData));
+			data->reflection_manager = reflection_manager;
+			data->type = link_types[index];
+			data->allocator = allocator;
+
+			info.extra_data = data;
+			info.name = target_type->name;
+			info.component_fixup.component_byte_size = Reflection::GetReflectionTypeByteSize(target_type);
+			double _allocator_size = target_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
+			info.component_fixup.allocator_size = _allocator_size != DBL_MAX ? (size_t)_allocator_size : 0;
+			if (info.component_fixup.allocator_size > 0) {
+				// Look for the buffers
+				CapacityStream<ComponentBuffer> component_buffers = { info.component_fixup.component_buffers, 0, ECS_COMPONENT_INFO_MAX_BUFFER_COUNT };
+				Reflection::GetReflectionTypeRuntimeBuffers(target_type, component_buffers);
+				info.component_fixup.component_buffer_count = component_buffers.size;
+			}
+			
+			overrides[index] = info;
+		}
+	}
 
 	void CreateDeserializeEntityManagerSharedComponentTable(
 		DeserializeEntityManagerSharedComponentTable& table,

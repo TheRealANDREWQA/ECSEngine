@@ -771,8 +771,11 @@ namespace ECSEngine {
 		unsigned int copy_size = data_pointer->GetData();
 		copy_size *= component_buffer.element_byte_size;
 
-		void* allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
-		memcpy(allocation, copy_buffer, copy_size);
+		void* allocation = nullptr;
+		if (copy_size > 0) {
+			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+			memcpy(allocation, copy_buffer, copy_size);
+		}
 
 		DataPointer* destination_pointer = (DataPointer*)function::OffsetPointer(destination, component_buffer.pointer_offset);
 		destination_pointer->SetPointer(allocation);
@@ -786,8 +789,11 @@ namespace ECSEngine {
 		unsigned int copy_size = *(unsigned int*)function::OffsetPointer(source, component_buffer.size_offset);
 		copy_size *= component_buffer.element_byte_size;
 
-		void* allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
-		memcpy(allocation, source_pointer, copy_size);
+		void* allocation = nullptr;
+		if (copy_size > 0) {
+			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+			memcpy(allocation, source_pointer, copy_size);
+		}
 
 		void** destination_pointer = (void**)function::OffsetPointer(destination, component_buffer.pointer_offset);
 		*destination_pointer = allocation;

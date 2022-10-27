@@ -6,10 +6,13 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void GetReflectionAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices)
+	void GetAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices)
 	{
 		for (size_t index = 0; index < type->fields.size; index++) {
-
+			ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(type->fields[index].tag);
+			if (asset_type != ECS_ASSET_TYPE_COUNT) {
+				field_indices.AddSafe({ (unsigned int)index, asset_type });
+			}
 		}
 	}
 
@@ -66,17 +69,20 @@ namespace ECSEngine {
 				break;
 			}
 		}
-		if (asset_type == ECS_ASSET_TEXTURE || asset_type == ECS_ASSET_GPU_SAMPLER || asset_type == ECS_ASSET_SHADER) {
-			// The interface is one level deeper
-			if (success) {
-				pointer = *(const void**)pointer;
+
+		if (data != nullptr) {
+			if (asset_type == ECS_ASSET_TEXTURE || asset_type == ECS_ASSET_GPU_SAMPLER || asset_type == ECS_ASSET_SHADER) {
+				// The interface is one level deeper
+				if (success) {
+					pointer = *(const void**)pointer;
+				}
 			}
-		}
-		else if (asset_type == ECS_ASSET_MISC) {
-			if (success) {
-				// Extract the size and the pointer is deeper
-				pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
-				pointer = *(void**)pointer;
+			else if (asset_type == ECS_ASSET_MISC) {
+				if (success) {
+					// Extract the size and the pointer is deeper
+					pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
+					pointer = *(void**)pointer;
+				}
 			}
 		}
 
@@ -181,6 +187,221 @@ namespace ECSEngine {
 		}
 
 		return ECS_SET_ASSET_TARGET_FIELD_OK;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	template<typename Functor>
+	void GetLinkComponentHandlesImpl(
+		const Reflection::ReflectionType* type, 
+		const void* link_components, 
+		size_t count, 
+		CapacityStream<unsigned int>& handles, 
+		Functor&& functor
+	) {
+		for (size_t index = 0; index < count; index++) {
+			unsigned int field = functor(index);
+			handles.AddSafe((unsigned int*)function::OffsetPointer(link_components, type->fields[field].info.pointer_offset));
+		}
+	}
+
+	void GetLinkComponentHandles(
+		const Reflection::ReflectionType* type,
+		const void* link_component, 
+		Stream<unsigned int> field_indices, 
+		CapacityStream<unsigned int>& handles
+	)
+	{
+		GetLinkComponentHandlesImpl(type, link_component, field_indices.size, handles, [field_indices](size_t index) {
+			return field_indices[index];
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetLinkComponentHandles(
+		const Reflection::ReflectionType* type,
+		const void* link_component, 
+		Stream<LinkComponentAssetField> field_indices, 
+		CapacityStream<unsigned int>& handles
+	)
+	{
+		GetLinkComponentHandlesImpl(type, link_component, field_indices.size, handles, [field_indices](size_t index) {
+			return field_indices[index].field_index;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	template<typename Functor>
+	void GetLinkComponentHandlePtrsImpl(
+		const Reflection::ReflectionType* type,
+		const void* link_component,
+		size_t count,
+		CapacityStream<unsigned int*>& pointers,
+		Functor&& functor
+	) {
+		for (size_t index = 0; index < count; index++) {
+			unsigned int field_index = functor(index);
+			pointers.AddSafe((unsigned int*)function::OffsetPointer(link_component, type->fields[field_index].info.pointer_offset));
+		}
+	}
+
+	void GetLinkComponentHandlePtrs(
+		const Reflection::ReflectionType* type,
+		const void* link_component,
+		Stream<unsigned int> field_indices,
+		CapacityStream<unsigned int*>& pointers
+	) {
+		GetLinkComponentHandlePtrsImpl(type, link_component, field_indices.size, pointers, [field_indices](size_t index) {
+			return field_indices[index];
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetLinkComponentHandlePtrs(
+		const Reflection::ReflectionType* type,
+		const void* link_component,
+		Stream<LinkComponentAssetField> field_indices,
+		CapacityStream<unsigned int*>& pointers
+	) {
+		GetLinkComponentHandlePtrsImpl(type, link_component, field_indices.size, pointers, [field_indices](size_t index) {
+			return field_indices[index].field_index;
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ValidateLinkComponent(const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type)
+	{
+		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);
+		if (needs_dll) {
+			// If user supplied then assume true
+			return true;
+		}
+
+		if (link_type->fields.size != target_type->fields.size) {
+			return false;
+		}
+
+		for (size_t index = 0; index < link_type->fields.size; index++) {
+			ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(link_type->fields[index].tag);
+			if (asset_type != ECS_ASSET_TYPE_COUNT) {
+				// We have an asset handle - verify that the corresponding asset is in the target
+				AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(target_type, index, nullptr);
+				if (!target_field.success || target_field.type != asset_type) {
+					return false;
+				}
+			}
+			else {
+				// Not an asset. Verify that they are identical.
+				if (!link_type->fields[index].Compare(target_type->fields[index])) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ResetLinkComponent(
+		const Reflection::ReflectionManager* reflection_manager,
+		const Reflection::ReflectionType* type,
+		void* link_component
+	)
+	{
+		reflection_manager->SetInstanceDefaultData(type, link_component);
+		// Make all handles -1
+		for (size_t index = 0; index < type->fields.size; index++) {
+			if (FindAssetMetadataMacro(type->fields[index].tag) != ECS_ASSET_TYPE_COUNT) {
+				// It is a handle
+				unsigned int* handle = (unsigned int*)function::OffsetPointer(link_component, type->fields[index].info.pointer_offset);
+				*handle = -1;
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetLinkComponentIndices(const Reflection::ReflectionManager* reflection_manager, CapacityStream<unsigned int>& indices) {
+		Reflection::ReflectionManagerGetQuery query;
+		query.indices = &indices;
+		query.strict_compare = false;
+
+		Stream<char> tags[] = {
+			ECS_LINK_COMPONENT_TAG
+		};
+		query.tags = { tags, std::size(tags) };
+		reflection_manager->GetHierarchyTypes(query);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetUniqueLinkComponents(const Reflection::ReflectionManager* reflection_manager, CapacityStream<const Reflection::ReflectionType*>& link_types)
+	{
+		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 2);
+		GetLinkComponentIndices(reflection_manager, link_type_indices);
+
+		for (unsigned int index = 0; index < link_type_indices.size; index++) {
+			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_type);
+
+			Reflection::ReflectionType target_type;
+			if (reflection_manager->TryGetType(target, target_type)) {
+				if (Reflection::IsReflectionTypeComponent(&target_type)) {
+					link_types.AddSafe(link_type);
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetSharedLinkComponents(const Reflection::ReflectionManager* reflection_manager, CapacityStream<const Reflection::ReflectionType*>& link_types)
+	{
+		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 2);
+		GetLinkComponentIndices(reflection_manager, link_type_indices);
+
+		for (unsigned int index = 0; index < link_type_indices.size; index++) {
+			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_type);
+
+			Reflection::ReflectionType target_type;
+			if (reflection_manager->TryGetType(target, target_type)) {
+				if (Reflection::IsReflectionTypeSharedComponent(&target_type)) {
+					link_types.AddSafe(link_type);
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetUniqueAndSharedLinkComponents(
+		const Reflection::ReflectionManager* reflection_manager,
+		CapacityStream<const Reflection::ReflectionType*>& unique_link_types,
+		CapacityStream<const Reflection::ReflectionType*>& shared_link_types
+	) {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, link_type_indices, ECS_KB * 2);
+		GetLinkComponentIndices(reflection_manager, link_type_indices);
+
+		for (unsigned int index = 0; index < link_type_indices.size; index++) {
+			const Reflection::ReflectionType* link_type = reflection_manager->GetType(link_type_indices[index]);
+			Stream<char> target = Reflection::GetReflectionTypeLinkComponentTarget(link_type);
+
+			Reflection::ReflectionType target_type;
+			if (reflection_manager->TryGetType(target, target_type)) {
+				if (Reflection::IsReflectionTypeSharedComponent(&target_type)) {
+					shared_link_types.AddSafe(link_type);
+				}
+				else if (Reflection::IsReflectionTypeComponent(&target_type)) {
+					unique_link_types.AddSafe(link_type);
+				}
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
