@@ -17,6 +17,7 @@ namespace ECSEngine {
 
 	struct ResourceManager;
 	struct AssetDatabase;
+	struct AssetDatabaseReference;
 	struct TaskManager;
 
 	// This is used to report the exact failure for the load
@@ -88,13 +89,24 @@ namespace ECSEngine {
 	};
 
 	// Releases all assets from the database. If an asset is not found, it is placed into the missing assets list if specified, else ignored
-	// This is single threaded
+	// If the asset mask is specified, then there must be ECS_ASSET_TYPE_COUNT streams to indicate which handles to unload
+	// This is single threaded.
 	ECSENGINE_API void UnloadAssets(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager,
-		Stream<wchar_t> mount_point = { nullptr, 0 }, 
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		Stream<unsigned int>* asset_mask = nullptr,
 		CapacityStream<MissingAsset>* missing_assets = nullptr
 	);
 
+	// Releases all assets from the given asset database reference. It will unload these assets that have the reference count to 0 after
+	// their elimination from the main database (the reference count is decremented in all cases).
+	// If the asset mask is specified, then there must be ECS_ASSET_TYPE_COUNT streams to indicate which handles to unload
+	ECSENGINE_API void UnloadAssets(
+		AssetDatabaseReference* database_reference,
+		ResourceManager* resource_manager,
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		Stream<unsigned int>* asset_mask = nullptr
+	);
 
 }

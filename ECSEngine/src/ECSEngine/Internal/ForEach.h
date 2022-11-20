@@ -35,7 +35,7 @@ namespace ECSEngine {
 
 	// This is the same as the ForEachEntity with the difference that it can be outside the ECS runtime. The version above
 	// Uses a query handle accelerator in order to increase the query speed. The world needs to contain an
-	// entity manager and the very least and a task manager if using multithreading. (other fields are optional)
+	// entity manager. (other fields are optional)
 	ECSENGINE_API void ForEachEntityCommit(
 		World* world,
 		ForEachEntityFunctor functor,

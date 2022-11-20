@@ -12,6 +12,7 @@
 #include "../UI/CreateScene.h"
 #include "ECSEngineComponents.h"
 #include "../Assets/AssetManagement.h"
+#include "../Assets/AssetTick.h"
 #include "../UI/AssetOverrides.h"
 
 using namespace ECSEngine;
@@ -240,7 +241,7 @@ void EditorStateProjectTick(EditorState* editor_state) {
 		TickPendingTasks(editor_state);
 
 		TickEditorComponents(editor_state);
-		TickDefaultMetadataForAssets(editor_state);
+		TickAsset(editor_state);
 	}
 }
 
@@ -286,7 +287,7 @@ void PreinitializeRuntime(EditorState* editor_state) {
 
 	*runtime_resource_manager_allocator = DefaultResourceManagerAllocator(editor_state->GlobalMemoryManager());
 
-	// Create the resource manager
+	// Create the resource manager - it already has the shader directory set for the ECSEngine Shaders
 	editor_state->runtime_resource_manager = (ResourceManager*)function::OffsetPointer(runtime_resource_manager_allocator, sizeof(*runtime_resource_manager_allocator));
 	*editor_state->runtime_resource_manager = ResourceManager(runtime_resource_manager_allocator, editor_state->RuntimeGraphics(), editor_state->task_manager->GetThreadCount());
 
@@ -354,8 +355,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	new (editor_task_manager) TaskManager(std::thread::hardware_concurrency(), global_memory_manager, 1000, 100'000);
 	editor_state->task_manager = editor_task_manager;
 
-	// The task wrappers use the 
-	editor_task_manager->m_world = nullptr;
+	// Make a wrapper world that only references this task manager
+	World* task_manager_world = (World*)calloc(1, sizeof(World));
+	task_manager_world->task_manager = editor_task_manager;
+	editor_task_manager->m_world = task_manager_world;
 
 	unsigned int thread_count = std::thread::hardware_concurrency();
 
@@ -435,11 +438,11 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ECS_STACK_LINEAR_ALLOCATOR(ui_asset_override_allocator, ECS_KB * 2);
 
 	// Override the module reflection with the assets overrides
-	UIReflectionFieldOverride ui_asset_overrides[ASSET_UI_OVERRIDE_COUNT];
-	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides, GetAllocatorPolymorphic(&ui_asset_override_allocator));
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(UIReflectionFieldOverride, ui_asset_overrides, AssetUIOverrideCount());
+	GetEntityComponentUIOverrides(editor_state, ui_asset_overrides.buffer, GetAllocatorPolymorphic(&ui_asset_override_allocator));
 	// Set the overrides on the module reflection
-	for (size_t index = 0; index < ASSET_UI_OVERRIDE_COUNT; index++) {
-		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides + index);
+	for (size_t index = 0; index < ui_asset_overrides.capacity; index++) {
+		editor_state->module_reflection->SetFieldOverride(ui_asset_overrides.buffer + index);
 	}
 
 	HubData* hub_data = (HubData*)malloc(sizeof(HubData));

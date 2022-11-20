@@ -68,6 +68,7 @@ struct ECS_REFLECT EditorSandbox {
 
 	EDITOR_SANDBOX_STATE run_state;
 	bool is_scene_dirty;
+	bool is_locked;
 
 	size_t runtime_settings_last_write;
 	ECSEngine::WorldDescriptor runtime_descriptor;
@@ -130,6 +131,11 @@ void ChangeSandboxModuleConfiguration(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Clears the entity manager and empties the asset database reference
+void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // It will deallocate the allocator but keep the path intact.
 // If no module index is specified, it will clear all the modules
 void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index = -1);
@@ -162,7 +168,9 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DestroySandbox(EditorState* editor_state, unsigned int index);
+// Returns true if it did actually do the destruction. If the sandbox is locked, then it will return false immediately
+// If the push event is set to true, then it will push an event that will destroy the sandbox runtime when it is unlocked
+bool DestroySandbox(EditorState* editor_state, unsigned int index, bool push_event = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -243,6 +251,29 @@ bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigne
 
 // -------------------------------------------------------------------------------------------------------------
 
+bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns the given configuration of the module if it is being used, else COUNT to signal that it is not being used
+EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns true if a sandbox references the given module info. If the configuration is COUNT, then it will return true
+// if any configuration is used. If the running state is set to true, then it will return true if the sandbox is actually
+// running/paused. If set to false, it will also report true when the sandbox is just in the scene state.
+// If the dependent modules is specified, then it will fill in all the sandboxes that depend on that module (won't stop at the first occurence)
+bool IsModuleInfoUsed(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	bool running_state, 
+	EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT,
+	ECSEngine::CapacityStream<unsigned int>* dependent_sandboxes = nullptr
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Called during the initialization of the editor state to set the allocator
 // and to create the cache graphics and cache resource manager
 void InitializeSandboxes(EditorState* editor_state);
@@ -287,14 +318,14 @@ bool LoadRuntimeSettings(
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Returns true if it managed to read the scene file and load everything required.
-bool LoadSandboxScene(EditorState* editor_state, unsigned int sandbox_index);
-
-// -------------------------------------------------------------------------------------------------------------
-
 bool LoadEditorSandboxFile(
 	EditorState* editor_state
 );
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Useful for example for not letting the sandbox be destroyed while a load operation is in progress
+void LockSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -332,6 +363,12 @@ void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_index, 
 
 // The last argument must be the index of the module inside the modules stream to be removed
 void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// All sandboxes will remove the given module from being used and deallocate any entities data stored
+// that was coming from that module
+void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -377,5 +414,14 @@ bool UpdateSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 
 // Returns true if the runtime settings where changed from outside
 bool UpdateRuntimeSettings(const EditorState* editor_state, ECSEngine::Stream<wchar_t> filename, size_t* last_write);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Waits until the given sandbox becomes unlocked. If the sandbox index is -1 then it will wait for all sandboxes
+void WaitSandboxUnlock(EditorState* editor_state, unsigned int sandbox_index = -1);
 
 // -------------------------------------------------------------------------------------------------------------

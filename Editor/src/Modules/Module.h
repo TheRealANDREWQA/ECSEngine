@@ -146,17 +146,23 @@ bool GetModuleReflectSolutionPath(const EditorState* editor_state, unsigned int 
 unsigned int GetModuleReflectionHierarchyIndex(const EditorState* editor_state, unsigned int module_index);
 
 // Returns the most suitable configuration. The rules are like this. Find the first GOOD configuration (from distribution to debug).
-// If found return it. If none is found, find the first OUT_OF_DATE configuration (also from distribution to debug). If found, return it.
-// If all are not loaded, then return EDITOR_MODULE_CONFIGURATION_COUNT
+// If found return it. If all are not loaded or out of date, then return EDITOR_MODULE_CONFIGURATION_COUNT
 EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* editor_state, unsigned int module_index);
 
 // Returns a structures with both functions nullptr in case there is no such component. (Fine for components
 // that only expose handles to assets). If there is no dll loaded, then it will simply return
 ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, unsigned int module_index, Stream<char> name);
 
+// Fills in the indices of the modules that the types from the given module index depend upon
+void GetModuleDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);
+
+void GetModulesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);
+
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
+
+void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<const AppliedModule*>& applied_modules);
 
 // This function can also fail if the temporary dll could not be created
 bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
@@ -164,10 +170,12 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 // It will reflect the module - it will create the UI types aswell
 void ReflectModule(EditorState* editor_state, unsigned int index);
 
+// Does not check to see if the module is being used by a sandbox
 // Deallocates the streams and releases the OS library handle
 // If the configuration is defaulted, it will release all the configurations
 void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT);
 
+// Does not check to see if the module is being used by a sandbox
 // Deallocates the streams and releases the OS library handle
 // In addition, it will free the memory used by the path, the associated files will be also deleted and the
 // reflection types. All the configurations will be released
@@ -176,8 +184,10 @@ void ReleaseModule(EditorState* editor_state, unsigned int index);
 // Removes all the reflection types - not instances
 void ReleaseModuleReflection(EditorState* editor_state, unsigned int index);
 
+// Does not check to see that a sandbox depends on this module
 void RemoveModule(EditorState* editor_state, unsigned int index);
 
+// Does not check to see that a sandbox depends on this module
 void RemoveModule(EditorState* editor_state, Stream<wchar_t> solution_path);
 
 void RemoveModuleAssociatedFiles(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);

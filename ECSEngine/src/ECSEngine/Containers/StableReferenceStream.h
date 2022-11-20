@@ -110,9 +110,13 @@ namespace ECSEngine {
 		}
 
 		bool ExistsItem(unsigned int index) const {
+			if (index >= capacity) {
+				return false;
+			}
+
 			if (size < capacity / 2) {
 				// Iterate the occupied indices since they are fewer
-				for (unsigned int occupied_index = 0; occupied_index < capacity - size; occupied_index++) {
+				for (unsigned int occupied_index = 0; occupied_index < size; occupied_index++) {
 					unsigned int current_index = 0;
 					if constexpr (!queue_indirection_list) {
 						current_index = indirection_list[occupied_index];
@@ -129,11 +133,11 @@ namespace ECSEngine {
 				return false;
 			}
 			else {
-				// Iterate the free indices since they are fewer
+				// Iterate the freed indices since they are fewer
 				unsigned int freed_start = indirection_list_start_index + size;
 				freed_start = freed_start >= capacity ? freed_start - capacity : freed_start;
 
-				for (unsigned int free_index = 0; free_index < size; free_index++) {
+				for (unsigned int free_index = 0; free_index < capacity - size; free_index++) {
 					unsigned int current_index = 0;
 					if constexpr (!queue_indirection_list) {
 						current_index = indirection_list[size + free_index];
@@ -144,10 +148,10 @@ namespace ECSEngine {
 					}
 
 					if (current_index == index) {
-						return true;
+						return false;
 					}
 				}
-				return false;
+				return true;
 			}
 		}
 

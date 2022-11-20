@@ -236,10 +236,30 @@ void ChangeAssetFile(EditorState* editor_state, unsigned int handle, ECS_ASSET_T
 
 bool DeallocateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
 {
+	return DeallocateAsset(editor_state, editor_state->asset_database->GetAsset(handle, type), type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type)
+{
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
-	return DeallocateAssetFromMetadata(editor_state->RuntimeResourceManager(), editor_state->asset_database, handle, type, assets_folder);
+	Stream<void> old_asset_pointer = GetAssetFromMetadata(metadata, type);
+
+	bool success = DeallocateAssetFromMetadata(
+		editor_state->RuntimeResourceManager(),
+		editor_state->asset_database,
+		metadata,
+		type,
+		assets_folder
+	);
+	if (success) {
+		// For some assets (material and mesh) there might be allocations made from the database allocator
+		DeallocateIfBelongs(editor_state->asset_database->Allocator(), old_asset_pointer.buffer);
+	}
+	return success;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -314,6 +334,59 @@ void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wch
 	data->file_size = file.size;
 	data->type = type;
 	EditorAddEvent(editor_state, DeleteAssetSettingEvent, data, write_size);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void DeleteMissingAssetSettings(const EditorState* editor_state)
+{
+	// At the moment only meshes and textures need this.
+	Stream<wchar_t> mesh_extensions[std::size(ASSET_MESH_EXTENSIONS)];
+	Stream<wchar_t> texture_extensions[std::size(ASSET_TEXTURE_EXTENSIONS)];
+
+	for (size_t index = 0; index < std::size(ASSET_MESH_EXTENSIONS); index++) {
+		mesh_extensions[index] = ASSET_MESH_EXTENSIONS[index];
+	}
+
+	for (size_t index = 0; index < std::size(ASSET_TEXTURE_EXTENSIONS); index++) {
+		texture_extensions[index] = ASSET_TEXTURE_EXTENSIONS[index];
+	}
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	GetProjectAssetsFolder(editor_state, assets_folder);
+	assets_folder.Add(ECS_OS_PATH_SEPARATOR);
+
+	auto functor = [](Stream<wchar_t> path, void* _data) {
+		CapacityStream<wchar_t>* assets_folder = (CapacityStream<wchar_t>*)_data;
+
+		unsigned int original_size = assets_folder->size;
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, current_file, 512);
+		AssetDatabase::ExtractFileFromFile(path, current_file);
+		if (current_file.size > 0) {
+			assets_folder->AddStream(current_file);
+			if (!ExistsFileOrFolder(*assets_folder)) {
+				// Destroy the current setting
+				RemoveFile(path);
+			}
+		}
+
+		assets_folder->size = original_size;
+		return true;
+	};
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, metadata_directory, 512);
+	AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, ECS_ASSET_MESH);
+	// It has a final backslash
+	metadata_directory.size--;
+
+	ForEachFileInDirectory(metadata_directory, &assets_folder, functor);
+
+	metadata_directory.size = 0;
+	AssetDatabaseFileDirectory(editor_state->asset_database->metadata_file_location, metadata_directory, ECS_ASSET_TEXTURE);
+	// It has a final backslash
+	metadata_directory.size--;
+	ForEachFileInDirectory(metadata_directory, &assets_folder, functor);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -430,16 +503,6 @@ bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStrea
 Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_state, Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
 {
 	return editor_state->asset_database->GetMetadatasForFile(file, type, allocator);
-}
-
-// ----------------------------------------------------------------------------------------------
-
-void TickDefaultMetadataForAssets(EditorState* editor_state)
-{
-	// Every second tick this
-	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_DEFAULT_METADATA_FOR_ASSETS, 1'000)) {
-		CreateAssetDefaultSetting(editor_state);
-	}
 }
 
 // ----------------------------------------------------------------------------------------------

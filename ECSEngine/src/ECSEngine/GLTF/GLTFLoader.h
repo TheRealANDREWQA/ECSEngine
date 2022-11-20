@@ -66,6 +66,45 @@ namespace ECSEngine {
 		CapacityStream<char>* error_message = nullptr
 	);
 
+	struct GLTFMeshBufferSizes {
+		unsigned int count[ECS_MESH_BUFFER_COUNT] = { 0 };
+		unsigned int index_count = 0;
+	};
+
+	// Returns true if the sizes could be determined.
+	ECSENGINE_API bool DetermineMeshesFromGLTFBufferSizes(
+		GLTFData data,
+		GLTFMeshBufferSizes* sizes,
+		CapacityStream<char>* error_message = nullptr
+	);
+
+	// Coallesces on the CPU side the values to be directly copied to the GPU
+	// This allows to have no synchronization when loading multithreadely multiple resources
+	// There must be data.mesh_count meshes allocated. It will deallocate the buffer allocated
+	// if it fails
+	ECSENGINE_API bool LoadCoallescedMeshFromGLTF(
+		GLTFData data,
+		const GLTFMeshBufferSizes* sizes,
+		GLTFMesh* mesh,
+		Submesh* submeshes,
+		AllocatorPolymorphic allocator,
+		bool invert_z_axis = true,
+		CapacityStream<char>* error_message = nullptr
+	);
+
+	// Coallesces on the CPU side the values to be directly copied to the GPU
+	// This allows to have no synchronization when loading multithreadely multiple resources
+	// There must be data.mesh_count meshes allocated. It will deallocate the buffer allocated
+	// if it fails. It does the extra step of determining the sizes before the actual allocation is done
+	ECSENGINE_API bool LoadCoallescedMeshFromGLTF(
+		GLTFData data,
+		GLTFMesh* mesh,
+		Submesh* submeshes,
+		AllocatorPolymorphic allocator,
+		bool invert_z_axis = true,
+		CapacityStream<char>* error_message = nullptr
+	);
+		
 	// For each mesh it will create a separate material
 	ECSENGINE_API bool LoadMaterialsFromGLTF(
 		GLTFData data,
@@ -135,9 +174,36 @@ namespace ECSEngine {
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE
 	);
 
+	// Returns a coallesced mesh with 0 submeshes if it fails.
+	// It needs a temporary buffer allocator such that it can coallesce the buffers
+	// on the CPU side and them upload them directly to GPU. The coallesced_mesh_allocator
+	// is used for the CoallescedMesh submesh allocation
+	ECSENGINE_API CoallescedMesh LoadCoallescedMeshFromGLTFToGPU(
+		Graphics* graphics,
+		GLTFData gltf_data,
+		AllocatorPolymorphic coallesced_mesh_allocator,
+		bool invert_z_axis,
+		AllocatorPolymorphic temporary_buffer_allocator = { nullptr },
+		CapacityStream<char>* error_message = nullptr
+	);
+
+	// Fills in the given coallesced_mesh and its submeshes
+	// It needs a temporary buffer allocator such that it can coallesce the buffers
+	// on the CPU side and them upload them directly to GPU.
+	ECSENGINE_API bool LoadCoallescedMeshFromGLTFToGPU(
+		Graphics* graphics,
+		GLTFData gltf_data,
+		CoallescedMesh* coallesced_mesh,
+		bool invert_z_axis,
+		AllocatorPolymorphic temporary_buffer_allocator = { nullptr },
+		CapacityStream<char>* error_message = nullptr
+	);
+
 	ECSENGINE_API void FreeGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void FreeGLTFMeshes(const GLTFMesh* meshes, size_t count, AllocatorPolymorphic allocator);
+
+	ECSENGINE_API void FreeCoallescedGLTFMesh(const GLTFMesh& mesh, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void FreeGLTFFile(GLTFData data);
 

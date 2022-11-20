@@ -13,6 +13,12 @@ namespace ECSEngine {
 #define ECS_STACK_CAPACITY_STREAM(type, name, capacity) type _##name[capacity]; ECSEngine::CapacityStream<type> name(_##name, 0, capacity);
 #define ECS_STACK_CAPACITY_STREAM_DYNAMIC(type, name, capacity) void* _##name = ECS_STACK_ALLOC(sizeof(type) * (capacity)); ECSEngine::CapacityStream<type> name(_##name, 0, (capacity));
 
+#define ECS_STACK_CAPACITY_STREAM_OF_STREAMS(type, name, count, capacity_per_stream)	ECS_STACK_CAPACITY_STREAM(type, __##name, capacity_per_stream * count); \
+																						ECS_STACK_CAPACITY_STREAM(ECSEngine::CapacityStream<type>, name, count); \
+																						for (size_t name##_index = 0; name##_index < count; name##_index++) { \
+																							name[name##_index].InitializeFromBuffer(__##name.buffer + capacity_per_stream * name##_index, 0, capacity_per_stream); \
+																						}
+
 #define ECS_STACK_VOID_STREAM(name, capacity) char __storage##name[capacity]; ECSEngine::CapacityStream<void> name(__storage##name, 0, capacity);
 #define ECS_STACK_VOID_STREAM_DYNAMIC(name, capacity) void* __storage##name = ECS_STACK_ALLOC(capacity); ECSEngine::CapacityStream<void> name(__storage##name, 0, capacity);
 

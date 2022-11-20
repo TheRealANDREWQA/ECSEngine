@@ -36,12 +36,12 @@ constexpr const wchar_t* MODULE_SOURCE_FILES[] = {
 };
 
 const wchar_t* ECS_RUNTIME_PDB_PATHS[] = {
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug-windows-x86_64\\ECSEngine",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug-windows-x86_64\\Editor",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release-windows-x86_64\\ECSEngine",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release-windows-x86_64\\Editor",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution-windows-x86_64\\ECSEngine",
-	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution-windows-x86_64\\Editor"
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug\\ECSEngine",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Debug\\Editor",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release\\ECSEngine",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Release\\Editor",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution\\ECSEngine",
+	L"C:\\Users\\Andrei\\C++\\ECSEngine\\bin\\Distribution\\Editor"
 };
 
 constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
@@ -198,7 +198,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 
 	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
 		module->infos[index].load_status = EDITOR_MODULE_LOAD_FAILED;
-		module->infos[index].ecs_module.code = ECS_GET_MODULE_FAULTY_PATH;
+		module->infos[index].ecs_module.base_module.code = ECS_GET_MODULE_FAULTY_PATH;
 
 		module->infos[index].library_last_write_time = 0;
 	}
@@ -660,37 +660,9 @@ void DeleteModuleFlagFiles(EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void InitializeModuleConfigurations(EditorState* editor_state)
-{
-	/*EDITOR_STATE(editor_state);
-
-	constexpr size_t count = (unsigned int)EDITOR_MODULE_CONFIGURATION::EDITOR_MODULE_CONFIGURATION_COUNT;
-	size_t total_memory = sizeof(Stream<char>) * count;
-
-	size_t string_sizes[count];
-	string_sizes[EDITOR_MODULE_CONFIGURATION_DEBUG] = strlen(MODULE_CONFIGURATION_DEBUG);
-	string_sizes[EDITOR_MODULE_CONFIGURATION_RELEASE] = strlen(MODULE_CONFIGURATION_RELEASE);
-	string_sizes[EDITOR_MODULE_CONFIGURATION_DISTRIBUTION] = strlen(MODULE_CONFIGURATION_DISTRIBUTION);
-
-	for (size_t index = 0; index < count; index++) {
-		total_memory += string_sizes[index];
-	}
-
-	void* allocation = editor_allocator->Allocate(total_memory);
-	uintptr_t buffer = (uintptr_t)allocation;
-	editor_state->module_configuration_definitions.InitializeFromBuffer(buffer, count);
-
-	for (size_t index = 0; index < count; index++) {
-		editor_state->module_configuration_definitions[index].InitializeFromBuffer(buffer, string_sizes[index]);
-		editor_state->module_configuration_definitions[index].Copy(Stream<char>(MODULE_CONFIGURATIONS[index], string_sizes[index]));
-	}*/
-}
-
-// -------------------------------------------------------------------------------------------------------------------------
-
 bool IsEditorModuleLoaded(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
-	return info->ecs_module.code == ECS_GET_MODULE_OK;
+	return info->ecs_module.base_module.code == ECS_GET_MODULE_OK;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -949,7 +921,7 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 	// If the module is already loaded, release it
 	if (IsEditorModuleLoaded(editor_state, index, configuration)) {
 		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
-		info->ecs_module.code = ECS_GET_MODULE_FAULTY_PATH;
+		info->ecs_module.base_module.code = ECS_GET_MODULE_FAULTY_PATH;
 	}
 
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
@@ -962,17 +934,12 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 		// Copy the .dll to a temporary dll such that it will allow building the module again
 		bool copy_success = CreateEditorModuleTemporaryDLL(library_path, temporary_library);
 		if (copy_success) {
-			info->ecs_module = LoadModule(temporary_library);
+			info->ecs_module.base_module = LoadModule(temporary_library);
 			// The load succeded, now try to retrieve the streams for this module
-			if (info->ecs_module.code == ECS_GET_MODULE_OK) {
+			if (info->ecs_module.base_module.code == ECS_GET_MODULE_OK) {
 				AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
-				const Module* ecs_module = &info->ecs_module;
 
-				info->build_asset_types = LoadModuleBuildAssetTypes(ecs_module, allocator);
-				info->link_components = LoadModuleLinkComponentTargets(ecs_module, allocator);
-				info->serialize_streams = LoadModuleSerializeComponentFunctors(ecs_module, allocator);
-				info->tasks = LoadModuleTasks(ecs_module, allocator);
-				info->ui_descriptors = LoadModuleUIDescriptors(ecs_module, allocator);
+				LoadAppliedModule(&info->ecs_module, allocator);
 
 				info->load_status = EDITOR_MODULE_LOAD_GOOD;
 				return true;
@@ -1069,12 +1036,6 @@ EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* edit
 		}
 	}
 
-	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
-		if (module->infos[EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index].load_status == EDITOR_MODULE_LOAD_OUT_OF_DATE) {
-			return (EDITOR_MODULE_CONFIGURATION)(EDITOR_MODULE_CONFIGURATION_COUNT - 1 - index);
-		}
-	}
-
 	return EDITOR_MODULE_CONFIGURATION_COUNT;
 }
 
@@ -1088,12 +1049,21 @@ ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor
 		return { nullptr, nullptr };
 	}
 	const EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, loaded_configuration);
-	for (size_t index = 0; index < info->link_components.size; index++) {
-		if (function::CompareStrings(info->link_components[index].component_name, name)) {
-			return info->link_components[index];
-		}
-	}
-	return { nullptr, nullptr };
+	return ECSEngine::GetModuleLinkComponentTarget(&info->ecs_module, name);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
+{
+	editor_state->editor_components.GetModuleTypeDependencies(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModulesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
+{
+	editor_state->editor_components.GetModulesDependentUpon(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1114,6 +1084,19 @@ bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDIT
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<const AppliedModule*>& applied_modules)
+{
+	unsigned int count = editor_state->project_modules->size;
+	for (unsigned int index = 0; index < count; index++) {
+		EDITOR_MODULE_CONFIGURATION configuration = GetModuleLoadedConfiguration(editor_state, index);
+		if (configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
+			applied_modules.AddSafe(&GetModuleInfo(editor_state, index, configuration)->ecs_module);
+		}
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
@@ -1126,32 +1109,7 @@ void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
 
-	if (info->tasks.buffer != nullptr) {
-		Deallocate(allocator, info->tasks.buffer);
-		info->tasks.buffer = nullptr;
-	}
-
-	if (info->ui_descriptors.buffer != nullptr) {
-		Deallocate(allocator, info->ui_descriptors.buffer);
-		info->ui_descriptors.buffer = nullptr;
-	}
-
-	if (info->build_asset_types.buffer != nullptr) {
-		Deallocate(allocator, info->build_asset_types.buffer);
-		info->build_asset_types.buffer = nullptr;
-	}
-
-	if (info->link_components.buffer != nullptr) {
-		Deallocate(allocator, info->link_components.buffer);
-		info->link_components.buffer = nullptr;
-	}
-
-	if (info->serialize_streams.GetAllocatedBuffer() != nullptr) {
-		Deallocate(allocator, info->serialize_streams.GetAllocatedBuffer());
-		info->serialize_streams.serialize_components.buffer = nullptr;
-	}
-
-	ReleaseModule(&info->ecs_module);
+	ReleaseAppliedModule(&info->ecs_module, allocator);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

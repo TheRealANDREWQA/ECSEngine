@@ -249,24 +249,14 @@ namespace ECSEngine {
 
 	unsigned char Archetype::FindUniqueComponentIndex(Component component) const
 	{
-		for (size_t index = 0; index < m_unique_components.count; index++) {
-			if (component == m_unique_components.indices[index]) {
-				return index;
-			}
-		}
-		return UCHAR_MAX;
+		return m_unique_components.Find(component);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
 
 	unsigned char Archetype::FindSharedComponentIndex(Component component) const
 	{
-		for (size_t index = 0; index < m_shared_components.count; index++) {
-			if (component == m_shared_components.indices[index]) {
-				return index;
-			}
-		}
-		return UCHAR_MAX;
+		return m_shared_components.Find(component);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -334,7 +324,7 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < m_base_archetypes.size; index++) {
 			size_t subindex = 0;
 			for (; subindex < shared_signature.count; subindex++) {
-				if (m_base_archetypes[index].shared_instances[temporary_mapping[subindex]] != shared_signature.instances[index]) {
+				if (m_base_archetypes[index].shared_instances[temporary_mapping[subindex]] != shared_signature.instances[subindex]) {
 					break;
 				}
 			}
@@ -441,6 +431,19 @@ namespace ECSEngine {
 	{
 		ECS_CRASH_RETURN_VALUE(base_index < m_base_archetypes.size, {}, "Incorrect base index {#} when trying to retrieve vector instances from archetype.", base_index);
 		return m_base_archetypes[base_index].vector_instances;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	unsigned int Archetype::GetEntityCount() const
+	{
+		unsigned int entity_count = 0;
+		unsigned int base_count = GetBaseCount();
+		for (unsigned int index = 0; index < base_count; index++) {
+			entity_count += GetBase(index)->EntityCount();
+		}
+
+		return entity_count;
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

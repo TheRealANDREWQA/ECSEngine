@@ -38,18 +38,18 @@ namespace ECSEngine {
 
 	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
-		return IsTriviallyCopyable(data->reflection_manager, template_type, data->exceptions);
+		return IsTriviallyCopyable(data->reflection_manager, template_type);
 	}
 
 	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
-		CopyReflectionType(data->reflection_manager, template_type, data->source, data->destination, data->allocator, data->blittable_exceptions, data->blittable_byte_sizes);
+		CopyReflectionType(data->reflection_manager, template_type, data->source, data->destination, data->allocator);
 
 		// Also copy the reference count
 		size_t byte_size = 0;
-		unsigned int exception_index = function::FindString(template_type, data->blittable_exceptions);
-		if (exception_index != -1) {
-			byte_size = data->blittable_byte_sizes[exception_index];
+		uint2 exception_index = data->reflection_manager->FindBlittableException(data->definition);
+		if (exception_index.x != -1) {
+			byte_size = exception_index.x;
 		}
 		else {
 			byte_size = Reflection::SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
@@ -64,15 +64,22 @@ namespace ECSEngine {
 	
 	ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
-		const Reflection::ReflectionType* reflection_type = data->reflection_manager->GetType(template_type);
-		if (data->write_data) {
-			Serialize(data->reflection_manager, reflection_type, data->data, *data->stream);
-		}
-		else {
-			return SerializeSize(data->reflection_manager, reflection_type, data->data);
-		}
 
-		return 0;
+		SerializeCustomWriteHelperExData ex_data;
+		ex_data.data_to_write = { data->data, 1 };
+		ex_data.template_type = template_type;
+		ex_data.write_data = data;
+		size_t written_size = SerializeCustomWriteHelperEx(&ex_data);
+
+		// We need the helper to tell us the byte size of the original type
+		// In order to write the reference count
+		SerializeCustomTypeDeduceTypeHelperData helper_data;
+		helper_data.reflection_manager = data->reflection_manager;
+		helper_data.template_type = &template_type;
+
+		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
+		unsigned int* reference_count = (unsigned int*)function::OffsetPointer(data->data, result.byte_size);
+		return written_size + Write(data->stream, reference_count, sizeof(unsigned int), data->write_data);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -85,23 +92,23 @@ namespace ECSEngine {
 		// Determine if it is a trivial type - including streams
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 
-		const Reflection::ReflectionType* reflection_type = data->reflection_manager->GetType(template_type);
-		if (data->read_data) {
-			DeserializeOptions options;
-			ECS_DESERIALIZE_CODE code = Deserialize(data->reflection_manager, reflection_type, data->data, *data->stream);
-			if (code != ECS_DESERIALIZE_OK) {
-				return -1;
-			}
+		DeserializeCustomReadHelperExData ex_data;
+		ex_data.data = data;
+		ex_data.definition = template_type;
+		ex_data.deserialize_target = data->data;
+		ex_data.elements_to_allocate = 0;
+		ex_data.element_count = 1;
+		size_t buffer_size = DeserializeCustomReadHelperEx(&ex_data);
 
-			// Return 0 because no buffer we don't need to know the data size
-			return 0;
-		}
-		else {
-			size_t buffer_size = DeserializeSize(data->reflection_manager, reflection_type, *data->stream);
-			return buffer_size;
-		}
+		// We need the byte size of the template type in order to read the reference count
+		SerializeCustomTypeDeduceTypeHelperData helper_data;
+		helper_data.reflection_manager = data->reflection_manager;
+		helper_data.template_type = &template_type;
 
-		return 0;
+		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
+		Read(data->stream, function::OffsetPointer(data->data, result.byte_size), sizeof(unsigned int), data->read_data);
+
+		return buffer_size;
 	}
 
 	// --------------------------------------------------------------------------------------

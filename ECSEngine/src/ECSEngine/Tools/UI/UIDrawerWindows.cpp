@@ -1809,6 +1809,7 @@ namespace ECSEngine {
 				clickable_data.notifier = &data->filter_message_type_changed;
 				clickable_data.state = filter_status;
 				drawer.AddDefaultClickableHoverable(
+					configuration,
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y }, 
 					transform.scale, 
 					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },
@@ -1855,6 +1856,7 @@ namespace ECSEngine {
 				clickable_data.notifier = &data->filter_message_type_changed;
 				clickable_data.state = filter_status;
 				drawer.AddDefaultClickableHoverable(
+					configuration,
 					{ transform.position.x, transform.position.y - drawer.region_render_offset.y },
 					transform.scale,
 					{ StateTableBoolClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_LATE },

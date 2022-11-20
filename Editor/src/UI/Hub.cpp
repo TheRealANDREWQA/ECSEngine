@@ -14,11 +14,6 @@ using namespace ECSEngine::Tools;
 
 constexpr float INCREASE_FONT_SIZE_FACTOR = 1.3f;
 
-void AddHubProject(EditorState* editor_state, const wchar_t* path)
-{
-	AddHubProject(editor_state, path);
-}
-
 void AddHubProject(EditorState* editor_state, Stream<wchar_t> path) {
 	EDITOR_STATE(editor_state);
 
@@ -121,11 +116,6 @@ void ResetHubData(EditorState* editor_state) {
 	HubData* data = editor_state->hub_data;
 	DeallocateHubProjects(editor_state);
 	data->projects.size = 0;
-}
-
-void RemoveHubProject(EditorState* editor_state, const wchar_t* path)
-{
-	RemoveHubProject(editor_state, path);
 }
 
 void RemoveHubProject(EditorState* editor_state, Stream<wchar_t> path)

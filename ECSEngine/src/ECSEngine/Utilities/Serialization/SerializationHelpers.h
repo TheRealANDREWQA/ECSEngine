@@ -50,7 +50,6 @@ namespace ECSEngine {
 	struct SerializeCustomTypeIsTriviallyCopyableData {
 		Stream<char> definition;
 		const Reflection::ReflectionManager* reflection_manager;
-		Stream<Stream<char>> exceptions;
 	};
 
 	typedef bool (*SerializeCustomTypeIsTriviallyCopyable)(SerializeCustomTypeIsTriviallyCopyableData* data);
@@ -63,9 +62,6 @@ namespace ECSEngine {
 		const void* source;
 		void* destination;
 		AllocatorPolymorphic allocator;
-
-		Stream<Stream<char>> blittable_exceptions;
-		Stream<unsigned int> blittable_byte_sizes;
 	};
 
 	typedef void (*SerializeCustomTypeCopy)(SerializeCustomTypeCopyData* data);
@@ -149,9 +145,16 @@ namespace ECSEngine {
 		unsigned int custom_serializer_index;
 		SerializeCustomTypeReadFunctionData* read_data;
 		size_t element_count;
+
+		// If this is 0 and the element_count is 1 then it will assume that a single instance is to be deserialized
+		// and no buffer will be allocated
 		size_t elements_to_allocate;
 		size_t element_byte_size;
-		void** allocated_buffer;
+
+		union {
+			void** allocated_buffer;
+			void* deserialize_target;
+		};
 		AllocatorPolymorphic override_allocator = { nullptr };
 		Stream<size_t> indices = { nullptr, 0 };
 	};
@@ -169,8 +172,16 @@ namespace ECSEngine {
 		Stream<char> definition;
 		SerializeCustomTypeReadFunctionData* data;
 		size_t element_count;
-		size_t elements_to_allocate = -1; // -1 means the same as the element count
-		void** allocated_buffer;
+		
+		// -1 means the same as the element count
+		// This can also be 0 if you want to deserialize a single instance
+		// and the element count is 1
+		size_t elements_to_allocate = -1; 
+
+		union {
+			void** allocated_buffer;
+			void* deserialize_target;
+		};
 	};
 
 	// Combines SerializeCustomTypeDeduceTypeHelper with a DeserializeCustomReadHelper call
@@ -187,8 +198,7 @@ namespace ECSEngine {
 	// Can optionally give field definitions to be considered as trivially copyable
 	ECSENGINE_API bool IsTriviallyCopyable(
 		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type, 
-		Stream<Stream<char>> exceptions = { nullptr, 0 }
+		const Reflection::ReflectionType* type
 	);
 
 	// Returns true if it can be copied with memcpy, else false
@@ -196,8 +206,7 @@ namespace ECSEngine {
 	// Can optionally give field definitions to be considered as trivially copyable
 	ECSENGINE_API bool IsTriviallyCopyable(
 		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		Stream<Stream<char>> exceptions = { nullptr, 0 }
+		Stream<char> definition
 	);
 
 	// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
@@ -206,9 +215,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type,
 		const void* source,
 		void* destination,
-		AllocatorPolymorphic field_allocator,
-		Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
-		Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 }
+		AllocatorPolymorphic field_allocator
 	);
 
 	// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
@@ -217,9 +224,7 @@ namespace ECSEngine {
 		Stream<char> definition,
 		const void* source,
 		void* destination,
-		AllocatorPolymorphic field_allocator,
-		Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
-		Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 }
+		AllocatorPolymorphic field_allocator
 	);
 
 #pragma region User defined influence

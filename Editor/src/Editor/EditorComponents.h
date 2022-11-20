@@ -89,6 +89,9 @@ struct EditorComponents {
 	// Returns the index inside the loaded_modules if the module has components recorded here, else -1.
 	unsigned int FindModule(ECSEngine::Stream<char> name) const;
 
+	// Returns the index inside the loaded modules of the module that contains the given component/type
+	unsigned int FindComponentModule(ECSEngine::Stream<char> name) const;
+
 	// Returns the index of the module that contains that component. The index references the module index that can be used
 	// with the other module function (inside Module.h)
 	// Returns -1 if it doesn't exist
@@ -133,8 +136,47 @@ struct EditorComponents {
 	// It will eliminate these events from the internal buffer
 	void GetUserEvents(ECSEngine::CapacityStream<EditorComponentEvent>& events);
 
+	// The indices should be used to index into loaded modules. If the replace links parameter is set to true
+	// then instead of giving the index of the component it will replace it with its link instead
+	void GetModuleComponentIndices(unsigned int module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, bool replace_links = false) const;
+
+	// The indices should be used to index into loaded modules.  If the replace links parameter is set to true
+	// then instead of giving the index of the component it will replace it with its link instead
+	void GetModuleSharedComponentIndices(unsigned int module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, bool replace_links = false) const;
+
+	// At the moment, a single link component can be assigned to each component. It returns { nullptr, 0 }
+	// If it doesn't exist
+	ECSEngine::Stream<char> GetLinkComponentForTarget(ECSEngine::Stream<char> name) const;
+
+	// Returns true if the link components needs to be built using DLL functions
+	bool GetLinkComponentDLLStatus(ECSEngine::Stream<char> name) const;
+
+	// Fills in the names of the types that the given type depends upon
+	void GetTypeDependencies(
+		ECSEngine::Stream<char> type,
+		ECSEngine::CapacityStream<ECSEngine::Stream<char>>* dependencies
+	) const;
+
+	// Fills in the indices of the modules inside loaded_modules that the given module depends upon.
+	// If the editor_state is given then it will fill in with the ProjectModules* indices instead
+	// of the loaded_modules ones. If it depends on an ECS type then it will skip it - it will always consider it to be available
+	void GetModuleTypeDependencies(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state = nullptr) const;
+
+	// Fills in the indices of the modules inside loaded_modules that depend upon the given module.
+	// If the editor_state is given then it will fill in with the ProjectModules* indices instead
+	// of the loaded_modules ones.
+	void GetModulesDependentUpon(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state = nullptr) const;
+
 	// Returns true if the component name contains non trivially copyable types
 	bool HasBuffers(ECSEngine::Stream<char> component_name) const;
+
+	// If the component doesn't need a DLL or the DLL function is loaded then it will return true.
+	// Else false
+	bool HasLinkComponentDLLFunction(const EditorState* modules, ECSEngine::Stream<char> component_name) const;
+
+	// Returns true if all the component (unique and/or shared) which have link components have
+	// their DLL function ready
+	bool HasLinkComponentDLLFunction(const EditorState* modules, const ECSEngine::EntityManager* entity_manager, ECSEngine::bool2 select_unique_shared = { true, true }) const;
 
 	// Returns true if the component (unique or shared) exists or not
 	bool IsComponent(ECSEngine::Stream<char> name) const;
@@ -159,20 +201,11 @@ struct EditorComponents {
 
 	unsigned int ModuleSharedComponentCount(unsigned int index) const;
 
-	// The indices should be used to index into loaded modules. If the replace links parameter is set to true
-	// then instead of giving the index of the component it will replace it with its link instead
-	void GetModuleComponentIndices(unsigned int module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, bool replace_links = false) const;
+	// Returns the loaded_modules index given the index from ProjectModules*
+	unsigned int ModuleIndexFromReflection(const EditorState* editor_state, unsigned int module_index) const;
 
-	// The indices should be used to index into loaded modules.  If the replace links parameter is set to true
-	// then instead of giving the index of the component it will replace it with its link instead
-	void GetModuleSharedComponentIndices(unsigned int module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, bool replace_links = false) const;
-
-	// At the moment, a single link component can be assigned to each component. It returns { nullptr, 0 }
-	// If it doesn't exist
-	ECSEngine::Stream<char> GetLinkComponentForTarget(ECSEngine::Stream<char> name) const;
-
-	// Returns true if the link components needs to be built using DLL functions
-	bool GetLinkComponentDLLStatus(ECSEngine::Stream<char> name) const;
+	// Returns the module index inside the ProjectModules* given the index inside this structure
+	unsigned int ReflectionModuleIndex(const EditorState* editor_state, unsigned int loaded_module_index) const;
 
 	// Returns true if the component has changed since last time, else false.
 	bool NeedsUpdate(ECSEngine::Stream<char> component, const ECSEngine::Reflection::ReflectionManager* reflection_manager) const;
@@ -198,6 +231,9 @@ struct EditorComponents {
 	// Removes the component from the manager.
 	void RemoveTypeFromManager(ECSEngine::EntityManager* entity_manager, ECSEngine::Component component, bool shared, ECSEngine::SpinLock* lock = nullptr) const;
 
+	// Removes all the components that came from the given module and destroys those archetypes
+	void RemoveModuleFromManager(ECSEngine::EntityManager* entity_manager, unsigned int loaded_module_index) const;
+
 	// Does not deallocate any buffers. It will only set the default values.
 	void ResetComponent(ECSEngine::Stream<char> component_name, void* component_data) const;
 
@@ -208,10 +244,13 @@ struct EditorComponents {
 	// and sets the data to its default values. The buffers will be set to 0.
 	void ResetComponents(ECSEngine::ComponentSignature component_signature, void* stack_memory, void** component_buffers) const;
 
-	// For link components it does will reset the target component, without doing anything to the link component.
+	// For link components it will reset the target component, without doing anything to the link component.
 	// It works only for unique and link components to unique components
 	// Sets the component to default values. If it has buffers, it will deallocate them.
 	void ResetComponentFromManager(ECSEngine::EntityManager* entity_manager, ECSEngine::Stream<char> component_name, ECSEngine::Entity entity) const;
+
+	// Removes all internal types that were associated with the given module
+	void RemoveModule(unsigned int loaded_module_index);
 
 	// Returns true if it handled the event, else false when the event needs to be reprocessed later on (for example when resizing
 	// a component allocator and the component has not yet been registered because of the event)

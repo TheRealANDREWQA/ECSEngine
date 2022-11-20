@@ -282,7 +282,7 @@ namespace ECSEngine {
 
 		// A more detailed version that directly takes the data and does not deallocate it
 		// If it fails it returns nullptr. It allocates memory from the allocator
-		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT.
+		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK.
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
 		CoallescedMesh* LoadCoallescedMeshImplementationEx(
 			const GLTFData* data,
@@ -293,10 +293,23 @@ namespace ECSEngine {
 
 		// A more detailed version that directly takes the data and does not deallocate it
 		// If it fails it returns nullptr. It allocates memory from the allocator
-		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT.
+		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT, ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK.
 		// It will also insert it into the table if the filename is not { nullptr, 0 }
 		CoallescedMesh* LoadCoallescedMeshImplementationEx(
 			Stream<GLTFMesh> gltf_meshes,
+			float scale_factor = 1.0f,
+			ResourceManagerLoadDesc load_descriptor = {},
+			ResourceManagerExDesc* ex_desc = {}
+		);
+
+		// A more detailed version that directly takes the data and does not deallocate it
+		// This function cannot fail (unless GPU memory runs out). It allocates memory from the allocator.
+		// The submeshes are allocated as well, they are not referenced
+		// Flags: ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK
+		// It will also insert it into the table if the filename is not { nullptr, 0 }
+		CoallescedMesh* LoadCoallescedMeshImplementationEx(
+			const GLTFMesh* gltf_mesh,
+			Stream<Submesh> submeshes,
 			float scale_factor = 1.0f,
 			ResourceManagerLoadDesc load_descriptor = {},
 			ResourceManagerExDesc* ex_desc = {}

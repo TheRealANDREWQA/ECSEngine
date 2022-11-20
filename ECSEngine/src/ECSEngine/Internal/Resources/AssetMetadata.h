@@ -23,14 +23,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool AssetHasFile(ECS_ASSET_TYPE type);
 
-	ECSENGINE_API extern Stream<char> ECS_ASSET_METADATA_MACROS[];
-
-	ECSENGINE_API size_t ECS_ASSET_METADATA_MACROS_SIZE();
-
 	struct AssetFieldTarget {
 		Stream<char> name;
 		ECS_ASSET_TYPE asset_type;
 	};
+
+	ECSENGINE_API extern AssetFieldTarget ECS_ASSET_METADATA_MACROS[];
+
+	ECSENGINE_API size_t ECS_ASSET_METADATA_MACROS_SIZE();
 
 	ECSENGINE_API extern AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[];
 
@@ -43,11 +43,16 @@ namespace ECSEngine {
 	// The string is read-only from the global memory (it is a constant)
 	ECSENGINE_API const char* ConvertAssetTypeString(ECS_ASSET_TYPE type);
 
+	ECSENGINE_API size_t AssetMetadataByteSize(ECS_ASSET_TYPE type);
+
 	enum ECS_REFLECT ECS_ASSET_MESH_OPTIMIZE_LEVEL : unsigned char {
 		ECS_ASSET_MESH_OPTIMIZE_NONE,
 		ECS_ASSET_MESH_OPTIMIZE_BASIC,
 		ECS_ASSET_MESH_OPTIMIZE_ADVANCED
 	};
+
+	// This is the limit of assets which can be randomized on asset database load
+#define ECS_ASSET_RANDOMIZED_ASSET_LIMIT 10'000
 
 	// ------------------------------------------------------------------------------------------------------
 
@@ -65,8 +70,8 @@ namespace ECSEngine {
 			return mesh_pointer;
 		}
 
-		Stream<char> name; ECS_SERIALIZATION_OMIT_FIELD
-		Stream<wchar_t> file; ECS_SERIALIZATION_OMIT_FIELD
+		Stream<char> name;
+		Stream<wchar_t> file;
 		float scale_factor;
 		bool invert_z_axis;
 		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
@@ -88,8 +93,8 @@ namespace ECSEngine {
 			return texture.view;
 		}
 
-		Stream<char> name; ECS_SERIALIZATION_OMIT_FIELD
-		Stream<wchar_t> file; ECS_SERIALIZATION_OMIT_FIELD
+		Stream<char> name;
+		Stream<wchar_t> file;
 		bool sRGB;
 		bool generate_mip_maps;
 		ECS_TEXTURE_COMPRESSION_EX compression_type;
@@ -108,7 +113,7 @@ namespace ECSEngine {
 			return sampler.sampler;
 		}
 
-		Stream<char> name; ECS_SERIALIZATION_OMIT_FIELD
+		Stream<char> name;
 		ECS_SAMPLER_ADDRESS_TYPE address_mode;
 		ECS_SAMPLER_FILTER_TYPE filter_mode;
 		unsigned char anisotropic_level;
@@ -147,8 +152,8 @@ namespace ECSEngine {
 			return shader_interface;
 		}
 
-		Stream<char> name; ECS_SERIALIZATION_OMIT_FIELD
-		Stream<wchar_t> file; ECS_SERIALIZATION_OMIT_FIELD
+		Stream<char> name;
+		Stream<wchar_t> file;
 		Stream<ShaderMacro> macros;
 		ECS_SHADER_TYPE shader_type;
 		ECS_SHADER_COMPILE_FLAGS compile_flag;
@@ -232,8 +237,8 @@ namespace ECSEngine {
 			return data.buffer;
 		}
 
-		Stream<char> name; ECS_SERIALIZATION_OMIT_FIELD
-		Stream<wchar_t> file; ECS_SERIALIZATION_OMIT_FIELD
+		Stream<char> name;
+		Stream<wchar_t> file;
 
 		Stream<void> data; ECS_SKIP_REFLECTION(static_assert(sizeof(Stream<void>) == 16))
 	};
@@ -260,5 +265,17 @@ namespace ECSEngine {
 	}
 
 	ECSENGINE_API Stream<void> GetAssetFromMetadata(const void* metadata, ECS_ASSET_TYPE type);
+
+	ECSENGINE_API void SetAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, Stream<void> asset);
+
+	ECSENGINE_API void SetRandomizedAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, unsigned int index);
+
+	ECSENGINE_API bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type);
+
+	// Meshes and materials are treated differently
+	ECSENGINE_API unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type);
+
+	// If long format is specified then it will print the full file path for absolute paths instead of only the filename
+	ECSENGINE_API void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format = false);
 
 }

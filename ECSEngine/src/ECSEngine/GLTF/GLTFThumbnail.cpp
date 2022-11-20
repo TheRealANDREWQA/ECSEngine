@@ -166,7 +166,14 @@ namespace ECSEngine {
 
 		// If the biggest side is on the Z axis, rotate the object by 90 degrees on the Y axis such that the object can be better seen
 		if (maximum_side == difference.z) {
-			info.object_rotation.y = -90.0f;
+			// Determine if to rotate by 90 degrees positive or negative
+			// If it spans more on the positive axis, then make the rotation negative
+			// Else positive rotation
+			float rotation = 90.0f;
+			if (min_bound.z < max_bound.z) {
+				rotation = -rotation;
+			}
+			info.object_rotation.y = rotation;
 		}
 
 		return info;

@@ -1004,6 +1004,71 @@ ECS_ASSERT(!table.Insert(format, identifier));
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
+	Stream<char> VERTEX_SHADER_TYPE_KEYWORDS[] = {
+		STRING(SV_Position),
+		STRING(SV_POSITION),
+		STRING(VS_INPUT),
+		STRING(VS_OUTPUT),
+		STRING(SV_VertexID)
+	};
+
+	Stream<char> PIXEL_SHADER_TYPE_KEYWORDS[] = {
+		STRING(SV_Target),
+		STRING(SV_TARGET)
+	};
+
+	Stream<char> GEOMETRY_SHADER_TYPE_KEYWORDS[] = {
+		STRING([maxvertexcount),
+		STRING(TriangleStream),
+		STRING(SV_GSInstanceID)
+	};
+
+	Stream<char> DOMAIN_SHADER_TYPE_KEYWORDS[] = {
+		STRING([domain),
+		STRING(OutputPatch),
+		STRING(SV_DomainLocation)
+	};
+
+	Stream<char> HULL_SHADER_TYPE_KEYWORDS[] = {
+		STRING(SV_TessFactor),
+		STRING(SV_InsideTessFactor),
+		STRING(InputPatch)
+	};
+
+	Stream<char> COMPUTE_SHADER_TYPE_KEYWORDS[] = {
+		STRING([numthreads),
+		STRING(SV_DispatchThreadID),
+		STRING(SV_GroupID),
+		STRING(SV_GroupIndex),
+		STRING(SV_GroupThreadID)
+	};
+
+	Stream<Stream<char>> SHADER_TYPE_KEYWORDS[] = {
+		{ VERTEX_SHADER_TYPE_KEYWORDS, std::size(VERTEX_SHADER_TYPE_KEYWORDS) },
+		{ PIXEL_SHADER_TYPE_KEYWORDS, std::size(PIXEL_SHADER_TYPE_KEYWORDS) },
+		{ DOMAIN_SHADER_TYPE_KEYWORDS, std::size(DOMAIN_SHADER_TYPE_KEYWORDS) },
+		{ HULL_SHADER_TYPE_KEYWORDS, std::size(HULL_SHADER_TYPE_KEYWORDS) },
+		{ GEOMETRY_SHADER_TYPE_KEYWORDS, std::size(GEOMETRY_SHADER_TYPE_KEYWORDS) },
+		{ COMPUTE_SHADER_TYPE_KEYWORDS, std::size(COMPUTE_SHADER_TYPE_KEYWORDS) }
+	};
+
+	ECS_SHADER_TYPE ShaderReflection::DetermineShaderType(Stream<char> source_code) const
+	{
+		// Start from the compute shader downwards to the vertex shader because
+		// the geometry shader, domain shader or hull shader can use the SV_Position
+		// found in the vertex shader
+		for (int64_t index = ECS_SHADER_TYPE_COUNT - 1; index >= 0; index--) {
+			for (size_t subindex = 0; subindex < SHADER_TYPE_KEYWORDS[index].size; subindex++) {
+				if (function::FindFirstToken(SHADER_TYPE_KEYWORDS[index][subindex], source_code).size > 0) {
+					return (ECS_SHADER_TYPE)index;
+				}
+			}
+		}
+		return ECS_SHADER_TYPE_COUNT;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------------------------
+
 	size_t ShaderReflection::MemoryOf()
 	{
 		return ShaderReflectionFormatTable::MemoryOf(STRING_FORMAT_TABLE_CAPACITY) + ShaderReflectionFloatFormatTable::MemoryOf(FLOAT_FORMAT_TABLE_CAPACITY) +

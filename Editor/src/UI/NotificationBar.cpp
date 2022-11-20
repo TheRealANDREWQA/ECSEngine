@@ -116,7 +116,7 @@ void NotificationBarDraw(void* window_data, void* drawer_descriptor, bool initia
 			| UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_TEXT_ALIGNMENT, config, draw_message);
 
 		float2 action_scale = { drawer.current_x - action_position.x, TEXT_LABEL_Y_SIZE };
-		drawer.AddClickable(action_position, action_scale, { FocusConsole, data->editor_state, 0 });
+		drawer.AddClickable(0, action_position, action_scale, { FocusConsole, data->editor_state, 0 });
 
 		float2 notification_size = drawer.GetLabelScale(message->message.buffer);
 		if (notification_size.x > NOTIFICATION_MESSAGE_SIZE) {			

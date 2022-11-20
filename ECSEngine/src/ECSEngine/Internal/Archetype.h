@@ -109,6 +109,9 @@ namespace ECSEngine {
 
 		VectorComponentSignature ECS_VECTORCALL GetVectorInstances(unsigned int base_index) const;
 
+		// Returns the total amount of entities in all base archetypes
+		unsigned int GetEntityCount() const;
+
 		struct InternalBase {
 			ArchetypeBase archetype;
 			SharedInstance* shared_instances;

@@ -639,7 +639,7 @@ void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableDat
 	tooltip_data.base.center_horizontal_x = true;
 	tooltip_data.base.font_size = font_size;
 	
-	drawer->AddTextTooltipHoverable(current_position, { label_horizontal_scale, drawer->layout.default_element_y }, &tooltip_data);
+	drawer->AddTextTooltipHoverable(0, current_position, { label_horizontal_scale, drawer->layout.default_element_y }, &tooltip_data);
 }
 
 struct PathButtonData {
@@ -2197,6 +2197,7 @@ ECS_ASSERT(!data->file_functors.Insert(action, identifier));
 				null_terminated_path[stream_path.size] = L'\0';
 
 				drawer->AddDoubleClickAction(
+					0,
 					rectangle_position,
 					rectangle_scale,
 					_data->element_count,

@@ -128,14 +128,12 @@ namespace ECSEngine {
 		// is greater than the current remaining elements, it will do nothing
 		void ShrinkToFit(unsigned int supplementary_elements = 0);
 		
-		// It will update some entity infos for when the chunk is empty and it will be removed swap back-ed
-		// by another chunk and these entities change their chunk index and for the entity that will replace
-		// it inside the chunk
+		// It needs the EntityPool* to update the EntityInfo for the swapped entity.
+		// It doesn't modify the entity info for the entity being removed
 		void RemoveEntity(Entity entity, EntityPool* pool);
 
-		// It will update some entity infos for when the chunk is empty and it will be removed swap back-ed
-		// by another chunk and these entities change their chunk index and for the entity that will replace
-		// it inside the chunk
+		// It needs the EntityPool* to update the EntityInfo for the swapped entity.
+		// It doesn't modify the entity info for the entity being removed
 		void RemoveEntity(unsigned int stream_index, EntityPool* pool);
 
 		// Sets the entities previously allocated using reserve

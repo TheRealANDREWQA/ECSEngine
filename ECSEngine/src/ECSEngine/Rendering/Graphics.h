@@ -15,8 +15,6 @@
 
 namespace ECSEngine {
 
-	extern ECSENGINE_API char DEVICE_NAME[128];
-
 #ifdef ECSENGINE_PLATFORM_WINDOWS
 
 #ifdef ECSENGINE_DIRECTX11
@@ -913,6 +911,9 @@ namespace ECSEngine {
 
 		// ------------------------------------------------- Shader Reflection --------------------------------------------------
 
+		// Returns ECS_SHADER_TYPE_COUNT if it couldn't determine the shader type for a given shader
+		ECS_SHADER_TYPE DetermineShaderType(Stream<char> source_code) const;
+
 		// The vertex byte code needs to be given from the compilation of the vertex shader
 		InputLayout ReflectVertexShaderInput(
 			Stream<char> source_code, 
@@ -1493,6 +1494,7 @@ namespace ECSEngine {
 	// Releases the mesh GPU resources and the names of the submeshes if any
 	ECSENGINE_API void FreeCoallescedMesh(Graphics* graphics, const CoallescedMesh* mesh);
 
+	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
 	// Merges the vertex buffers and the index buffers into a single resource that can reduce 
 	// the bind calls by moving the offsets into the draw call; it returns the aggregate mesh
 	// and the submeshes - the offsets into the buffers; it will release the initial mesh 
@@ -1502,6 +1504,7 @@ namespace ECSEngine {
 	// The submeshes will inherit the mesh name if it has one
 	ECSENGINE_API Mesh MeshesToSubmeshes(Graphics* graphics, Stream<Mesh> meshes, Submesh* submeshes, ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE);
 
+	// SINGLE THREADED - It uses the CopyResource which requires the immediate context
 	// Same as the non mask variant - the difference is that it will only convert the meshes specified
 	// in the mesh mask
 	// The mesh will have no name associated with it

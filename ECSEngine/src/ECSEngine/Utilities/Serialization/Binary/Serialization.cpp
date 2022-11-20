@@ -88,7 +88,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 			if (!skip_serializable && omit_fields.size > 0) {
-				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].definition, omit_fields);
+				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
 			}
 			serializable_field_count -= skip_serializable;
 		}
@@ -100,7 +100,7 @@ namespace ECSEngine {
 
 			if (!skip_serializable) {
 				if (omit_fields.size > 0) {
-					skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].definition, omit_fields);
+					skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
 				}
 				
 				if (!skip_serializable) {

@@ -1,285 +1,269 @@
 #include "ecspch.h"
 #include "ModuleUtilities.h"
-#include "../../Utilities/Reflection/Reflection.h"
-#include "../../Utilities/Serialization/SerializationHelpers.h"
-#include "../../Internal/Resources/AssetDatabase.h"
 #include "../../Internal/LinkComponents.h"
+#include "../../Utilities/Reflection/Reflection.h"
+#include "../../Internal/EntityManagerSerialize.h"
 
 namespace ECSEngine {
 
-	// ---------------------------------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------------------------
 
-	// Returns true if the type has conformant field types else false
-	bool ConvertTargetAssetsToHandles(
-		const AssetDatabase* database,
-		const Reflection::ReflectionType* target_type,
-		const void* target_data,
-		CapacityStream<unsigned int>& handles,
-		CapacityStream<ECS_ASSET_TYPE>& types
-	) {
-		for (size_t index = 0; index < target_type->fields.size; index++) {
-			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(target_type, index, target_data);
-
-			if (!asset_field.success) {
-				return false;
-			}
-			else if (asset_field.type != ECS_ASSET_TYPE_COUNT) {
-				handles.AddSafe(database->FindAssetEx(asset_field.asset, asset_field.type));
-				types.AddSafe(asset_field.type);
+	void ModuleGatherSerializeOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<SerializeEntityManagerComponentInfo>& infos)
+	{
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			Stream<SerializeEntityManagerComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_components;
+			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
+				infos.AddSafe(current_infos[index]);
 			}
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ModuleGatherSerializeSharedOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<SerializeEntityManagerSharedComponentInfo>& infos)
+	{
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			Stream<SerializeEntityManagerSharedComponentInfo> current_infos = applied_modules[index]->serialize_streams.serialize_shared_components;
+			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
+				infos.AddSafe(current_infos[index]);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ModuleGatherDeserializeOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<DeserializeEntityManagerComponentInfo>& infos)
+	{
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			Stream<DeserializeEntityManagerComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_components;
+			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
+				infos.AddSafe(current_infos[index]);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ModuleGatherDeserializeSharedOverrides(Stream<const AppliedModule*> applied_modules, CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos)
+	{
+		for (size_t index = 0; index < applied_modules.size; index++) {
+			Stream<DeserializeEntityManagerSharedComponentInfo> current_infos = applied_modules[index]->serialize_streams.deserialize_shared_components;
+			for (size_t subindex = 0; subindex < current_infos.size; subindex++) {
+				infos.AddSafe(current_infos[index]);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ModuleLinkComponentTarget GetModuleLinkComponentTarget(const AppliedModule* applied_module, Stream<char> name)
+	{
+		for (size_t index = 0; index < applied_module->link_components.size; index++) {
+			if (function::CompareStrings(applied_module->link_components[index].component_name, name)) {
+				return applied_module->link_components[index];
+			}
+		}
+		return { nullptr, nullptr };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ModuleLinkComponentTarget GetModuleLinkComponentTarget(Stream<const AppliedModule*> applied_module, Stream<char> name)
+	{
+		for (size_t index = 0; index < applied_module.size; index++) {
+			ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_module[index], name);
+			if (target.build_function != nullptr) {
+				return target;
+			}
+		}
+		return { nullptr, nullptr };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	template<typename LinkFunctor, typename ConvertFunctor>
+	bool ModuleGatherLinkOverridesImpl(
+		Stream<const AppliedModule*> applied_modules,
+		LinkFunctor&& link_functor,
+		ConvertFunctor&& convert_functor
+	) {
+		ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, unique_link_types, ECS_KB);
+		ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, shared_link_types, ECS_KB);
+		ECS_STACK_CAPACITY_STREAM(ModuleLinkComponentTarget, unique_link_type_targets, ECS_KB);
+		ECS_STACK_CAPACITY_STREAM(ModuleLinkComponentTarget, shared_link_type_targets, ECS_KB);
+
+		link_functor(unique_link_types, shared_link_types);
+
+		auto iterate = [applied_modules](Stream<const Reflection::ReflectionType*> link_types, CapacityStream<ModuleLinkComponentTarget>& link_type_targets) {
+			for (size_t index = 0; index < link_types.size; index++) {
+				bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_types[index]);
+				if (needs_dll) {
+					ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_modules, link_types[index]->name);
+					if (target.build_function == nullptr || target.reverse_function == nullptr) {
+						return false;
+					}
+					link_type_targets.AddSafe(target);
+				}
+				else {
+					link_type_targets.AddSafe({ nullptr, nullptr });
+				}
+			}
+			return true;
+		};
+
+		if (!iterate(unique_link_types, unique_link_type_targets)) {
+			return false;
+		}
+
+		if (!iterate(shared_link_types, shared_link_type_targets)) {
+			return false;
+		}
+
+		convert_functor(unique_link_types, shared_link_types, unique_link_type_targets, shared_link_type_targets);
+
 		return true;
 	}
 
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	void ConvertHandlesToAssets(
+	bool ModuleGatherLinkSerializeOverrides(
+		Stream<const AppliedModule*> applied_modules, 
+		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* database,
-		const Reflection::ReflectionType* link_type,
-		const void* link_data,
-		CapacityStream<Stream<void>>& assets,
-		CapacityStream<ECS_ASSET_TYPE>& types
-	) {
-		for (size_t index = 0; index < link_type->fields.size; index++) {
-			ECS_ASSET_TYPE handle_type = FindAssetMetadataMacro(link_type->fields[index].tag);
-			if (handle_type != ECS_ASSET_TYPE_COUNT) {
-				// We have a handle
-				unsigned int handle = *(unsigned int*)function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset);
-				const void* metadata = database->GetAssetConst(handle, handle_type);
-				Stream<void> asset_data = GetAssetFromMetadata(metadata, handle_type);
-				assets.AddSafe(asset_data);
-				types.AddSafe(handle_type);
-			}
-		}
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------
-
-	bool ModuleFromTargetToLinkComponent(
-		ModuleLinkComponentTarget module_link, 
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* target_type, 
-		const Reflection::ReflectionType* link_type, 
-		const AssetDatabase* asset_database, 
-		const void* target_data, 
-		void* link_data,
-		AllocatorPolymorphic allocator
+		AllocatorPolymorphic temp_allocator,
+		CapacityStream<SerializeEntityManagerComponentInfo>& infos
 	)
 	{
-		// Determine if the link component has a DLL function
-		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);
-		if (needs_dll && (module_link.build_function == nullptr || module_link.reverse_function == nullptr)) {
-			// Fail
-			return false;
-		}
-
-		// Extract the handles of the target
-		ECS_STACK_CAPACITY_STREAM(unsigned int, asset_handles, 512);
-		ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, asset_types, 512);
-		bool success = ConvertTargetAssetsToHandles(asset_database, target_type, target_data, asset_handles, asset_types);
-		if (!success) {
-			return false;
-		}
-
-		// Needs DLL but the functions are present
-		if (needs_dll) {
-			// Use the function
-			ModuleLinkComponentReverseFunctionData reverse_data;
-			reverse_data.asset_handles = asset_handles;
-			reverse_data.link_component = link_data;
-			reverse_data.component = target_data;
-			module_link.reverse_function(&reverse_data);
-		}
-		else {
-			const size_t MAX_LINK_SIZE = ECS_KB * 4;
-			size_t link_type_size = Reflection::GetReflectionTypeByteSize(link_type);
-			ECS_ASSERT(link_type_size < MAX_LINK_SIZE);
-			size_t link_type_storage[MAX_LINK_SIZE / sizeof(size_t)];
-			memcpy(link_type_storage, link_data, link_type_size);
-
-			struct RestoreLinkData {
-				void operator()() {
-					if (link_type_size > 0) {
-						memcpy(link_data, link_initial_storage, link_type_size);
-					}
-				}
-
-				void* link_data;
-				void* link_initial_storage;
-				size_t link_type_size;
-			};
-
-			StackScope<RestoreLinkData> restore_link({ link_data, link_type_storage, link_type_size });
-
-			// If different count of fields, fail
-			if (link_type->fields.size != target_type->fields.size) {
-				return false;
+		return ModuleGatherLinkOverridesImpl(applied_modules,
+			[=](auto& unique_link_types, auto& shared_link_types) {
+				GetUniqueLinkComponents(reflection_manager, unique_link_types);
+			},
+			[&](auto unique_link_types, auto shared_link_types, auto unique_link_type_targets, auto shared_link_type_targets) {
+				ECS_ASSERT(infos.size + unique_link_types.size <= infos.capacity);
+				ConvertLinkTypesToSerializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, infos.buffer + infos.size);
+				infos.size += unique_link_types.size;
 			}
-
-			// Go through the link target and try to copy the fields
-			unsigned int asset_index = 0;
-			for (size_t index = 0; index < link_type->fields.size; index++) {
-				ECS_ASSET_TYPE asset_type = FindAssetMetadataMacro(link_type->fields[index].tag);
-				if (asset_type != ECS_ASSET_TYPE_COUNT) {
-					if (asset_index >= asset_types.size) {
-						// Too many assets, fail
-						return false;
-					}
-
-					if (asset_types[asset_index] != asset_type) {
-						// A mismatch, fail
-						return false;
-					}
-					
-					unsigned int* handle = (unsigned int*)function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset);
-					*handle = asset_handles[asset_index];
-					asset_index++;
-				}
-				else {
-					// Not an asset. Check to see that they have identical types
-					if (!link_type->fields[index].Compare(target_type->fields[index])) {
-						return false;
-					}
-
-					const void* source = function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset);
-					void* destination = function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset);
-					if (allocator.allocator != nullptr) {
-						CopyReflectionType(
-							reflection_manager,
-							link_type->fields[index].definition,
-							source,
-							destination,
-							allocator
-						);
-					}
-					else {
-						memcpy(
-							destination,
-							source,
-							link_type->fields[index].info.byte_size
-						);
-					}
-				}
-			}
-
-			// Disable the restore
-			restore_link.deallocator.link_type_size = 0;
-		}
-
-		return true;
+		);
 	}
 
-	// ---------------------------------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------------------------
 
-	bool ModuleLinkComponentToTarget(
-		ModuleLinkComponentTarget module_link, 
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* link_type, 
-		const Reflection::ReflectionType* target_type,
-		const AssetDatabase* asset_database,
-		const void* link_data, 
-		void* target_data,
-		AllocatorPolymorphic allocator
+	bool ModuleGatherLinkSerializeSharedOverrides(
+		Stream<const AppliedModule*> applied_modules, 
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
+		AllocatorPolymorphic temp_allocator,
+		CapacityStream<SerializeEntityManagerSharedComponentInfo>& infos
 	)
 	{
-		// Determine if the link component has a DLL function
-		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);
-		if (needs_dll && (module_link.build_function == nullptr || module_link.reverse_function == nullptr)) {
-			// Fail
-			return false;
-		}
-
-		ECS_STACK_CAPACITY_STREAM(Stream<void>, assets, 512);
-		ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, asset_types, 512);
-		ConvertHandlesToAssets(asset_database, link_type, link_data, assets, asset_types);
-
-		if (needs_dll) {
-			// Build it using the function
-			ModuleLinkComponentFunctionData build_data;
-			build_data.assets = assets;
-			build_data.component = target_data;
-			build_data.link_component = link_data;
-			module_link.build_function(&build_data);
-		}
-		else {
-			if (link_type->fields.size != target_type->fields.size) {
-				return false;
+		return ModuleGatherLinkOverridesImpl(applied_modules,
+			[=](auto& unique_link_types, auto& shared_link_types) {
+				GetSharedLinkComponents(reflection_manager, shared_link_types);
+			},
+			[&](auto unique_link_types, auto shared_link_types, auto unique_link_type_targets, auto shared_link_type_targets) {
+				ECS_ASSERT(infos.size + shared_link_types.size <= infos.capacity);
+				ConvertLinkTypesToSerializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, infos.buffer + infos.size);
+				infos.size += shared_link_types.size;
 			}
-
-			const size_t MAX_TARGET_SIZE = ECS_KB * 4;
-			size_t target_size = Reflection::GetReflectionTypeByteSize(target_type);
-			size_t target_data_storage[MAX_TARGET_SIZE / sizeof(size_t)];
-			memcpy(target_data_storage, target_data, target_size);
-
-			struct RestoreTarget {
-				void operator()() {
-					if (copy_size > 0) {
-						memcpy(target_data, target_storage, copy_size);
-					}
-				}
-
-				void* target_data;
-				const void* target_storage;
-				size_t copy_size;
-			};
-
-			StackScope<RestoreTarget> restore_stack({ target_data, target_data_storage, target_size });
-
-			size_t asset_index = 0;
-			auto copy_field = [&](size_t index) {
-				const void* source = function::OffsetPointer(link_data, link_type->fields[index].info.pointer_offset);
-				void* destination = function::OffsetPointer(target_data, target_type->fields[index].info.pointer_offset);
-
-				if (allocator.allocator != nullptr) {
-					CopyReflectionType(
-						reflection_manager,
-						target_type->fields[index].definition,
-						source,
-						destination,
-						allocator
-					);
-				}
-				else {
-					memcpy(
-						destination,
-						source,
-						target_type->fields[index].info.byte_size
-					);
-				}
-			};
-			for (size_t index = 0; index < target_type->fields.size; index++) {
-				if (asset_index < assets.size) {
-					ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflection(target_type, index, target_data, assets[asset_index], asset_types[asset_index]);
-					if (result == ECS_SET_ASSET_TARGET_FIELD_FAILED) {
-						return false;
-					}
-					else if (result == ECS_SET_ASSET_TARGET_FIELD_OK) {
-						asset_index++;
-					}
-					else {
-						if (target_type->fields[index].Compare(link_type->fields[index])) {
-							return false;
-						}
-						copy_field(index);
-					}
-				}
-				else {
-					ECS_ASSET_TYPE type = FindAssetTargetField(target_type->fields[index].definition);
-					if (type != ECS_ASSET_TYPE_COUNT) {
-						// Too many asset types
-						return false;
-					}
-					copy_field(index);
-				}
-			}
-
-
-			restore_stack.deallocator.copy_size = 0;
-		}
-		
-		return true;
+		);
 	}
 
-	// ---------------------------------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ModuleGatherLinkSerializeUniqueAndSharedOverrides(
+		Stream<const AppliedModule*> applied_modules, 
+		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
+		AllocatorPolymorphic temp_allocator,
+		CapacityStream<SerializeEntityManagerComponentInfo>& unique_infos, 
+		CapacityStream<SerializeEntityManagerSharedComponentInfo>& shared_infos
+	)
+	{
+		return ModuleGatherLinkOverridesImpl(applied_modules,
+			[=](auto& unique_link_types, auto& shared_link_types) {
+				GetUniqueAndSharedLinkComponents(reflection_manager, unique_link_types, shared_link_types);
+			},
+			[&](auto unique_link_types, auto shared_link_types, auto unique_link_type_targets, auto shared_link_type_targets) {
+				ECS_ASSERT(unique_infos.size + unique_link_types.size <= unique_infos.capacity);
+				ECS_ASSERT(shared_infos.size + shared_link_types.size <= shared_infos.capacity);
+
+				ConvertLinkTypesToSerializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, unique_infos.buffer + unique_infos.size);
+				ConvertLinkTypesToSerializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, shared_infos.buffer + shared_infos.size);
+				unique_infos.size += unique_link_types.size;
+				shared_infos.size += shared_link_types.size;
+			}
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ModuleGatherLinkDeserializeOverrides(
+		Stream<const AppliedModule*> applied_modules, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		const AssetDatabase* database,
+		AllocatorPolymorphic temp_allocator,
+		CapacityStream<DeserializeEntityManagerComponentInfo>& infos
+	)
+	{
+		return ModuleGatherLinkOverridesImpl(applied_modules,
+			[=](auto& unique_link_types, auto& shared_link_types) {
+				GetUniqueLinkComponents(reflection_manager, unique_link_types);
+			},
+			[&](auto unique_link_types, auto shared_link_types, auto unique_link_type_targets, auto shared_link_type_targets) {
+				ECS_ASSERT(infos.size + unique_link_types.size <= infos.capacity);
+				ConvertLinkTypesToDeserializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, infos.buffer + infos.size);
+				infos.size += unique_link_types.size;
+			}
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ModuleGatherLinkDeserializeSharedOverrides(
+		Stream<const AppliedModule*> applied_modules, 
+		const Reflection::ReflectionManager* reflection_manager, 
+		const AssetDatabase* database,
+		AllocatorPolymorphic temp_allocator,
+		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& infos
+	)
+	{
+		return ModuleGatherLinkOverridesImpl(applied_modules,
+			[=](auto& unique_link_types, auto& shared_link_types) {
+				GetSharedLinkComponents(reflection_manager, shared_link_types);
+			},
+			[&](auto unique_link_types, auto shared_link_types, auto unique_link_type_targets, auto shared_link_type_targets) {
+				ECS_ASSERT(infos.size + shared_link_types.size <= infos.capacity);
+				ConvertLinkTypesToDeserializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, infos.buffer + infos.size);
+				infos.size += shared_link_types.size;
+			}
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ModuleGatherLinkDeserializeUniqueAndSharedOverrides(
+		Stream<const AppliedModule*> applied_modules,
+		const Reflection::ReflectionManager* reflection_manager, 
+		const AssetDatabase* database,
+		AllocatorPolymorphic temp_allocator,
+		CapacityStream<DeserializeEntityManagerComponentInfo>& unique_infos,
+		CapacityStream<DeserializeEntityManagerSharedComponentInfo>& shared_infos
+	)
+	{
+		return ModuleGatherLinkOverridesImpl(applied_modules,
+			[=](auto& unique_link_types, auto& shared_link_types) {
+				GetUniqueAndSharedLinkComponents(reflection_manager, unique_link_types, shared_link_types);
+			},
+			[&](auto unique_link_types, auto shared_link_types, auto unique_link_type_targets, auto shared_link_type_targets) {
+				ECS_ASSERT(unique_infos.size + unique_link_types.size <= unique_infos.capacity);
+				ECS_ASSERT(shared_infos.size + shared_link_types.size <= shared_infos.capacity);
+
+				ConvertLinkTypesToDeserializeEntityManagerUnique(reflection_manager, database, temp_allocator, unique_link_types, unique_link_type_targets, unique_infos.buffer + unique_infos.size);
+				ConvertLinkTypesToDeserializeEntityManagerShared(reflection_manager, database, temp_allocator, shared_link_types, shared_link_type_targets, shared_infos.buffer + shared_infos.size);
+				unique_infos.size += unique_link_types.size;
+				shared_infos.size += shared_link_types.size;
+			}
+		);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 }

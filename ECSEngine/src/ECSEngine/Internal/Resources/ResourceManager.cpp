@@ -146,10 +146,10 @@ namespace ECSEngine {
 			ECS_ASSERT(allocation != nullptr, "Allocating memory for a resource failed");
 			memcpy(allocation, identifier.ptr, identifier.size + sizeof(wchar_t));
 
-			allocation = (void*)function::AlignPointer((uintptr_t)allocation + identifier.size + sizeof(wchar_t), 8);
+			void* handler_allocation = (void*)function::AlignPointer((uintptr_t)allocation + identifier.size + sizeof(wchar_t), 8);
 
-			memset(allocation, 0, allocation_size);
-			void* data = handler(allocation);
+			memset(handler_allocation, 0, allocation_size);
+			void* data = handler(handler_allocation);
 
 			if (data != nullptr) {
 				ResourceManagerEntry entry;
@@ -612,6 +612,10 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 
+		if (m_resource_types[(unsigned int)type].GetCapacity() == 0) {
+			return -1;
+		}
+
 		return m_resource_types[(unsigned int)type].Find(identifier);
 	}
 
@@ -619,28 +623,15 @@ namespace ECSEngine {
 
 	void* ResourceManager::GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix)
 	{
-		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
-		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-
-		unsigned int hashed_position = m_resource_types[(unsigned int)type].Find(identifier);
-		if (hashed_position != -1) {
-			return m_resource_types[(unsigned int)type].GetValueFromIndex(hashed_position).data_pointer.GetPointer();
-		}
-		return nullptr;
+		return (void*)((const ResourceManager*)this)->GetResource(identifier, type, suffix);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	const void* ResourceManager::GetResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix) const
 	{
-		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
-		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-
-		unsigned int hashed_position = m_resource_types[(unsigned int)type].Find(identifier);
-		if (hashed_position != -1) {
-			return m_resource_types[(unsigned int)type].GetValueFromIndex(hashed_position).data_pointer.GetPointer();
-		}
-		return nullptr;
+		// It is valid for the failure case as well
+		return GetEntry(identifier, type, suffix).data_pointer.GetPointer();
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -661,28 +652,22 @@ namespace ECSEngine {
 
 	ResourceManagerEntry ResourceManager::GetEntry(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix) const
 	{
-		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
-		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-
-		ResourceManagerEntry entry;
-		if (m_resource_types[(unsigned int)type].TryGetValue(identifier, entry)) {
-			return entry;
+		unsigned int index = GetResourceIndex(identifier, type, suffix);
+		if (index == -1) {
+			return { DataPointer(nullptr), (size_t)-1 };
 		}
-		return { DataPointer(nullptr), (size_t)-1 };
+		return m_resource_types[(unsigned int)type].GetValueFromIndex(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	ResourceManagerEntry* ResourceManager::GetEntryPtr(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix)
 	{
-		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
-		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
-
-		ResourceManagerEntry* entry;
-		if (m_resource_types[(unsigned int)type].TryGetValuePtr(identifier, entry)) {
-			return entry;
+		unsigned int index = GetResourceIndex(identifier, type, suffix);
+		if (index == -1) {
+			return nullptr;
 		}
-		return nullptr;
+		return m_resource_types[(unsigned int)type].GetValuePtrFromIndex(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -972,11 +957,7 @@ namespace ECSEngine {
 			}
 		}
 
-		if (ex_desc != nullptr && ex_desc->HasFilename()) {
-			ex_desc->Lock();
-			AddResource(ex_desc->filename, ResourceType::Texture, texture_view.view, ex_desc->time_stamp, load_descriptor.identifier_suffix);
-			ex_desc->Unlock();
-		}
+		AddResourceEx(this, ResourceType::Texture, texture_view.view, load_descriptor, ex_desc);
 
 		return texture_view;
 	}
@@ -1124,32 +1105,30 @@ namespace ECSEngine {
 		ResourceManagerExDesc* ex_desc
 	)
 	{
-		ECS_ASSERT(data->mesh_count < 200);
+		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
 
-		GLTFMesh* gltf_meshes = (GLTFMesh*)ECS_STACK_ALLOC(sizeof(GLTFMesh) * data->mesh_count);
-		// Nullptr and 0 everything
-		memset(gltf_meshes, 0, sizeof(GLTFMesh) * data->mesh_count);
-		AllocatorPolymorphic allocator = Allocator();
-
+		AllocatorPolymorphic buffer_allocator = { nullptr };
 		// Determine how much memory do the buffers take. If they fit the under a small amount, use the normal allocator.
 		// Else use the global allocator
-		if (data->data->bin_size > ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE || data->data->json_size > ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE) {
-			allocator = GetAllocatorPolymorphic(m_memory->m_backup);
+		if (data->data->bin_size <= ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE || data->data->json_size <= ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE) {
+			buffer_allocator = GetAllocatorPolymorphic(m_memory->m_backup);
 		}
 
-		bool has_invert = !function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT);
-		bool success = LoadMeshesFromGLTF(*data, gltf_meshes, allocator, has_invert);
+		// Calculate the allocation size
+		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * data->mesh_count;
+		// Allocate the needed memory
+		void* allocation = Allocate(allocation_size);
+		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
+		uintptr_t buffer = (uintptr_t)allocation;
+		buffer += sizeof(CoallescedMesh);
+		mesh->submeshes.InitializeFromBuffer(buffer, data->mesh_count);
 
-		// The load failed
+		bool success = LoadCoallescedMeshFromGLTFToGPU(m_graphics, *data, mesh, has_invert, buffer_allocator);
 		if (!success) {
-			return nullptr;
+			Deallocate(allocation);
+			mesh = nullptr;
 		}
 
-		load_descriptor.load_flags |= ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK;
-		CoallescedMesh* mesh = LoadCoallescedMeshImplementationEx({ gltf_meshes, data->mesh_count }, scale_factor, load_descriptor, ex_desc);
-
-		// Free the gltf meshes
-		FreeGLTFMeshes(gltf_meshes, data->mesh_count, allocator);
 		return mesh;
 	}
 
@@ -1162,20 +1141,19 @@ namespace ECSEngine {
 		ResourceManagerExDesc* ex_desc
 	)
 	{
-		// Scale the gltf meshes, they already have a built in check for scale of 1.0f
-		ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, scale_factor);
-
 		// Calculate the allocation size
 		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * gltf_meshes.size;
-
-		Mesh* temporary_meshes = (Mesh*)ECS_STACK_ALLOC(sizeof(Mesh) * gltf_meshes.size);
-
 		// Allocate the needed memory
 		void* allocation = Allocate(allocation_size);
 		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
 		uintptr_t buffer = (uintptr_t)allocation;
 		buffer += sizeof(CoallescedMesh);
 		mesh->submeshes.InitializeFromBuffer(buffer, gltf_meshes.size);
+
+		// Scale the gltf meshes, they already have a built in check for scale of 1.0f
+		ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, scale_factor);
+
+		Mesh* temporary_meshes = (Mesh*)ECS_STACK_ALLOC(sizeof(Mesh) * gltf_meshes.size);
 
 		ECS_GRAPHICS_MISC_FLAGS misc_flags = ECS_GRAPHICS_MISC_NONE;
 		// Convert the gltf meshes into multiple meshes and then convert these to an aggregated mesh
@@ -1184,11 +1162,46 @@ namespace ECSEngine {
 		// Convert now to aggregated mesh
 		mesh->mesh = MeshesToSubmeshes(m_graphics, { temporary_meshes, gltf_meshes.size }, mesh->submeshes.buffer, misc_flags);
 
+		AddResourceEx(this, ResourceType::CoallescedMesh, mesh, load_descriptor, ex_desc);
+
 		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
 			// Rescale the meshes to their original size such that on further processing they will be the same
 			ScaleGLTFMeshes(gltf_meshes.buffer, gltf_meshes.size, 1.0f / scale_factor);
 		}
 		
+		return mesh;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	CoallescedMesh* ResourceManager::LoadCoallescedMeshImplementationEx(
+		const GLTFMesh* gltf_mesh, 
+		Stream<Submesh> submeshes,
+		float scale_factor,
+		ResourceManagerLoadDesc load_descriptor, 
+		ResourceManagerExDesc* ex_desc
+	)
+	{
+		// Calculate the allocation size
+		size_t allocation_size = sizeof(CoallescedMesh) + sizeof(Submesh) * submeshes.size;
+		// Allocate the needed memory
+		void* allocation = Allocate(allocation_size);
+		CoallescedMesh* mesh = (CoallescedMesh*)allocation;
+		uintptr_t buffer = (uintptr_t)allocation;
+		buffer += sizeof(CoallescedMesh);
+		mesh->submeshes.InitializeAndCopy(buffer, submeshes);
+
+		ScaleGLTFMeshes(gltf_mesh, 1, scale_factor);
+
+		mesh->mesh = GLTFMeshToMesh(m_graphics, *gltf_mesh);
+
+		AddResourceEx(this, ResourceType::CoallescedMesh, mesh, load_descriptor, ex_desc);
+
+		if (!function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALLESCED_MESH_EX_DO_NOT_SCALE_BACK)) {
+			// Rescale the meshes to their original size such that on further processing they will be the same
+			ScaleGLTFMeshes(gltf_mesh, 1, 1.0f / scale_factor);
+		}
+
 		return mesh;
 	}
 

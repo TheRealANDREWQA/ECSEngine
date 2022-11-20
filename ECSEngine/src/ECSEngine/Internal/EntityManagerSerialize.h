@@ -10,6 +10,9 @@ namespace ECSEngine {
 		struct ReflectionType;
 	}
 
+	struct ModuleLinkComponentTarget;
+	struct AssetDatabase;
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
 	ECSENGINE_API bool SerializeEntityManager(
@@ -50,11 +53,22 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	// It will fill in the overrides
+	ECSENGINE_API ECS_DESERIALIZE_ENTITY_MANAGER_STATUS DeserializeEntityManager(
+		EntityManager* entity_manager,
+		uintptr_t& ptr,
+		const DeserializeEntityManagerComponentTable* component_table,
+		const DeserializeEntityManagerSharedComponentTable* shared_component_table
+	);
+
+	// -------------------------------------------------------------------------------------------------------------------------------------
+
+	// It will fill in the overrides. The module links needs to be in sync with the link types
 	ECSENGINE_API void ConvertLinkTypesToSerializeEntityManagerUnique(
 		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
 		SerializeEntityManagerComponentInfo* overrides
 	);
 
@@ -72,13 +86,21 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
 	);
 
+	ECSENGINE_API void AddSerializeEntityManagerComponentTableOverrides(
+		SerializeEntityManagerComponentTable& table,
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<SerializeEntityManagerComponentInfo> overrides
+	);
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	// It will fill in the overrides
+	// It will fill in the overrides. The module links needs to be in sync with the link types
 	ECSENGINE_API void ConvertLinkTypesToSerializeEntityManagerShared(
 		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
 		SerializeEntityManagerSharedComponentInfo* overrides
 	);
 
@@ -96,13 +118,21 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
 	);
 
+	ECSENGINE_API void AddSerializeEntityManagerSharedComponentTableOverrides(
+		SerializeEntityManagerSharedComponentTable& table,
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<SerializeEntityManagerSharedComponentInfo> overrides
+	);
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	// It will fill in the overrides
+	// It will fill in the overrides. The module links needs to be in sync with the link types
 	ECSENGINE_API void ConvertLinkTypesToDeserializeEntityManagerUnique(
 		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
 		DeserializeEntityManagerComponentInfo* overrides
 	);
 
@@ -120,13 +150,21 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
 	);
 
+	ECSENGINE_API void AddDeserializeEntityManagerComponentTableOverrides(
+		DeserializeEntityManagerComponentTable& table,
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<DeserializeEntityManagerComponentInfo> overrides
+	);
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
-	// It will fill in the overrides
+	// It will fill in the overrides. The module links needs to be in sync with the link types
 	ECSENGINE_API void ConvertLinkTypesToDeserializeEntityManagerShared(
 		const Reflection::ReflectionManager* reflection_manager,
+		const AssetDatabase* database,
 		AllocatorPolymorphic allocator,
 		Stream<const Reflection::ReflectionType*> link_types,
+		Stream<ModuleLinkComponentTarget> module_links,
 		DeserializeEntityManagerSharedComponentInfo* overrides
 	);
 
@@ -144,6 +182,12 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices = { nullptr, 0 }
 	);
 	
+	ECSENGINE_API void AddDeserializeEntityManagerSharedComponentTableOverrides(
+		DeserializeEntityManagerSharedComponentTable& table,
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<DeserializeEntityManagerSharedComponentInfo> overrides
+	);
+
 	// -------------------------------------------------------------------------------------------------------------------------------------
 
 	// -------------------------------------------------------------------------------------------------------------------------------------

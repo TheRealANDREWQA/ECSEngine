@@ -119,7 +119,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	}
 	
 	float2 action_scale = { transform.scale.x - border_size_horizontal, transform.scale.y };
-	drawer.AddDefaultClickableHoverable(transform.position, action_scale, { RunProjectAction, editor_state, 0 }, drawer.color_theme.theme);
+	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { RunProjectAction, editor_state, 0 }, drawer.color_theme.theme);
 	
 	config.flag_count--;
 	transform.position.x += button_scale.x;
@@ -135,7 +135,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	float2 bar_position = { AlignMiddle(transform.position.x, button_scale.x, bar_scale_x * 3), AlignMiddle(transform.position.y, button_scale.y, bar_scale_y) };
 	drawer.SpriteRectangle(configuration, bar_position, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
 	drawer.SpriteRectangle(configuration, { bar_position.x + bar_scale.x * 2, bar_position.y }, bar_scale, ECS_TOOLS_UI_TEXTURE_MASK, EDITOR_GREEN_COLOR);
-	drawer.AddDefaultClickableHoverable(transform.position, action_scale, { PauseProjectAction, nullptr, 0 });
+	drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { PauseProjectAction, nullptr, 0 });
 	drawer.TextToolTip("Pause", transform.position, transform.scale, &base_tool_tip);
 
 	transform.position.x += transform.scale.x;
@@ -149,7 +149,7 @@ void MiscellaneousBarDraw(void* window_data, void* drawer_descriptor, bool initi
 	Color frame_color = drawer.color_theme.unavailable_text;
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PAUSED)) {
 		frame_color = EDITOR_GREEN_COLOR;
-		drawer.AddDefaultClickableHoverable(transform.position, action_scale, { StepProjectAction, nullptr, 0 });
+		drawer.AddDefaultClickableHoverable(0, transform.position, action_scale, { StepProjectAction, nullptr, 0 });
 		drawer.TextToolTip("Frame", transform.position, transform.scale, &base_tool_tip);
 	}
 	drawer.SpriteRectangle(configuration, triangle_position, scaled_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, frame_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });

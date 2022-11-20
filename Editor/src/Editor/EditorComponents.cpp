@@ -14,7 +14,7 @@ using namespace ECSEngine::Reflection;
 #define HASH_TABLE_DEFAULT_CAPACITY 64
 
 #define ARENA_CAPACITY 50'000
-#define ARENA_COUNT 4
+#define ARENA_COUNT 2
 #define ARENA_BLOCK_COUNT 1024
 
 // ----------------------------------------------------------------------------------------------
@@ -115,18 +115,6 @@ void EditorComponents::GetUserEvents(CapacityStream<EditorComponentEvent>& user_
 	}
 
 	user_events.AssertCapacity();
-}
-
-// ----------------------------------------------------------------------------------------------
-
-unsigned int EditorComponents::FindModule(Stream<char> name) const
-{
-	for (unsigned int index = 0; index < loaded_modules.size; index++) {
-		if (function::CompareStrings(loaded_modules[index].name, name)) {
-			return index;
-		}
-	}
-	return -1;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -235,6 +223,28 @@ unsigned int EditorComponents::ModuleSharedComponentCount(unsigned int module_in
 
 // ----------------------------------------------------------------------------------------------
 
+unsigned int EditorComponents::ModuleIndexFromReflection(const EditorState* editor_state, unsigned int module_index) const
+{
+	ECS_STACK_CAPACITY_STREAM(char, library_name_storage, 512);
+	function::ConvertWideCharsToASCII(editor_state->project_modules->buffer[module_index].library_name, library_name_storage);
+
+	Stream<char> library_name = library_name_storage;
+	return function::FindString(library_name, loaded_modules.ToStream(), [](const LoadedModule& loaded_module) {
+		return loaded_module.name;
+	});
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::ReflectionModuleIndex(const EditorState* editor_state, unsigned int loaded_module_index) const
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 512);
+	function::ConvertASCIIToWide(library_name, loaded_modules[loaded_module_index].name);
+	return GetModuleIndexFromName(editor_state, library_name);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void EditorComponents::GetModuleComponentIndices(unsigned int module_index, CapacityStream<unsigned int>* module_indices, bool replace_links) const
 {
 	for (size_t index = 0; index < loaded_modules[module_index].types.size; index++) {
@@ -297,7 +307,7 @@ void EditorComponents::RecoverData(EntityManager* entity_manager, const Reflecti
 	const ReflectionType* current_type = reflection_manager->GetType(component_name);
 	ReflectionType* old_type = internal_manager->GetType(component_name);
 
-	Component component = { (unsigned short)old_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+	Component component = { (short)old_type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 
 	size_t new_allocator_size = (size_t)current_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 	size_t old_allocator_size = (size_t)old_type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
@@ -805,7 +815,7 @@ void EditorComponents::ChangeComponentID(EntityManager* entity_manager, Stream<c
 	double allocator_size_float = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 	size_t allocator_size = 0;
 
-	unsigned short old_id = type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
+	short old_id = (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
 	ECS_ASSERT(old_id != DBL_MAX);
 
 	Component old_component = { old_id };
@@ -891,22 +901,38 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 
 // ----------------------------------------------------------------------------------------------
 
-unsigned int EditorComponents::FindComponentModuleInReflection(const EditorState* editor_state, Stream<char> name) const
+unsigned int EditorComponents::FindModule(Stream<char> name) const
 {
-	unsigned int in_loaded_modules_index = FindModule(name);
-	if (in_loaded_modules_index == -1) {
-		return -1;
-	}
-
-	ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
-	function::ConvertASCIIToWide(wide_name, name);
-
-	for (size_t index = 0; index < editor_state->project_modules->size; index++) {
-		if (function::CompareStrings(editor_state->project_modules->buffer[index].library_name, wide_name)) {
+	for (unsigned int index = 0; index < loaded_modules.size; index++) {
+		if (function::CompareStrings(loaded_modules[index].name, name)) {
 			return index;
 		}
 	}
 	return -1;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::FindComponentModule(Stream<char> name) const
+{
+	for (unsigned int index = 0; index < loaded_modules.size; index++) {
+		unsigned int subindex = function::FindString(name, loaded_modules[index].types);
+		if (subindex != -1) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int EditorComponents::FindComponentModuleInReflection(const EditorState* editor_state, Stream<char> name) const
+{
+	unsigned int in_loaded_modules_index = FindComponentModule(name);
+	if (in_loaded_modules_index == -1) {
+		return -1;
+	}
+	return ReflectionModuleIndex(editor_state, in_loaded_modules_index);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -932,7 +958,6 @@ void EditorComponents::ForEachComponent(void (*Functor)(const ReflectionType* ty
 }
 
 // ----------------------------------------------------------------------------------------------
-
 
 void EditorComponents::ForEachSharedComponent(void(*Functor)(ECSEngine::Reflection::ReflectionType* type, void* _data), void* _data)
 {
@@ -969,6 +994,63 @@ bool EditorComponents::HasBuffers(Stream<char> name) const
 
 // ----------------------------------------------------------------------------------------------
 
+bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_state, Stream<char> component_name) const
+{
+	const ReflectionType* type = GetType(component_name);
+	ECS_ASSERT(type != nullptr);
+
+	bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(type);
+	if (!needs_dll) {
+		return true;
+	}
+
+	unsigned int reflection_module_index = FindComponentModuleInReflection(editor_state, component_name);
+	if (reflection_module_index == -1) {
+		return false;
+	}
+
+	EDITOR_MODULE_CONFIGURATION configuration = GetModuleLoadedConfiguration(editor_state, reflection_module_index);
+	return configuration != EDITOR_MODULE_CONFIGURATION_COUNT;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_state, const EntityManager* entity_manager, bool2 select_unique_shared) const
+{
+	bool has_failed = false;
+
+	auto component_functor = [&](Component component) {
+		Stream<char> component_name = TypeFromID(component.value, false);
+		Stream<char> link_component = GetLinkComponentForTarget(component_name);
+		if (link_component.size > 0) {
+			// Test it
+			has_failed |= !HasLinkComponentDLLFunction(editor_state, link_component);
+			return has_failed;
+		}
+		// Continue the iteration
+		return false;
+	};
+
+	if (select_unique_shared.x) {
+		entity_manager->ForEachComponent<true>(component_functor);
+
+		if (has_failed) {
+			return false;
+		}
+	}
+
+	if (select_unique_shared.y) {
+		entity_manager->ForEachSharedComponent<true>(component_functor);
+
+		if (has_failed) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 Stream<char> EditorComponents::GetLinkComponentForTarget(Stream<char> name) const
 {
 	for (size_t index = 0; index < link_components.size; index++) {
@@ -988,6 +1070,70 @@ bool EditorComponents::GetLinkComponentDLLStatus(Stream<char> name) const
 		return GetReflectionTypeLinkComponentNeedsDLL(&type);
 	}
 	return false;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::GetTypeDependencies(Stream<char> type, CapacityStream<Stream<char>>* dependencies) const
+{
+	GetReflectionTypeDependentTypes(internal_manager, GetType(type), *dependencies);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::GetModuleTypeDependencies(unsigned int loaded_module_index, CapacityStream<unsigned int>* module_indices, const EditorState* editor_state) const
+{
+	ECS_STACK_CAPACITY_STREAM(Stream<char>, type_dependencies, 128);
+
+	size_t type_count = loaded_modules[loaded_module_index].types.size;
+	for (size_t index = 0; index < type_count; index++) {
+		type_dependencies.size = 0;
+		GetTypeDependencies(loaded_modules[loaded_module_index].types[index], &type_dependencies);
+
+		for (unsigned int subindex = 0; subindex < type_dependencies.size; subindex++) {
+			// Determine the module of each type dependency
+			unsigned int module_index = FindComponentModule(type_dependencies[subindex]);
+			if (editor_state != nullptr) {
+				// The 0'th module is the ECS one - this one should be pushed
+				if (module_index != 0) {
+					unsigned int reflection_index = ReflectionModuleIndex(editor_state, module_index);
+					ECS_ASSERT(reflection_index != -1);
+					bool exists = function::SearchBytes(module_indices->buffer, module_indices->size, reflection_index, sizeof(reflection_index)) != -1;
+					if (!exists) {
+						module_indices->AddSafe(reflection_index);
+					}
+				}
+			}
+			else {
+				bool exists = function::SearchBytes(module_indices->buffer, module_indices->size, module_index, sizeof(module_index)) != -1;
+				if (!exists) {
+					module_indices->AddSafe(module_index);
+				}
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::GetModulesDependentUpon(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state) const
+{
+	ECS_STACK_CAPACITY_STREAM(unsigned int, dependent_indices, 512);
+
+	for (unsigned int index = 0; index < loaded_modules.size; index++) {
+		if (index != loaded_module_index) {
+			dependent_indices.size = 0;
+			GetModuleTypeDependencies(index, &dependent_indices);
+			bool exists = function::SearchBytes(dependent_indices.buffer, dependent_indices.size, loaded_module_index, sizeof(loaded_module_index)) != -1;
+			if (exists) {
+				unsigned int index_to_add = index;
+				if (editor_state != nullptr) {
+					index_to_add = ReflectionModuleIndex(editor_state, index);
+				}
+				module_indices->AddSafe(index_to_add);
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1086,7 +1232,7 @@ void EditorComponents::RemoveTypeFromManager(EntityManager* entity_manager, Comp
 			}
 		}
 
-		// Destroy all matched archetypes now
+		// Destroy all the matched archetypes now
 		for (unsigned int index = 0; index < archetype_indices.size; index++) {
 			entity_manager->DestroyArchetypeCommit(archetype_indices[index]);
 		}
@@ -1118,6 +1264,26 @@ void EditorComponents::RemoveTypeFromManager(EntityManager* entity_manager, Comp
 	}
 	if (lock != nullptr) {
 		lock->unlock();
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::RemoveModuleFromManager(EntityManager* entity_manager, unsigned int loaded_module_index) const
+{
+	// Go through the types and see which is a component or shared component
+	for (size_t index = 0; index < loaded_modules[loaded_module_index].types.size; index++) {
+		const ReflectionType* type = GetType(loaded_modules[loaded_module_index].types[index]);
+		if (IsReflectionTypeComponent(type)) {
+			// Unique component
+			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+			RemoveTypeFromManager(entity_manager, component, false);
+		}
+		else if (IsReflectionTypeSharedComponent(type)) {
+			// Shared component
+			Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
+			RemoveTypeFromManager(entity_manager, component, true);
+		}
 	}
 }
 
@@ -1194,6 +1360,13 @@ void EditorComponents::ResetComponentFromManager(EntityManager* entity_manager, 
 	}
 
 	internal_manager->SetInstanceDefaultData(component_name, entity_data);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::RemoveModule(unsigned int loaded_module_index)
+{
+	
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1407,7 +1580,12 @@ void EditorComponents::Initialize(AllocatorPolymorphic _allocator)
 	link_components.Initialize(allocator, 0);
 
 	internal_manager = (ReflectionManager*)Allocate(allocator, sizeof(ReflectionManager));
+	memset(internal_manager, 0, sizeof(*internal_manager));
+	internal_manager->folders.allocator = allocator;
 	internal_manager->type_definitions.Initialize(allocator, 0);
+	internal_manager->blittable_types.Initialize(allocator, 1);
+	internal_manager->AddBlittableException(STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>));
+	internal_manager->InitializeFieldTable();
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1524,11 +1702,7 @@ void EditorComponents::UpdateComponents(
 
 				double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 
-				Stream<char> exceptions[] = {
-					STRING(Stream<void>)
-				};
-
-				bool has_buffers = !IsTriviallyCopyable(reflection_manager, type, { exceptions, std::size(exceptions) });
+				bool has_buffers = !IsTriviallyCopyable(reflection_manager, type);
 				if (allocator_size != DBL_MAX) {
 					if (!has_buffers) {
 						events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name });
@@ -1554,11 +1728,7 @@ void EditorComponents::UpdateComponents(
 			const ReflectionType* type = reflection_manager->GetType(indices[index]);
 			unsigned int old_type_index = internal_manager->type_definitions.Find(type->name);
 
-			Stream<char> exceptions[] = {
-				STRING(Stream<void>)
-			};
-
-			bool is_trivially_copyable = IsTriviallyCopyable(reflection_manager, type, { exceptions, std::size(exceptions) });
+			bool is_trivially_copyable = IsTriviallyCopyable(reflection_manager, type);
 			double buffer_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 
 			if (!is_trivially_copyable) {

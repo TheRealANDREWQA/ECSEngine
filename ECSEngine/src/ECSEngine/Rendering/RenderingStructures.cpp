@@ -941,6 +941,21 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	size_t GetMeshIndexElementByteSize(ECS_MESH_INDEX type) {
+		static alignas(ECS_CACHE_LINE_SIZE) size_t values[ECS_MESH_BUFFER_COUNT] = {
+			sizeof(float3),
+			sizeof(float3),
+			sizeof(float2),
+			sizeof(Color),
+			sizeof(float4),
+			sizeof(uint4)
+		};
+
+		return values[type];
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 	D3D11_FILTER GetGraphicsNativeFilter(ECS_SAMPLER_FILTER_TYPE filter) {
 		switch (filter) {
 		case ECS_SAMPLER_FILTER_POINT:

@@ -234,7 +234,6 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 			}
 			else {
 				// Check for the indexed windows
-
 				auto get_indexed_window = [&](const char* window_name, unsigned int max_count, SetDescriptorFunction function) {
 					return VerifyIndexedWindow(descriptor, editor_state, file_window_names[index], window_name, max_count, stack_memory, function);
 				};

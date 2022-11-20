@@ -65,7 +65,10 @@ namespace ECSEngine {
 	void EntityPool::CreatePool() {
 		unsigned int pool_capacity = 1 << m_pool_power_of_two;
 
-		void* allocation = m_memory_manager->Allocate(m_entity_infos.buffer->stream.MemoryOf(pool_capacity));
+		size_t allocation_size = m_entity_infos.buffer->stream.MemoryOf(pool_capacity);
+		void* allocation = m_memory_manager->Allocate(allocation_size);
+		memset(allocation, 0, allocation_size);
+
 		// Walk through the entity info stream and look for an empty slot and place the allocation there
 		// Cannot remove swap back chunks because the entity index calculation takes into consideration the initial
 		// chunk position. Using reallocation tables that would offset chunk indices does not seem like a good idea
@@ -708,6 +711,8 @@ namespace ECSEngine {
 		entity_pool->m_entity_infos.FreeBuffer();
 
 		SerializeEntityInfo* serialize_infos = (SerializeEntityInfo*)stream;
+		stream += sizeof(SerializeEntityInfo) * header.entity_count;
+			
 		// Walk through the entities and determine the "biggest one" in order to preallocate the streams
 		Entity highest_entity = { 0 };
 		for (unsigned int index = 0; index < header.entity_count; index++) {
@@ -715,14 +720,19 @@ namespace ECSEngine {
 		}
 
 		// Create the necessary pools - add a pool if the modulo is different from 0
-		unsigned int necessary_pool_count = highest_entity.index >> entity_pool->m_pool_power_of_two +
+		unsigned int necessary_pool_count = (highest_entity.index >> entity_pool->m_pool_power_of_two) +
 			((highest_entity.index % (1 << entity_pool->m_pool_power_of_two)) != 0);
+		necessary_pool_count = necessary_pool_count == 0 ? 1 : necessary_pool_count;
 		for (unsigned int index = 0; index < necessary_pool_count; index++) {
 			entity_pool->CreatePool();
 		}
 
 		// Update the entity infos
 		for (unsigned int index = 0; index < header.entity_count; index++) {
+			uint2 stream_index = GetPoolAndEntityIndex(entity_pool, serialize_infos[index].entity);
+			// Need to allocate the index
+			entity_pool->m_entity_infos[stream_index.x].stream.AllocateIndex(stream_index.y);
+
 			EntityInfo* info = entity_pool->GetInfoPtrNoChecks(serialize_infos[index].entity);
 			*info = serialize_infos[index].info;
 		}
@@ -766,37 +776,73 @@ namespace ECSEngine {
 
 	void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination)
 	{
-		const DataPointer* data_pointer = (const DataPointer*)function::OffsetPointer(source, component_buffer.pointer_offset);
-		const void* copy_buffer = data_pointer->GetPointer();
-		unsigned int copy_size = data_pointer->GetData();
-		copy_size *= component_buffer.element_byte_size;
-
-		void* allocation = nullptr;
-		if (copy_size > 0) {
-			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
-			memcpy(allocation, copy_buffer, copy_size);
-		}
-
-		DataPointer* destination_pointer = (DataPointer*)function::OffsetPointer(destination, component_buffer.pointer_offset);
-		destination_pointer->SetPointer(allocation);
+		ComponentBufferCopyDataPointer(component_buffer, allocator, ComponentBufferGetStreamDataPointer(component_buffer, source), destination);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	void ComponentBufferCopyStream(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination)
 	{
-		const void* source_pointer = *(const void**)function::OffsetPointer(source, component_buffer.pointer_offset);
-		unsigned int copy_size = *(unsigned int*)function::OffsetPointer(source, component_buffer.size_offset);
-		copy_size *= component_buffer.element_byte_size;
+		ComponentBufferCopyStream(component_buffer, allocator, ComponentBufferGetStreamNormalPointer(component_buffer, source), destination);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopy(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination)
+	{
+		if (component_buffer.is_data_pointer) {
+			ComponentBufferCopyDataPointer(component_buffer, allocator, data, destination);
+		}
+		else {
+			ComponentBufferCopyStream(component_buffer, allocator, data, destination);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopyStream(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination)
+	{
+		size_t copy_size = data.size * component_buffer.element_byte_size;
 
 		void* allocation = nullptr;
 		if (copy_size > 0) {
 			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
-			memcpy(allocation, source_pointer, copy_size);
+			memcpy(allocation, data.buffer, copy_size);
 		}
 
 		void** destination_pointer = (void**)function::OffsetPointer(destination, component_buffer.pointer_offset);
 		*destination_pointer = allocation;
+		unsigned int* destination_size = (unsigned int*)function::OffsetPointer(destination, component_buffer.size_offset);
+		*destination_size = data.size;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination)
+	{
+		size_t copy_size = data.size * component_buffer.element_byte_size;
+
+		void* allocation = nullptr;
+		if (copy_size > 0) {
+			allocation = allocator->Allocate(copy_size, std::min(component_buffer.element_byte_size, (unsigned int)alignof(void*)));
+			memcpy(allocation, data.buffer, copy_size);
+		}
+
+		DataPointer* destination_pointer = (DataPointer*)function::OffsetPointer(destination, component_buffer.pointer_offset);
+		destination_pointer->SetPointer(allocation);
+		destination_pointer->SetData(data.size);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void ComponentBufferCopyStreamChecked(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination)
+	{
+		Stream<void> destination_data = ComponentBufferGetStream(component_buffer, destination);
+		size_t check_size = destination_data.size * component_buffer.element_byte_size;
+		if (data.size != destination_data.size || (memcmp(destination_data.buffer, data.buffer, check_size) != 0)) {
+			ComponentBufferDeallocate(component_buffer, allocator, destination);
+			ComponentBufferCopy(component_buffer, allocator, data, destination);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -830,6 +876,33 @@ namespace ECSEngine {
 		if (buffer != nullptr) {
 			allocator->Deallocate(buffer);
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Stream<void> ComponentBufferGetStream(ComponentBuffer component_buffer, const void* source)
+	{
+		if (component_buffer.is_data_pointer) {
+			return ComponentBufferGetStreamDataPointer(component_buffer, source);
+		}
+		else {
+			return ComponentBufferGetStreamNormalPointer(component_buffer, source);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Stream<void> ComponentBufferGetStreamNormalPointer(ComponentBuffer component_buffer, const void* source) {
+		const void** ptr = (const void**)function::OffsetPointer(source, component_buffer.pointer_offset);
+		unsigned int* size = (unsigned int*)function::OffsetPointer(source, component_buffer.size_offset);
+		return { *ptr, *size };
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Stream<void> ComponentBufferGetStreamDataPointer(ComponentBuffer component_buffer, const void* source) {
+		const DataPointer* data_pointer = (const DataPointer*)function::OffsetPointer(source, component_buffer.pointer_offset);
+		return { data_pointer->GetPointer(), data_pointer->GetData() };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -191,8 +191,10 @@
     <ClInclude Include="src\ECSEngine\Tools\Debug Draw\DebugDrawTypes.h" />
     <ClInclude Include="src\ECSEngine\Internal\Resources\AssetMetadataMacros.h" />
     <ClInclude Include="src\Includes\ECSEngineAssetMacros.h" />
-    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
     <ClInclude Include="src\ECSEngine\Internal\LinkComponents.h" />
+    <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
+    <ClInclude Include="src\Includes\ECSEngineScene.h" />
+    <ClInclude Include="src\Includes\ECSEngineTimer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -298,9 +300,9 @@
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataSerialize.cpp" />
     <ClCompile Include="src\ECSEngine\Rendering\ColorUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\Resources\AssetMetadataHandling.cpp" />
-    <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
     <ClCompile Include="src\ECSEngine\Internal\LinkComponents.cpp" />
     <ClCompile Include="src\ECSEngine\Containers\SparseSet.cpp" />
+    <ClCompile Include="src\ECSEngine\Tools\Modules\ModuleUtilities.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Vertex\UIVertexColor.hlsl" />

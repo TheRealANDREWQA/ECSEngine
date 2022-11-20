@@ -288,6 +288,12 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// This variant will check to see if the stack string contains the separation pattern
+			// And not add it again
+			Stream<char> HandleResourceIdentifierEx(Stream<char> input, bool permanent_buffer = false);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void HandleRectangleActions(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -924,10 +930,10 @@ namespace ECSEngine {
 								memcpy(base_data, &hoverable_data, sizeof(hoverable_data));
 
 								unsigned int write_size = wrapper_data->WriteCallback(name_action->hoverable_handler);
-								AddHoverable(text_position, text_span, { ActionWrapperWithCallback, hoverable_data_storage, write_size, ECS_UI_DRAW_SYSTEM });
+								AddHoverable(configuration, text_position, text_span, { ActionWrapperWithCallback, hoverable_data_storage, write_size, ECS_UI_DRAW_SYSTEM });
 							}
 							else {
-								AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
+								AddHoverable(configuration, text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
 							}
 
 							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
@@ -946,20 +952,20 @@ namespace ECSEngine {
 										memcpy(base_data, draggable_data, draggable_data_size);
 									}
 									unsigned int write_size = wrapper_data->WriteCallback(name_action->clickable_handler);
-									AddClickable(text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, name_action->clickable_handler.phase });
+									AddClickable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, name_action->clickable_handler.phase });
 								}
 								else {
-									AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+									AddClickable(configuration, text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
 								}
 							}
 						}
 						else {
-							AddHoverable(text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
+							AddHoverable(configuration, text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
 
 							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
 								UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
 								base_data->input = input;
-								AddClickable(text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+								AddClickable(configuration, text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
 							}
 						}
 					}
@@ -1517,6 +1523,11 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// Adds the actions that were recorded during the late binding
+			void PushLateActions();
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void UpdateCurrentColumnScale(float value);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -1614,15 +1625,23 @@ namespace ECSEngine {
 			
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void AddHoverable(float2 position, float2 scale, UIActionHandler handler);
+			void AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, bool stable = false, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_SYSTEM);
+			void AddTextTooltipHoverable(
+				size_t configuration, 
+				float2 position, 
+				float2 scale, 
+				UITextTooltipHoverableData* data, 
+				bool stable = false, 
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_SYSTEM
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddClickable(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler
@@ -1631,6 +1650,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			void AddGeneral(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler
@@ -1639,6 +1659,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultHoverable(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				Color color,
@@ -1649,6 +1670,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultHoverable(
+				size_t configuration,
 				float2 main_position,
 				float2 main_scale,
 				const float2* positions,
@@ -1662,6 +1684,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickable(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler hoverable_handler,
@@ -1681,6 +1704,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDoubleClickAction(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				unsigned int identifier,
@@ -1695,6 +1719,7 @@ namespace ECSEngine {
 
 			// This will always have the system phase
 			void AddRightClickAction(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				Stream<char> name,
@@ -1705,6 +1730,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickableHoverableWithText(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
@@ -1720,6 +1746,7 @@ namespace ECSEngine {
 
 			// Either horizontal or vertical cull should be set
 			void AddDefaultClickableHoverableWithTextEx(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
@@ -1739,6 +1766,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickableHoverable(
+				size_t configuration,
 				float2 position,
 				float2 scale,
 				UIActionHandler handler,
@@ -1762,6 +1790,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void AddDefaultClickableHoverable(
+				size_t configuration,
 				float2 main_position,
 				float2 main_scale,
 				const float2* positions,
@@ -2095,8 +2124,8 @@ namespace ECSEngine {
 							float2 action_position = arrow_transform.position - region_render_offset;
 							float2 action_scale;
 							action_position = ExpandRectangle(action_position, arrow_transform.scale, { 1.25f, 1.25f }, action_scale);
-							AddClickable(action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
-							AddDefaultHoverable(action_position, action_scale, color_theme.theme);
+							AddClickable(element_configuration, action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
+							AddDefaultHoverable(element_configuration, action_position, action_scale, color_theme.theme);
 						}
 						
 						NextRow();
@@ -2387,6 +2416,7 @@ namespace ECSEngine {
 					if (is_capacity_stream) {
 						if (elements->size < elements->capacity) {
 							AddDefaultClickableHoverable(
+								configuration,
 								button_position,
 								button_scale,
 								{ UIDrawerArrayAddAction, &add_remove_data, sizeof(add_remove_data), data->add_callback_phase },
@@ -2399,6 +2429,7 @@ namespace ECSEngine {
 					}
 					else {
 						AddDefaultClickableHoverable(
+							configuration,
 							button_position,
 							button_scale,
 							{ UIDrawerArrayAddAction, &add_remove_data, sizeof(add_remove_data), data->add_callback_phase },
@@ -2430,6 +2461,7 @@ namespace ECSEngine {
 					add_remove_data.new_size = elements->size - 1;
 					if (elements->size > 0) {
 						AddDefaultClickableHoverable(
+							configuration,
 							button_position,
 							button_scale,
 							{ UIDrawerArrayRemoveAction, &add_remove_data, sizeof(add_remove_data), data->remove_callback_phase },
@@ -4855,16 +4887,33 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			UIActionHandler TextToolTipHandler(
+				Stream<char> characters, 
+				const UITextTooltipHoverableData* data, 
+				bool stable_characters = false, 
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
+			);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			// Default values for the parameters
 			UIConfigTextParameters TextParameters() const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DefaultHoverableWithToolTip(Stream<char> characters, float2 position, float2 scale, const Color* color = nullptr, const float* percentage = nullptr, const UITooltipBaseData* base = nullptr);
+			void DefaultHoverableWithToolTip(
+				size_t configuration, 
+				Stream<char> characters, 
+				float2 position, 
+				float2 scale, 
+				const Color* color = nullptr, 
+				const float* percentage = nullptr, 
+				const UITooltipBaseData* base = nullptr
+			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
-			void DefaultHoverableWithToolTip(float2 position, float2 scale, const UIDefaultHoverableWithTooltipData* data);
+			void DefaultHoverableWithToolTip(size_t configuration, float2 position, float2 scale, const UIDefaultHoverableWithTooltipData* data);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4991,9 +5040,12 @@ namespace ECSEngine {
 			UIDrawerAcquireDragDrop acquire_drag_drop;
 			CapacityStream<void*> last_initialized_element_allocations;
 			CapacityStream<ResourceIdentifier> last_initialized_element_table_resources;
+			CapacityStream<unsigned int> late_hoverables;
+			CapacityStream<unsigned int> late_clickables;
+			CapacityStream<unsigned int> late_generals;
 		};
 
-		using UIDrawerInitializeFunction = void (*)(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
+		typedef void (*UIDrawerInitializeFunction)(void* window_data, void* additional_data, UIDrawer* drawer_ptr, size_t configuration);
 
 		// --------------------------------------------------------------------------------------------------------------
 

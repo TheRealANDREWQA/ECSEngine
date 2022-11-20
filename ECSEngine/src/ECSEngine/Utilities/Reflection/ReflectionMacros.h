@@ -29,6 +29,9 @@
 #define ECS_REFLECT_SHARED_COMPONENT
 #define ECS_REFLECT_LINK_COMPONENT()
 
+// Used to describe the type of element that the data pointer is used for
+#define ECS_DATA_POINTER_TAG(a)
+
 // Used with the IsTag function of the ReflectionType
 #define ECS_COMPONENT_TAG "COMPONENT"
 // Used with the IsTag function of the ReflectionType

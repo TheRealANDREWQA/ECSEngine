@@ -52,13 +52,14 @@
     <ClInclude Include="src\UI\AssetSettingHelper.h" />
     <ClInclude Include="src\UI\Inspector\InspectorTextureFile.h" />
     <ClInclude Include="src\Assets\AssetExtensions.h" />
-    <ClInclude Include="src\Assets\EntityAsset.h" />
     <ClInclude Include="src\UI\AssetOverrides.h" />
     <ClInclude Include="src\UI\AssetIcons.h" />
     <ClInclude Include="src\UI\Inspector\InspectorGPUSamplerFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorShaderFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorMaterialFile.h" />
     <ClInclude Include="src\UI\Inspector\InspectorMiscFile.h" />
+    <ClInclude Include="src\Editor\EditorEventDef.h" />
+    <ClInclude Include="src\Assets\AssetTick.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -105,12 +106,12 @@
     <ClCompile Include="src\Assets\AssetManagement.cpp" />
     <ClCompile Include="src\UI\AssetSettingHelper.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorTextureFile.cpp" />
-    <ClCompile Include="src\Assets\EntityAsset.cpp" />
     <ClCompile Include="src\UI\AssetOverrides.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorGPUSamplerFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorShaderFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorMaterialFile.cpp" />
     <ClCompile Include="src\UI\Inspector\InspectorMiscFile.cpp" />
+    <ClCompile Include="src\Assets\AssetTick.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

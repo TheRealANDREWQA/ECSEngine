@@ -15,7 +15,7 @@
 								const ECSEngine::HID::KeyboardTracker* keyboard_tracker = action_data->keyboard_tracker; \
 								ECSEngine::HID::Keyboard* keyboard = action_data->keyboard; \
 								ECSEngine::HID::Mouse* mouse = action_data->mouse; \
-								ECSEngine::float2 mouse_delta = system->GetMouseDelta(mouse_position)
+								ECSEngine::float2 mouse_delta = system != nullptr ? system->GetMouseDelta(mouse_position) : ECSEngine::float2(0.0f, 0.0f);
 
 #define UI_PREPARE_DRAWER(initializer)	ECSEngine::Tools::UIDrawerDescriptor* descriptor = (ECSEngine::Tools::UIDrawerDescriptor*)drawer_descriptor; \
 							ECSEngine::Tools::UIDrawer drawer = ECSEngine::Tools::UIDrawer( \
@@ -61,6 +61,7 @@
 #define ECS_TOOLS_UI_MISC_WINDOW_TABLE_SIZE 256
 #define ECS_TOOLS_UI_MISC_TOOL_TIP_PADDING {0.007f, 0.005f}
 #define ECS_TOOLS_UI_MISC_DRAWER_ELEMENT_ALLOCATIONS 256
+#define ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY 32
 
 #define ECS_TOOLS_UI_MISC_RENDER_SLIDER_HORIZONTAL_SIZE 0.031f 
 #define ECS_TOOLS_UI_MISC_RENDER_SLIDER_VERTICAL_SIZE 0.018f

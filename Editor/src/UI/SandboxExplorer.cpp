@@ -32,15 +32,27 @@ void RemoveSandboxAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RemoveSandboxActionData* data = (RemoveSandboxActionData*)_data;
-	DestroySandbox(data->explorer_data->editor_state, data->index);
-
-	if (data->explorer_data->active_sandbox == data->index) {
-		// Indicate that no sandbox is selected
-		data->explorer_data->active_sandbox = -1;
+	bool success = DestroySandbox(data->explorer_data->editor_state, data->index);
+	if (!success) {
+		// Check to see if the sandbox is currently running
+		EDITOR_SANDBOX_STATE state = GetSandboxState(data->explorer_data->editor_state, data->index);
+		if (state == EDITOR_SANDBOX_RUNNING || state == EDITOR_SANDBOX_PAUSED) {
+			// Give a more detailed description
+			EditorSetConsoleError("Failed to destroy the selected sandbox since it is being used (running or paused).");
+		}
+		else {
+			EditorSetConsoleError("Failed to destroy the selected sandbox. It is locked by a background task.");
+		}
 	}
+	else {
+		if (data->explorer_data->active_sandbox == data->index) {
+			// Indicate that no sandbox is selected
+			data->explorer_data->active_sandbox = -1;
+		}
 
-	// Also rewrite the sandbox file
-	SaveEditorSandboxFile(data->explorer_data->editor_state);
+		// Also rewrite the sandbox file
+		SaveEditorSandboxFile(data->explorer_data->editor_state);
+	}
 }
 
 // --------------------------------------------------------------------------------------------
@@ -171,21 +183,26 @@ void SandboxExplorerDraw(void* window_data, void* drawer_descriptor, bool initia
 		drawer.Text(count_string.buffer);
 		drawer.NextRow();
 
+		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
+		row_layout.AddSquareLabel();
+		row_layout.AddSquareLabel();
+
 		ECS_STACK_CAPACITY_STREAM(char, display_labels, 128);
 		display_labels.Copy("Sandbox ");
 
-		float2 square_scale = drawer.GetSquareScale(drawer.GetElementDefaultScale().y);
-		float total_label_scale = drawer.GetWindowScaleUntilBorder() - (square_scale.x + drawer.layout.element_indentation) * 2.0f;
+		size_t button_configuration = UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_ALIGNMENT;
+		size_t sprite_configuration = 0;
 
-		UIConfigRelativeTransform relative_transform;
-		relative_transform.scale.x = drawer.GetRelativeTransformFactorsZoomed({ total_label_scale, 0.0f }).x;
-		config.AddFlag(relative_transform);
+		UIDrawConfig button_config;
+		UIDrawConfig sprite_config;
 
-		config.AddFlag(text_alignment);
+		row_layout.GetTransform(button_config, button_configuration);
+		row_layout.GetTransform(sprite_config, sprite_configuration);
 
-		size_t initial_label_configuration = UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X
-			| UI_CONFIG_TEXT_ALIGNMENT;
-		size_t label_configuration = initial_label_configuration;
+		button_config.AddFlag(text_alignment);
+
+		size_t label_configuration = button_configuration;
 
 		unsigned int base_display_size = display_labels.size;
 		for (unsigned int index = 0; index < sandboxes->size; index++) {
@@ -197,19 +214,19 @@ void SandboxExplorerDraw(void* window_data, void* drawer_descriptor, bool initia
 			SelectSandboxActionData select_data;
 			select_data.explorer_data = data;
 			select_data.index = index;
-			drawer.Button(label_configuration, config, display_labels.buffer, { SelectSandboxAction, &select_data, sizeof(select_data) });
-			label_configuration = initial_label_configuration;
+			drawer.Button(label_configuration, button_config, display_labels.buffer, { SelectSandboxAction, &select_data, sizeof(select_data) });
+			label_configuration = button_configuration;
 
 			// Draw the configuration button which will open up an inspector with that sandbox selected
 			OpenSandboxInspectorSettingsData open_data;
 			open_data.editor_state = editor_state;
 			open_data.sandbox_index = index;
-			drawer.SpriteButton(UI_CONFIG_MAKE_SQUARE, config, { OpenSandboxInspectorSettings, &open_data, sizeof(open_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_COG);
+			drawer.SpriteButton(sprite_configuration, sprite_config, { OpenSandboxInspectorSettings, &open_data, sizeof(open_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_COG);
 
 			RemoveSandboxActionData remove_data;
 			remove_data.explorer_data = data;
 			remove_data.index = index;
-			drawer.SpriteButton(UI_CONFIG_MAKE_SQUARE, config, { RemoveSandboxPopupAction, &remove_data, sizeof(remove_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_X);
+			drawer.SpriteButton(sprite_configuration, sprite_config, { RemoveSandboxPopupAction, &remove_data, sizeof(remove_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_X);
 			drawer.NextRow();
 		}
 	}
@@ -219,7 +236,6 @@ void SandboxExplorerDraw(void* window_data, void* drawer_descriptor, bool initia
 	}
 
 	// The create button now
-	config.flag_count = 0;
 	UIConfigWindowDependentSize create_transform;
 	config.AddFlag(create_transform);
 

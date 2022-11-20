@@ -64,3 +64,12 @@ void EditorAddEventWithPointer(EditorState* editor_state, EditorEventFunction fu
 	}
 	editor_state->event_queue.Push(editor_event);
 }
+
+void* EditorEventLastData(const EditorState* editor_state)
+{
+	EditorEvent event_;
+	if (editor_state->event_queue.Peek(event_)) {
+		return event_.data;
+	}
+	return nullptr;
+}

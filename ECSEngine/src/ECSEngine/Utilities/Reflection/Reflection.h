@@ -94,11 +94,19 @@ namespace ECSEngine {
 				const void* allocated_buffer;
 			};
 
+			struct BlittableType {
+				Stream<char> name;
+				unsigned int byte_size;
+				unsigned int alignment;
+			};
+
 			ReflectionManager() {}
 			ReflectionManager(MemoryManager* allocator, size_t type_count = ECS_REFLECTION_MAX_TYPE_COUNT, size_t enum_count = ECS_REFLECTION_MAX_ENUM_COUNT);
 
 			ReflectionManager(const ReflectionManager& other) = default;
 			ReflectionManager& operator = (const ReflectionManager& other) = default;
+
+			void AddBlittableException(Stream<char> definition, unsigned int byte_size, unsigned int alignment);
 
 			// Returns true if it succededs. It can fail due to expression evaluation
 			// or if a referenced type is not yet reflected
@@ -119,6 +127,9 @@ namespace ECSEngine {
 			// Returns DBL_MAX if the evaluation fails. The expression must have constant terms,
 			// ECS_CONSTANT_REFLECT macros or sizeof()/alignof() types that were reflected
 			double EvaluateExpression(Stream<char> expression);
+
+			// Returns the byte size and the alignment
+			uint2 FindBlittableException(Stream<char> name) const;
 
 			void FreeFolderHierarchy(unsigned int folder_index);
 
@@ -193,6 +204,8 @@ namespace ECSEngine {
 			void RemoveFolderHierarchy(unsigned int index);
 			void RemoveFolderHierarchy(Stream<wchar_t> root);
 
+			void RemoveBlittableException(Stream<char> name);
+
 			// keeps reference intact, it is the same as removing all types from the respective folder hierarchy,
 			// calling recreate on the folder hierarchy and then process it
 			bool UpdateFolderHierarchy(unsigned int index, CapacityStream<char>* error_message = nullptr);
@@ -232,6 +245,9 @@ namespace ECSEngine {
 			ReflectionFieldTable field_table;
 			ResizableStream<FolderHierarchy> folders;
 			ResizableStream<ReflectionConstant> constants;
+
+			// Blittable types that are easier
+			ResizableStream<BlittableType> blittable_types;
 		};
 
 		ECSENGINE_API bool IsTypeCharacter(char character);
@@ -328,19 +344,14 @@ namespace ECSEngine {
 		// which have not had their dependencies met yet.
 		ECSENGINE_API size_t SearchReflectionUserDefinedTypeByteSize(
 			const ReflectionManager* reflection_manager,
-			Stream<char> definition, 
-			Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
-			Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 }
+			Stream<char> definition
 		);
 
 		// Returns -1 if no match was found. It can return 0 for container types
 		// which have not had their dependencies met yet.
 		ECSENGINE_API ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(
 			const ReflectionManager* reflection_manager,
-			Stream<char> definition,
-			Stream<Stream<char>> blittable_exceptions = { nullptr, 0 },
-			Stream<unsigned int> blittable_byte_sizes = { nullptr, 0 },
-			Stream<unsigned int> blittable_alignments = { nullptr, 0 }
+			Stream<char> definition
 		);
 
 		// Returns -1 if the no match was found. It can return 0 for container types
@@ -420,6 +431,16 @@ namespace ECSEngine {
 
 		// Returns the byte size and the alignment for the field
 		ECSENGINE_API ulong2 GetReflectionTypeGivenFieldTag(const ReflectionField* field);
+
+		// Walks through the fields and returns the component buffer and optionally the index of the field that
+		// corresponds to that buffer index
+		// Example struct { int, Stream<>, Stream<>, int, Stream<> }
+		// buffer_index: 0 -> 1; 1 -> 2, 2 -> 4
+		ECSENGINE_API ComponentBuffer GetReflectionTypeRuntimeBufferIndex(const ReflectionType* type, unsigned int buffer_index, unsigned int* field_index = nullptr);
+
+		ECSENGINE_API size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag);
+
+		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
 
 		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
 			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;

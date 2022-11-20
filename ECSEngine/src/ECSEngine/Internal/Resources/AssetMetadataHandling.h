@@ -6,6 +6,7 @@ namespace ECSEngine {
 	
 	struct ResourceManager;
 	struct AssetDatabase;
+	struct AssetDatabaseReference;
 	struct GLTFMesh;
 
 	struct CreateAssetFromMetadataExData {
@@ -18,18 +19,32 @@ namespace ECSEngine {
 #pragma region Create and Identifiers
 
 	// Returns true if it managed to create the asset according to the metadata, else false
+	// It does not modify the underlying CoallescedMesh* pointer if it fails
 	ECSENGINE_API bool CreateMeshFromMetadata(
 		ResourceManager* resource_manager, 
-		const MeshMetadata* metadata, 
+		MeshMetadata* metadata, 
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
 	// A more detailed version. Useful for multithreaded loading
 	// If the time stamp is 0, then it will get it from the OS
+	// It does not modify the underlying CoallescedMesh* pointer if it fails
 	ECSENGINE_API bool CreateMeshFromMetadataEx(
 		ResourceManager* resource_manager,
-		const MeshMetadata* metadata,
+		MeshMetadata* metadata,
 		Stream<GLTFMesh> meshes,
+		CreateAssetFromMetadataExData* ex_data = {}
+	);
+
+	// A more detailed version. Useful for multithreaded loading
+	// If the time stamp is 0, then it will get it from the OS
+	// It does not modify the underlying CoallescedMesh* pointer if it fails
+	// This version cannot fail (unless the GPU memory runs out)
+	ECSENGINE_API void CreateMeshFromMetadataEx(
+		ResourceManager* resource_manager,
+		MeshMetadata* metadata,
+		const GLTFMesh* coallesced_mesh,
+		Stream<Submesh> submeshes,
 		CreateAssetFromMetadataExData* ex_data = {}
 	);
 
@@ -37,17 +52,19 @@ namespace ECSEngine {
 	ECSENGINE_API void MeshMetadataIdentifier(const MeshMetadata* metadata, CapacityStream<void>& identifier);
 
 	// Returns true if it managed to create the asset according to the metadata, else false
+	// It does not modify the underlying ResourceView if it fails
 	ECSENGINE_API bool CreateTextureFromMetadata(
 		ResourceManager* resource_manager, 
-		const TextureMetadata* metadata, 
+		TextureMetadata* metadata, 
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
 	// A more detailed version. Useful for multithreaded loading
 	// If the time stamp is 0, then it will get it from the OS
+	// It does not modify the underlying ResourceView if it fails
 	ECSENGINE_API bool CreateTextureFromMetadataEx(
 		ResourceManager* resource_manager,
-		const TextureMetadata* metadata,
+		TextureMetadata* metadata,
 		DecodedTexture texture,
 		SpinLock* gpu_spin_lock = nullptr,
 		CreateAssetFromMetadataExData* ex_data = {}
@@ -59,12 +76,14 @@ namespace ECSEngine {
 	ECSENGINE_API void CreateSamplerFromMetadata(ResourceManager* resource_manager, GPUSamplerMetadata* metadata);
 
 	// Returns true if it managed to create the asset according to the metadata, else false
+	// It does not modify the underlying Shader Interface if it fails
 	ECSENGINE_API bool CreateShaderFromMetadata(
 		ResourceManager* resource_manager, 
 		ShaderMetadata* metadata,
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
+	// It does not modify the underlying Shader Interface if it fails
 	ECSENGINE_API bool CreateShaderFromMetadataEx(
 		ResourceManager* resource_manager,
 		ShaderMetadata* metadata,
@@ -75,6 +94,8 @@ namespace ECSEngine {
 	ECSENGINE_API void ShaderMetadataIdentifier(const ShaderMetadata* metadata, CapacityStream<void>& identifier);
 
 	// Returns true if it managed to create the asset according to the metadata, else false
+	// It does not modify the underlying Material pointer if it fails (if the pointer is nullptr
+	// and it succeeds then it will make an allocation from the asset database allocator)
 	ECSENGINE_API bool CreateMaterialFromMetadata(
 		ResourceManager* resource_manager, 
 		AssetDatabase* asset_database,
@@ -91,6 +112,7 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
+	// It does not modify the underlying Stream<void> from the misc asset if it fails.
 	ECSENGINE_API bool CreateMiscAssetFromMetadata(
 		ResourceManager* resource_manager,
 		MiscAsset* misc_asset,
@@ -109,25 +131,60 @@ namespace ECSEngine {
 
 #pragma region Is Loaded
 
-	ECSENGINE_API bool IsMeshFromMetadataLoaded(const ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
+	// For randomized assets it will test differently
+	ECSENGINE_API bool IsMeshFromMetadataLoaded(
+		const ResourceManager* resource_manager, 
+		const MeshMetadata* metadata, 
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
 
-	ECSENGINE_API bool IsTextureFromMetadataLoaded(const ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
+	// For randomized assets it will test differently
+	ECSENGINE_API bool IsTextureFromMetadataLoaded(
+		const ResourceManager* resource_manager, 
+		const TextureMetadata* metadata, 
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
 
-	ECSENGINE_API bool IsGPUSamplerFromMetadataLoaded(const GPUSamplerMetadata* metadata);
+	ECSENGINE_API bool IsGPUSamplerFromMetadataLoaded(const GPUSamplerMetadata* metadata, bool randomized_asset = false);
 
-	ECSENGINE_API bool IsShaderFromMetadataLoaded(const ResourceManager* resource_manager, const ShaderMetadata* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
+	ECSENGINE_API bool IsShaderFromMetadataLoaded(
+		const ResourceManager* resource_manager, 
+		const ShaderMetadata* metadata, 
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
 	
-	ECSENGINE_API bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata);
+	ECSENGINE_API bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata, bool randomized_asset = false);
 
-	ECSENGINE_API bool IsMiscFromMetadataLoaded(const ResourceManager* resource_manager, const MiscAsset* metadata, Stream<wchar_t> mount_point = { nullptr, 0 });
+	ECSENGINE_API bool IsMiscFromMetadataLoaded(
+		const ResourceManager* resource_manager, 
+		const MiscAsset* metadata, 
+		Stream<wchar_t> mount_point = { nullptr, 0 }
+	);
+
+	ECSENGINE_API bool IsAssetFromMetadataLoaded(
+		const ResourceManager* resource_manager, 
+		const void* metadata, 
+		ECS_ASSET_TYPE type, 
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool randomized_asset = false
+	);
 
 	// There must be ECS_ASSET_TYPE_COUNT missing asset streams. Every type will write into its own stream
-	// Use this version for the asset database but with the difference being that you must convert it to a standalone version first
 	ECSENGINE_API void GetDatabaseMissingAssets(
 		const ResourceManager* resource_manager,
 		const AssetDatabase* database, 
 		CapacityStream<unsigned int>* missing_handles, 
-		Stream<wchar_t> mount_point = { nullptr, 0 }
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool randomized_assets = false
+	);
+
+	// There must be ECS_ASSET_TYPE_COUNT missing asset streams. Every type will write into its own stream
+	ECSENGINE_API void GetDatabaseMissingAssets(
+		const ResourceManager* resource_manager,
+		const AssetDatabaseReference* database,
+		CapacityStream<unsigned int>* missing_handles,
+		Stream<wchar_t> mount_point = { nullptr, 0 },
+		bool randomized_assets = false
 	);
 
 	ECSENGINE_API bool HasMissingAssets(CapacityStream<unsigned int>* missing_handles);
@@ -161,7 +218,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool DeallocateAssetFromMetadata(
 		ResourceManager* resource_manager, 
 		AssetDatabase* database, 
-		unsigned int handle,
+		void* metadata,
 		ECS_ASSET_TYPE type, 
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
