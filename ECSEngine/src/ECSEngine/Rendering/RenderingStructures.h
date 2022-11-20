@@ -278,6 +278,9 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool IsGraphicsFormatSRGB(ECS_GRAPHICS_FORMAT format);
 
+	// Returns the byte size of an element of the given type (for position is sizeof(float3))
+	ECSENGINE_API size_t GetMeshIndexElementByteSize(ECS_MESH_INDEX type);
+
 	enum ECS_REFLECT ECS_SAMPLER_FILTER_TYPE : unsigned char {
 		ECS_SAMPLER_FILTER_POINT,
 		ECS_SAMPLER_FILTER_LINEAR,
@@ -1289,11 +1292,11 @@ namespace ECSEngine {
 		Mesh(const Mesh& other) = default;
 		Mesh& operator = (const Mesh& other) = default;
 
-		Stream<char> name;
 		IndexBuffer index_buffer;
 		VertexBuffer vertex_buffers[ECS_MESH_BUFFER_COUNT];
 		ECS_MESH_INDEX mapping[ECS_MESH_BUFFER_COUNT];
 		unsigned char mapping_count;
+		Stream<char> name;
 	};
 
 	struct ECSENGINE_API Submesh {

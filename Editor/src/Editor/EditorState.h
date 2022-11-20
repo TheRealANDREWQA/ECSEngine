@@ -8,14 +8,9 @@
 #include "../Modules/ModuleDefinition.h"
 #include "EditorSandbox.h"
 #include "EditorComponents.h"
+#include "EditorEventDef.h"
 
 #define EDITOR_CONSOLE_SYSTEM_NAME "Editor"
-
-struct EditorEvent {
-	void* function;
-	void* data;
-	size_t data_size;
-};
 
 struct EditorState;
 
@@ -30,7 +25,7 @@ enum EDITOR_LAZY_EVALUATION_COUNTERS : unsigned char {
 	EDITOR_LAZY_EVALUATION_UPDATE_GRAPHICS_MODULE_STATUS,
 	EDITOR_LAZY_EVALUATION_RESET_TASK_MANAGER,
 	EDITOR_LAZY_EVALUATION_RUNTIME_SETTINGS,
-	EDITOR_LAZY_EVALUATION_DEFAULT_METADATA_FOR_ASSETS,
+	EDITOR_LAZY_EVALUATION_METADATA_FOR_ASSETS,
 	EDITOR_LAZY_EVALUATION_COUNTERS_COUNT,
 };
 
@@ -80,6 +75,14 @@ struct EditorState {
 
 	inline ECSEngine::Reflection::ReflectionManager* ModuleReflectionManager() {
 		return module_reflection->reflection;
+	}
+
+	inline ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() {
+		return editor_components.internal_manager;
+	}
+
+	inline const ECSEngine::Reflection::ReflectionManager* GlobalReflectionManager() const {
+		return editor_components.internal_manager;
 	}
 
 	inline ECSEngine::HID::Mouse* Mouse() {
@@ -140,7 +143,7 @@ struct EditorState {
 
 	// A queue onto which GPU tasks can be placed in order to be consumed on the immediate context
 	ECSEngine::ResizableQueue<ECSEngine::ThreadTask> gpu_tasks;
-	
+
 	// There is no cache line padding. So false sharing is at play here. But there shouldn't be much
 	// crossover between these flags (if one is activated the others most likely are not)
 	std::atomic<size_t> flags[EDITOR_STATE_FLAG_COUNT];

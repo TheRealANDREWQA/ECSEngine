@@ -50,6 +50,29 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		bool IsLateOrSystemConfiguration(size_t configuration) {
+			return function::HasFlag(configuration, UI_CONFIG_LATE_DRAW) || function::HasFlag(configuration, UI_CONFIG_SYSTEM_DRAW);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		// Add to the late_hoverable, late_clickable or late_generals the last action in order to be added later on
+		ECS_INLINE void AddLateOrSystemAction(UIDrawer* drawer, size_t configuration, bool hoverable, bool clickable, bool general) {
+			if (IsLateOrSystemConfiguration(configuration)) {
+				if (hoverable) {
+					drawer->late_hoverables.AddSafe(drawer->system->GetLastHoverableIndex(drawer->dockspace, drawer->border_index));
+				}
+				if (clickable) {
+					drawer->late_clickables.AddSafe(drawer->system->GetLastClickableIndex(drawer->dockspace, drawer->border_index));
+				}
+				if (general) {
+					drawer->late_generals.AddSafe(drawer->system->GetLastGeneralIndex(drawer->dockspace, drawer->border_index));
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		template<typename BasicType>
 		void InputGroupInitializerImplementation(
 			UIDrawer* drawer,
@@ -71,10 +94,12 @@ namespace ECSEngine {
 				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 			}
 
-			// The identifier must be stable
-			Stream<char> identifier = drawer->HandleResourceIdentifier(group_name, true);
-			// Save a resource to the window for dynamic type resources such that they recognize that they are allocated
-			drawer->AddWindowResourceToTable(nullptr, identifier);
+			if (configuration & UI_CONFIG_DYNAMIC_RESOURCE) {
+				// The identifier must be stable
+				Stream<char> identifier = drawer->HandleResourceIdentifier(group_name, true);
+				// Save a resource to the window for dynamic type resources such that they recognize that they are allocated
+				drawer->AddWindowResourceToTable(nullptr, identifier);
+			}
 
 			bool has_pushed_stack = drawer->PushIdentifierStackStringPattern();
 			drawer->PushIdentifierStack(group_name);
@@ -606,9 +631,9 @@ namespace ECSEngine {
 
 		void UIDrawer::HandleLateAndSystemDrawActionNullify(size_t configuration, float2 position, float2 scale) {
 			if ((configuration & UI_CONFIG_LATE_DRAW) || (configuration & UI_CONFIG_SYSTEM_DRAW)) {
-				AddHoverable(position, scale, { SkipAction, nullptr, 0 });
-				AddClickable(position, scale, { SkipAction, nullptr, 0 });
-				AddGeneral(position, scale, { SkipAction, nullptr, 0 });
+				AddHoverable(0, position, scale, { SkipAction, nullptr, 0 });
+				AddClickable(0, position, scale, { SkipAction, nullptr, 0 });
+				AddGeneral(0, position, scale, { SkipAction, nullptr, 0 });
 			}
 		}
 
@@ -851,26 +876,54 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		Stream<char> UIDrawer::HandleResourceIdentifier(Stream<char> input, bool permanent_buffer) {
+		// The functor returns the string to copy
+		template<typename Functor>
+		Stream<char> HandleResourceIdentifierImpl(UIDrawer* drawer, Stream<char> input, bool permanent_buffer, Functor&& functor) {
 			if (!permanent_buffer) {
-				if (identifier_stack.size > 0) {
-					char* temp_memory = (char*)GetTempBuffer((input.size + current_identifier.size) * sizeof(char), ECS_UI_DRAW_NORMAL, alignof(char));
+				if (drawer->identifier_stack.size > 0) {
+					Stream<char> string_to_copy = functor();
+
+					char* temp_memory = (char*)drawer->GetTempBuffer((input.size + string_to_copy.size) * sizeof(char), ECS_UI_DRAW_NORMAL, alignof(char));
 					input.CopyTo(temp_memory);
-					memcpy(temp_memory + input.size, current_identifier.buffer, current_identifier.size);
-					return { temp_memory, input.size + current_identifier.size };
+					memcpy(temp_memory + input.size, string_to_copy.buffer, string_to_copy.size);
+					return { temp_memory, input.size + string_to_copy.size };
 				}
 				else {
 					return input;
 				}
 			}
 			else {
-				char* memory = (char*)GetMainAllocatorBuffer((input.size + current_identifier.size) * sizeof(char), alignof(char));
+				Stream<char> string_to_copy = functor();
+
+				char* memory = (char*)drawer->GetMainAllocatorBuffer((input.size + string_to_copy.size) * sizeof(char), alignof(char));
 				input.CopyTo(memory);
-				if (identifier_stack.size > 0) {
-					memcpy(memory + input.size, current_identifier.buffer, current_identifier.size);
+				if (drawer->identifier_stack.size > 0) {
+					memcpy(memory + input.size, string_to_copy.buffer, string_to_copy.size * sizeof(char));
 				}
-				return { memory, input.size + current_identifier.size };
+				return { memory, input.size + string_to_copy.size };
 			}
+		}
+		
+		Stream<char> UIDrawer::HandleResourceIdentifier(Stream<char> input, bool permanent_buffer) {
+			return HandleResourceIdentifierImpl(this, input, permanent_buffer, [=]() {
+				return current_identifier;
+			});
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> UIDrawer::HandleResourceIdentifierEx(Stream<char> input, bool permanent_buffer)
+		{
+			return HandleResourceIdentifierImpl(this, input, permanent_buffer, [=]() {
+				Stream<char> string_to_copy = current_identifier;
+				Stream<char> string_pattern = function::FindFirstToken(current_identifier, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
+				if (string_pattern.buffer != nullptr) {
+					if (function::FindFirstToken(input, ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT).buffer != nullptr) {
+						string_to_copy = { string_pattern.buffer + ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT, string_pattern.size - ECS_TOOLS_UI_DRAWER_STRING_PATTERN_COUNT };
+					}
+				}
+				return string_to_copy;
+			});
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -878,17 +931,17 @@ namespace ECSEngine {
 		void UIDrawer::HandleRectangleActions(size_t configuration, const UIDrawConfig& config, float2 position, float2 scale) {
 			if (configuration & UI_CONFIG_RECTANGLE_HOVERABLE_ACTION) {
 				const UIActionHandler* handler = (const UIActionHandler*)config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-				AddHoverable(position, scale, *handler);
+				AddHoverable(configuration, position, scale, *handler);
 			}
 
 			if (configuration & UI_CONFIG_RECTANGLE_CLICKABLE_ACTION) {
 				const UIActionHandler* handler = (const UIActionHandler*)config.GetParameter(UI_CONFIG_RECTANGLE_CLICKABLE_ACTION);
-				AddClickable(position, scale, *handler);
+				AddClickable(configuration, position, scale, *handler);
 			}
 
 			if (configuration & UI_CONFIG_RECTANGLE_GENERAL_ACTION) {
 				const UIActionHandler* handler = (const UIActionHandler*)config.GetParameter(UI_CONFIG_RECTANGLE_GENERAL_ACTION);
-				AddGeneral(position, scale, *handler);
+				AddGeneral(configuration, position, scale, *handler);
 			}
 		}
 
@@ -1342,14 +1395,14 @@ namespace ECSEngine {
 		) {
 			ECS_UI_DRAW_PHASE phase = HandlePhase(configuration);
 			if (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
-				AddHoverable(position, scale, { SliderReturnToDefault, info, 0, phase });
+				AddHoverable(configuration, position, scale, { SliderReturnToDefault, info, 0, phase });
 			}
 			if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 				UIDrawerSliderEnterValuesData enter_data;
 				enter_data.slider = info;
 				enter_data.convert_input = functions.convert_text_input;
 				enter_data.filter_function = filter;
-				AddGeneral(position, scale, { SliderEnterValues, &enter_data, sizeof(enter_data), phase });
+				AddGeneral(configuration, position, scale, { SliderEnterValues, &enter_data, sizeof(enter_data), phase });
 			}
 			if (~configuration & UI_CONFIG_SLIDER_MOUSE_DRAGGABLE) {
 				UIDrawerSliderBringToMouse bring_info;
@@ -1358,9 +1411,9 @@ namespace ECSEngine {
 
 				if (info->text_input_counter == 0) {
 					SolidColorRectangle(configuration, slider_position, slider_scale, slider_color);
-					AddClickable(position, scale, { SliderBringToMouse, &bring_info, sizeof(bring_info), phase });
-					AddClickable(slider_position, slider_scale, { SliderAction, info, 0, phase });
-					AddDefaultHoverable(slider_position, slider_scale, slider_color, 1.25f, phase);
+					AddClickable(configuration, position, scale, { SliderBringToMouse, &bring_info, sizeof(bring_info), phase });
+					AddClickable(configuration, slider_position, slider_scale, { SliderAction, info, 0, phase });
+					AddDefaultHoverable(configuration, slider_position, slider_scale, slider_color, 1.25f, phase);
 				}
 			}
 			else {
@@ -1379,13 +1432,13 @@ namespace ECSEngine {
 						}
 					}
 
-					AddClickable(position, scale, { SliderMouseDraggable, &action_data, sizeof(action_data), phase });
+					AddClickable(configuration, position, scale, { SliderMouseDraggable, &action_data, sizeof(action_data), phase });
 					if (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
 						UIDrawerSliderReturnToDefaultMouseDraggable data;
 						data.slider = info;
 						data.hoverable_data.colors[0] = color;
 						data.hoverable_data.percentages[0] = 1.25f;
-						AddHoverable(position, scale, { SliderReturnToDefaultMouseDraggable, &data, sizeof(data), phase });
+						AddHoverable(configuration, position, scale, { SliderReturnToDefaultMouseDraggable, &data, sizeof(data), phase });
 					}
 					else {
 						struct CopyValueData {
@@ -1408,12 +1461,12 @@ namespace ECSEngine {
 						CopyValueData copy_data;
 						copy_data.slider = info;
 						copy_data.hoverable_data.colors[0] = color;
-						AddHoverable(position, scale, { copy_value, &copy_data, sizeof(copy_data), phase });
+						AddHoverable(configuration, position, scale, { copy_value, &copy_data, sizeof(copy_data), phase });
 					}
 				}
 				else {
 					if (configuration & UI_CONFIG_SLIDER_DEFAULT_VALUE) {
-						AddHoverable(position, scale, { SliderReturnToDefault, info, 0, phase });
+						AddHoverable(configuration, position, scale, { SliderReturnToDefault, info, 0, phase });
 					}
 				}
 			}
@@ -2130,6 +2183,8 @@ namespace ECSEngine {
 			float2 initial_position = position;
 			float2 initial_scale = scale;
 
+			input->padding = element_descriptor.label_padd;
+
 			bool is_element_name_first = IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME);
 			if (is_element_name_first) {
 				ElementName(configuration, config, &input->name, position, scale);
@@ -2216,6 +2271,10 @@ namespace ECSEngine {
 				float character_spacing;
 				Color font_color;
 				HandleText(configuration, config, font_color, font_size, character_spacing);
+				if (font_size != input->font_size) {
+					input->SetNewZoom(*zoom_ptr);
+				}
+
 				if (!is_active) {
 					font_color = color_theme.unavailable_text;
 				}
@@ -2240,8 +2299,8 @@ namespace ECSEngine {
 					// Change the text color
 					UIConfigTextParameters text_parameters;
 					text_parameters.color = hint_color;
-					text_parameters.size = font_size;
-					text_parameters.character_spacing = character_spacing;
+					text_parameters.size = font_size * zoom_inverse;
+					text_parameters.character_spacing = character_spacing * zoom_inverse.x;
 
 					UIConfigTextParameters previous_parameters;
 					SetConfigParameter(configuration, label_config, text_parameters, previous_parameters);
@@ -2283,18 +2342,15 @@ namespace ECSEngine {
 
 				input->position = position;
 				input->bound = position.x + scale.x - input->padding.x;
-				if (~configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-					scale.y = input->solid_color_y_scale;
-				}
 				Color color = HandleColor(configuration, config);
 				SolidColorRectangle(configuration, position, scale, color);
 
 				if (is_active) {
 					// Use system phase for the hoverable because we might have to display a tooltip
-					AddHoverable(position, scale, { TextInputHoverable, input, 0, ECS_UI_DRAW_SYSTEM });
-					AddClickable(position, scale, { TextInputClickable, input, 0 });
+					AddHoverable(configuration, position, scale, { TextInputHoverable, input, 0, ECS_UI_DRAW_SYSTEM });
+					AddClickable(configuration, position, scale, { TextInputClickable, input, 0 });
 					UIDrawerTextInputActionData input_data = { input, filter };
-					AddGeneral(position, scale, { TextInputAction, &input_data, sizeof(input_data) });
+					AddGeneral(configuration, position, scale, { TextInputAction, &input_data, sizeof(input_data) });
 				}
 
 				if (input->current_selection != input->current_sprite_position) {
@@ -2777,7 +2833,7 @@ namespace ECSEngine {
 							scale
 						);
 
-						AddHoverable(position, scale, { SliderCopyPaste, slider, 0 });
+						AddHoverable(configuration, position, scale, { SliderCopyPaste, slider, 0 });
 					};
 					if (~configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						text_label_lambda();
@@ -3039,6 +3095,13 @@ namespace ECSEngine {
 			if (~configuration & UI_CONFIG_INITIALIZER_DO_NOT_BEGIN) {
 				BeginElement();
 				configuration |= UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
+			}
+
+			if (configuration & UI_CONFIG_DYNAMIC_RESOURCE) {
+				// It needs to be stable
+				Stream<char> identifier = HandleResourceIdentifier(group_name, true);
+				// Add a nullptr resource if it is a dynamic element
+				AddWindowResourceToTable(nullptr, identifier);
 			}
 
 			bool has_pushed_stack = PushIdentifierStackStringPattern();
@@ -3415,14 +3478,14 @@ namespace ECSEngine {
 								wrapper_size += callback->handler.data_size;
 							}
 							
-							drawer->AddDefaultClickableHoverable(position, scale, { wrapper, wrapper_data, wrapper_size, callback_handler.phase });
+							drawer->AddDefaultClickableHoverable(configuration, position, scale, { wrapper, wrapper_data, wrapper_size, callback_handler.phase });
 						}
 						else {
-							drawer->AddDefaultClickableHoverable(position, scale, callback_handler);
+							drawer->AddDefaultClickableHoverable(configuration, position, scale, callback_handler);
 						}
 					}
 					else {
-						drawer->AddDefaultClickableHoverable(position, scale, { BoolClickable, value_to_modify, 0, phase }, color);
+						drawer->AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, value_to_modify, 0, phase }, color);
 					}
 				}
 
@@ -3611,8 +3674,8 @@ namespace ECSEngine {
 					clickable_data.configuration = configuration;
 					data->label_y_scale = scale.y;
 
-					AddDefaultHoverable(border_position, border_scale, positions, scales, colors, percentages, 2, HandlePhase(configuration));
-					AddClickable(border_position, border_scale, { ComboBoxClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_SYSTEM });
+					AddDefaultHoverable(configuration, border_position, border_scale, positions, scales, colors, percentages, 2, HandlePhase(configuration));
+					AddClickable(configuration, border_position, border_scale, { ComboBoxClickable, &clickable_data, sizeof(clickable_data), ECS_UI_DRAW_SYSTEM });
 				}
 				else {
 					SpriteRectangle(no_get_transform_configuration, triangle_position, triangle_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, color_theme.unavailable_text);
@@ -3664,7 +3727,20 @@ namespace ECSEngine {
 				size_t slider_configuration = configuration | UI_CONFIG_INITIALIZER_DO_NOT_BEGIN;
 				slider_configuration |= configuration & UI_CONFIG_SLIDER_ENTER_VALUES ? UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK : 0;
 
-				if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
+				bool rgb = false;
+				bool hsv = false;
+				bool alpha = false;
+				bool hex = false;
+
+				if (configuration & UI_CONFIG_COLOR_INPUT_SLIDERS) {
+					const UIConfigColorInputSliders* sliders = (const UIConfigColorInputSliders*)config.GetParameter(UI_CONFIG_COLOR_INPUT_SLIDERS);
+					rgb = sliders->rgb;
+					hsv = sliders->hsv;
+					alpha = sliders->alpha;
+					hex = sliders->hex;
+				}
+
+				if (rgb) {
 					UIConfigSliderChangedValueCallback previous_callback;
 					if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						UIConfigSliderChangedValueCallback callback;
@@ -3740,7 +3816,7 @@ namespace ECSEngine {
 					}
 				}
 
-				if (configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) {
+				if (hsv) {
 					UIConfigSliderChangedValueCallback previous_callback;
 					if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						UIConfigSliderChangedValueCallback callback;
@@ -3818,7 +3894,7 @@ namespace ECSEngine {
 					}
 				}
 
-				if (configuration & UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER) {
+				if (alpha) {
 					UIConfigSliderChangedValueCallback previous_callback;
 					if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 						UIConfigSliderChangedValueCallback callback;
@@ -3872,7 +3948,7 @@ namespace ECSEngine {
 					}
 				}
 
-				if (configuration & UI_CONFIG_COLOR_INPUT_HEX_INPUT) {
+				if (hex) {
 					data->hex_characters.buffer = (char*)GetMainAllocatorBuffer(sizeof(char) * 7);
 					data->hex_characters.size = 0;
 					data->hex_characters.capacity = 6;
@@ -3958,7 +4034,6 @@ namespace ECSEngine {
 			text_alignment.vertical = ECS_UI_ALIGN_MIDDLE;
 
 			label_config.AddFlags(text_params, text_alignment);
-			//data->hsv.alpha = color->alpha;
 
 			float2 end_point;
 			float2 starting_point;
@@ -3977,11 +4052,24 @@ namespace ECSEngine {
 			size_t SLIDER_CONFIGURATION = configuration | UI_CONFIG_ELEMENT_NAME_FIRST;
 			SLIDER_CONFIGURATION |= ~configuration & UI_CONFIG_SLIDER_ENTER_VALUES ? 0 : UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 
+			bool rgb = false;
+			bool hsv = false;
+			bool alpha = false;
+			bool hex = false;
+
+			if (configuration & UI_CONFIG_COLOR_INPUT_SLIDERS) {
+				const UIConfigColorInputSliders* sliders = (const UIConfigColorInputSliders*)config.GetParameter(UI_CONFIG_COLOR_INPUT_SLIDERS);
+				rgb = sliders->rgb;
+				hsv = sliders->hsv;
+				alpha = sliders->alpha;
+				hex = sliders->hex;
+			}
+
 			auto callback_lambda = [&](bool is_rgb, bool is_hsv, bool is_alpha) {
 				if (configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
 					UIConfigSliderChangedValueCallback callback;
 
-					UIDrawerColorInputSliderCallback callback_data;
+					/*UIDrawerColorInputSliderCallback callback_data;
 					callback_data.input = data;
 					callback_data.is_rgb = is_rgb;
 					callback_data.is_hsv = is_hsv;
@@ -3989,7 +4077,8 @@ namespace ECSEngine {
 
 					callback.handler.action = ColorInputSliderCallback;
 					callback.handler.data = &callback_data;
-					callback.handler.data_size = sizeof(callback_data);
+					callback.handler.data_size = sizeof(callback_data);*/
+					callback.copy_on_initialization = true;
 
 					config.AddFlag(callback);
 				}
@@ -4025,7 +4114,7 @@ namespace ECSEngine {
 			auto hsv_lambda = [&]() {
 				callback_lambda(false, true, false);
 
-				if ((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) != 0) {
+				if (rgb) {
 					NextRow();
 					SetCurrentX(overall_start_position.x + region_render_offset.x);
 					position = GetCurrentPosition();
@@ -4046,7 +4135,7 @@ namespace ECSEngine {
 				IntSliderDrawer(SLIDER_CONFIGURATION, config, data->v_slider, position, scale, &data->hsv.value, (unsigned char)0, (unsigned char)255);
 				position.x = GetCurrentPosition().x;
 
-				if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
+				if (rgb) {
 					if (data->r_slider->interpolate_value || data->g_slider->interpolate_value || data->b_slider->interpolate_value) {
 						data->hsv = RGBToHSV(*color);
 					}
@@ -4064,7 +4153,7 @@ namespace ECSEngine {
 			auto alpha_lambda = [&]() {
 				callback_lambda(false, false, true);
 
-				if (((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) == 0) && ((configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) == 0)) {
+				if (!rgb && !hsv) {
 					HandleTransformFlags(configuration, config, position, scale);
 					IntSliderDrawer(SLIDER_CONFIGURATION, config, data->a_slider, position, scale, &color->alpha, (unsigned char)0, (unsigned char)255);
 					position.x = GetCurrentPosition().x;
@@ -4087,8 +4176,7 @@ namespace ECSEngine {
 			};
 
 			auto hex_lambda = [&]() {
-				if (((configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) != 0) || ((configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) != 0)
-					|| ((configuration & UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER) != 0)) {
+				if (rgb || hsv || alpha) {
 					NextRow();
 					SetCurrentX(overall_start_position.x + region_render_offset.x);
 
@@ -4120,20 +4208,20 @@ namespace ECSEngine {
 				NextRow();
 			};
 
-			if (configuration & UI_CONFIG_COLOR_INPUT_RGB_SLIDERS) {
+			if (rgb) {
 				rgb_lambda();
 			}
 
-			if (configuration & UI_CONFIG_COLOR_INPUT_HSV_SLIDERS) {
+			if (hsv) {
 				hsv_lambda();
 			}
 
-			if (configuration & UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER) {
+			if (alpha) {
 				alpha_lambda();
 			}
 
 			if (~configuration & UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR) {
-				position = GetCurrentPositionNonOffset();
+				position = GetCurrentPosition();
 			}
 
 			size_t rectangle_configuration = configuration | UI_CONFIG_MAKE_SQUARE;
@@ -4143,10 +4231,10 @@ namespace ECSEngine {
 
 			if (is_active) {
 				if (~configuration & UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR) {
-					AddDefaultClickable(position, GetSquareScale(scale.y), { SkipAction, nullptr, 0 }, { ColorInputCreateWindow, data, 0, ECS_UI_DRAW_SYSTEM });
+					AddDefaultClickable(configuration, position, GetSquareScale(scale.y), { SkipAction, nullptr, 0 }, { ColorInputCreateWindow, data, 0, ECS_UI_DRAW_SYSTEM });
 				}
 				if (configuration & UI_CONFIG_COLOR_INPUT_DEFAULT_VALUE) {
-					AddHoverable(position, GetSquareScale(scale.y), { ColorInputDefaultColor, data, 0 });
+					AddHoverable(configuration, position, GetSquareScale(scale.y), { ColorInputDefaultColor, data, 0 });
 				}
 			}
 
@@ -4155,7 +4243,7 @@ namespace ECSEngine {
 				ElementName(configuration, config, &data->name, position, scale);
 			}
 
-			if (configuration & UI_CONFIG_COLOR_INPUT_HEX_INPUT) {
+			if (hex) {
 				hex_lambda();
 			}
 
@@ -4747,9 +4835,9 @@ namespace ECSEngine {
 					}
 
 					unsigned int digit_count = 0;
-					const char* dot = strchr(input->text->buffer, '.');
-					if (dot != nullptr) {
-						digit_count = input->text->buffer + input->text->size - dot - 1;
+					Stream<char> dot = function::FindFirstCharacter(*input->text, '.');
+					if (dot.size > 0) {
+						digit_count = dot.size - 1;
 					}
 
 					// If the value changed, update the input stream
@@ -5238,7 +5326,7 @@ namespace ECSEngine {
 						selectable_data.bool_data = click_data;
 						selectable_data.hierarchy = data;
 						selectable_data.node_index = index;
-						AddDefaultClickableHoverable(position, hoverable_scale, { HierarchySelectableClick, &selectable_data, sizeof(selectable_data) }, hover_color);
+						AddDefaultClickableHoverable(configuration, position, hoverable_scale, { HierarchySelectableClick, &selectable_data, sizeof(selectable_data) }, hover_color);
 					}
 					else if (configuration & UI_CONFIG_HIERARCHY_DRAG_NODE) {
 						if (data->selectable.selected_index == index && data->multiple_hierarchy_data->active_hierarchy == data) {
@@ -5252,11 +5340,11 @@ namespace ECSEngine {
 						drag_data.selectable_data.bool_data = click_data;
 						drag_data.timer.SetMarker();
 
-						AddClickable(position, hoverable_scale, { HierarchyNodeDrag, &drag_data, sizeof(drag_data) });
-						AddDefaultHoverable(position, hoverable_scale, hover_color);
+						AddClickable(configuration, position, hoverable_scale, { HierarchyNodeDrag, &drag_data, sizeof(drag_data) });
+						AddDefaultHoverable(configuration, position, hoverable_scale, hover_color);
 					}
 					else {
-						AddDefaultClickableHoverable(position, hoverable_scale, { BoolClickableWithPin, &click_data, sizeof(click_data) }, hover_color);
+						AddDefaultClickableHoverable(configuration, position, hoverable_scale, { BoolClickableWithPin, &click_data, sizeof(click_data) }, hover_color);
 					}
 					max_label_scale = function::ClampMin(max_label_scale, label_scale);
 					position = { GetNextRowXPosition() - region_render_offset.x, current_y - region_render_offset.y };
@@ -5411,7 +5499,7 @@ namespace ECSEngine {
 					UIDrawerHistogramHoverableData hoverable_data;
 					hoverable_data.sample_index = index;
 					hoverable_data.sample_value = samples[index];
-					AddHoverable({ sample_position.x, histogram_position.y }, { sample_scale.x, histogram_scale.y }, { HistogramHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+					AddHoverable(configuration, { sample_position.x, histogram_position.y }, { sample_scale.x, histogram_scale.y }, { HistogramHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 					histogram_position.x += sample_scale.x + element_descriptor.histogram_bar_spacing;
 				}
 			}
@@ -5553,9 +5641,9 @@ namespace ECSEngine {
 					general_data.menu = data;
 					general_data.menu_initializer_index = 255;
 
-					AddDefaultHoverable(position, scale, HandleColor(configuration, config));
-					AddGeneral(position, scale, { MenuGeneral, &general_data, sizeof(general_data), ECS_UI_DRAW_SYSTEM });
-					AddClickable(position, scale, { SkipAction, nullptr, 0 });
+					AddDefaultHoverable(configuration, position, scale, HandleColor(configuration, config));
+					AddGeneral(configuration, position, scale, { MenuGeneral, &general_data, sizeof(general_data), ECS_UI_DRAW_SYSTEM });
+					AddClickable(configuration, position, scale, { SkipAction, nullptr, 0 });
 				}
 			}
 
@@ -7273,7 +7361,7 @@ namespace ECSEngine {
 					hoverable_data.second_sample_values = samples[index + 1];
 					hoverable_data.sample_index = index;
 
-					AddHoverable(hoverable_position, hoverable_scale, { GraphHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
+					AddHoverable(configuration, hoverable_position, hoverable_scale, { GraphHoverable, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_PHASE::ECS_UI_DRAW_SYSTEM });
 					if (configuration & UI_CONFIG_GRAPH_DROP_COLOR) {
 						line_color.alpha = ECS_TOOLS_UI_GRAPH_DROP_COLOR_ALPHA;
 						size_t base_index = (index - starting_index) * 6;
@@ -8111,6 +8199,23 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void UIDrawer::PushLateActions()
+		{
+			for (unsigned int index = 0; index < late_hoverables.size; index++) {
+				system->ReaddHoverableToDockspaceRegion(dockspace, border_index, late_hoverables[index]);
+			}
+
+			for (unsigned int index = 0; index < late_clickables.size; index++) {
+				system->ReaddClickableToDockspaceRegion(dockspace, border_index, late_clickables[index]);
+			}
+
+			for (unsigned int index = 0; index < late_generals.size; index++) {
+				system->ReaddGeneralToDockspaceRegion(dockspace, border_index, late_generals[index]);
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::UpdateCurrentColumnScale(float value) {
 			current_column_x_scale = std::max(current_column_x_scale, value);
 		}
@@ -8378,13 +8483,13 @@ namespace ECSEngine {
 			if (configuration & UI_CONFIG_ELEMENT_NAME_ACTION) {
 				const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
 				if (name_action->hoverable_handler.action != nullptr) {
-					drawer->AddHoverable(draw_position, draw_scale, name_action->hoverable_handler);
+					drawer->AddHoverable(configuration, draw_position, draw_scale, name_action->hoverable_handler);
 				}
 				if (name_action->clickable_handler.action != nullptr) {
-					drawer->AddClickable(draw_position, draw_scale, name_action->clickable_handler);
+					drawer->AddClickable(configuration, draw_position, draw_scale, name_action->clickable_handler);
 				}
 				if (name_action->general_handler.action != nullptr) {
-					drawer->AddGeneral(draw_position, draw_scale, name_action->general_handler);
+					drawer->AddGeneral(configuration, draw_position, draw_scale, name_action->general_handler);
 				}
 			}
 
@@ -8494,6 +8599,9 @@ namespace ECSEngine {
 				current_identifier.buffer = (char*)system->m_memory->Allocate(system->m_descriptors.misc.drawer_identifier_memory, 1);
 				current_identifier.size = 0;
 
+				late_hoverables.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+				late_clickables.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
+				late_generals.Initialize(system->m_memory, 0, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
 
 				if (initializer) {
 					// For convinience, use separate allocations
@@ -8524,6 +8632,8 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		UIDrawer::~UIDrawer() {
+			PushLateActions();
+
 			if (!initializer) {
 				float2 render_span = GetRenderSpan();
 				float2 render_zone = GetRenderZone();
@@ -8551,6 +8661,10 @@ namespace ECSEngine {
 				system->m_memory->Deallocate(current_identifier.buffer);
 				system->m_memory->Deallocate(identifier_stack.buffer);
 
+				system->m_memory->Deallocate(late_hoverables.buffer);
+				system->m_memory->Deallocate(late_clickables.buffer);
+				system->m_memory->Deallocate(late_generals.buffer);
+
 				if (initializer) {
 					system->m_memory->Deallocate(last_initialized_element_allocations.buffer);
 					system->m_memory->Deallocate(last_initialized_element_table_resources.buffer);
@@ -8573,7 +8687,7 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::AddHoverable(float2 position, float2 scale, UIActionHandler handler) {
+		void UIDrawer::AddHoverable(size_t configuration, float2 position, float2 scale, UIActionHandler handler) {
 			if (!initializer) {
 				system->AddHoverableToDockspaceRegion(
 					thread_id,
@@ -8583,26 +8697,31 @@ namespace ECSEngine {
 					scale,
 					handler
 				);
+				AddLateOrSystemAction(this, configuration, true, false, false);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::AddTextTooltipHoverable(float2 position, float2 scale, UITextTooltipHoverableData* data, bool stable, ECS_UI_DRAW_PHASE phase) {
-			size_t total_storage[256];
-			unsigned int write_size = sizeof(*data);
-			if (!stable) {
-				UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
-				memcpy(stack_data, data, sizeof(*data));
-				write_size = stack_data->Write(data->characters);
-				data = stack_data;
+		void UIDrawer::AddTextTooltipHoverable(size_t configuration, float2 position, float2 scale, UITextTooltipHoverableData* data, bool stable, ECS_UI_DRAW_PHASE phase) {
+			if (!initializer) {
+				size_t total_storage[256];
+				unsigned int write_size = sizeof(*data);
+				if (!stable) {
+					UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
+					memcpy(stack_data, data, sizeof(*data));
+					write_size = stack_data->Write(data->characters);
+					data = stack_data;
+				}
+				system->AddHoverableToDockspaceRegion(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, data, write_size, phase });
+				AddLateOrSystemAction(this, configuration, true, false, false);
 			}
-			system->AddHoverableToDockspaceRegion(thread_id, dockspace, border_index, position, scale, { TextTooltipHoverable, data, write_size, phase });
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddClickable(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			UIActionHandler handler
@@ -8616,12 +8735,14 @@ namespace ECSEngine {
 					scale,
 					handler
 				);
+				AddLateOrSystemAction(this, configuration, false, true, false);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddGeneral(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			UIActionHandler handler
@@ -8635,12 +8756,14 @@ namespace ECSEngine {
 					scale,
 					handler
 				);
+				AddLateOrSystemAction(this, configuration, false, false, true);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDefaultHoverable(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			Color color,
@@ -8658,12 +8781,15 @@ namespace ECSEngine {
 				data.thread_id = thread_id;
 				data.phase = phase;
 				system->AddDefaultHoverable(data);
+
+				AddLateOrSystemAction(this, configuration, true, false, false);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDefaultHoverable(
+			size_t configuration,
 			float2 main_position,
 			float2 main_scale,
 			const float2* positions,
@@ -8692,12 +8818,15 @@ namespace ECSEngine {
 				data.position = main_position;
 				data.scale = main_scale;
 				system->AddDefaultHoverable(data);
+
+				AddLateOrSystemAction(this, configuration, true, false, false);
 			}
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDefaultClickable(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			UIActionHandler hoverable_handler,
@@ -8713,6 +8842,8 @@ namespace ECSEngine {
 				data.scale = scale;
 				data.thread_id = thread_id;
 				system->AddDefaultClickable(data);
+
+				AddLateOrSystemAction(this, configuration, true, true, false);
 			}
 		}
 
@@ -8743,6 +8874,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDoubleClickAction(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			unsigned int identifier,
@@ -8762,6 +8894,8 @@ namespace ECSEngine {
 					first_click_handler,
 					second_click_handler
 				);
+
+				AddLateOrSystemAction(this, configuration, false, false, true);
 			}
 		}
 
@@ -8807,15 +8941,16 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::AddRightClickAction(float2 position, float2 scale, Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
+		void UIDrawer::AddRightClickAction(size_t configuration, float2 position, float2 scale, Stream<char> name, UIDrawerMenuState* menu_state, UIActionHandler custom_handler)
 		{
 			UIDrawerMenuRightClickData right_click = PrepareRightClickActionData(name, menu_state, custom_handler);
-			AddHoverable(position, scale, { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM });
+			AddHoverable(configuration, position, scale, { RightClickMenu, &right_click, sizeof(right_click), ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDefaultClickableHoverableWithText(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			UIActionHandler handler,
@@ -8840,13 +8975,14 @@ namespace ECSEngine {
 			}
 			hoverable_data.text_offset = text_offset;
 
-			AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
+			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// Either horizontal or vertical cull should be set
 		void UIDrawer::AddDefaultClickableHoverableWithTextEx(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			UIActionHandler handler,
@@ -8881,12 +9017,13 @@ namespace ECSEngine {
 			hoverable_data.vertical_cull_bound = vertical_cull_bound;
 			hoverable_data.vertical_text = vertical_text;
 
-			AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
+			AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDefaultClickableHoverable(
+			size_t configuration,
 			float2 position,
 			float2 scale,
 			UIActionHandler handler,
@@ -8912,6 +9049,8 @@ namespace ECSEngine {
 				data.scale = scale;
 				data.thread_id = thread_id;
 				system->AddDefaultHoverableClickable(data);
+
+				AddLateOrSystemAction(this, configuration, true, true, false);
 			}
 		}
 
@@ -8952,6 +9091,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::AddDefaultClickableHoverable(
+			size_t configuration,
 			float2 main_position,
 			float2 main_scale,
 			const float2* positions,
@@ -8981,6 +9121,8 @@ namespace ECSEngine {
 				data.scale = main_scale;
 				data.thread_id = thread_id;
 				system->AddDefaultHoverableClickable(data);
+
+				AddLateOrSystemAction(this, configuration, true, true, false);
 			}
 		}
 
@@ -9254,7 +9396,7 @@ namespace ECSEngine {
 							else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
 								phase = ECS_UI_DRAW_SYSTEM;
 							}
-							AddDefaultClickable(position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
+							AddDefaultClickable(configuration, position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 						}
 						else {
 							UISpriteVertex* vertices = HandleTextSpriteBuffer(configuration);
@@ -9287,14 +9429,14 @@ namespace ECSEngine {
 								else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
 									hoverable_phase = ECS_UI_DRAW_SYSTEM;
 								}
-								AddDefaultClickable(position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
+								AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
 							}
 						}
 					}
 					else {
 						const UIConfigButtonHoverable* hoverable = (const UIConfigButtonHoverable*)config.GetParameter(UI_CONFIG_BUTTON_HOVERABLE);
-						AddDefaultClickable(position, scale, hoverable->handler, handler);
-						AddHoverable(position, scale, hoverable->handler);
+						AddDefaultClickable(configuration, position, scale, hoverable->handler, handler);
+						AddHoverable(configuration, position, scale, hoverable->handler);
 					}
 				}
 
@@ -9304,11 +9446,16 @@ namespace ECSEngine {
 
 						UITextTooltipHoverableData hover_data;
 						hover_data.characters = tool_tip->characters;
-						hover_data.base.offset.y = 0.005f;
+						hover_data.base.offset.y = 0.01f;
 						hover_data.base.offset_scale.y = true;
+						hover_data.base.center_horizontal_x = true;
 
 						ActionData action_data = system->GetFilledActionData(window_index);
 						action_data.data = &hover_data;
+						action_data.buffers = system_buffers;
+						action_data.counts = system_counts;
+						action_data.position = position;
+						action_data.scale = scale;
 						TextTooltipHoverable(&action_data);
 					}
 				}
@@ -9363,7 +9510,7 @@ namespace ECSEngine {
 						SolidColorRectangle(configuration, position, scale, color);
 					}
 
-					AddDefaultClickableHoverable(position, scale, { BoolClickable, state, 0 }, color);
+					AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, color);
 				}
 				else {
 					TextLabel(function::ClearFlag(configuration, UI_CONFIG_DO_CACHE) | UI_CONFIG_UNAVAILABLE_TEXT, config, name, position, scale);
@@ -9416,7 +9563,7 @@ namespace ECSEngine {
 					float2 sprite_position = ExpandRectangle(position, scale, expand_factor, sprite_scale);
 					if (is_active) {
 						SpriteRectangle(configuration, position, scale, texture, color, top_left_uv, bottom_right_uv);
-						AddDefaultClickableHoverable(position, scale, { BoolClickable, state, 0 }, color);
+						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 }, color);
 					}
 					else {
 						color.alpha *= color_theme.alpha_inactive_item;
@@ -9497,7 +9644,7 @@ namespace ECSEngine {
 
 					Color color = HandleColor(configuration, config);
 
-					AddClickable(position, scale, { MenuButtonAction, data, write_size, ECS_UI_DRAW_SYSTEM });
+					AddClickable(configuration, position, scale, { MenuButtonAction, data, write_size, ECS_UI_DRAW_SYSTEM });
 					ECS_UI_DRAW_PHASE hovered_phase = ECS_UI_DRAW_NORMAL;
 					if (configuration & UI_CONFIG_LATE_DRAW) {
 						hovered_phase = ECS_UI_DRAW_LATE;
@@ -9506,7 +9653,7 @@ namespace ECSEngine {
 						hovered_phase = ECS_UI_DRAW_SYSTEM;
 					}
 
-					AddDefaultHoverable(position, scale, color, 1.25f, hovered_phase);
+					AddDefaultHoverable(configuration, position, scale, color, 1.25f, hovered_phase);
 
 					unsigned int pop_up_window_index = system->GetWindowFromName(window_descriptor.window_name);
 					if (pop_up_window_index != -1) {
@@ -11028,6 +11175,7 @@ namespace ECSEngine {
 			row_layout.horizontal_alignment = ECS_UI_ALIGN_LEFT;
 			row_layout.vertical_alignment = ECS_UI_ALIGN_TOP;
 			row_layout.offset_render_region = { false, false };
+			memset(row_layout.indentations, 0, sizeof(row_layout.indentations));
 			
 			return row_layout;
 		}
@@ -11980,8 +12128,8 @@ namespace ECSEngine {
 							data->selected_label_temporary.Copy(label_stream);
 						}
 
-						AddClickable(initial_label_position, action_scale, { FilesystemHierarchySelectable, data, 0, selectable_callback_phase });
-						AddDefaultHoverable(initial_label_position, action_scale, current_color);
+						AddClickable(configuration, initial_label_position, action_scale, { FilesystemHierarchySelectable, data, 0, selectable_callback_phase });
+						AddDefaultHoverable(configuration, initial_label_position, action_scale, current_color);
 
 						UIDrawerFilesystemHierarchyChangeStateData change_state_data;
 						change_state_data.hierarchy = data;
@@ -11993,7 +12141,7 @@ namespace ECSEngine {
 							else {
 								SpriteRectangle(configuration, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, text_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
 							}
-							AddClickable(current_position, square_scale, { FilesystemHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
+							AddClickable(configuration, current_position, square_scale, { FilesystemHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
 						}
 						current_position.x += square_scale.x;
 						if (configuration & UI_CONFIG_FILESYSTEM_HIERARCHY_SPRITE_TEXTURE) {
@@ -12004,7 +12152,7 @@ namespace ECSEngine {
 								SpriteRectangle(configuration, current_position, square_scale, closed_texture, closed_color, closed_top_left_uv, closed_bottom_right_uv);
 							}
 							if (!keep_triangle && has_children) {
-								AddClickable(current_position, square_scale, { FilesystemHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
+								AddClickable(configuration, current_position, square_scale, { FilesystemHierarchyChangeState, &change_state_data, sizeof(change_state_data), selectable_callback_phase });
 							}
 						}
 
@@ -12018,7 +12166,7 @@ namespace ECSEngine {
 							UIDrawerFilesystemHierarchyRightClickData right_click;
 							right_click.data = data->right_click_callback_data;
 							right_click.label = data->right_click_label_temporary;
-							AddHoverable(initial_label_position, action_scale, { data->right_click_callback, &right_click, sizeof(right_click), right_click_phase });
+							AddHoverable(configuration, initial_label_position, action_scale, { data->right_click_callback, &right_click, sizeof(right_click), right_click_phase });
 
 							if (trigger) {
 								data->active_label.Copy(data->selected_label_temporary);
@@ -12476,8 +12624,8 @@ namespace ECSEngine {
 							click_data->hierarchy = data;
 							unsigned int click_data_size = click_data->WriteLabel(untyped_label);
 
-							AddGeneral(current_position, current_scale, { LabelHierarchyClickAction, click_data, click_data_size, click_action_phase });
-							AddDefaultHoverable(current_position, current_scale, current_color);
+							AddGeneral(configuration, current_position, current_scale, { LabelHierarchyClickAction, click_data, click_data_size, click_action_phase });
+							AddDefaultHoverable(configuration, current_position, current_scale, current_color);
 						}
 
 						// Embedd the string into the data
@@ -12493,7 +12641,7 @@ namespace ECSEngine {
 							else {
 								SpriteRectangle(configuration, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_TRIANGLE, text_color, { 1.0f, 0.0f }, { 0.0f, 1.0f });
 							}
-							AddClickable(current_position, square_scale, { LabelHierarchyChangeState, change_state_data, change_data_size, ECS_UI_DRAW_NORMAL });
+							AddClickable(configuration, current_position, square_scale, { LabelHierarchyChangeState, change_state_data, change_data_size, ECS_UI_DRAW_NORMAL });
 						}
 
 						float2 user_sprite_texture_position = current_position;
@@ -12506,7 +12654,7 @@ namespace ECSEngine {
 								SpriteRectangle(configuration, user_sprite_texture_position, square_scale, closed_texture, closed_color, closed_top_left_uv, closed_bottom_right_uv);
 							}
 							if (!keep_triangle && has_children) {
-								AddClickable(user_sprite_texture_position, square_scale, { LabelHierarchyChangeState, change_state_data, change_data_size, ECS_UI_DRAW_NORMAL });
+								AddClickable(configuration, user_sprite_texture_position, square_scale, { LabelHierarchyChangeState, change_state_data, change_data_size, ECS_UI_DRAW_NORMAL });
 							}
 						}
 
@@ -12520,7 +12668,7 @@ namespace ECSEngine {
 								right_click_data->hover_color = current_color;
 								unsigned int write_size = right_click_data->WriteLabel(untyped_label);
 
-								AddHoverable(current_position, current_scale, { LabelHierarchyRightClickAction, right_click_data, write_size, right_click_phase });
+								AddHoverable(configuration, current_position, current_scale, { LabelHierarchyRightClickAction, right_click_data, write_size, right_click_phase });
 							}
 
 							if (is_active) {
@@ -12577,7 +12725,7 @@ namespace ECSEngine {
 						else if (system->m_keyboard->IsKeyPressed(HID::Key::V)) {
 							// Call the appropriate callback
 							// Only if there is no selection or just a single selection
-							if (data->copied_labels.size > 0 && (data->selected_labels.size == 0 || data->selected_labels.size == 1)) {
+							if (data->copied_labels.size > 0 /*&& (data->selected_labels.size == 0 || data->selected_labels.size == 1)*/) {
 								if (data->is_selection_cut && data->cut_action != nullptr) {
 									data->TriggerCut(&action_data);
 								}
@@ -13873,15 +14021,15 @@ namespace ECSEngine {
 			if (~configuration & UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS) {
 				if (configuration & UI_CONFIG_RECTANGLE_HOVERABLE_ACTION) {
 					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddHoverable(initial_position, total_scale, *handler);
+					AddHoverable(configuration, initial_position, total_scale, *handler);
 				}
 				if (configuration & UI_CONFIG_RECTANGLE_CLICKABLE_ACTION) {
 					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddClickable(initial_position, total_scale, *handler);
+					AddClickable(configuration, initial_position, total_scale, *handler);
 				}
 				if (configuration & UI_CONFIG_RECTANGLE_GENERAL_ACTION) {
 					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddGeneral(initial_position, total_scale, *handler);
+					AddGeneral(configuration, initial_position, total_scale, *handler);
 				}
 			}
 
@@ -13910,15 +14058,15 @@ namespace ECSEngine {
 			if (~configuration & UI_CONFIG_RECTANGLES_INDIVIDUAL_ACTIONS) {
 				if (configuration & UI_CONFIG_RECTANGLE_HOVERABLE_ACTION) {
 					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_HOVERABLE_ACTION);
-					AddHoverable(initial_position, total_scale, *handler);
+					AddHoverable(configuration, initial_position, total_scale, *handler);
 				}
 				if (configuration & UI_CONFIG_RECTANGLE_CLICKABLE_ACTION) {
 					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_CLICKABLE_ACTION);
-					AddClickable(initial_position, total_scale, *handler);
+					AddClickable(configuration, initial_position, total_scale, *handler);
 				}
 				if (configuration & UI_CONFIG_RECTANGLE_GENERAL_ACTION) {
 					const UIActionHandler* handler = (const UIActionHandler*)overall_config.GetParameter(UI_CONFIG_RECTANGLE_GENERAL_ACTION);
-					AddGeneral(initial_position, total_scale, *handler);
+					AddGeneral(configuration, initial_position, total_scale, *handler);
 				}
 			}
 
@@ -14419,7 +14567,7 @@ namespace ECSEngine {
 			tooltip_data.base.center_horizontal_x = true;
 			tooltip_data.base.offset.y = TOOLTIP_OFFSET;
 
-			AddTextTooltipHoverable(position, label_scale, &tooltip_data, tooltip_text_stable);
+			AddTextTooltipHoverable(configuration, position, label_scale, &tooltip_data, tooltip_text_stable);
 
 			size_t SPRITE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE | UI_CONFIG_MENU_BUTTON_SPRITE;
 
@@ -14439,21 +14587,16 @@ namespace ECSEngine {
 			// Acts as a wrapper. It automatically checks to see when the window is destroyed
 			// if the selection has changed to trigger the calllback
 			struct DestroyWindowCallbackData {
-				Stream<char> GetInitialSelection() {
-					return { function::OffsetPointer(this, sizeof(*this)), selection_launch_size };
-				}
-
 				void* GetSelectionData() const {
-					return function::OffsetPointer(this, sizeof(*this) + sizeof(char) * selection_launch_size);
+					return function::OffsetPointer(this, sizeof(*this));
 				}
 
 				void* GetDestroyData() const {
-					return function::OffsetPointer(this, sizeof(*this) + sizeof(char) * selection_launch_size + handler_data.data_size);
+					return function::OffsetPointer(this, sizeof(*this) + handler_data.data_size);
 				}
 
 				CapacityStream<char>* selection;
 				UIActionHandler handler_data;
-				unsigned int selection_launch_size;
 				UIActionHandler destroy_action;
 			};
 
@@ -14461,13 +14604,10 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				DestroyWindowCallbackData* data = (DestroyWindowCallbackData*)_data;
-				Stream<char> initial_selection = data->GetInitialSelection();
-				if (!function::CompareStrings(initial_selection, *data->selection)) {
-					if (data->handler_data.action != nullptr) {
-						void* handler_data = data->GetSelectionData();
-						action_data->data = handler_data;
-						data->handler_data.action(action_data);
-					}
+				if (data->handler_data.action != nullptr) {
+					void* handler_data = data->GetSelectionData();
+					action_data->data = handler_data;
+					data->handler_data.action(action_data);
 				}
 
 				if (data->destroy_action.action != nullptr) {
@@ -14480,17 +14620,10 @@ namespace ECSEngine {
 			DestroyWindowCallbackData* callback_data = (DestroyWindowCallbackData*)_callback_data_storage;
 			callback_data->handler_data = selection_callback;
 			callback_data->selection = selection;
-			callback_data->selection_launch_size = selection->size;
 
 			unsigned int write_size = sizeof(*callback_data);
 
 			// Now copy the callback data first and then the initial selection
-			if (selection->size > 0) {
-				void* launch_buffer = function::OffsetPointer(callback_data, write_size);
-				memcpy(launch_buffer, selection->buffer, selection->size);
-				write_size += selection->size;
-			}
-
 			if (selection_callback.data_size > 0) {
 				void* selection_callback_data = function::OffsetPointer(callback_data, write_size);
 				memcpy(selection_callback_data, selection_callback.data, selection_callback.data_size);
@@ -14614,21 +14747,21 @@ namespace ECSEngine {
 
 		// places a hoverable on the whole window
 		void UIDrawer::SetWindowHoverable(const UIActionHandler* handler) {
-			AddHoverable(region_position, region_scale, *handler);
+			AddHoverable(0, region_position, region_scale, *handler);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// places a clickable on the whole window
 		void UIDrawer::SetWindowClickable(const UIActionHandler* handler) {
-			AddClickable(region_position, region_scale, *handler);
+			AddClickable(0, region_position, region_scale, *handler);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		// places a general on the whole window
 		void UIDrawer::SetWindowGeneral(const UIActionHandler* handler) {
-			AddGeneral(region_position, region_scale, *handler);
+			AddGeneral(0, region_position, region_scale, *handler);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -14854,7 +14987,7 @@ namespace ECSEngine {
 						SpriteRectangle(UI_CONFIG_LATE_DRAW, current_position, square_scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, current_checkbox_color);
 					}
 
-					AddDefaultClickableHoverable(current_position, { scale.x, square_scale.y }, { StateTableBoolClickable, &clickable_data, sizeof(clickable_data) }, background_color);
+					AddDefaultClickableHoverable(configuration, current_position, { scale.x, square_scale.y }, { StateTableBoolClickable, &clickable_data, sizeof(clickable_data) }, background_color);
 
 					current_position.x += square_scale.x + element_descriptor.label_padd.x;
 					Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_ALIGN_TO_ROW_Y, config, data->labels.buffer + index, current_position);
@@ -14906,7 +15039,13 @@ namespace ECSEngine {
 						button_data.notifier = nullptr;
 					}
 
-					AddDefaultClickableHoverable(current_position, { scale.x, square_scale.y }, { StateTableAllButtonAction, &button_data, sizeof(button_data) }, background_color);
+					AddDefaultClickableHoverable(
+						configuration, 
+						current_position, 
+						{ scale.x, square_scale.y }, 
+						{ StateTableAllButtonAction, &button_data, sizeof(button_data) }, 
+						background_color
+					);
 
 					current_position.x += square_scale.x + element_descriptor.label_padd.x;
 					Text(configuration | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_ALIGN_TO_ROW_Y, config, "All", current_position);
@@ -15133,7 +15272,7 @@ namespace ECSEngine {
 						drawer->HandleBorder(configuration, config, position, scale);
 						drawer->HandleLateAndSystemDrawActionNullify(configuration, position, scale);
 
-						drawer->AddDefaultClickableHoverable(position, scale, clickable);
+						drawer->AddDefaultClickableHoverable(configuration, position, scale, clickable);
 					}
 					else {
 						draw(position, scale, color);
@@ -15277,7 +15416,7 @@ namespace ECSEngine {
 						HandleBorder(configuration, config, position, scale);
 						HandleLateAndSystemDrawActionNullify(configuration, position, scale);
 
-						AddDefaultClickableHoverable(position, scale, { BoolClickable, state, 0 });
+						AddDefaultClickableHoverable(configuration, position, scale, { BoolClickable, state, 0 });
 					}
 					else {
 						color.alpha *= color_theme.alpha_inactive_item;
@@ -15366,7 +15505,7 @@ namespace ECSEngine {
 						UIChangeStateData change_state;
 						change_state.state = flags;
 						change_state.flag = flag_to_set;
-						AddDefaultClickableHoverable(position, scale, { ChangeStateAction, &change_state, sizeof(change_state) });
+						AddDefaultClickableHoverable(configuration, position, scale, { ChangeStateAction, &change_state, sizeof(change_state) });
 					}
 					else {
 						color.alpha *= color_theme.alpha_inactive_item;
@@ -15787,6 +15926,26 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		UIActionHandler UIDrawer::TextToolTipHandler(
+			Stream<char> characters, 
+			const UITextTooltipHoverableData* data, 
+			bool stable_characters, 
+			ECS_UI_DRAW_PHASE phase
+		)
+		{
+			size_t total_storage[256];
+			unsigned int write_size = sizeof(*data);
+			if (!stable_characters) {
+				UITextTooltipHoverableData* stack_data = (UITextTooltipHoverableData*)total_storage;
+				memcpy(stack_data, data, sizeof(*data));
+				write_size = stack_data->Write(data->characters);
+				data = stack_data;
+			}
+			return { TextTooltipHoverable, (void*)data, write_size, phase };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		UIConfigTextParameters UIDrawer::TextParameters() const
 		{
 			UIConfigTextParameters parameters;
@@ -15798,7 +15957,15 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::DefaultHoverableWithToolTip(Stream<char> characters, float2 position, float2 scale, const Color* color, const float* percentage, const UITooltipBaseData* base) {
+		void UIDrawer::DefaultHoverableWithToolTip(
+			size_t configuration, 
+			Stream<char> characters, 
+			float2 position, 
+			float2 scale, 
+			const Color* color, 
+			const float* percentage, 
+			const UITooltipBaseData* base
+		) {
 			UIDefaultHoverableWithTooltipData tool_tip_data;
 			if (color != nullptr) {
 				tool_tip_data.color = *color;
@@ -15819,13 +15986,13 @@ namespace ECSEngine {
 			}
 			tool_tip_data.tool_tip_data.characters = characters;
 
-			AddHoverable(position, scale, { DefaultHoverableWithToolTipAction, &tool_tip_data, sizeof(tool_tip_data), ECS_UI_DRAW_SYSTEM });
+			AddHoverable(configuration, position, scale, { DefaultHoverableWithToolTipAction, &tool_tip_data, sizeof(tool_tip_data), ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		void UIDrawer::DefaultHoverableWithToolTip(float2 position, float2 scale, const UIDefaultHoverableWithTooltipData* data) {
-			AddHoverable(position, scale, { DefaultHoverableWithToolTipAction, (void*)data, sizeof(*data), ECS_UI_DRAW_SYSTEM });
+		void UIDrawer::DefaultHoverableWithToolTip(size_t configuration, float2 position, float2 scale, const UIDefaultHoverableWithTooltipData* data) {
+			AddHoverable(configuration, position, scale, { DefaultHoverableWithToolTipAction, (void*)data, sizeof(*data), ECS_UI_DRAW_SYSTEM });
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

@@ -65,6 +65,17 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
+	void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator)
+	{
+		module->build_asset_types = LoadModuleBuildAssetTypes(&module->base_module, allocator);
+		module->link_components = LoadModuleLinkComponentTargets(&module->base_module, allocator);
+		module->serialize_streams = LoadModuleSerializeComponentFunctors(&module->base_module, allocator);
+		module->tasks = LoadModuleTasks(&module->base_module, allocator);
+		module->ui_descriptors = LoadModuleUIDescriptors(&module->base_module, allocator);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
 	Stream<TaskSchedulerElement> LoadModuleTasks(const Module* module, AllocatorPolymorphic allocator)
 	{
 		const size_t STACK_MEMORY_CAPACITY = ECS_KB * 64;
@@ -305,6 +316,42 @@ namespace ECSEngine {
 	void ReleaseModule(Module* module) {
 		BOOL success = FreeLibrary(module->os_module_handle);
 		module->code = ECS_GET_MODULE_FAULTY_PATH;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void ReleaseAppliedModuleStreams(AppliedModule* module, AllocatorPolymorphic allocator)
+	{
+		if (module->build_asset_types.size > 0) {
+			DeallocateIfBelongs(allocator, module->build_asset_types.buffer);
+			module->build_asset_types = { nullptr, 0 };
+		}
+
+		if (module->link_components.size > 0) {
+			DeallocateIfBelongs(allocator, module->link_components.buffer);
+			module->link_components = { nullptr, 0 };
+		}
+
+		DeallocateIfBelongs(allocator, module->serialize_streams.GetAllocatedBuffer());
+		memset(&module->serialize_streams, 0, sizeof(module->serialize_streams));
+
+		if (module->tasks.size > 0) {
+			DeallocateIfBelongs(allocator, module->tasks.buffer);
+			module->tasks = { nullptr, 0 };
+		}
+
+		if (module->ui_descriptors.size > 0) {
+			DeallocateIfBelongs(allocator, module->ui_descriptors.buffer);
+			module->ui_descriptors = { nullptr, 0 };
+		}
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator)
+	{
+		ReleaseAppliedModuleStreams(module, allocator);
+		ReleaseModule(&module->base_module);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

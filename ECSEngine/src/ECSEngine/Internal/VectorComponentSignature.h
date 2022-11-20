@@ -41,6 +41,15 @@ namespace ECSEngine {
 		// When no components are desired
 		void Initialize();
 
+		// Returns how many components it can store at a maximum
+		static size_t ComponentCount() {
+			return sizeof(VectorComponentSignature) / sizeof(Component);
+		}
+
+		static size_t InstanceCount() {
+			return sizeof(VectorComponentSignature) / sizeof(SharedInstance);
+		}
+
 		Vec16us value;
 	};
 

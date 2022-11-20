@@ -41,7 +41,8 @@ namespace ECSEngine {
 		// Make sure that there is an item in the stack.
 		ECS_INLINE unsigned int PeekIndex() const {
 			unsigned int last_index = m_first_item + m_stack.size;
-			return last_index >= m_stack.capacity ? last_index - m_stack.capacity : last_index;
+			last_index = last_index >= m_stack.capacity ? last_index - m_stack.capacity : last_index;
+			return last_index - 1;
 		}
 
 		// Returns a pointer to the "first" element (the one to be popped)
@@ -73,7 +74,7 @@ namespace ECSEngine {
 
 		void Push(T element) {
 			unsigned int peek_index = PeekIndex();
-			peek_index = peek_index == m_stack.capacity - 1 ? 0 : peek_index + 1;
+			peek_index = peek_index == (m_stack.capacity - 1) ? 0 : peek_index + 1;
 			m_stack[peek_index] = element;
 
 			if (m_stack.size == m_stack.capacity) {
@@ -86,7 +87,7 @@ namespace ECSEngine {
 
 		void Push(const T* element) {
 			unsigned int peek_index = PeekIndex();
-			peek_index = peek_index == m_stack.capacity - 1 ? 0 : peek_index + 1;
+			peek_index = peek_index == (m_stack.capacity - 1) ? 0 : peek_index + 1;
 			m_stack[peek_index] = *element;
 
 			if (m_stack.size == m_stack.capacity) {

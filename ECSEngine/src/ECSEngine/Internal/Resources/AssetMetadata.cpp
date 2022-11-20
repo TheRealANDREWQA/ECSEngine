@@ -9,13 +9,16 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	Stream<char> ECS_ASSET_METADATA_MACROS[] = {
-		STRING(ECS_MESH_HANDLE),
-		STRING(ECS_TEXTURE_HANDLE),
-		STRING(ECS_GPU_SAMPLER_HANDLE),
-		STRING(ECS_SHADER_HANDLE),
-		STRING(ECS_MATERIAL_HANDLE),
-		STRING(ECS_MISC_HANDLE)
+	AssetFieldTarget ECS_ASSET_METADATA_MACROS[] = {
+		{ STRING(ECS_MESH_HANDLE), ECS_ASSET_MESH },
+		{ STRING(ECS_TEXTURE_HANDLE), ECS_ASSET_TEXTURE },
+		{ STRING(ECS_GPU_SAMPLER_HANDLE), ECS_ASSET_GPU_SAMPLER },
+		{ STRING(ECS_SHADER_HANDLE), ECS_ASSET_SHADER },
+		{ STRING(ECS_VERTEX_SHADER_HANDLE), ECS_ASSET_SHADER },
+		{ STRING(ECS_PIXEL_SHADER_HANDLE), ECS_ASSET_SHADER },
+		{ STRING(ECS_COMPUTE_SHADER_HANDLE), ECS_ASSET_SHADER },
+		{ STRING(ECS_MATERIAL_HANDLE), ECS_ASSET_MATERIAL },
+		{ STRING(ECS_MISC_HANDLE), ECS_ASSET_MISC }
 	};
 
 	size_t ECS_ASSET_METADATA_MACROS_SIZE() {
@@ -50,8 +53,12 @@ namespace ECSEngine {
 	ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string) {
 		size_t count = std::size(ECS_ASSET_METADATA_MACROS);
 		for (size_t index = 0; index < count; index++) {
-			if (string.size == ECS_ASSET_METADATA_MACROS[index].size && memcmp(string.buffer, ECS_ASSET_METADATA_MACROS[index].buffer, string.size * sizeof(char)) == 0) {
-				return (ECS_ASSET_TYPE)index;
+			if (string.size == ECS_ASSET_METADATA_MACROS[index].name.size && memcmp(
+					string.buffer, 
+					ECS_ASSET_METADATA_MACROS[index].name.buffer, 
+					string.size * sizeof(char)
+				) == 0) {
+				return ECS_ASSET_METADATA_MACROS[index].asset_type;
 			}
 		}
 		return ECS_ASSET_TYPE_COUNT;
@@ -87,6 +94,27 @@ namespace ECSEngine {
 	const char* ConvertAssetTypeString(ECS_ASSET_TYPE type)
 	{
 		return ECS_ASSET_TYPE_CONVERSION[type];
+	}
+	
+	// ------------------------------------------------------------------------------------------------------
+
+	size_t AssetMetadataByteSize(ECS_ASSET_TYPE type)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+			return sizeof(MeshMetadata);
+		case ECS_ASSET_TEXTURE:
+			return sizeof(TextureMetadata);
+		case ECS_ASSET_GPU_SAMPLER:
+			return sizeof(GPUSamplerMetadata);
+		case ECS_ASSET_SHADER:
+			return sizeof(ShaderMetadata);
+		case ECS_ASSET_MATERIAL:
+			return sizeof(MaterialAsset);
+		case ECS_ASSET_MISC:
+			return sizeof(MiscAsset);
+		}
+		ECS_ASSERT(false, "Incorrect asset type");
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -676,6 +704,147 @@ namespace ECSEngine {
 			ECS_ASSERT(false, "Invalid asset type");
 		}
 		return { nullptr, 0 };
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void SetAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, Stream<void> asset)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+		{
+			MeshMetadata* mesh = (MeshMetadata*)metadata;
+			mesh->mesh_pointer = (CoallescedMesh*)asset.buffer;
+		}
+		break;
+		case ECS_ASSET_TEXTURE:
+		{
+			TextureMetadata* texture = (TextureMetadata*)metadata;
+			texture->texture = (ID3D11ShaderResourceView*)asset.buffer;
+		}
+		break;
+		case ECS_ASSET_GPU_SAMPLER:
+		{
+			GPUSamplerMetadata* sampler = (GPUSamplerMetadata*)metadata;
+			sampler->sampler = (ID3D11SamplerState*)asset.buffer;
+		}
+		break;
+		case ECS_ASSET_SHADER:
+		{
+			ShaderMetadata* shader = (ShaderMetadata*)metadata;
+			shader->shader_interface = asset.buffer;
+		}
+		break;
+		case ECS_ASSET_MATERIAL:
+		{
+			MaterialAsset* material = (MaterialAsset*)metadata;
+			material->material_pointer = (Material*)asset.buffer;
+		}
+		break;
+		case ECS_ASSET_MISC:
+		{
+			MiscAsset* misc = (MiscAsset*)metadata;
+			misc->data = asset;
+		}
+		break;
+		default:
+			ECS_ASSERT(false, "Invalid asset type.");
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void SetRandomizedAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, unsigned int index) {
+		switch (type) {
+		case ECS_ASSET_MESH:
+		{
+			MeshMetadata* mesh = (MeshMetadata*)metadata;
+			unsigned int* int_ptr = (unsigned int*)mesh->mesh_pointer;
+			*int_ptr = index;
+		}
+		break;
+		case ECS_ASSET_TEXTURE:
+		{
+			TextureMetadata* texture = (TextureMetadata*)metadata;
+			texture->texture = (ID3D11ShaderResourceView*)index;
+		}
+		break;
+		case ECS_ASSET_GPU_SAMPLER:
+		{
+			GPUSamplerMetadata* sampler = (GPUSamplerMetadata*)metadata;
+			sampler->sampler = (ID3D11SamplerState*)index;
+		}
+		break;
+		case ECS_ASSET_SHADER:
+		{
+			ShaderMetadata* shader = (ShaderMetadata*)metadata;
+			shader->shader_interface = (void*)index;
+		}
+		break;
+		case ECS_ASSET_MATERIAL:
+		{
+			MaterialAsset* material = (MaterialAsset*)metadata;
+			unsigned int* int_ptr = (unsigned int*)material->material_pointer;
+			*int_ptr = index;
+
+		}
+		break;
+		case ECS_ASSET_MISC:
+		{
+			MiscAsset* misc = (MiscAsset*)metadata;
+			misc->data = { (void*)index, 0 };
+		}
+		break;
+		default:
+			ECS_ASSERT(false, "Invalid asset type.");
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type)
+	{
+		void* pointer = GetAssetFromMetadata(metadata, type).buffer;
+		return (size_t)pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+		case ECS_ASSET_MATERIAL:
+			return (unsigned int)(*(void**)asset_pointer);
+		case ECS_ASSET_TEXTURE:
+		case ECS_ASSET_GPU_SAMPLER:
+		case ECS_ASSET_SHADER:
+		case ECS_ASSET_MISC:
+			return (unsigned int)asset_pointer;
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+
+		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format)
+	{
+		Stream<char> name = GetAssetName(metadata, type);
+		Stream<wchar_t> file = GetAssetFile(metadata, type);
+		if (file.size == 0) {
+			string.AddStreamSafe(name);
+		}
+		else {
+			Stream<wchar_t> path_to_write = file;
+			if (!long_format) {
+				path_to_write = function::PathFilenameBoth(path_to_write);
+			}
+
+			ECS_FORMAT_STRING(string, "{#} ({#})", path_to_write, name);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------

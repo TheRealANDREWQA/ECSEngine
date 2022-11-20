@@ -155,6 +155,26 @@ namespace ECSEngine {
 			return action + index;
 		}
 
+		float2 UIHandler::GetPositionFromIndex(unsigned int index) const
+		{
+			return { position_x[index], position_y[index] };
+		}
+
+		float2 UIHandler::GetScaleFromIndex(unsigned int index) const
+		{
+			return { scale_x[index], scale_y[index] };
+		}
+
+		UIActionHandler UIHandler::GetActionFromIndex(unsigned int index) const
+		{
+			return action[index];
+		}
+
+		unsigned int UIHandler::GetLastHandlerIndex() const
+		{
+			return position_x.size - 1;
+		}
+
 		void UIHandler::Resize(AllocatorPolymorphic allocator, size_t new_count)
 		{
 			void* allocation = Allocate(allocator, MemoryOf(new_count));
@@ -193,13 +213,14 @@ namespace ECSEngine {
 			scale_x = (float*)ptr;
 			ptr += sizeof(float) * count;
 			scale_y = (float*)ptr;
+			ptr += sizeof(float) * count;
 
 			ptr = function::AlignPointer(ptr, alignof(UIActionHandler));
 			action = (UIActionHandler*)ptr;
 		}
 
 		size_t UIHandler::MemoryOf(size_t count) {
-			return (sizeof(float) * 4 + sizeof(UIActionHandler) + sizeof(bool)) * count + 8;
+			return (sizeof(float) * 4 + sizeof(UIActionHandler)) * count + 8;
 		}
 
 		void UIWindowDescriptor::Center(float2 size) {

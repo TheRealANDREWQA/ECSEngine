@@ -1,6 +1,8 @@
 #include "ecspch.h"
 #include "LinkComponents.h"
 #include "../Utilities/Reflection/Reflection.h"
+#include "Resources/AssetDatabase.h"
+#include "../Utilities/Serialization/SerializationHelpers.h"
 
 namespace ECSEngine {
 
@@ -18,6 +20,23 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	bool GetAssetFieldsFromLinkComponentTarget(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices)
+	{
+		for (size_t index = 0; index < type->fields.size; index++) {
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(type, index, nullptr);
+
+			if (!asset_field.success) {
+				return false;
+			}
+			else if (asset_field.type != ECS_ASSET_TYPE_COUNT) {
+				field_indices.Add({ (unsigned int)index, asset_field.type });
+			}
+		}
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	AssetTargetFieldFromReflection GetAssetTargetFieldFromReflection(
 		const Reflection::ReflectionType* type,
 		unsigned int field,
@@ -26,6 +45,40 @@ namespace ECSEngine {
 	{
 		AssetTargetFieldFromReflection result;
 
+		ECS_ASSET_TYPE asset_type = ECS_ASSET_TYPE_COUNT;
+
+		// 2 means there is no match. It will be set to 1 if there is a match with a succesful
+		// type or 0 if there is match but incorrect field type
+		bool success = true;
+
+		Stream<char> definition = type->fields[field].definition;
+		const Reflection::ReflectionFieldInfo* info = &type->fields[field].info;
+		
+		size_t mapping_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
+		for (size_t index = 0; index < mapping_count; index++) {
+			if (function::CompareStrings(definition, ECS_ASSET_TARGET_FIELD_NAMES[index].name)) {
+				asset_type = ECS_ASSET_TARGET_FIELD_NAMES[index].asset_type;
+				if (data != nullptr) {
+					result.asset = GetAssetTargetFieldFromReflection(type, field, data, asset_type);
+					success = result.asset.buffer != nullptr;
+				}
+				else {
+					success = true;
+				}
+				break;
+			}
+		}
+		
+		result.success = success;
+
+		result.type = asset_type;
+		return result;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	Stream<void> GetAssetTargetFieldFromReflection(const Reflection::ReflectionType* type, unsigned int field, const void* data, ECS_ASSET_TYPE asset_type)
+	{
 		auto get_pointer_from_field = [data](const Reflection::ReflectionFieldInfo* info, const void** pointer) {
 			if (info->stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 				unsigned int indirection = Reflection::GetReflectionFieldPointerIndirection(*info);
@@ -47,78 +100,79 @@ namespace ECSEngine {
 
 		const void* pointer = nullptr;
 		size_t pointer_size = 0;
-		ECS_ASSET_TYPE asset_type = ECS_ASSET_TYPE_COUNT;
 
-		// 2 means there is no match. It will be set to 1 if there is a match with a succesful
-		// type or 0 if there is match but incorrect field type
-		bool success = true;
-
-		Stream<char> definition = type->fields[field].definition;
-		const Reflection::ReflectionFieldInfo* info = &type->fields[field].info;
-		
-		size_t mapping_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
-		for (size_t index = 0; index < mapping_count; index++) {
-			if (function::CompareStrings(definition, ECS_ASSET_TARGET_FIELD_NAMES[index].name)) {
-				if (data != nullptr) {
-					success = get_pointer_from_field(info, &pointer);
-				}
-				else {
-					success = true;
-				}
-				asset_type = ECS_ASSET_TARGET_FIELD_NAMES[index].asset_type;
-				break;
-			}
-		}
-
-		if (data != nullptr) {
-			if (asset_type == ECS_ASSET_TEXTURE || asset_type == ECS_ASSET_GPU_SAMPLER || asset_type == ECS_ASSET_SHADER) {
-				// The interface is one level deeper
-				if (success) {
-					pointer = *(const void**)pointer;
-				}
-			}
-			else if (asset_type == ECS_ASSET_MISC) {
-				if (success) {
-					// Extract the size and the pointer is deeper
-					pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
-					pointer = *(void**)pointer;
-				}
-			}
-		}
+		bool success = get_pointer_from_field(&type->fields[field].info, &pointer);
 
 		if (success) {
-			result.asset = { pointer, pointer_size };
-			result.success = true;
-		}
-		else {
-			result.success = false;
+			if (asset_type == ECS_ASSET_TEXTURE || asset_type == ECS_ASSET_GPU_SAMPLER || asset_type == ECS_ASSET_SHADER) {
+				// The interface is one level deeper
+				pointer = *(const void**)pointer;
+			}
+			else if (asset_type == ECS_ASSET_MISC) {
+				// Extract the size and the pointer is deeper
+				pointer_size = *(size_t*)function::OffsetPointer(pointer, sizeof(void*));
+				pointer = *(void**)pointer;
+			}
 		}
 
-		result.type = asset_type;
-		return result;
+		return { pointer, pointer_size };
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflection(
+	void GetLinkComponentTargetHandles(
+		const Reflection::ReflectionType* type, 
+		const AssetDatabase* asset_database,
+		const void* data,
+		Stream<LinkComponentAssetField> asset_fields, 
+		unsigned int* handles
+	)
+	{
+		for (size_t index = 0; index < asset_fields.size; index++) {
+			Stream<void> field_data = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, data, asset_fields[index].type);
+			unsigned int handle = asset_database->FindAssetEx(field_data, asset_fields[index].type);
+			handles[index] = handle;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	template<typename Comparator>
+	ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflectionImpl(
 		const Reflection::ReflectionType* type,
 		unsigned int field,
 		void* data,
 		Stream<void> field_data,
-		ECS_ASSET_TYPE field_type
-	)
-	{
-		ECS_ASSET_TYPE current_field_type = FindAssetMetadataMacro(type->fields[field].definition);
+		ECS_ASSET_TYPE field_type,
+		Comparator&& comparator
+	) {
+		ECS_ASSET_TYPE current_field_type = FindAssetTargetField(type->fields[field].definition);
 		if (field_type != current_field_type) {
 			return ECS_SET_ASSET_TARGET_FIELD_NONE;
 		}
 
-		auto copy_value = [&](void* ptr_to_copy, size_t copy_size) {
-			memcpy(function::OffsetPointer(data, type->fields[field].info.pointer_offset), ptr_to_copy, copy_size);
+		void* ptr_to_write = function::OffsetPointer(data, type->fields[field].info.pointer_offset);
+
+		auto copy_value = [&](const void* ptr_to_copy, size_t copy_size) {
+			if (!comparator(ptr_to_write)) {
+				return;
+			}
+
+			if ((unsigned int)ptr_to_copy >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
+				memcpy(ptr_to_write, ptr_to_copy, copy_size);
+			}
+			else {
+				memset(ptr_to_write, 0, copy_size);
+				unsigned int* randomized_value = (unsigned int*)ptr_to_write;
+				*randomized_value = (unsigned int)ptr_to_copy;
+			}
 		};
 
 		auto set_pointer = [&](void* ptr_to_set) {
-			void** ptr = (void**)function::OffsetPointer(data, type->fields[field].info.pointer_offset);
+			void** ptr = (void**)ptr_to_write;
+			if (!comparator(*ptr)) {
+				return;
+			}
 			*ptr = ptr_to_set;
 		};
 
@@ -167,8 +221,8 @@ namespace ECSEngine {
 		break;
 		case ECS_ASSET_MISC:
 		{
-			if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
-				// Copy the data
+			if (type->fields[field].info.stream_type != Reflection::ReflectionStreamFieldType::Pointer) {
+				// It is a Stream<void>, copy into it
 				copy_value(field_data.buffer, field_data.size);
 			}
 			else if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
@@ -187,6 +241,57 @@ namespace ECSEngine {
 		}
 
 		return ECS_SET_ASSET_TARGET_FIELD_OK;
+	}
+
+	ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflection(
+		const Reflection::ReflectionType* type,
+		unsigned int field,
+		void* data,
+		Stream<void> field_data,
+		ECS_ASSET_TYPE field_type
+	)
+	{
+		return SetAssetTargetFieldFromReflectionImpl(type, field, data, field_data, field_type, [](const void* ptr) { return true; });
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflectionIfMatches(
+		const Reflection::ReflectionType* type, 
+		unsigned int field, 
+		void* data, 
+		Stream<void> field_data, 
+		ECS_ASSET_TYPE field_type, 
+		Stream<void> comparator
+	)
+	{
+		return SetAssetTargetFieldFromReflectionImpl(type, field, data, field_data, field_type, [=](void* ptr) {
+			switch (field_type) {
+			case ECS_ASSET_MESH:
+			{
+				if ((unsigned int)comparator.buffer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
+					return memcmp(ptr, comparator.buffer, sizeof(CoallescedMesh)) == 0;
+				}
+				else {
+					return *(unsigned int*)ptr == (unsigned int)comparator.buffer;
+				}
+			}
+			break;
+			case ECS_ASSET_TEXTURE: 
+			case ECS_ASSET_GPU_SAMPLER:
+			case ECS_ASSET_SHADER: 
+			case ECS_ASSET_MATERIAL:
+			{
+				return ptr == comparator.buffer;
+			}
+			case ECS_ASSET_MISC:
+			{
+				Stream<void> current_ptr = *(Stream<void>*)ptr;
+				return current_ptr.buffer == comparator.buffer && current_ptr.size == comparator.size;
+			}
+			break;
+			}
+		});
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -269,6 +374,34 @@ namespace ECSEngine {
 		GetLinkComponentHandlePtrsImpl(type, link_component, field_indices.size, pointers, [field_indices](size_t index) {
 			return field_indices[index].field_index;
 		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void GetLinkComponentAssetData(
+		const Reflection::ReflectionType* type,
+		const void* link_component,
+		const AssetDatabase* database, 
+		Stream<LinkComponentAssetField> asset_fields,
+		Stream<void>* field_data
+	)
+	{
+		constexpr size_t static_data_size = std::max(std::max(std::max(std::max(std::max(sizeof(MeshMetadata), sizeof(TextureMetadata)), 
+			sizeof(GPUSamplerMetadata)), sizeof(ShaderMetadata)), sizeof(MaterialAsset)), sizeof(MiscAsset));
+		static const char empty_metadata[static_data_size] = { 0 };
+
+		for (size_t index = 0; index < asset_fields.size; index++) {
+			unsigned int handle = *(unsigned int*)function::OffsetPointer(link_component, type->fields[asset_fields[index].field_index].info.pointer_offset);
+			const void* metadata = nullptr;
+			if (handle == -1) {
+				metadata = empty_metadata;
+			}
+			else {
+				metadata = database->GetAssetConst(handle, asset_fields[index].type);
+			}
+			Stream<void> asset_data = GetAssetFromMetadata(metadata, asset_fields[index].type);
+			field_data[index] = asset_data;
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -402,6 +535,293 @@ namespace ECSEngine {
 				}
 			}
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ConvertFromTargetToLinkComponent(
+		const ConvertToAndFromLinkBaseData* base_data,
+		const void* target_data,
+		void* link_data
+	)
+	{
+		// Determine if the link component has a DLL function
+		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(base_data->link_type);
+		if (needs_dll && (base_data->module_link.build_function == nullptr || base_data->module_link.reverse_function == nullptr)) {
+			// Fail
+			return false;
+		}
+
+		bool success = true;
+		// Extract the handles of the target
+		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+		if (base_data->asset_fields.size == 0) {
+			success = GetAssetFieldsFromLinkComponentTarget(base_data->target_type, asset_fields);
+			if (!success) {
+				return false;
+			}
+
+			if (!needs_dll) {
+				// Verify that the link type has the same assets
+				ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, link_asset_fields, 512);
+				GetAssetFieldsFromLinkComponent(base_data->link_type, link_asset_fields);
+
+				if (link_asset_fields.size != asset_fields.size) {
+					return false;
+				}
+
+				for (size_t index = 0; index < asset_fields.size; index++) {
+					if (link_asset_fields[index].field_index != asset_fields[index].field_index || link_asset_fields[index].type != asset_fields[index].type) {
+						return false;
+					}
+				}
+			}
+		}
+		else {
+			asset_fields = base_data->asset_fields;
+		}
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, asset_handles, 512);
+		GetLinkComponentTargetHandles(base_data->target_type, base_data->asset_database, target_data, asset_fields, asset_handles.buffer);
+		asset_handles.size = asset_fields.size;
+
+		// Needs DLL but the functions are present
+		if (needs_dll) {
+			// Use the function
+			ModuleLinkComponentReverseFunctionData reverse_data;
+			reverse_data.asset_handles = asset_handles;
+			reverse_data.link_component = link_data;
+			reverse_data.component = target_data;
+			base_data->module_link.reverse_function(&reverse_data);
+		}
+		else {
+			const size_t MAX_LINK_SIZE = ECS_KB * 4;
+			size_t link_type_size = Reflection::GetReflectionTypeByteSize(base_data->link_type);
+			ECS_ASSERT(link_type_size < MAX_LINK_SIZE);
+			size_t link_type_storage[MAX_LINK_SIZE / sizeof(size_t)];
+			memcpy(link_type_storage, link_data, link_type_size);
+
+			struct RestoreLinkData {
+				void operator()() {
+					if (link_type_size > 0) {
+						memcpy(link_data, link_initial_storage, link_type_size);
+					}
+				}
+
+				void* link_data;
+				void* link_initial_storage;
+				size_t link_type_size;
+			};
+
+			StackScope<RestoreLinkData> restore_link({ link_data, link_type_storage, link_type_size });
+
+			// If different count of fields, fail
+			if (base_data->link_type->fields.size != base_data->target_type->fields.size) {
+				return false;
+			}
+
+			// Go through the link target and try to copy the fields
+			ECS_STACK_CAPACITY_STREAM(unsigned int*, link_handle_ptrs, 512);
+			GetLinkComponentHandlePtrs(base_data->link_type, link_data, asset_fields, link_handle_ptrs);
+			for (unsigned int index = 0; index < asset_fields.size; index++) {
+				*link_handle_ptrs[index] = asset_handles[index];
+			}
+
+			for (unsigned int index = 0; index < (unsigned int)base_data->link_type->fields.size; index++) {
+				// Check to see if it an asset field
+				unsigned int subindex = 0;
+				for (; subindex < asset_fields.size; subindex++) {
+					if (asset_fields[subindex].field_index == index) {
+						break;
+					}
+				}
+
+				if (subindex != asset_fields.size) {
+					continue;
+				}
+
+				// Not an asset. Check to see that they have identical types
+				if (!base_data->link_type->fields[index].Compare(base_data->target_type->fields[index])) {
+					return false;
+				}
+
+				const void* source = function::OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
+				void* destination = function::OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
+				if (base_data->allocator.allocator != nullptr) {
+					CopyReflectionType(
+						base_data->reflection_manager,
+						base_data->link_type->fields[index].definition,
+						source,
+						destination,
+						base_data->allocator
+					);
+				}
+				else {
+					memcpy(
+						destination,
+						source,
+						base_data->link_type->fields[index].info.byte_size
+					);
+				}
+			}
+
+			// Disable the restore
+			restore_link.deallocator.link_type_size = 0;
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// The functor needs to handle the non asset fields
+	template<typename Functor>
+	bool ConvertLinkComponentToTargetImpl(
+		const ConvertToAndFromLinkBaseData* base_data,
+		const void* link_data,
+		void* target_data,
+		Functor&& functor
+	) {
+		// Determine if the link component has a DLL function
+		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(base_data->link_type);
+		if (needs_dll && (base_data->module_link.build_function == nullptr || base_data->module_link.reverse_function == nullptr)) {
+			// Fail
+			return false;
+		}
+
+		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+		if (base_data->asset_fields.size == 0) {
+			GetAssetFieldsFromLinkComponent(base_data->link_type, asset_fields);
+
+			if (!needs_dll) {
+				ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, target_asset_fields, 512);
+				bool success = GetAssetFieldsFromLinkComponentTarget(base_data->target_type, target_asset_fields);
+				if (!success) {
+					return false;
+				}
+
+				if (target_asset_fields.size != asset_fields.size) {
+					return false;
+				}
+
+				for (unsigned int index = 0; index < asset_fields.size; index++) {
+					if (asset_fields[index].field_index != target_asset_fields[index].field_index || asset_fields[index].type != target_asset_fields[index].type) {
+						return false;
+					}
+				}
+			}
+		}
+		else {
+			asset_fields = base_data->asset_fields;
+		}
+
+		ECS_STACK_CAPACITY_STREAM(Stream<void>, assets, 512);
+		GetLinkComponentAssetData(base_data->link_type, link_data, base_data->asset_database, asset_fields, assets.buffer);
+		assets.size = asset_fields.size;
+
+		if (needs_dll) {
+			// Build it using the function
+			ModuleLinkComponentFunctionData build_data;
+			build_data.assets = assets;
+			build_data.component = target_data;
+			build_data.link_component = link_data;
+			base_data->module_link.build_function(&build_data);
+		}
+		else {
+			if (base_data->link_type->fields.size != base_data->target_type->fields.size) {
+				return false;
+			}
+
+			const size_t MAX_TARGET_SIZE = ECS_KB * 4;
+			size_t target_size = Reflection::GetReflectionTypeByteSize(base_data->target_type);
+			size_t target_data_storage[MAX_TARGET_SIZE / sizeof(size_t)];
+			memcpy(target_data_storage, target_data, target_size);
+
+			struct RestoreTarget {
+				void operator()() {
+					if (copy_size > 0) {
+						memcpy(target_data, target_storage, copy_size);
+					}
+				}
+
+				void* target_data;
+				const void* target_storage;
+				size_t copy_size;
+			};
+
+			StackScope<RestoreTarget> restore_stack({ target_data, target_data_storage, target_size });
+
+			for (unsigned int index = 0; index < asset_fields.size; index++) {
+				ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflection(base_data->target_type, asset_fields[index].field_index, target_data, assets[index], asset_fields[index].type);
+				if (result != ECS_SET_ASSET_TARGET_FIELD_OK) {
+					return false;
+				}
+			}
+
+			for (unsigned int index = 0; index < (unsigned int)base_data->link_type->fields.size; index++) {
+				// Check to see that the field is not an asset field
+				unsigned int subindex = 0;
+				for (; subindex < asset_fields.size; subindex++) {
+					if (asset_fields[subindex].field_index == index) {
+						break;
+					}
+				}
+
+				if (subindex != asset_fields.size) {
+					continue;
+				}
+
+				if (!functor(index)) {
+					return false;
+				}
+			}
+
+			restore_stack.deallocator.copy_size = 0;
+		}
+
+		return true;
+	}
+
+	bool ConvertLinkComponentToTarget(
+		const ConvertToAndFromLinkBaseData* base_data,
+		const void* link_data,
+		void* target_data
+	)
+	{
+		auto copy_field = [&](size_t index) {
+			if (!base_data->target_type->fields[index].Compare(base_data->link_type->fields[index])) {
+				return false;
+			}
+
+			const void* source = function::OffsetPointer(link_data, base_data->link_type->fields[index].info.pointer_offset);
+			void* destination = function::OffsetPointer(target_data, base_data->target_type->fields[index].info.pointer_offset);
+
+			if (base_data->allocator.allocator != nullptr) {
+				CopyReflectionType(
+					base_data->reflection_manager,
+					base_data->target_type->fields[index].definition,
+					source,
+					destination,
+					base_data->allocator
+				);
+			}
+			else {
+				memcpy(
+					destination,
+					source,
+					base_data->target_type->fields[index].info.byte_size
+				);
+			}
+			return true;
+		};
+		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, copy_field);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool ConvertLinkComponentToTargetAssetsOnly(const ConvertToAndFromLinkBaseData* base_data, const void* link_data, void* target_data)
+	{
+		return ConvertLinkComponentToTargetImpl(base_data, link_data, target_data, [](size_t index) { return true; });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

@@ -22,6 +22,10 @@ namespace ECSEngine {
 		Stream<AssetDatabaseSameTargetAsset> miscs;
 	};
 
+	struct AssetDatabaseSnapshot {
+		unsigned int stream_sizes[ECS_ASSET_TYPE_COUNT];
+	};
+
 	// The last character is a path separator
 	ECSENGINE_API void AssetDatabaseFileDirectory(Stream<wchar_t> file_location, CapacityStream<wchar_t>& path, ECS_ASSET_TYPE type);
 
@@ -37,42 +41,42 @@ namespace ECSEngine {
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddMeshInternal(const MeshMetadata* metadata);
+		unsigned int AddMeshInternal(const MeshMetadata* metadata, unsigned int reference_count = 1);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddTexture(Stream<char> name, Stream<wchar_t> file, bool* loaded_now = nullptr);
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddTextureInternal(const TextureMetadata* metadata);
+		unsigned int AddTextureInternal(const TextureMetadata* metadata, unsigned int reference_count = 1);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddGPUSampler(Stream<char> name, bool* loaded_now = nullptr);
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddGPUSamplerInternal(const GPUSamplerMetadata* metadata);
+		unsigned int AddGPUSamplerInternal(const GPUSamplerMetadata* metadata, unsigned int reference_count = 1);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddShader(Stream<char> name, Stream<wchar_t> file, bool* loaded_now = nullptr);
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddShaderInternal(const ShaderMetadata* metadata);
+		unsigned int AddShaderInternal(const ShaderMetadata* metadata, unsigned int reference_count = 1);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddMaterial(Stream<char> name, bool* loaded_now = nullptr);
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddMaterialInternal(const MaterialAsset* metadata);
+		unsigned int AddMaterialInternal(const MaterialAsset* metadata, unsigned int reference_count = 1);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		unsigned int AddMisc(Stream<char> name, Stream<wchar_t> file, bool* loaded_now = nullptr);
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddMiscInternal(const MiscAsset* metadata);
+		unsigned int AddMiscInternal(const MiscAsset* metadata, unsigned int reference_count = 1);
 
 		// It returns the handle to that asset. If it fails it returns -1
 		// The file is ignored for materials and samplers
@@ -80,7 +84,7 @@ namespace ECSEngine {
 
 		// Used in specific scenarios where a temporary database is needed. It will copy the metadata as is
 		// Returns a handle to that asset. Does not verify it it already exists
-		unsigned int AddAssetInternal(const void* asset, ECS_ASSET_TYPE type);
+		unsigned int AddAssetInternal(const void* asset, ECS_ASSET_TYPE type, unsigned int reference_count = 1);
 
 		// It increments by one the reference count for that asset.
 		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
@@ -93,6 +97,11 @@ namespace ECSEngine {
 
 		// Creates a new standalone database with the given allocator and the given handles
 		AssetDatabase Copy(CapacityStream<unsigned int>* handle_mask, AllocatorPolymorphic allocator) const;
+
+		// Copies the pointers for the assets from another database. If an asset mask is given, it must have ECS_ASSET_TYPE_COUNT entries
+		// And the ints to be handles, not indices
+		// If an asset doesn't exist, then it will not add it (since it can mess up the reference count).
+		void CopyAssetPointers(const AssetDatabase* other, Stream<unsigned int>* asset_mask = nullptr);
 
 		// Creates all the necessary folders for the metadata
 		// Returns true if all the folders exist, else false (a failure happened during the creation of the folders)
@@ -123,7 +132,6 @@ namespace ECSEngine {
 		unsigned int FindMisc(Stream<char> name, Stream<wchar_t> file) const;
 
 		// Returns the handle to that asset. Returns -1 if it doesn't exist
-		// For misc asset, the path needs to be casted into a char type
 		unsigned int FindAsset(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type) const;
 
 		// Searches an asset based upon its actual data. Returns -1 if it doesn't find it.
@@ -219,6 +227,15 @@ namespace ECSEngine {
 
 		unsigned int GetAssetHandleFromIndex(unsigned int index, ECS_ASSET_TYPE type) const;
 
+		unsigned int GetReferenceCount(unsigned int handle, ECS_ASSET_TYPE type) const;
+
+		AssetDatabaseSnapshot GetSnapshot() const;
+
+		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
+		// An allocator can be given to allocate the assets from or, if left as default, it will allocate
+		// from the database allocator. The randomization consists on 
+		void RandomizePointers(AssetDatabaseSnapshot snapshot, AllocatorPolymorphic allocator = { nullptr });
+
 		// It does not set the name or the file
 		bool ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata) const;
 
@@ -242,40 +259,47 @@ namespace ECSEngine {
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMesh(unsigned int handle);
+		bool RemoveMesh(unsigned int handle, MeshMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveTexture(unsigned int handle);
+		bool RemoveTexture(unsigned int handle, TextureMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveGPUSampler(unsigned int handle);
+		bool RemoveGPUSampler(unsigned int handle, GPUSamplerMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveShader(unsigned int handle);
+		bool RemoveShader(unsigned int handle, ShaderMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMaterial(unsigned int handle);
+		bool RemoveMaterial(unsigned int handle, MaterialAsset* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveMisc(unsigned int handle);
+		bool RemoveMisc(unsigned int handle, MiscAsset* storage = nullptr);
 
 		// Returns true if the asset was evicted - e.g. it was the last reference
 		// Does not destroy the file
-		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type);
+		bool RemoveAsset(unsigned int handle, ECS_ASSET_TYPE type, void* storage = nullptr);
 
 		// Does not destroy the file. It will remove the asset no matter what the reference count is
 		void RemoveAssetForced(unsigned int handle, ECS_ASSET_TYPE type);
+
+		// The restore works only when elements were added, if removals have happened
+		// these will produce undefined behaviour
+		void RestoreSnapshot(AssetDatabaseSnapshot snapshot);
 
 		// Only sets the allocator for the streams, it does not copy the already existing data
 		// (it should not be used for that purpose)
 		void SetAllocator(AllocatorPolymorphic allocator);
 
 		void SetFileLocation(Stream<wchar_t> file_location);
+
+		// The reference count needs to be larger than 1
+		void SetAssetReferenceCount(unsigned int handle, ECS_ASSET_TYPE asset_type, unsigned int new_reference_count);
 
 		// Fills in the handles of the "unique" meshes - only the meshes with different settings
 		// are selected. This is in order to avoid a different mesh but with the same target for processing

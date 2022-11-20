@@ -164,6 +164,12 @@ namespace ECSEngine {
 
 		ECSENGINE_API void UIReflectionDrawConfigCopyToNormalConfig(const UIReflectionDrawConfig* ui_config, UIDrawConfig& config);
 
+		struct UIReflectionOverrideDrawConfig {
+			UIReflectionDrawConfig base_config;
+			Stream<char> override_tag[8];
+			unsigned char override_tag_count = 1;
+		};
+
 		enum ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT {
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_ADD = 1 << 0,
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT_ARRAY_REMOVE = 1 << 1,
@@ -184,7 +190,8 @@ namespace ECSEngine {
 			Stream<UIReflectionDrawConfig> ui_config, 
 			UIActionHandler handler,
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT splat_type,
-			void* stack_allocation
+			void* stack_allocation,
+			bool trigger_only_on_release = true
 		);
 
 		typedef void (*UIReflectionInstanceDrawCustom)(
@@ -271,11 +278,11 @@ namespace ECSEngine {
 			UIDrawConfig* config;
 			size_t global_configuration = 0;
 			Stream<UIReflectionDrawConfig> additional_configs = { nullptr, 0 };
+			Stream<UIReflectionOverrideDrawConfig> override_additional_configs = { nullptr, 0 };
 			const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr;
 			Stream<char> default_value_button = { nullptr, 0 };
 		};
 
-		// Responsible for creating type definitions and drawing of C++ types
 		struct ECSENGINE_API UIReflectionDrawer {
 			UIReflectionDrawer(
 				UIToolsAllocator* allocator,

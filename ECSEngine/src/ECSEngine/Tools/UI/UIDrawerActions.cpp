@@ -625,11 +625,11 @@ namespace ECSEngine {
 			if (converted_color != *input->rgb) {
 				*input->rgb = converted_color;
 				input->hsv = RGBToHSV(*input->rgb);
-			}
 
-			// For debug
-			Color back_to_rgb = HSVToRGB(input->hsv);
-			input->Callback(action_data);
+				// For debug
+				Color back_to_rgb = HSVToRGB(input->hsv);
+				input->Callback(action_data);
+			}
 		}
 
 		// --------------------------------------------------------------------------------------------------------------
@@ -950,6 +950,9 @@ namespace ECSEngine {
 						function::ConvertFloatingPointToChars<FloatingPoint>(number_characters_stream, *data->callback_data.number, 3);
 						data->callback_data.number_data.input->DeleteAllCharacters();
 						data->callback_data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
+
+						// Set the trigger callback to exit
+						data->callback_data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 					}
 					if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
 						// Don't trigger the callback for the input
@@ -1011,11 +1014,17 @@ namespace ECSEngine {
 						data->data.number_data.input->DeleteAllCharacters();
 						data->data.number_data.input->InsertCharacters(number_characters, number_characters_stream.size, 0, system);
 
-						if (data->callback_on_release && mouse_tracker->LeftButton() != MBRELEASED) {
-							// Don't trigger the callback for the input
-							data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+						if (data->callback_on_release) {
+							if (mouse_tracker->LeftButton() != MBRELEASED) {
+								// Don't trigger the callback for the input
+								data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_NONE;
+							}
 						}
 					}
+				}
+				if (data->callback_on_release && mouse_tracker->LeftButton() == MBRELEASED) {
+					// Make an exit callback
+					data->data.number_data.input->trigger_callback = UIDrawerTextInput::TRIGGER_CALLBACK_EXIT;
 				}
 			}
 		}
@@ -2361,9 +2370,9 @@ namespace ECSEngine {
 
 #pragma region Sliders
 
-			const size_t COLOR_INPUT_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER | UI_CONFIG_COLOR_INPUT_RGB_SLIDERS
-				| UI_CONFIG_COLOR_INPUT_HSV_SLIDERS | UI_CONFIG_COLOR_INPUT_NO_NAME | UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR
-				| UI_CONFIG_COLOR_INPUT_HEX_INPUT | UI_CONFIG_SLIDER_MOUSE_DRAGGABLE | UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_DO_CACHE;
+			const size_t COLOR_INPUT_CONFIGURATION = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_COLOR_INPUT_SLIDERS
+				| UI_CONFIG_COLOR_INPUT_NO_NAME | UI_CONFIG_COLOR_INPUT_DO_NOT_CHOOSE_COLOR| UI_CONFIG_SLIDER_MOUSE_DRAGGABLE 
+				| UI_CONFIG_SLIDER_ENTER_VALUES | UI_CONFIG_DO_CACHE;
 
 			UIDrawConfig color_input_config;
 			UIConfigWindowDependentSize color_input_transform;
@@ -2373,8 +2382,11 @@ namespace ECSEngine {
 			UIConfigSliderMouseDraggable mouse_draggable;
 			mouse_draggable.interpolate_bounds = true;
 
+			UIConfigColorInputSliders sliders;
+
 			color_input_config.AddFlag(color_input_transform);
 			color_input_config.AddFlag(mouse_draggable);
+			color_input_config.AddFlag(sliders);
 			drawer.ColorInput(COLOR_INPUT_CONFIGURATION, color_input_config, "ColorInput", main_input->rgb);
 
 #pragma endregion

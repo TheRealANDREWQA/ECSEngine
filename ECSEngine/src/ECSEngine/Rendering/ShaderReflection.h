@@ -125,6 +125,9 @@ namespace ECSEngine {
 		// Returns whether or not it succeded
 		bool ReflectVertexBufferMappingSource(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping) const;
 
+		// It will try to determine the type of the shader from source code
+		ECS_SHADER_TYPE DetermineShaderType(Stream<char> source_code) const;
+
 		// Returns the amount of bytes necessary to create an instance of this class
 		static size_t MemoryOf();
 

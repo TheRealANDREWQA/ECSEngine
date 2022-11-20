@@ -101,7 +101,7 @@ void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_data) {
 	state.click_handlers = handlers;
 	state.row_count = std::size(handlers);
 
-	drawer.AddRightClickAction(drawer.GetRegionPosition(), drawer.GetRegionScale(), "Entities Right Click", &state);
+	drawer.AddRightClickAction(0, drawer.GetRegionPosition(), drawer.GetRegionScale(), "Entities Right Click", &state);
 }
 
 void RenameCallback(ActionData* action_data) {

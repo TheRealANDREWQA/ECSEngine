@@ -844,10 +844,18 @@ namespace ECSEngine {
 				Stream<char> hovered_char_label = hovered_label.AsIs<char>();
 				void* untyped_label = &hovered_char_label;
 				if (label_size != 0) {
-					untyped_label = hovered_label.buffer;
+					if (hovered_char_label.size > 0) {
+						untyped_label = hovered_label.buffer;
+					}
+					else {
+						untyped_label = nullptr;
+					}
+				}
+				else {
+					untyped_label = hovered_char_label.size == 0 ? nullptr : &hovered_char_label;
 				}
 
-				unsigned int is_not_same_hover = FindSelectedLabel(untyped_label) == -1;
+				bool is_not_same_hover = untyped_label == nullptr ? true : FindSelectedLabel(untyped_label) == -1;
 				if (!reject_same_label_drag || is_not_same_hover) {
 					UIDrawerLabelHierarchyDragData action_drag_data;
 					action_drag_data.data = drag_data;
@@ -857,8 +865,10 @@ namespace ECSEngine {
 					action_data->data = &action_drag_data;
 					drag_action(action_data);
 
-					// Add the label to the opened_labels
-					AddOpenedLabel(action_data->system, action_data->system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index), untyped_label);
+					if (untyped_label != nullptr) {
+						// Add the label to the opened_labels
+						AddOpenedLabel(action_data->system, action_data->system->GetWindowIndexFromBorder(action_data->dockspace, action_data->border_index), untyped_label);
+					}
 				}
 			}
 		}

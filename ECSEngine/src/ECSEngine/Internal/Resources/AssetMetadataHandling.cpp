@@ -3,6 +3,7 @@
 
 #include "ResourceManager.h"
 #include "AssetDatabase.h"
+#include "AssetDatabaseReference.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
 #include "../../Utilities/Path.h"
 #include "../../Utilities/OSFunctions.h"
@@ -36,7 +37,7 @@ namespace ECSEngine {
 	// -------------------------------------------------------------------------------------------------------------------------
 
 	template<typename Functor>
-	bool CreateMeshHelper(const MeshMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
+	bool CreateMeshHelper(MeshMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
 		if (metadata->file.size == 0) {
 			// There is no path, fail
 			return false;
@@ -51,19 +52,24 @@ namespace ECSEngine {
 		ECS_STACK_VOID_STREAM(suffix, 512);
 		MeshMetadataIdentifier(metadata, suffix);
 		load_descriptor.identifier_suffix = suffix;
-		return functor(file_path, load_descriptor);
+		CoallescedMesh* mesh = functor(file_path, load_descriptor);
+		if (mesh != nullptr) {
+			metadata->mesh_pointer = mesh;
+			return true;
+		}
+		return false;
 	}
 
-	bool CreateMeshFromMetadata(ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<wchar_t> mount_point)
+	bool CreateMeshFromMetadata(ResourceManager* resource_manager, MeshMetadata* metadata, Stream<wchar_t> mount_point)
 	{
 		return CreateMeshHelper(metadata, mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
-			return resource_manager->LoadCoallescedMesh(file_path, metadata->scale_factor, load_descriptor) != nullptr;
+			return resource_manager->LoadCoallescedMesh(file_path, metadata->scale_factor, load_descriptor);
 		});
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	bool CreateMeshFromMetadataEx(ResourceManager* resource_manager, const MeshMetadata* metadata, Stream<GLTFMesh> meshes, CreateAssetFromMetadataExData* ex_data)
+	bool CreateMeshFromMetadataEx(ResourceManager* resource_manager, MeshMetadata* metadata, Stream<GLTFMesh> meshes, CreateAssetFromMetadataExData* ex_data)
 	{
 		return CreateMeshHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
 			size_t time_stamp = GetTimeStamp(ex_data->time_stamp, file_path);
@@ -71,14 +77,34 @@ namespace ECSEngine {
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->manager_lock;
-			return resource_manager->LoadCoallescedMeshImplementationEx(meshes, metadata->scale_factor, load_descriptor, &ex_desc) != nullptr;
+			return resource_manager->LoadCoallescedMeshImplementationEx(meshes, metadata->scale_factor, load_descriptor, &ex_desc);
 		});
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
+	void CreateMeshFromMetadataEx(
+		ResourceManager* resource_manager, 
+		MeshMetadata* metadata, 
+		const GLTFMesh* coallesced_mesh, 
+		Stream<Submesh> submeshes, 
+		CreateAssetFromMetadataExData* ex_data
+	)
+	{
+		ECS_ASSERT(CreateMeshHelper(metadata, ex_data->mount_point, [&](Stream<wchar_t> file_path, ResourceManagerLoadDesc load_descriptor) {
+			size_t time_stamp = GetTimeStamp(ex_data->time_stamp, file_path);
+			ResourceManagerExDesc ex_desc;
+			ex_desc.filename = file_path;
+			ex_desc.time_stamp = time_stamp;
+			ex_desc.push_lock = ex_data->manager_lock;
+			return resource_manager->LoadCoallescedMeshImplementationEx(coallesced_mesh, submeshes, metadata->scale_factor, load_descriptor, &ex_desc);
+		}));
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
 	template<typename Functor>
-	bool CreateTextureHelper(ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
+	bool CreateTextureHelper(ResourceManager* resource_manager, TextureMetadata* metadata, Stream<wchar_t> mount_point, Functor&& functor) {
 		if (metadata->file.size == 0) {
 			// There is no file, fail
 			return false;
@@ -98,13 +124,18 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_desc;
 		load_desc.identifier_suffix = suffix;
 
-		return functor(file_path, &texture_descriptor, load_desc);
+		ResourceView loaded_texture = functor(file_path, &texture_descriptor, load_desc);
+		if (loaded_texture.Interface() != nullptr) {
+			metadata->texture = loaded_texture;
+			return true;
+		}
+		return false;
 	}
 
-	bool CreateTextureFromMetadata(ResourceManager* resource_manager, const TextureMetadata* metadata, Stream<wchar_t> mount_point)
+	bool CreateTextureFromMetadata(ResourceManager* resource_manager, TextureMetadata* metadata, Stream<wchar_t> mount_point)
 	{
 		return CreateTextureHelper(resource_manager, metadata, mount_point, [&](auto file_path, const auto* texture_descriptor, auto load_desc) {
-			return resource_manager->LoadTexture(file_path, texture_descriptor, load_desc).Interface() != nullptr;
+			return resource_manager->LoadTexture(file_path, texture_descriptor, load_desc);
 		});
 	}
 
@@ -112,7 +143,7 @@ namespace ECSEngine {
 
 	bool CreateTextureFromMetadataEx(
 		ResourceManager* resource_manager,
-		const TextureMetadata* metadata,
+		TextureMetadata* metadata,
 		DecodedTexture texture,
 		SpinLock* gpu_spin_lock,
 		CreateAssetFromMetadataExData* ex_data
@@ -126,7 +157,7 @@ namespace ECSEngine {
 			ex_desc.filename = file_path;
 			ex_desc.time_stamp = time_stamp;
 			ex_desc.push_lock = ex_data->manager_lock;
-			return resource_manager->LoadTextureImplementationEx(texture, texture_descriptor, load_desc, &ex_desc).Interface() != nullptr;
+			return resource_manager->LoadTextureImplementationEx(texture, texture_descriptor, load_desc, &ex_desc);
 		});
 	}
 
@@ -165,9 +196,11 @@ namespace ECSEngine {
 		load_desc.identifier_suffix = suffix;
 
 		void* shader_interface = functor(file_path, compile_options, load_desc);
-		metadata->shader_interface = shader_interface;
-
-		return shader_interface != nullptr;
+		if (shader_interface != nullptr) {
+			metadata->shader_interface = shader_interface;
+			return true;
+		}
+		return false;
 	}
 
 	bool CreateShaderFromMetadata(ResourceManager* resource_manager, ShaderMetadata* metadata, Stream<wchar_t> mount_point)
@@ -218,19 +251,23 @@ namespace ECSEngine {
 		
 		UserMaterial user_material;
 		ConvertMaterialAssetToUserMaterial(asset_database, material, &user_material, allocator, mount_point);
-		
-		if (material->material_pointer == nullptr) {
-			AllocatorPolymorphic database_allocator = asset_database->Allocator();
-			database_allocator.allocation_type = ECS_ALLOCATION_MULTI;
-			material->material_pointer = (Material*)Allocate(database_allocator, sizeof(Material));
-		}
-
+	
+		Material runtime_material;
 		ResourceManagerLoadDesc load_desc;
 		load_desc.load_flags |= dont_load_referenced ? ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_LOAD : 0;
-		bool success = resource_manager->LoadUserMaterial(&user_material, (Material*)material->material_pointer, load_desc);
-
+		bool success = resource_manager->LoadUserMaterial(&user_material, &runtime_material, load_desc);
 		stack_allocator.ClearBackup();
-		return success;
+
+		if (success) {
+			if (material->material_pointer == nullptr) {
+				AllocatorPolymorphic database_allocator = asset_database->Allocator();
+				database_allocator.allocation_type = ECS_ALLOCATION_MULTI;
+				material->material_pointer = (Material*)Allocate(database_allocator, sizeof(Material));
+			}
+			memcpy(material->material_pointer, &runtime_material, sizeof(runtime_material));
+			return true;
+		}
+		return false;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -296,9 +333,11 @@ namespace ECSEngine {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
 		Stream<wchar_t> final_path = function::MountPathOnlyRel(misc_asset->file, mount, storage);
 		ResizableStream<void> data = *resource_manager->LoadMisc<true>(final_path);
-		misc_asset->data = { data.buffer, data.size };
-
-		return misc_asset->data.size > 0 || misc_asset->data.buffer != nullptr;
+		if (data.size > 0 && data.buffer != nullptr) {
+			misc_asset->data = { data.buffer, data.size };
+			return true;
+		}
+		return false;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -310,12 +349,12 @@ namespace ECSEngine {
 		switch (type) {
 		case ECS_ASSET_MESH: 
 		{
-			success = CreateMeshFromMetadata(resource_manager, (const MeshMetadata*)asset, mount_point);
+			success = CreateMeshFromMetadata(resource_manager, (MeshMetadata*)asset, mount_point);
 		}
 		break;
 		case ECS_ASSET_TEXTURE:
 		{
-			success = CreateTextureFromMetadata(resource_manager, (const TextureMetadata*)asset, mount_point);
+			success = CreateTextureFromMetadata(resource_manager, (TextureMetadata*)asset, mount_point);
 		}
 		break;
 		case ECS_ASSET_GPU_SAMPLER:
@@ -373,9 +412,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	bool IsGPUSamplerFromMetadataLoaded(const GPUSamplerMetadata* metadata)
+	bool IsGPUSamplerFromMetadataLoaded(const GPUSamplerMetadata* metadata, bool randomized_asset)
 	{
-		return metadata->sampler.Interface() != nullptr;
+		if (!randomized_asset) {
+			return metadata->sampler.Interface() != nullptr;
+		}
+		else {
+			return (size_t)metadata->sampler.Interface() >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -391,9 +435,14 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata)
+	bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata, bool randomized_asset)
 	{
-		return metadata->material_pointer != nullptr;
+		if (!randomized_asset) {
+			return metadata->material_pointer != nullptr;
+		}
+		else {
+			return (size_t)metadata->material_pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -405,43 +454,79 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
+	bool IsAssetFromMetadataLoaded(const ResourceManager* resource_manager, const void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point, bool randomized_asset)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+			return IsMeshFromMetadataLoaded(resource_manager, (const MeshMetadata*)metadata, mount_point);
+		case ECS_ASSET_TEXTURE:
+			return IsTextureFromMetadataLoaded(resource_manager, (const TextureMetadata*)metadata, mount_point);
+		case ECS_ASSET_GPU_SAMPLER:
+			return IsGPUSamplerFromMetadataLoaded((const GPUSamplerMetadata*)metadata, randomized_asset);
+		case ECS_ASSET_SHADER:
+			return IsShaderFromMetadataLoaded(resource_manager, (const ShaderMetadata*)metadata, mount_point);
+		case ECS_ASSET_MATERIAL:
+			return IsMaterialFromMetadataLoaded((const MaterialAsset*)metadata, randomized_asset);
+		case ECS_ASSET_MISC:
+			return IsMiscFromMetadataLoaded(resource_manager, (const MiscAsset*)metadata, mount_point);
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+		return false;
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
 	void GetDatabaseMissingAssets(
 		const ResourceManager* resource_manager,
 		const AssetDatabase* database, 
 		CapacityStream<unsigned int>* missing_handles, 
-		Stream<wchar_t> mount_point
+		Stream<wchar_t> mount_point,
+		bool randomized_assets
 	)
 	{
-		auto get_missing_assets = [&](ECS_ASSET_TYPE type, auto sparse_set, auto is_loaded) {
+		auto get_missing_assets = [&](ECS_ASSET_TYPE type, auto sparse_set) {
 			auto stream_type = sparse_set.ToStream();
 			for (size_t index = 0; index < stream_type.size; index++) {
 				unsigned int handle = sparse_set.GetHandleFromIndex(index);
-				if (!is_loaded(database->GetAssetConst(handle, type))) {
+				if (!IsAssetFromMetadataLoaded(resource_manager, database->GetAssetConst(handle, type), type, mount_point, randomized_assets)) {
 					missing_handles[type].AddSafe(handle);
 				}
 			}
 		};
 
-		get_missing_assets(ECS_ASSET_MESH, database->mesh_metadata,
-			[mount_point, resource_manager](const void* asset) {
-				return IsMeshFromMetadataLoaded(resource_manager, (const MeshMetadata*)asset, mount_point);
+		get_missing_assets(ECS_ASSET_MESH, database->mesh_metadata);
+		get_missing_assets(ECS_ASSET_TEXTURE, database->texture_metadata);
+		get_missing_assets(ECS_ASSET_GPU_SAMPLER, database->gpu_sampler_metadata);
+		get_missing_assets(ECS_ASSET_SHADER, database->shader_metadata);
+		get_missing_assets(ECS_ASSET_MATERIAL, database->material_asset);
+		get_missing_assets(ECS_ASSET_MISC, database->misc_asset);
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	void GetDatabaseMissingAssets(
+		const ResourceManager* resource_manager,
+		const AssetDatabaseReference* database,
+		CapacityStream<unsigned int>* missing_handles,
+		Stream<wchar_t> mount_point,
+		bool randomized_assets
+	) {
+		auto get_missing_assets = [&](ECS_ASSET_TYPE type) {
+			const AssetDatabase* main_database = database->GetDatabase();
+			unsigned int count = database->GetCount(type);
+
+			for (unsigned int index = 0; index < count; index++) {
+				unsigned int handle = database->GetHandle(index, type);
+				if (!IsAssetFromMetadataLoaded(resource_manager, main_database->GetAssetConst(handle, type), type, mount_point, randomized_assets)) {
+					missing_handles[type].AddSafe(handle);
+				}
 			}
-		);
-		get_missing_assets(ECS_ASSET_TEXTURE, database->texture_metadata,
-			[mount_point, resource_manager](const void* asset) {
-				return IsTextureFromMetadataLoaded(resource_manager, (const TextureMetadata*)asset, mount_point);
-			}
-		);
-		get_missing_assets(ECS_ASSET_SHADER, database->shader_metadata,
-			[mount_point, resource_manager](const void* asset) {
-				return IsShaderFromMetadataLoaded(resource_manager, (const ShaderMetadata*)asset, mount_point);
-			}
-		);
-		get_missing_assets(ECS_ASSET_MISC, database->misc_asset,
-			[mount_point, resource_manager](const void* asset) {
-				return IsMiscFromMetadataLoaded(resource_manager, (const MiscAsset*)asset, mount_point);
-			}
-		);
+		};
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			get_missing_assets((ECS_ASSET_TYPE)index);
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------
@@ -468,7 +553,7 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_desc;
 		load_desc.identifier_suffix = suffix;
 
-		bool unloaded = resource_manager->TryUnloadResource<true>(file_path, ResourceType::CoallescedMesh, load_desc);
+		bool unloaded = resource_manager->TryUnloadResource(file_path, ResourceType::CoallescedMesh, load_desc);
 		metadata->mesh_pointer = nullptr;
 		return unloaded;
 	}
@@ -484,7 +569,7 @@ namespace ECSEngine {
 		TextureMetadataIdentifier(metadata, suffix);
 		ResourceManagerLoadDesc load_desc;
 		load_desc.identifier_suffix = suffix;
-		bool unloaded = resource_manager->TryUnloadResource<true>(file_path, ResourceType::Texture, load_desc);
+		bool unloaded = resource_manager->TryUnloadResource(file_path, ResourceType::Texture, load_desc);
 		metadata->texture.view = nullptr;
 		return unloaded;
 	}
@@ -510,7 +595,7 @@ namespace ECSEngine {
 		load_desc.identifier_suffix = suffix;
 
 		ResourceType type = FromShaderTypeToResourceType(metadata->shader_type);
-		bool unloaded = resource_manager->TryUnloadResource<true>(file_path, type, load_desc);
+		bool unloaded = resource_manager->TryUnloadResource(file_path, type, load_desc);
 
 		metadata->shader_interface = nullptr;
 		metadata->source_code = { nullptr, 0 };
@@ -542,7 +627,7 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
 		Stream<wchar_t> final_path = function::MountPathOnlyRel(misc->file, mount_point, storage);
-		bool unloaded = resource_manager->TryUnloadResource<true>(final_path, ResourceType::Misc);
+		bool unloaded = resource_manager->TryUnloadResource(final_path, ResourceType::Misc);
 
 		misc->data = { nullptr, 0 };	
 		return unloaded;
@@ -550,41 +635,39 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	bool DeallocateAssetFromMetadata(ResourceManager* resource_manager, AssetDatabase* database, unsigned int handle, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point)
+	bool DeallocateAssetFromMetadata(ResourceManager* resource_manager, AssetDatabase* database, void* metadata, ECS_ASSET_TYPE type, Stream<wchar_t> mount_point)
 	{
-		void* asset = database->GetAsset(handle, type);
-
 		switch (type) {
 		case ECS_ASSET_MESH:
 		{
-			return DeallocateMeshFromMetadata(resource_manager, (MeshMetadata*)asset, mount_point);
+			return DeallocateMeshFromMetadata(resource_manager, (MeshMetadata*)metadata, mount_point);
 		}
 		break;
 		case ECS_ASSET_TEXTURE:
 		{
-			return DeallocateTextureFromMetadata(resource_manager, (TextureMetadata*)asset, mount_point);
+			return DeallocateTextureFromMetadata(resource_manager, (TextureMetadata*)metadata, mount_point);
 		}
 		break;
 		case ECS_ASSET_GPU_SAMPLER:
 		{
-			DeallocateSamplerFromMetadata(resource_manager, (GPUSamplerMetadata*)asset);
+			DeallocateSamplerFromMetadata(resource_manager, (GPUSamplerMetadata*)metadata);
 			return true;
 		}
 		break;
 		case ECS_ASSET_SHADER:
 		{
-			return DeallocateShaderFromMetadata(resource_manager, (ShaderMetadata*)asset, mount_point);
+			return DeallocateShaderFromMetadata(resource_manager, (ShaderMetadata*)metadata, mount_point);
 		}
 		break;
 		case ECS_ASSET_MATERIAL:
 		{
-			DeallocateMaterialFromMetadata(resource_manager, (MaterialAsset*)asset, database, mount_point);
+			DeallocateMaterialFromMetadata(resource_manager, (MaterialAsset*)metadata, database, mount_point);
 			return true;
 		}
 		break;
 		case ECS_ASSET_MISC:
 		{
-			return DeallocateMiscAssetFromMetadata(resource_manager, (MiscAsset*)asset, mount_point);
+			return DeallocateMiscAssetFromMetadata(resource_manager, (MiscAsset*)metadata, mount_point);
 		}
 		break;
 		default:

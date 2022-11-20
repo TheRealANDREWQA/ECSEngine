@@ -194,6 +194,7 @@ namespace ECSEngine {
 			// If the set was previously full, the next needs to be -1
 			// Mostly for debug purposes tho
 			indirection_buffer[handle].x = size == capacity ? -1 : first_empty_slot + capacity;
+			indirection_buffer[array_index].y = indirection_index;
 			first_empty_slot = handle;
 			size--;
 		}
@@ -225,18 +226,8 @@ namespace ECSEngine {
 			buffer = (T*)_buffer;
 			indirection_buffer = (uint2*)((uintptr_t)_buffer + sizeof(T) * _capacity);
 
-			// Don't do anything if the capacity is 0
-			if (_capacity > 0) {
-				memset(indirection_buffer, 0, sizeof(uint2) * _capacity);
-				// Set the linked freed slots
-				for (unsigned int index = 0; index < _capacity - 1; index++) {
-					// Add the capacity to indicate that the slot is free
-					// Mostly for easier debugging
-					indirection_buffer[index].x = index + 1 + _capacity;
-				}
-				// Mostly for debug purposes
-				indirection_buffer[_capacity - 1].x = -1;
-			}
+			// Has a built in check for capacity 0
+			InitializeIndirectionBuffer(indirection_buffer, _capacity);
 
 			size = 0;
 			first_empty_slot = 0;
@@ -254,6 +245,21 @@ namespace ECSEngine {
 
 		static size_t MemoryOf(unsigned int capacity) {
 			return (sizeof(T) + sizeof(uint2)) * capacity;
+		}
+
+		static void InitializeIndirectionBuffer(void* _indirection_buffer, unsigned int capacity) {
+			if (capacity > 0) {
+				uint2* indirection_buffer = (uint2*)_indirection_buffer;
+				memset(indirection_buffer, 0, sizeof(uint2) * capacity);
+				// Set the linked freed slots
+				for (unsigned int index = 0; index < capacity - 1; index++) {
+					// Add the capacity to indicate that the slot is free
+					// Mostly for easier debugging
+					indirection_buffer[index].x = index + 1 + capacity;
+				}
+				// Mostly for debug purposes
+				indirection_buffer[capacity - 1].x = -1;
+			}
 		}
 
 		T* buffer;
@@ -275,6 +281,9 @@ namespace ECSEngine {
 		void (*copy_function)(const void* source_element, void* destination_element, AllocatorPolymorphic allocator, void* extra_data),
 		void* extra_data
 	);
+
+	// Destination needs to be a pointer to the SparseSet*
+	ECSENGINE_API void SparseSetInitializeUntyped(void* destination, unsigned int capacity, unsigned int element_byte_size, void* _buffer);
 
 	template<typename T>
 	struct ResizableSparseSet {

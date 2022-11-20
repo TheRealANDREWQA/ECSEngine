@@ -119,11 +119,29 @@ namespace ECSEngine {
 
 	ECSENGINE_API void ComponentBufferCopyStream(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source, void* destination);
 
+	// The source will still be offsetted
+	ECSENGINE_API void ComponentBufferCopy(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination);
+
+	// The source will still be offsetted
+	ECSENGINE_API void ComponentBufferCopyStream(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination);
+
+	// The source will still be offsetted
+	ECSENGINE_API void ComponentBufferCopyDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination);
+
+	// Only does the allocation and the copy if the current data is different from the given data
+	ECSENGINE_API void ComponentBufferCopyStreamChecked(ComponentBuffer component_buffer, MemoryArena* allocator, Stream<void> data, void* destination);
+
 	ECSENGINE_API void ComponentBufferDeallocate(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source);
 
 	ECSENGINE_API void ComponentBufferDeallocateDataPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source);
 
 	ECSENGINE_API void ComponentBufferDeallocateNormalPointer(ComponentBuffer component_buffer, MemoryArena* allocator, const void* source);
+
+	ECSENGINE_API Stream<void> ComponentBufferGetStream(ComponentBuffer component_buffer, const void* source);
+
+	ECSENGINE_API Stream<void> ComponentBufferGetStreamNormalPointer(ComponentBuffer component_buffer, const void* source);
+
+	ECSENGINE_API Stream<void> ComponentBufferGetStreamDataPointer(ComponentBuffer component_buffer, const void* source);
 
 #define ECS_COMPONENT_INFO_MAX_BUFFER_COUNT (5)
 
@@ -153,6 +171,16 @@ namespace ECSEngine {
 
 		ComponentSignature Copy(uintptr_t& ptr);
 
+		// Returns UCHAR_MAX when the component is not found
+		ECS_INLINE unsigned char Find(Component component) const {
+			for (unsigned char index = 0; index < count; index++) {
+				if (indices[index] == component) {
+					return index;
+				}
+			}
+			return UCHAR_MAX;
+		}
+
 		ECS_INLINE Component& operator[](size_t index) {
 			return indices[index];
 		}
@@ -174,6 +202,16 @@ namespace ECSEngine {
 		SharedComponentSignature(Component* _indices, SharedInstance* _instances, unsigned char _count) : indices(_indices), instances(_instances), count(_count) {}
 
 		ECS_CLASS_DEFAULT_CONSTRUCTOR_AND_ASSIGNMENT(SharedComponentSignature);
+
+		// Returns UCHAR_MAX when the component is not found
+		ECS_INLINE unsigned char Find(Component component) const {
+			for (unsigned char index = 0; index < count; index++) {
+				if (indices[index] == component) {
+					return index;
+				}
+			}
+			return UCHAR_MAX;
+		}
 
 		Component* indices;
 		SharedInstance* instances;

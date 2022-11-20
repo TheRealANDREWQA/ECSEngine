@@ -6,27 +6,6 @@
 
 namespace ECSEngine {
 
-	// Module function missing is returned for either graphics function missing
-	enum ECS_MODULE_STATUS : unsigned char {
-		ECS_GET_MODULE_OK,
-		ECS_GET_MODULE_FAULTY_PATH,
-		ECS_GET_MODULE_FUNCTION_MISSING
-	};
-
-	struct Module {
-		ECS_MODULE_STATUS code;
-
-		// The function pointers
-		ModuleTaskFunction task_function;
-		ModuleUIFunction ui_function;
-		ModuleBuildFunctions build_functions;
-		ModuleSerializeComponentFunction serialize_function;
-		ModuleRegisterLinkComponentFunction link_components;
-		ModuleSetCurrentWorld set_world;
-
-		HMODULE os_module_handle;
-	};
-
 	// Returns true if it has the associated DLL task function
 	// The other are optional and do not need to be present in order for the module to be valid
 	ECSENGINE_API bool FindModule(Stream<wchar_t> path);
@@ -34,6 +13,9 @@ namespace ECSEngine {
 	// It does not load any stream from the functions. Use the corresponding load functions for that
 	// The function LoadModuleTasks can be used to load them at a later time
 	ECSENGINE_API Module LoadModule(Stream<wchar_t> path);
+
+	// Loads the streams from the given module
+	ECSENGINE_API void LoadAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator);
 
 	// It will not release the OS Handle - it must be kept around as long as the tasks are loaded;
 	// It does a single coallesced allocation. Deallocate the buffer to free the memory
@@ -78,6 +60,10 @@ namespace ECSEngine {
 	// Frees the OS handle to the valid module function but it does not deallocate the tasks
 	// or any other stream that was previously allocated. They must be manually deallocated.
 	ECSENGINE_API void ReleaseModule(Module* module);
+
+	ECSENGINE_API void ReleaseAppliedModuleStreams(AppliedModule* module, AllocatorPolymorphic allocator);
+
+	ECSENGINE_API void ReleaseAppliedModule(AppliedModule* module, AllocatorPolymorphic allocator);
 
 	// It will move all the valid types in the front of the stream while keeping the invalid ones
 	// at the end

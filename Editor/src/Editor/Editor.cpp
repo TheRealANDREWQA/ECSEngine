@@ -946,6 +946,8 @@ public:
 
 		editor_state.task_manager->SleepUntilDynamicTasksFinish();
 		unsigned int sandbox_count = editor_state.sandboxes.size;
+
+		WaitSandboxUnlock(&editor_state);
 		for (size_t index = 0; index < sandbox_count; index++) {
 			DestroySandbox(&editor_state, 0);
 		}
@@ -1097,7 +1099,6 @@ Editor::~Editor() {
 LRESULT WINAPI Editor::HandleMessageSetup(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {
 
 	if (message == WM_NCCREATE) {
-
 		// extract pointer to window class from creation data
 		const CREATESTRUCTW* const createStruct = reinterpret_cast<CREATESTRUCTW*>(lParam);
 		Editor* const editor_pointer = static_cast<Editor*>(createStruct->lpCreateParams);
@@ -1111,6 +1112,7 @@ LRESULT WINAPI Editor::HandleMessageSetup(HWND hWnd, UINT message, WPARAM wParam
 		// forward message
 		return editor_pointer->HandleMessageForward(hWnd, message, wParam, lParam);
 	}
+	return 0;
 }
 
 LRESULT WINAPI Editor::HandleMessageForward(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept {

@@ -87,15 +87,30 @@ unsigned int ChangeInspectorDrawFunction(
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+// Returns the first inspector which matches the sandbox and the draw function, or -1 if it doesn't exist
+unsigned int FindInspectorWithDrawFunction(
+	const EditorState* editor_state,
+	InspectorDrawFunction draw_function,
+	unsigned int sandbox_index = -1
+);
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+// Returns all inspector indices which match the given draw function and the sandbox
+void FindInspectorWithDrawFunction(
+	const EditorState* editor_state,
+	InspectorDrawFunction draw_function,
+	CapacityStream<unsigned int>* inspector_indices,
+	unsigned int sandbox_index = -1
+);
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, Stream<wchar_t> _identifier);
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, const wchar_t* _identifier);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 

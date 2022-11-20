@@ -50,7 +50,7 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 
 				for (size_t index = 0; index < stream.size; index++) {
 					const void* asset = stream.buffer + index;
-					Stream<char> asset_name = *(Stream<char>*)asset;
+					Stream<char> asset_name = GetAssetName(asset, asset_type);
 
 					size_t select_storage[512];
 					unsigned int write_size = 0;
@@ -65,7 +65,19 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 					size_t configuration = 0;
 					row_layout.GetTransform(config, configuration);
 
-					drawer.Button(configuration, config, asset_name, { select_action, select_data, write_size });
+					ECS_STACK_CAPACITY_STREAM(char, asset_string, 256);
+					AssetToString(asset, asset_type, asset_string);
+
+					ECS_STACK_CAPACITY_STREAM(char, long_asset_string, 256);
+					AssetToString(asset, asset_type, long_asset_string, true);
+
+					if (long_asset_string.size != asset_string.size) {
+						UIConfigToolTip tooltip_config;
+						tooltip_config.characters = long_asset_string;
+						config.AddFlag(tooltip_config);
+						configuration |= UI_CONFIG_RECTANGLE_TOOL_TIP;
+					}
+					drawer.Button(configuration, config, asset_string, { select_action, select_data, write_size });
 					drawer.NextRow();
 				}
 				});

@@ -13,7 +13,7 @@ struct VS_INPUT ECS_REFLECT_INCREMENT_INPUT_SLOT
 
 struct VS_OUTPUT
 {
-    float4 position : SV_Position;
+    float4 position : SV_position;
     float2 uv : UV;
 };
 

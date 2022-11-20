@@ -273,4 +273,38 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
+	// Module function missing is returned for either graphics function missing
+	enum ECS_MODULE_STATUS : unsigned char {
+		ECS_GET_MODULE_OK,
+		ECS_GET_MODULE_FAULTY_PATH,
+		ECS_GET_MODULE_FUNCTION_MISSING
+	};
+
+	struct Module {
+		ECS_MODULE_STATUS code;
+
+		// The function pointers
+		ModuleTaskFunction task_function;
+		ModuleUIFunction ui_function;
+		ModuleBuildFunctions build_functions;
+		ModuleSerializeComponentFunction serialize_function;
+		ModuleRegisterLinkComponentFunction link_components;
+		ModuleSetCurrentWorld set_world;
+
+		HMODULE os_module_handle;
+	};
+
+	struct AppliedModule {
+		Module base_module;
+
+		// The streams for the module
+		Stream<TaskSchedulerElement> tasks;
+		Stream<UIWindowDescriptor> ui_descriptors;
+		Stream<ModuleBuildAssetType> build_asset_types;
+		Stream<ModuleLinkComponentTarget> link_components;
+		ModuleSerializeComponentStreams serialize_streams;
+	};
+
+	// ----------------------------------------------------------------------------------------------------------------------
+
 }

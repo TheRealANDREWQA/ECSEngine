@@ -421,7 +421,7 @@ void CreateProjectWizardDraw(void* window_data, void* drawer_descriptor, bool in
 
 	float2 folder_position = drawer.GetLastSpriteRectanglePosition();
 	float2 folder_scale = drawer.GetLastSpriteRectangleScale();
-	drawer.AddDefaultClickableHoverable(folder_position, folder_scale, { FileExplorerGetDirectoryAction, get_directory_data, 0 });
+	drawer.AddDefaultClickableHoverable(0, folder_position, folder_scale, { FileExplorerGetDirectoryAction, get_directory_data, 0 });
 
 	drawer.NextRow();
 	
@@ -604,6 +604,9 @@ bool OpenProject(ProjectOperationData data)
 		ResetModules(data.editor_state);
 	}
 
+	// Set the database path - before the sandbox file
+	EditorStateSetDatabasePath(data.editor_state);
+
 	// The sandboxes. If a failure has happened, then it will be reported to the user
 	LoadEditorSandboxFile(data.editor_state);
 
@@ -664,9 +667,6 @@ bool OpenProject(ProjectOperationData data)
 		}
 	};
 	ui_system->PushFrameHandler({ remove_editor_state_do_not_add_tasks, &remove_data, sizeof(remove_data) });
-	
-	// Set the database path
-	EditorStateSetDatabasePath(data.editor_state);
 
 	data.editor_state->editor_tick = EditorStateProjectTick;
 

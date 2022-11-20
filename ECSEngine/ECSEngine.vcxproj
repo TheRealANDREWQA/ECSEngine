@@ -337,9 +337,11 @@
     <ClInclude Include="src\Includes\ECSEngineRendering.h" />
     <ClInclude Include="src\Includes\ECSEngineRenderingCompression.h" />
     <ClInclude Include="src\Includes\ECSEngineResources.h" />
+    <ClInclude Include="src\Includes\ECSEngineScene.h" />
     <ClInclude Include="src\Includes\ECSEngineSerialization.h" />
     <ClInclude Include="src\Includes\ECSEngineSerializationHelpers.h" />
     <ClInclude Include="src\Includes\ECSEngineStream.h" />
+    <ClInclude Include="src\Includes\ECSEngineTimer.h" />
     <ClInclude Include="src\Includes\ECSEngineUI.h" />
     <ClInclude Include="src\Includes\ECSEngineUtilities.h" />
     <ClInclude Include="src\ECSEngine\Containers\DataPointer.h" />

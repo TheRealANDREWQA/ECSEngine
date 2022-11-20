@@ -15,12 +15,12 @@ namespace ECSEngine {
 					ECS_ASSERT(associated_bits[index] != associated_bit, "Repeated flag addition");
 				}
 
-				unsigned int parameter_count = sizeof(flag) / sizeof(float) + (sizeof(flag) % sizeof(float) != 0);
+				unsigned int parameter_count = sizeof(flag);
 				unsigned int new_start = parameter_start[flag_count] + parameter_count;
-				ECS_ASSERT(new_start <= 64);
+				ECS_ASSERT(new_start <= sizeof(parameters));
 				
 				parameter_start[flag_count + 1] = new_start;
-				memcpy(parameters + parameter_start[flag_count], &flag, sizeof(float) * parameter_count);
+				memcpy(parameters + parameter_start[flag_count], &flag, parameter_count);
 				associated_bits[flag_count] = associated_bit;
 				flag_count++;
 			}
@@ -84,7 +84,7 @@ namespace ECSEngine {
 
 			size_t flag_count;
 			unsigned int parameter_start[16];
-			float parameters[64];
+			char parameters[320];
 			size_t associated_bits[16];
 		};
 

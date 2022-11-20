@@ -41,6 +41,7 @@ namespace ECSEngine {
 
 			void* allocation = AllocateEx(m_backup, m_backup_size);
 			m_allocated_buffers[0] = allocation;
+			m_allocated_buffer_size++;
 
 			ptr = (uintptr_t)m_allocated_buffers[0];
 			ptr = function::AlignPointer(ptr, alignment);
@@ -49,7 +50,8 @@ namespace ECSEngine {
 			return (void*)ptr;
 		}
 		else {
-			size_t remaining_capacity = m_backup_size - (m_top - m_initial_capacity - (m_allocated_buffer_size - 1) * m_backup_size);
+			size_t current_buffer_allocated_size = m_top - m_initial_capacity - (m_allocated_buffer_size - 1) * m_backup_size;
+			size_t remaining_capacity = m_backup_size - current_buffer_allocated_size;
 			if (remaining_capacity < size + alignment) {
 				// Allocate another one
 				ECS_ASSERT(m_allocated_buffer_size < m_allocated_buffer_capacity);
@@ -59,7 +61,7 @@ namespace ECSEngine {
 			}
 
 			uintptr_t ptr = (uintptr_t)m_allocated_buffers[m_allocated_buffer_size - 1];
-			ptr = function::AlignPointer(ptr, alignment);
+			ptr = function::AlignPointer(ptr + current_buffer_allocated_size, alignment);
 
 			m_top = m_initial_capacity + (m_allocated_buffer_size - 1) * m_backup_size +
 				function::PointerDifference((void*)ptr, m_allocated_buffers[m_allocated_buffer_size - 1]) + size;

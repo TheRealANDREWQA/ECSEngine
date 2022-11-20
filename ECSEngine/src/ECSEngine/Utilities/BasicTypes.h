@@ -455,40 +455,40 @@ namespace ECSEngine {
 		Base w;
 	};
 
-	using bool2 = Base2<bool>;
-	using char2 = Base2<char>;
-	using uchar2 = Base2<unsigned char>;
-	using short2 = Base2<short>;
-	using ushort2 = Base2<unsigned short>;
-	using int2 = Base2<int>;
-	using uint2 = Base2<unsigned int>;
-	using long2 = Base2<int64_t>;
-	using ulong2 = Base2<uint64_t>;
-	using float2 = Base2<float>;
-	using double2 = Base2<double>;
-
-	using bool3 = Base3<bool>;
-	using char3 = Base3<char>;
-	using uchar3 = Base3<unsigned char>;
-	using short3 = Base3<short>;
-	using ushort3 = Base3<unsigned short>;
-	using int3 = Base3<int>;
-	using uint3 = Base3<unsigned int>;
-	using long3 = Base3<int64_t>;
-	using ulong3 = Base3<uint64_t>;
-	using float3 = Base3<float>;
-	using double3 = Base3<double>;
-
-	using bool4 = Base4<bool>;
-	using char4 = Base4<char>;
-	using uchar4 = Base4<unsigned char>;
-	using short4 = Base4<short>;
-	using ushort4 = Base4<unsigned short>;
-	using int4 = Base4<int>;
-	using uint4 = Base4<unsigned int>;
-	using long4 = Base4<int64_t>;
-	using ulong4 = Base4<uint64_t>;
-	using float4 = Base4<float>;
-	using double4 = Base4<double>;
+	typedef Base2<bool> bool2;
+	typedef Base2<char> char2;
+	typedef Base2<unsigned char> uchar2;
+	typedef Base2<short> short2;
+	typedef Base2<unsigned short> ushort2;
+	typedef Base2<int> int2;
+	typedef Base2<unsigned int> uint2;
+	typedef Base2<int64_t> long2;
+	typedef Base2<uint64_t> ulong2;
+	typedef Base2<float> float2;
+	typedef Base2<double> double2;
+	
+	typedef Base3<bool> bool3;
+	typedef Base3<char> char3;
+	typedef Base3<unsigned char> uchar3;
+	typedef Base3<short> short3;
+	typedef Base3<unsigned short> ushort3;
+	typedef Base3<int> int3;
+	typedef Base3<unsigned int> uint3;
+	typedef Base3<int64_t> long3;
+	typedef Base3<uint64_t> ulong3;
+	typedef Base3<float> float3;
+	typedef Base3<double> double3;
+	
+	typedef Base4<bool> bool4;
+	typedef Base4<char> char4;
+	typedef Base4<unsigned char> uchar4;
+	typedef Base4<short> short4;
+	typedef Base4<unsigned short> ushort4;
+	typedef Base4<int> int4;
+	typedef Base4<unsigned int> uint4;
+	typedef Base4<int64_t> long4;
+	typedef Base4<uint64_t> ulong4;
+	typedef Base4<float> float4;
+	typedef Base4<double> double4;
 
 }

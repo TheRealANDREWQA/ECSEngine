@@ -61,8 +61,8 @@ struct ECS_REFLECT_SHARED_COMPONENT RenderEverything {
 struct ECS_REFLECT_LINK_COMPONENT(RenderEverything) RenderEverything_Link {
 	unsigned int texture_handle; ECS_TEXTURE_HANDLE
 	unsigned int sampler_handle; ECS_GPU_SAMPLER_HANDLE
-	unsigned int vertex_handle; ECS_SHADER_HANDLE
-	unsigned int pixel_handle; ECS_SHADER_HANDLE
+	unsigned int vertex_handle; ECS_VERTEX_SHADER_HANDLE
+	unsigned int pixel_handle; ECS_PIXEL_SHADER_HANDLE
 	unsigned int material_handle; ECS_MATERIAL_HANDLE
 	unsigned int misc_handle; ECS_MISC_HANDLE
 };

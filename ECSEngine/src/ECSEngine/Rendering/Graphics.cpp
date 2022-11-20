@@ -19,10 +19,7 @@
 
 namespace ECSEngine {
 	
-	char DEVICE_NAME[128];
-
 	const char* SHADER_ENTRY_POINT = "main";
-
 
 #ifdef ECSENGINE_PLATFORM_WINDOWS
 
@@ -807,6 +804,11 @@ namespace ECSEngine {
 	PixelShader Graphics::CreatePixelShaderFromSource(Stream<char> source_code, ID3DInclude* include_policy, ShaderCompileOptions options, bool temporary, DebugInfo debug_info)
 	{
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_PIXEL);
+		
+		if (byte_code == nullptr) {
+			return { nullptr };
+		}
+
 		PixelShader shader = CreatePixelShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
@@ -837,6 +839,9 @@ namespace ECSEngine {
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_VERTEX);
+		if (byte_code == nullptr) {
+			return { nullptr };
+		}
 
 		if (vertex_byte_code != nullptr) {
 			void* allocation = m_allocator->Allocate_ts(byte_code->GetBufferSize());
@@ -874,6 +879,10 @@ namespace ECSEngine {
 	)
 	{
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_DOMAIN);
+		if (byte_code == nullptr) {
+			return { nullptr };
+		}
+
 		DomainShader shader = CreateDomainShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
@@ -902,6 +911,10 @@ namespace ECSEngine {
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_HULL);
+		if (byte_code == nullptr) {
+			return { nullptr };
+		}
+
 		HullShader shader = CreateHullShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
@@ -929,6 +942,10 @@ namespace ECSEngine {
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_GEOMETRY);
+		if (byte_code == nullptr) {
+			return { nullptr };
+		}
+
 		GeometryShader shader = CreateGeometryShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
@@ -956,6 +973,10 @@ namespace ECSEngine {
 		DebugInfo debug_info
 	) {
 		ID3DBlob* byte_code = ShaderByteCode(m_device, source_code, options, include_policy, ECS_SHADER_COMPUTE);
+		if (byte_code == nullptr) {
+			return { nullptr };
+		}
+
 		ComputeShader shader = CreateComputeShader({ byte_code->GetBufferPointer(), byte_code->GetBufferSize() }, temporary, debug_info);
 		byte_code->Release();
 		return shader;
@@ -1028,6 +1049,10 @@ namespace ECSEngine {
 		}
 
 		ID3DBlob* blob = ShaderByteCode(GetDevice(), source_code, options, include_policy, type);
+		if (blob == nullptr) {
+			return { nullptr, 0 };
+		}
+
 		void* allocation = Allocate(allocator, blob->GetBufferSize());
 		memcpy(allocation, blob->GetBufferPointer(), blob->GetBufferSize());
 		return { allocation, blob->GetBufferSize() };
@@ -3112,6 +3137,12 @@ namespace ECSEngine {
 
 	void Graphics::UnmapTexture(Texture3D texture, unsigned int resource_index) {
 		ECSEngine::UnmapTexture(texture, m_context, resource_index);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------------
+
+	ECS_SHADER_TYPE Graphics::DetermineShaderType(Stream<char> source_code) const {
+		return m_shader_reflection->DetermineShaderType(source_code);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------

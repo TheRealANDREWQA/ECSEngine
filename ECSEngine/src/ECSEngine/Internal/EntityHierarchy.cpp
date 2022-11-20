@@ -548,8 +548,9 @@ namespace ECSEngine {
         hierarchy->roots.Resize(header->root_count);
         return true;
     }
-
-    void DeserializeEntityHierarchyChildTable(EntityHierarchy* hierarchy, unsigned int children_count, uintptr_t& ptr) {
+    
+    // Returns true if the data is valid
+    bool DeserializeEntityHierarchyChildTable(EntityHierarchy* hierarchy, unsigned int children_count, uintptr_t& ptr) {
         // Read the children table now
         for (unsigned int index = 0; index < children_count; index++) {
             EntityHierarchy::Children children;
@@ -570,12 +571,18 @@ namespace ECSEngine {
             }
             ptr += sizeof(Entity) * children.count;
 
+            if (hierarchy->children_table.Find(current_parent) != -1) {
+                return false;
+            }
             // Insert the value into the hash table now
             hierarchy->children_table.Insert(children, current_parent);
 
             // Iterate through the list of children and insert them into the parent table as well
             const Entity* children_entities = children.count > ECS_ENTITY_HIERARCHY_STATIC_STORAGE ? children.entities : children.static_children;
             for (unsigned int child_index = 0; child_index < children.count; child_index++) {
+                if (hierarchy->parent_table.Find(children_entities[child_index]) != -1) {
+                    return false;
+                }
                 hierarchy->parent_table.Insert(current_parent, children_entities[child_index]);
             }
         }
@@ -583,8 +590,12 @@ namespace ECSEngine {
         // Now go through the roots and insert them into the parent table with a parent of -1
         Entity null_parent = { (unsigned int)-1 };
         for (unsigned int index = 0; index < hierarchy->roots.size; index++) {
+            if (hierarchy->parent_table.Find(hierarchy->roots[index]) != -1) {
+                return false;
+            }
             hierarchy->parent_table.Insert(null_parent, hierarchy->roots[index]);
         }
+        return true;
     }
 
     bool DeserializeEntityHierarchy(EntityHierarchy* hierarchy, ECS_FILE_HANDLE file)
@@ -607,7 +618,7 @@ namespace ECSEngine {
         }
 
         void* temp_buffer = nullptr;
-        size_t STACK_LIMIT = ECS_KB * 256;
+        size_t STACK_LIMIT = ECS_KB * 128;
         if (header.children_data_size > STACK_LIMIT) {
             temp_buffer = malloc(header.children_data_size);
         }
@@ -624,12 +635,11 @@ namespace ECSEngine {
         }
         uintptr_t temp_ptr = (uintptr_t)temp_buffer;
 
-        DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, temp_ptr);
-
+        success = DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, temp_ptr);
         if (header.children_data_size > STACK_LIMIT) {
             free(temp_buffer);
         }
-        return true;
+        return success;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------
@@ -648,6 +658,7 @@ namespace ECSEngine {
         hierarchy->roots.size = header.root_count;
 
         DeserializeEntityHierarchyChildTable(hierarchy, header.children_count, *ptr);
+        return true;
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------

@@ -59,13 +59,13 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 	UI_PREPARE_DRAWER(initialize);
 
 	const float INPUT_X_FACTOR = 7.0f;
-	const const char* SOLUTION_PATH_NAME = "Solution Path";
-	const const char* SOLUTION_PATH_BUFFER_NAME = "Solution Path buffer";
-	const const char* LIBRARY_NAME = "Library Name";
-	const const char* LIBRARY_BUFFER_NAME = "Library Name buffer";
-	const const char* SOLUTION_PATH_WIDE_NAME = "Solution Path Wide";
-	const const char* FOLDER_DATA_NAME = "Folder data";
-	const const char* ADD_DATA_NAME = "Add data";
+	const char* SOLUTION_PATH_NAME = "Solution Path";
+	const char* SOLUTION_PATH_BUFFER_NAME = "Solution Path buffer";
+	const char* LIBRARY_NAME = "Library Name";
+	const char* LIBRARY_BUFFER_NAME = "Library Name buffer";
+	const char* SOLUTION_PATH_WIDE_NAME = "Solution Path Wide";
+	const char* FOLDER_DATA_NAME = "Folder data";
+	const char* ADD_DATA_NAME = "Add data";
 
 	EditorState* editor_state = (EditorState*)window_data;
 
@@ -265,22 +265,64 @@ void ModuleExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* ed
 
 // --------------------------------------------------------------------------------------------------------
 
+void ModuleExplorerConfirmRemoveModule(ActionData* action_data) {
+	UI_UNPACK_ACTION_DATA;
+
+	ModuleExplorerData* data = (ModuleExplorerData*)_data;
+	// Delete the module from the sandboxes
+	RemoveSandboxModuleForced(data->editor_state, data->selected_module);
+	RemoveModule(data->editor_state, data->selected_module);
+
+	memmove(
+		data->configurations + data->selected_module,
+		data->configurations + data->selected_module + 1,
+		(data->editor_state->project_modules->size - data->selected_module) * sizeof(EDITOR_MODULE_CONFIGURATION)
+	);
+	data->selected_module = -1;
+	bool success = SaveModuleFile(data->editor_state);
+	if (!success) {
+		CreateErrorMessageWindow(system, "Could not save the module file after deletion of a module.");
+	}
+}
+
 void ModuleExplorerRemoveModule(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	ModuleExplorerData* data = (ModuleExplorerData*)_data;
 	if (data->selected_module != -1) {
-		RemoveModule(data->editor_state, data->selected_module);
-
-		memmove(
-			data->configurations + data->selected_module,
-			data->configurations + data->selected_module + 1, 
-			(data->editor_state->project_modules->size - data->selected_module) * sizeof(EDITOR_MODULE_CONFIGURATION)
-		);
-		data->selected_module = -1;
-		bool success = SaveModuleFile(data->editor_state);
-		if (!success) {
-			CreateErrorMessageWindow(system, "Could not save the module file after deletion of a module.");
+		// Detect if another module depends on this one
+		ECS_STACK_CAPACITY_STREAM(unsigned int, dependent_modules, 512);
+		GetModulesDependentUpon(data->editor_state, data->selected_module, dependent_modules);
+		if (dependent_modules.size == 0) {
+			// Check to see if any sandboxes depend upon on it
+			bool is_used = IsModuleInfoUsed(data->editor_state, data->selected_module, false, EDITOR_MODULE_CONFIGURATION_COUNT, &dependent_modules);
+			if (is_used) {
+				ECS_STACK_CAPACITY_STREAM(char, description, 1024);
+				description.Copy("Are you sure you want to remove the selected module? It is being used by the following sandboxes: ");
+				for (unsigned int index = 0; index < dependent_modules.size; index++) {
+					function::ConvertIntToChars(description, dependent_modules[index]);
+					if (index < dependent_modules.size - 1) {
+						description.AddStream(", ");
+					}
+				}
+				CreateConfirmWindow(system, description, { ModuleExplorerConfirmRemoveModule, data, 0 });
+			}
+			else {
+				ModuleExplorerConfirmRemoveModule(action_data);
+			}
+		}
+		else {
+			// It has dependent modules - cannot delete the current one without deleting the dependent modules
+			ECS_STACK_CAPACITY_STREAM(char, description, 1024);
+			description.Copy("The selected module is being referenced by other modules. In order to remove this one you must remove all the others before hand. The dependent modules: ");
+			for (unsigned int index = 0; index < dependent_modules.size; index++) {
+				Stream<wchar_t> library_name = data->editor_state->project_modules->buffer[dependent_modules[index]].library_name;
+				function::ConvertWideCharsToASCII(library_name, description);
+				if (index < dependent_modules.size - 1) {
+					description.AddStream(", ");
+				}
+			}
+			CreateErrorMessageWindow(system, description);
 		}
 	}
 }

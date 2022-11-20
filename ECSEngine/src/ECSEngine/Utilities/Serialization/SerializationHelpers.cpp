@@ -296,7 +296,12 @@ namespace ECSEngine {
 		write_data.data_to_write = data->data_to_write;
 		write_data.element_byte_size = data->element_byte_size == -1 ? result.byte_size : data->element_byte_size;
 		write_data.write_data = data->write_data;
-		return SerializeCustomWriteHelper(&write_data);
+
+		Stream<char> previous_definition = data->write_data->definition;
+		data->write_data->definition = data->template_type;
+		size_t return_result = SerializeCustomWriteHelper(&write_data);
+		data->write_data->definition = previous_definition;
+		return return_result;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -319,6 +324,8 @@ namespace ECSEngine {
 			*data->allocated_buffer = nullptr;
 		};
 
+		bool single_instance = data->elements_to_allocate == 0 && data->element_count == 1;
+
 		if (data->reflection_type->name.size > 0) {
 			bool has_options = data->read_data->options != nullptr;
 
@@ -339,35 +346,49 @@ namespace ECSEngine {
 
 			if (data->read_data->read_data) {
 				// Allocate the data before
-				void* buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
-				*data->allocated_buffer = buffer;
-				deserialize_size += data->elements_to_allocate * data->element_byte_size;
+				if (!single_instance) {
+					void* buffer = data->elements_to_allocate > 0 ? AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size) : nullptr;
+					*data->allocated_buffer = buffer;
+					deserialize_size += data->elements_to_allocate * data->element_byte_size;
 
-				auto loop = [&](auto use_indices) {
-					for (size_t index = 0; index < data->element_count; index++) {
-						size_t offset = index;
-						if constexpr (use_indices) {
-							offset = data->indices[index];
+					auto loop = [&](auto use_indices) {
+						for (size_t index = 0; index < data->element_count; index++) {
+							size_t offset = index;
+							if constexpr (use_indices) {
+								offset = data->indices[index];
+							}
+							void* element = function::OffsetPointer(buffer, data->element_byte_size * offset);
+							ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, element, *data->read_data->stream, &options);
+							if (code != ECS_DESERIALIZE_OK) {
+								deallocate_buffer();
+								return -1;
+							}
 						}
-						void* element = function::OffsetPointer(buffer, data->element_byte_size * offset);
-						ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, element, *data->read_data->stream, &options);
-						if (code != ECS_DESERIALIZE_OK) {
-							deallocate_buffer();
-							return -1;
-						}
+						return 0;
+					};
+
+					int return_val;
+					// Hoist the if check outside the for
+					if (data->indices.buffer == nullptr) {
+						return_val = loop(std::false_type{});
 					}
-				};
-
-				// Hoist the if check outside the for
-				if (data->indices.buffer == nullptr) {
-					loop(std::false_type{});
+					else {
+						return_val =loop(std::true_type{});
+					}
+					if (return_val == -1) {
+						return -1;
+					}
 				}
 				else {
-					loop(std::true_type{});
+					ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->reflection_type, data->deserialize_target, *data->read_data->stream, &options);
+					if (code != ECS_DESERIALIZE_OK) {
+						return -1;
+					}
 				}
 			}
 			else {
-				for (size_t index = 0; index < data->element_count; index++) {
+				size_t iterate_count = single_instance ? 1 : data->element_count;
+				for (size_t index = 0; index < iterate_count; index++) {
 					size_t byte_size = DeserializeSize(data->read_data->reflection_manager, data->reflection_type, *data->read_data->stream, &options);
 					if (byte_size == -1) {
 						return -1;
@@ -377,38 +398,49 @@ namespace ECSEngine {
 			}
 		}
 		else if (data->custom_serializer_index != -1) {
-			if (data->read_data->read_data) {
-				void* buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
-				*data->allocated_buffer = buffer;
-				deserialize_size += data->elements_to_allocate * data->element_byte_size;
-			}
-
-			auto loop = [&](auto use_indices) {
-				for (size_t index = 0; index < data->element_count; index++) {
-					size_t offset = index;
-					if constexpr (use_indices) {
-						offset = data->indices[index];
-					}
-
-					void* element = function::OffsetPointer(*data->allocated_buffer, data->element_byte_size * offset);
-					data->read_data->data = element;
-					size_t byte_size_or_success = ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].read(data->read_data);
-					if (byte_size_or_success == -1) {
-						if (data->read_data->read_data) {
-							deallocate_buffer();
-							return -1;
-						}
-					}
-
-					deserialize_size += byte_size_or_success;
+			if (!single_instance) {
+				if (data->read_data->read_data) {
+					void* buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
+					*data->allocated_buffer = buffer;
+					deserialize_size += data->elements_to_allocate * data->element_byte_size;
 				}
-			};
 
-			if (data->indices.buffer == nullptr) {
-				loop(std::false_type{});
+				auto loop = [&](auto use_indices) {
+					for (size_t index = 0; index < data->element_count; index++) {
+						size_t offset = index;
+						if constexpr (use_indices) {
+							offset = data->indices[index];
+						}
+
+						void* element = function::OffsetPointer(*data->allocated_buffer, data->element_byte_size * offset);
+						data->read_data->data = element;
+						size_t byte_size_or_success = ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].read(data->read_data);
+						if (byte_size_or_success == -1) {
+							if (data->read_data->read_data) {
+								deallocate_buffer();
+								return -1;
+							}
+						}
+
+						deserialize_size += byte_size_or_success;
+					}
+					return 0;
+				};
+
+				int return_val;
+				if (data->indices.buffer == nullptr) {
+					return_val = loop(std::false_type{});
+				}
+				else {
+					return_val = loop(std::true_type{});
+				}
+				if (return_val == -1) {
+					return -1;
+				}
 			}
 			else {
-				loop(std::true_type{});
+				data->read_data->data = data->deserialize_target;
+				deserialize_size += ECS_SERIALIZE_CUSTOM_TYPES[data->custom_serializer_index].read(data->read_data);
 			}
 		}
 		else {
@@ -427,37 +459,40 @@ namespace ECSEngine {
 				size_t stream_size = data->stream_type == ReflectionStreamFieldType::ResizableStream ? sizeof(ResizableStream<void>) : sizeof(Stream<void>);
 
 				if (data->read_data->read_data) {
-					*data->allocated_buffer = AllocateEx(backup_allocator, data->elements_to_allocate * stream_size);
-					deserialize_size += data->elements_to_allocate * stream_size;
+					if (!single_instance) {
+						*data->allocated_buffer = data->elements_to_allocate > 0 ? AllocateEx(backup_allocator, data->elements_to_allocate * stream_size) : nullptr;
+						deserialize_size += data->elements_to_allocate * stream_size;
 
-					auto loop = [&](auto use_indices) {
-						for (size_t index = 0; index < data->element_count; index++) {
-							size_t offset = index;
-							if constexpr (use_indices) {
-								offset = data->indices[index];
-							}
-
-							void* element = function::OffsetPointer(*data->allocated_buffer, index * stream_size);
-							if (data->stream_type == ReflectionStreamFieldType::ResizableStream) {
-								if (has_options && data->read_data->options->use_resizable_stream_allocator) {
-									allocator = ((ResizableStream<void>*)element)->allocator;
+						auto loop = [&](auto use_indices) {
+							for (size_t index = 0; index < data->element_count; index++) {
+								size_t offset = index;
+								if constexpr (use_indices) {
+									offset = data->indices[index];
 								}
+
+								void* element = function::OffsetPointer(*data->allocated_buffer, index * stream_size);
+								if (data->stream_type == ReflectionStreamFieldType::ResizableStream) {
+									if (has_options && data->read_data->options->use_resizable_stream_allocator) {
+										allocator = ((ResizableStream<void>*)element)->allocator;
+									}
+								}
+
+								// The zero is for basic type arrays. Should not really happen
+								ReadOrReferenceFundamentalType<true, true>(field_info, element, *data->read_data->stream, 0, allocator);
 							}
+						};
 
-							// The zero is for basic type arrays. Should not really happen
-							ReadOrReferenceFundamentalType<true, true>(field_info, element, *data->read_data->stream, 0, allocator);
+						if (data->indices.buffer == nullptr) {
+							loop(std::false_type{});
 						}
-					};
-
-					if (data->indices.buffer == nullptr) {
-						loop(std::false_type{});
-					}
-					else {
-						loop(std::true_type{});
+						else {
+							loop(std::true_type{});
+						}
 					}
 				}
 				else {
-					for (size_t index = 0; index < data->element_count; index++) {
+					size_t iterate_count = single_instance ? 1 : data->element_count;
+					for (size_t index = 0; index < iterate_count; index++) {
 						void* element = function::OffsetPointer(*data->allocated_buffer, index * stream_size);
 
 						// The zero is for basic type arrays. Should not really happen
@@ -467,19 +502,25 @@ namespace ECSEngine {
 			}
 			else {
 				if (data->read_data->read_data) {
-					*data->allocated_buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
+					if (!single_instance) {
+						*data->allocated_buffer = AllocateEx(backup_allocator, data->elements_to_allocate * data->element_byte_size);
 
-					if (data->indices.buffer == nullptr) {
-						Read<true>(data->read_data->stream, *data->allocated_buffer, data->element_count * data->element_byte_size);
+						if (data->indices.buffer == nullptr) {
+							Read<true>(data->read_data->stream, *data->allocated_buffer, data->element_count * data->element_byte_size);
+						}
+						else {
+							for (size_t index = 0; index < data->element_count; index++) {
+								Read<true>(data->read_data->stream, function::OffsetPointer(*data->allocated_buffer, data->indices[index] * data->element_byte_size), data->element_byte_size);
+							}
+						}
 					}
 					else {
-						for (size_t index = 0; index < data->element_count; index++) {
-							Read<true>(data->read_data->stream, function::OffsetPointer(*data->allocated_buffer, data->indices[index] * data->element_byte_size), data->element_byte_size);
-						}
+						Read<true>(data->read_data->stream, data->deserialize_target, data->element_byte_size);
 					}
 				}
 				else {
-					deserialize_size += data->elements_to_allocate * data->element_byte_size;
+					size_t count = single_instance ? 1 : data->elements_to_allocate;
+					deserialize_size += count * data->element_byte_size;
 				}
 			}
 		}
@@ -512,16 +553,20 @@ namespace ECSEngine {
 
 		SerializeCustomTypeDeduceTypeHelperResult result = SerializeCustomTypeDeduceTypeHelper(&helper_data);
 		
+		Stream<char> previous_definition = data->data->definition;
 		data->data->definition = data->definition;
 
 		// Copy the results into this structure
 		DeserializeCustomReadHelperData deserialize_data = FillDeserializeCustomReadHelper(&result);
-		deserialize_data.elements_to_allocate = data->element_count;
+		deserialize_data.elements_to_allocate = data->elements_to_allocate;
 		deserialize_data.element_count = data->element_count;
 		deserialize_data.read_data = data->data;
 		deserialize_data.allocated_buffer = data->allocated_buffer;
 
-		return DeserializeCustomReadHelper(&deserialize_data);
+		size_t return_result = DeserializeCustomReadHelper(&deserialize_data);
+		// Restore the previous definition
+		data->data->definition = previous_definition;
+		return return_result;
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -538,9 +583,7 @@ namespace ECSEngine {
 		const ReflectionType* type,
 		const void* source,
 		void* destination,
-		AllocatorPolymorphic field_allocator,
-		Stream<Stream<char>> blittable_exceptions,
-		Stream<unsigned int> blittable_byte_sizes
+		AllocatorPolymorphic field_allocator
 	)
 	{
 		for (size_t index = 0; index < type->fields.size; index++) {
@@ -553,7 +596,7 @@ namespace ECSEngine {
 					memcpy(destination_field, source_field, type->fields[index].info.byte_size);
 				}
 				else {
-					CopyReflectionType(reflection_manager, type->fields[index].definition, source_field, destination_field, field_allocator, blittable_exceptions, blittable_byte_sizes);
+					CopyReflectionType(reflection_manager, type->fields[index].definition, source_field, destination_field, field_allocator);
 				}
 			}
 			else {
@@ -569,17 +612,13 @@ namespace ECSEngine {
 		Stream<char> definition,
 		const void* source, 
 		void* destination, 
-		AllocatorPolymorphic field_allocator, 
-		Stream<Stream<char>> blittable_exceptions,
-		Stream<unsigned int> blittable_byte_sizes
+		AllocatorPolymorphic field_allocator
 	)
 	{
-		ECS_ASSERT(blittable_exceptions.size == blittable_byte_sizes.size);
-
 		// Check blittable exceptions
-		unsigned int exception_index = function::FindString(definition, blittable_exceptions);
-		if (exception_index != -1) {
-			memcpy(destination, source, blittable_byte_sizes[exception_index]);
+		uint2 exception_index = reflection_manager->FindBlittableException(definition);
+		if (exception_index.x != -1) {
+			memcpy(destination, source, exception_index.x);
 		}
 		else {
 			// Check fundamental type
@@ -591,7 +630,7 @@ namespace ECSEngine {
 				ReflectionType reflection_type;
 				if (reflection_manager->TryGetType(definition, reflection_type)) {
 					// Forward the call
-					CopyReflectionType(reflection_manager, &reflection_type, source, destination, field_allocator, blittable_exceptions, blittable_byte_sizes);
+					CopyReflectionType(reflection_manager, &reflection_type, source, destination, field_allocator);
 				}
 				else {
 					// Check to see if it is a custom type
@@ -599,7 +638,6 @@ namespace ECSEngine {
 					if (custom_index != -1) {
 						SerializeCustomTypeIsTriviallyCopyableData trivially_data;
 						trivially_data.definition = definition;
-						trivially_data.exceptions = blittable_exceptions;
 						trivially_data.reflection_manager = reflection_manager;
 						bool trivially_copyable = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].is_trivially_copyable(&trivially_data);
 						if (trivially_copyable) {
@@ -616,8 +654,6 @@ namespace ECSEngine {
 							copy_data.definition = definition;
 							copy_data.destination = destination;
 							copy_data.source = source;
-							copy_data.blittable_exceptions = blittable_exceptions;
-							copy_data.blittable_byte_sizes = blittable_byte_sizes;
 							copy_data.reflection_manager = reflection_manager;
 
 							ECS_SERIALIZE_CUSTOM_TYPES[custom_index].copy_function(&copy_data);
@@ -741,6 +777,7 @@ namespace ECSEngine {
 		helper_data.data = data;
 		helper_data.definition = template_type;
 		helper_data.element_count = buffer_count;
+		helper_data.elements_to_allocate = buffer_count;
 		return DeserializeCustomReadHelperEx(&helper_data);
 
 		//size_t template_type_byte_size = SerializeCustomTypeDeduceTypeHelper(template_type, data->reflection_manager, &reflection_type, custom_serializer_index, basic_type, stream_type);
@@ -768,8 +805,8 @@ namespace ECSEngine {
 
 	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(Stream) {
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
-		size_t element_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type, data->blittable_exceptions, data->blittable_byte_sizes);
-		bool trivially_copyable = IsTriviallyCopyable(data->reflection_manager, data->definition, data->blittable_exceptions);
+		size_t element_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
+		bool trivially_copyable = IsTriviallyCopyable(data->reflection_manager, data->definition);
 		
 		Stream<char>* source = (Stream<char>*)data->source;
 		Stream<char>* destination = (Stream<char>*)data->destination;
@@ -794,9 +831,7 @@ namespace ECSEngine {
 						&nested_type,
 						function::OffsetPointer(source->buffer, index * element_size),
 						function::OffsetPointer(allocation, element_size * index),
-						data->allocator,
-						data->blittable_exceptions,
-						data->blittable_byte_sizes
+						data->allocator
 					);
 				}
 			}
@@ -958,7 +993,7 @@ namespace ECSEngine {
 		total_deserialize_size += user_defined_size;
 
 		if (data->read_data) {
-			set->InitializeFromBuffer(allocated_buffer, buffer_capacity);
+			SparseSetInitializeUntyped(set, buffer_capacity, result.byte_size, allocated_buffer);
 		}
 
 		if (user_data != nullptr && *user_data) {
@@ -973,15 +1008,13 @@ namespace ECSEngine {
 			// Now read the indirection_buffer
 			if (data->read_data) {
 				Read<true>(data->stream, set->indirection_buffer, sizeof(uint2) * buffer_capacity);
+
+				set->size = buffer_count;
+				set->first_empty_slot = first_free;
 			}
 			else {
 				total_deserialize_size += Read<false>(data->stream, set->indirection_buffer, sizeof(uint2) * buffer_capacity);
 			}
-		}
-
-		if (data->read_data) {
-			set->size = buffer_count;
-			set->first_empty_slot = first_free;
 		}
 
 		return total_deserialize_size;
@@ -997,9 +1030,9 @@ namespace ECSEngine {
 
 	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(SparseSet) {
 		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
-		size_t element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type, data->blittable_exceptions, data->blittable_byte_sizes);
+		size_t element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
 
-		bool trivially_copyable = IsTriviallyCopyable(data->reflection_manager, template_type, data->blittable_exceptions);
+		bool trivially_copyable = IsTriviallyCopyable(data->reflection_manager, template_type);
 		if (trivially_copyable) {
 			// Can blit the data type
 			SparseSetCopyTypeErased(data->source, data->destination, element_byte_size, data->allocator);
@@ -1016,7 +1049,7 @@ namespace ECSEngine {
 			auto copy_function = [](const void* source, void* destination, AllocatorPolymorphic allocator, void* extra_data) {
 				CopyData* data = (CopyData*)extra_data;
 				if (data->type != nullptr) {
-					CopyReflectionType(data->custom_data->reflection_manager, data->type, source, destination, allocator, data->custom_data->blittable_exceptions);
+					CopyReflectionType(data->custom_data->reflection_manager, data->type, source, destination, allocator);
 				}
 				else {
 					data->custom_data->source = source;
@@ -1281,13 +1314,12 @@ namespace ECSEngine {
 
 	bool IsTriviallyCopyable(
 		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* type,
-		Stream<Stream<char>> exceptions
+		const Reflection::ReflectionType* type
 	) {
 		for (size_t index = 0; index < type->fields.size; index++) {
 			// Check exceptions
-			unsigned int exception_index = function::FindString(type->fields[index].definition, exceptions);
-			if (exception_index != -1) {
+			uint2 exception_index = reflection_manager->FindBlittableException(type->fields[index].definition);
+			if (exception_index.x != -1) {
 				// Go to the next iteration
 				continue;
 			}
@@ -1332,14 +1364,13 @@ namespace ECSEngine {
 
 	bool IsTriviallyCopyable(
 		const Reflection::ReflectionManager* reflection_manager, 
-		Stream<char> definition,
-		Stream<Stream<char>> exceptions
+		Stream<char> definition
 	)
 	{
 		ReflectionType type;
 		if (reflection_manager->TryGetType(definition, type)) {
 			// If we have the type, return its trivial status
-			return IsTriviallyCopyable(reflection_manager, &type, exceptions);
+			return IsTriviallyCopyable(reflection_manager, &type);
 		}
 		else {
 			// Might be another container type
@@ -1348,7 +1379,6 @@ namespace ECSEngine {
 				SerializeCustomTypeIsTriviallyCopyableData is_data;
 				is_data.definition = definition;
 				is_data.reflection_manager = reflection_manager;
-				is_data.exceptions = exceptions;
 				return ECS_SERIALIZE_CUSTOM_TYPES[container_index].is_trivially_copyable(&is_data);
 			}
 			else {
@@ -1370,8 +1400,8 @@ namespace ECSEngine {
 
 		if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
 			// Check exceptions
-			unsigned int exception_index = function::FindString(definition, exceptions);
-			if (exception_index != -1) {
+			uint2 exception_index = reflection_manager->FindBlittableException(definition);
+			if (exception_index.x != -1) {
 				return true;
 			}
 			

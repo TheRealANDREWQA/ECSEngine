@@ -1,6 +1,8 @@
 #include "editorpch.h"
 #include "EditorSandbox.h"
 #include "EditorState.h"
+#include "EditorEvent.h"
+#include "../Assets/EditorSandboxAssets.h"
 #include "../Modules/Module.h"
 #include "../Project/ProjectFolders.h"
 #include "../Modules/ModuleSettings.h"
@@ -189,43 +191,31 @@ bool ChangeSandboxScenePath(EditorState* editor_state, unsigned int sandbox_inde
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	
-	if (new_scene.size == 0) {
-		// Reset the scene entities
-		sandbox->scene_entities.Reset();
-		sandbox->database.Reset();
-		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
+	ClearSandboxScene(editor_state, sandbox_index);
+	sandbox->scene_path.size = 0;
 
-		sandbox->scene_path.size = 0;
+	if (new_scene.size == 0) {
+		// Setting the components needs to be done right before exiting
+		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
 		return true;
 	}
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetSandboxScenePathImpl(editor_state, new_scene, absolute_path);
 
-	GlobalMemoryManager global_manager = GlobalMemoryManager(sandbox->runtime_descriptor.global_memory_size, sandbox->runtime_descriptor.global_memory_pool_count, sandbox->runtime_descriptor.global_memory_new_allocation_size);
-	EntityManager entity_manager = CreateEntityManagerWithPool(sandbox->runtime_descriptor.entity_manager_memory_size, sandbox->runtime_descriptor.entity_manager_memory_pool_count, sandbox->runtime_descriptor.entity_manager_memory_new_allocation_size, sandbox->runtime_descriptor.entity_pool_power_of_two, &global_manager);
-
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
-	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
-	AssetDatabaseReference database_reference(editor_state->asset_database, stack_allocator);
-
-	bool success = LoadEditorSceneCore(editor_state, &entity_manager, &database_reference, absolute_path);
+	bool success = LoadEditorSceneCore(editor_state, sandbox_index, absolute_path);
 	if (success) {
-		// Now need to reset the current contents and copy these ones instead
-		sandbox->scene_entities.Reset();
-		sandbox->database.Reset();
-
-		sandbox->scene_entities.CopyOther(&entity_manager);
-		sandbox->database = database_reference.Copy(sandbox->database.mesh_metadata.allocator);
-		editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
-
+		// Copy the contents
 		sandbox->scene_path.Copy(new_scene);
 		sandbox->is_scene_dirty = false;
+
+		// Load the assets
+		LoadSandboxAssets(editor_state, sandbox_index);
 	}
 
-	// Now we can release the temporary objects
-	global_manager.Free();
-	_stack_allocator.ClearBackup();
+	// If the load failed, the scene will be reset with an empty value
+	editor_state->editor_components.SetManagerComponents(&sandbox->scene_entities);
+
 	return success;
 }
 
@@ -240,6 +230,18 @@ void ChangeSandboxModuleConfiguration(
 	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
 	ECS_ASSERT(in_stream_index != -1);
 	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].module_configuration = module_configuration;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void ClearSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
+{
+	// Unload the assets currently used by this sandbox and reset the scene entities
+	UnloadSandboxAssets(editor_state, sandbox_index);
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox->scene_entities.Reset();
+	sandbox->database.Reset();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -323,6 +325,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->is_scene_dirty = false;
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
+	sandbox->is_locked = false;
 
 	// Initialize the runtime settings string
 	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
@@ -368,7 +371,7 @@ void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int san
 
 void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
 {
-	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	if (IsSandboxRuntimePreinitialized(editor_state, sandbox_index)) {
 		// Can safely now destroy the runtime world
@@ -378,40 +381,78 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
-	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
+struct DestroySandboxEventData {
+	GlobalMemoryManager* sandbox_global_manager;
+};
+
+EDITOR_EVENT(DestroySandboxEvent) {
+	DestroySandboxEventData* data = (DestroySandboxEventData*)_data;
+
+	unsigned int sandbox_index = 0;
+	for (; sandbox_index < editor_state->sandboxes.size; sandbox_index++) {
+		if (editor_state->sandboxes[sandbox_index].GlobalMemoryManager() == data->sandbox_global_manager) {
+			break;
+		}
+	}
+
+	if (sandbox_index == editor_state->sandboxes.size) {
+		// There is no match, exit
+		return false;
+	}
+
+	if (!IsSandboxLocked(editor_state, sandbox_index)) {
+		DestroySandbox(editor_state, sandbox_index);
+		return false;
+	}
+	else {
+		return true;
+	}
+}
+
+bool DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool push_event) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	
-	// Destroy the reflected settings
-	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-		DestroyModuleSettings(
-			editor_state,
-			sandbox->modules_in_use[index].module_index,
-			sandbox->modules_in_use[index].reflected_settings,
-			index
-		);
+	if (!IsSandboxLocked(editor_state, sandbox_index)) {
+		// Destroy the reflected settings
+		for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
+			DestroyModuleSettings(
+				editor_state,
+				sandbox->modules_in_use[index].module_index,
+				sandbox->modules_in_use[index].reflected_settings,
+				index
+			);
+		}
+
+		// Destroy the sandbox runtime
+		DestroySandboxRuntime(editor_state, sandbox_index);
+
+		// Free the global sandbox allocator
+		sandbox->GlobalMemoryManager()->Free();
+
+		// Release the runtime settings path as well - it was allocated from the editor allocator
+		editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
+
+		unsigned int previous_count = editor_state->sandboxes.size;
+		editor_state->sandboxes.RemoveSwapBack(sandbox_index);
+
+		// Notify the UI and the inspector
+		if (editor_state->sandboxes.size > 0) {
+			FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
+			UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
+			UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
+			UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
+		}
+
+		RegisterInspectorSandbox(editor_state);
+		return true;
 	}
-
-	// Destroy the sandbox runtime
-	DestroySandboxRuntime(editor_state, sandbox_index);
-
-	// Free the global sandbox allocator
-	sandbox->GlobalMemoryManager()->Free();
-
-	// Release the runtime settings path as well - it was allocated from the editor allocator
-	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
-
-	unsigned int previous_count = editor_state->sandboxes.size;
-	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
-
-	// Notify the UI and the inspector
-	if (editor_state->sandboxes.size > 0) {
-		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
-		UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
-		UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
-		UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
+	else {
+		if (push_event) {
+			DestroySandboxEventData event_data{ sandbox->GlobalMemoryManager() };
+			EditorAddEvent(editor_state, DestroySandboxEvent, &event_data, sizeof(event_data));
+		}
 	}
-
-	RegisterInspectorSandbox(editor_state);
+	return false;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -536,6 +577,95 @@ bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigne
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index)
+{
+	return GetSandbox(editor_state, sandbox_index)->is_locked;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
+		if (sandbox->modules_in_use[index].module_index == module_index) {
+			return sandbox->modules_in_use[index].module_configuration;
+		}
+	}
+	return EDITOR_MODULE_CONFIGURATION_COUNT;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsModuleInfoUsed(
+	const EditorState* editor_state, 
+	unsigned int module_index, 
+	bool running_state, 
+	EDITOR_MODULE_CONFIGURATION configuration, 
+	CapacityStream<unsigned int>* sandbox_indices
+)
+{
+	if (sandbox_indices != nullptr) {
+		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
+			bool is_used = false;
+			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+				is_used |= IsModuleInfoUsed(editor_state, module_index, running_state, (EDITOR_MODULE_CONFIGURATION)configuration_index, sandbox_indices);
+			}
+			return is_used;
+		}
+		else {
+			bool is_used = false;
+			unsigned int sandbox_count = editor_state->sandboxes.size;
+			for (unsigned int index = 0; index < sandbox_count; index++) {
+				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, index, module_index);
+				if (sandbox_configuration == configuration) {
+					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, index);
+					if (running_state) {
+						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
+							is_used = true;
+							sandbox_indices->AddSafe(index);
+						}
+					}
+					else {
+						is_used = true;
+						sandbox_indices->AddSafe(index);
+					}
+				}
+			}
+			return is_used;
+		}
+	}
+	else {
+		if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT) {
+			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+				if (IsModuleInfoUsed(editor_state, module_index, (EDITOR_MODULE_CONFIGURATION)configuration_index)) {
+					return true;
+				}
+			}
+		}
+		else {
+			unsigned int sandbox_count = editor_state->sandboxes.size;
+			for (unsigned int index = 0; index < sandbox_count; index++) {
+				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, index, module_index);
+				if (sandbox_configuration == configuration) {
+					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, index);
+					if (running_state) {
+						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
+							return true;
+						}
+					}
+					else {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void InitializeSandboxes(EditorState* editor_state)
 {
 	// Set the allocator for the resizable strema
@@ -648,17 +778,6 @@ bool LoadRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool LoadSandboxScene(EditorState* editor_state, unsigned int sandbox_index)
-{
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
-
-	GetSandboxScenePath(editor_state, sandbox_index, absolute_path);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, absolute_path);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 bool LoadEditorSandboxFile(EditorState* editor_state)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_file_path, 512);
@@ -744,6 +863,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 			}
 		}
 
+		WaitSandboxUnlock(editor_state);
 		// Deallocate all the current sandboxes if any
 		size_t initial_sandbox_count = editor_state->sandboxes.size;
 		for (size_t index = 0; index < initial_sandbox_count; index++) {
@@ -774,7 +894,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
 			}
 
-			sandbox->database = AssetDatabaseReference(editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
+			//sandbox->database = AssetDatabaseReference(editor_state->asset_database, GetAllocatorPolymorphic(sandbox->GlobalMemoryManager()));
 
 			// Now the modules
 			for (unsigned int subindex = 0; subindex < sandboxes[index].modules_in_use.size; subindex++) {
@@ -801,6 +921,13 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void LockSandbox(EditorState* editor_state, unsigned int sandbox_index)
+{
+	GetSandbox(editor_state, sandbox_index)->is_locked = true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, index);
@@ -819,7 +946,7 @@ bool LaunchSandboxRuntime(EditorState* editor_state, unsigned int index)
 	// Push all the tasks into it
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);	
-		task_scheduler->Add(info->tasks);
+		task_scheduler->Add(info->ecs_module.tasks);
 	}
 
 	ECS_STACK_CAPACITY_STREAM(char, solve_error_message, 2048);
@@ -953,6 +1080,42 @@ void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox
 	sandbox_module->settings_allocator.Free();
 
 	editor_state->sandboxes[sandbox_index].modules_in_use.RemoveSwapBack(in_stream_index);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_index)
+{
+	// Find all sandboxes that depend on that module
+	ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_indices, 512);
+	IsModuleInfoUsed(editor_state, module_index, false, EDITOR_MODULE_CONFIGURATION_COUNT, &sandbox_indices);
+
+	if (sandbox_indices.size > 0) {
+		unsigned int loaded_module_index = editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index);
+		ECS_ASSERT(loaded_module_index != -1);
+
+		// Remove the module from the sandbox
+		// And also update its scene to have any components from the given module be removed
+		for (unsigned int index = 0; index < sandbox_indices.size; index++) {
+			// Remove the module from the entity manager
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_indices[index]);
+			
+			// Do it for the scene entities and also for the runtime entities
+			editor_state->editor_components.RemoveModuleFromManager(&sandbox->scene_entities, loaded_module_index);
+			editor_state->editor_components.RemoveModuleFromManager(sandbox->sandbox_world.entity_manager, loaded_module_index);
+			
+			// Set the scene dirty for that sandbox
+			SetSandboxSceneDirty(editor_state, sandbox_indices[index]);
+
+			RemoveSandboxModule(editor_state, sandbox_indices[index], module_index);
+		}
+
+		// Save the sandbox file
+		bool success = SaveEditorSandboxFile(editor_state);
+		if (!success) {
+			EditorSetConsoleError("Failed to save editor sandbox file.");
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1120,6 +1283,31 @@ bool UpdateRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> file
 	}
 
 	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index)
+{
+	GetSandbox(editor_state, sandbox_index)->is_locked = false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void WaitSandboxUnlock(EditorState* editor_state, unsigned int sandbox_index)
+{
+	if (sandbox_index == -1) {
+		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
+			while (IsSandboxLocked(editor_state, index)) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(15));
+			}
+		}
+	}
+	else {
+		while (IsSandboxLocked(editor_state, sandbox_index)) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(15));
+		}
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

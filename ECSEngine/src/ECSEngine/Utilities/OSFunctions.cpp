@@ -1219,6 +1219,7 @@ namespace ECSEngine {
 							// Create the last all filter
 							filters[data->extensions.size] = { L"", modified_extensions.buffer + modified_extensions.size };
 							for (size_t index = 0; index < data->extensions.size; index++) {
+								modified_extensions.Add(L'*');
 								modified_extensions.AddStream(data->extensions[index]);
 								modified_extensions.Add(L';');
 							}

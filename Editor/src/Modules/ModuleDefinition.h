@@ -35,14 +35,7 @@ enum EDITOR_MODULE_LOAD_STATUS : unsigned char {
 
 // This is a per Configuration basis
 struct EditorModuleInfo {
-	ECSEngine::Module ecs_module;
-
-	// The streams for the module
-	ECSEngine::Stream<ECSEngine::TaskSchedulerElement> tasks;
-	ECSEngine::Stream<ECSEngine::Tools::UIWindowDescriptor> ui_descriptors;
-	ECSEngine::Stream<ECSEngine::ModuleBuildAssetType> build_asset_types;
-	ECSEngine::Stream<ECSEngine::ModuleLinkComponentTarget> link_components;
-	ECSEngine::ModuleSerializeComponentStreams serialize_streams;
+	ECSEngine::AppliedModule ecs_module;
 
 	EDITOR_MODULE_LOAD_STATUS load_status;
 	size_t library_last_write_time;

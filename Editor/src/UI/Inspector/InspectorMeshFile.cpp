@@ -25,6 +25,7 @@ struct InspectorDrawMeshFileData {
 	CoallescedMesh* mesh;
 	float radius_delta;
 	float2 rotation_delta;
+	float window_thumbnail_percentage;
 
 	MeshMetadata current_metadata;
 	AssetSettingsHelperData helper_data;
@@ -167,10 +168,10 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 	// Convert back to absolute separator
 	function::ReplaceCharacter(data->current_metadata.file, ECS_OS_PATH_SEPARATOR_REL, ECS_OS_PATH_SEPARATOR);
 
-	auto calculate_texture_size_from_region = [](uint2 window_size, float2 region_scale) {
+	auto calculate_texture_size_from_region = [=](uint2 window_size, float2 region_scale) {
 		return uint2(
 			(unsigned int)(window_size.x * region_scale.x),
-			(unsigned int)(window_size.y * MESH_PREVIEW_HEIGHT)
+			(unsigned int)(window_size.y * data->window_thumbnail_percentage)
 		);
 	};
 
@@ -240,9 +241,9 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 
 		UIConfigAbsoluteTransform thumbnail_transform;
 		thumbnail_transform.scale.x = drawer->GetRegionScale().x;
-		thumbnail_transform.scale.y = MESH_PREVIEW_HEIGHT;
+		thumbnail_transform.scale.y = data->window_thumbnail_percentage;
 		thumbnail_transform.position.x = drawer->GetRegionPosition().x;
-		thumbnail_transform.position.y = drawer->GetRegionPosition().y + drawer->GetRegionScale().y - MESH_PREVIEW_HEIGHT;
+		thumbnail_transform.position.y = drawer->GetRegionPosition().y + drawer->GetRegionScale().y - data->window_thumbnail_percentage;
 		// Add the offsets from the region offset
 		thumbnail_transform.position += drawer->GetRegionRenderOffset();
 
@@ -260,8 +261,36 @@ void InspectorDrawMeshFile(EditorState* editor_state, unsigned int inspector_ind
 		);
 
 		// Add the clickable and hoverable handler on that rectangle aswell
-		drawer->AddHoverable(thumbnail_transform.position, thumbnail_transform.scale, { InspectorMeshPreviewHoverable, data, 0 });
-		drawer->AddClickable(thumbnail_transform.position, thumbnail_transform.scale, { InspectorMeshPreviewClickable, data, 0 });
+		drawer->AddHoverable(0, thumbnail_transform.position, thumbnail_transform.scale, { InspectorMeshPreviewHoverable, data, 0 });
+		drawer->AddClickable(0, thumbnail_transform.position, thumbnail_transform.scale, { InspectorMeshPreviewClickable, data, 0 });
+
+		auto slide_preview = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
+			// The delta needs to be inverted
+			data->window_thumbnail_percentage -= mouse_delta.y;
+			data->window_thumbnail_percentage = function::ClampMin(data->window_thumbnail_percentage, 0.0f);
+
+			UIDefaultHoverableData default_data;
+			default_data.colors[0] = system->m_descriptors.color_theme.theme;
+			default_data.percentages[0] = 1.25f;
+
+			action_data->data = &default_data;
+			DefaultHoverableAction(action_data);
+		};
+
+		const float SLIDE_PREVIEW_THICKNESS = 0.01f;
+		
+		float2 slide_preview_scale = { drawer->GetRegionScale().x, SLIDE_PREVIEW_THICKNESS };
+
+		// Add a clickable in order to increase or decrease the preview
+		float2 slide_preview_position = thumbnail_transform.position;
+		slide_preview_position.y -= SLIDE_PREVIEW_THICKNESS * 0.5f;
+		slide_preview_position.y -= drawer->GetRegionRenderOffset().y;
+
+		drawer->AddDefaultHoverable(0, slide_preview_position, slide_preview_scale, drawer->color_theme.theme);
+		drawer->AddClickable(0, slide_preview_position, slide_preview_scale, { slide_preview, data, 0 });
 	}
 }
 
@@ -270,6 +299,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 	data.mesh = nullptr;
 	data.radius_delta = 0.0f;
 	data.rotation_delta = { 0.0f, 0.0f };
+	data.window_thumbnail_percentage = MESH_PREVIEW_HEIGHT;
 	memset(&data.helper_data, 0, sizeof(data.helper_data));
 
 	// Allocate the data and embedd the path in it

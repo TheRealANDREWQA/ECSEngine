@@ -1842,6 +1842,17 @@ namespace ECSEngine {
 			void* display_data = nullptr;
 		};
 
+		struct UIConfigColorInputSliders {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_COLOR_INPUT_SLIDERS;
+			}
+
+			bool rgb = true;
+			bool hsv = true;
+			bool alpha = true;
+			bool hex = true;
+		};
+
 	}
 
 }

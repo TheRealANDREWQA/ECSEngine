@@ -12,24 +12,48 @@ namespace ECSEngine {
 	namespace Reflection {
 		struct ReflectionManager;
 	}
+	
+	struct AssetDatabaseReferencePointerRemap {
+		unsigned int old_index;
+		unsigned int new_index;
+		unsigned int handle;
+	};
+
+	// A handle_remapping can be specified. When adding the assets from the given database
+	// into the master database that this reference is referring to, the handle can change their values
+	// The pairs are { original_handle, new_handle_value }.
+	// Alternatively, if there are randomized pointers and you want to make sure that they are unique when inserting
+	// them into the master database, this will report the handles that needed to be changed.
+	// There needs to be specified ECS_ASSET_TYPE_COUNT for each remapping (each asset type has its own stream)
+	struct AssetDatabaseReferenceFromStandaloneOptions {
+		CapacityStream<uint2>* handle_remapping = nullptr;
+		CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remapping = nullptr;
+	};
 
 	struct ECSENGINE_API ECS_REFLECT AssetDatabaseReference {
 		AssetDatabaseReference();
 		AssetDatabaseReference(AssetDatabase* database, AllocatorPolymorphic allocator);
 
-		void AddMesh(unsigned int handle);
+		// By default it does not increment the count
+		void AddMesh(unsigned int handle, bool increment_count = false);
 
-		void AddTexture(unsigned int handle);
+		// By default it does not increment the count
+		void AddTexture(unsigned int handle, bool increment_count = false);
 
-		void AddGPUSampler(unsigned int handle);
+		// By default it does not increment the count
+		void AddGPUSampler(unsigned int handle, bool increment_count = false);
 
-		void AddShader(unsigned int handle);
+		// By default it does not increment the count
+		void AddShader(unsigned int handle, bool increment_count = false);
 
-		void AddMaterial(unsigned int handle);
+		// By default it does not increment the count
+		void AddMaterial(unsigned int handle, bool increment_count = false);
 
-		void AddMisc(unsigned int handle);
+		// By default it does not increment the count
+		void AddMisc(unsigned int handle, bool increment_count = false);
 
-		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type);
+		// By default it does not increment the count
+		void AddAsset(unsigned int handle, ECS_ASSET_TYPE type, bool increment_count = false);
 
 		unsigned int AddAsset(Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool* loaded_now = nullptr);
 
@@ -57,26 +81,40 @@ namespace ECSEngine {
 
 		AssetDatabase* GetDatabase() const;
 
-		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveMesh(unsigned int index);
+		unsigned int GetCount(ECS_ASSET_TYPE type) const;
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveTexture(unsigned int index);
+		// Can optionally fill in the fields of the evicted asset such that you can use it
+		// for some other purpose. The values are valid only until the next remove or addition
+		bool RemoveMesh(unsigned int index, MeshMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveGPUSampler(unsigned int index);
+		// Can optionally fill in the fields of the evicted asset such that you can use it
+		// for some other purpose. The values are valid only until the next remove or addition
+		bool RemoveTexture(unsigned int index, TextureMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveShader(unsigned int index);
+		// Can optionally fill in the fields of the evicted asset such that you can use it
+		// for some other purpose. The values are valid only until the next remove or addition
+		bool RemoveGPUSampler(unsigned int index, GPUSamplerMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveMaterial(unsigned int index);
+		// Can optionally fill in the fields of the evicted asset such that you can use it
+		// for some other purpose. The values are valid only until the next remove or addition
+		bool RemoveShader(unsigned int index, ShaderMetadata* storage = nullptr);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveMisc(unsigned int index);
+		// Can optionally fill in the fields of the evicted asset such that you can use it
+		// for some other purpose. The values are valid only until the next remove or addition
+		bool RemoveMaterial(unsigned int index, MaterialAsset* storage = nullptr);
 
 		// Returns true if the asset was evicted e.g. its reference count reached 0
-		bool RemoveAsset(unsigned int index, ECS_ASSET_TYPE type);
+		bool RemoveMisc(unsigned int index, MiscAsset* storage = nullptr);
+
+		// Returns true if the asset was evicted e.g. its reference count reached 0
+		// Can optionally fill in the fields of the evicted asset such that you can use it
+		// for some other purpose. The values are valid only until the next remove or addition
+		bool RemoveAsset(unsigned int index, ECS_ASSET_TYPE type, void* storage = nullptr);
 
 		// It removes it only from this internal storage, not doing it for the main database
 		void RemoveAssetThisOnly(unsigned int index, ECS_ASSET_TYPE type);
@@ -90,7 +128,7 @@ namespace ECSEngine {
 		void IncrementReferenceCounts();
 
 		// Converts a standalone database into a reference to the one being stored.
-		void FromStandalone(const AssetDatabase* database);
+		void FromStandalone(const AssetDatabase* database, AssetDatabaseReferenceFromStandaloneOptions options = {});
 
 		// Creates a standalone database from the referenced assets.
 		void ToStandalone(AllocatorPolymorphic allocator, AssetDatabase* database) const;
@@ -106,10 +144,16 @@ namespace ECSEngine {
 		// Returns the amount of bytes needed to write the data. Returns -1 an error occurs
 		size_t SerializeStandaloneSize(const Reflection::ReflectionManager* reflection_manager) const;
 
-		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file);
+		// A handle_remapping can be specified.When adding the assets from the given database
+		// into the master database that this reference is referring to, the handle can change their values
+		// The pairs are { original_handle, new_handle_value }
+		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file, AssetDatabaseReferenceFromStandaloneOptions options = {});
 
 		// Assumes a valid allocator was set before hand on this database
-		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr);
+		// A handle_remapping can be specified.When adding the assets from the given database
+		// into the master database that this reference is referring to, the handle can change their values
+		// The pairs are { original_handle, new_handle_value }
+		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr, AssetDatabaseReferenceFromStandaloneOptions options = {});
 
 		// Returns the amount of bytes needed for the buffers. Returns -1 in case an error occurs
 		static size_t DeserializeSize(const Reflection::ReflectionManager* reflection_manager, uintptr_t ptr);

@@ -792,7 +792,7 @@ namespace ECSEngine {
 			for (size_t index = 0; index < ui_config->config_count; index++) {
 				memcpy(config.parameters + config.parameter_start[config.flag_count], ui_config->configs[index], ui_config->config_size[index]);
 
-				size_t parameter_count = ui_config->config_size[index] / sizeof(float) + (ui_config->config_size[index] % sizeof(float) != 0);
+				size_t parameter_count = ui_config->config_size[index];
 				config.parameter_start[config.flag_count + 1] = config.parameter_start[config.flag_count] + parameter_count;
 				config.flag_count++;
 			}
@@ -803,7 +803,8 @@ namespace ECSEngine {
 			Stream<UIReflectionDrawConfig> ui_config, 
 			UIActionHandler handler, 
 			ECS_UI_REFLECTION_DRAW_CONFIG_SPLAT splat_type,
-			void* stack_memory
+			void* stack_memory,
+			bool trigger_only_on_release
 		)
 		{
 			size_t index = 0;
@@ -948,6 +949,7 @@ namespace ECSEngine {
 
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
 				callback->handler = handler;
+				callback->trigger_only_on_release = trigger_only_on_release;
 				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
@@ -986,6 +988,7 @@ namespace ECSEngine {
 
 				UIConfigPathInputCallback* callback = (UIConfigPathInputCallback*)stack_memory;
 				callback->callback = handler;
+				callback->trigger_on_release = trigger_only_on_release;
 				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
@@ -1002,6 +1005,7 @@ namespace ECSEngine {
 
 				UIConfigTextInputCallback* callback = (UIConfigTextInputCallback*)stack_memory;
 				callback->handler = handler;
+				callback->trigger_only_on_release = trigger_only_on_release;
 				stack_memory = function::OffsetPointer(stack_memory, sizeof(*callback));
 
 				UIReflectionDrawConfigAddConfig(ui_config.buffer + count_type, callback);
@@ -1955,7 +1959,7 @@ namespace ECSEngine {
 				mask = UI_CONFIG_SLIDER_CHANGED_VALUE_CALLBACK;
 				break;
 			case UIReflectionIndex::Color:
-				mask = UI_CONFIG_COLOR_INPUT_RGB_SLIDERS | UI_CONFIG_COLOR_INPUT_HSV_SLIDERS | UI_CONFIG_COLOR_INPUT_ALPHA_SLIDER | UI_CONFIG_COLOR_INPUT_CALLBACK;
+				mask = UI_CONFIG_COLOR_INPUT_CALLBACK;
 				break;
 			case UIReflectionIndex::DoubleInput:
 			case UIReflectionIndex::FloatInput:
@@ -2837,7 +2841,7 @@ namespace ECSEngine {
 				if (type.fields[index].reflection_index == UIReflectionIndex::Override) {
 					OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
 					if (data->override_index == override_index) {
-						// Same type can proceed
+						// Same type, can proceed
 						modify_override(GetAllocatorPolymorphic(allocator), data->GetData(), overrides[override_index].global_data, user_data);
 					}
 				}
@@ -4118,7 +4122,7 @@ namespace ECSEngine {
 					{
 						OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
 						if (overrides[data->override_index].deallocate_function != nullptr) {
-							overrides[data->override_index].deallocate_function(GetAllocatorPolymorphic(allocator), data, overrides[data->override_index].global_data);
+							overrides[data->override_index].deallocate_function(GetAllocatorPolymorphic(allocator), data->GetData(), overrides[data->override_index].global_data);
 						}
 					}
 					break;
@@ -4327,6 +4331,22 @@ namespace ECSEngine {
 							current_configuration |= options->additional_configs[subindex].configurations;
 
 							UIReflectionDrawConfigCopyToNormalConfig(options->additional_configs.buffer + subindex, *options->config);
+						}
+					}
+				}
+				
+				if (type.fields[index].reflection_index == UIReflectionIndex::Override && options->override_additional_configs.size > 0) {
+					OverrideAllocationData* override_data = (OverrideAllocationData*)instance->data[index];
+					Stream<char> override_tag = overrides[override_data->override_index].tag;
+					for (size_t subindex = 0; subindex < options->override_additional_configs.size; subindex++) {
+						unsigned int tag_index = function::FindString(
+							override_tag,
+							Stream<Stream<char>>(options->override_additional_configs[subindex].override_tag, options->override_additional_configs[subindex].override_tag_count)
+						);
+						if (tag_index != -1) {
+							// We have a match
+							current_configuration |= options->override_additional_configs[subindex].base_config.configurations;
+							UIReflectionDrawConfigCopyToNormalConfig(&options->override_additional_configs[subindex].base_config, *options->config);
 						}
 					}
 				}

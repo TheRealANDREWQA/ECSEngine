@@ -230,11 +230,13 @@ string_name.AssertCapacity();
 		// It will copy the null termination character
 		ECSENGINE_API Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string);
 
+		// The offset is added to the sequence
 		template<typename Stream>
-		ECSENGINE_API void MakeSequence(Stream stream);
+		ECSENGINE_API void MakeSequence(Stream stream, size_t offset = 0);
 
+		// The offset is added to the sequence
 		template<typename Stream>
-		ECSENGINE_API void MakeDescendingSequence(Stream stream);
+		ECSENGINE_API void MakeDescendingSequence(Stream stream, size_t offset = 0);
 
 		// The size of data must contain the byte size of the element
 		template<typename IndexStream>

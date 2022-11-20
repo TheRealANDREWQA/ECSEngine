@@ -1,5 +1,6 @@
 #pragma once
 #include "../Core.h"
+#include "../Containers/Stream.h"
 
 namespace ECSEngine {
 
@@ -30,6 +31,11 @@ namespace ECSEngine {
 		void* GetPointer() const;
 
 		void SetPointer(void* new_pointer);
+
+		template<typename ElementType>
+		ECS_INLINE Stream<ElementType> As() const {
+			return { GetPointer(), GetData() };
+		}
 
 		void* pointer;
 	};

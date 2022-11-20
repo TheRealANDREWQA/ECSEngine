@@ -378,6 +378,14 @@ namespace ECSEngine {
 
 			UIActionHandler* GetLastHandler() const;
 
+			float2 GetPositionFromIndex(unsigned int index) const;
+
+			float2 GetScaleFromIndex(unsigned int index) const;
+
+			UIActionHandler GetActionFromIndex(unsigned int index) const;
+
+			unsigned int GetLastHandlerIndex() const;
+
 			void Resize(AllocatorPolymorphic allocator, size_t new_count);
 
 			unsigned int ReserveOne(AllocatorPolymorphic allocator);

@@ -712,7 +712,8 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 		Stream<char> StringCopy(AllocatorPolymorphic allocator, Stream<char> string) {
-			Stream<char> result = Stream<char>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(char), alignof(char)), string.size);
+			Stream<char> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+			result.Copy(string);
 			result[string.size] = '\0';
 			return result;
 		}
@@ -721,35 +722,37 @@ namespace ECSEngine {
 
 		Stream<wchar_t> StringCopy(AllocatorPolymorphic allocator, Stream<wchar_t> string)
 		{
-			Stream<wchar_t> result = Stream<wchar_t>(Copy(allocator, string.buffer, (string.size + 1) * sizeof(wchar_t), alignof(wchar_t)), string.size);
-			result[string.size] = '\0';
+			Stream<wchar_t> result = { Allocate(allocator, string.MemoryOf(string.size + 1)), string.size };
+			result.Copy(string);
+			result[string.size] = L'\0';
 			return result;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
-		void MakeSequence(Stream stream)
+		void MakeSequence(Stream stream, size_t offset)
 		{
 			for (size_t index = 0; index < stream.size; index++) {
-				stream[index] = index;
+				stream[index] = index + offset;
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>);
-		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, CapacityStream<unsigned char>, CapacityStream<unsigned short>, CapacityStream<unsigned int>, CapacityStream<size_t>);
+		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, size_t);
+		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeSequence, CapacityStream<unsigned char>, CapacityStream<unsigned short>, CapacityStream<unsigned int>, CapacityStream<size_t>, size_t);
 		
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename Stream>
-		void MakeDescendingSequence(Stream stream) {
+		void MakeDescendingSequence(Stream stream, size_t offset) {
+			offset += stream.size - 1;
 			for (size_t index = 0; index < stream.size; index++) {
-				stream[index] = stream.size - 1 - index;
+				stream[index] = offset - index;
 			}
 		}
 
-		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>);
-		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, CapacityStream<unsigned char>, CapacityStream<unsigned short>, CapacityStream<unsigned int>, CapacityStream<size_t>);
+		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, Stream<unsigned char>, Stream<unsigned short>, Stream<unsigned int>, Stream<size_t>, size_t);
+		ECS_TEMPLATE_FUNCTION_4_BEFORE(void, MakeDescendingSequence, CapacityStream<unsigned char>, CapacityStream<unsigned short>, CapacityStream<unsigned int>, CapacityStream<size_t>, size_t);
 
 		// ----------------------------------------------------------------------------------------------------------
 

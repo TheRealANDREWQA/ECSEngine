@@ -47,4 +47,18 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void SparseSetInitializeUntyped(void* destination, unsigned int capacity, unsigned int element_byte_size, void* _buffer)
+	{
+		SparseSet<char>* sparse_set = (SparseSet<char>*)destination;
+		sparse_set->buffer = (char*)_buffer;
+		sparse_set->indirection_buffer = (uint2*)function::OffsetPointer(_buffer, capacity * element_byte_size);
+		sparse_set->first_empty_slot = 0;
+		sparse_set->size = 0;
+		sparse_set->capacity = capacity;
+
+		sparse_set->InitializeIndirectionBuffer(sparse_set->indirection_buffer, capacity);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 }

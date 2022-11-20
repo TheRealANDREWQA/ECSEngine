@@ -205,6 +205,52 @@ unsigned int ChangeInspectorDrawFunction(
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
+unsigned int FindInspectorWithDrawFunction(
+	const EditorState* editor_state, 
+	InspectorDrawFunction draw_function, 
+	unsigned int sandbox_index
+)
+{
+	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
+			if (sandbox_index != -1) {
+				if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
+					return index;
+				}
+			}
+			else {
+				return index;
+			}
+		}
+	}
+	return -1;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void FindInspectorWithDrawFunction(
+	const EditorState* editor_state, 
+	InspectorDrawFunction draw_function, 
+	CapacityStream<unsigned int>* inspector_indices, 
+	unsigned int sandbox_index
+)
+{
+	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
+			if (sandbox_index != -1) {
+				if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
+					inspector_indices->AddSafe(index);
+				}
+			}
+			else {
+				inspector_indices->AddSafe(index);
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
 void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspector_index) {
 	return editor_state->inspector_manager.data[inspector_index].draw_data;
 }
@@ -215,12 +261,6 @@ bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunc
 	ResourceIdentifier identifier(_identifier.buffer, _identifier.size * sizeof(wchar_t));
 
 	return editor_state->inspector_manager.function_table.TryGetValue(identifier, function);
-}
-
-// ----------------------------------------------------------------------------------------------------------------------------
-
-bool TryGetInspectorTableFunction(const EditorState* editor_state, InspectorFunctions& function, const wchar_t* _identifier) {
-	return TryGetInspectorTableFunction(editor_state, function, _identifier);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

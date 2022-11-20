@@ -29,52 +29,56 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddMesh(unsigned int handle)
+	void AssetDatabaseReference::AddMesh(unsigned int handle, bool increment_count)
 	{
-		AddAsset(handle, ECS_ASSET_MESH);
+		AddAsset(handle, ECS_ASSET_MESH, increment_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddTexture(unsigned int handle)
+	void AssetDatabaseReference::AddTexture(unsigned int handle, bool increment_count)
 	{
-		AddAsset(handle, ECS_ASSET_TEXTURE);
+		AddAsset(handle, ECS_ASSET_TEXTURE, increment_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddGPUSampler(unsigned int handle)
+	void AssetDatabaseReference::AddGPUSampler(unsigned int handle, bool increment_count)
 	{
-		AddAsset(handle, ECS_ASSET_GPU_SAMPLER);
+		AddAsset(handle, ECS_ASSET_GPU_SAMPLER, increment_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddShader(unsigned int handle)
+	void AssetDatabaseReference::AddShader(unsigned int handle, bool increment_count)
 	{
-		AddAsset(handle, ECS_ASSET_SHADER);
+		AddAsset(handle, ECS_ASSET_SHADER, increment_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddMaterial(unsigned int handle)
+	void AssetDatabaseReference::AddMaterial(unsigned int handle, bool increment_count)
 	{
-		AddAsset(handle, ECS_ASSET_MATERIAL);
+		AddAsset(handle, ECS_ASSET_MATERIAL, increment_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddMisc(unsigned int handle)
+	void AssetDatabaseReference::AddMisc(unsigned int handle, bool increment_count)
 	{
-		AddAsset(handle, ECS_ASSET_MISC);
+		AddAsset(handle, ECS_ASSET_MISC, increment_count);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::AddAsset(unsigned int handle, ECS_ASSET_TYPE type)
+	void AssetDatabaseReference::AddAsset(unsigned int handle, ECS_ASSET_TYPE type, bool increment_count)
 	{
 		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
 		streams[type].Add(handle);
+
+		if (increment_count) {
+			database->AddAsset(handle, type);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -179,53 +183,61 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveMesh(unsigned int index)
+	unsigned int AssetDatabaseReference::GetCount(ECS_ASSET_TYPE type) const
+	{
+		ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
+		return streams[type].size;
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
+	bool AssetDatabaseReference::RemoveMesh(unsigned int index, MeshMetadata* storage)
 	{
 		return RemoveAsset(index, ECS_ASSET_MESH);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveTexture(unsigned int index)
+	bool AssetDatabaseReference::RemoveTexture(unsigned int index, TextureMetadata* storage)
 	{
 		return RemoveAsset(index, ECS_ASSET_TEXTURE);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveGPUSampler(unsigned int index)
+	bool AssetDatabaseReference::RemoveGPUSampler(unsigned int index, GPUSamplerMetadata* storage)
 	{
 		return RemoveAsset(index, ECS_ASSET_GPU_SAMPLER);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveShader(unsigned int index)
+	bool AssetDatabaseReference::RemoveShader(unsigned int index, ShaderMetadata* storage)
 	{
 		return RemoveAsset(index, ECS_ASSET_SHADER);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveMaterial(unsigned int index)
+	bool AssetDatabaseReference::RemoveMaterial(unsigned int index, MaterialAsset* storage)
 	{
 		return RemoveAsset(index, ECS_ASSET_MATERIAL);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveMisc(unsigned int index)
+	bool AssetDatabaseReference::RemoveMisc(unsigned int index, MiscAsset* storage)
 	{
 		return RemoveAsset(index, ECS_ASSET_MISC);
 	}
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::RemoveAsset(unsigned int index, ECS_ASSET_TYPE type)
+	bool AssetDatabaseReference::RemoveAsset(unsigned int index, ECS_ASSET_TYPE type, void* storage)
 	{
-		RemoveAssetThisOnly(index, type);
 		unsigned int handle = GetHandle(index, type);
-		return database->RemoveAsset(handle, type);
+		RemoveAssetThisOnly(index, type);
+		return database->RemoveAsset(handle, type, storage);
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -269,6 +281,7 @@ namespace ECSEngine {
 	void AssetDatabaseReference::ToStandalone(AllocatorPolymorphic allocator, AssetDatabase* out_database) const {
 		out_database->SetAllocator(allocator);
 
+		out_database->reflection_manager = database->reflection_manager;
 		out_database->SetFileLocation({ nullptr, 0 });
 		out_database->mesh_metadata.ResizeNoCopy(mesh_metadata.size);
 		out_database->texture_metadata.ResizeNoCopy(texture_metadata.size);
@@ -278,8 +291,36 @@ namespace ECSEngine {
 		out_database->misc_asset.ResizeNoCopy(misc_asset.size);
 
 		auto set_value = [&](auto stream, ECS_ASSET_TYPE type) {
-			for (unsigned int index = 0; index < stream.size; index++) {
-				out_database->AddAssetInternal(database->GetAsset(stream[index], type), type);
+			if (stream.size > 0) {
+				// Create a temporary copy of the stream and eliminate the duplicates
+				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, stream_copy, stream.size);
+				ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, reference_count, stream.size);
+				stream_copy.Copy(stream);
+
+				// If the stream copy has size of 1, we still need to initialize the first reference count to 1
+				bool had_duplicates = false;
+				for (unsigned int index = 0; index < stream_copy.size - 1; index++) {
+					had_duplicates = false;
+					reference_count[index] = 1;
+					unsigned int offset = index + 1;
+					unsigned int current_find = function::SearchBytes(stream_copy.buffer + offset, stream_copy.size - offset, stream_copy[index], sizeof(stream_copy[index]));
+					while (current_find != -1) {
+						had_duplicates = true;
+						reference_count[index]++;
+						stream_copy.RemoveSwapBack(current_find + offset);
+						offset += current_find;
+						current_find = function::SearchBytes(stream_copy.buffer + offset, stream_copy.size - offset, stream_copy[index], sizeof(stream_copy[index]));
+					}
+				}
+				// If the last value didn't have duplicates, then we need to initialize its reference count to 1
+				// since it will get skipped
+				if (!had_duplicates) {
+					reference_count[stream_copy.size - 1] = 1;
+				}
+
+				for (unsigned int index = 0; index < stream_copy.size; index++) {
+					out_database->AddAssetInternal(database->GetAsset(stream_copy[index], type), type, reference_count[index]);
+				}
 			}
 		};
 
@@ -293,7 +334,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::FromStandalone(const AssetDatabase* standalone_database) {
+	void AssetDatabaseReference::FromStandalone(const AssetDatabase* standalone_database, AssetDatabaseReferenceFromStandaloneOptions options) {
 		mesh_metadata.ResizeNoCopy(standalone_database->mesh_metadata.set.size);
 		texture_metadata.ResizeNoCopy(standalone_database->texture_metadata.set.size);
 		gpu_sampler_metadata.ResizeNoCopy(standalone_database->gpu_sampler_metadata.set.size);
@@ -301,11 +342,35 @@ namespace ECSEngine {
 		material_asset.ResizeNoCopy(standalone_database->material_asset.set.size);
 		misc_asset.ResizeNoCopy(standalone_database->misc_asset.set.size);
 
-		auto set_values = [&](const auto& metadata, auto& stream_metadata, ECS_ASSET_TYPE asset_type) {
-			auto stream = metadata.set.ToStream();
+		auto set_values = [&](const auto& standalone_metadata, auto& reference_metadata, ECS_ASSET_TYPE asset_type) {
+			auto stream = standalone_metadata.set.ToStream();
 			for (size_t index = 0; index < stream.size; index++) {
+				unsigned int original_handle = standalone_metadata.GetHandleFromIndex(index);
+				unsigned int reference_count = standalone_metadata[original_handle].reference_count;
+
 				Stream<wchar_t> file = GetAssetFile(&stream[index].value, asset_type);
-				stream_metadata[index] = database->AddAsset(stream[index].value.name, file, asset_type);
+				reference_metadata.Add(database->AddAsset(stream[index].value.name, file, asset_type));
+
+				unsigned int last_index = reference_metadata.size - 1;
+				unsigned int added_handle = reference_metadata[last_index];
+
+				// If it is the first time it is added, then also copy the pointer
+				if (database->GetReferenceCount(reference_metadata[last_index], asset_type) == 1) {
+					// Copy the pointer
+					Stream<void> standalone_asset = GetAssetFromMetadata(&stream[index].value, asset_type);
+					SetAssetToMetadata(database->GetAsset(added_handle, asset_type), asset_type, standalone_asset);
+				}
+
+				// There must in total reference_count values of the previous handle in order to preserve the reference count
+				// from this asset database reference
+				for (unsigned int subindex = 1; subindex < reference_count; subindex++) {
+					AddAsset(added_handle, asset_type, true);
+				}
+
+				if (options.handle_remapping != nullptr) {
+					// Add the remapping even when the values are identical
+					options.handle_remapping[asset_type].AddSafe({ original_handle, reference_metadata[last_index] });
+				}
 			}
 		};
 
@@ -315,6 +380,55 @@ namespace ECSEngine {
 		set_values(standalone_database->shader_metadata, shader_metadata, ECS_ASSET_SHADER);
 		set_values(standalone_database->material_asset, material_asset, ECS_ASSET_MATERIAL);
 		set_values(standalone_database->misc_asset, misc_asset, ECS_ASSET_MISC);
+
+		// If it has pointer remapping, iterate the master database and report the changed values
+		if (options.pointer_remapping != nullptr) {
+			auto pointer_remap = [&](const auto& standalone_metadata, ECS_ASSET_TYPE asset_type) {
+				auto stream = standalone_metadata.ToStream();
+				// Create a mask of indices which were not yet taken
+				// And then remove it when an asset is found to have that index
+				ECS_STACK_CAPACITY_STREAM(unsigned int, free_indices, ECS_ASSET_RANDOMIZED_ASSET_LIMIT);
+				free_indices.size = ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+				function::MakeSequence(free_indices, 1);
+
+				for (size_t index = 0; index < stream.size; index++) {
+					unsigned int current_handle = database->GetAssetHandleFromIndex(index, asset_type);
+					void* asset = database->GetAsset(current_handle, asset_type);
+					Stream<void> asset_pointer = GetAssetFromMetadata(asset, asset_type);
+
+					unsigned int old_randomized_index = ExtractRandomizedAssetValue(asset_pointer.buffer, asset_type);
+					
+					if (old_randomized_index <= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
+						unsigned int found_index = function::SearchBytes(free_indices.buffer, free_indices.size, old_randomized_index, sizeof(old_randomized_index));
+
+						// The index has not yet been found
+						if (found_index != -1) {
+							free_indices.RemoveSwapBack(found_index);
+						}
+						else {
+							ECS_ASSERT(free_indices.size > 0);
+
+							// The index is already in use
+							// Choose the last index to be the new index
+							free_indices.size--;
+							unsigned int new_index = free_indices[free_indices.size];
+							options.pointer_remapping[asset_type].AddSafe({ old_randomized_index, new_index, current_handle });
+
+							// Change the mapping for this asset
+							SetRandomizedAssetToMetadata(asset, asset_type, new_index);
+						}
+					}
+				}
+				
+			};
+
+			pointer_remap(database->mesh_metadata, ECS_ASSET_MESH);
+			pointer_remap(database->texture_metadata, ECS_ASSET_TEXTURE);
+			pointer_remap(database->gpu_sampler_metadata, ECS_ASSET_GPU_SAMPLER);
+			pointer_remap(database->shader_metadata, ECS_ASSET_SHADER);
+			pointer_remap(database->material_asset, ECS_ASSET_MATERIAL);
+			pointer_remap(database->misc_asset, ECS_ASSET_MISC);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------
@@ -332,9 +446,7 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
 		reference->ToStandalone(allocator_polymorphic, &temp_database);
 
-		SetSerializeCustomSparsetSet();
 		ReturnType return_value = functor(&temp_database);
-		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET);
 
 		temp_allocator.ClearBackup();
 		return return_value;
@@ -389,26 +501,24 @@ namespace ECSEngine {
 
 	template<typename Functor>
 	size_t DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Functor&& functor) {
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 128, ECS_MB * 4);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 64, ECS_MB * 4);
 		AssetDatabase temp_database;
 		temp_database.reflection_manager = reflection_manager;
 
 		AllocatorPolymorphic allocator_polymorphic = GetAllocatorPolymorphic(&temp_allocator);
 		temp_database.SetAllocator(allocator_polymorphic);
 
-		SetSerializeCustomSparsetSet();
 		size_t return_value = functor(&temp_database);
-		ClearSerializeCustomTypeUserData(Reflection::ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET);
 
 		temp_allocator.ClearBackup();
 		return return_value;
 	}
 
-	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file) {
+	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, Stream<wchar_t> file, AssetDatabaseReferenceFromStandaloneOptions options) {
 		return (bool)ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
 			bool success = DeserializeAssetDatabase(database, file) == ECS_DESERIALIZE_OK;
 			if (success) {
-				FromStandalone(database);
+				FromStandalone(database, options);
 			}
 			return success;
 		});
@@ -416,11 +526,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr) {
+	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, uintptr_t& ptr, AssetDatabaseReferenceFromStandaloneOptions options) {
 		return (bool)ECSEngine::DeserializeStandalone(reflection_manager, [&](AssetDatabase* database) {
 			bool success = DeserializeAssetDatabase(database, ptr) == ECS_DESERIALIZE_OK;
 			if (success) {
-				FromStandalone(database);
+				FromStandalone(database, options);
 			}
 			return success;
 		});

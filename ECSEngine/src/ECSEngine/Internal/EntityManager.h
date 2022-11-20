@@ -279,6 +279,14 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// When the entity already has the shared component but the instance needs to be changed.
+		// It returns the old shared instance of that entity. It has no deferred version at the moment.
+		// If the destroy archetypes is set, for the x component it will destroy the archetype if there are no more entities in it,
+		// for the y component it will destroy the base archetype if there are no more entities in it.
+		SharedInstance ChangeEntitySharedInstanceCommit(Entity entity, Component component, SharedInstance new_instance, bool destroy_base_archetype = false);
+
+		// ---------------------------------------------------------------------------------------------------
+
 		void ChangeEntityParentCommit(Stream<EntityPair> pairs);
 
 		void ChangeEntityParent(
@@ -518,11 +526,20 @@ namespace ECSEngine {
 
 		// It will destroy all the archetypes that are empty (they don't contain any entities)
 		// Single threaded
-		void DestroyArchetypesEmpty();
+		void DestroyArchetypesEmptyCommit();
 
 		// It will destroy all the base archetype that are empty (that don't contain any entities)
 		// Single threaded
-		void DestroyArchetypesBaseEmpty(bool destroy_main_archetypes = false);
+		void DestroyArchetypesBaseEmptyCommit(bool destroy_main_archetypes = false);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Destroys the archetype if it is empty (it has no entities).
+		void DestroyArchetypeEmptyCommit(unsigned int main_index);
+
+		// Destroy the base archetype if it empty (it has no entities). If the main_propagation flag is true,
+		// then it will try to destroy the main archetype if the base one is destroyed.
+		void DestroyArchetypeBaseEmptyCommit(unsigned int main_index, unsigned int base_index, bool main_propagation = false);
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -576,14 +593,173 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// It requires a syncronization barrier!! If the archetype does not exist, then it will commit the creation of a new one
+		// Single threaded. If the archetype does not exist, then it will commit the creation of a new one
 		unsigned int FindOrCreateArchetype(ComponentSignature unique_signature, ComponentSignature shared_signature);
 
+		// Single threaded. If the archetype does not exist, then it will commit the creation of a new one
 		uint2 FindOrCreateArchetypeBase(
 			ComponentSignature unique_signature,
 			SharedComponentSignature shared_signature,
 			unsigned int starting_size = ECS_ARCHETYPE_DEFAULT_BASE_RESERVE_COUNT
 		);
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Return true to exit early, if desired.
+		// The functor receives the component as a Component
+		// This iterates over all unique components in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachComponent(Functor&& functor) const {
+			size_t component_count = m_unique_components.size;
+			for (size_t index = 0; index < component_count; index++) {
+				Component current_component = { (short)index };
+				if (ExistsComponent(current_component)) {
+					if constexpr (early_exit) {
+						if (functor(current_component)) {
+							return;
+						}
+					}
+					else {
+						functor(current_component);
+					}
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the component as a Component
+		// This iterates over all shared components in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachSharedComponent(Functor&& functor) const {
+			size_t component_count = m_shared_components.size;
+			for (size_t index = 0; index < component_count; index++) {
+				Component current_component = { (short)index };
+				if (ExistsSharedComponent(current_component)) {
+					if constexpr (early_exit) {
+						if (functor(current_component)) {
+							return;
+						}
+					}
+					else {
+						functor(current_component);
+					}
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the shared instance as a SharedInstance
+		// This iterates over all shared instances of a certain component in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachSharedInstance(Component component, Functor&& functor) const {
+			ECS_ASSERT(ExistsSharedComponent(component));
+			m_shared_components[component.value].instances.stream.ForEachIndex<early_exit>([&](unsigned int index) {
+				SharedInstance current_instance = { (short)index };
+				if constexpr (early_exit) {
+					return functor(current_instance);
+				}
+				else {
+					functor(current_instance);
+				}
+			});
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the archetype as a Archetype*
+		// This iterates over all archetypes in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachArchetype(Functor&& functor) {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				Archetype* archetype = GetArchetype(archetype_index);
+				if constexpr (early_exit) {
+					if (functor(archetype)) {
+						return;
+					}
+				}
+				else {
+					functor(archetype);
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the main archetype as Archetype* and the base archetype as ArchetypeBase*
+		// This iterates over all base archetypes in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachBaseArchetype(Functor&& functor) {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				Archetype* archetype = GetArchetype(archetype_index);
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					ArchetypeBase* base_archetype = archetype->GetBase(base_index);
+					if constexpr (early_exit) {
+						if (functor(archetype, base_archetype)) {
+							return;
+						}
+					}
+					else {
+						functor(archetype, base_archetype);
+					}
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the main archetype as Archetype*, the base archetype as ArchetypeBase*, the entity as Entity, void** unique_components
+		// The ArchetypeInitializeFunctor receives an Archetype*, the ArchetypeBaseInitializeFunctor receives an Archetype* and an ArchetypeBase*
+		// This iterates over all entities in the entity manager.
+		template<bool early_exit = false, typename ArchetypeInitializeFunctor, typename ArchetypeBaseInitializeFunctor, typename Functor>
+		void ForEachEntity(ArchetypeInitializeFunctor&& archetype_initialize, ArchetypeBaseInitializeFunctor&& base_initialize, Functor&& functor) {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				Archetype* archetype = GetArchetype(archetype_index);
+				archetype_initialize(archetype);
+
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					ArchetypeBase* base_archetype = archetype->GetBase(base_index);
+					base_initialize(archetype, base_archetype);
+
+					unsigned int entity_count = base_archetype->EntityCount();
+
+					void* entity_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					unsigned int component_sizes[ECS_ARCHETYPE_MAX_COMPONENTS];
+
+					ComponentSignature unique_signature = archetype->GetUniqueSignature();
+					unsigned char unique_count = unique_signature.count;
+
+					memcpy(entity_components, base_archetype->m_buffers, sizeof(*base_archetype->m_buffers) * unique_count);
+					for (unsigned char component_index = 0; component_index < unique_count; component_index++) {
+						component_sizes[component_index] = ComponentSize(unique_signature[component_index]);
+					}
+
+					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+						if constexpr (early_exit) {
+							if (functor(archetype, base_archetype, base_archetype->m_entities[entity_index], entity_components)) {
+								return;
+							}
+						}
+						else {
+							functor(archetype, base_archetype, base_archetype->m_entities[entity_index], entity_components);
+						}
+
+						for (unsigned char component_index = 0; component_index < unique_count; component_index++) {
+							entity_components[component_index] = function::OffsetPointer(entity_components[component_index], component_sizes[component_index]);
+						}
+					}
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the main archetype as Archetype*, the base archetype as ArchetypeBase*, the entity as Entity, void** unique_components
+		// This iterates over all entities in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachEntity(Functor&& functor) {
+			ForEachEntity<early_exit>([](Archetype* archetype) {}, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor)
+		}
 
 		// ---------------------------------------------------------------------------------------------------
 
@@ -716,6 +892,9 @@ namespace ECSEngine {
 
 		SharedInstance GetNamedSharedComponentInstance(Component component, ResourceIdentifier identifier) const;
 
+		// Fills in all the shared instances that are registered for that component
+		void GetSharedComponentInstanceAll(Component component, CapacityStream<SharedInstance>& shared_instances) const;
+
 		// These are vector components which are much faster to use than normal components
 		VectorComponentSignature ECS_VECTORCALL GetArchetypeUniqueComponents(unsigned int archetype_index) const;
 
@@ -748,6 +927,12 @@ namespace ECSEngine {
 
 		// It does both at the same time to avoid some checks
 		void GetQueryResultsAndComponents(unsigned int handle, Stream<unsigned int>& results, ArchetypeQuery& query) const;
+
+		// Returns the index of the unique component with the maximum index
+		Component GetMaxComponent() const;
+
+		// Returns the index of the shared component with the maximum index
+		Component GetMaxSharedComponent() const;
 
 		// Tag should only be the bit index, not the actual value
 		bool HasEntityTag(Entity entity, unsigned char tag) const;
@@ -984,6 +1169,35 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		void UnregisterSharedInstanceCommit(Component component, SharedInstance instance);
+
+		// Deferred call
+		void UnregisterSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
+
+		void UnregisterNamedSharedInstanceCommit(Component component, Stream<char> name);
+
+		// Deferred call
+		void UnregisterNamedSharedInstance(Component component, Stream<char> name, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
+
+		// Returns true if the instance was deleted, else false.
+		bool UnregisterUnreferencedSharedInstanceCommit(Component component, SharedInstance instance);
+
+		// Deferred call
+		void UnregisterUnreferencedSharedInstance(Component component, SharedInstance instance, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
+
+		void UnregisterUnreferencedSharedInstancesCommit(Component component);
+
+		// Deferred call
+		void UnregisterUnreferencedSharedInstances(Component component, EntityManagerCommandStream* command_stream = nullptr, DebugInfo debug_info = { ECS_LOCATION });
+
+		// ---------------------------------------------------------------------------------------------------
+
 		MemoryManager m_small_memory_manager;
 		
 		// Alongside this vector, the vector components will be kept in sync to allow
@@ -1000,7 +1214,7 @@ namespace ECSEngine {
 		AtomicStream<EntityManagerCommandStream> m_pending_command_streams;
 		ArchetypeQueryCache* m_query_cache;
 
-		MemoryManager m_hierarchy_allocator;
+		MemoryManager* m_hierarchy_allocator;
 		EntityHierarchy m_hierarchy;
 
 		MemoryManager* m_memory_manager;
@@ -1021,7 +1235,7 @@ namespace ECSEngine {
 	ECSENGINE_API VectorComponentSignature* GetEntityManagerSharedVectorSignaturePtr(VectorComponentSignature* signatures, unsigned int index);
 
 	// Creates the allocator for the entity pool, the entity pool itself, the entity manager allocator,
-	// and the entity manager itself
+	// and the entity manager itself.
 	ECSENGINE_API EntityManager CreateEntityManagerWithPool(
 		size_t allocator_size, 
 		size_t allocator_pool_count,

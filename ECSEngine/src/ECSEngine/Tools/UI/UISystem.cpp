@@ -295,6 +295,13 @@ namespace ECSEngine {
 				memcpy(allocation, action_handler.data, action_handler.data_size);
 				action_handler.data = allocation;
 			}
+			AddActionHandlerForced(handler, position, scale, action_handler);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::AddActionHandlerForced(UIHandler* handler, float2 position, float2 scale, UIActionHandler action_handler)
+		{
 			handler->AddResizable(GetAllocatorPolymorphic(m_memory), position, scale, action_handler);
 		}
 
@@ -387,6 +394,24 @@ namespace ECSEngine {
 		{
 			AddActionHandler(
 				allocator,
+				&dockspace->borders[border_index].hoverable_handler,
+				position,
+				scale,
+				handler
+			);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::AddHoverableToDockspaceRegionForced(
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler
+		)
+		{
+			AddActionHandlerForced(
 				&dockspace->borders[border_index].hoverable_handler,
 				position,
 				scale,
@@ -505,6 +530,24 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::AddClickableToDockspaceRegionForced(
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler
+		)
+		{
+			AddActionHandlerForced(
+				&dockspace->borders[border_index].clickable_handler,
+				position,
+				scale,
+				handler
+			);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddDoubleClickActionToDockspaceRegion(
 			unsigned int thread_id, 
 			UIDockspace* dockspace, 
@@ -579,6 +622,24 @@ namespace ECSEngine {
 		{
 			AddActionHandler(
 				allocator,
+				&dockspace->borders[border_index].general_handler,
+				position,
+				scale,
+				handler
+			);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::AddGeneralActionToDockspaceRegionForced(
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			float2 position, 
+			float2 scale, 
+			UIActionHandler handler
+		)
+		{
+			AddActionHandlerForced(
 				&dockspace->borders[border_index].general_handler,
 				position,
 				scale,
@@ -844,7 +905,6 @@ namespace ECSEngine {
 
 			ECS_ASSERT(table->Find(identifier) == -1);
 			InsertIntoDynamicTable(*table, m_memory, resource, identifier);
-			//ECS_ASSERT(!table->Insert(resource, identifier));
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -6718,6 +6778,27 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		unsigned int UISystem::GetLastClickableIndex(const UIDockspace* dockspace, unsigned int border_index) const
+		{
+			return dockspace->borders[border_index].clickable_handler.GetLastHandlerIndex();
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UISystem::GetLastHoverableIndex(const UIDockspace* dockspace, unsigned int border_index) const
+		{
+			return dockspace->borders[border_index].hoverable_handler.GetLastHandlerIndex();
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		unsigned int UISystem::GetLastGeneralIndex(const UIDockspace* dockspace, unsigned int border_index) const
+		{
+			return dockspace->borders[border_index].general_handler.GetLastHandlerIndex();
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetFixedDockspaceRegionsFromMouse(float2 mouse_position, UIDockspace** output_dockspaces, DockspaceType* types, unsigned int& count) const
 		{
 			UIDockspace* dockspaces[] = {
@@ -8553,6 +8634,36 @@ namespace ECSEngine {
 				system_handler_data->callback.data = handler_data;
 				memcpy(handler_data, handler.data, handler.data_size);
 			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ReaddHoverableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index)
+		{
+			const UIHandler* handler = &dockspace->borders[border_index].hoverable_handler;
+			AddHoverableToDockspaceRegionForced(dockspace, border_index, handler->GetPositionFromIndex(handler_index), handler->GetScaleFromIndex(handler_index), handler->GetActionFromIndex(handler_index));
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ReaddClickableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index)
+		{
+			const UIHandler* handler = &dockspace->borders[border_index].clickable_handler;
+			AddClickableToDockspaceRegionForced(dockspace, border_index, handler->GetPositionFromIndex(handler_index), handler->GetScaleFromIndex(handler_index), handler->GetActionFromIndex(handler_index));
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::ReaddGeneralToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index)
+		{
+			const UIHandler* handler = &dockspace->borders[border_index].general_handler;
+			AddGeneralActionToDockspaceRegionForced(
+				dockspace, 
+				border_index, 
+				handler->GetPositionFromIndex(handler_index), 
+				handler->GetScaleFromIndex(handler_index), 
+				handler->GetActionFromIndex(handler_index)
+			);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -10762,6 +10873,34 @@ namespace ECSEngine {
 			unsigned int window_index = GetWindowFromName(name);
 			if (window_index != -1) {
 				SetActiveWindow(window_index);
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::SetActiveWindowInBorder(unsigned int index)
+		{
+			DockspaceType type;
+			unsigned int border_index;
+			UIDockspace* dockspace = GetDockspaceFromWindow(index, border_index, type);
+
+			unsigned int in_stream_index = function::SearchBytes(
+				dockspace->borders[border_index].window_indices.buffer, 
+				dockspace->borders[border_index].window_indices.size, 
+				index, 
+				sizeof(unsigned short)
+			);
+			ECS_ASSERT(in_stream_index != -1);
+			dockspace->borders[border_index].active_window = in_stream_index;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::SetActiveWindowInBorder(Stream<char> name)
+		{
+			unsigned int window_index = GetWindowFromName(name);
+			if (window_index != -1) {
+				SetActiveWindowInBorder(window_index);
 			}
 		}
 

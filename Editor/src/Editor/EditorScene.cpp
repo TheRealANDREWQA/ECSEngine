@@ -1,207 +1,14 @@
 #include "editorpch.h"
 #include "EditorScene.h"
 #include "EditorState.h"
+#include "EditorEvent.h"
 
 #include "../Project/ProjectFolders.h"
 #include "Modules/Module.h"
-#include "EditorComponents.h"
-#include "ECSEngineEntitiesSerialize.h"
+#include "ECSEngineScene.h"
+#include "../Assets/EditorSandboxAssets.h"
 
 using namespace ECSEngine;
-
-#pragma region Internal functions
-
-// ----------------------------------------------------------------------------------------------
-
-SerializeEntityManagerComponentTable SerializeComponentTable(
-	const EditorState* editor_state,
-	AllocatorPolymorphic allocator,
-	Stream<const Reflection::ReflectionType*> link_types
-) {
-	SerializeEntityManagerComponentTable table;
-
-	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerComponentInfo, overrides, 512);
-
-	// Walk through the module reflection and retrieve their overrides
-	ProjectModules project_modules = *editor_state->project_modules;
-	for	(size_t index = 0; index < project_modules.size; index++) {
-		EDITOR_MODULE_CONFIGURATION loaded_configuration = GetModuleLoadedConfiguration(editor_state, index);
-		if (loaded_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-			// There is a suitable loaded configuration
-			// Check for its overrides
-			const EditorModuleInfo* info = GetModuleInfo(editor_state, index, loaded_configuration);
-			for (size_t override_index = 0; override_index < info->serialize_streams.serialize_components.size; override_index++) {
-				// Only if the name is specified, otherwise skip it (it is malformed)
-				if (info->serialize_streams.serialize_components[override_index].name.size > 0) {
-					overrides.Add(info->serialize_streams.serialize_components[override_index]);
-				}
-			}
-		}
-	}
-
-	// Get the link types
-	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
-	ConvertLinkTypesToSerializeEntityManagerUnique(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
-	overrides.size += link_types.size;
-
-	CreateSerializeEntityManagerComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
-
-	//CreateSerializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	//CreateSerializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
-	
-	// Add the overrides manually
-	for (unsigned int index = 0; index < overrides.size; index++) {
-		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
-		ECS_ASSERT(!table.Insert(overrides[index], component));
-	}
-
-
-	return table;
-}
-
-// ----------------------------------------------------------------------------------------------
-
-SerializeEntityManagerSharedComponentTable SerializeSharedComponentTable(
-	const EditorState* editor_state,
-	AllocatorPolymorphic allocator,
-	Stream<const Reflection::ReflectionType*> link_types
-) {
-	SerializeEntityManagerSharedComponentTable table;
-
-	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerSharedComponentInfo, overrides, 256);
-
-	// Walk through the module reflection and retrieve their overrides
-	ProjectModules project_modules = *editor_state->project_modules;
-	for (size_t index = 0; index < project_modules.size; index++) {
-		EDITOR_MODULE_CONFIGURATION loaded_configuration = GetModuleLoadedConfiguration(editor_state, index);
-		if (loaded_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-			// There is a suitable loaded configuration
-			// Check for its overrides
-			const EditorModuleInfo* info = GetModuleInfo(editor_state, index, loaded_configuration);
-			for (size_t override_index = 0; override_index < info->serialize_streams.serialize_shared_components.size; override_index++) {
-				// Only if the name is specified, otherwise skip it (it is malformed)
-				if (info->serialize_streams.serialize_shared_components[override_index].name.size > 0) {
-					overrides.Add(info->serialize_streams.serialize_shared_components[override_index]);
-				}
-			}
-		}
-	}
-
-	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
-	ConvertLinkTypesToSerializeEntityManagerShared(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
-	overrides.size += link_types.size;
-
-	CreateSerializeEntityManagerSharedComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
-
-	//CreateSerializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	//CreateSerializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
-	
-	// Add the overrides manually
-	for (unsigned int index = 0; index < overrides.size; index++) {
-		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
-		ECS_ASSERT(!table.Insert(overrides[index], component));
-	}
-
-	return table;
-}
-
-// ----------------------------------------------------------------------------------------------
-
-DeserializeEntityManagerComponentTable DeserializeComponentTable(
-	const EditorState* editor_state,
-	AllocatorPolymorphic allocator,
-	Stream<const Reflection::ReflectionType*> link_types
-) {
-	DeserializeEntityManagerComponentTable table;
-
-	ECS_STACK_CAPACITY_STREAM(DeserializeEntityManagerComponentInfo, overrides, 256);
-
-	// Walk through the module reflection and retrieve their overrides
-	ProjectModules project_modules = *editor_state->project_modules;
-	for (size_t index = 0; index < project_modules.size; index++) {
-		EDITOR_MODULE_CONFIGURATION loaded_configuration = GetModuleLoadedConfiguration(editor_state, index);
-		if (loaded_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-			// There is a suitable loaded configuration
-			// Check for its overrides
-			const EditorModuleInfo* info = GetModuleInfo(editor_state, index, loaded_configuration);
-			for (size_t override_index = 0; override_index < info->serialize_streams.deserialize_components.size; override_index++) {
-				// Only if the name is specified, otherwise skip it (it is malformed)
-				if (info->serialize_streams.deserialize_components[override_index].name.size > 0) {
-					overrides.Add(info->serialize_streams.deserialize_components[override_index]);
-				}
-			}
-		}
-	}
-
-	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
-	ConvertLinkTypesToDeserializeEntityManagerUnique(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
-	overrides.size += link_types.size;
-
-	CreateDeserializeEntityManagerComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
-
-	//CreateDeserializeEntityManagerComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	//CreateDeserializeEntityManagerComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
-
-	// Add the overrides manually
-	for (unsigned int index = 0; index < overrides.size; index++) {
-		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
-		ECS_ASSERT(!table.Insert(overrides[index], component));
-	}
-
-	return table;
-}
-
-// ----------------------------------------------------------------------------------------------
-
-DeserializeEntityManagerSharedComponentTable DeserializeSharedComponentTable(
-	const EditorState* editor_state,
-	AllocatorPolymorphic allocator,
-	Stream<const Reflection::ReflectionType*> link_types
-) {
-	DeserializeEntityManagerSharedComponentTable table;
-
-	ECS_STACK_CAPACITY_STREAM(DeserializeEntityManagerSharedComponentInfo, overrides, 256);
-
-	// Walk through the module reflection and retrieve their overrides
-	ProjectModules project_modules = *editor_state->project_modules;
-	for (size_t index = 0; index < project_modules.size; index++) {
-		EDITOR_MODULE_CONFIGURATION loaded_configuration = GetModuleLoadedConfiguration(editor_state, index);
-		if (loaded_configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-			// There is a suitable loaded configuration
-			// Check for its overrides
-			const EditorModuleInfo* info = GetModuleInfo(editor_state, index, loaded_configuration);
-			for (size_t override_index = 0; override_index < info->serialize_streams.deserialize_shared_components.size; override_index++) {
-				// Only if the name is specified, otherwise skip it (it is malformed)
-				if (info->serialize_streams.deserialize_shared_components[override_index].name.size > 0) {
-					overrides.Add(info->serialize_streams.deserialize_shared_components[override_index]);
-				}
-			}
-		}
-	}
-
-	ECS_ASSERT(overrides.capacity - overrides.size >= link_types.size, "Too little override slots");
-	ConvertLinkTypesToDeserializeEntityManagerShared(editor_state->editor_components.internal_manager, allocator, link_types, overrides.buffer + overrides.size);
-	overrides.size += link_types.size;
-
-	CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->editor_components.internal_manager, allocator, overrides);
-	
-	//CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->ui_reflection->reflection, allocator, overrides);
-	//CreateDeserializeEntityManagerSharedComponentTable(table, editor_state->module_reflection->reflection, allocator, overrides);
-	
-	// Add the overrides manually
-	for (unsigned int index = 0; index < overrides.size; index++) {
-		Component component = editor_state->editor_components.GetComponentID(overrides[index].name);
-		ECS_ASSERT(!table.Insert(overrides[index], component));
-	}
-
-	return table;
-}
-
-// ----------------------------------------------------------------------------------------------
-
-// ----------------------------------------------------------------------------------------------
-
-#pragma endregion
 
 // ----------------------------------------------------------------------------------------------
 
@@ -212,13 +19,7 @@ bool CreateEmptyScene(const EditorState* editor_state, Stream<wchar_t> path)
 	absolute_path.Add(ECS_OS_PATH_SEPARATOR);
 	absolute_path.AddStreamSafe(path);
 
-	ECS_FILE_HANDLE file_handle = -1;
-	ECS_FILE_STATUS_FLAGS status = FileCreate(absolute_path, &file_handle, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE);
-	if (status == ECS_FILE_STATUS_OK) {
-		CloseFile(file_handle);
-		return true;
-	}
-	return false;
+	return ECSEngine::CreateEmptyScene(absolute_path);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -235,160 +36,161 @@ bool ExistScene(const EditorState* editor_state, Stream<wchar_t> path)
 
 // ----------------------------------------------------------------------------------------------
 
-bool LoadEditorSceneCore(EditorState* editor_state, EntityManager* entity_manager, AssetDatabaseReference* database, Stream<wchar_t> filename)
+// It can fail if the link components cannot be found
+bool GetLoadSceneDataBase(
+	LoadSceneData* load_data,
+	EditorState* editor_state, 
+	EntityManager* entity_manager, 
+	const AssetDatabaseReference* database, 
+	AllocatorPolymorphic randomized_allocator,
+	Stream<wchar_t> filename,
+	AllocatorPolymorphic stack_allocator
+) {
+	CapacityStream<const AppliedModule*> applied_modules;
+	applied_modules.Initialize(stack_allocator, 0, 512);
+	CapacityStream<DeserializeEntityManagerComponentInfo> unique_overrides;
+	unique_overrides.Initialize(stack_allocator, 0, 256);
+	CapacityStream<DeserializeEntityManagerSharedComponentInfo> shared_overrides;
+	shared_overrides.Initialize(stack_allocator, 0, 256);
+
+	// We need to manually create the standalone asset database because the link components will wrongly
+	// take the handles to the master database that will not coincide with the standalone database
+	AssetDatabase* standalone_database = (AssetDatabase*)Allocate(stack_allocator, sizeof(AssetDatabase));
+	database->ToStandalone(stack_allocator, standalone_database);
+
+	ModulesToAppliedModules(editor_state, applied_modules);
+	ModuleGatherDeserializeOverrides(applied_modules, unique_overrides);
+	ModuleGatherDeserializeSharedOverrides(applied_modules, shared_overrides);
+	bool link_success = ModuleGatherLinkDeserializeUniqueAndSharedOverrides(
+		applied_modules,
+		editor_state->GlobalReflectionManager(),
+		standalone_database,
+		stack_allocator,
+		unique_overrides,
+		shared_overrides
+	);
+	if (!link_success) {
+		return false;
+	}
+
+	load_data->file = filename;
+	load_data->database = standalone_database;
+	load_data->entity_manager = entity_manager;
+	load_data->reflection_manager = editor_state->editor_components.internal_manager;
+	load_data->unique_overrides = unique_overrides;
+	load_data->shared_overrides = shared_overrides;
+	load_data->database_allocator = randomized_allocator;
+	return true;
+}
+
+bool LoadEditorSceneCore(
+	EditorState* editor_state, 
+	EntityManager* entity_manager, 
+	AssetDatabaseReference* database, 
+	Stream<wchar_t> filename,
+	CapacityStream<AssetDatabaseReferencePointerRemap>* pointer_remap
+)
 {
-	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
-	ECS_FILE_HANDLE file_handle = -1;
-	ECS_FILE_STATUS_FLAGS status = OpenFile(filename, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_OPTIMIZE_SEQUENTIAL | ECS_FILE_ACCESS_BINARY);
-	if (status != ECS_FILE_STATUS_OK) {
+	LoadSceneData load_data;
+	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, editor_state->asset_database->Allocator(), filename, stack_allocator);
+	if (!initialize_data) {
 		_stack_allocator.ClearBackup();
 		return false;
 	}
 
-	// If the file is empty, then the entity manager and the database reference is empty as well
-	if (GetFileByteSize(file_handle) == 0) {
-		CloseFile(file_handle);
+	bool success = LoadScene(&load_data);
 
-		// Just reset the entity manager and database reference
-		entity_manager->Reset();
-		database->Reset();
-		return true;
+	if (success) {
+		// Now we need to convert from standalone database to the reference one
+		database->FromStandalone(load_data.database, { nullptr, pointer_remap });
 	}
 
-	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, unique_link_types, ECS_KB);
-	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, shared_link_types, ECS_KB);
-
-	editor_state->editor_components.GetLinkComponents(unique_link_types, shared_link_types);
-
-	// Create the 2 serialize table
-	auto unique_table = DeserializeComponentTable(editor_state, stack_allocator, unique_link_types);
-	auto shared_table = DeserializeSharedComponentTable(editor_state, stack_allocator, shared_link_types);
-
-	// The entity manager first
-	ECS_DESERIALIZE_ENTITY_MANAGER_STATUS deserialize_status = DeserializeEntityManager(entity_manager, file_handle, &unique_table, &shared_table);
-	if (deserialize_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
-		_stack_allocator.ClearBackup();
-		CloseFile(file_handle);
-		return false;
-	}
-
-	// Read the database reference now
-	// Read whatever its left in the file now and send it to the asset database
-	// Choose a high enough buffer size
-	void* malloc_buffer = malloc(ECS_MB * 10);
-	unsigned int bytes_read = ReadFromFile(file_handle, { malloc_buffer, ECS_MB * 10 });
-	if (bytes_read == -1) {
-		entity_manager->Reset();
-		free(malloc_buffer);
-		_stack_allocator.ClearBackup();
-		CloseFile(file_handle);
-		return false;
-	}
-
-	uintptr_t ptr = (uintptr_t)malloc_buffer;
-	bool success = database->DeserializeStandalone(editor_state->ui_reflection->reflection, ptr);
-
-	free(malloc_buffer);
 	_stack_allocator.ClearBackup();
-	CloseFile(file_handle);
-
-	if (!success) {
-		entity_manager->Reset();
-		return false;
-	}
-
-	return true;
+	return success;
 }
 
 // ----------------------------------------------------------------------------------------------
 
-bool SaveEditorScene(const EditorState* editor_state, const EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename)
+bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
+{
+	// Create the pointer remap
+	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping.buffer);
+	if (success) {
+		// Check the pointer remap - we need to update the link components
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			for (unsigned int subindex = 0; subindex < pointer_remapping[index].size; subindex++) {
+				auto remapping = pointer_remapping[index][subindex];
+				if (remapping.new_index != remapping.old_index) {
+					// Update the link components
+					UpdateAssetToComponents(editor_state, { (void*)remapping.old_index, 0 }, { (void*)remapping.new_index, 0 }, (ECS_ASSET_TYPE)index);
+				}
+			}
+		}
+	}
+
+	return success;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_manager, const AssetDatabaseReference* database, Stream<wchar_t> filename)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 256, ECS_MB * 8);
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
-	// Rename the file to a temporary name such that if we fail to serialize we don't lose the previous data
-	ECS_STACK_CAPACITY_STREAM(wchar_t, renamed_file, 512);
-	renamed_file.Copy(function::PathFilename(filename));
-	renamed_file.AddStream(L".temp");
-	if (!RenameFolderOrFile(filename, renamed_file)) {
-		// If we fail, then return now.
-		return false;
-	}
+	// Convert the asset database reference into a standalone
+	AssetDatabase standalone_database;
+	database->ToStandalone(stack_allocator, &standalone_database);
 
-	struct StackDeallocator {
-		void operator()() {
-			linear_allocator->ClearBackup();
-
-			renamed_file.Copy(original_file);
-			renamed_file.AddStream(L".temp");
-
-			Stream<wchar_t> original_file_filename = function::PathFilename(original_file);
-
-			if (file_handle != -1) {
-				CloseFile(file_handle);
-
-				if (!destroy_temporary) {
-					RemoveFile(original_file);
-
-					// Try to rename the previous file to this name
-					RenameFolderOrFile(renamed_file, original_file_filename);
-				}
-				else {
-					RemoveFile(renamed_file);
-				}
-			}
-			else {
-				RenameFolderOrFile(renamed_file, original_file_filename);
-			}
-		}
-
-		Stream<wchar_t> original_file;
-		Stream<wchar_t> renamed_file;
-		ECS_FILE_HANDLE file_handle;
-		bool destroy_temporary;
-		ResizableLinearAllocator* linear_allocator;
-	};
-
-	StackScope<StackDeallocator> stack_deallocator({ filename, renamed_file, -1, false, &_stack_allocator });
-
-	// Start with writing the entity manager first
-	// Open the file first
-	ECS_FILE_HANDLE file_handle = -1;
-	ECS_FILE_STATUS_FLAGS status = FileCreate(filename, &file_handle, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE);
-	if (status != ECS_FILE_STATUS_OK) {
-		return false;
-	}
-
-	stack_deallocator.deallocator.file_handle = file_handle;
+	SaveSceneData save_data;
+	save_data.file = filename;
+	save_data.asset_database = &standalone_database;
+	save_data.entity_manager = entity_manager;
+	save_data.reflection_manager = editor_state->GlobalReflectionManager();
 	
-	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, unique_link_types, ECS_KB);
-	ECS_STACK_CAPACITY_STREAM(const Reflection::ReflectionType*, shared_link_types, ECS_KB);
-	editor_state->editor_components.GetLinkComponents(unique_link_types, shared_link_types);
+	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
+	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerComponentInfo, unique_overrides, ECS_KB);
+	ECS_STACK_CAPACITY_STREAM(SerializeEntityManagerSharedComponentInfo, shared_overrides, ECS_KB);
 
-	// Create the 2 serialize table
-	auto unique_table = SerializeComponentTable(editor_state, stack_allocator, unique_link_types);
-	auto shared_table = SerializeSharedComponentTable(editor_state, stack_allocator, shared_link_types);
-
-	bool success = SerializeEntityManager(entity_manager, file_handle, &unique_table, &shared_table);
-	if (!success) {
+	ModulesToAppliedModules(editor_state, applied_modules);
+	ModuleGatherSerializeOverrides(applied_modules, unique_overrides);
+	ModuleGatherSerializeSharedOverrides(applied_modules, shared_overrides);
+	bool link_success = ModuleGatherLinkSerializeUniqueAndSharedOverrides(applied_modules, save_data.reflection_manager, &standalone_database, stack_allocator, unique_overrides, shared_overrides);
+	if (!link_success) {
+		_stack_allocator.ClearBackup();
 		return false;
 	}
 
-	// Now can write the asset database reference
-	Stream<void> buffer = database->SerializeStandalone(editor_state->ui_reflection->reflection, stack_allocator);
-	if (buffer.size > 0) {
-		// Write it
-		success = WriteFile(file_handle, buffer);
-		if (!success) {
-			return false;
-		}
-	}
+	save_data.unique_overrides = unique_overrides;
+	save_data.shared_overrides = shared_overrides;
 
-	stack_deallocator.deallocator.destroy_temporary = true;
-	return true;
+	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
+
+	bool success = SaveScene(&save_data);
+	_stack_allocator.ClearBackup();
+	return success;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool SaveEditorScene(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, filename);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Stream<wchar_t> filename)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename);
 }
 
 // ----------------------------------------------------------------------------------------------

@@ -29,7 +29,7 @@ bool CreateAssetSetting(const EditorState* editor_state, Stream<char> name, Stre
 // This doesn't check the prevent resource load flag and wait until is cleared
 bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
-// If an asset like a mesh or a texture doesn't have a default setting, create one
+// If an asset like a mesh or a texture doesn't have a default setting, it creates one
 void CreateAssetDefaultSetting(const EditorState* editor_state);
 
 // When the target file of an asset is changed this needs to be called
@@ -46,8 +46,15 @@ void ChangeAssetName(EditorState* editor_state, unsigned int handle, ECS_ASSET_T
 // This doesn't check the prevent resource load flag and wait until is cleared
 bool DeallocateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
+// Returns true if it succeeded, else false. It can fail if the resource doesn't exist
+// This doesn't check the prevent resource load flag and wait until is cleared
+bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type);
+
 // It may not run immediately since it may be prevented from loading resources
 void DeleteAssetSetting(EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
+
+// Deletes all asset metadata files which have their asset missing
+void DeleteMissingAssetSettings(const EditorState* editor_state);
 
 // Returns true if the asset already exists or not. For materials and samplers the file parameter is ignored
 bool ExistsAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
@@ -72,8 +79,6 @@ bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStrea
 
 // This is used only for meshes and textures (these are a special case. They are not thunk files nor forwarding files)
 Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_state, Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
-
-void TickDefaultMetadataForAssets(EditorState* editor_state);
 
 // Returns true if it managed to write
 bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path);

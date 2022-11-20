@@ -85,6 +85,14 @@ namespace ECSEngine {
 				);
 			}
 
+			// Pushes the action handler as is
+			void AddActionHandlerForced(
+				UIHandler* handler,
+				float2 position,
+				float2 scale,
+				UIActionHandler action_handler
+			);
+
 			// Returns { nullptr, 0 } if there is no drag data. If there is, it returns it.
 			// If highlight element is given, it will set it to true if it should highlight, else to fale
 			Stream<void> AcquireDragDrop(float2 position, float2 scale, Stream<Stream<char>> name, bool* highlight_element = nullptr, unsigned int* matched_name = nullptr);
@@ -108,6 +116,15 @@ namespace ECSEngine {
 
 			void AddHoverableToDockspaceRegion(
 				LinearAllocator* allocator,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler
+			);
+
+			// Pushes the item without allocating anything
+			void AddHoverableToDockspaceRegionForced(
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -156,6 +173,14 @@ namespace ECSEngine {
 
 			void AddClickableToDockspaceRegion(
 				LinearAllocator* allocator,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler
+			);
+
+			void AddClickableToDockspaceRegionForced(
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -213,6 +238,14 @@ namespace ECSEngine {
 
 			void AddGeneralActionToDockspaceRegion(
 				LinearAllocator* allocator,
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				float2 position,
+				float2 scale,
+				UIActionHandler handler
+			);
+
+			void AddGeneralActionToDockspaceRegionForced(
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				float2 position,
@@ -1089,6 +1122,12 @@ namespace ECSEngine {
 
 			unsigned int GetFrameHandlerCount() const;
 
+			unsigned int GetLastClickableIndex(const UIDockspace* dockspace, unsigned int border_index) const;
+
+			unsigned int GetLastHoverableIndex(const UIDockspace* dockspace, unsigned int border_index) const;
+
+			unsigned int GetLastGeneralIndex(const UIDockspace* dockspace, unsigned int border_index) const;
+
 			void GetFixedDockspaceRegionsFromMouse(
 				float2 mouse_position,
 				UIDockspace** dockspaces,
@@ -1259,6 +1298,12 @@ namespace ECSEngine {
 
 			void PushDestroyCallbackWindowHandler(unsigned int window_index, UIActionHandler handler);
 
+			void ReaddHoverableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index);
+
+			void ReaddClickableToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index);
+
+			void ReaddGeneralToDockspaceRegion(UIDockspace* dockspace, unsigned int border_index, unsigned int handler_index);
+
 			void ReadFontDescriptionFile(Stream<wchar_t> filename);
 
 			void RegisterFocusedWindowClickableAction(
@@ -1396,6 +1441,10 @@ namespace ECSEngine {
 			void SetActiveWindow(unsigned int index);
 
 			void SetActiveWindow(Stream<char> name);
+
+			void SetActiveWindowInBorder(unsigned int index);
+
+			void SetActiveWindowInBorder(Stream<char> name);
 
 			void SetCleanupGeneralHandler();
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "Resources/AssetMetadata.h"
+#include "../Tools/Modules/ModuleDefinition.h"
 
 namespace ECSEngine {
 
@@ -8,15 +9,20 @@ namespace ECSEngine {
 		struct ReflectionType;
 	}
 
+	struct AssetDatabase;
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	struct LinkComponentAssetField {
 		unsigned int field_index;
 		ECS_ASSET_TYPE type;
 	};
 
-	// ------------------------------------------------------------------------------------------------------------
-
 	// Fills in the field indices of the fields that contain asset handles
 	ECSENGINE_API void GetAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices);
+
+	// Returns true if it has conformant types. (for example we don't support basic arrays of ResourceView for textures)
+	ECSENGINE_API bool GetAssetFieldsFromLinkComponentTarget(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices);
 
 	struct AssetTargetFieldFromReflection {
 		ECS_ASSET_TYPE type;
@@ -38,6 +44,22 @@ namespace ECSEngine {
 		const void* data
 	);
 
+	// Only accesses the field and returns the interface/pointer to the structure
+	ECSENGINE_API Stream<void> GetAssetTargetFieldFromReflection(
+		const Reflection::ReflectionType* type,
+		unsigned int field,
+		const void* data,
+		ECS_ASSET_TYPE asset_type
+	);
+
+	ECSENGINE_API void GetLinkComponentTargetHandles(
+		const Reflection::ReflectionType* type,
+		const AssetDatabase* asset_database,
+		const void* data,
+		Stream<LinkComponentAssetField> asset_fields,
+		unsigned int* handles
+	);
+
 	// ------------------------------------------------------------------------------------------------------------
 
 	enum ECS_SET_ASSET_TARGET_FIELD_RESULT : unsigned char {
@@ -54,6 +76,17 @@ namespace ECSEngine {
 		void* data,
 		Stream<void> field_data,
 		ECS_ASSET_TYPE field_type
+	);
+
+	// It will try to set the field according to the given field only if the metadata matches the given
+	// comparator, else it will leave it the same
+	ECSENGINE_API ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflectionIfMatches(
+		const Reflection::ReflectionType* type,
+		unsigned int field,
+		void* data,
+		Stream<void> field_data,
+		ECS_ASSET_TYPE field_type,
+		Stream<void> comparator
 	);
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -92,6 +125,16 @@ namespace ECSEngine {
 		CapacityStream<unsigned int*>& pointers
 	);
 
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void GetLinkComponentAssetData(
+		const Reflection::ReflectionType* type,
+		const void* link_component,
+		const AssetDatabase* database,
+		Stream<LinkComponentAssetField> asset_fields,
+		Stream<void>* field_data
+	);
+	
 	// ------------------------------------------------------------------------------------------------------------
 
 	// If the link component is a default linked component, it verifies that the target
@@ -164,6 +207,52 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		CapacityStream<const Reflection::ReflectionType*>& unique_link_types,
 		CapacityStream<const Reflection::ReflectionType*>& shared_link_types
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	struct ConvertToAndFromLinkBaseData {
+		// ----------------- Mandatory ---------------------------
+		ModuleLinkComponentTarget module_link;
+		const Reflection::ReflectionManager* reflection_manager;
+		const Reflection::ReflectionType* target_type;
+		const Reflection::ReflectionType* link_type;
+		const AssetDatabase* asset_database;
+
+
+		// ------------------ Optional ---------------------------
+		AllocatorPolymorphic allocator = { nullptr };
+		Stream<LinkComponentAssetField> asset_fields = { nullptr, 0 };	
+	};
+
+	// Returns true if the conversion is successful. It can fail if the component needs a DLL function
+	// but none is provided or if an asset is incorrectly represented (streams at the moment cannot be represented)
+	// If the allocator is not provided, then it will only reference the fields (it will not make a deep copy)
+	ECSENGINE_API bool ConvertFromTargetToLinkComponent(
+		const ConvertToAndFromLinkBaseData* base_data,
+		const void* target_data,
+		void* link_data
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// Return true if the conversion is successful. It can fail if the component needs a DLL function
+	// but none is provided or if an asset is incorrectly represented (streams at the moment cannot be represented)
+	// If the allocator is not provided, then it will only reference the streams (it will not make a deep copy)
+	ECSENGINE_API bool ConvertLinkComponentToTarget(
+		const ConvertToAndFromLinkBaseData* base_data,
+		const void* link_data,
+		void* target_data
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	// It will ignore non asset fields. Return true if the conversion is successful. It can fail if the component needs a DLL function
+	// but none is provided or if an asset is incorrectly represented (streams at the moment cannot be represented)
+	ECSENGINE_API bool ConvertLinkComponentToTargetAssetsOnly(
+		const ConvertToAndFromLinkBaseData* base_data,
+		const void* link_data,
+		void* target_data
 	);
 
 	// ------------------------------------------------------------------------------------------------------------

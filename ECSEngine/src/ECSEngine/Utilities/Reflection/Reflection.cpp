@@ -307,6 +307,9 @@ namespace ECSEngine {
 			InitializeEnumTable(enum_count);
 
 			constants.Initialize(GetAllocatorPolymorphic(allocator), 0);
+			blittable_types.Initialize(GetAllocatorPolymorphic(allocator), 0);
+
+			AddBlittableException(STRING(Stream<void>), sizeof(Stream<void>), alignof(Stream<void>));
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -317,6 +320,13 @@ namespace ECSEngine {
 				Deallocate(folders.allocator, type.name.buffer);
 			});
 			type_definitions.Clear();
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::AddBlittableException(Stream<char> definition, unsigned int byte_size, unsigned int alignment)
+		{
+			blittable_types.Add({ definition, byte_size, alignment });
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -806,6 +816,16 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		uint2 ReflectionManager::FindBlittableException(Stream<char> name) const
+		{
+			unsigned int index = function::FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+				return type.name;
+			});
+			return index != -1 ? uint2(blittable_types[index].byte_size, blittable_types[index].alignment) : uint2(-1, -1);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 		void ReflectionManager::FreeFolderHierarchy(unsigned int folder_index)
 		{
 			// The types associated
@@ -1047,6 +1067,7 @@ namespace ECSEngine {
 				}
 			}
 			ECS_ASSERT(false);
+			return nullptr;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -1158,7 +1179,7 @@ COMPLEX_TYPE(base##4, ReflectionBasicFieldType::basic_reflect##4, ReflectionStre
 COMPLEX_TYPE(u##base##3, ReflectionBasicFieldType::U##basic_reflect##3, ReflectionStreamFieldType::Basic, sizeof(base) * 3); \
 COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, ReflectionStreamFieldType::Basic, sizeof(base) * 4);
 
-#define TYPE_234_INT(base, basic_reflect, extended_reflect) TYPE_234_SIGNED_INT(base, basic_reflect); TYPE_234_UNSIGNED_INT(base, basic_reflect)
+#define TYPE_234_INT(base, basic_reflect) TYPE_234_SIGNED_INT(base, basic_reflect); TYPE_234_UNSIGNED_INT(base, basic_reflect)
 
 			INT_TYPE(int8_t, Int8);
 			INT_TYPE(uint8_t, UInt8);
@@ -1185,8 +1206,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			BASIC_TYPE(size_t, ReflectionBasicFieldType::UInt64, ReflectionStreamFieldType::Basic);
 			BASIC_TYPE(wchar_t, ReflectionBasicFieldType::Wchar_t, ReflectionStreamFieldType::Basic);
 
-			COMPLEX_TYPE(enum, ReflectionBasicFieldType::Enum, ReflectionStreamFieldType::Basic, sizeof(ReflectionBasicFieldType), 1);
-			COMPLEX_TYPE(pointer, ReflectionBasicFieldType::UserDefined, ReflectionStreamFieldType::Pointer, sizeof(void*), 1);
+			COMPLEX_TYPE(enum, ReflectionBasicFieldType::Enum, ReflectionStreamFieldType::Basic, sizeof(ReflectionBasicFieldType));
+			COMPLEX_TYPE(pointer, ReflectionBasicFieldType::UserDefined, ReflectionStreamFieldType::Pointer, sizeof(void*));
 			
 			TYPE_234(bool, Bool);
 			TYPE_234(float, Float);
@@ -1493,6 +1514,18 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			// error if not found
 			ECS_ASSERT(false);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::RemoveBlittableException(Stream<char> name)
+		{
+			unsigned int index = function::FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+				return type.name;
+			});
+			if (index != -1) {
+				blittable_types.RemoveSwapBack(index);
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -2624,22 +2657,29 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 							&info.default_bool
 						);
 						info.has_default_value = parse_success;
+						return ECS_REFLECTION_ADD_TYPE_FIELD_SUCCESS;
 					};
 					// If it is an opening brace, it's ok.
 					if (*default_value_parse == '{') {
-						parse_default_value(default_value_parse, '}');
+						ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = parse_default_value(default_value_parse, '}');
+						if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
+							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+						}
 					}
 					else if (function::IsCodeIdentifierCharacter(*default_value_parse)) {
 						// Check to see that it is the constructor type - else it is the actual value
 						const char* start_parse_value = default_value_parse;
 						while (function::IsCodeIdentifierCharacter(*default_value_parse)) {
-							*default_value_parse++;
+							default_value_parse++;
 						}
 
 						// If it is an open paranthese, it is a constructor
 						if (*default_value_parse == '(') {
 							// Look for the closing paranthese
-							parse_default_value(default_value_parse, ')');
+							ECS_REFLECTION_ADD_TYPE_FIELD_RESULT result = parse_default_value(default_value_parse, ')');
+							if (result == ECS_REFLECTION_ADD_TYPE_FIELD_FAILED) {
+								return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+							}
 						}
 						else {
 							// If it is a space, tab or semicolon, it means that we skipped the value
@@ -3134,29 +3174,24 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		size_t SearchReflectionUserDefinedTypeByteSize(
 			const ReflectionManager* reflection_manager, 
-			Stream<char> definition,
-			Stream<Stream<char>> blittable_exceptions,
-			Stream<unsigned int> blittable_byte_sizes
+			Stream<char> definition
 		)
 		{
-			return SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, definition, blittable_exceptions, blittable_byte_sizes).x;
+			return SearchReflectionUserDefinedTypeByteSizeAlignment(reflection_manager, definition).x;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ulong2 SearchReflectionUserDefinedTypeByteSizeAlignment(
 			const ReflectionManager* reflection_manager,
-			Stream<char> definition,
-			Stream<Stream<char>> blittable_exceptions,
-			Stream<unsigned int> blittable_byte_sizes,
-			Stream<unsigned int> blittable_alignments
+			Stream<char> definition
 		)
 		{
-			unsigned int exception_index = function::FindString(definition, blittable_exceptions);
-			if (exception_index != -1) {
+			uint2 blittable_exception = reflection_manager->FindBlittableException(definition);
+			if (blittable_exception.x != -1) {
 				return { 
-					blittable_byte_sizes[exception_index],
-					blittable_alignments.size > 0 ? blittable_alignments[exception_index] : std::max(blittable_byte_sizes[exception_index], (unsigned int)alignof(void*)) 
+					blittable_exception.x,
+					blittable_exception.y
 				};
 			}
 
@@ -3256,6 +3291,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, ReflectionField field)
 		{
+			// Check the give size macro
 			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined) {
 				if (field.info.stream_type == ReflectionStreamFieldType::Basic || field.info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
 					return GetFieldTypeAlignment(field.info.basic_type);
@@ -3265,6 +3301,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 			}
 			else {
+				ulong2 given_size = GetReflectionTypeGivenFieldTag(&field);
+				if (given_size.y != -1) {
+					return given_size.y;
+				}
+
 				ReflectionType nested_type;
 				if (reflection_manager->TryGetType(field.definition, nested_type)) {
 					return GetReflectionTypeAlignment(&nested_type);
@@ -3276,8 +3317,13 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 						return alignof(unsigned char);
 					}
 
-					// Assume its a container type - which should always have an alignment of alignof(void*)
-					return alignof(void*);
+					unsigned int custom_index = FindReflectionCustomType(field.definition);
+					ECS_ASSERT(custom_index != -1);
+
+					ReflectionCustomTypeByteSizeData byte_size_data;
+					byte_size_data.definition = field.definition;
+					byte_size_data.reflection_manager = reflection_manager;
+					return ECS_REFLECTION_CUSTOM_TYPES[custom_index].byte_size(&byte_size_data).y;
 				}
 			}
 			
@@ -3606,6 +3652,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		Stream<char> GetReflectionTypeLinkComponentTarget(const ReflectionType* type)
 		{
 			Stream<char> opened_parenthese = function::FindFirstCharacter(type->tag, '(');
+			if (opened_parenthese.size == 0) {
+				return { nullptr, 0 };
+			}
+
 			opened_parenthese.buffer += 1;
 			opened_parenthese.size -= 1;
 			opened_parenthese = function::SkipWhitespace(opened_parenthese);
@@ -3629,12 +3679,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		Stream<char> GetReflectionTypeLinkNamePretty(Stream<char> name)
 		{
 			if (name.size > 0) {
-				const char* token = "_Link";
-				const size_t token_size = strlen(token);
-				if (name.size > token_size) {
-					if (memcmp(name.buffer + name.size - token_size, token, token_size) == 0) {
-						return { name.buffer, name.size - token_size };
-					}
+				Stream<char> found_token = function::FindFirstToken(name, "_Link");
+				if (found_token.size > 0) {
+					return { name.buffer, name.size - found_token.size };
 				}
 			}
 			return name;
@@ -3706,8 +3753,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					ComponentBuffer component_buffer;
 					component_buffer.element_byte_size = type->fields[index].info.stream_byte_size;
 					component_buffer.is_data_pointer = false;
-					component_buffer.pointer_offset = offsetof(Stream<void>, buffer);
-					component_buffer.size_offset = offsetof(Stream<void>, size);
+					component_buffer.pointer_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, buffer);
+					component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
 					component_buffers.Add(component_buffer);
 				}
 				else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
@@ -3715,9 +3762,9 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					ComponentBuffer component_buffer;
 					component_buffer.element_byte_size = 1;
 					component_buffer.is_data_pointer = true;
-					component_buffer.pointer_offset = 0;
+					component_buffer.pointer_offset = type->fields[index].info.pointer_offset;
 					component_buffer.size_offset = 0;
-					component_buffers.Add({ type->fields[index].info.pointer_offset, true });
+					component_buffers.Add(component_buffer);
 				}
 			}
 			component_buffers.AssertCapacity();
@@ -3728,6 +3775,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		ulong2 GetReflectionTypeGivenFieldTag(const ReflectionField* field)
 		{
 			Stream<char> tag = field->GetTag(STRING(ECS_GIVE_SIZE_REFLECTION));
+			if (tag.size == 0) {
+				return { (size_t)-1, (size_t)-1 };
+			}
+
 			Stream<char> comma = function::FindFirstCharacter(tag, ',');
 
 			ulong2 result;
@@ -3740,7 +3791,114 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			
 			result.x = function::ConvertCharactersToInt(tag);
+			if (result.x < 8) {
+				result.y = function::PowerOfTwoGreater(result.x) / 2;
+			}
 			return result;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ComponentBuffer GetReflectionTypeRuntimeBufferIndex(const ReflectionType* type, unsigned int buffer_index, unsigned int* field_index)
+		{
+			unsigned int index = 0;
+			unsigned int current_buffer_index = 0;
+			for (; index < type->fields.size && current_buffer_index <= buffer_index; index++) {
+				if (IsStream(type->fields[index].info.stream_type) && type->fields[index].info.basic_type != ReflectionBasicFieldType::UserDefined) {
+					current_buffer_index++;
+				}
+				else if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
+					current_buffer_index++;
+				}
+			}
+
+			if (current_buffer_index <= buffer_index) {
+				// Invalid buffer index
+				if (field_index != nullptr) {
+					*field_index = -1;
+				}
+				return {};
+			}
+
+			ComponentBuffer component_buffer;
+			// TODO: Add a reflection field tag such that it can specify the stream byte size
+			if (function::CompareStrings(type->fields[index].definition, STRING(DataPointer))) {
+				component_buffer.element_byte_size = 1;
+				component_buffer.is_data_pointer = true;
+				component_buffer.pointer_offset = type->fields[index].info.pointer_offset;
+				component_buffer.size_offset = 0;
+			}
+			else {
+				component_buffer.element_byte_size = type->fields[index].info.stream_byte_size;
+				component_buffer.is_data_pointer = false;
+				component_buffer.pointer_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, buffer);
+				component_buffer.size_offset = type->fields[index].info.pointer_offset + offsetof(Stream<void>, size);
+			}
+			if (field_index != nullptr) {
+				*field_index = index;
+			}
+			return component_buffer;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag)
+		{
+			tag = function::FindFirstCharacter(tag, '(');
+			if (tag.size == 0) {
+				return -1;
+			}
+			tag.buffer += 1;
+			// The last character is a closed parenthese
+			tag.size -= 2;
+
+			size_t user_defined_type = SearchReflectionUserDefinedTypeByteSize(manager, tag);
+			if (user_defined_type != -1) {
+				return user_defined_type;
+			}
+
+			// Explicit number given
+			return function::ConvertCharactersToInt(tag);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types)
+		{
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					// Check to see if it has the size given
+					if (GetReflectionTypeGivenFieldTag(&type->fields[index]).x == -1) {
+						// Check blittable exception
+						uint2 blittable_index = manager->FindBlittableException(type->fields[index].definition);
+						if (blittable_index.x == -1) {
+							// Not a blittable type
+							// Try nested type, then custom type
+							ReflectionType nested_type;
+							if (manager->TryGetType(type->fields[index].definition, nested_type)) {
+								dependent_types.AddSafe(nested_type.name);
+								// Retrieve its dependent types as well
+								GetReflectionTypeDependentTypes(manager, &nested_type, dependent_types);
+							}
+							else {
+								// Try custom type
+								unsigned int custom_type_index = FindReflectionCustomType(type->fields[index].definition);
+								if (custom_type_index != -1) {
+									ReflectionCustomTypeDependentTypesData dependent_data;
+									dependent_data.definition = type->fields[index].definition;
+									dependent_data.dependent_types = dependent_types;
+									ECS_REFLECTION_CUSTOM_TYPES[custom_type_index].dependent_types(&dependent_data);
+									dependent_types.size = dependent_data.dependent_types.size;
+								}
+								else {
+									// Possibly an error, could not identify what type this is
+									ECS_ASSERT(false);
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

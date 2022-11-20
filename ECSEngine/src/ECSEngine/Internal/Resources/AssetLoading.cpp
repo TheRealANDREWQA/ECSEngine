@@ -4,6 +4,7 @@
 #include "../Resources/ResourceManager.h"
 #include "../../Internal/Multithreading/TaskManager.h"
 #include "AssetDatabase.h"
+#include "AssetDatabaseReference.h"
 #include "../../GLTF/GLTFLoader.h"
 #include "../../Allocators/ResizableLinearAllocator.h"
 #include "../../Utilities/Path.h"
@@ -20,11 +21,11 @@ namespace ECSEngine {
 
 	struct MeshLoadData {
 		ECS_INLINE bool IsValid() const {
-			return (data.data != nullptr && data.mesh_count > 0) || time_stamp > 0;
+			return (submeshes.size > 0 && submeshes.buffer != nullptr) || time_stamp > 0;
 		}
 
-		GLTFData data;
-		GLTFMesh* meshes;
+		GLTFMesh coallesced_mesh;
+		Stream<Submesh> submeshes;
 		size_t time_stamp;
 		Stream<unsigned int> different_handles;
 	};
@@ -160,31 +161,36 @@ namespace ECSEngine {
 
 	ECS_THREAD_TASK(ProcessMesh) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
+		Graphics* initial_graphics = data->control_block->resource_manager->m_graphics;
+
 		auto* meshes = &data->control_block->meshes[data->write_index];
-		const MeshMetadata* metadata = data->control_block->database->GetMeshConst(meshes->different_handles[data->subhandle_index]);
+		MeshMetadata* metadata = data->control_block->database->GetMesh(meshes->different_handles[data->subhandle_index]);
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
 			meshes->time_stamp,
 			data->control_block->load_info.mount_point
 		};
 
-		bool success = CreateMeshFromMetadataEx(
+		CreateMeshFromMetadataEx(
 			data->control_block->resource_manager,
 			metadata, 
-			{ meshes->meshes, meshes->data.mesh_count },
+			&meshes->coallesced_mesh,
+			meshes->submeshes,
 			&ex_data
 		);
-		if (!success) {
-			LoadAssetFailure failure;
-			failure.processing_failure = true;
-			failure.dependency_failure = false;
-			failure.asset_type = ECS_ASSET_MESH;
-			failure.handle = meshes->different_handles[data->subhandle_index];
-		
-			data->control_block->Fail(failure);
-			// Make the handle -1 to indicate that the processing failed
-			meshes->different_handles[data->subhandle_index] = -1;
-		}
+		// At the moment this cannot fail
+
+		//if (!success) {
+		//	LoadAssetFailure failure;
+		//	failure.processing_failure = true;
+		//	failure.dependency_failure = false;
+		//	failure.asset_type = ECS_ASSET_MESH;
+		//	failure.handle = meshes->different_handles[data->subhandle_index];
+		//
+		//	data->control_block->Fail(failure);
+		//	// Make the handle -1 to indicate that the processing failed
+		//	meshes->different_handles[data->subhandle_index] = -1;
+		//}
 
 		// Exit from the semaphore - use ex exit
 		data->control_block->load_info.finish_semaphore->ExitEx();
@@ -195,7 +201,7 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(ProcessTexture) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
 		auto* textures = &data->control_block->textures[data->write_index];
-		const TextureMetadata* metadata = data->control_block->database->GetTextureConst(textures->different_handles[data->subhandle_index]);
+		TextureMetadata* metadata = data->control_block->database->GetTexture(textures->different_handles[data->subhandle_index]);
 
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
@@ -315,26 +321,27 @@ namespace ECSEngine {
 			failure.handle = mesh_handle;
 
 			data->control_block->Fail(failure);
+
+			// We need to signal it
+			data->control_block->load_info.finish_semaphore->ExitEx();
 			return;
 		}
 
-		mesh_block_pointer->data = gltf_data;
 		mesh_block_pointer->time_stamp = OS::GetFileLastWrite(file_path);
 
-		GLTFMesh* gltf_meshes = (GLTFMesh*)Allocate(allocator, sizeof(GLTFMesh) * gltf_data.mesh_count);
-		bool success = LoadMeshesFromGLTF(gltf_data, gltf_meshes, allocator, metadata->invert_z_axis);
+		Submesh* submeshes = (Submesh*)Allocate(allocator, sizeof(Submesh) * gltf_data.mesh_count);
+
+		bool success = LoadCoallescedMeshFromGLTF(gltf_data, &mesh_block_pointer->coallesced_mesh, submeshes, allocator, metadata->invert_z_axis);
 		FreeGLTFFile(gltf_data);
 		if (success) {
-			data->control_block->meshes[data->write_index].meshes = gltf_meshes;
+			mesh_block_pointer->submeshes = { submeshes, gltf_data.mesh_count };
 			// Generate the processing tasks
 			SpawnProcessingTasks(data->control_block, world->task_manager, ProcessMesh, mesh_block_pointer->different_handles.size, data->write_index, thread_index);
 		}
 		else {
-			Deallocate(allocator, gltf_meshes);
+			Deallocate(allocator, submeshes);
 
-			mesh_block_pointer->meshes = nullptr;
-			mesh_block_pointer->data.data = nullptr;
-			mesh_block_pointer->data.mesh_count = 0;
+			mesh_block_pointer->submeshes = { nullptr, 0 };
 
 			LoadAssetFailure failure;
 			failure.asset_type = ECS_ASSET_MESH;
@@ -343,6 +350,9 @@ namespace ECSEngine {
 			failure.handle = mesh_handle;
 			data->control_block->Fail(failure);
 		}
+
+		// Now we can exit from our own task
+		data->control_block->load_info.finish_semaphore->ExitEx();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -381,6 +391,9 @@ namespace ECSEngine {
 			failure.handle = texture_handle;
 
 			data->control_block->Fail(failure);
+
+			// We need to signal it
+			data->control_block->load_info.finish_semaphore->ExitEx();
 			return;
 		}
 
@@ -391,7 +404,7 @@ namespace ECSEngine {
 		SpawnProcessingTasks(data->control_block, world->task_manager, ProcessTexture, texture_block_pointer->different_handles.size, data->write_index, thread_index);
 	
 		// Now we can exit from our own task
-		data->control_block->load_info.finish_semaphore->Exit();
+		data->control_block->load_info.finish_semaphore->ExitEx();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -417,6 +430,9 @@ namespace ECSEngine {
 
 			shader_block_pointer->source_code = { nullptr, 0 };
 			data->control_block->Fail(failure);
+
+			// We need to signal it
+			data->control_block->load_info.finish_semaphore->ExitEx();
 			return;
 		}
 
@@ -427,7 +443,7 @@ namespace ECSEngine {
 		SpawnProcessingTasks(data->control_block, world->task_manager, ProcessShader, shader_block_pointer->different_handles.size, data->write_index, thread_index);
 
 		// Now we can exit from our own task
-		data->control_block->load_info.finish_semaphore->Exit();
+		data->control_block->load_info.finish_semaphore->ExitEx();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -453,6 +469,9 @@ namespace ECSEngine {
 
 			misc_block_pointer->data = { nullptr, 0 };
 			data->control_block->Fail(failure);
+
+			// We need to signal it
+			data->control_block->load_info.finish_semaphore->ExitEx();
 			return;
 		}
 
@@ -478,7 +497,7 @@ namespace ECSEngine {
 		}
 
 		// Now we can exit from our own task
-		data->control_block->load_info.finish_semaphore->Exit();
+		data->control_block->load_info.finish_semaphore->ExitEx();
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -630,7 +649,7 @@ namespace ECSEngine {
 
 		// Wait until all threads have finished - the value is 2 since
 		// by default the semaphore should have 1 and another one incremented for this task
-		data->load_info.finish_semaphore->TickWait(5'000, 2);
+		data->load_info.finish_semaphore->TickWait(5, 2);
 
 		auto materials = data->database->material_asset.ToStream();
 		for (size_t index = 0; index < materials.size; index++) {
@@ -732,7 +751,7 @@ namespace ECSEngine {
 		DeallocateIfBelongs(persistent_allocator, data->load_info.mount_point.buffer);
 
 		// Exit from the semaphore
-		data->load_info.finish_semaphore->ExitEx();
+		data->load_info.finish_semaphore->ExitEx(2);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -780,7 +799,7 @@ namespace ECSEngine {
 
 		for (size_t index = 0; index < same_target.meshes.size; index++) {
 			control_block->meshes[index].different_handles.InitializeAndCopy(persistent_allocator, same_target.meshes[index].other_handles);
-			control_block->meshes[index].data.data = nullptr;
+			control_block->meshes[index].submeshes = { nullptr, 0 };
 		}
 
 		for (size_t index = 0; index < same_target.textures.size; index++) {
@@ -953,49 +972,96 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void UnloadAssets(AssetDatabase* database, ResourceManager* resource_manager, Stream<wchar_t> mount_point, CapacityStream<MissingAsset>* missing_assets)
+	void UnloadAssets(
+		AssetDatabase* database, 
+		ResourceManager* resource_manager, 
+		Stream<wchar_t> mount_point, 
+		Stream<unsigned int>* asset_mask, 
+		CapacityStream<MissingAsset>* missing_assets
+	)
 	{
-		auto mesh_stream = database->mesh_metadata.ToStream();
-		auto texture_stream = database->texture_metadata.ToStream();
-		auto gpu_sampler_stream = database->gpu_sampler_metadata.ToStream();
-		auto shader_stream = database->shader_metadata.ToStream();
-		auto material_stream = database->material_asset.ToStream();
-		auto misc_stream = database->misc_asset.ToStream();
+		auto iterate = [=](ECS_ASSET_TYPE type, auto use_mask) {
+			unsigned int count;
+			if constexpr (use_mask) {
+				count = asset_mask[type].size;
+			}
+			else {
+				count = database->GetAssetCount(type);
+			}
 
-		for (size_t index = 0; index < mesh_stream.size; index++) {
-			auto* mesh = &mesh_stream[index].value;
-			if (IsMeshFromMetadataLoaded(resource_manager, mesh, mount_point)) {
-				DeallocateMeshFromMetadata(resource_manager, mesh, mount_point);
+			for (unsigned int index = 0; index < count; index++) {
+				unsigned int handle;
+				if constexpr (use_mask) {
+					handle = database->GetAssetHandleFromIndex(index, type);
+				}
+				else {
+					handle = asset_mask[type][index];
+				}
+
+				void* metadata = database->GetAsset(handle, type);
+				if (IsAssetFromMetadataLoaded(resource_manager, metadata, type, mount_point)) {
+					DeallocateAssetFromMetadata(resource_manager, database, metadata, type, mount_point);
+				}
+			}
+		};
+
+		if (asset_mask != nullptr) {
+			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+				iterate((ECS_ASSET_TYPE)index, std::true_type{});
 			}
 		}
-
-		for (size_t index = 0; index < texture_stream.size; index++) {
-			auto* texture = &texture_stream[index].value;
-			if (IsTextureFromMetadataLoaded(resource_manager, texture, mount_point)) {
-				DeallocateTextureFromMetadata(resource_manager, texture, mount_point);
+		else {
+			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+				iterate((ECS_ASSET_TYPE)index, std::false_type{});
 			}
 		}
+	}
 
-		for (size_t index = 0; index < gpu_sampler_stream.size; index++) {
-			DeallocateSamplerFromMetadata(resource_manager, &gpu_sampler_stream[index].value);
-		}
+	// ------------------------------------------------------------------------------------------------------------
 
-		for (size_t index = 0; index < shader_stream.size; index++) {
-			auto* shader = &shader_stream[index].value;
-			if (IsShaderFromMetadataLoaded(resource_manager, shader, mount_point)) {
-				DeallocateShaderFromMetadata(resource_manager, shader, mount_point);
+	void UnloadAssets(
+		AssetDatabaseReference* database_reference, 
+		ResourceManager* resource_manager, 
+		Stream<wchar_t> mount_point,
+		Stream<unsigned int>* asset_mask
+	)
+	{
+		AssetDatabase* database = database_reference->GetDatabase();
+
+		auto loop = [=](auto use_mask) {
+			for (size_t asset_index = 0; asset_index < ECS_ASSET_TYPE_COUNT; asset_index++) {
+				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)asset_index;
+				unsigned int current_count;
+				if constexpr (use_mask) {
+					current_count = asset_mask[current_type].size;
+				}
+				else {
+					current_count = database_reference->GetCount(current_type);
+				}
+
+				for (unsigned int index = 0; index < current_count; index++) {
+					unsigned int index_to_remove;
+					if constexpr (use_mask) {
+						index_to_remove = database_reference->GetIndex(asset_mask[current_type][index], current_type);
+					}
+					else {
+						index_to_remove = index;
+					}
+
+					size_t metadata_storage[ECS_KB];
+					bool unloaded_now = database_reference->RemoveAsset(index_to_remove, current_type, metadata_storage);
+					if (unloaded_now) {
+						DeallocateAssetFromMetadata(resource_manager, database, metadata_storage, current_type, mount_point);
+					}
+				}
 			}
-		}
+		};
 
-		for (size_t index = 0; index < material_stream.size; index++) {
-			DeallocateMaterialFromMetadata(resource_manager, &material_stream[index].value, database, mount_point);
+		if (asset_mask != nullptr) {
+			loop(std::true_type{});
 		}
-
-		for (size_t index = 0; index < misc_stream.size; index++) {
-			auto* misc = &misc_stream[index].value;
-			if (IsMiscFromMetadataLoaded(resource_manager, misc, mount_point)) {
-				DeallocateMiscAssetFromMetadata(resource_manager, misc, mount_point);
-			}
+		else {
+			loop(std::false_type{});
 		}
 	}
 
@@ -1004,24 +1070,34 @@ namespace ECSEngine {
 	void LoadAssetFailure::ToString(const AssetDatabase* database, CapacityStream<char>& characters) const
 	{
 		// The name is always the first field
-		const void* asset = database->GetAssetConst(handle, asset_type);
-		Stream<char> name = *(Stream<char>*)asset;
+		Stream<char> name = database->GetAssetName(handle, asset_type);
+		Stream<wchar_t> file = database->GetAssetPath(handle, asset_type);
 
 		Stream<char> type_string = ConvertAssetTypeString(asset_type);
-		const char* failure_string = nullptr;
+		const char* failure_string_base = nullptr;
 		if (processing_failure) {
-			failure_string = "LoadFailure: Could not process asset {#}, type {#}.";
+			failure_string_base = "LoadFailure: Could not process asset {#}, type {#}";
 		}
 		else {
 			if (dependency_failure) {
-				failure_string = "LoadFailure: Asset {#}, type {#}, could not be loaded because a dependency failed.";
+				failure_string_base = "LoadFailure: Asset {#}, type {#}, could not be loaded because a dependency failed";
 			}
 			else {
-				failure_string = "LoadFailure: Could not read data from disk for asset {#}, type {#}.";
+				failure_string_base = "LoadFailure: Could not read data from disk for asset {#}, type {#}";
 			}
 		}
 
-		ECS_FORMAT_STRING(characters, failure_string, name, type_string);
+		if (file.size > 0) {
+			ECS_STACK_CAPACITY_STREAM(char, failure_string, 512);
+			failure_string.Copy(failure_string_base);
+			failure_string.AddStream(" with target file {#}");
+			failure_string.Add('\0');
+			ECS_FORMAT_STRING(characters, failure_string.buffer, name, type_string, file);
+		}
+		else {
+			ECS_FORMAT_STRING(characters, failure_string_base, name, type_string);
+		}
+
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
