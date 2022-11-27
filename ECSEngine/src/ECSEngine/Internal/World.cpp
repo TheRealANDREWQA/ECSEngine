@@ -75,8 +75,6 @@ namespace ECSEngine {
 		);
 		allocation = function::OffsetPointer(allocation, sizeof(MemoryManager));
 		
-		unsigned int thread_count = std::thread::hardware_concurrency();
-
 		if (descriptor.resource_manager == nullptr) {
 			MemoryManager* resource_manager_allocator = (MemoryManager*)allocation;
 			*resource_manager_allocator = DefaultResourceManagerAllocator(memory);
@@ -84,7 +82,7 @@ namespace ECSEngine {
 
 			// resource manager
 			resource_manager = (ResourceManager*)allocation;
-			new (resource_manager) ResourceManager(resource_manager_allocator, graphics, thread_count);
+			new (resource_manager) ResourceManager(resource_manager_allocator, graphics);
 			allocation = function::OffsetPointer(allocation, sizeof(ResourceManager));
 		}
 
@@ -106,6 +104,8 @@ namespace ECSEngine {
 
 		// task manager - if needed
 		if (descriptor.task_manager == nullptr) {
+			unsigned int thread_count = std::thread::hardware_concurrency();
+
 			task_manager = (TaskManager*)allocation;
 			new (task_manager) TaskManager(thread_count, memory, descriptor.per_thread_temporary_memory_size);
 			task_manager->SetWorld(this);

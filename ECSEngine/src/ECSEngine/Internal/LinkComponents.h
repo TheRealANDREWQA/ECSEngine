@@ -65,7 +65,8 @@ namespace ECSEngine {
 	enum ECS_SET_ASSET_TARGET_FIELD_RESULT : unsigned char {
 		ECS_SET_ASSET_TARGET_FIELD_NONE,
 		ECS_SET_ASSET_TARGET_FIELD_OK,
-		ECS_SET_ASSET_TARGET_FIELD_FAILED
+		ECS_SET_ASSET_TARGET_FIELD_FAILED,
+		ECS_SET_ASSET_TARGET_FIELD_MATCHED
 	};
 
 	// It will try to set the field according to the given field. It will fail if the field

@@ -974,3 +974,10 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
+
+void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+{
+	editor_state->inspector_manager.data[inspector_index].target_sandbox = sandbox_index;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------

@@ -289,7 +289,7 @@ void PreinitializeRuntime(EditorState* editor_state) {
 
 	// Create the resource manager - it already has the shader directory set for the ECSEngine Shaders
 	editor_state->runtime_resource_manager = (ResourceManager*)function::OffsetPointer(runtime_resource_manager_allocator, sizeof(*runtime_resource_manager_allocator));
-	*editor_state->runtime_resource_manager = ResourceManager(runtime_resource_manager_allocator, editor_state->RuntimeGraphics(), editor_state->task_manager->GetThreadCount());
+	*editor_state->runtime_resource_manager = ResourceManager(runtime_resource_manager_allocator, editor_state->RuntimeGraphics());
 
 	// And the asset database
 	ResizableMemoryArena* database_arena = (ResizableMemoryArena*)function::OffsetPointer(editor_state->runtime_resource_manager, sizeof(*editor_state->runtime_resource_manager));
@@ -341,8 +341,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 	GlobalMemoryManager* global_memory_manager = new GlobalMemoryManager(GLOBAL_MEMORY_COUNT, 512, GLOBAL_MEMORY_RESERVE_COUNT);
 	Graphics* graphics = (Graphics*)malloc(sizeof(Graphics));
-	// Prefer the integrated GPU
-	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, false);
+	// Could have used the integrated GPU to render the UI but since the sandboxes
+	// will use the dedicated GPU then they will have to share the textures through CPU RAM
+	// and that will be slow. So instead we have to use the dedicated GPU for UI as well
+	CreateGraphicsForProcess(graphics, hWnd, global_memory_manager, true);
 
 	MemoryManager* editor_allocator = new MemoryManager(2'000'000, 4096, 10'000'000, global_memory_manager);
 	editor_state->editor_allocator = editor_allocator;
@@ -360,12 +362,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	task_manager_world->task_manager = editor_task_manager;
 	editor_task_manager->m_world = task_manager_world;
 
-	unsigned int thread_count = std::thread::hardware_concurrency();
-
 	MemoryManager* ui_resource_manager_allocator = (MemoryManager*)malloc(sizeof(MemoryManager));
 	*ui_resource_manager_allocator = DefaultResourceManagerAllocator(global_memory_manager);
 	ResourceManager* ui_resource_manager = (ResourceManager*)malloc(sizeof(ResourceManager));
-	*ui_resource_manager = ResourceManager(ui_resource_manager_allocator, graphics, thread_count);
+	*ui_resource_manager = ResourceManager(ui_resource_manager_allocator, graphics);
 
 	editor_state->ui_resource_manager = ui_resource_manager;
 

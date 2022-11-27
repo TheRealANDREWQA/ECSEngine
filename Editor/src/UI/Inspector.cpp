@@ -599,6 +599,14 @@ void RegisterInspectorSandbox(EditorState* editor_state) {
 		else {
 			editor_state->inspector_manager.round_robin_index[sandbox_count] = 0;
 		}
+
+		// Any inspectors that are targetting invalid sandboxes, retarget them to the 0th sandbox
+		for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
+			if (GetInspectorTargetSandbox(editor_state, index) >= sandbox_count) {
+				ChangeInspectorTargetSandbox(editor_state, index, 0);
+				ChangeInspectorToNothing(editor_state, index);
+			}
+		}
 	}
 }
 

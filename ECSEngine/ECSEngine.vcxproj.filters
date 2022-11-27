@@ -195,6 +195,7 @@
     <ClInclude Include="src\ECSEngine\Tools\Modules\ModuleUtilities.h" />
     <ClInclude Include="src\Includes\ECSEngineScene.h" />
     <ClInclude Include="src\Includes\ECSEngineTimer.h" />
+    <ClInclude Include="src\Includes\ECSEngineApplication.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">

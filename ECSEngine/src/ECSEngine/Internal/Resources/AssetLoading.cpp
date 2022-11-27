@@ -155,16 +155,47 @@ namespace ECSEngine {
 		unsigned int subhandle_index;
 	};
 
+	// ------------------------------------------------------------------------------------------------------------
+
+	void CallCallback(
+		AssetLoadingControlBlock* control_block, 
+		ThreadTask* tasks, 
+		unsigned int thread_id, 
+		unsigned int handle, 
+		void* metadata, 
+		ECS_ASSET_TYPE asset_type
+	) {
+		if (tasks[asset_type].function != nullptr) {
+			LoadAssetOnSuccessData data;
+			data.metadata = metadata;
+			data.handle = handle;
+			data.database = control_block->database;
+			data.resource_manager = control_block->resource_manager;
+			data.spin_lock = &control_block->manager_lock;
+			data.type = asset_type;
+			data.data = tasks[asset_type].data;
+
+			tasks[asset_type].function(thread_id, nullptr, &data);
+		}
+	}
+
+	void CallOnPreloadCallback(AssetLoadingControlBlock* control_block, unsigned int thread_id, unsigned int handle, void* metadata, ECS_ASSET_TYPE asset_type) {
+		CallCallback(control_block, control_block->load_info.preload_on_success, thread_id, handle, metadata, asset_type);
+	}
+
+	void CallOnProcessCallback(AssetLoadingControlBlock* control_block, unsigned int thread_id, unsigned int handle, void* metadata, ECS_ASSET_TYPE asset_type) {
+		CallCallback(control_block, control_block->load_info.process_on_success, thread_id, handle, metadata, asset_type);
+	}
+
 #pragma region Processing Tasks
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	ECS_THREAD_TASK(ProcessMesh) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
-		Graphics* initial_graphics = data->control_block->resource_manager->m_graphics;
-
 		auto* meshes = &data->control_block->meshes[data->write_index];
-		MeshMetadata* metadata = data->control_block->database->GetMesh(meshes->different_handles[data->subhandle_index]);
+		unsigned int handle = meshes->different_handles[data->subhandle_index];
+		MeshMetadata* metadata = data->control_block->database->GetMesh(handle);
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
 			meshes->time_stamp,
@@ -185,12 +216,14 @@ namespace ECSEngine {
 		//	failure.processing_failure = true;
 		//	failure.dependency_failure = false;
 		//	failure.asset_type = ECS_ASSET_MESH;
-		//	failure.handle = meshes->different_handles[data->subhandle_index];
+		//	failure.handle = handle;
 		//
 		//	data->control_block->Fail(failure);
 		//	// Make the handle -1 to indicate that the processing failed
 		//	meshes->different_handles[data->subhandle_index] = -1;
 		//}
+		
+		CallOnProcessCallback(data->control_block, thread_id, handle, metadata, ECS_ASSET_MESH);
 
 		// Exit from the semaphore - use ex exit
 		data->control_block->load_info.finish_semaphore->ExitEx();
@@ -201,7 +234,8 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(ProcessTexture) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
 		auto* textures = &data->control_block->textures[data->write_index];
-		TextureMetadata* metadata = data->control_block->database->GetTexture(textures->different_handles[data->subhandle_index]);
+		unsigned int handle = textures->different_handles[data->subhandle_index];
+		TextureMetadata* metadata = data->control_block->database->GetTexture(handle);
 
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
@@ -221,11 +255,14 @@ namespace ECSEngine {
 			failure.processing_failure = true;
 			failure.dependency_failure = false;
 			failure.asset_type = ECS_ASSET_TEXTURE;
-			failure.handle = textures->different_handles[data->subhandle_index];
+			failure.handle = handle;
 
 			data->control_block->Fail(failure);
 			// Make the handle -1 to indicate that the processing has failed
 			textures->different_handles[data->subhandle_index] = -1;
+		}
+		else {
+			CallOnProcessCallback(data->control_block, thread_id, handle, metadata, ECS_ASSET_TEXTURE);
 		}
 
 		// Exit from the semaphore - use ex exit
@@ -237,7 +274,8 @@ namespace ECSEngine {
 	ECS_THREAD_TASK(ProcessShader) {
 		ProcessTaskData* data = (ProcessTaskData*)_data;
 		auto* shaders = &data->control_block->shaders[data->write_index];
-		ShaderMetadata* metadata = data->control_block->database->GetShader(shaders->different_handles[data->subhandle_index]);
+		unsigned int handle = shaders->different_handles[data->subhandle_index];
+		ShaderMetadata* metadata = data->control_block->database->GetShader(handle);
 
 		CreateAssetFromMetadataExData ex_data = {
 			&data->control_block->manager_lock,
@@ -256,11 +294,14 @@ namespace ECSEngine {
 			failure.processing_failure = true;
 			failure.dependency_failure = false;
 			failure.asset_type = ECS_ASSET_SHADER;
-			failure.handle = shaders->different_handles[data->subhandle_index];
+			failure.handle = handle;
 
 			data->control_block->Fail(failure);
 			// Make the handle -1 to indicate a processing failure
 			shaders->different_handles[data->subhandle_index] = -1;
+		}
+		else {
+			CallOnProcessCallback(data->control_block, thread_id, handle, metadata, ECS_ASSET_SHADER);
 		}
 
 		// Exit from the semaphore - use ex exit
@@ -307,7 +348,7 @@ namespace ECSEngine {
 
 		auto* mesh_block_pointer = &data->control_block->meshes[data->write_index];
 		unsigned int mesh_handle = mesh_block_pointer->different_handles[0];
-		const MeshMetadata* metadata = data->control_block->database->GetMeshConst(mesh_handle);
+		MeshMetadata* metadata = data->control_block->database->GetMesh(mesh_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 		Stream<wchar_t> file_path = function::MountPath(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
@@ -335,6 +376,10 @@ namespace ECSEngine {
 		FreeGLTFFile(gltf_data);
 		if (success) {
 			mesh_block_pointer->submeshes = { submeshes, gltf_data.mesh_count };
+
+			// Call the callback before that
+			CallOnPreloadCallback(data->control_block, thread_index, mesh_handle, metadata, ECS_ASSET_MESH);
+
 			// Generate the processing tasks
 			SpawnProcessingTasks(data->control_block, world->task_manager, ProcessMesh, mesh_block_pointer->different_handles.size, data->write_index, thread_index);
 		}
@@ -364,7 +409,7 @@ namespace ECSEngine {
 
 		auto* texture_block_pointer = &data->control_block->textures[data->write_index];
 		unsigned int texture_handle = texture_block_pointer->different_handles[0];
-		const TextureMetadata* metadata = data->control_block->database->GetTextureConst(texture_handle);
+		TextureMetadata* metadata = data->control_block->database->GetTexture(texture_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 		Stream<wchar_t> file_path = function::MountPath(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
@@ -400,6 +445,9 @@ namespace ECSEngine {
 		texture_block_pointer->texture = decoded_texture;
 		texture_block_pointer->time_stamp = OS::GetFileLastWrite(file_path);
 
+		// Call the callback
+		CallOnPreloadCallback(data->control_block, thread_index, texture_handle, metadata, ECS_ASSET_TEXTURE);
+
 		// Generate the processing tasks
 		SpawnProcessingTasks(data->control_block, world->task_manager, ProcessTexture, texture_block_pointer->different_handles.size, data->write_index, thread_index);
 	
@@ -415,7 +463,7 @@ namespace ECSEngine {
 
 		auto* shader_block_pointer = &data->control_block->shaders[data->write_index];
 		unsigned int shader_handle = shader_block_pointer->different_handles[0];
-		const ShaderMetadata* metadata = data->control_block->database->GetShaderConst(shader_handle);
+		ShaderMetadata* metadata = data->control_block->database->GetShader(shader_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 		Stream<wchar_t> file_path = function::MountPathOnlyRel(metadata->file, data->control_block->load_info.mount_point, absolute_path);
 
@@ -438,6 +486,9 @@ namespace ECSEngine {
 
 		shader_block_pointer->source_code = file_data;
 		shader_block_pointer->time_stamp = OS::GetFileLastWrite(file_path);
+
+		// Call the callback
+		CallOnPreloadCallback(data->control_block, thread_index, shader_handle, metadata, ECS_ASSET_SHADER);
 
 		// Generate the processing tasks
 		SpawnProcessingTasks(data->control_block, world->task_manager, ProcessShader, shader_block_pointer->different_handles.size, data->write_index, thread_index);
@@ -483,11 +534,10 @@ namespace ECSEngine {
 		misc_data_resizable.buffer = file_data.buffer;
 		misc_data_resizable.size = file_data.size;
 		misc_data_resizable.capacity = file_data.size;
+
 		// Insert the resource into the resource manager
 		data->control_block->manager_lock.lock();
-
 		data->control_block->resource_manager->AddResource(file_path, ResourceType::Misc, &misc_data_resizable, misc_block_pointer->time_stamp);
-
 		data->control_block->manager_lock.unlock();
 
 		// Go through all the misc handles and set their data
@@ -495,6 +545,9 @@ namespace ECSEngine {
 			MiscAsset* current_asset = data->control_block->database->GetMisc(misc_block_pointer->different_handles[index]);
 			SetMiscData(current_asset, file_data);
 		}
+
+		// Call the callback
+		CallOnPreloadCallback(data->control_block, thread_index, misc_handle, metadata, ECS_ASSET_MISC);
 
 		// Now we can exit from our own task
 		data->control_block->load_info.finish_semaphore->ExitEx();
@@ -644,7 +697,11 @@ namespace ECSEngine {
 
 		// These cannot fail
 		for (size_t index = 0; index < samplers.size; index++) {
-			CreateSamplerFromMetadata(data->resource_manager, &samplers[index].value);
+			GPUSamplerMetadata* metadata = &samplers[index].value;
+			CreateSamplerFromMetadata(data->resource_manager, metadata);
+
+			// Call the callback, if any
+			CallOnPreloadCallback(data, thread_id, data->database->GetAssetHandleFromIndex(index, ECS_ASSET_GPU_SAMPLER), metadata, ECS_ASSET_GPU_SAMPLER);
 		}
 
 		// Wait until all threads have finished - the value is 2 since
@@ -654,6 +711,8 @@ namespace ECSEngine {
 		auto materials = data->database->material_asset.ToStream();
 		for (size_t index = 0; index < materials.size; index++) {
 			MaterialAsset* material_asset = &materials[index].value;
+			unsigned int material_handle = data->database->GetAssetHandleFromIndex(index, ECS_ASSET_MATERIAL);
+
 			// Check to see that the corresponding shaders and textures have been loaded
 			unsigned int pixel_shader_index = data->FindShader(material_asset->pixel_shader_handle);
 
@@ -691,6 +750,10 @@ namespace ECSEngine {
 			bool success = CreateMaterialFromMetadata(data->resource_manager, data->database, material_asset, data->load_info.mount_point);
 			if (!success) {
 				fail(index, false);
+			}
+			else {
+				// Call the callback
+				CallOnPreloadCallback(data, thread_id, material_handle, material_asset, ECS_ASSET_MATERIAL);
 			}
 		}
 
@@ -750,6 +813,16 @@ namespace ECSEngine {
 		// Deallocate the mount point if any
 		DeallocateIfBelongs(persistent_allocator, data->load_info.mount_point.buffer);
 
+		// Deallocate the thread task data
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			if (data->load_info.preload_on_success[index].function != nullptr && data->load_info.preload_on_success[index].data_size > 0) {
+				Deallocate(persistent_allocator, data->load_info.preload_on_success[index].data);
+			}
+			if (data->load_info.process_on_success[index].function != nullptr && data->load_info.process_on_success[index].data_size > 0) {
+				Deallocate(persistent_allocator, data->load_info.process_on_success[index].data);
+			}
+		}
+
 		// Exit from the semaphore
 		data->load_info.finish_semaphore->ExitEx(2);
 	}
@@ -780,9 +853,29 @@ namespace ECSEngine {
 			mount_point = function::StringCopy(persistent_allocator, mount_point);
 		}
 
-		control_block->load_info = *load_info;
+		memcpy(&control_block->load_info, load_info, sizeof(*load_info));
 		control_block->load_info.mount_point = mount_point;
+
+		// Copy the thread task data, if necessary
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			if (load_info->preload_on_success[index].function != nullptr) {
+				control_block->load_info.preload_on_success[index].data = function::CopyNonZero(
+					persistent_allocator, 
+					load_info->preload_on_success[index].data, 
+					load_info->preload_on_success[index].data_size
+				);
+			}
+			if (load_info->process_on_success[index].function != nullptr) {
+				control_block->load_info.process_on_success[index].data = function::CopyNonZero(
+					persistent_allocator,
+					load_info->process_on_success[index].data,
+					load_info->process_on_success[index].data_size
+				);
+			}
+		}
+
 		control_block->gpu_lock.unlock();
+		control_block->manager_lock.unlock();
 		control_block->database = database;
 		control_block->resource_manager = resource_manager;
 		control_block->extra = *extra;
@@ -972,7 +1065,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void UnloadAssets(
+	void DeallocateAssetsWithRemapping(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager, 
 		Stream<wchar_t> mount_point, 
@@ -992,15 +1085,16 @@ namespace ECSEngine {
 			for (unsigned int index = 0; index < count; index++) {
 				unsigned int handle;
 				if constexpr (use_mask) {
-					handle = database->GetAssetHandleFromIndex(index, type);
+					handle = asset_mask[type][index];
 				}
 				else {
-					handle = asset_mask[type][index];
+					handle = database->GetAssetHandleFromIndex(index, type);
 				}
 
 				void* metadata = database->GetAsset(handle, type);
 				if (IsAssetFromMetadataLoaded(resource_manager, metadata, type, mount_point)) {
 					DeallocateAssetFromMetadata(resource_manager, database, metadata, type, mount_point);
+					database->RemoveAsset(handle, type);
 				}
 			}
 		};
@@ -1019,7 +1113,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	void UnloadAssets(
+	void DeallocateAssetsWithRemapping(
 		AssetDatabaseReference* database_reference, 
 		ResourceManager* resource_manager, 
 		Stream<wchar_t> mount_point,
@@ -1063,6 +1157,18 @@ namespace ECSEngine {
 		else {
 			loop(std::false_type{});
 		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool LoadAssetHasFailed(Stream<LoadAssetFailure> failures, unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		for (size_t index = 0; index < failures.size; index++) {
+			if (failures[index].handle == handle && failures[index].asset_type == type) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

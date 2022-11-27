@@ -492,11 +492,7 @@ namespace ECSEngine {
 		auto stream = set->ToStream();
 		for (size_t index = 0; index < stream.size; index++) {
 			const void* current_pointer = stream[index].value.Pointer();
-			if (current_pointer == pointer) {
-				return set->GetHandleFromIndex(index);
-			}
-
-			if (compare_size > 0 && memcmp(current_pointer, pointer, compare_size) == 0) {
+			if (CompareAssetPointers(pointer, current_pointer, compare_size)) {
 				return set->GetHandleFromIndex(index);
 			}
 		}
@@ -984,72 +980,101 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RandomizePointers(AssetDatabaseSnapshot snapshot, AllocatorPolymorphic allocator)
+	unsigned int AssetDatabase::GetRandomizedPointer(ECS_ASSET_TYPE type) const
+	{
+		unsigned int count = GetAssetCount(type);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, randomized_values, count);
+		RandomizedPointerList(count, type, randomized_values);
+		return randomized_values[0];
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::RandomizedPointerList(unsigned int maximum_count, ECS_ASSET_TYPE type, CapacityStream<unsigned int>& values) const
+	{
+		ECS_ASSERT(maximum_count <= ECS_ASSET_RANDOMIZED_ASSET_LIMIT);
+
+		CapacityStream<unsigned int>* randomized_values = &values;
+		if (values.capacity < maximum_count) {
+			// It is allocated with _alloca, so it will outlive the scope until the end of the function
+			ECS_STACK_CAPACITY_STREAM(unsigned int, _randomized_values, ECS_ASSET_RANDOMIZED_ASSET_LIMIT);
+			randomized_values = &_randomized_values;
+		}
+
+		randomized_values->size = maximum_count;
+		function::MakeSequence(*randomized_values, 1);
+
+		unsigned int count = GetAssetCount(type);
+		for (unsigned int index = 0; index < count; index++) {
+			unsigned int current_handle = GetAssetHandleFromIndex(index, type);
+
+			const void* metadata = GetAssetConst(current_handle, type);
+			Stream<void> asset_value = GetAssetFromMetadata(metadata, type);
+			if (asset_value.buffer != nullptr && !IsAssetFromMetadataValid(asset_value)) {
+				// It is a randomized asset
+				unsigned int randomized_value = ExtractRandomizedAssetValue(asset_value.buffer, type);
+				size_t valid_index = function::SearchBytes(
+					randomized_values->buffer,
+					randomized_values->size,
+					randomized_value,
+					sizeof(randomized_value)
+				);
+
+				ECS_ASSERT(valid_index != -1);
+				randomized_values->RemoveSwapBack(valid_index);
+			}
+		}
+
+		if (randomized_values != &values) {
+			values.Copy(*randomized_values);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::RandomizePointer(unsigned int handle, ECS_ASSET_TYPE type)
+	{
+		// Pick the remaining randomized asset value
+		void* metadata = GetAsset(handle, type);
+		// Make the asset metadata pointer a valid values such that it will be excluded from the list generation
+		SetRandomizedAssetToMetadata(metadata, type, ECS_ASSET_RANDOMIZED_ASSET_LIMIT + 1);
+
+		unsigned int count = GetAssetCount(type);
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, valid_indices, count);
+		RandomizedPointerList(count, type, valid_indices);
+		SetRandomizedAssetToMetadata(metadata, type, valid_indices[0]);
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabase::RandomizePointers(AssetDatabaseSnapshot snapshot)
 	{
 		ECS_ASSET_TYPE current_type = ECS_ASSET_MESH;
 
-		if (allocator.allocator == nullptr) {
-			allocator = Allocator();
+		unsigned int max_count = 0;
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			unsigned int current_count = GetAssetCount((ECS_ASSET_TYPE)index);
+			max_count = std::max(current_count, max_count);
 		}
 
-		unsigned int current_count = GetAssetCount(current_type);
-		for (unsigned int subindex = snapshot.stream_sizes[current_type]; subindex < current_count; subindex++) {
-			MeshMetadata* metadata = GetMesh(GetAssetHandleFromIndex(subindex, current_type));
-			metadata->mesh_pointer = (CoallescedMesh*)Allocate(allocator, sizeof(CoallescedMesh));
-			memset(metadata->mesh_pointer, 0, sizeof(*metadata->mesh_pointer));
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, randomized_values, max_count);
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+			unsigned int current_count = GetAssetCount((ECS_ASSET_TYPE)index);
+			unsigned int difference = current_count - snapshot.stream_sizes[current_type];
 
-			// Set the first bytes of the pointer to the index such that they are unique
-			unsigned int* variance = (unsigned int*)metadata->mesh_pointer;
-			// Make these different from all 0
-			*variance = subindex + 1;
-		}
+			if (difference > 0) {
+				randomized_values.size = 0;
+				RandomizedPointerList(max_count, current_type, randomized_values);
 
-		current_type = ECS_ASSET_TEXTURE;
-		current_count = GetAssetCount(current_type);
-		for (unsigned int subindex = snapshot.stream_sizes[current_type]; subindex < current_count; subindex++) {
-			TextureMetadata* metadata = GetTexture(GetAssetHandleFromIndex(subindex, current_type));
-			// We don't need to allocate anything here
-			// Make these different from all 0
-			metadata->texture.view = (ID3D11ShaderResourceView*)(subindex + 1);
-		}
+				ECS_ASSERT(randomized_values.size >= difference);
 
-		current_type = ECS_ASSET_GPU_SAMPLER;
-		current_count = GetAssetCount(current_type);
-		for (unsigned int subindex = snapshot.stream_sizes[current_type]; subindex < current_count; subindex++) {
-			GPUSamplerMetadata* metadata = GetGPUSampler(GetAssetHandleFromIndex(subindex, current_type));
-			// We don't need to allocate anything here
-			// Make these different from all 0
-			metadata->sampler.sampler = (ID3D11SamplerState*)(subindex + 1);
-		}
-
-		current_type = ECS_ASSET_SHADER;
-		current_count = GetAssetCount(current_type);
-		for (unsigned int subindex = snapshot.stream_sizes[current_type]; subindex < current_count; subindex++) {
-			ShaderMetadata* metadata = GetShader(GetAssetHandleFromIndex(subindex, current_type));
-			// We don't need to allocate anything here
-			// Make these different from all 0
-			metadata->shader_interface = (void*)(subindex + 1);
-		}
-
-		current_type = ECS_ASSET_MATERIAL;
-		current_count = GetAssetCount(current_type);
-		for (unsigned int subindex = snapshot.stream_sizes[current_type]; subindex < current_count; subindex++) {
-			MaterialAsset* asset = GetMaterial(GetAssetHandleFromIndex(subindex, current_type));
-			// We need to allocate here
-			asset->material_pointer = (Material*)Allocate(allocator, sizeof(Material));
-			memset(asset->material_pointer, 0, sizeof(*asset->material_pointer));
-			unsigned int* variance = (unsigned int*)asset->material_pointer;
-
-			// Make these different from all 0
-			*variance = subindex + 1;
-		}
-
-		current_type = ECS_ASSET_MISC;
-		current_count = GetAssetCount(current_type);
-		for (unsigned int subindex = snapshot.stream_sizes[current_type]; subindex < current_count; subindex++) {
-			MiscAsset* asset = GetMisc(GetAssetHandleFromIndex(subindex, current_type));
-			// We don't need to allocate anything
-			asset->data.buffer = (void*)(subindex + 1);
+				for (unsigned int subindex = 0; subindex < difference; subindex++) {
+					unsigned int handle = GetAssetHandleFromIndex(subindex + snapshot.stream_sizes[current_type], current_type);
+					void* metadata = GetAsset(handle, current_type);
+					SetRandomizedAssetToMetadata(metadata, current_type, randomized_values[subindex]);
+				}
+			}
 		}
 	}
 

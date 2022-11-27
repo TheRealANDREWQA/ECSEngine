@@ -10,6 +10,43 @@ using namespace ECSEngine;
 
 // ----------------------------------------------------------------------------------------------
 
+Stream<wchar_t> AssetMetadataTimeStampPath(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& storage) {
+	editor_state->asset_database->FileLocationAsset(GetAssetName(metadata, type), GetAssetFile(metadata, type), storage, type);
+	return storage;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+Stream<wchar_t> AssetTargetFileTimeStampPath(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, CapacityStream<wchar_t>& storage) {
+	Stream<wchar_t> path = { nullptr, 0 };
+
+	switch (type) {
+	case ECS_ASSET_MESH:
+	case ECS_ASSET_TEXTURE:
+	case ECS_ASSET_SHADER:
+	case ECS_ASSET_MISC:
+	{
+		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+		GetProjectAssetsFolder(editor_state, assets_folder);
+		path = function::MountPathOnlyRel(GetAssetFile(metadata, type), assets_folder, storage);
+	}
+	break;
+	case ECS_ASSET_GPU_SAMPLER:
+	case ECS_ASSET_MATERIAL:
+	{
+		// There is no external target path
+		path = { nullptr, 0 };
+	}
+	break;
+	default:
+		ECS_ASSERT(false, "Invalid asset type");
+	}
+
+	return path;
+}
+
+// ----------------------------------------------------------------------------------------------
+
 bool CreateAssetFileImpl(const EditorState* editor_state, Stream<wchar_t> relative_path, Stream<wchar_t> extension) {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path, 512);
 	GetProjectAssetsFolder(editor_state, absolute_path);
@@ -71,13 +108,19 @@ bool CreateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
-	return CreateAssetFromMetadata(
+	void* metadata = editor_state->asset_database->GetAsset(handle, type);
+	bool success = CreateAssetFromMetadata(
 		editor_state->RuntimeResourceManager(),
 		editor_state->asset_database,
-		editor_state->asset_database->GetAsset(handle, type),
+		metadata,
 		type,
 		assets_folder
 	);
+	if (success) {
+		// Create the asset time stamp
+		InsertAssetTimeStamp(editor_state, metadata, type);
+	}
+	return success;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -195,6 +238,23 @@ void ChangeAssetName(EditorState* editor_state, unsigned int handle, ECS_ASSET_T
 
 // ----------------------------------------------------------------------------------------------
 
+void ChangeAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, size_t new_stamp)
+{
+	ChangeAssetTimeStamp(editor_state, editor_state->asset_database->GetAssetConst(handle, type), type, new_stamp);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void ChangeAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, size_t new_stamp)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
+
+	Stream<wchar_t> metadata_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
+	editor_state->RuntimeResourceManager()->ChangeTimeStamp(metadata_file, ResourceType::TimeStamp, new_stamp);
+}
+
+// ----------------------------------------------------------------------------------------------
+
 // This takes the pointer as is, it does not copy it
 struct ChangeAssetFileEventData {
 	unsigned int handle;
@@ -246,8 +306,6 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 	GetProjectAssetsFolder(editor_state, assets_folder);
 
-	Stream<void> old_asset_pointer = GetAssetFromMetadata(metadata, type);
-
 	bool success = DeallocateAssetFromMetadata(
 		editor_state->RuntimeResourceManager(),
 		editor_state->asset_database,
@@ -256,8 +314,9 @@ bool DeallocateAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE t
 		assets_folder
 	);
 	if (success) {
-		// For some assets (material and mesh) there might be allocations made from the database allocator
-		DeallocateIfBelongs(editor_state->asset_database->Allocator(), old_asset_pointer.buffer);
+		// Randomize the asset
+		unsigned int randomized_value = editor_state->asset_database->GetRandomizedPointer(type);
+		SetRandomizedAssetToMetadata(metadata, type, randomized_value);
 	}
 	return success;
 }
@@ -469,7 +528,7 @@ bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStrea
 	char buffer[MAX_SIZE];
 
 	ECS_FILE_HANDLE file_handle = 0;
-	ECS_FILE_STATUS_FLAGS status = OpenFile(absolute_path, &file_handle, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_BINARY);
+	ECS_FILE_STATUS_FLAGS status = OpenFile(absolute_path, &file_handle, ECS_FILE_ACCESS_READ_BINARY_SEQUENTIAL);
 	if (status != ECS_FILE_STATUS_OK) {
 		return false;
 	}
@@ -503,6 +562,148 @@ bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStrea
 Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_state, Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
 {
 	return editor_state->asset_database->GetMetadatasForFile(file, type, allocator);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+Stream<Stream<unsigned int>> GetOutOfDateAssets(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp)
+{
+	Stream<Stream<unsigned int>> handles;
+	handles.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
+
+	ECS_STACK_CAPACITY_STREAM(unsigned int, out_of_date_temporary, ECS_KB * 8);
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+		unsigned int asset_count = editor_state->asset_database->GetAssetCount(current_type);
+		handles[current_type].Initialize(allocator, asset_count);
+		handles[current_type].size = 0;
+
+		for (unsigned int subindex = 0; subindex < asset_count; subindex++) {
+			unsigned int current_handle = editor_state->asset_database->GetAssetHandleFromIndex(subindex, current_type);
+			const void* metadata = editor_state->asset_database->GetAssetConst(current_handle, current_type);
+			size_t external_time_stamp = GetAssetExternalTimeStamp(editor_state, metadata, current_type);
+			size_t runtime_time_stamp = GetAssetRuntimeTimeStamp(editor_state, metadata, current_type);
+
+			if (external_time_stamp > runtime_time_stamp) {
+				// Register it
+				handles[current_type].Add(current_handle);
+
+				if (update_stamp) {
+					ChangeAssetTimeStamp(editor_state, metadata, current_type, external_time_stamp);
+				}
+			}
+		}
+	}
+
+	return handles;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+Stream<Stream<unsigned int>> GetDependentAssetsFor(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator)
+{
+	return ECSEngine::GetDependentAssetsFor(editor_state->asset_database, metadata, type, allocator);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+size_t GetAssetRuntimeTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
+
+	// The time stamp stored is already the maximum between the 2 values
+	Stream<wchar_t> metadata_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
+	size_t metadata_time_stamp = editor_state->runtime_resource_manager->GetTimeStamp(metadata_file, ResourceType::TimeStamp);
+
+	return metadata_time_stamp;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+size_t GetAssetExternalTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
+
+	size_t time_stamp = 0;
+	Stream<wchar_t> target_file = AssetTargetFileTimeStampPath(editor_state, metadata, type, storage);
+	if (target_file.size > 0) {
+		time_stamp = OS::GetFileLastWrite(target_file);
+		time_stamp = time_stamp == -1 ? 0 : time_stamp;
+	}
+	storage.size = 0;
+
+	Stream<wchar_t> metadata_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
+	size_t metadata_time_stamp = OS::GetFileLastWrite(metadata_file);
+	return std::max(time_stamp, metadata_time_stamp);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+{
+	const void* metadata = editor_state->asset_database->GetAssetConst(handle, type);
+	InsertAssetTimeStamp(editor_state, metadata, type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type) {
+	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
+
+	size_t runtime_asset_stamp = 0;
+
+	Stream<wchar_t> target_file = AssetTargetFileTimeStampPath(editor_state, metadata, type, storage);
+	if (target_file.size > 0) {
+		runtime_asset_stamp = OS::GetFileLastWrite(target_file);
+		runtime_asset_stamp = runtime_asset_stamp == -1 ? 0 : runtime_asset_stamp;
+	}
+	storage.size = 0;
+
+	Stream<wchar_t> metadata_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
+	size_t metadata_file_stamp = OS::GetFileLastWrite(metadata_file);
+	metadata_file_stamp = metadata_file_stamp == -1 ? 0 : metadata_file_stamp;
+
+	editor_state->runtime_resource_manager->AddTimeStamp(metadata_file, std::max(metadata_file_stamp, runtime_asset_stamp));
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RemoveAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+{
+	const void* metadata = editor_state->asset_database->GetAssetConst(handle, type);
+	RemoveAssetTimeStamp(editor_state, metadata, type);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RemoveAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, storage, 512);
+
+	Stream<wchar_t> metadata_file = AssetMetadataTimeStampPath(editor_state, metadata, type, storage);
+	editor_state->runtime_resource_manager->RemoveTimeStamp(metadata_file);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool RemoveAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type)
+{
+	bool success = DeallocateAsset(editor_state, metadata, type);
+	if (success) {
+		RemoveAssetTimeStamp(editor_state, metadata, type);
+	}
+	return success;
+}
+
+// ----------------------------------------------------------------------------------------------
+
+bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type)
+{
+	bool success = RemoveAsset(editor_state, editor_state->asset_database->GetAsset(handle, type), type);
+	if (success) {
+		editor_state->asset_database->RemoveAssetForced(handle, type);
+	}
+	return success;
 }
 
 // ----------------------------------------------------------------------------------------------

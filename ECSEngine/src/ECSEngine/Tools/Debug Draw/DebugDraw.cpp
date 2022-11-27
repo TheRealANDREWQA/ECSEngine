@@ -2825,8 +2825,8 @@ namespace ECSEngine {
 		Stream<char> shader_source;
 		Stream<void> byte_code;
 
-#define REGISTER_SHADER(index, name) vertex_shaders[index] = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(name), &shader_source, &byte_code); \
-		pixel_shaders[index] = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(name)); \
+#define REGISTER_SHADER(index, name) vertex_shaders[index] = resource_manager->LoadShaderImplementation(ECS_VERTEX_SHADER_SOURCE(name), ECS_SHADER_VERTEX, &shader_source, &byte_code); \
+		pixel_shaders[index] = resource_manager->LoadShaderImplementation(ECS_PIXEL_SHADER_SOURCE(name), ECS_SHADER_PIXEL); \
 		layout_shaders[index] = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code); \
 		resource_manager->Deallocate(shader_source.buffer);
 

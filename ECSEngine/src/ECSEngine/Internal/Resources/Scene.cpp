@@ -72,7 +72,7 @@ namespace ECSEngine {
 
 		uintptr_t ptr = (uintptr_t)file_allocation;
 
-		bool make_database_unique = load_data->database_allocator.allocator != nullptr;
+		bool randomize_assets = load_data->randomize_assets;
 		AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot();
 
 		// Try to load the asset database first
@@ -89,8 +89,8 @@ namespace ECSEngine {
 		}
 
 		// Check to see if we need to make the added assets unique
-		if (make_database_unique) {
-			database->RandomizePointers(asset_database_snapshot, load_data->database_allocator);
+		if (randomize_assets) {
+			database->RandomizePointers(asset_database_snapshot);
 		}
 
 		// Create the deserialize tables firstly

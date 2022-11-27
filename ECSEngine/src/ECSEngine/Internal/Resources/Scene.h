@@ -31,7 +31,7 @@ namespace ECSEngine {
 
 		// If you want the asset database to have metadatas unique (but invalid, they don't point to valid data)
 		// after the load such that the link assets can be still identified, you must give an allocator for the temporary allocations needed
-		AllocatorPolymorphic database_allocator = { nullptr };
+		bool randomize_assets = false;
 		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
 

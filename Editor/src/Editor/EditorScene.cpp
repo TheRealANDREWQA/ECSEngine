@@ -41,8 +41,7 @@ bool GetLoadSceneDataBase(
 	LoadSceneData* load_data,
 	EditorState* editor_state, 
 	EntityManager* entity_manager, 
-	const AssetDatabaseReference* database, 
-	AllocatorPolymorphic randomized_allocator,
+	const AssetDatabaseReference* database,
 	Stream<wchar_t> filename,
 	AllocatorPolymorphic stack_allocator
 ) {
@@ -79,7 +78,7 @@ bool GetLoadSceneDataBase(
 	load_data->reflection_manager = editor_state->editor_components.internal_manager;
 	load_data->unique_overrides = unique_overrides;
 	load_data->shared_overrides = shared_overrides;
-	load_data->database_allocator = randomized_allocator;
+	load_data->randomize_assets = true;
 	return true;
 }
 
@@ -95,7 +94,7 @@ bool LoadEditorSceneCore(
 	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
 
 	LoadSceneData load_data;
-	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, editor_state->asset_database->Allocator(), filename, stack_allocator);
+	bool initialize_data = GetLoadSceneDataBase(&load_data, editor_state, entity_manager, database, filename, stack_allocator);
 	if (!initialize_data) {
 		_stack_allocator.ClearBackup();
 		return false;

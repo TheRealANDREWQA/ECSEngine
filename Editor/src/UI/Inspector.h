@@ -37,6 +37,8 @@ void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int in
 
 void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index = -1);
 
+void ChangeInspectorTargetSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+
 // Returns the index of the sandbox that is being referenced by the inspector
 unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned int inspector_index);
 

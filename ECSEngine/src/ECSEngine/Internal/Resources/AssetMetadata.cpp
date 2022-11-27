@@ -50,6 +50,30 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	ResourceType AssetTypeToResourceType(ECS_ASSET_TYPE type)
+	{
+		switch (type) {
+		case ECS_ASSET_MESH:
+			return ResourceType::CoallescedMesh;
+		case ECS_ASSET_TEXTURE:
+			return ResourceType::Texture;
+		case ECS_ASSET_GPU_SAMPLER:
+			return ResourceType::TypeCount;
+		case ECS_ASSET_SHADER:
+			return ResourceType::Shader;
+		case ECS_ASSET_MATERIAL:
+			return ResourceType::TypeCount;
+		case ECS_ASSET_MISC:
+			return ResourceType::Misc;
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
+		}
+
+		return ResourceType::TypeCount;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	ECS_ASSET_TYPE FindAssetMetadataMacro(Stream<char> string) {
 		size_t count = std::size(ECS_ASSET_METADATA_MACROS);
 		for (size_t index = 0; index < count; index++) {
@@ -759,8 +783,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MESH:
 		{
 			MeshMetadata* mesh = (MeshMetadata*)metadata;
-			unsigned int* int_ptr = (unsigned int*)mesh->mesh_pointer;
-			*int_ptr = index;
+			mesh->mesh_pointer = (CoallescedMesh*)index;
 		}
 		break;
 		case ECS_ASSET_TEXTURE:
@@ -784,8 +807,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MATERIAL:
 		{
 			MaterialAsset* material = (MaterialAsset*)metadata;
-			unsigned int* int_ptr = (unsigned int*)material->material_pointer;
-			*int_ptr = index;
+			material->material_pointer = (Material*)index;
 
 		}
 		break;
@@ -810,22 +832,39 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
+	bool IsAssetFromMetadataValid(Stream<void> asset_pointer) {
+		return (size_t)asset_pointer.buffer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
 	unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type)
 	{
-		switch (type) {
-		case ECS_ASSET_MESH:
-		case ECS_ASSET_MATERIAL:
-			return (unsigned int)(*(void**)asset_pointer);
-		case ECS_ASSET_TEXTURE:
-		case ECS_ASSET_GPU_SAMPLER:
-		case ECS_ASSET_SHADER:
-		case ECS_ASSET_MISC:
-			return (unsigned int)asset_pointer;
-		default:
+		if (type >= ECS_ASSET_TYPE_COUNT) {
 			ECS_ASSERT(false, "Invalid asset type");
 		}
+		return (unsigned int)asset_pointer;
+	}
 
-		return -1;
+	// ------------------------------------------------------------------------------------------------------
+
+	bool CompareAssetPointers(const void* first, const void* second, ECS_ASSET_TYPE type) {
+		return CompareAssetPointers(first, second, AssetMetadataByteSize(type));
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	bool CompareAssetPointers(const void* first, const void* second, size_t compare_size) {
+		if (first == second) {
+			return true;
+		}
+
+		if (IsAssetFromMetadataValid({ first, 0 }) && IsAssetFromMetadataValid({ second, 0 })) {
+			if (compare_size > 0 && memcmp(first, second, compare_size) == 0) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------------------------------------------

@@ -1024,4 +1024,42 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------------------
 
+	bool Material::ContainsTexture(ResourceView texture) const
+	{		
+		for (unsigned char index = 0; index < v_texture_count; index++) {
+			if (v_textures[index].Interface() == texture.Interface()) {
+				return true;
+			}
+		}
+
+		for (unsigned char index = 0; index < p_texture_count; index++) {
+			if (p_textures[index].Interface() == texture.Interface()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
+	bool Material::ContainsSampler(SamplerState sampler_state) const
+	{
+		for (unsigned char index = 0; index < v_sampler_count; index++) {
+			if (v_samplers[index].Interface() == sampler_state.Interface()) {
+				return true;
+			}
+		}
+
+		for (unsigned char index = 0; index < p_sampler_count; index++) {
+			if (p_samplers[index].Interface() == sampler_state.Interface()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------------------
+
 }

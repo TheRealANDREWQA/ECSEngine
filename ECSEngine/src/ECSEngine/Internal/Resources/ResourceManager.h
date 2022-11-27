@@ -32,11 +32,12 @@
 
 // Tells the loader to not try to insert into the resource table (in order to avoid 
 // multithreading race conditions). This applies both for loading and unloading
-#define ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_LOAD (1 << 18)
+#define ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS (1 << 18)
+
 
 namespace ECSEngine {
 
-	using ResourceManagerAllocator = MemoryManager;
+	typedef MemoryManager ResourceManagerAllocator;
 	
 	// The time stamp can be used to compare against a new stamp and check to see if the resource is out of date
 	struct ResourceManagerEntry {
@@ -45,7 +46,7 @@ namespace ECSEngine {
 	};
 
 	// Embedd the reference count inside the pointer
-	using ResourceManagerTable = HashTableDefault<ResourceManagerEntry>;
+	typedef HashTableDefault<ResourceManagerEntry> ResourceManagerTable;
 
 	constexpr size_t ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT = USHORT_MAX;
 
@@ -65,8 +66,6 @@ namespace ECSEngine {
 	ECSENGINE_API ResourceManagerAllocator DefaultResourceManagerAllocator(GlobalMemoryManager* global_allocator);
 
 	ECSENGINE_API size_t DefaultResourceManagerAllocatorSize();
-
-	ECSENGINE_API ResourceType FromShaderTypeToResourceType(ECS_SHADER_TYPE shader_type);
 
 	struct GLTFData;
 	struct GLTFMesh;
@@ -114,8 +113,7 @@ namespace ECSEngine {
 	{
 		ResourceManager(
 			ResourceManagerAllocator* memory,
-			Graphics* graphics,
-			unsigned int thread_count
+			Graphics* graphics
 		);
 
 		ResourceManager(const ResourceManager& other) = default;
@@ -132,6 +130,15 @@ namespace ECSEngine {
 			unsigned short reference_count = USHORT_MAX
 		);
 
+		// This holds a time stamp in the time stamp table.
+		// Returns true when the reference counted is set to true and it is the first time it is added
+		bool AddTimeStamp(
+			ResourceIdentifier identifier,
+			size_t time_stamp = 0,
+			bool reference_counted = false,
+			Stream<void> suffix = { nullptr, 0 }
+		);
+
 		void AddShaderDirectory(Stream<wchar_t> directory);
 
 		void* Allocate(size_t size);
@@ -142,13 +149,19 @@ namespace ECSEngine {
 
 		AllocatorPolymorphic AllocatorTs() const;
 
+		// Returns the old time stamp
+		size_t ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix = { nullptr, 0 });
+
 		void Deallocate(const void* data);
 
 		void DeallocateTs(const void* data);
 
 		// Decrements the reference count all resources of that type
 		template<bool delete_if_zero = true>
-		void DecrementReferenceCount(ResourceType type, unsigned int amount);
+		void DecrementReferenceCounts(ResourceType type, unsigned int amount);
+
+		// Returns true if the resource has reached a reference count of 0.
+		bool DecrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned int amount);
 
 		// Checks to see if the resource exists
 		bool Exists(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
@@ -156,8 +169,11 @@ namespace ECSEngine {
 		// Checks to see if the resource exists and returns its position as index inside the hash table
 		bool Exists(ResourceIdentifier identifier, ResourceType type, unsigned int& table_index, Stream<void> suffix = { nullptr, 0 }) const;
 
-		// Removes a resource from the table - it does not unload it.
+		// Removes a resource from the table - it does not unload it. (it just removes it from the table)
 		void EvictResource(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 });
+		
+		// Removes a resource from the table - it does not unload it. (it just removes it from the table)
+		void EvictResource(unsigned int index, ResourceType type);
 
 		// Removes all resources from the tables without unloading them that appear in the other resource manager
 		void EvictResourcesFrom(const ResourceManager* other);
@@ -165,6 +181,10 @@ namespace ECSEngine {
 		// Walks through the table and removes all resources which are outdated - implies that all resource identifiers have as their
 		// ptr the path to the resource
 		void EvictOutdatedResources(ResourceType type);
+
+		// Walks through the table and removes all resources which are outdated - implies that all resource identifiers have as their
+		// ptr the path to the resource. This version also records which assets have been removed
+		Stream<ResourceIdentifier> EvictOutdatedResources(ResourceType type, AllocatorPolymorphic allocator);
 
 		// It returns -1 if the resource doesn't exist
 		unsigned int GetResourceIndex(ResourceIdentifier identifier, ResourceType type, Stream<void> suffix = { nullptr, 0 }) const;
@@ -188,8 +208,10 @@ namespace ECSEngine {
 		// it returns false. The suffix is optional (can either bake it into the identifier or give it to the function to do it)
 		bool IsResourceOutdated(ResourceIdentifier identifier, ResourceType type, size_t new_stamp, Stream<void> suffix = { nullptr, 0 });
 
+		void IncrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned int amount);
+
 		// Increases the referece count for all resources of that type
-		void IncrementReferenceCount(ResourceType type, unsigned int amount);
+		void IncrementReferenceCounts(ResourceType type, unsigned int amount);
 
 		// It will insert the resources already loaded from the other resource manager into the instance's
 		// tables. The timestamps will be 0, and will have no reference count. If the graphics object
@@ -326,7 +348,8 @@ namespace ECSEngine {
 		Stream<PBRMaterial>* LoadMaterialsImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor = {});
 
 		// Converts a list of textures into a material. If it fails (a path doesn't exist, or a shader is invalid)
-		// it returns false and rolls back any loads that have been done
+		// it returns false and rolls back any loads that have been done.
+		// Flags: ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS
 		bool LoadUserMaterial(
 			const UserMaterial* user_material,
 			Material* converted_material,
@@ -344,212 +367,15 @@ namespace ECSEngine {
 		// Flags: ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT
 		PBRMesh* LoadPBRMeshImplementation(Stream<wchar_t> filename, ResourceManagerLoadDesc load_descriptor = {});
 
+		// ---------------------------------------------------------------------------------------------------------------------------
+
 		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
 		// If a .hlsl is specified, it will be compiled into binary using shader compile options and then passed to D3D
 		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
 		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		template<bool reference_counted = false>
-		VertexShader* LoadVertexShader(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			Stream<void>* byte_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		VertexShader LoadVertexShaderImplementation(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			Stream<void>* byte_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr.
-		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		VertexShader LoadVertexShaderImplementationEx(
-			Stream<char> source_code,
-			Stream<void>* byte_code = nullptr,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		template<bool reference_counted = false>
-		PixelShader* LoadPixelShader(
-			Stream<wchar_t> filename,
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		PixelShader LoadPixelShaderImplementation(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr.
-		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		PixelShader LoadPixelShaderImplementationEx(
-			Stream<char> source_code,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		template<bool reference_counted = false>
-		HullShader* LoadHullShader(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		HullShader LoadHullShaderImplementation(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr.
-		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		HullShader LoadHullShaderImplementationEx(
-			Stream<char> source_code,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		template<bool reference_counted = false>
-		DomainShader* LoadDomainShader(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		DomainShader LoadDomainShaderImplementation(
-			Stream<wchar_t> filename,
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr.
-		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		DomainShader LoadDomainShaderImplementationEx(
-			Stream<char> source_code,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		template<bool reference_counted = false>
-		GeometryShader* LoadGeometryShader(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		GeometryShader LoadGeometryShaderImplementation(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr.
-		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		GeometryShader LoadGeometryShaderImplementationEx(
-			Stream<char> source_code,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		template<bool reference_counted = false>
-		ComputeShader* LoadComputeShader(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
-		// If a .hlsl is specified, it will be compiled into binary and then passed to D3D
-		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
-		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
-		ComputeShader LoadComputeShaderImplementation(
-			Stream<wchar_t> filename, 
-			Stream<char>* shader_source_code = nullptr,
-			ShaderCompileOptions options = {}, 
-			ResourceManagerLoadDesc load_descriptor = {}
-		);
-
-		// A more detailed version that directly takes the data and does not deallocate it
-		// If it fails it returns nullptr.
-		// It will also insert it into the table if the filename is not { nullptr, 0 }
-		ComputeShader LoadComputeShaderImplementationEx(
-			Stream<char> source_code,
-			ShaderCompileOptions options = {},
-			ResourceManagerLoadDesc load_descriptor = {},
-			ResourceManagerExDesc* ex_desc = {}
-		);
-
-		// ---------------------------------------------------------------------------------------------------------------------------
-
 		// Returns a pointer to the shader type (for vertex shader a VertexShader*)
 		template<bool reference_counted = false>
-		void* LoadShader(
+		ShaderInterface LoadShader(
 			Stream<wchar_t> filename,
 			ECS_SHADER_TYPE shader_type,
 			Stream<char>* shader_source_code = nullptr,
@@ -558,8 +384,12 @@ namespace ECSEngine {
 			ResourceManagerLoadDesc load_descriptor = {}
 		);
 
+		// If a .cso is specified, it will be loaded into memory and simply passed to D3D
+		// If a .hlsl is specified, it will be compiled into binary using shader compile options and then passed to D3D
+		// An optional pointer to an Stream<char> can be specified such that for .hlsl the calling code receives
+		// The shader byte code for further use i.e. reflect the textures, reflect the vertex input layout
 		// Returns a pointer to the shader type (for vertex shader a VertexShader*)
-		void* LoadShaderImplementation(
+		ShaderInterface LoadShaderImplementation(
 			Stream<wchar_t> filename,
 			ECS_SHADER_TYPE shader_type,
 			Stream<char>* shader_source_code = nullptr,
@@ -571,7 +401,7 @@ namespace ECSEngine {
 		// Returns a pointer to the interface type (for vertex shader a ID3D11VertexShader*)
 		// A more detailed version that directly takes the data and does not deallocate it
 		// If it fails it returns nullptr. It allocates memory from the allocator if the filename is specified
-		void* LoadShaderImplementationEx(
+		ShaderInterface LoadShaderImplementationEx(
 			Stream<char> source_code,
 			ECS_SHADER_TYPE shader_type,
 			Stream<void>* byte_code = nullptr,
@@ -592,12 +422,15 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 		
 		// Reassigns a value to a resource that has been loaded; the resource is first destroyed then reassigned
-		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource);
+		void RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = { nullptr, 0 });
 
 		// Reassigns a value to a resource that has been loaded; no destruction is being done
-		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource);
+		void RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix = { nullptr, 0 });
 
-		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type);
+		void RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix = { nullptr, 0 });
+
+		// Returns true when reference counted is set to true and the time stamp was removed
+		bool RemoveTimeStamp(ResourceIdentifier identifier, bool reference_count = false, Stream<void> suffix = { nullptr, 0 });
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -667,60 +500,12 @@ namespace ECSEngine {
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		template<bool reference_counted = false>
-		void UnloadVertexShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
+		void UnloadShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadVertexShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadPixelShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
-
-		template<bool reference_counted = false>
-		void UnloadPixelShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
-
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadHullShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
-
-		template<bool reference_counted = false>
-		void UnloadHullShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
-
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadDomainShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
-
-		template<bool reference_counted = false>
-		void UnloadDomainShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
-
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadGeometryShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
-
-		template<bool reference_counted = false>
-		void UnloadGeometryShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
-
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadComputeShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc = {});
-
-		template<bool reference_counted = false>
-		void UnloadComputeShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
-
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		template<bool reference_counted = false>
-		void UnloadShader(Stream<wchar_t> filename, ECS_SHADER_TYPE type, ResourceManagerLoadDesc load_desc = {});
-
-		template<bool reference_counted = false>
-		void UnloadShader(unsigned int index, ECS_SHADER_TYPE type, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
-
-		void UnloadShaderImplementation(void* shader, ECS_SHADER_TYPE type, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadShaderImplementation(void* shader, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 

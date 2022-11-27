@@ -273,6 +273,9 @@ namespace ECSEngine {
 				storage.Copy(mount_point);
 				bool is_absolute = PathIsAbsolute(mount_point);
 				CharacterType character_to_check;
+				CharacterType absolute_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
+				CharacterType relative_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
+
 				if (is_absolute) {
 					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
 				}
@@ -283,7 +286,15 @@ namespace ECSEngine {
 				if (mount_point[mount_point.size - 1] != character_to_check) {
 					storage.Add(character_to_check);
 				}
+
+				size_t new_path_base_size = storage.size;
 				storage.AddStreamSafe(base);
+				
+				if (is_absolute) {
+					// If the path is absolute, replace any relative separators that come from the base into absolute separator
+					function::ReplaceCharacter(PathType(storage.buffer + new_path_base_size, base.size), relative_separator, absolute_separator);
+				}
+
 				return storage;
 			}
 			return base;
@@ -310,18 +321,28 @@ namespace ECSEngine {
 
 				new_path.Copy(mount_point);
 				bool is_absolute = PathIsAbsolute(mount_point);
+				CharacterType absolute_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
+				CharacterType relative_separator = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
+
 				CharacterType character_to_check;
 				if (is_absolute) {
-					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII);
+					character_to_check = absolute_separator;
 				}
 				else {
-					character_to_check = Character<CharacterType>(ECS_OS_PATH_SEPARATOR_ASCII_REL);
+					character_to_check = relative_separator;
 				}
 
 				if (mount_point[mount_point.size - 1] != character_to_check) {
 					new_path.Add(character_to_check);
 				}
+				size_t new_path_base_size = new_path.size;
 				new_path.AddStream(base);
+
+				if (is_absolute) {
+					// If the path is absolute, replace any relative separators that come from the base into absolute separator
+					function::ReplaceCharacter(PathType(new_path.buffer + new_path_base_size, base.size), relative_separator, absolute_separator);
+				}
+
 				return new_path;
 			}
 			return base;

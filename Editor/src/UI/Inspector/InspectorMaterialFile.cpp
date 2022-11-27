@@ -50,12 +50,17 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunction(
+	inspector_index = ChangeInspectorDrawFunctionWithSearch(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawMaterialFile, InspectorCleanMaterial },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1)
+		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		-1,
+		[=](void* inspector_data) {
+			InspectorDrawMaterialFileData* other_data = (InspectorDrawMaterialFileData*)inspector_data;
+			return function::CompareStrings(other_data->path, path);
+		}
 	);
 
 	if (inspector_index != -1) {
