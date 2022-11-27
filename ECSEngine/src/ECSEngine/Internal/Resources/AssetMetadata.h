@@ -8,6 +8,7 @@
 #include "../../Utilities/Reflection/ReflectionMacros.h"
 #include "../../Rendering/Compression/TextureCompressionTypes.h"
 #include "../../Utilities/Serialization/Binary/SerializationMacro.h"
+#include "../../Internal/Resources/ResourceTypes.h"
 
 namespace ECSEngine {
 
@@ -22,6 +23,8 @@ namespace ECSEngine {
 	};
 
 	ECSENGINE_API bool AssetHasFile(ECS_ASSET_TYPE type);
+
+	ECSENGINE_API ResourceType AssetTypeToResourceType(ECS_ASSET_TYPE type);
 
 	struct AssetFieldTarget {
 		Stream<char> name;
@@ -70,13 +73,17 @@ namespace ECSEngine {
 			return mesh_pointer;
 		}
 
+		ECS_INLINE void** PtrToPointer() {
+			return (void**)&mesh_pointer;
+		}
+
 		Stream<char> name;
 		Stream<wchar_t> file;
 		float scale_factor;
 		bool invert_z_axis;
 		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
 
-		CoallescedMesh* mesh_pointer; ECS_SKIP_REFLECTION(static_assert(sizeof(CoallescedMesh*) == 8))
+		CoallescedMesh* mesh_pointer; ECS_SKIP_REFLECTION()
 	};
 
 	struct ECSENGINE_API ECS_REFLECT TextureMetadata {
@@ -91,6 +98,10 @@ namespace ECSEngine {
 
 		ECS_INLINE void* Pointer() const {
 			return texture.view;
+		}
+
+		ECS_INLINE void** PtrToPointer() {
+			return (void**)&texture;
 		}
 
 		Stream<char> name;
@@ -111,6 +122,10 @@ namespace ECSEngine {
 
 		ECS_INLINE void* Pointer() const {
 			return sampler.sampler;
+		}
+
+		ECS_INLINE void** PtrToPointer() {
+			return (void**)&sampler;
 		}
 
 		Stream<char> name;
@@ -152,6 +167,10 @@ namespace ECSEngine {
 			return shader_interface;
 		}
 
+		ECS_INLINE void** PtrToPointer() {
+			return &shader_interface;
+		}
+
 		Stream<char> name;
 		Stream<wchar_t> file;
 		Stream<ShaderMacro> macros;
@@ -159,9 +178,9 @@ namespace ECSEngine {
 		ECS_SHADER_COMPILE_FLAGS compile_flag;
 
 		// The Graphics object interface
-		void* shader_interface; ECS_SKIP_REFLECTION(static_assert(sizeof(void*) == 8))
-		Stream<char> source_code; ECS_SKIP_REFLECTION(static_assert(sizeof(Stream<char>) == 16))
-		Stream<void> byte_code; ECS_SKIP_REFLECTION(static_assert(sizeof(Stream<void>) == 16))
+		void* shader_interface; ECS_SKIP_REFLECTION()
+		Stream<char> source_code; ECS_SKIP_REFLECTION()
+		Stream<void> byte_code; ECS_SKIP_REFLECTION()
 	};
 
 	struct MaterialAssetResource {
@@ -211,6 +230,10 @@ namespace ECSEngine {
 			return material_pointer;
 		}
 
+		ECS_INLINE void** PtrToPointer() {
+			return (void**)&material_pointer;
+		}
+
 		Stream<char> name;
 		// These are maintained as a coallesced buffer
 		Stream<MaterialAssetResource> textures;
@@ -220,7 +243,7 @@ namespace ECSEngine {
 		unsigned int pixel_shader_handle;
 
 		// A pointer to the graphics object
-		Material* material_pointer; ECS_SKIP_REFLECTION(static_assert(sizeof(Material*) == 8))
+		Material* material_pointer; ECS_SKIP_REFLECTION()
 	};
 
 	struct ECS_REFLECT MiscAsset {
@@ -237,10 +260,14 @@ namespace ECSEngine {
 			return data.buffer;
 		}
 
+		ECS_INLINE void** PtrToPointer() {
+			return (void**)&data;
+		}
+
 		Stream<char> name;
 		Stream<wchar_t> file;
 
-		Stream<void> data; ECS_SKIP_REFLECTION(static_assert(sizeof(Stream<void>) == 16))
+		Stream<void> data; ECS_SKIP_REFLECTION()
 	};
 
 	ECSENGINE_API void DeallocateAssetBase(const void* asset, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
@@ -272,8 +299,14 @@ namespace ECSEngine {
 
 	ECSENGINE_API bool IsAssetFromMetadataValid(const void* metadata, ECS_ASSET_TYPE type);
 
+	ECSENGINE_API bool IsAssetFromMetadataValid(Stream<void> asset_pointer);
+
 	// Meshes and materials are treated differently
 	ECSENGINE_API unsigned int ExtractRandomizedAssetValue(const void* asset_pointer, ECS_ASSET_TYPE type);
+
+	ECSENGINE_API bool CompareAssetPointers(const void* first, const void* second, ECS_ASSET_TYPE type);
+
+	ECSENGINE_API bool CompareAssetPointers(const void* first, const void* second, size_t compare_size);
 
 	// If long format is specified then it will print the full file path for absolute paths instead of only the filename
 	ECSENGINE_API void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format = false);

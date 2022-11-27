@@ -85,6 +85,30 @@ unsigned int ChangeInspectorDrawFunction(
 	unsigned int sandbox_index = -1
 );
 
+// The functor takes a parameter the data of the inspector to be compared and returns true
+// if a match was found, else false. This is used to instead highlight an inspector if it already exists.
+// It returns -1 if either no inspector was found or an inspector already exists with that highlighted data
+template<typename Functor>
+unsigned int ChangeInspectorDrawFunctionWithSearch(
+	EditorState* editor_state,
+	unsigned int inspector_index,
+	InspectorFunctions functions,
+	void* data,
+	size_t data_size,
+	unsigned int sandbox_index,
+	Functor&& functor
+) {
+	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, MAX_INSPECTOR_WINDOWS);
+	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_index);
+	for (unsigned int index = 0; index < indices.size; index++) {
+		if (functor(GetInspectorDrawFunctionData(editor_state, indices[index]))) {
+			return indices[index];
+		}
+	}
+
+	return ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_index);
+}
+
 // ----------------------------------------------------------------------------------------------------------------------------
 
 // Returns the first inspector which matches the sandbox and the draw function, or -1 if it doesn't exist

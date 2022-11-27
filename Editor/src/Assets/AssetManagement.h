@@ -42,6 +42,10 @@ void ChangeAssetFile(EditorState* editor_state, unsigned int handle, ECS_ASSET_T
 // It will create the full name internally
 void ChangeAssetName(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, const void* new_asset);
 
+void ChangeAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, size_t new_stamp);
+
+void ChangeAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, size_t new_stamp);
+
 // Returns true if it succeeded, else false. It can fail if the resource doesn't exist
 // This doesn't check the prevent resource load flag and wait until is cleared
 bool DeallocateAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
@@ -79,6 +83,38 @@ bool GetAssetFileFromForwardingFile(Stream<wchar_t> absolute_path, CapacityStrea
 
 // This is used only for meshes and textures (these are a special case. They are not thunk files nor forwarding files)
 Stream<Stream<char>> GetAssetCorrespondingMetadata(const EditorState* editor_state, Stream<wchar_t> file, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
+
+// Fills in the handles of the assets that are out of date (have been changed from outside, like a mesh or a texture, ECS files as well)
+// If the update stamp flag is true then it will also update the time stamps stored into the resource manager
+Stream<Stream<unsigned int>> GetOutOfDateAssets(EditorState* editor_state, AllocatorPolymorphic allocator, bool update_stamp = true);
+
+Stream<Stream<unsigned int>> GetDependentAssetsFor(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
+
+// For meshes, textures, shaders and misc assets it will get the time stamp for both the metadata and the 
+// actual target file and return the maximum of both. It returns the time stamp stored in the resource manager
+size_t GetAssetRuntimeTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// It returns the time stamp of the target file (if it has one) and that of the metadata from the OS,
+// not the internally stored one
+size_t GetAssetExternalTimeStamp(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// Inserts a time stamp into the resource manager
+void InsertAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+
+// Inserts a time stamp into the resource manager
+void InsertAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+void RemoveAssetTimeStamp(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
+
+void RemoveAssetTimeStamp(EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type);
+
+// Deallocates the asset and removes the time stamp from the resource manager. Returns true if the deallocation
+// was successful, else false
+bool RemoveAsset(EditorState* editor_state, void* metadata, ECS_ASSET_TYPE type);
+
+// Deallocates the asset and removes the time stamp from the resource manager, it will also eliminate it from the
+// asset database
+bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type);
 
 // Returns true if it managed to write
 bool WriteForwardingFile(Stream<wchar_t> absolute_path, Stream<wchar_t> target_path);

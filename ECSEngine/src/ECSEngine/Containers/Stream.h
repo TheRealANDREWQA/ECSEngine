@@ -481,6 +481,10 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return sizeof(T) * number;
 		}
 
+		ECS_INLINE Stream<T> ToStream() const {
+			return { buffer, size };
+		}
+
 		void InitializeFromBuffer(void* _buffer, unsigned int _size, unsigned int _capacity) {
 			buffer = (T*)_buffer;
 			size = _size;

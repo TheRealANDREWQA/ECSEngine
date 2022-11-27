@@ -452,6 +452,10 @@ namespace ECSEngine {
 			return VertexShader((ID3D11VertexShader*)interface_);
 		}
 
+		inline void From(void* interface_) {
+			shader = (ID3D11VertexShader*)interface_;
+		}
+
 		ID3D11VertexShader* shader;
 	};
 
@@ -482,6 +486,10 @@ namespace ECSEngine {
 
 		inline static PixelShader FromInterface(void* interface_) {
 			return PixelShader((ID3D11PixelShader*)interface_);
+		}
+
+		inline void From(void* interface_) {
+			shader = (ID3D11PixelShader*)interface_;
 		}
 
 		ID3D11PixelShader* shader;
@@ -515,6 +523,10 @@ namespace ECSEngine {
 			return GeometryShader((ID3D11GeometryShader*)interface_);
 		}
 
+		inline void From(void* interface_) {
+			shader = (ID3D11GeometryShader*)interface_;
+		}
+
 		ID3D11GeometryShader* shader;
 	};
 
@@ -546,6 +558,10 @@ namespace ECSEngine {
 			return DomainShader((ID3D11DomainShader*)interface_);
 		}
 
+		inline void From(void* interface_) {
+			shader = (ID3D11DomainShader*)interface_;
+		}
+
 		ID3D11DomainShader* shader;
 	};
 
@@ -575,6 +591,10 @@ namespace ECSEngine {
 
 		inline static HullShader FromInterface(void* interface_) {
 			return HullShader((ID3D11HullShader*)interface_);
+		}
+
+		inline void From(void* interface_) {
+			shader = (ID3D11HullShader*)interface_;
 		}
 
 		ID3D11HullShader* shader;
@@ -609,7 +629,43 @@ namespace ECSEngine {
 			return ComputeShader((ID3D11ComputeShader*)interface_);
 		}
 
+		inline void From(void* interface_) {
+			shader = (ID3D11ComputeShader*)interface_;
+		}
+
 		ID3D11ComputeShader* shader;
+	};
+
+	struct ShaderInterface {
+		ECS_INLINE operator void*() {
+			return interface_;
+		}
+
+		ECS_INLINE operator VertexShader() {
+			return VertexShader::FromInterface(interface_);
+		}
+
+		ECS_INLINE operator PixelShader() {
+			return PixelShader::FromInterface(interface_);
+		}
+
+		ECS_INLINE operator GeometryShader() {
+			return GeometryShader::FromInterface(interface_);
+		}
+
+		ECS_INLINE operator DomainShader() {
+			return DomainShader::FromInterface(interface_);
+		}
+
+		ECS_INLINE operator HullShader() {
+			return HullShader::FromInterface(interface_);
+		}
+
+		ECS_INLINE operator ComputeShader() {
+			return ComputeShader::FromInterface(interface_);
+		}
+
+		void* interface_;
 	};
 
 	// All types except the vertex shader which needs byte code as well
@@ -1322,6 +1378,18 @@ namespace ECSEngine {
 
 		Material(const Material& other) = default;
 		Material& operator = (const Material& other) = default;
+
+		bool ContainsTexture(ResourceView texture) const;
+
+		ECS_INLINE bool ContainsShader(VertexShader _vertex_shader) const {
+			return vertex_shader.Interface() == _vertex_shader.Interface();
+		}
+
+		ECS_INLINE bool ContainsShader(PixelShader _pixel_shader) const {
+			return pixel_shader.Interface() == pixel_shader.Interface();
+		}
+
+		bool ContainsSampler(SamplerState sampler_state) const;
 
 		InputLayout layout;
 		VertexShader vertex_shader;

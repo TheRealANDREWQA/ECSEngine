@@ -32,7 +32,7 @@ struct ECS_REFLECT EditorSandboxModule {
 	// These are needed for reflection of the settings
 	ECSEngine::Stream<wchar_t> settings_name;
 
-	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::Stream<EditorModuleReflectedSetting>) == 16))
+	ECSEngine::Stream<EditorModuleReflectedSetting> reflected_settings; ECS_SKIP_REFLECTION()
 	ECSEngine::MemoryManager settings_allocator; ECS_SKIP_REFLECTION(static_assert(sizeof(ECSEngine::MemoryManager) == 48))
 
 	ECS_FIELDS_END_REFLECT;
@@ -43,6 +43,11 @@ struct ECS_REFLECT EditorSandboxModule {
 struct ECS_REFLECT EditorSandbox {
 	inline ECSEngine::GlobalMemoryManager* GlobalMemoryManager() {
 		return (ECSEngine::GlobalMemoryManager*)modules_in_use.allocator.allocator;
+	}
+
+	inline EditorSandbox& operator = (const EditorSandbox& other) {
+		memcpy(this, &other, sizeof(*this));
+		return *this;
 	}
 
 	ECS_FIELDS_START_REFLECT;
@@ -68,7 +73,7 @@ struct ECS_REFLECT EditorSandbox {
 
 	EDITOR_SANDBOX_STATE run_state;
 	bool is_scene_dirty;
-	bool is_locked;
+	std::atomic<unsigned char> locked_count;
 
 	size_t runtime_settings_last_write;
 	ECSEngine::WorldDescriptor runtime_descriptor;
@@ -168,9 +173,9 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -------------------------------------------------------------------------------------------------------------
 
-// Returns true if it did actually do the destruction. If the sandbox is locked, then it will return false immediately
-// If the push event is set to true, then it will push an event that will destroy the sandbox runtime when it is unlocked
-bool DestroySandbox(EditorState* editor_state, unsigned int index, bool push_event = false);
+// This does not check to see if the sandbox is locked - you must ensure that before calling this function
+// that the sandbox is unlocked
+void DestroySandbox(EditorState* editor_state, unsigned int index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -251,6 +256,7 @@ bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigne
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Returns true if at least a task/process requested the sandbox to be locked
 bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -325,6 +331,7 @@ bool LoadEditorSandboxFile(
 // -------------------------------------------------------------------------------------------------------------
 
 // Useful for example for not letting the sandbox be destroyed while a load operation is in progress
+// This can be called multiple times, it is a counter, not a boolean and it is atomic.
 void LockSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
@@ -372,6 +379,19 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 
 // -------------------------------------------------------------------------------------------------------------
 
+template<typename Functor>
+void SandboxAction(const EditorState* editor_state, unsigned int sandbox_index, Functor&& functor) {
+	if (sandbox_index == -1) {
+		unsigned int count = editor_state->sandboxes.size;
+		for (unsigned int index = 0; index < count; index++) {
+			functor(index);
+		}
+	}
+	else {
+		functor(sandbox_index);
+	}
+}
+
 // Returns true if it succeded. On error it will print an error message
 bool SaveSandboxRuntimeSettings(const EditorState* editor_state, unsigned int sandbox_index);
 
@@ -417,11 +437,12 @@ bool UpdateRuntimeSettings(const EditorState* editor_state, ECSEngine::Stream<wc
 
 // -------------------------------------------------------------------------------------------------------------
 
+// This is a counter, not a boolean, so it can be called multiple times and it is atomic.
 void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Waits until the given sandbox becomes unlocked. If the sandbox index is -1 then it will wait for all sandboxes
-void WaitSandboxUnlock(EditorState* editor_state, unsigned int sandbox_index = -1);
+void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_index = -1);
 
 // -------------------------------------------------------------------------------------------------------------

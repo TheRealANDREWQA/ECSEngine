@@ -178,6 +178,29 @@ namespace ECSEngine {
 		// Retrieves all the asset paths for a certain type (The type must have paths). They will reference the paths stored inside
 		void FillAssetPaths(ECS_ASSET_TYPE type, CapacityStream<Stream<wchar_t>>& paths) const;
 
+		// The functor will be called with the handle as a parameter
+		template<typename Functor>
+		void ForEachAsset(ECS_ASSET_TYPE type, Functor&& functor) {
+			unsigned int count = GetAssetCount(type);
+			for (unsigned int index = 0; index < count; index++) {
+				unsigned int handle = GetAssetHandleFromIndex(index, type);
+				functor(handle);
+			}
+		}
+
+		// The functor will be called with the handle as a parameter and the asset type
+		template<typename Functor>
+		void ForEachAsset(Functor&& functor) {
+			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+				ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+				unsigned int count = GetAssetCount(current_type);
+				for (unsigned int subindex = 0; subindex < count; subindex++) {
+					unsigned int handle = GetAssetHandleFromIndex(subindex, current_type);
+					functor(handle, current_type);
+				}
+			}
+		}
+
 		MeshMetadata* GetMesh(unsigned int handle);
 
 		const MeshMetadata* GetMeshConst(unsigned int handle) const;
@@ -231,10 +254,20 @@ namespace ECSEngine {
 
 		AssetDatabaseSnapshot GetSnapshot() const;
 
+		unsigned int GetRandomizedPointer(ECS_ASSET_TYPE type) const;
+
+		// Generates the list of randomized values that are still valid
+		void RandomizedPointerList(unsigned int maximum_count, ECS_ASSET_TYPE type, CapacityStream<unsigned int>& values) const;
+
 		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
 		// An allocator can be given to allocate the assets from or, if left as default, it will allocate
-		// from the database allocator. The randomization consists on 
-		void RandomizePointers(AssetDatabaseSnapshot snapshot, AllocatorPolymorphic allocator = { nullptr });
+		// from the database allocator.
+		void RandomizePointer(unsigned int handle, ECS_ASSET_TYPE type);
+
+		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
+		// An allocator can be given to allocate the assets from or, if left as default, it will allocate
+		// from the database allocator.
+		void RandomizePointers(AssetDatabaseSnapshot snapshot);
 
 		// It does not set the name or the file
 		bool ReadMeshFile(Stream<char> name, Stream<wchar_t> file, MeshMetadata* metadata) const;

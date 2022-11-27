@@ -314,6 +314,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\Timer.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocatorPolymorphic.h" />
     <ClInclude Include="src\Includes\ECSEngineAllocators.h" />
+    <ClInclude Include="src\Includes\ECSEngineApplication.h" />
     <ClInclude Include="src\Includes\ECSEngineApplicationUtilities.h" />
     <ClInclude Include="src\Includes\ECSEngineAssetMacros.h" />
     <ClInclude Include="src\Includes\ECSEngineAssets.h" />

@@ -4,6 +4,7 @@
 #include "AssetMetadata.h"
 #include "../../Utilities/FilePackaging.h"
 #include "../../Containers/AtomicStream.h"
+#include "../../Internal/Multithreading/ThreadTask.h"
 
 namespace ECSEngine {
 
@@ -35,12 +36,32 @@ namespace ECSEngine {
 		bool dependency_failure;
 	};
 
+	struct LoadAssetOnSuccessData {
+		SpinLock* spin_lock;
+		unsigned int handle;
+		ECS_ASSET_TYPE type;
+		void* metadata;
+		AssetDatabase* database;
+		ResourceManager* resource_manager;
+		void* data;
+	};
+
 	// The mount path will be copied internally
 	struct LoadAssetInfo {
 		Semaphore* finish_semaphore;
 		bool* success = nullptr;
 		AtomicStream<LoadAssetFailure>* load_failures = nullptr;
 		Stream<wchar_t> mount_point = { nullptr, 0 };
+
+		// The function must cast the data into a LoadAssetOnSuccessData* and then cast to its own data
+		// The spin lock can be used to get exclusive access to the resource manager and reference the
+		// asset that was successfully preloaded/processed. Also the thread task data will also be copied
+
+		// These are callbacks that will be called when an asset was successfully preloaded.
+		ThreadTask preload_on_success[ECS_ASSET_TYPE_COUNT] = { {} };
+
+		// These are callbacks that will be called when an asset was successfully processed.
+		ThreadTask process_on_success[ECS_ASSET_TYPE_COUNT] = { {} };
 	};
 
 	// Loads all the corresponding assets from disk with the appropriate settings applied.
@@ -91,7 +112,7 @@ namespace ECSEngine {
 	// Releases all assets from the database. If an asset is not found, it is placed into the missing assets list if specified, else ignored
 	// If the asset mask is specified, then there must be ECS_ASSET_TYPE_COUNT streams to indicate which handles to unload
 	// This is single threaded.
-	ECSENGINE_API void UnloadAssets(
+	ECSENGINE_API void DeallocateAssetsWithRemapping(
 		AssetDatabase* database, 
 		ResourceManager* resource_manager,
 		Stream<wchar_t> mount_point = { nullptr, 0 },
@@ -102,11 +123,13 @@ namespace ECSEngine {
 	// Releases all assets from the given asset database reference. It will unload these assets that have the reference count to 0 after
 	// their elimination from the main database (the reference count is decremented in all cases).
 	// If the asset mask is specified, then there must be ECS_ASSET_TYPE_COUNT streams to indicate which handles to unload
-	ECSENGINE_API void UnloadAssets(
+	ECSENGINE_API void DeallocateAssetsWithRemapping(
 		AssetDatabaseReference* database_reference,
 		ResourceManager* resource_manager,
 		Stream<wchar_t> mount_point = { nullptr, 0 },
 		Stream<unsigned int>* asset_mask = nullptr
 	);
+
+	ECSENGINE_API bool LoadAssetHasFailed(Stream<LoadAssetFailure> failures, unsigned int handle, ECS_ASSET_TYPE type);
 
 }

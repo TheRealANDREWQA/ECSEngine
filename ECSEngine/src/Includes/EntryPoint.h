@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../ECSEngine/Application.h"
-#include "ecspch.h"
+#include <Windows.h>
 
 #define ECSENGINE_RENDER
 

@@ -10,13 +10,9 @@ namespace ECSEngine {
 		CoallescedMesh,
 		PBRMaterial,
 		PBRMesh,
-		VertexShader,
-		PixelShader,
-		HullShader,
-		DomainShader,
-		GeometryShader,
-		ComputeShader,
+		Shader,
 		Misc,
+		TimeStamp,
 		TypeCount
 	};
 
@@ -27,13 +23,9 @@ namespace ECSEngine {
 		"CoallescedMesh",
 		"PBRMaterial",
 		"PBRMesh",
-		"VertexShader",
-		"PixelShader",
-		"HullShader",
-		"DomainShader",
-		"GeometryShader",
-		"ComputeShader",
-		"Misc"
+		"Shader",
+		"Misc",
+		"TimeStamp"
 	};
 	static_assert(std::size(ECS_RESOURCE_TYPE_NAMES) == (unsigned int)ResourceType::TypeCount);
 

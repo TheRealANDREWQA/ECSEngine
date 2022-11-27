@@ -347,6 +347,29 @@ namespace ECSEngine {
 
 			uintptr_t ptr = (uintptr_t)allocation;
 
+			// Go through all types and if they have ECS_SKIP_REFLECTION fields
+			// with deduction process them now
+			for (size_t data_index = 0; data_index < data_count; data_index++) {
+				for (size_t index = 0; index < data[data_index].types.size; index++) {
+					ReflectionType* data_type = &data[data_index].types[index];
+					for (size_t field_index = 0; field_index < data_type->fields.size; field_index++) {
+						if (data_type->fields[field_index].Is(STRING(ECS_SKIP_REFLECTION))) {
+							// Try to deduce the type
+							size_t byte_size = SearchReflectionUserDefinedTypeByteSize(this, data_type->fields[field_index].definition);
+							if (byte_size == -1) {
+								// Fail if couldn't determine
+								return false;
+							}
+
+							// Remove the field and increase the type byte size
+							data_type->byte_size += byte_size;
+							data_type->fields.Remove(field_index);
+							field_index--;
+						}
+					}
+				}
+			}
+
 			for (size_t data_index = 0; data_index < data_count; data_index++) {
 				for (size_t index = 0; index < data[data_index].types.size; index++) {
 					const ReflectionType* data_type = &data[data_index].types[index];
@@ -2521,11 +2544,41 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					
 					// A special case to handle is the ECS_SKIP_REFLECTION
 					if (memcmp(parsed_tag_character, STRING(ECS_SKIP_REFLECTION), sizeof(STRING(ECS_SKIP_REFLECTION)) - 1) == 0) {
-						// It is a skip reflection tag - get the byte size, add it to the type's and advance
+						// If it doesn't have an argument, then try to deduce the byte size
 						Stream<char> argument_range = { parsed_tag_character, function::PointerDifference(next_line_character, parsed_tag_character) + 1 };
-						int64_t byte_size = function::ConvertCharactersToInt(argument_range);
-						type.byte_size += byte_size;
-						return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+						Stream<char> paranthese = function::FindFirstCharacter(argument_range, '(');
+						if (paranthese.size == 0) {
+							return ECS_REFLECTION_ADD_TYPE_FIELD_FAILED;
+						}
+
+						const char* skipped_whitespace = function::SkipWhitespaceEx(paranthese.buffer + 1);
+						if (*skipped_whitespace != ')') {
+							// It is a skip reflection tag - get the byte size, add it to the type's and advance
+							int64_t byte_size = function::ConvertCharactersToInt(argument_range);
+							type.byte_size += byte_size;
+							return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+						}
+						else {
+							// We will forward the deduction at the end.
+							size_t field_index = type.fields.size;
+							type.fields[field_index].tag = STRING(ECS_SKIP_REFLECTION);
+							const char* definition_start = function::SkipWhitespaceEx(last_line_character);
+							// Skip the namespace qualification
+							const char* colons = strstr(definition_start, "::");
+							while (colons != nullptr && colons < semicolon_character) {
+								definition_start = function::SkipWhitespace(colons + 2);
+								colons = strstr(definition_start, "::");
+							}
+
+							const char* definition_end = function::SkipCodeIdentifier(definition_start);
+							// Include the pointer asterisk
+							while (*definition_end == '*') {
+								definition_end++;
+							}
+							type.fields[field_index].definition = { definition_start, function::PointerDifference(definition_end, definition_start) };
+							type.fields.size++;
+							return ECS_REFLECTION_ADD_TYPE_FIELD_OMITTED;
+						}
 					}
 
 					char* ending_tag_character = (char*)function::SkipCodeIdentifier(parsed_tag_character);
@@ -3195,6 +3248,33 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				};
 			}
 
+			// Check fundamental type
+			ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
+			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+				return { field.info.byte_size, GetFieldTypeAlignment(field.info.basic_type) };
+			}
+
+			// Check pointers
+			if (function::FindFirstCharacter(definition, '*').size > 0) {
+				return { sizeof(void*), alignof(void*) };
+			}
+
+			// Check stream types
+			const char* stream_string = STRING(Stream);
+			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
+				return { sizeof(Stream<void>), alignof(Stream<void>) };
+			}
+
+			stream_string = STRING(CapacityStream);
+			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
+				return { sizeof(CapacityStream<void>), alignof(CapacityStream<void>) };
+			}
+
+			stream_string = STRING(ResizableStream);
+			if (memcmp(definition.buffer, stream_string, strlen(stream_string)) == 0) {
+				return { sizeof(ResizableStream<char>), alignof(ResizableStream<char>) };
+			}
+
 			ReflectionType type;
 			ReflectionEnum enum_;
 			unsigned int container_index = -1;
@@ -3211,13 +3291,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 			else if (enum_.name.size > 0) {
 				return { sizeof(unsigned char), alignof(unsigned char) };
-			}
-			else {
-				// Check fundamental type
-				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
-				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-					return { field.info.byte_size, GetFieldTypeAlignment(field.info.basic_type) };
-				}
 			}
 
 			// Signal an error

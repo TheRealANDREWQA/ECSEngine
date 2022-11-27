@@ -119,6 +119,8 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
+	// If the copy_instead_of_reference flag is set then for meshes and materials
+	// it will memcpy into the existing 
 	ECSENGINE_API bool CreateAssetFromMetadata(
 		ResourceManager* resource_manager,
 		AssetDatabase* database,
@@ -126,6 +128,14 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE type,
 		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
+
+	// Creates a unique identifier suffix for an asset such that for the same target file it can be loaded into the resource
+	// manager without causing conflicts
+	ECSENGINE_API void AssetMetadataIdentifier(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<void>& identifier);
+
+	// The file path + the identifier, if it has one. For materials and gpu samplers, which are not contained in the 
+	// resource manager it will not fill in anything
+	ECSENGINE_API void AssetMetadataResourceIdentifier(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<void>& path_identifier, Stream<wchar_t> mount_point = { nullptr, 0 });
 
 #pragma endregion
 
@@ -224,6 +234,12 @@ namespace ECSEngine {
 	);
 
 #pragma endregion
+
+	ECSENGINE_API bool DoesMaterialDependOn(const MaterialAsset* material, const void* other_metadata, ECS_ASSET_TYPE type);
+
+	// Determines assets that use the given asset (at the moment only the material references other assets)
+	// For example if a texture is being used and a material references it, then it will fill in the material that references it
+	ECSENGINE_API Stream<Stream<unsigned int>> GetDependentAssetsFor(const AssetDatabase* database, const void* metadata, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void SetShaderMetadataSourceCode(ShaderMetadata* metadata, Stream<char> source_code);
 

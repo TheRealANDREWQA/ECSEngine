@@ -2,6 +2,7 @@
 #include "AssetExplorer.h"
 #include "..\Editor\EditorState.h"
 #include "..\HelperWindows.h"
+#include "ECSEngineAssets.h"
 
 struct AssetExplorerData {
 	EditorState* editor_state;
@@ -80,7 +81,7 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 					drawer.Button(configuration, config, asset_string, { select_action, select_data, write_size });
 					drawer.NextRow();
 				}
-				});
+			});
 		};
 
 		drawer.Text("Assets");
@@ -94,7 +95,7 @@ void AssetExplorerDraw(void* window_data, void* drawer_descriptor, bool initiali
 		iterate(ECS_ASSET_MATERIAL, database->material_asset.ToStream());
 		iterate(ECS_ASSET_MISC, database->misc_asset.ToStream());
 	}
-	
+
 }
 
 void AssetExplorerSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, void* stack_memory)

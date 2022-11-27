@@ -155,7 +155,7 @@ namespace ECSEngine {
 
 		auto copy_value = [&](const void* ptr_to_copy, size_t copy_size) {
 			if (!comparator(ptr_to_write)) {
-				return;
+				return ECS_SET_ASSET_TARGET_FIELD_OK;
 			}
 
 			if ((unsigned int)ptr_to_copy >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
@@ -166,24 +166,26 @@ namespace ECSEngine {
 				unsigned int* randomized_value = (unsigned int*)ptr_to_write;
 				*randomized_value = (unsigned int)ptr_to_copy;
 			}
+			return ECS_SET_ASSET_TARGET_FIELD_MATCHED;
 		};
 
 		auto set_pointer = [&](void* ptr_to_set) {
 			void** ptr = (void**)ptr_to_write;
 			if (!comparator(*ptr)) {
-				return;
+				return ECS_SET_ASSET_TARGET_FIELD_OK;
 			}
 			*ptr = ptr_to_set;
+			return ECS_SET_ASSET_TARGET_FIELD_MATCHED;
 		};
 
 		auto copy_and_pointer = [&](size_t copy_size) {
 			if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
 				// Copy the data
-				copy_value(field_data.buffer, copy_size);
+				return copy_value(field_data.buffer, copy_size);
 			}
 			else if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 				if (Reflection::GetReflectionFieldPointerIndirection(type->fields[field].info) == 1) {
-					set_pointer(field_data.buffer);
+					return set_pointer(field_data.buffer);
 				}
 				else {
 					return ECS_SET_ASSET_TARGET_FIELD_FAILED;
@@ -207,7 +209,7 @@ namespace ECSEngine {
 		case ECS_ASSET_SHADER:
 		{
 			if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
-				set_pointer(field_data.buffer);
+				return set_pointer(field_data.buffer);
 			}
 			else {
 				return ECS_SET_ASSET_TARGET_FIELD_FAILED;
@@ -223,11 +225,11 @@ namespace ECSEngine {
 		{
 			if (type->fields[field].info.stream_type != Reflection::ReflectionStreamFieldType::Pointer) {
 				// It is a Stream<void>, copy into it
-				copy_value(field_data.buffer, field_data.size);
+				return copy_value(field_data.buffer, field_data.size);
 			}
 			else if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 				if (Reflection::GetReflectionFieldPointerIndirection(type->fields[field].info) == 1) {
-					set_pointer(&field_data);
+					return set_pointer(&field_data);
 				}
 				else {
 					return ECS_SET_ASSET_TARGET_FIELD_FAILED;
@@ -238,6 +240,8 @@ namespace ECSEngine {
 			}
 		}
 		break;
+		default:
+			ECS_ASSERT(false, "Invalid asset type");
 		}
 
 		return ECS_SET_ASSET_TARGET_FIELD_OK;
@@ -268,19 +272,29 @@ namespace ECSEngine {
 		return SetAssetTargetFieldFromReflectionImpl(type, field, data, field_data, field_type, [=](void* ptr) {
 			switch (field_type) {
 			case ECS_ASSET_MESH:
+			case ECS_ASSET_MATERIAL:
 			{
-				if ((unsigned int)comparator.buffer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
-					return memcmp(ptr, comparator.buffer, sizeof(CoallescedMesh)) == 0;
+				if (ptr == comparator.buffer) {
+					return true;
 				}
-				else {
-					return *(unsigned int*)ptr == (unsigned int)comparator.buffer;
+
+				if ((unsigned int)ptr >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
+					if ((unsigned int)comparator.buffer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT) {
+						size_t compare_size = field_type == ECS_ASSET_MESH ? sizeof(CoallescedMesh) : sizeof(Material);
+						return memcmp(ptr, comparator.buffer, compare_size) == 0;
+					}
+					else {
+						if (*(unsigned int*)ptr == (unsigned int)comparator.buffer) {
+							return true;
+						}
+					}
 				}
+				return false;
 			}
 			break;
 			case ECS_ASSET_TEXTURE: 
 			case ECS_ASSET_GPU_SAMPLER:
 			case ECS_ASSET_SHADER: 
-			case ECS_ASSET_MATERIAL:
 			{
 				return ptr == comparator.buffer;
 			}
@@ -753,7 +767,7 @@ namespace ECSEngine {
 
 			for (unsigned int index = 0; index < asset_fields.size; index++) {
 				ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflection(base_data->target_type, asset_fields[index].field_index, target_data, assets[index], asset_fields[index].type);
-				if (result != ECS_SET_ASSET_TARGET_FIELD_OK) {
+				if (result != ECS_SET_ASSET_TARGET_FIELD_OK && result != ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
 					return false;
 				}
 			}

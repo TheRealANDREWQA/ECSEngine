@@ -1779,11 +1779,11 @@ namespace ECSEngine {
 		dx_descriptor.BindFlags = GetGraphicsNativeBind(ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE);
 		dx_descriptor.CPUAccessFlags = GetGraphicsNativeCPUAccess(ECS_GRAPHICS_CPU_ACCESS_NONE);
 
-		dx_descriptor.MiscFlags = GetGraphicsNativeMiscFlags(ECS_GRAPHICS_MISC_GENERATE_MIPS);
+		dx_descriptor.MiscFlags = GetGraphicsNativeMiscFlags(/*ECS_GRAPHICS_MISC_GENERATE_MIPS | */ECS_GRAPHICS_MISC_SHARED);
 		dx_descriptor.Usage = GetGraphicsNativeUsage(ECS_GRAPHICS_USAGE_DEFAULT);
 		dx_descriptor.Width = size.x;
 		dx_descriptor.Height = size.y;
-		dx_descriptor.MipLevels = 0;
+		dx_descriptor.MipLevels = 1;
 
 		ID3D11Texture2D* texture_interface;
 		ID3D11ShaderResourceView* texture_view = nullptr;
@@ -1808,7 +1808,7 @@ namespace ECSEngine {
 		ECS_ASSERT(!FAILED(result), "Creating texture view from DXTex failed.");
 
 		// Generate mips
-		GetContext()->GenerateMips(texture_view);
+		//GetContext()->GenerateMips(texture_view);
 
 		if (!temporary) {
 			AddInternalResource(Texture2D(texture_interface), debug_info);

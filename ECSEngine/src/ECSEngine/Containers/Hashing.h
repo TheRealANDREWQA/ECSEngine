@@ -45,6 +45,14 @@ namespace ECSEngine {
 		// the temp_buffer and the append the suffix
 		static ResourceIdentifier WithSuffix(ResourceIdentifier base, CapacityStream<void> temp_buffer, Stream<void> suffix);
 
+		ECS_INLINE Stream<char> AsASCII() const {
+			return { ptr, size / sizeof(char) };
+		}
+
+		ECS_INLINE Stream<wchar_t> AsWide() const {
+			return { ptr, size / sizeof(wchar_t) };
+		}
+
 		const void* ptr;
 		unsigned int size;
 	};

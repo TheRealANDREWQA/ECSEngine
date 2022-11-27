@@ -15,41 +15,10 @@
 
 #define ECS_RESOURCE_MANAGER_CHECK_RESOURCE
 
-constexpr size_t ECS_RESOURCE_MANAGER_DEFAULT_RESOURCE_COUNT = 256;
-
 #define ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_INITIAL_SIZE ECS_MB
 #define ECS_RESOURCE_MANAGER_DEFAULT_MEMORY_BACKUP_SIZE (ECS_MB * 10)
 
 namespace ECSEngine {
-
-	ResourceType FromShaderTypeToResourceType(ECS_SHADER_TYPE shader_type) {
-		ResourceType type;
-		switch (shader_type)
-		{
-		case ECS_SHADER_VERTEX:
-			type = ResourceType::VertexShader;
-			break;
-		case ECS_SHADER_PIXEL:
-			type = ResourceType::PixelShader;
-			break;
-		case ECS_SHADER_DOMAIN:
-			type = ResourceType::DomainShader;
-			break;
-		case ECS_SHADER_HULL:
-			type = ResourceType::HullShader;
-			break;
-		case ECS_SHADER_GEOMETRY:
-			type = ResourceType::GeometryShader;
-			break;
-		case ECS_SHADER_COMPUTE:
-			type = ResourceType::ComputeShader;
-			break;
-		default:
-			ECS_ASSERT(false);
-			break;
-		}
-		return type;
-	}
 
 #define ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT 100
 
@@ -337,9 +306,8 @@ namespace ECSEngine {
 		DeallocateIfBelongs(allocator, storage->byte_code.buffer);
 	}
 
-	template<ECS_SHADER_TYPE shader_type>
 	void DeleteShader(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadShader<false>(index, shader_type, flags);
+		manager->UnloadShader<false>(index, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -355,6 +323,15 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	// These are just placeholders - they shouldn't be called
+	void UnloadTimeStamp(void* parameter, ResourceManager* resource_manager) {}
+
+	void DeleteTimeStamp(ResourceManager* manager, unsigned int index, size_t flags) {
+		manager->EvictResource(index, ResourceType::TimeStamp);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	constexpr DeleteFunction DELETE_FUNCTIONS[] = {
 		DeleteTexture, 
 		DeleteTextFile,
@@ -362,13 +339,9 @@ namespace ECSEngine {
 		DeleteCoallescedMesh,
 		DeleteMaterials,
 		DeletePBRMesh,
-		DeleteShader<ECS_SHADER_VERTEX>,
-		DeleteShader<ECS_SHADER_PIXEL>,
-		DeleteShader<ECS_SHADER_HULL>,
-		DeleteShader<ECS_SHADER_DOMAIN>,
-		DeleteShader<ECS_SHADER_GEOMETRY>,
-		DeleteShader<ECS_SHADER_COMPUTE>,
-		DeleteMisc
+		DeleteShader,
+		DeleteMisc,
+		DeleteTimeStamp
 	};
 	
 	constexpr UnloadFunction UNLOAD_FUNCTIONS[] = {
@@ -379,12 +352,8 @@ namespace ECSEngine {
 		UnloadMaterialsHandler,
 		UnloadPBRMeshHandler,
 		UnloadShaderHandler,
-		UnloadShaderHandler,
-		UnloadShaderHandler,
-		UnloadShaderHandler,
-		UnloadShaderHandler,
-		UnloadShaderHandler,
-		UnloadMisc
+		UnloadMisc,
+		UnloadTimeStamp
 	};
 
 	static_assert(std::size(DELETE_FUNCTIONS) == (unsigned int)ResourceType::TypeCount);
@@ -404,8 +373,7 @@ namespace ECSEngine {
 
 	ResourceManager::ResourceManager(
 		ResourceManagerAllocator* memory,
-		Graphics* graphics,
-		unsigned int thread_count
+		Graphics* graphics
 	) : m_memory(memory), m_graphics(graphics) {
 		m_resource_types.Initialize(m_memory, (unsigned int)ResourceType::TypeCount);
 		// Set to 0 the initial data for these resource types such that if a type is not being constructed but it is
@@ -444,11 +412,36 @@ namespace ECSEngine {
 
 		// The identifier needs to be allocated, account for the L'\0'
 		void* allocation = m_memory->Allocate(identifier.size + sizeof(wchar_t), alignof(wchar_t));
-		memcpy(allocation, identifier.ptr, identifier.size + sizeof(wchar_t));
+		memcpy(allocation, identifier.ptr, identifier.size);
 		identifier.ptr = allocation;
+		wchar_t* wide_allocation = (wchar_t*)allocation;
+		wide_allocation[identifier.size] = L'\0';
 
 		unsigned int resource_type_int = (unsigned int)resource_type;
 		InsertIntoDynamicTable(m_resource_types[resource_type_int], m_memory, entry, identifier);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	bool ResourceManager::AddTimeStamp(ResourceIdentifier identifier, size_t time_stamp, bool reference_counted, Stream<void> suffix)
+	{
+		if (reference_counted) {
+			time_stamp = time_stamp == 0 ? OS::GetFileLastWrite(identifier.AsWide()) : time_stamp;
+			AddResource(identifier, ResourceType::TimeStamp, nullptr, time_stamp, suffix);
+		}
+		else {
+			// Check to see if it exists and increment it if it does
+			unsigned int index = GetResourceIndex(identifier, ResourceType::TimeStamp, suffix);
+			if (index == -1) {
+				time_stamp = time_stamp == 0 ? OS::GetFileLastWrite(identifier.AsWide()) : time_stamp;
+				AddResource(identifier, ResourceType::TimeStamp, nullptr, time_stamp, suffix, 1);
+				return true;
+			}
+			else {
+				IncrementReferenceCount(ResourceType::TimeStamp, index, 1);
+			}
+		}
+		return false;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -488,6 +481,17 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
+	size_t ResourceManager::ChangeTimeStamp(ResourceIdentifier identifier, ResourceType resource_type, size_t new_time_stamp, Stream<void> suffix)
+	{
+		ResourceManagerEntry* entry = GetEntryPtr(identifier, resource_type, suffix);
+		ECS_ASSERT(entry != nullptr);
+		size_t old_time_stamp = entry->time_stamp;
+		entry->time_stamp = new_time_stamp;
+		return old_time_stamp;
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
 	void ResourceManager::Deallocate(const void* data)
 	{
 		m_memory->Deallocate(data);
@@ -503,7 +507,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool delete_if_zero>
-	void ResourceManager::DecrementReferenceCount(ResourceType type, unsigned int amount)
+	void ResourceManager::DecrementReferenceCounts(ResourceType type, unsigned int amount)
 	{
 		unsigned int type_int = (unsigned int)type;
 		m_resource_types[type_int].ForEachIndex([&](unsigned int index) {
@@ -523,7 +527,15 @@ namespace ECSEngine {
 		});
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::DecrementReferenceCount, ResourceType, unsigned int);
+	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::DecrementReferenceCounts, ResourceType, unsigned int);
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	bool ResourceManager::DecrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned int amount)
+	{
+		ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
+		return entry->data_pointer.DecrementData(amount) == 0;
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -564,12 +576,20 @@ namespace ECSEngine {
 		unsigned int table_index = m_resource_types[type_int].Find(identifier);
 		ECS_ASSERT(table_index != -1, "Trying to evict a resource from ResourceManager that doesn't exist.");
 
-		ResourceManagerEntry entry = m_resource_types[type_int].GetValueFromIndex(table_index);
-		identifier = m_resource_types[type_int].GetIdentifierFromIndex(table_index);
+		EvictResource(table_index, type);;
+	}
 
-		void* data = entry.data_pointer.GetPointer();
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::EvictResource(unsigned int index, ResourceType type)
+	{
+		unsigned int type_int = (unsigned int)type;
+
+		ResourceManagerEntry entry = m_resource_types[type_int].GetValueFromIndex(index);
+		ResourceIdentifier identifier = m_resource_types[type_int].GetIdentifierFromIndex(index);
+
 		Deallocate(identifier.ptr);
-		m_resource_types[type_int].EraseFromIndex(table_index);
+		m_resource_types[type_int].EraseFromIndex(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -593,7 +613,8 @@ namespace ECSEngine {
 		// Iterate through all resources and check their new stamps
 		m_resource_types[int_type].ForEachIndex([&](unsigned int index) {
 			// Get the new stamp
-			size_t new_stamp = OS::GetFileLastWrite((const wchar_t*)m_resource_types[int_type].GetIdentifierFromIndex(index).ptr);
+			ResourceIdentifier identifier = m_resource_types[int_type].GetIdentifierFromIndex(index);
+			size_t new_stamp = OS::GetFileLastWrite({ identifier.ptr, identifier.size / sizeof(wchar_t) });
 			if (new_stamp > m_resource_types[int_type].GetValueFromIndex(index).time_stamp) {
 				// Kick this resource
 				DELETE_FUNCTIONS[int_type](this, index, 1);
@@ -603,6 +624,36 @@ namespace ECSEngine {
 
 			return false;
 		});
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	Stream<ResourceIdentifier> ResourceManager::EvictOutdatedResources(ResourceType type, AllocatorPolymorphic allocator)
+	{
+		unsigned int int_type = (unsigned int)type;
+		
+		Stream<ResourceIdentifier> identifiers;
+		identifiers.Resize(allocator, m_resource_types[int_type].GetCount());
+		identifiers.size = 0;
+
+		// Iterate through all resources and check their new stamps
+		m_resource_types[int_type].ForEachIndex([&](unsigned int index) {
+			// Get the new stamp
+			ResourceIdentifier identifier = m_resource_types[int_type].GetIdentifierFromIndex(index);
+			size_t new_stamp = OS::GetFileLastWrite({ identifier.ptr, identifier.size / sizeof(wchar_t) });
+			if (new_stamp > m_resource_types[int_type].GetValueFromIndex(index).time_stamp) {
+				identifiers.Add(identifier.Copy(allocator));
+
+				// Kick this resource
+				DELETE_FUNCTIONS[int_type](this, index, 1);
+				// Decrement the index because other resources can move into this place
+				return true;
+			}
+
+			return false;
+		});
+
+		return identifiers;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -684,7 +735,18 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::IncrementReferenceCount(ResourceType type, unsigned int amount)
+	void ResourceManager::IncrementReferenceCount(ResourceType type, unsigned int resource_index, unsigned int amount)
+	{
+		ResourceManagerEntry* entry = m_resource_types[(unsigned int)type].GetValuePtrFromIndex(resource_index);
+		unsigned short count = entry->data_pointer.IncrementData(amount);
+		if (count == USHORT_MAX) {
+			entry->data_pointer.SetData(USHORT_MAX - 1);
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	void ResourceManager::IncrementReferenceCounts(ResourceType type, unsigned int amount)
 	{
 		unsigned int type_int = (unsigned int)type;
 		m_resource_types[type_int].ForEach([&](ResourceManagerEntry& entry, ResourceIdentifier identifier) {
@@ -720,12 +782,7 @@ namespace ECSEngine {
 							AddResource(identifier, (ResourceType)index, entry.data_pointer.GetPointer(), entry.time_stamp, { nullptr, 0 }, entry.data_pointer.GetData());
 						});
 						break;
-					case ResourceType::VertexShader:
-					case ResourceType::ComputeShader:
-					case ResourceType::DomainShader:
-					case ResourceType::GeometryShader:
-					case ResourceType::HullShader:
-					case ResourceType::PixelShader:
+					case ResourceType::Shader:
 						table.ForEachConst([&](const ResourceManagerEntry& entry, ResourceIdentifier identifier) {
 							// Need to transfer the shader
 						});
@@ -951,6 +1008,8 @@ namespace ECSEngine {
 				graphics_descriptor.mip_data = { &decoded_texture.data, 1 };
 				graphics_descriptor.mip_levels = 1;
 				graphics_descriptor.format = decoded_texture.format;
+				graphics_descriptor.misc_flag = descriptor->misc_flags;
+				graphics_descriptor.usage = descriptor->usage;
 
 				Texture2D texture = m_graphics->CreateTexture(&graphics_descriptor, temporary);
 				texture_view = m_graphics->CreateTextureShaderViewResource(texture, temporary);
@@ -958,7 +1017,6 @@ namespace ECSEngine {
 		}
 
 		AddResourceEx(this, ResourceType::Texture, texture_view.view, load_descriptor, ex_desc);
-
 		return texture_view;
 	}
 
@@ -1300,16 +1358,19 @@ namespace ECSEngine {
 		ECS_ASSERT(user_material->vertex_shader.size > 0, "User material needs vertex shader.");
 		ECS_ASSERT(user_material->pixel_shader.size > 0, "User material needs pixel shader.");
 
-		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_LOAD);
+		bool dont_load = function::HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 
 		Stream<char> source_code = { nullptr, 0 };
 		Stream<void> byte_code;
+
+		ShaderInterface vertex_shader = { nullptr };
 		if (dont_load) {
-			converted_material->vertex_shader = LoadVertexShaderImplementation(user_material->vertex_shader, &source_code, &byte_code, user_material->vertex_compile_options, load_descriptor);
+			vertex_shader = LoadShaderImplementation(user_material->vertex_shader, ECS_SHADER_VERTEX, &source_code, &byte_code, user_material->vertex_compile_options, load_descriptor);
 		}
 		else {
-			converted_material->vertex_shader = *LoadVertexShader<true>(user_material->vertex_shader, &source_code, &byte_code, user_material->vertex_compile_options, load_descriptor);
+			vertex_shader = LoadShader<true>(user_material->vertex_shader, ECS_SHADER_VERTEX, &source_code, &byte_code, user_material->vertex_compile_options, load_descriptor);
 		}
+		converted_material->vertex_shader = vertex_shader;
 
 		if (converted_material->vertex_shader.shader == nullptr) {
 			return false;
@@ -1330,10 +1391,10 @@ namespace ECSEngine {
 		Deallocate(source_code.buffer);
 
 		if (dont_load) {
-			converted_material->pixel_shader = LoadPixelShaderImplementation(user_material->pixel_shader, nullptr, user_material->pixel_compile_options, load_descriptor);
+			converted_material->pixel_shader = LoadShaderImplementation(user_material->pixel_shader, ECS_SHADER_PIXEL, nullptr, nullptr, user_material->pixel_compile_options, load_descriptor);
 		}
 		else {
-			converted_material->pixel_shader = *LoadPixelShader<true>(user_material->pixel_shader, nullptr, user_material->pixel_compile_options, load_descriptor);
+			converted_material->pixel_shader = LoadShader<true>(user_material->pixel_shader, ECS_SHADER_PIXEL, nullptr, nullptr, user_material->pixel_compile_options, load_descriptor);
 		}
 
 		auto deallocate_vertex_shader = [&]() {
@@ -1342,7 +1403,7 @@ namespace ECSEngine {
 				UnloadShaderImplementation(converted_material->vertex_shader.Interface(), ECS_SHADER_VERTEX);
 			}
 			else {
-				UnloadVertexShader<true>(user_material->vertex_shader);
+				UnloadShader<true>(user_material->vertex_shader);
 			}
 		};
 
@@ -1356,7 +1417,7 @@ namespace ECSEngine {
 				UnloadShaderImplementation(converted_material->pixel_shader.Interface(), ECS_SHADER_PIXEL);
 			}
 			else {
-				UnloadPixelShader<true>(user_material->pixel_shader);
+				UnloadShader<true>(user_material->pixel_shader);
 			}
 		};
 
@@ -1525,7 +1586,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void* LoadShaderInternalImplementation(ResourceManager* manager, Stream<wchar_t> filename, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor,
+	ShaderInterface LoadShaderInternalImplementation(ResourceManager* manager, Stream<wchar_t> filename, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor,
 		Stream<char>* shader_source_code, Stream<void>* byte_code, ECS_SHADER_TYPE type) {
 		Path path_extension = function::PathExtensionBoth(filename);
 		bool is_byte_code = function::CompareStrings(path_extension, L".cso");
@@ -1560,11 +1621,11 @@ namespace ECSEngine {
 			*shader_source_code = Stream<char>(contents.buffer, contents.size);
 		}
 
-		return shader;
+		return { shader };
 	}
 
 	// Convert from source code to shader
-	void* LoadShaderInternalImplementationEx(
+	ShaderInterface LoadShaderInternalImplementationEx(
 		ResourceManager* manager,
 		Stream<char> source_code,
 		ECS_SHADER_TYPE shader_type,
@@ -1573,8 +1634,6 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_descriptor,
 		ResourceManagerExDesc* ex_desc
 	) {
-		ResourceType type = FromShaderTypeToResourceType(shader_type);
-
 		ShaderIncludeFiles include(manager->m_memory, manager->m_shader_directory);
 		void* shader = manager->m_graphics->CreateShaderFromSource(
 			source_code,
@@ -1594,224 +1653,18 @@ namespace ECSEngine {
 			storage->shader = (ID3D11VertexShader*)shader;
 			storage->source_code = { nullptr, 0 };
 			storage->byte_code = { nullptr, 0 };
-			manager->AddResource(ex_desc->filename, type, allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix);
+			manager->AddResource(ex_desc->filename, ResourceType::Shader, allocation, ex_desc->time_stamp, load_descriptor.identifier_suffix);
 
 			ex_desc->Unlock();
 		}
 
-		return shader;
+		return { shader };
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	VertexShader* ResourceManager::LoadVertexShader(
-		Stream<wchar_t> filename, 
-		Stream<char>* source_code,
-		Stream<void>* byte_code,
-		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return (VertexShader*)LoadShader<reference_counted>(filename, ECS_SHADER_COMPUTE, source_code, byte_code, options, load_descriptor);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(VertexShader*, ResourceManager::LoadVertexShader, Stream<wchar_t>, Stream<char>*, Stream<void>*, ShaderCompileOptions, ResourceManagerLoadDesc);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	VertexShader ResourceManager::LoadVertexShaderImplementation(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code, 
-		Stream<void>* byte_code,
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return VertexShader::FromInterface(LoadShaderImplementation(filename, ECS_SHADER_VERTEX, shader_source_code, byte_code, options, load_descriptor));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	VertexShader ResourceManager::LoadVertexShaderImplementationEx(
-		Stream<char> source_code, 
-		Stream<void>* byte_code,
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor, 
-		ResourceManagerExDesc* ex_desc
-	)
-	{
-		return VertexShader::FromInterface(LoadShaderImplementationEx(source_code, ECS_SHADER_VERTEX, byte_code, options, load_descriptor, ex_desc));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	PixelShader* ResourceManager::LoadPixelShader(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return (PixelShader*)LoadShader<reference_counted>(filename, ECS_SHADER_PIXEL, shader_source_code, nullptr, options, load_descriptor);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(PixelShader*, ResourceManager::LoadPixelShader, Stream<wchar_t>, Stream<char>*, ShaderCompileOptions, ResourceManagerLoadDesc);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	PixelShader ResourceManager::LoadPixelShaderImplementation(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return PixelShader::FromInterface(LoadShaderImplementation(filename, ECS_SHADER_PIXEL, shader_source_code, nullptr, options, load_descriptor));
-	}
-
-	PixelShader ResourceManager::LoadPixelShaderImplementationEx(Stream<char> source_code, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
-	{
-		return PixelShader::FromInterface(LoadShaderImplementationEx(source_code, ECS_SHADER_PIXEL, nullptr, options, load_descriptor, ex_desc));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	HullShader* ResourceManager::LoadHullShader(
-		Stream<wchar_t> filename,
-		Stream<char>* shader_source_code, 
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return (HullShader*)LoadShader<reference_counted>(filename, ECS_SHADER_HULL, shader_source_code, nullptr, options, load_descriptor);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(HullShader*, ResourceManager::LoadHullShader, Stream<wchar_t>, Stream<char>*, ShaderCompileOptions, ResourceManagerLoadDesc);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	HullShader ResourceManager::LoadHullShaderImplementation(
-		Stream<wchar_t> filename,
-		Stream<char>* shader_source_code, 
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return HullShader::FromInterface(LoadShaderImplementation(filename, ECS_SHADER_HULL, shader_source_code, nullptr, options, load_descriptor));
-	}
-
-	HullShader ResourceManager::LoadHullShaderImplementationEx(Stream<char> source_code, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
-	{
-		return HullShader::FromInterface(LoadShaderImplementationEx(source_code, ECS_SHADER_HULL, nullptr, options, load_descriptor, ex_desc));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	DomainShader* ResourceManager::LoadDomainShader(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return (DomainShader*)LoadShader<reference_counted>(filename, ECS_SHADER_DOMAIN, shader_source_code, nullptr, options, load_descriptor);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(DomainShader*, ResourceManager::LoadDomainShader, Stream<wchar_t>, Stream<char>*, ShaderCompileOptions, ResourceManagerLoadDesc);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	DomainShader ResourceManager::LoadDomainShaderImplementation(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options, 
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return DomainShader::FromInterface(LoadShaderImplementation(filename, ECS_SHADER_DOMAIN, shader_source_code, nullptr, options, load_descriptor));
-	}
-
-	DomainShader ResourceManager::LoadDomainShaderImplementationEx(Stream<char> source_code, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
-	{
-		return DomainShader::FromInterface(LoadShaderImplementationEx(source_code, ECS_SHADER_DOMAIN, nullptr, options, load_descriptor, ex_desc));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	GeometryShader* ResourceManager::LoadGeometryShader(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return (GeometryShader*)LoadShader<reference_counted>(filename, ECS_SHADER_GEOMETRY, shader_source_code, nullptr, options, load_descriptor);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(GeometryShader*, ResourceManager::LoadGeometryShader, Stream<wchar_t>, Stream<char>*, ShaderCompileOptions, ResourceManagerLoadDesc);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	GeometryShader ResourceManager::LoadGeometryShaderImplementation(
-		Stream<wchar_t> filename,
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return GeometryShader::FromInterface(LoadShaderImplementation(filename, ECS_SHADER_GEOMETRY, shader_source_code, nullptr, options, load_descriptor));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	GeometryShader ResourceManager::LoadGeometryShaderImplementationEx(Stream<char> source_code, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
-	{
-		return GeometryShader::FromInterface(LoadShaderImplementationEx(source_code, ECS_SHADER_GEOMETRY, nullptr, options, load_descriptor, ex_desc));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	ComputeShader* ResourceManager::LoadComputeShader(
-		Stream<wchar_t> filename,
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return (ComputeShader*)LoadShader<reference_counted>(filename, ECS_SHADER_COMPUTE, shader_source_code, nullptr, options, load_descriptor);
-	}
-
-	ECS_TEMPLATE_FUNCTION_BOOL(ComputeShader*, ResourceManager::LoadComputeShader, Stream<wchar_t>, Stream<char>*, ShaderCompileOptions, ResourceManagerLoadDesc);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	ComputeShader ResourceManager::LoadComputeShaderImplementation(
-		Stream<wchar_t> filename, 
-		Stream<char>* shader_source_code,
-		ShaderCompileOptions options,
-		ResourceManagerLoadDesc load_descriptor
-	)
-	{
-		return ComputeShader::FromInterface(LoadShaderImplementation(filename, ECS_SHADER_COMPUTE, shader_source_code, nullptr, options, load_descriptor));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	ComputeShader ResourceManager::LoadComputeShaderImplementationEx(Stream<char> source_code, ShaderCompileOptions options, ResourceManagerLoadDesc load_descriptor, ResourceManagerExDesc* ex_desc)
-	{
-		return ComputeShader::FromInterface(LoadShaderImplementationEx(source_code, ECS_SHADER_COMPUTE, nullptr, options, load_descriptor, ex_desc));
-	}
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void* ResourceManager::LoadShader(
+	ShaderInterface ResourceManager::LoadShader(
 		Stream<wchar_t> filename, 
 		ECS_SHADER_TYPE shader_type, 
 		Stream<char>* shader_source_code,
@@ -1820,8 +1673,6 @@ namespace ECSEngine {
 		ResourceManagerLoadDesc load_descriptor
 	)
 	{
-		ResourceType type = FromShaderTypeToResourceType(shader_type);
-
 		bool _is_loaded_first_time = false;
 		bool* is_loaded_first_time = load_descriptor.reference_counted_is_loaded != nullptr ? load_descriptor.reference_counted_is_loaded : &_is_loaded_first_time;
 
@@ -1829,12 +1680,12 @@ namespace ECSEngine {
 		void* shader = LoadResource<reference_counted>(
 			this,
 			filename,
-			type,
+			ResourceType::Shader,
 			sizeof(VertexShaderStorage),
 			load_descriptor,
 			[=](void* allocation) {
 				VertexShaderStorage* shader = (VertexShaderStorage*)allocation;
-				shader->shader = (ID3D11VertexShader*)LoadShaderImplementation(filename, shader_type, shader_source_code, byte_code, options, load_descriptor);
+				shader->shader = LoadShaderImplementation(filename, shader_type, shader_source_code, byte_code, options, load_descriptor);
 
 				if (shader_source_code != nullptr) {
 					shader->source_code = *shader_source_code;
@@ -1884,14 +1735,14 @@ namespace ECSEngine {
 			}
 		}
 
-		return shader;
+		return { shader };
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void*, ResourceManager::LoadShader, Stream<wchar_t>, ECS_SHADER_TYPE, Stream<char>*, Stream<void>*, ShaderCompileOptions, ResourceManagerLoadDesc);
+	ECS_TEMPLATE_FUNCTION_BOOL(ShaderInterface, ResourceManager::LoadShader, Stream<wchar_t>, ECS_SHADER_TYPE, Stream<char>*, Stream<void>*, ShaderCompileOptions, ResourceManagerLoadDesc);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void* ResourceManager::LoadShaderImplementation(
+	ShaderInterface ResourceManager::LoadShaderImplementation(
 		Stream<wchar_t> filename, 
 		ECS_SHADER_TYPE shader_type, 
 		Stream<char>* shader_source_code, 
@@ -1905,7 +1756,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void* ResourceManager::LoadShaderImplementationEx(
+	ShaderInterface ResourceManager::LoadShaderImplementationEx(
 		Stream<char> source_code,
 		ECS_SHADER_TYPE shader_type, 
 		Stream<void>* byte_code,
@@ -1950,11 +1801,13 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource)
+	void ResourceManager::RebindResource(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
-
 		ResourceManagerEntry* entry;
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
+		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
 		ECS_ASSERT(success, "Could not rebind resource");
 
@@ -1967,10 +1820,13 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource)
+	void ResourceManager::RebindResourceNoDestruction(ResourceIdentifier identifier, ResourceType resource_type, void* new_resource, Stream<void> suffix)
 	{
 		unsigned int int_type = (unsigned int)resource_type;
 		ResourceManagerEntry* entry;
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
+		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 		bool success = m_resource_types[int_type].TryGetValuePtr(identifier, entry);
 
 		ECS_ASSERT(success, "Could not rebind resource");
@@ -1981,14 +1837,36 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	void ResourceManager::RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type)
+	void ResourceManager::RemoveReferenceCountForResource(ResourceIdentifier identifier, ResourceType resource_type, Stream<void> suffix)
 	{
 		unsigned int type_index = (unsigned int)resource_type;
 		ResourceManagerEntry* entry;
+
+		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
+		identifier = ResourceIdentifier::WithSuffix(identifier, fully_specified_identifier, suffix);
 		bool success = m_resource_types[type_index].TryGetValuePtr(identifier, entry);
 
 		ECS_ASSERT(success, "Could not remove reference count for resource");
 		entry->data_pointer.SetData(USHORT_MAX);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------------------
+
+	bool ResourceManager::RemoveTimeStamp(ResourceIdentifier identifier, bool reference_count, Stream<void> suffix)
+	{
+		unsigned int resource_index = GetResourceIndex(identifier, ResourceType::TimeStamp, suffix);
+		ECS_ASSERT(resource_index != -1);
+
+		if (reference_count) {
+			if (DecrementReferenceCount(ResourceType::TimeStamp, resource_index, 1)) {
+				EvictResource(resource_index, ResourceType::TimeStamp);
+				return true;
+			}
+		}
+		else {
+			EvictResource(resource_index, ResourceType::TimeStamp);
+		}
+		return false;
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -2096,14 +1974,14 @@ namespace ECSEngine {
 
 	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, ResourceManagerLoadDesc load_desc)
 	{
-		bool dont_load = function::HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_LOAD);
+		bool dont_load = function::HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS);
 		if (dont_load) {
 			UnloadShaderImplementation(material->vertex_shader.Interface(), ECS_SHADER_VERTEX);
 			UnloadShaderImplementation(material->pixel_shader.Interface(), ECS_SHADER_PIXEL);
 		}
 		else {
-			UnloadVertexShader<true>(user_material->vertex_shader, load_desc);
-			UnloadPixelShader<true>(user_material->pixel_shader, load_desc);
+			UnloadShader<true>(user_material->vertex_shader, load_desc);
+			UnloadShader<true>(user_material->pixel_shader, load_desc);
 		}
 		m_graphics->FreeResource(material->layout);
 
@@ -2179,186 +2057,22 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadVertexShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
 	{
-		UnloadResource<reference_counted>(filename, ResourceType::VertexShader, load_desc);
+		UnloadResource<reference_counted>(filename, ResourceType::Shader, load_desc);
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadVertexShader(unsigned int index, size_t flags)
+	void ResourceManager::UnloadShader(unsigned int index, size_t flags)
 	{
-		UnloadResource<reference_counted>(index, ResourceType::VertexShader, flags);
+		UnloadResource<reference_counted>(index, ResourceType::Shader, flags);
 	}
 
-	EXPORT_UNLOAD(UnloadVertexShader);
+	EXPORT_UNLOAD(UnloadShader);
 
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadPixelShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
+	void ResourceManager::UnloadShaderImplementation(void* shader_interface, size_t flags)
 	{
-		UnloadResource<reference_counted>(filename, ResourceType::PixelShader, load_desc);
-	}
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadPixelShader(unsigned int index, size_t flags)
-	{
-		UnloadResource<reference_counted>(index, ResourceType::PixelShader, flags);
-	}
-
-	EXPORT_UNLOAD(UnloadPixelShader);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadHullShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
-	{
-		UnloadResource<reference_counted>(filename, ResourceType::HullShader, load_desc);
-	}
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadHullShader(unsigned int index, size_t flags)
-	{
-		UnloadResource<reference_counted>(index, ResourceType::HullShader, flags);
-	}
-
-	EXPORT_UNLOAD(UnloadHullShader);
-	
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadDomainShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
-	{
-		UnloadResource<reference_counted>(filename, ResourceType::DomainShader, load_desc);
-	}
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadDomainShader(unsigned int index, size_t flags)
-	{
-		UnloadResource<reference_counted>(index, ResourceType::DomainShader, flags);
-	}
-
-	EXPORT_UNLOAD(UnloadDomainShader);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadGeometryShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
-	{
-		UnloadResource<reference_counted>(filename, ResourceType::GeometryShader, load_desc);
-	}
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadGeometryShader(unsigned int index, size_t flags)
-	{
-		UnloadResource<reference_counted>(index, ResourceType::GeometryShader, flags);
-	}
-
-	EXPORT_UNLOAD(UnloadGeometryShader);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadComputeShader(Stream<wchar_t> filename, ResourceManagerLoadDesc load_desc)
-	{
-		UnloadResource<reference_counted>(filename, ResourceType::ComputeShader, load_desc);
-	}
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadComputeShader(unsigned int index, size_t flags)
-	{
-		UnloadResource<reference_counted>(index, ResourceType::ComputeShader, flags);
-	}
-
-	EXPORT_UNLOAD(UnloadComputeShader);
-
-	// ---------------------------------------------------------------------------------------------------------------------------
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadShader(Stream<wchar_t> filename, ECS_SHADER_TYPE type, ResourceManagerLoadDesc load_desc)
-	{
-		switch (type) {
-		case ECS_SHADER_VERTEX:
-			UnloadVertexShader(filename, load_desc);
-			break;
-		case ECS_SHADER_PIXEL:
-			UnloadPixelShader(filename, load_desc);
-			break;
-		case ECS_SHADER_GEOMETRY:
-			UnloadGeometryShader(filename, load_desc);
-			break;
-		case ECS_SHADER_HULL:
-			UnloadHullShader(filename, load_desc);
-			break;
-		case ECS_SHADER_DOMAIN:
-			UnloadDomainShader(filename, load_desc);
-			break;
-		case ECS_SHADER_COMPUTE:
-			UnloadComputeShader(filename, load_desc);
-			break;
-		default:
-			ECS_ASSERT(false);
-		}
-	}
-	
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadShader, Stream<wchar_t>, ECS_SHADER_TYPE, ResourceManagerLoadDesc);
-
-	template<bool reference_counted>
-	void ResourceManager::UnloadShader(unsigned int index, ECS_SHADER_TYPE type, size_t flags)
-	{
-		switch (type) {
-		case ECS_SHADER_VERTEX:
-			UnloadVertexShader(index, flags);
-			break;
-		case ECS_SHADER_PIXEL:
-			UnloadPixelShader(index, flags);
-			break;
-		case ECS_SHADER_GEOMETRY:
-			UnloadGeometryShader(index, flags);
-			break;
-		case ECS_SHADER_HULL:
-			UnloadHullShader(index, flags);
-			break;
-		case ECS_SHADER_DOMAIN:
-			UnloadDomainShader(index, flags);
-			break;
-		case ECS_SHADER_COMPUTE:
-			UnloadComputeShader(index, flags);
-			break;
-		default:
-			ECS_ASSERT(false);
-		}
-	}
-	
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadShader, unsigned int, ECS_SHADER_TYPE, size_t);
-
-	void ResourceManager::UnloadShaderImplementation(void* shader_interface, ECS_SHADER_TYPE type, size_t flags)
-	{
-		ResourceType resource_type;
-		switch (type) {
-		case ECS_SHADER_VERTEX:
-			resource_type = ResourceType::VertexShader;
-			break;
-		case ECS_SHADER_PIXEL:
-			resource_type = ResourceType::PixelShader;
-			break;
-		case ECS_SHADER_GEOMETRY:
-			resource_type = ResourceType::GeometryShader;
-			break;
-		case ECS_SHADER_HULL:
-			resource_type = ResourceType::HullShader;
-			break;
-		case ECS_SHADER_DOMAIN:
-			resource_type = ResourceType::DomainShader;
-			break;
-		case ECS_SHADER_COMPUTE:
-			resource_type = ResourceType::ComputeShader;
-			break;
-		default:
-			ECS_ASSERT(false);
-		}
-
-		UnloadResourceImplementation(shader_interface, resource_type, flags);
+		UnloadResourceImplementation(shader_interface, ResourceType::Shader, flags);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -2607,7 +2321,7 @@ namespace ECSEngine {
 
 		Stream<char> shader_source;
 		Stream<void> byte_code;
-		material->vertex_shader = resource_manager->LoadVertexShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), &shader_source, &byte_code);
+		material->vertex_shader = resource_manager->LoadShaderImplementation(ECS_VERTEX_SHADER_SOURCE(PBR), ECS_SHADER_VERTEX, &shader_source, &byte_code);
 		ECS_ASSERT(material->vertex_shader.shader != nullptr);
 		material->layout = resource_manager->m_graphics->ReflectVertexShaderInput(shader_source, byte_code);
 		bool success = resource_manager->m_graphics->ReflectVertexBufferMapping(shader_source, vertex_mappings);
@@ -2616,7 +2330,7 @@ namespace ECSEngine {
 		material->vertex_buffer_mapping_count = vertex_mappings.size;
 		resource_manager->Deallocate(shader_source.buffer);
 
-		material->pixel_shader = resource_manager->LoadPixelShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), nullptr, options);
+		material->pixel_shader = resource_manager->LoadShaderImplementation(ECS_PIXEL_SHADER_SOURCE(PBR), ECS_SHADER_PIXEL, nullptr, nullptr, options);
 		ECS_ASSERT(material->pixel_shader.shader != nullptr);
 
 		material->v_buffers[0] = Shaders::CreatePBRVertexConstants(resource_manager->m_graphics);

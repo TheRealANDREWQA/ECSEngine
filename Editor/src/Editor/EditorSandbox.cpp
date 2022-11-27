@@ -325,7 +325,7 @@ void CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->is_scene_dirty = false;
 
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
-	sandbox->is_locked = false;
+	sandbox->locked_count = 0;
 
 	// Initialize the runtime settings string
 	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
@@ -381,78 +381,45 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-struct DestroySandboxEventData {
-	GlobalMemoryManager* sandbox_global_manager;
-};
+void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	ECS_ASSERT(!IsSandboxLocked(editor_state, sandbox_index));
 
-EDITOR_EVENT(DestroySandboxEvent) {
-	DestroySandboxEventData* data = (DestroySandboxEventData*)_data;
-
-	unsigned int sandbox_index = 0;
-	for (; sandbox_index < editor_state->sandboxes.size; sandbox_index++) {
-		if (editor_state->sandboxes[sandbox_index].GlobalMemoryManager() == data->sandbox_global_manager) {
-			break;
-		}
-	}
-
-	if (sandbox_index == editor_state->sandboxes.size) {
-		// There is no match, exit
-		return false;
-	}
-
-	if (!IsSandboxLocked(editor_state, sandbox_index)) {
-		DestroySandbox(editor_state, sandbox_index);
-		return false;
-	}
-	else {
-		return true;
-	}
-}
-
-bool DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool push_event) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	
-	if (!IsSandboxLocked(editor_state, sandbox_index)) {
-		// Destroy the reflected settings
-		for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-			DestroyModuleSettings(
-				editor_state,
-				sandbox->modules_in_use[index].module_index,
-				sandbox->modules_in_use[index].reflected_settings,
-				index
-			);
-		}
+	// Unload the sandbox assets
+	UnloadSandboxAssets(editor_state, sandbox_index);
 
-		// Destroy the sandbox runtime
-		DestroySandboxRuntime(editor_state, sandbox_index);
-
-		// Free the global sandbox allocator
-		sandbox->GlobalMemoryManager()->Free();
-
-		// Release the runtime settings path as well - it was allocated from the editor allocator
-		editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
-
-		unsigned int previous_count = editor_state->sandboxes.size;
-		editor_state->sandboxes.RemoveSwapBack(sandbox_index);
-
-		// Notify the UI and the inspector
-		if (editor_state->sandboxes.size > 0) {
-			FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
-			UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
-			UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
-			UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
-		}
-
-		RegisterInspectorSandbox(editor_state);
-		return true;
+	// Destroy the reflected settings
+	for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
+		DestroyModuleSettings(
+			editor_state,
+			sandbox->modules_in_use[index].module_index,
+			sandbox->modules_in_use[index].reflected_settings,
+			index
+		);
 	}
-	else {
-		if (push_event) {
-			DestroySandboxEventData event_data{ sandbox->GlobalMemoryManager() };
-			EditorAddEvent(editor_state, DestroySandboxEvent, &event_data, sizeof(event_data));
-		}
+
+	// Destroy the sandbox runtime
+	DestroySandboxRuntime(editor_state, sandbox_index);
+
+	// Free the global sandbox allocator
+	sandbox->GlobalMemoryManager()->Free();
+
+	// Release the runtime settings path as well - it was allocated from the editor allocator
+	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
+
+	unsigned int previous_count = editor_state->sandboxes.size;
+	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
+
+	// Notify the UI and the inspector
+	if (editor_state->sandboxes.size > 0) {
+		FixInspectorSandboxReference(editor_state, previous_count, sandbox_index);
+		UpdateGameUIWindowIndex(editor_state, previous_count, sandbox_index);
+		UpdateSceneUIWindowIndex(editor_state, previous_count, sandbox_index);
+		UpdateEntitiesUITargetSandbox(editor_state, previous_count, sandbox_index);
 	}
-	return false;
+
+	RegisterInspectorSandbox(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -579,7 +546,7 @@ bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigne
 
 bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index)
 {
-	return GetSandbox(editor_state, sandbox_index)->is_locked;
+	return GetSandbox(editor_state, sandbox_index)->locked_count.load(ECS_RELAXED) > 0;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -863,7 +830,6 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 			}
 		}
 
-		WaitSandboxUnlock(editor_state);
 		// Deallocate all the current sandboxes if any
 		size_t initial_sandbox_count = editor_state->sandboxes.size;
 		for (size_t index = 0; index < initial_sandbox_count; index++) {
@@ -923,7 +889,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 void LockSandbox(EditorState* editor_state, unsigned int sandbox_index)
 {
-	GetSandbox(editor_state, sandbox_index)->is_locked = true;
+	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_add(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1289,24 +1255,22 @@ bool UpdateRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> file
 
 void UnlockSandbox(EditorState* editor_state, unsigned int sandbox_index)
 {
-	GetSandbox(editor_state, sandbox_index)->is_locked = false;
+	GetSandbox(editor_state, sandbox_index)->locked_count.fetch_sub(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void WaitSandboxUnlock(EditorState* editor_state, unsigned int sandbox_index)
+void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_index)
 {
 	if (sandbox_index == -1) {
 		for (unsigned int index = 0; index < editor_state->sandboxes.size; index++) {
-			while (IsSandboxLocked(editor_state, index)) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(15));
-			}
+			const EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			TickWait<'!'>(15, sandbox->locked_count, (unsigned char)0);
 		}
 	}
 	else {
-		while (IsSandboxLocked(editor_state, sandbox_index)) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(15));
-		}
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		TickWait<'!'>(15, sandbox->locked_count, (unsigned char)0);
 	}
 }
 

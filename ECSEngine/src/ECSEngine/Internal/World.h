@@ -29,17 +29,17 @@ namespace ECSEngine {
 
 		// If the graphics descriptor is specified, then it will construct a Graphics object
 		// from the given descriptor
-		Graphics* graphics; ECS_SKIP_REFLECTION(static_assert(sizeof(Graphics*) == 8))
-		HID::Mouse* mouse; ECS_SKIP_REFLECTION(static_assert(sizeof(HID::Mouse*) == 8))
-		HID::Keyboard* keyboard; ECS_SKIP_REFLECTION(static_assert(sizeof(HID::Keyboard*) == 8))
-		TaskScheduler* task_scheduler; ECS_SKIP_REFLECTION(static_assert(sizeof(TaskScheduler*) == 8))
+		Graphics* graphics; ECS_SKIP_REFLECTION()
+		HID::Mouse* mouse; ECS_SKIP_REFLECTION()
+		HID::Keyboard* keyboard; ECS_SKIP_REFLECTION()
+		TaskScheduler* task_scheduler; ECS_SKIP_REFLECTION()
 		// This is optional. If you want to reuse the task manager among different worlds
 		// without having to reinitialize it, this is the way to do it
-		TaskManager* task_manager = nullptr; ECS_SKIP_REFLECTION(static_assert(sizeof(TaskManager*) == 8))
-		GraphicsDescriptor* graphics_descriptor = nullptr; ECS_SKIP_REFLECTION(static_assert(sizeof(GraphicsDescriptor*) == 8))
+		TaskManager* task_manager = nullptr; ECS_SKIP_REFLECTION()
+		GraphicsDescriptor* graphics_descriptor = nullptr; ECS_SKIP_REFLECTION()
 		// The resource manager is optional. If you want to give one from the outside can do.
 		// If it is nullptr then it will create an internal one
-		ResourceManager* resource_manager = nullptr; ECS_SKIP_REFLECTION(static_assert(sizeof(ResourceManager*) == 8))
+		ResourceManager* resource_manager = nullptr; ECS_SKIP_REFLECTION()
 	};
 
 	struct ECSENGINE_API World

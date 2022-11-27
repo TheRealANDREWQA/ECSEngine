@@ -523,6 +523,10 @@ namespace ECSEngine {
 		}
 
 		bool TryGetValue(Identifier identifier, T& value) const {
+			if (GetCount() == 0) {
+				return false;
+			}
+
 			unsigned int index = Find(identifier);
 			if (index != -1) {
 				value = GetValueFromIndex(index);
@@ -534,6 +538,10 @@ namespace ECSEngine {
 		}
 
 		bool TryGetValuePtr(Identifier identifier, T*& pointer) {
+			if (GetCount() == 0) {
+				return false;
+			}
+
 			unsigned int index = Find(identifier);
 			if (index != -1) {
 				pointer = GetValuePtrFromIndex(index);
@@ -545,6 +553,10 @@ namespace ECSEngine {
 		}
 
 		bool TryGetValuePtr(Identifier identifier, const T*& pointer) const {
+			if (GetCount() == 0) {
+				return false;
+			}
+
 			unsigned int index = Find(identifier);
 			if (index != -1) {
 				pointer = GetValuePtrFromIndex(index);

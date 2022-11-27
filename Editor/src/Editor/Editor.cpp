@@ -29,12 +29,6 @@ using namespace ECSEngine::Tools;
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "Shcore.lib")
 
-//ECS_OPTIMIZE_START;
-
-struct ECS_REFLECT MyComponent {
-	void* data; ECS_SKIP_REFLECTION(static_assert(sizeof(void*) == 8))
-};
-
 class Editor : public ECSEngine::Application {
 public:
 	Editor(int width, int height, LPCWSTR name);
@@ -947,7 +941,6 @@ public:
 		editor_state.task_manager->SleepUntilDynamicTasksFinish();
 		unsigned int sandbox_count = editor_state.sandboxes.size;
 
-		WaitSandboxUnlock(&editor_state);
 		for (size_t index = 0; index < sandbox_count; index++) {
 			DestroySandbox(&editor_state, 0);
 		}
@@ -1091,6 +1084,7 @@ Editor::Editor(int _width, int _height, LPCWSTR name)
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
 }
+
 Editor::~Editor() {
 	delete[] cursors.buffer;
 	DestroyWindow(hWnd);

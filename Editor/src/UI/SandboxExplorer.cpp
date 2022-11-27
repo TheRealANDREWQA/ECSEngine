@@ -32,27 +32,14 @@ void RemoveSandboxAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RemoveSandboxActionData* data = (RemoveSandboxActionData*)_data;
-	bool success = DestroySandbox(data->explorer_data->editor_state, data->index);
-	if (!success) {
-		// Check to see if the sandbox is currently running
-		EDITOR_SANDBOX_STATE state = GetSandboxState(data->explorer_data->editor_state, data->index);
-		if (state == EDITOR_SANDBOX_RUNNING || state == EDITOR_SANDBOX_PAUSED) {
-			// Give a more detailed description
-			EditorSetConsoleError("Failed to destroy the selected sandbox since it is being used (running or paused).");
-		}
-		else {
-			EditorSetConsoleError("Failed to destroy the selected sandbox. It is locked by a background task.");
-		}
+	DestroySandbox(data->explorer_data->editor_state, data->index);
+	if (data->explorer_data->active_sandbox == data->index) {
+		// Indicate that no sandbox is selected
+		data->explorer_data->active_sandbox = -1;
 	}
-	else {
-		if (data->explorer_data->active_sandbox == data->index) {
-			// Indicate that no sandbox is selected
-			data->explorer_data->active_sandbox = -1;
-		}
 
-		// Also rewrite the sandbox file
-		SaveEditorSandboxFile(data->explorer_data->editor_state);
-	}
+	// Also rewrite the sandbox file
+	SaveEditorSandboxFile(data->explorer_data->editor_state);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -226,8 +213,19 @@ void SandboxExplorerDraw(void* window_data, void* drawer_descriptor, bool initia
 			RemoveSandboxActionData remove_data;
 			remove_data.explorer_data = data;
 			remove_data.index = index;
-			drawer.SpriteButton(sprite_configuration, sprite_config, { RemoveSandboxPopupAction, &remove_data, sizeof(remove_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_X);
+
+			UIConfigActiveState active_state;
+			active_state.state = !IsSandboxLocked(editor_state, index);
+			sprite_config.AddFlag(active_state);
+
+			drawer.SpriteButton(
+				sprite_configuration | UI_CONFIG_ACTIVE_STATE, 
+				sprite_config, 
+				{ RemoveSandboxPopupAction, &remove_data, sizeof(remove_data), ECS_UI_DRAW_SYSTEM }, 
+				ECS_TOOLS_UI_TEXTURE_X
+			);
 			drawer.NextRow();
+			sprite_config.flag_count--;
 		}
 	}
 	else {

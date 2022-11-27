@@ -3507,7 +3507,7 @@ namespace ECSEngine {
 		unsigned int UISystem::DoFrame() {
 			m_texture_evict_count++;
 			if (m_texture_evict_count == m_texture_evict_target) {
-				m_resource_manager->DecrementReferenceCount(ResourceType::Texture, m_texture_evict_count);
+				m_resource_manager->DecrementReferenceCounts(ResourceType::Texture, m_texture_evict_count);
 				// Evict the outdated resources aswell
 				EvictOutdatedTextures();
 				m_texture_evict_count = 0;
@@ -9268,7 +9268,7 @@ namespace ECSEngine {
 
 		void UISystem::RegisterPixelShader(wchar_t* filename) {
 			ECS_ASSERT(m_resources.pixel_shaders.size < m_resources.pixel_shaders.capacity);
-			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_resource_manager->LoadPixelShaderImplementation(filename);
+			m_resources.pixel_shaders[m_resources.pixel_shaders.size++] = m_resource_manager->LoadShaderImplementation(filename, ECS_SHADER_PIXEL);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -9314,8 +9314,9 @@ namespace ECSEngine {
 			ECS_ASSERT(m_resources.vertex_shaders.size < m_resources.vertex_shaders.capacity);
 			Stream<char> shader_source;
 			Stream<void> byte_code;
-			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_resource_manager->LoadVertexShaderImplementation(
+			m_resources.vertex_shaders[m_resources.vertex_shaders.size++] = m_resource_manager->LoadShaderImplementation(
 				filename, 
+				ECS_SHADER_VERTEX,
 				&shader_source,
 				&byte_code
 			);
@@ -11484,7 +11485,7 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
-		void ProcessTexture(unsigned int thread_index, World* world, void* _data) {
+		static void ProcessTexture(unsigned int thread_index, World* world, void* _data) {
 			ProcessTextureData* data = (ProcessTextureData*)_data;
 
 			Texture2D old_texture(data->texture->GetResource());

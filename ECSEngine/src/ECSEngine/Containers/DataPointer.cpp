@@ -10,7 +10,7 @@ namespace ECSEngine {
 	{
 		unsigned short data = GetData();
 		bool is_zero = data < count;
-		data = (1 - is_zero) * (data - count);
+		data = is_zero ? 0 : data - count;
 		SetData(data);
 
 		return data;
@@ -19,7 +19,7 @@ namespace ECSEngine {
 	unsigned short DataPointer::IncrementData(unsigned short count) {
 		unsigned short data = GetData();
 		bool is_max = (USHORT_MAX - data) < count;
-		data = is_max * USHORT_MAX + (1 - is_max) * (data + count);
+		data = is_max ? USHORT_MAX : data + count;
 		SetData(data);
 
 		return data;

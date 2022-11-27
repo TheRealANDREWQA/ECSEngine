@@ -5,11 +5,13 @@
 
 namespace ECSEngine {
 
-	void CreateGraphicsForProcess(Graphics* graphics, HWND hWnd, GlobalMemoryManager* global_manager, bool discrete_gpu)
+	void CreateGraphicsForProcess(Graphics* graphics, void* hWnd, GlobalMemoryManager* global_manager, bool discrete_gpu)
 	{
+		HWND hwnd = (HWND)hWnd;
+
 		GraphicsDescriptor graphics_descriptor;
 		RECT window_rectangle;
-		GetClientRect(hWnd, &window_rectangle);
+		GetClientRect(hwnd, &window_rectangle);
 		
 		float monitor_scaling = 100.0f;
 	#ifdef EDITOR_GET_MONITOR_SCALE
@@ -38,7 +40,7 @@ namespace ECSEngine {
 		graphics_descriptor.window_size = { new_width, new_height };
 		graphics_descriptor.gamma_corrected = false;
 		graphics_descriptor.allocator = graphics_allocator;
-		graphics_descriptor.hWnd = hWnd;
+		graphics_descriptor.hWnd = hwnd;
 		graphics_descriptor.discrete_gpu = discrete_gpu;
 		graphics_descriptor.create_swap_chain = true;
 		new (graphics) Graphics(&graphics_descriptor);

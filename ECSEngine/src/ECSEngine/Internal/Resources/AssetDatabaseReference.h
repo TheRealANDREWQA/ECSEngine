@@ -167,7 +167,7 @@ namespace ECSEngine {
 		ResizableStream<unsigned int> material_asset;
 		ResizableStream<unsigned int> misc_asset;
 
-		AssetDatabase* database; ECS_SKIP_REFLECTION(static_assert(sizeof(AssetDatabase*) == 8))
+		AssetDatabase* database; ECS_SKIP_REFLECTION()
 
 		ECS_FIELDS_END_REFLECT;
 	};
