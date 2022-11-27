@@ -1779,17 +1779,17 @@ namespace ECSEngine {
 		dx_descriptor.BindFlags = GetGraphicsNativeBind(ECS_GRAPHICS_BIND_RENDER_TARGET | ECS_GRAPHICS_BIND_SHADER_RESOURCE);
 		dx_descriptor.CPUAccessFlags = GetGraphicsNativeCPUAccess(ECS_GRAPHICS_CPU_ACCESS_NONE);
 
-		dx_descriptor.MiscFlags = GetGraphicsNativeMiscFlags(/*ECS_GRAPHICS_MISC_GENERATE_MIPS | */ECS_GRAPHICS_MISC_SHARED);
+		dx_descriptor.MiscFlags = GetGraphicsNativeMiscFlags(ECS_GRAPHICS_MISC_GENERATE_MIPS);
 		dx_descriptor.Usage = GetGraphicsNativeUsage(ECS_GRAPHICS_USAGE_DEFAULT);
 		dx_descriptor.Width = size.x;
 		dx_descriptor.Height = size.y;
-		dx_descriptor.MipLevels = 1;
+		dx_descriptor.MipLevels = 0;
 
 		ID3D11Texture2D* texture_interface;
 		ID3D11ShaderResourceView* texture_view = nullptr;
 
 		HRESULT result = GetDevice()->CreateTexture2D(&dx_descriptor, nullptr, &texture_interface);
-		ECS_ASSERT(!FAILED(result), "Creating texture from DXTex failed.");
+		ECS_ASSERT(!FAILED(result), "Creating texture mip chain from first mip failed.");
 
 		D3D11_BOX box;
 		box.left = 0;
@@ -1805,10 +1805,10 @@ namespace ECSEngine {
 		GetContext()->UpdateSubresource(texture_interface, 0, &box, first_mip.buffer, row_pitch, slice_pitch);
 
 		result = GetDevice()->CreateShaderResourceView(texture_interface, nullptr, &texture_view);
-		ECS_ASSERT(!FAILED(result), "Creating texture view from DXTex failed.");
+		ECS_ASSERT(!FAILED(result), "Creating texture mip chain view from first mip failed.");
 
 		// Generate mips
-		//GetContext()->GenerateMips(texture_view);
+		GetContext()->GenerateMips(texture_view);
 
 		if (!temporary) {
 			AddInternalResource(Texture2D(texture_interface), debug_info);
