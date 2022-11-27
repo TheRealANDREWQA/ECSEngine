@@ -1,2 +1,2 @@
-C:\Users\Andrei\C++\GPUThunk\GPUThunk\x64\Debug\GPUThunk.exe
+C:\Users\Andrei\C++\GPUThunk\GPUThunk\GPUThunk\bin\Debug\GPUThunk.exe
 PAUSE
