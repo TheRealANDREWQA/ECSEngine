@@ -165,6 +165,25 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		void CopyStreamAndMemset(void* destination, size_t destination_capacity, Stream<void> data, int memset_value)
+		{
+			size_t copy_size = std::min(destination_capacity, data.size);
+			memcpy(destination, data.buffer, copy_size);
+			if (copy_size != destination_capacity) {
+				memset(function::OffsetPointer(destination, copy_size), memset_value, destination_capacity - copy_size);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void CopyStreamAndMemset(uintptr_t& ptr, size_t destination_capacity, Stream<void> data, int memset_value)
+		{
+			CopyStreamAndMemset((void*)ptr, destination_capacity, data, memset_value);
+			ptr += destination_capacity;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
 		size_t ConvertDurationToChars(size_t duration, char* characters)
 		{
 			auto append_lambda = [characters](size_t integer) {
@@ -557,6 +576,82 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		template<typename CharacterType>
+		const CharacterType* FindMatchingParanthesisImpl(
+			const CharacterType* start_character, 
+			const CharacterType* end_character, 
+			CharacterType opened_char, 
+			CharacterType closed_char,
+			unsigned int opened_count
+		) {
+			const CharacterType* current_closed = start_character - 1;
+			const CharacterType* current_opened = start_character - 1;
+			bool initial_zero = opened_count == 0;
+
+			auto iteration = [&]() {
+				current_opened = current_closed;
+				current_closed = function::FindFirstCharacter(Stream<CharacterType>(current_closed + 1, function::PointerDifference(end_character, current_closed + 1) / sizeof(CharacterType)), closed_char).buffer;
+				if (current_closed == nullptr) {
+					return nullptr;
+				}
+
+				while (current_opened < end_character) {
+					current_opened = function::FindFirstCharacter(
+						Stream<CharacterType>(current_opened + 1, function::PointerDifference(current_closed, current_opened + 1) / sizeof(CharacterType)),
+						opened_char
+					).buffer;
+					if (current_opened != nullptr) {
+						opened_count++;
+					}
+					else {
+						break;
+					}
+				}
+				opened_count--;
+			};
+
+			if (opened_count == 0) {
+				iteration();
+			}
+			while (current_closed < end_character && opened_count > 0) {
+				iteration();
+			}
+			return opened_count == 0 ? current_closed : nullptr;
+		}
+
+		const char* FindMatchingParenthesis(const char* start_character, const char* end_character, char opened_char, char closed_char, unsigned int opened_count)
+		{
+			return FindMatchingParanthesisImpl(start_character, end_character, opened_char, closed_char, opened_count);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		const wchar_t* FindMatchingParenthesis(const wchar_t* start_character, const wchar_t* end_character, wchar_t opened_char, wchar_t closed_char, unsigned int opened_count)
+		{
+			return FindMatchingParanthesisImpl(start_character, end_character, opened_char, closed_char, opened_count);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> FindDelimitedString(Stream<char> range, char opened_delimiter, char closed_delimiter, bool skip_whitespace)
+		{
+			Stream<char> first_delimiter = function::FindFirstCharacter(range, opened_delimiter);
+			Stream<char> first_closed = function::FindFirstCharacter(range, closed_delimiter);
+			
+			first_delimiter.Advance();
+			if (skip_whitespace) {
+				first_delimiter = function::SkipWhitespace(first_delimiter);
+			}
+
+			Stream<char> substring = Stream<char>(first_delimiter.buffer, first_closed.buffer - first_delimiter.buffer);
+			if (skip_whitespace) {
+				substring = function::SkipWhitespace(substring);
+			}
+			return substring;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
 		void* RemapPointer(const void* first_base, const void* second_base, const void* pointer)
 		{
 			return OffsetPointer(second_base, PointerDifference(pointer, first_base));
@@ -652,6 +747,58 @@ namespace ECSEngine {
 
 		// --------------------------------------------------------------------------------------------------
 
+		void FromNumbersToStrings(Stream<unsigned int> values, CapacityStream<char>& storage, Stream<char>* strings)
+		{
+			for (size_t index = 0; index < values.size; index++) {
+				strings[index].buffer = storage.buffer + storage.size;
+				strings[index].size = function::ConvertIntToChars(storage, values[index]);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		void FromNumbersToStrings(size_t count, CapacityStream<char>& storage, Stream<char>* strings, size_t offset)
+		{
+			for (size_t index = 0; index < count; index++) {
+				strings[index].buffer = storage.buffer + storage.size;
+				strings[index].size = function::ConvertIntToChars(storage, index + offset);
+			}
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> SkipCharacters(Stream<char> characters, char character, unsigned int count) {
+			for (unsigned int index = 0; index < count; index++) {
+				Stream<char> new_characters = function::FindFirstCharacter(characters, character);
+				if (new_characters.size == 0) {
+					return { nullptr, 0 };
+				}
+
+				characters = new_characters;
+				characters.Advance();
+			}
+
+			return characters;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		Stream<char> SkipTokens(Stream<char> characters, Stream<char> token, unsigned int count) {
+			for (unsigned int index = 0; index < count; index++) {
+				Stream<char> new_characters = function::FindFirstToken(characters, token);
+				if (new_characters.size == 0) {
+					return { nullptr, 0 };
+				}
+
+				characters = new_characters;
+				characters.Advance(token.size);
+			}
+
+			return characters;
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
 		void* CoallesceStreamWithData(void* allocation, size_t size)
 		{
 			uintptr_t buffer = (uintptr_t)allocation;
@@ -723,12 +870,12 @@ namespace ECSEngine {
 		Stream<char> SkipStream(Stream<char> characters, int increment) {
 			if (increment > 0) {
 				const char* skipped = SkipFunction(characters.buffer, increment);
-				return { skipped, function::PointerDifference(characters.buffer + characters.size, skipped) };
+				return { skipped, function::PointerDifference(characters.buffer + characters.size, skipped) / sizeof(char) };
 			}
 			else {
 				const char* last = characters.buffer + characters.size;
 				const char* skipped = SkipFunction(last, increment);
-				return { characters.buffer, function::PointerDifference(skipped, characters.buffer) };
+				return { characters.buffer, function::PointerDifference(skipped, characters.buffer) / sizeof(char) };
 			}
 		}
 
@@ -756,6 +903,20 @@ namespace ECSEngine {
 		Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment)
 		{
 			return SkipStream<SkipCodeIdentifier>(characters, increment);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> SkipUntilCharacterReverse(const char* string, const char* bound, char character)
+		{
+			const char* initial_string = string;
+			while (string >= bound && *string != character) {
+				string--;
+			}
+			if (string >= bound) {
+				return { string + 1, PointerDifference(initial_string, string) };
+			}
+			return { nullptr, 0 };
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -1214,6 +1375,57 @@ namespace ECSEngine {
 		void ReplaceCharacter(Stream<wchar_t> string, wchar_t token_to_be_replaced, wchar_t replacement)
 		{
 			ReplaceCharacterImpl(string, token_to_be_replaced, replacement);
+		}
+
+		// --------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		Stream<CharacterType> ReplaceTokenImpl(Stream<CharacterType> string, Stream<CharacterType> token, Stream<CharacterType> replacement, AllocatorPolymorphic allocator) {
+			Stream<CharacterType> result;
+			
+			Stream<CharacterType> original_string = string;
+			// Determine the size to be allocated
+			size_t size_to_allocate = 0;
+			Stream<CharacterType> current_token = function::FindFirstToken(string, token);
+			while (current_token.size > 0) {
+				size_to_allocate += current_token.buffer - string.buffer;
+				size_to_allocate += replacement.size;
+				current_token.Advance(token.size);
+				string = current_token;
+				current_token = function::FindFirstToken(string, token);
+			}
+
+			size_to_allocate += string.size;
+			
+			result.Initialize(allocator, size_to_allocate);
+			result.size = 0;
+			string = original_string;
+			current_token = function::FindFirstToken(string, token);
+
+			while (current_token.size > 0) {
+				Stream<CharacterType> first_part;
+				first_part.buffer = string.buffer;
+				first_part.size = current_token.buffer - string.buffer;
+				result.AddStream(first_part);
+				result.AddStream(replacement);
+
+				current_token.Advance(token.size);
+				string = current_token;
+				current_token = function::FindFirstToken(string, token);
+			}
+
+			// Copy the last part
+			result.AddStream(string);
+
+			return result;
+		}
+
+		Stream<char> ReplaceToken(Stream<char> string, Stream<char> token, Stream<char> replacement, AllocatorPolymorphic allocator) {
+			return ReplaceTokenImpl(string, token, replacement, allocator);
+		}
+
+		Stream<wchar_t> ReplaceToken(Stream<wchar_t> string, Stream<wchar_t> token, Stream<wchar_t> replacement, AllocatorPolymorphic allocator) {
+			return ReplaceTokenImpl(string, token, replacement, allocator);
 		}
 
 		// --------------------------------------------------------------------------------------------------

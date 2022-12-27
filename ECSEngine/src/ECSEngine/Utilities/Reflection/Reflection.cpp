@@ -115,6 +115,60 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(Stream) {
+			return false;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(Stream) {
+			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+			size_t element_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
+			bool blittable = Reflection::SearchIsBlittable(data->reflection_manager, data->definition);
+
+			Stream<char>* source = (Stream<char>*)data->source;
+			Stream<char>* destination = (Stream<char>*)data->destination;
+			size_t allocation_size = element_size * source->size;
+			void* allocation = nullptr;
+			if (allocation_size > 0) {
+				allocation = Allocate(data->allocator, allocation_size);
+				memcpy(allocation, source->buffer, allocation_size);
+			}
+
+			destination->buffer = (char*)allocation;
+			destination->size = source->size;
+
+			if (!blittable) {
+				size_t count = source->size;
+
+				ReflectionType nested_type;
+				if (data->reflection_manager->TryGetType(template_type, nested_type)) {
+					for (size_t index = 0; index < count; index++) {
+						CopyReflectionType(
+							data->reflection_manager,
+							&nested_type,
+							function::OffsetPointer(source->buffer, index * element_size),
+							function::OffsetPointer(allocation, element_size * index),
+							data->allocator
+						);
+					}
+				}
+				else {
+					unsigned int custom_type_index = FindReflectionCustomType(template_type);
+					ECS_ASSERT(custom_type_index != -1);
+					data->definition = template_type;
+
+					for (size_t index = 0; index < count; index++) {
+						data->source = function::OffsetPointer(source->buffer, index * element_size);
+						data->destination = function::OffsetPointer(allocation, element_size * index);
+						ECS_REFLECTION_CUSTOM_TYPES[custom_type_index].copy(data);
+					}
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
 #pragma endregion
 
 #pragma region SparseSet
@@ -142,6 +196,62 @@ namespace ECSEngine {
 			ReflectionCustomTypeDependentTypes_SingleTemplate(data);
 		}
 
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(SparseSet) {
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(SparseSet) {
+			Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
+			size_t element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
+
+			bool trivially_copyable = SearchIsBlittable(data->reflection_manager, template_type);
+			if (trivially_copyable) {
+				// Can blit the data type
+				SparseSetCopyTypeErased(data->source, data->destination, element_byte_size, data->allocator);
+			}
+			else {
+				data->definition = template_type;
+				struct CopyData {
+					ReflectionCustomTypeCopyData* custom_data;
+					const ReflectionType* type;
+					unsigned int custom_type_index;
+				};
+
+				// Need to copy each and every element
+				auto copy_function = [](const void* source, void* destination, AllocatorPolymorphic allocator, void* extra_data) {
+					CopyData* data = (CopyData*)extra_data;
+					if (data->type != nullptr) {
+						CopyReflectionType(data->custom_data->reflection_manager, data->type, source, destination, allocator);
+					}
+					else {
+						data->custom_data->source = source;
+						data->custom_data->destination = destination;
+						ECS_REFLECTION_CUSTOM_TYPES[data->custom_type_index].copy(data->custom_data);
+					}
+				};
+
+				CopyData copy_data;
+				copy_data.custom_data = data;
+				copy_data.type = nullptr;
+
+				ReflectionType nested_type;
+
+				if (data->reflection_manager->TryGetType(template_type, nested_type)) {
+					copy_data.type = &nested_type;
+				}
+				else {
+					copy_data.custom_type_index = FindReflectionCustomType(template_type);
+					ECS_ASSERT(copy_data.custom_type_index != -1);
+				}
+
+				SparseSetCopyTypeErasedFunction(data->source, data->destination, element_byte_size, data->allocator, copy_function, &copy_data);
+			}
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
@@ -163,6 +273,18 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(Color) {}
+
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(Color) {
+			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(Color) {
+			SerializeCustomTypeCopyBlit(data, sizeof(char) * 4);
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -186,6 +308,18 @@ namespace ECSEngine {
 
 		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(ColorFloat) {}
 
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(ColorFloat) {
+			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(ColorFloat) {
+			SerializeCustomTypeCopyBlit(data, sizeof(float) * 4);
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 #pragma endregion
@@ -207,6 +341,29 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(DataPointer) {}
+
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(DataPointer) {
+			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(DataPointer) {
+			DataPointer* source = (DataPointer*)data->source;
+			DataPointer* destination = (DataPointer*)data->destination;
+
+			unsigned short source_size = source->GetData();
+			void* allocation = nullptr;
+			if (source_size > 0) {
+				allocation = Allocate(data->allocator, source_size);
+				memcpy(allocation, source->GetPointer(), source_size);
+			}
+
+			destination->SetData(source_size);
+			destination->SetPointer(allocation);
+		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
@@ -623,12 +780,14 @@ namespace ECSEngine {
 				}
 			}
 
-			// Add the bytes sizes previously recorded
+			// Add the bytes sizes previously recorded and determine if each type
+			// is trivially copyable or not
 			type_definitions.ForEachIndex([&](unsigned int index) {
 				ReflectionType* type = type_definitions.GetValuePtrFromIndex(index);
 
 				if (type->folder_hierarchy_index == folder_index) {
 					type->byte_size += type_byte_sizes[index];
+					type->is_blittable = SearchIsBlittable(this, type);
 				}
 
 				return false;
@@ -1613,39 +1772,41 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::SetInstanceDefaultData(const ReflectionType* type, void* data) const
 		{
-			size_t type_size = GetReflectionTypeByteSize(type);
-
-			// Can't memset the data directly to 0 since for streams it might mess them up
-			// For basic types do the memset to 0 and for streams just set the size to 0
-
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
-				void* current_field = function::OffsetPointer(data, type->fields[field_index].info.pointer_offset);
+				SetInstanceFieldDefaultData(&type->fields[field_index], data);
+			}
+		}
 
-				if (type->fields[field_index].info.has_default_value) {
-					memcpy(
-						current_field,
-						&type->fields[field_index].info.default_bool,
-						type->fields[field_index].info.byte_size
-					);
-				}
-				else {
-					if (type->fields[field_index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-						// Check to see if it exists
-						ReflectionType nested_type;
-						if (TryGetType(type->fields[field_index].definition, nested_type)) {
-							// Set the field to its default values
-							SetInstanceDefaultData(type->fields[field_index].definition, current_field);
-						}
-						else {
-							// Might be a container type. These should be fine with memsetting to 0
-							memset(current_field, 0, type->fields[field_index].info.byte_size);
-						}
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ReflectionManager::SetInstanceFieldDefaultData(const ReflectionField* field, void* data) const
+		{
+			void* current_field = function::OffsetPointer(data, field->info.pointer_offset);
+
+			if (field->info.has_default_value) {
+				memcpy(
+					current_field,
+					&field->info.default_bool,
+					field->info.byte_size
+				);
+			}
+			else {
+				if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					// Check to see if it exists
+					ReflectionType nested_type;
+					if (TryGetType(field->definition, nested_type)) {
+						// Set the field to its default values
+						SetInstanceDefaultData(field->definition, current_field);
 					}
 					else {
-						// Memsetting to 0 should be fine for all the other cases (streams, pointers,
-						// basic type arrays, or enums)
-						memset(current_field, 0, type->fields[field_index].info.byte_size);
+						// Might be a custom type. These should be fine with memsetting to 0
+						memset(current_field, 0, field->info.byte_size);
 					}
+				}
+				else {
+					// Memsetting to 0 should be fine for all the other cases (streams, pointers,
+					// basic type arrays, or enums)
+					memset(current_field, 0, field->info.byte_size);
 				}
 			}
 		}
@@ -3360,6 +3521,206 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 		}
 
+		// -----------------------------------------------------------------------------------------
+
+		bool SearchIsBlittable(
+			const Reflection::ReflectionManager* reflection_manager,
+			const Reflection::ReflectionType* type
+		) {
+			for (size_t index = 0; index < type->fields.size; index++) {
+				// Check exceptions
+				uint2 exception_index = reflection_manager->FindBlittableException(type->fields[index].definition);
+				if (exception_index.x != -1) {
+					// Go to the next iteration
+					continue;
+				}
+
+				if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Basic && type->fields[index].info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
+					// Stream type or pointer type, not trivially copyable
+					return false;
+				}
+
+				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					// Check it
+					ReflectionType nested_type;
+					if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
+						if (!SearchIsBlittable(reflection_manager, &nested_type)) {
+							return false;
+						}
+					}
+					else {
+						// Check custom type
+						unsigned int custom_index = FindReflectionCustomType(type->fields[index].definition);
+						if (custom_index != -1) {
+							ReflectionCustomTypeIsBlittableData data;
+							data.reflection_manager = reflection_manager;
+							data.definition = type->fields[index].definition;
+							if (!ECS_REFLECTION_CUSTOM_TYPES[custom_index].is_blittable(&data)) {
+								return false;
+							}
+						}
+						else {
+							// Check for ECS_GIVE_SIZE_REFLECTION tag. If it present, assume it is trivially copyable
+							// because we don't know its fields
+							ECS_ASSERT(type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION)));
+						}
+					}
+				}
+			}
+
+			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		bool SearchIsBlittable(
+			const Reflection::ReflectionManager* reflection_manager,
+			Stream<char> definition
+		)
+		{
+			ReflectionType type;
+			if (reflection_manager->TryGetType(definition, type)) {
+				// If we have the type, return its trivial status
+				return SearchIsBlittable(reflection_manager, &type);
+			}
+			else {
+				// Might be another container type
+				unsigned int custom_index = FindReflectionCustomType(definition);
+				if (custom_index != -1) {
+					ReflectionCustomTypeIsBlittableData is_data;
+					is_data.definition = definition;
+					is_data.reflection_manager = reflection_manager;
+					return ECS_REFLECTION_CUSTOM_TYPES[custom_index].is_blittable(&is_data);
+				}
+				else {
+					// Try enum
+					Reflection::ReflectionEnum enum_;
+					if (reflection_manager->TryGetEnum(definition, enum_)) {
+						return true;
+					}
+				}
+			}
+
+			// It is not a user defined, not a container type. Either error or fundamental type
+			ReflectionBasicFieldType basic_type;
+			ReflectionStreamFieldType stream_type;
+			ConvertStringToPrimitiveType(definition, basic_type, stream_type);
+			if (IsUserDefined(basic_type) || basic_type == ReflectionBasicFieldType::Unknown) {
+				return false;
+			}
+
+			if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
+				// Check exceptions
+				uint2 exception_index = reflection_manager->FindBlittableException(definition);
+				if (exception_index.x != -1) {
+					return true;
+				}
+
+				// Pointer or stream type
+				return false;
+			}
+			return true;
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		void CopyReflectionType(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic field_allocator
+		)
+		{
+			for (size_t index = 0; index < type->fields.size; index++) {
+				const void* source_field = function::OffsetPointer(source, type->fields[index].info.pointer_offset);
+				void* destination_field = function::OffsetPointer(destination, type->fields[index].info.pointer_offset);
+
+				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					// If the byte size is given, then do a blit copy
+					if (type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION))) {
+						memcpy(destination_field, source_field, type->fields[index].info.byte_size);
+					}
+					else {
+						CopyReflectionType(reflection_manager, type->fields[index].definition, source_field, destination_field, field_allocator);
+					}
+				}
+				else {
+					CopyReflectionFieldBasic(&type->fields[index].info, source_field, destination_field, field_allocator);
+				}
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------
+
+		void CopyReflectionType(
+			const Reflection::ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic field_allocator
+		)
+		{
+			// Check blittable exceptions
+			uint2 exception_index = reflection_manager->FindBlittableException(definition);
+			if (exception_index.x != -1) {
+				memcpy(destination, source, exception_index.x);
+			}
+			else {
+				// Check fundamental type
+				ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
+				if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
+					CopyReflectionFieldBasic(&field.info, source, destination, field_allocator);
+				}
+				else {
+					ReflectionType reflection_type;
+					if (reflection_manager->TryGetType(definition, reflection_type)) {
+						// Forward the call
+						CopyReflectionType(reflection_manager, &reflection_type, source, destination, field_allocator);
+					}
+					else {
+						// Check to see if it is a custom type
+						unsigned int custom_index = FindReflectionCustomType(definition);
+						if (custom_index != -1) {
+							ReflectionCustomTypeIsBlittableData trivially_data;
+							trivially_data.definition = definition;
+							trivially_data.reflection_manager = reflection_manager;
+							bool trivially_copyable = ECS_REFLECTION_CUSTOM_TYPES[custom_index].is_blittable(&trivially_data);
+							if (trivially_copyable) {
+								ReflectionCustomTypeByteSizeData byte_size_data;
+								byte_size_data.definition = definition;
+								byte_size_data.reflection_manager = reflection_manager;
+								size_t byte_size = ECS_REFLECTION_CUSTOM_TYPES[custom_index].byte_size(&byte_size_data).x;
+
+								memcpy(destination, source, byte_size);
+							}
+							else {
+								ReflectionCustomTypeCopyData copy_data;
+								copy_data.allocator = field_allocator;
+								copy_data.definition = definition;
+								copy_data.destination = destination;
+								copy_data.source = source;
+								copy_data.reflection_manager = reflection_manager;
+
+								ECS_REFLECTION_CUSTOM_TYPES[custom_index].copy(&copy_data);
+							}
+						}
+						else {
+							// Try with an enum
+							ReflectionEnum enum_;
+							if (reflection_manager->TryGetEnum(definition, enum_)) {
+								memcpy(destination, source, sizeof(unsigned char));
+							}
+							else {
+								// Error - no type matched
+								ECS_ASSERT(false, "Copy reflection type unexpected error.");
+							}
+						}
+					}
+				}
+			}
+		}
+
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, ReflectionField field)
@@ -3457,69 +3818,6 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		bool IsIntegral(ReflectionBasicFieldType type)
-		{
-			// Use the negation - if it is different than all the other types
-			return type != ReflectionBasicFieldType::Bool && type != ReflectionBasicFieldType::Bool2 && type != ReflectionBasicFieldType::Bool3 &&
-				type != ReflectionBasicFieldType::Bool4 && type != ReflectionBasicFieldType::Double && type != ReflectionBasicFieldType::Double2 &&
-				type != ReflectionBasicFieldType::Double3 && type != ReflectionBasicFieldType::Double4 && type != ReflectionBasicFieldType::Float &&
-				type != ReflectionBasicFieldType::Float2 && type != ReflectionBasicFieldType::Float3 && type != ReflectionBasicFieldType::Float4 &&
-				type != ReflectionBasicFieldType::Enum && type != ReflectionBasicFieldType::UserDefined && type != ReflectionBasicFieldType::Unknown &&
-				type != ReflectionBasicFieldType::Wchar_t;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool IsIntegralSingleComponent(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Int8 || type == ReflectionBasicFieldType::UInt8 ||
-				type == ReflectionBasicFieldType::Int16 || type == ReflectionBasicFieldType::UInt16 ||
-				type == ReflectionBasicFieldType::Int32 || type == ReflectionBasicFieldType::UInt32 ||
-				type == ReflectionBasicFieldType::Int64 || type == ReflectionBasicFieldType::UInt64;
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		bool IsIntegralMultiComponent(ReflectionBasicFieldType type)
-		{
-			return IsIntegral(type) && !IsIntegralSingleComponent(type);
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type)
-		{
-			if (type == ReflectionBasicFieldType::Bool || type == ReflectionBasicFieldType::Double || type == ReflectionBasicFieldType::Enum ||
-				type == ReflectionBasicFieldType::Float || type == ReflectionBasicFieldType::Int8 || type == ReflectionBasicFieldType::UInt8 ||
-				type == ReflectionBasicFieldType::Int16 || type == ReflectionBasicFieldType::UInt16 || type == ReflectionBasicFieldType::Int32 ||
-				type == ReflectionBasicFieldType::UInt32 || type == ReflectionBasicFieldType::Int64 || type == ReflectionBasicFieldType::UInt64 ||
-				type == ReflectionBasicFieldType::Wchar_t) {
-				return 1;
-			}
-			else if (type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Float2 ||
-				type == ReflectionBasicFieldType::Char2 || type == ReflectionBasicFieldType::UChar2 || type == ReflectionBasicFieldType::Short2 ||
-				type == ReflectionBasicFieldType::UShort2 || type == ReflectionBasicFieldType::Int2 || type == ReflectionBasicFieldType::UInt2 ||
-				type == ReflectionBasicFieldType::Long2 || type == ReflectionBasicFieldType::ULong2) {
-				return 2;
-			}
-			else if (type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Float3 ||
-				type == ReflectionBasicFieldType::Char3 || type == ReflectionBasicFieldType::UChar3 || type == ReflectionBasicFieldType::Short3 ||
-				type == ReflectionBasicFieldType::UShort3 || type == ReflectionBasicFieldType::Int3 || type == ReflectionBasicFieldType::UInt3 ||
-				type == ReflectionBasicFieldType::Long3 || type == ReflectionBasicFieldType::ULong3) {
-				return 3;
-			}
-			else if (type == ReflectionBasicFieldType::Bool4 || type == ReflectionBasicFieldType::Double4 || type == ReflectionBasicFieldType::Float4 ||
-				type == ReflectionBasicFieldType::Char4 || type == ReflectionBasicFieldType::UChar4 || type == ReflectionBasicFieldType::Short4 ||
-				type == ReflectionBasicFieldType::UShort4 || type == ReflectionBasicFieldType::Int4 || type == ReflectionBasicFieldType::UInt4 ||
-				type == ReflectionBasicFieldType::Long4 || type == ReflectionBasicFieldType::ULong4) {
-				return 4;
-			}
-			else {
-				return 0;
-			}
-		}
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
 		size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info)
 		{
 			return info.byte_size / info.basic_type_count;
@@ -3568,22 +3866,66 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		Stream<void> GetReflectionFieldStreamVoid(const ReflectionFieldInfo& info, const void* data)
-		{
-			const void* stream_field = function::OffsetPointer(data, info.pointer_offset);
+		template<bool basic_array>
+		ResizableStream<void> GetReflectionFieldResizableStreamVoidImpl(const ReflectionFieldInfo& info, const void* data) {
+			ResizableStream<void> return_value;
+
+			void* stream_field = function::OffsetPointer(data, info.pointer_offset);
 			if (info.stream_type == ReflectionStreamFieldType::Stream) {
 				Stream<void>* stream = (Stream<void>*)stream_field;
-				return *stream;
+				return_value.buffer = stream->buffer;
+				return_value.size = stream->size;
+				return_value.capacity = stream->size;
+				return_value.allocator = { nullptr };
 			}
 			else if (info.stream_type == ReflectionStreamFieldType::CapacityStream) {
 				CapacityStream<void>* stream = (CapacityStream<void>*)stream_field;
-				return { stream->buffer, stream->size };
+				return_value.buffer = stream->buffer;
+				return_value.size = stream->size;
+				return_value.capacity = stream->capacity;
+				return_value.allocator = { nullptr };
 			}
 			else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
-				ResizableStream<char>* stream = (ResizableStream<char>*)stream_field;
-				return { stream->buffer, stream->size };
+				ResizableStream<void>* stream = (ResizableStream<void>*)stream_field;
+				return_value = *stream;
 			}
-			return { nullptr, 0 };
+			if constexpr (basic_array) {
+				if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+					return_value.buffer = stream_field;
+					return_value.size = info.basic_type_count;
+					return_value.capacity = info.basic_type_count;
+					return_value.allocator = { nullptr };
+				}
+			}
+			return return_value;
+		}
+
+		Stream<void> GetReflectionFieldStreamVoid(const ReflectionFieldInfo& info, const void* data)
+		{
+			ResizableStream<void> stream = GetReflectionFieldResizableStreamVoid(info, data);
+			return { stream.buffer, stream.size };
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ResizableStream<void> GetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, const void* data)
+		{
+			return GetReflectionFieldResizableStreamVoidImpl<false>(info, data);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		Stream<void> GetReflectionFieldStreamVoidEx(const ReflectionFieldInfo& info, const void* data)
+		{
+			ResizableStream<void> stream = GetReflectionFieldResizableStreamVoidEx(info, data);
+			return { stream.buffer, stream.size };
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ResizableStream<void> GetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, const void* data)
+		{
+			return GetReflectionFieldResizableStreamVoidImpl<true>(info, data);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -3628,6 +3970,48 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			return ReflectionBasicFieldType::COUNT;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		template<bool basic_array>
+		void SetReflectionFieldResizableStreamVoidImpl(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data) {
+			void* stream_field = function::OffsetPointer(data, info.pointer_offset);
+			if (info.stream_type == ReflectionStreamFieldType::Stream) {
+				Stream<void>* stream = (Stream<void>*)stream_field;
+				*stream = { stream_data.buffer, stream_data.size };
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::CapacityStream) {
+				CapacityStream<void>* stream = (CapacityStream<void>*)stream_field;
+				*stream = { stream_data.buffer, stream_data.size, stream_data.capacity };
+			}
+			else if (info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+				ResizableStream<void>* stream = (ResizableStream<void>*)stream_field;
+				*stream = stream_data;
+			}
+			if constexpr (basic_array) {
+				if (info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+					size_t element_byte_size = info.byte_size / info.basic_type_count;
+					size_t elements_to_copy = std::min((size_t)stream_data.size, (size_t)info.basic_type_count);
+					size_t copy_size = elements_to_copy * element_byte_size;
+					memcpy(stream_field, stream_data.buffer, copy_size);
+					if (elements_to_copy < (size_t)info.basic_type_count) {
+						memset(function::OffsetPointer(stream_field, copy_size), 0, info.byte_size - copy_size);
+					}
+				}
+			}
+		}
+
+		void SetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data)
+		{
+			SetReflectionFieldResizableStreamVoidImpl<false>(info, data, stream_data);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void SetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data)
+		{
+			SetReflectionFieldResizableStreamVoidImpl<true>(info, data, stream_data);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -3697,6 +4081,466 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			return true;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void CopyReflectionTypeToNewVersion(
+			const ReflectionManager* old_reflection_manager,
+			const ReflectionManager* new_reflection_manager,
+			const ReflectionType* old_type, 
+			const ReflectionType* new_type, 
+			const void* old_data, 
+			void* new_data,
+			AllocatorPolymorphic allocator,
+			bool always_allocate_for_buffers
+		)
+		{
+			if (always_allocate_for_buffers) {
+				ECS_ASSERT(allocator.allocator != nullptr);
+			}
+
+			// Go through the new type and try to get the data
+			for (size_t new_index = 0; new_index < new_type->fields.size; new_index++) {
+				// Check the remapping tag
+				Stream<char> mapping_tag = new_type->fields[new_index].GetTag(STRING(ECS_MAP_FIELD_REFLECTION));
+				Stream<char> name_to_search = new_type->fields[new_index].name;
+				if (mapping_tag.size > 0) {
+					name_to_search = function::FindDelimitedString(mapping_tag, '(', ')', true);
+				}
+				
+				unsigned int field_index = old_type->FindField(new_type->fields[new_index].name);
+				if (field_index != -1) {
+					ConvertReflectionFieldToOtherField(
+						old_reflection_manager,
+						new_reflection_manager,
+						&old_type->fields[field_index],
+						&new_type->fields[new_index],
+						old_data,
+						new_data,
+						allocator,
+						always_allocate_for_buffers
+					);
+				}
+				else {
+					// Use the default
+					new_reflection_manager->SetInstanceFieldDefaultData(&new_type->fields[new_index], new_data);
+				}
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ConvertReflectionBasicField(
+			ReflectionBasicFieldType first_type, 
+			ReflectionBasicFieldType second_type, 
+			const void* first_data, 
+			void* second_data,
+			size_t count
+		)
+		{
+			unsigned char first_basic_count = BasicTypeComponentCount(first_type);
+			unsigned char second_basic_count = BasicTypeComponentCount(second_type);
+
+			double double_data[4] = { 0 };
+
+			first_type = ReduceMultiComponentReflectionType(first_type);
+			second_type = ReduceMultiComponentReflectionType(second_type);
+
+			size_t first_byte_size = GetReflectionBasicFieldTypeByteSize(first_type);
+			size_t second_byte_size = GetReflectionBasicFieldTypeByteSize(second_type);
+
+#define CASE(reflection_type, normal_type) case ReflectionBasicFieldType::reflection_type: { \
+				normal_type* typed_first_data = (normal_type*)first_data; \
+				for (unsigned char subindex = 0; subindex < first_basic_count; subindex++) { \
+					double_data[subindex] = *typed_first_data; \
+					typed_first_data++;\
+				} \
+			} break;
+
+#define SWITCH  \
+			switch (first_type) {  \
+				CASE(Bool, bool); \
+				CASE(Enum, char); \
+				CASE(Float, float); \
+				CASE(Double, double); \
+				CASE(Int8, int8_t); \
+				CASE(UInt8, uint8_t); \
+				CASE(Int16, int16_t); \
+				CASE(UInt16, uint16_t); \
+				CASE(Int32, int32_t); \
+				CASE(UInt32, uint32_t); \
+				CASE(Int64, int64_t); \
+				CASE(UInt64, uint64_t); \
+				CASE(Wchar_t, wchar_t); \
+			}
+
+			for (size_t index = 0; index < count; index++) {
+				SWITCH;
+
+#undef CASE
+
+#define CASE(reflection_type, normal_type) case ReflectionBasicFieldType::reflection_type: { \
+				normal_type* typed_second_data = (normal_type*)second_data; \
+				for (unsigned char subindex = 0; subindex < second_basic_count; subindex++) { \
+					*typed_second_data = (normal_type)double_data[subindex]; \
+					typed_second_data++;\
+				} \
+			} break;
+
+				SWITCH;
+
+				first_data = function::OffsetPointer(first_data, first_byte_size);
+				second_data = function::OffsetPointer(second_data, second_byte_size);
+			}
+
+#undef CASE
+#undef SWITCH
+
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		void ConvertReflectionFieldToOtherField(
+			const ReflectionManager* first_reflection_manager,
+			const ReflectionManager* second_reflection_manager,
+			const ReflectionField* first_info, 
+			const ReflectionField* second_info, 
+			const void* first_data, 
+			void* second_data,
+			AllocatorPolymorphic allocator,
+			bool always_allocate_for_buffers
+		)
+		{
+			if (always_allocate_for_buffers) {
+				ECS_ASSERT(allocator.allocator != nullptr);
+			}
+
+			// If they have the same type, go ahead and try to copy
+			if (first_info->Compare(*second_info)) {
+				// If not a user defined type, can copy it
+				if (first_info->info.basic_type != ReflectionBasicFieldType::UserDefined) {
+					if (first_info->info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
+						if (always_allocate_for_buffers) {
+							ResizableStream<void> previous_data = GetReflectionFieldResizableStreamVoid(first_info->info, first_data);
+							size_t allocation_size = (size_t)second_info->info.stream_byte_size * previous_data.size;
+							void* allocation = Allocate(allocator, allocation_size);
+							memcpy(allocation, previous_data.buffer, allocation_size);
+
+							previous_data.buffer = allocation;
+							previous_data.capacity = previous_data.size;
+							SetReflectionFieldResizableStreamVoid(second_info->info, second_data, previous_data);
+						}
+						else {
+							memcpy(
+								function::OffsetPointer(second_data, second_info->info.pointer_offset),
+								function::OffsetPointer(first_data, first_info->info.pointer_offset),
+								second_info->info.byte_size
+							);
+						}
+					}
+					else {
+						unsigned short copy_size = std::min(first_info->info.byte_size, second_info->info.byte_size);
+						memcpy(
+							function::OffsetPointer(second_data, second_info->info.pointer_offset),
+							function::OffsetPointer(first_data, first_info->info.pointer_offset),
+							copy_size
+						);
+						if (copy_size != second_info->info.byte_size) {
+							memset(function::OffsetPointer(second_data, copy_size), 0, second_info->info.byte_size - copy_size);
+						}
+					}
+				}
+				else {
+					// Call the functor again
+					ReflectionType new_nested_type;
+					ReflectionType old_nested_type;
+					if (first_reflection_manager->TryGetType(first_info->definition, old_nested_type)) {
+						if (second_reflection_manager->TryGetType(second_info->definition, new_nested_type)) {
+							const void* old_data_field = function::OffsetPointer(first_data, first_info->info.pointer_offset);
+							void* new_data_field = function::OffsetPointer(second_data, second_info->info.pointer_offset);
+							if (first_info->info.stream_type == ReflectionStreamFieldType::Basic) {
+								CopyReflectionTypeToNewVersion(
+									first_reflection_manager,
+									second_reflection_manager,
+									&old_nested_type,
+									&new_nested_type,
+									old_data_field,
+									new_data_field,
+									allocator,
+									always_allocate_for_buffers
+								);
+							}
+							else {
+								ResizableStream<void> old_data = GetReflectionFieldResizableStreamVoidEx(first_info->info, first_data);
+								// Check to see if the type has changed. If it didn't, we can just reference it.
+								// If it did, we would need to make a new allocation.
+								if (CompareReflectionTypes(
+									first_reflection_manager,
+									second_reflection_manager,
+									&old_nested_type,
+									&new_nested_type
+								)) {
+									// Check to see if we need to allocate
+									if (always_allocate_for_buffers) {
+										size_t allocation_size = (size_t)second_info->info.stream_byte_size * old_data.size;
+										void* allocation = Allocate(allocator, allocation_size);
+										memcpy(allocation, old_data.buffer, allocation_size);
+										old_data.buffer = allocation;
+										old_data.capacity = old_data.size;
+									}
+
+									// Can set the data directly
+									SetReflectionFieldResizableStreamVoidEx(second_info->info, second_data, old_data);
+								}
+								else {
+									// We need to allocate
+									if (allocator.allocator == nullptr) {
+										// The behaviour is omitted
+										second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+									}
+									else {
+										size_t old_type_byte_size = GetReflectionTypeByteSize(&old_nested_type);
+										size_t new_type_byte_size = GetReflectionTypeByteSize(&new_nested_type);
+
+										if (second_info->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+											unsigned int copy_count = std::min(old_data.size, (unsigned int)second_info->info.basic_type_count);
+											void* current_data = function::OffsetPointer(second_data, second_info->info.pointer_offset);
+											for (unsigned int index = 0; index < copy_count; index++) {
+												CopyReflectionTypeToNewVersion(
+													first_reflection_manager,
+													second_reflection_manager,
+													&old_nested_type,
+													&new_nested_type,
+													function::OffsetPointer(old_data.buffer, old_type_byte_size * index),
+													function::OffsetPointer(current_data, new_type_byte_size * index),
+													allocator,
+													always_allocate_for_buffers
+												);
+											}
+										}
+										else {
+											size_t allocation_size = (size_t)second_info->info.stream_byte_size * old_data.size;
+											void* allocation = Allocate(allocator, allocation_size);
+											for (size_t index = 0; index < old_data.size; index++) {
+												CopyReflectionTypeToNewVersion(
+													first_reflection_manager,
+													second_reflection_manager,
+													&old_nested_type,
+													&new_nested_type,
+													function::OffsetPointer(old_data.buffer, old_type_byte_size * index),
+													function::OffsetPointer(allocation, new_type_byte_size * index),
+													allocator,
+													always_allocate_for_buffers
+												);
+											}
+											old_data.buffer = allocation;
+											old_data.capacity = old_data.size;
+											SetReflectionFieldResizableStreamVoid(second_info->info, second_data, old_data);
+										}
+									}
+								}
+							}
+						}
+						else {
+							// Custom type, enum, or error.
+							// Call the default instance data
+							second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+						}
+					}
+					else {
+						// Check for custom type
+						unsigned int custom_type_index = FindReflectionCustomType(second_info->definition);
+						if (custom_type_index != -1) {
+							// Get the dependent types. If any of these has changed, then revert to default instance field
+							ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 128);
+							ReflectionCustomTypeDependentTypesData dependent_data;
+							dependent_data.dependent_types = dependent_types;
+							dependent_data.definition = second_info->definition;
+							ECS_REFLECTION_CUSTOM_TYPES[custom_type_index].dependent_types(&dependent_data);
+
+							unsigned int index = 0;
+							for (; index < dependent_data.dependent_types.size; index++) {
+								ReflectionType first_type;
+								ReflectionType second_type;
+								if (first_reflection_manager->TryGetType(dependent_data.dependent_types[index], first_type)) {
+									if (second_reflection_manager->TryGetType(dependent_data.dependent_types[index], second_type)) {
+										if (!CompareReflectionTypes(
+											first_reflection_manager,
+											second_reflection_manager,
+											&first_type,
+											&second_type
+										)) {
+											// Revert to default data
+											break;
+										}
+									}
+									else {
+										// Revert to default data
+										break;
+									}
+								}
+								else {
+									// Revert to default data
+									break;
+								}
+							}
+
+							if (index < dependent_data.dependent_types.size) {
+								second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+							}
+							else {
+								// Nothing has changed. Can copy it
+								memcpy(
+									function::OffsetPointer(second_data, second_info->info.pointer_offset),
+									function::OffsetPointer(first_data, first_info->info.pointer_offset),
+									second_info->info.byte_size
+								);
+							}
+						}
+						else {
+							// Enum or error.
+							// Call the default instance data
+							second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+						}
+					}
+				}
+			}
+			else {
+				// Try to copy into this newer version
+				// If either one is a user defined type, then proceed with the default data
+				if (second_info->info.basic_type == ReflectionBasicFieldType::UserDefined
+					|| first_info->info.basic_type == ReflectionBasicFieldType::UserDefined) {
+					second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+				}
+				else {
+					if (second_info->info.stream_type != ReflectionStreamFieldType::Basic && 
+						first_info->info.stream_type != ReflectionStreamFieldType::Basic) {
+						ResizableStream<void> field = GetReflectionFieldResizableStreamVoid(first_info->info, first_data);
+						// If they have the same basic field type
+						if (first_info->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+							if (second_info->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+								// Convert if different types, else can just copy
+								if (first_info->info.basic_type == second_info->info.basic_type) {
+									SetReflectionFieldResizableStreamVoidEx(second_info->info, second_data, field);
+								}
+								else {
+									unsigned short copy_count = std::min(first_info->info.basic_type_count, second_info->info.basic_type_count);
+									ConvertReflectionBasicField(
+										first_info->info.basic_type,
+										second_info->info.basic_type,
+										function::OffsetPointer(first_data, first_info->info.pointer_offset),
+										function::OffsetPointer(second_data, second_info->info.pointer_offset),
+										copy_count
+									);
+
+									if (copy_count < second_info->info.basic_type_count) {
+										unsigned int element_byte_size = (unsigned int)second_info->info.byte_size / (unsigned int)second_info->info.basic_type_count;
+										unsigned int copy_byte_size = element_byte_size * copy_count;
+										memset(function::OffsetPointer(second_data, second_info->info.pointer_offset + copy_byte_size), 0, second_info->info.byte_size - copy_byte_size);
+									}
+								}
+							}
+							else {
+								// Need to allocate
+								if (allocator.allocator == nullptr) {
+									// Set the default
+									second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+								}
+								else {
+									void* allocation = Allocate(allocator, field.size * (size_t)second_info->info.stream_byte_size);
+									ConvertReflectionBasicField(
+										first_info->info.basic_type,
+										second_info->info.basic_type,
+										field.buffer,
+										allocation,
+										field.size
+									);
+									field.buffer = allocation;
+									field.capacity = field.size;
+									SetReflectionFieldResizableStreamVoid(second_info->info, second_data, field);
+								}
+							}
+						}
+						else {
+							if (first_info->info.basic_type == second_info->info.basic_type) {
+								// Can just copy directly
+								// Check to see if we need to allocate always
+								if (always_allocate_for_buffers) {
+									size_t allocation_size = (size_t)second_info->info.stream_byte_size * field.size;
+									void* allocation = Allocate(allocator, allocation_size);
+									memcpy(allocation, field.buffer, allocation_size);
+									field.buffer = allocation;
+									field.capacity = field.size;
+								}
+
+								SetReflectionFieldResizableStreamVoidEx(second_info->info, second_data, field);
+							}
+							else {
+								// Need to convert
+								if (second_info->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+									// No need to allocate, just to convert
+									void* write_buffer = function::OffsetPointer(second_data, second_info->info.pointer_offset);
+									unsigned int write_count = std::min(field.size, (unsigned int)second_info->info.basic_type_count);
+									ConvertReflectionBasicField(
+										first_info->info.basic_type,
+										second_info->info.basic_type,
+										field.buffer,
+										write_buffer,
+										write_count
+									);
+
+									if (write_count != (unsigned int)second_info->info.basic_type_count) {
+										// Set the 0 the other fields
+										unsigned int write_byte_size = write_count * (unsigned int)second_info->info.byte_size / (unsigned int)second_info->info.basic_type_count;
+										memset(
+											function::OffsetPointer(
+												write_buffer,
+												write_byte_size
+											),
+											0,
+											(unsigned int)second_info->info.byte_size - write_byte_size
+										);
+									}
+								}
+								else {
+									// Need to allocate
+									if (allocator.allocator == nullptr) {
+										second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+									}
+									else {
+										void* allocation = Allocate(allocator, field.size * second_info->info.stream_byte_size);
+										ConvertReflectionBasicField(
+											first_info->info.basic_type,
+											second_info->info.basic_type,
+											field.buffer,
+											allocation,
+											field.size
+										);
+										field.buffer = allocation;
+										SetReflectionFieldResizableStreamVoid(second_info->info, second_data, field);
+									}
+								}
+							}
+						}
+					}
+					else {
+						// If one is basic and the other one stream, just set the default for the field
+						if (second_info->info.stream_type == ReflectionStreamFieldType::Basic && first_info->info.stream_type == ReflectionStreamFieldType::Basic) {
+							// Convert the basic field type
+							ConvertReflectionBasicField(
+								first_info->info.basic_type, 
+								second_info->info.basic_type,
+								function::OffsetPointer(first_data, first_info->info.pointer_offset), 
+								function::OffsetPointer(second_data, second_info->info.pointer_offset)
+							);
+						}
+						else {
+							second_reflection_manager->SetInstanceFieldDefaultData(second_info, second_data);
+						}
+					}
+				}
+			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

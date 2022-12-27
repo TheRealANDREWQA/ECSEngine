@@ -8,6 +8,64 @@ namespace ECSEngine {
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
+		size_t REFLECTION_BASIC_FIELD_TYPE_BYTE_SIZE[] = {
+			sizeof(int8_t),
+			sizeof(uint8_t),
+			sizeof(int16_t),
+			sizeof(uint16_t),
+			sizeof(int32_t),
+			sizeof(uint32_t),
+			sizeof(int64_t),
+			sizeof(uint64_t),
+			sizeof(wchar_t),
+			sizeof(float),
+			sizeof(double),
+			sizeof(bool),
+			sizeof(unsigned char),
+			sizeof(char2),
+			sizeof(uchar2),
+			sizeof(short2),
+			sizeof(ushort2),
+			sizeof(int2),
+			sizeof(uint2),
+			sizeof(long2),
+			sizeof(ulong2),
+			sizeof(char3),
+			sizeof(uchar3),
+			sizeof(short3),
+			sizeof(ushort3),
+			sizeof(int3),
+			sizeof(uint3),
+			sizeof(long3),
+			sizeof(ulong3),
+			sizeof(char4),
+			sizeof(uchar4),
+			sizeof(short4),
+			sizeof(ushort4),
+			sizeof(int4),
+			sizeof(uint4),
+			sizeof(long4),
+			sizeof(ulong4),
+			sizeof(float2),
+			sizeof(float3),
+			sizeof(float4),
+			sizeof(double2),
+			sizeof(double3),
+			sizeof(double4),
+			sizeof(bool2),
+			sizeof(bool3),
+			sizeof(bool4),
+			0,
+			0
+		};
+
+		size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType type)
+		{
+			return REFLECTION_BASIC_FIELD_TYPE_BYTE_SIZE[(unsigned int)type];
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
         bool ReflectionField::Has(Stream<char> string) const
         {
 			if (tag.size > 0) {
@@ -153,8 +211,63 @@ namespace ECSEngine {
 			8
 		};
 
+		const char* ECS_BASIC_FIELD_TYPE_STRING[] = {
+			STRING(int8_t),
+			STRING(uint8_t),
+			STRING(int16_t),
+			STRING(uint16_t),
+			STRING(int32_t),
+			STRING(uint32_t),
+			STRING(int64_t),
+			STRING(uint64_t),
+			STRING(wchar_t),
+			STRING(float),
+			STRING(double),
+			STRING(bool),
+			// enum
+			"",
+			STRING(char2),
+			STRING(uchar2),
+			STRING(short2),
+			STRING(ushort2),
+			STRING(int2),
+			STRING(uint2),
+			STRING(long2),
+			STRING(ulong2),
+			STRING(char3),
+			STRING(uchar3),
+			STRING(short3),
+			STRING(ushort3),
+			STRING(int3),
+			STRING(uint3),
+			STRING(long3),
+			STRING(ulong3),
+			STRING(char4),
+			STRING(uchar4),
+			STRING(short4),
+			STRING(ushort4),
+			STRING(int4),
+			STRING(uint4),
+			STRING(long4),
+			STRING(ulong4),
+			STRING(float2),
+			STRING(float3),
+			STRING(float4),
+			STRING(double2),
+			STRING(double3),
+			STRING(double4),
+			STRING(bool2),
+			STRING(bool3),
+			STRING(bool4),
+			// User defined
+			"",
+			// Unknown
+			""
+		};
+
 		static_assert(std::size(ECS_BASIC_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionBasicFieldType::COUNT);
 		static_assert(std::size(ECS_STREAM_FIELD_TYPE_ALIGNMENT) == (unsigned int)ReflectionStreamFieldType::COUNT);
+		static_assert(std::size(ECS_BASIC_FIELD_TYPE_STRING) == (unsigned int)ReflectionBasicFieldType::COUNT);
 
 		size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type) {
 			return ECS_BASIC_FIELD_TYPE_ALIGNMENT[(unsigned int)field_type];
@@ -162,6 +275,186 @@ namespace ECSEngine {
 
 		size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type) {
 			return ECS_STREAM_FIELD_TYPE_ALIGNMENT[(unsigned int)stream_type];
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type)
+		{
+			return ECS_BASIC_FIELD_TYPE_STRING[(unsigned int)basic_type];
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		template<typename Type>
+		ECS_INLINE void ConvertFromDouble(double* values, unsigned int count, void* converted_values) {
+			Type* type_ptr = (Type*)converted_values;
+			for (unsigned int index = 0; index < count; index++) {
+				type_ptr[index] = (Type)values[index];
+			}
+		}
+
+		void ConvertFromDouble4ToBasic(ReflectionBasicFieldType basic_type, double4 values, void* converted_values)
+		{
+			double* double_values = (double*)&values;
+
+#define CASE(type) case ReflectionBasicFieldType::type
+#define CASE4(type) CASE(type): CASE(type##2): CASE(type##3): CASE(type##4):
+#define CASE4_INT32(type) CASE(type##32): CASE(type##2): CASE(type##3): CASE(type##4):
+#define CASE4_INT_BASE(base_int, other_int) CASE(base_int): CASE(other_int##2): CASE(other_int##3): CASE(other_int##4):
+
+			unsigned short basic_type_count = BasicTypeComponentCount(basic_type);
+			switch (basic_type) {
+				CASE4(Bool)
+				{
+					ConvertFromDouble<bool>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4(Float) 
+				{
+					ConvertFromDouble<float>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4(Double)
+				{
+					memcpy(converted_values, double_values, sizeof(double) * basic_type_count);
+				}
+				break;
+				CASE4_INT32(Int) 
+				{
+					ConvertFromDouble<int>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT32(UInt)
+				{
+					ConvertFromDouble<unsigned int>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT_BASE(Int8, Char)
+				{
+					ConvertFromDouble<char>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT_BASE(Int16, Short)
+				{
+					ConvertFromDouble<short>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT_BASE(Int64, Long)
+				{
+					ConvertFromDouble<long long>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT_BASE(UInt8, UChar)
+				{
+					ConvertFromDouble<unsigned char>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT_BASE(UInt16, UShort)
+				{
+					ConvertFromDouble<unsigned short>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				CASE4_INT_BASE(UInt64, ULong)
+				{
+					ConvertFromDouble<unsigned long long>(double_values, basic_type_count, converted_values);
+				}
+				break;
+				// Ignore all the other cases
+			}
+
+#undef CASE
+#undef CASE4
+#undef CASE4_INT32
+#undef CASE4_INT_BASE
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsIntegral(ReflectionBasicFieldType type)
+		{
+			// Use the negation - if it is different than all the other types
+			return type != ReflectionBasicFieldType::Bool && type != ReflectionBasicFieldType::Bool2 && type != ReflectionBasicFieldType::Bool3 &&
+				type != ReflectionBasicFieldType::Bool4 && type != ReflectionBasicFieldType::Double && type != ReflectionBasicFieldType::Double2 &&
+				type != ReflectionBasicFieldType::Double3 && type != ReflectionBasicFieldType::Double4 && type != ReflectionBasicFieldType::Float &&
+				type != ReflectionBasicFieldType::Float2 && type != ReflectionBasicFieldType::Float3 && type != ReflectionBasicFieldType::Float4 &&
+				type != ReflectionBasicFieldType::Enum && type != ReflectionBasicFieldType::UserDefined && type != ReflectionBasicFieldType::Unknown &&
+				type != ReflectionBasicFieldType::Wchar_t;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsIntegralSingleComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Int8 || type == ReflectionBasicFieldType::UInt8 ||
+				type == ReflectionBasicFieldType::Int16 || type == ReflectionBasicFieldType::UInt16 ||
+				type == ReflectionBasicFieldType::Int32 || type == ReflectionBasicFieldType::UInt32 ||
+				type == ReflectionBasicFieldType::Int64 || type == ReflectionBasicFieldType::UInt64;
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		bool IsIntegralMultiComponent(ReflectionBasicFieldType type)
+		{
+			return IsIntegral(type) && !IsIntegralSingleComponent(type);
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type)
+		{
+			if (type == ReflectionBasicFieldType::Bool || type == ReflectionBasicFieldType::Double || type == ReflectionBasicFieldType::Enum ||
+				type == ReflectionBasicFieldType::Float || type == ReflectionBasicFieldType::Int8 || type == ReflectionBasicFieldType::UInt8 ||
+				type == ReflectionBasicFieldType::Int16 || type == ReflectionBasicFieldType::UInt16 || type == ReflectionBasicFieldType::Int32 ||
+				type == ReflectionBasicFieldType::UInt32 || type == ReflectionBasicFieldType::Int64 || type == ReflectionBasicFieldType::UInt64 ||
+				type == ReflectionBasicFieldType::Wchar_t) {
+				return 1;
+			}
+			else if (type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Float2 ||
+				type == ReflectionBasicFieldType::Char2 || type == ReflectionBasicFieldType::UChar2 || type == ReflectionBasicFieldType::Short2 ||
+				type == ReflectionBasicFieldType::UShort2 || type == ReflectionBasicFieldType::Int2 || type == ReflectionBasicFieldType::UInt2 ||
+				type == ReflectionBasicFieldType::Long2 || type == ReflectionBasicFieldType::ULong2) {
+				return 2;
+			}
+			else if (type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Float3 ||
+				type == ReflectionBasicFieldType::Char3 || type == ReflectionBasicFieldType::UChar3 || type == ReflectionBasicFieldType::Short3 ||
+				type == ReflectionBasicFieldType::UShort3 || type == ReflectionBasicFieldType::Int3 || type == ReflectionBasicFieldType::UInt3 ||
+				type == ReflectionBasicFieldType::Long3 || type == ReflectionBasicFieldType::ULong3) {
+				return 3;
+			}
+			else if (type == ReflectionBasicFieldType::Bool4 || type == ReflectionBasicFieldType::Double4 || type == ReflectionBasicFieldType::Float4 ||
+				type == ReflectionBasicFieldType::Char4 || type == ReflectionBasicFieldType::UChar4 || type == ReflectionBasicFieldType::Short4 ||
+				type == ReflectionBasicFieldType::UShort4 || type == ReflectionBasicFieldType::Int4 || type == ReflectionBasicFieldType::UInt4 ||
+				type == ReflectionBasicFieldType::Long4 || type == ReflectionBasicFieldType::ULong4) {
+				return 4;
+			}
+			else {
+				return 0;
+			}
+		}
+
+		// ----------------------------------------------------------------------------------------------------------------------------
+
+		ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type) {
+#define CASE234(string, value)	case ReflectionBasicFieldType::string##2: \
+								case ReflectionBasicFieldType::string##3: \
+								case ReflectionBasicFieldType::string##4: \
+									return ReflectionBasicFieldType::value;
+
+			switch (type) {
+				CASE234(Bool, Bool);
+				CASE234(Float, Float);
+				CASE234(Double, Double);
+				CASE234(Char, Int8);
+				CASE234(UChar, UInt8);
+				CASE234(Short, Int16);
+				CASE234(UShort, UInt16);
+				CASE234(Int, Int32);
+				CASE234(UInt, UInt32);
+				CASE234(Long, Int64);
+				CASE234(ULong, UInt64);
+			}
+
+			return type;
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
@@ -260,6 +553,7 @@ namespace ECSEngine {
 				copy.evaluations = { nullptr, 0 };
 			}
 			copy.folder_hierarchy_index = folder_hierarchy_index;
+			copy.is_blittable = is_blittable;
 
 			return copy;
 		}

@@ -4,6 +4,7 @@
 #include "../../Internal/World.h"
 #include "../../Allocators/AllocatorPolymorphic.h"
 #include "../../Utilities/FunctionInterfaces.h"
+#include "../../Utilities/Path.h"
 
 
 namespace ECSEngine {
@@ -22,6 +23,162 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------
 
+	Stream<Stream<char>> GetModuleDLLDependencies(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool omit_system_dlls)
+	{
+		Stream<Stream<char>> result = { nullptr, 0 };
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, 512);
+
+		// Read the file as binary, but interpret it as text
+		Stream<void> file = ReadWholeFileBinary(path);
+		if (file.buffer != nullptr) {
+			Stream<char> text = { file.buffer, file.size };
+			Stream<char> token = ECS_MODULE_EXTENSION_ASCII;
+
+			Stream<char> last_dll = text;
+			Stream<char> dll = function::FindFirstToken(text, token);
+			while (dll.size > 0) {
+				Stream<char> dll_name = function::SkipUntilCharacterReverse(dll.buffer + token.size - 1, last_dll.buffer, '\0');
+				if (function::FindString(dll_name, dependencies) == -1) {
+					dependencies.AddSafe(dll_name);
+				}
+
+				dll.Advance(token.size);
+				last_dll = dll;
+				dll = function::FindFirstToken(dll, token);
+			}
+
+			Stream<wchar_t> filename = function::PathFilename(path);
+			ECS_STACK_CAPACITY_STREAM(char, char_filename, 512);
+			function::ConvertWideCharsToASCII(filename, char_filename);
+			unsigned int self_reference = function::FindString(char_filename, dependencies);
+			if (self_reference != -1) {
+				dependencies.RemoveSwapBack(self_reference);
+			}
+
+			static Stream<char> system_dlls[] = {
+				"KERNEL32.dll",
+				"VCRUNTIME140.dll",
+				"api-ms-win-crt-runtime-l1-1-0.dll",
+			};
+
+			if (omit_system_dlls) {
+				for (unsigned int index = 0; index < std::size(system_dlls); index++) {
+					unsigned int dependency_index = function::FindString(system_dlls[index], dependencies);
+					if (dependency_index != -1) {
+						dependencies.RemoveSwapBack(dependency_index);
+					}
+				}
+			}
+
+			free(file.buffer);
+			if (dependencies.size > 0) {
+				result = StreamDeepCopy(dependencies, allocator);
+			}
+		}
+		return result;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	Stream<Stream<char>> GetModuleDLLDependenciesFromVCX(Stream<wchar_t> path, AllocatorPolymorphic allocator, bool omit_system_dlls)
+	{
+		Stream<Stream<char>> result = { nullptr, 0 };
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, 512);
+
+		// Read the file as binary, but interpret it as text
+		Stream<void> file = ReadWholeFileBinary(path);
+		if (file.buffer != nullptr) {
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+
+			Stream<char> text = { file.buffer, file.size };
+			Stream<char> token = "<AdditionalDependencies>";
+			Stream<char> end_token = "</AdditionalDependencies>";
+
+			Stream<char> text_token = function::FindFirstToken(text, token);
+			if (text_token.size > 0) {
+				text_token.Advance(token.size);
+				Stream<char> text_end_token = function::FindFirstToken(text_token, end_token);
+				if (text_end_token.size > 0) {
+					char semicolon = ';';
+					Stream<char> parse_range;
+					parse_range.buffer = text_token.buffer;
+					parse_range.size = text_end_token.buffer - text_token.buffer;
+					Stream<char> current_lib_end = function::FindFirstCharacter(parse_range, semicolon);
+					while (current_lib_end.size > 0) {
+						Stream<char> current_range = { parse_range.buffer, function::PointerDifference(current_lib_end.buffer, parse_range.buffer) / sizeof(char) };
+						dependencies.Add(current_range);
+						size_t advance_count = current_lib_end.buffer - parse_range.buffer + 1;
+						parse_range.buffer = current_lib_end.buffer + 1;
+						parse_range.size -= advance_count;
+						current_lib_end = function::FindFirstCharacter(parse_range, semicolon);
+					}
+
+					static Stream<char> system_dlls[] = {
+						"kernel32.lib",
+						"user32.lib",
+						"gdi32.lib",
+						"winspool.lib",
+						"comdlg32.lib",
+						"advapi32.lib",
+						"shell32.lib",
+						"ole32.lib",
+						"oleaut32.lib",
+						"uuid.lib",
+						"odbc32.lib",
+						"odbccp32.lib"
+					};
+
+					if (omit_system_dlls) {
+						for (unsigned int index = 0; index < std::size(system_dlls); index++) {
+							unsigned int dependency_index = function::FindString(system_dlls[index], dependencies);
+							if (dependency_index != -1) {
+								dependencies.RemoveSwapBack(dependency_index);
+							}
+						}
+					}
+				}
+			}
+
+			free(file.buffer);
+			if (dependencies.size > 0) {
+				for (unsigned int index = 0; index < dependencies.size; index++) {
+					dependencies[index] = function::PathFilenameBoth(dependencies[index]);
+					Stream<char> extension = function::FindFirstCharacter(dependencies[index], '.');
+					// Some variable dlls might not have an extension (e.g. $(ECSEngineLibDebug))
+					if (extension.size > 0) {
+						// Change the extension to .dll
+						extension[1] = 'd';
+						extension[2] = 'l';
+						extension[3] = 'l';
+					}
+				}
+				result = StreamDeepCopy(dependencies, allocator);
+			}
+
+			stack_allocator.ClearBackup();
+		}
+
+		return result;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void* GetModuleHandleFromPath(Stream<char> module_path)
+	{
+		NULL_TERMINATE(module_path);
+		return GetModuleHandleA(module_path.buffer);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void* GetModuleHandleFromPath(Stream<wchar_t> module_path)
+	{
+		NULL_TERMINATE_WIDE(module_path);
+		return GetModuleHandleW(module_path.buffer);
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
 	Module LoadModule(Stream<wchar_t> path)
 	{
 		Module module;
@@ -36,9 +193,10 @@ namespace ECSEngine {
 			library_path = path;
 		}
 
-		HMODULE module_handle = LoadLibrary(library_path.buffer);
+		HMODULE module_handle = LoadLibraryEx(library_path.buffer, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
 
 		if (module_handle == nullptr) {
+			DWORD error = GetLastError();
 			module.code = ECS_GET_MODULE_FAULTY_PATH;
 			return module;
 		}
@@ -314,8 +472,15 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------
 
 	void ReleaseModule(Module* module) {
-		BOOL success = FreeLibrary(module->os_module_handle);
+		ReleaseModuleHandle(module->os_module_handle);
 		module->code = ECS_GET_MODULE_FAULTY_PATH;
+	}
+
+	// -----------------------------------------------------------------------------------------------------------
+
+	void ReleaseModuleHandle(void* handle)
+	{
+		BOOL success = FreeLibrary((HMODULE)handle);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------

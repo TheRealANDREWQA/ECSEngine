@@ -164,6 +164,24 @@ namespace ECSEngine {
 	);
 	
 	ECSENGINE_API bool IsMaterialFromMetadataLoaded(const MaterialAsset* metadata, bool randomized_asset = false);
+	
+	// If the segmented error string is given, then the error string must be specified as well
+	struct IsMaterialFromMetadataLoadedExDesc {
+		Stream<wchar_t> mount_point = { nullptr, 0 };
+		CapacityStream<char>* error_string = nullptr;
+		CapacityStream<AssetTypedHandle>* missing_handles = nullptr;
+		CapacityStream<Stream<char>>* segmented_error_string = nullptr;
+	};
+
+	// A different version which goes the assigned textures and shaders and determines if
+	// the dependencies are also loaded. If the segmented error string is specified, the first element
+	// will always be the description of the error
+	ECSENGINE_API bool IsMaterialFromMetadataLoadedEx(
+		const MaterialAsset* metadata, 
+		const ResourceManager* resource_manager, 
+		const AssetDatabase* database,
+		IsMaterialFromMetadataLoadedExDesc* load_desc = nullptr
+	);
 
 	ECSENGINE_API bool IsMiscFromMetadataLoaded(
 		const ResourceManager* resource_manager, 

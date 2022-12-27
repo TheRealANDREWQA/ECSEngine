@@ -168,8 +168,8 @@ void SandboxForEachEntity(
 	ComponentSignature shared_signature
 );
 
-// The functor receives takes as parameters Archetype*, ArchetypeBase*, Entity, void** unique_components
-template<typename ArchetypeInitialize, typename Functor>
+// The functor takes as parameters Archetype*, ArchetypeBase*, Entity, void** unique_components
+template<bool early_exit = false, typename ArchetypeInitialize, typename Functor>
 void SandboxForAllUniqueComponents(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
@@ -177,7 +177,31 @@ void SandboxForAllUniqueComponents(
 	Functor&& functor
 ) {
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	entity_manager->ForEachEntity(archetype_initialize, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor);
+	entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor);
+}
+
+// The functor receives as parameters const Archetype*, const ArchetypeBase*, Entity, void** unique_components
+template<bool early_exit = false, typename ArchetypeInitialize, typename Functor>
+void SandboxForAllUniqueComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ArchetypeInitialize&& archetype_initialize,
+	Functor&& functor
+) {
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](const Archetype* archetype, const ArchetypeBase* base_archetype) {}, functor);
+}
+
+// Return true to early exit, else false
+template<bool early_exit = false, typename ComponentFunctor, typename Functor>
+void SandboxForAllSharedComponents(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	ComponentFunctor&& component_functor,
+	Functor&& functor
+) {
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	entity_manager->ForAllSharedInstances<early_exit>(component_functor, functor);
 }
 
 // Unique component only. Splats the corresponding asset fields from the link component into their entity manager storage

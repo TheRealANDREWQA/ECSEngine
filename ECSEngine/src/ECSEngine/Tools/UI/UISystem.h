@@ -53,6 +53,8 @@ namespace ECSEngine {
 			UISystem(const UISystem& other) = default;
 			UISystem& operator= (const UISystem& other) = default;
 
+			void* AllocateFromHandlerAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase, size_t size);
+
 			void AddActionHandler(
 				LinearAllocator* allocator,
 				UIHandler* handler,
@@ -1127,6 +1129,12 @@ namespace ECSEngine {
 			unsigned int GetLastHoverableIndex(const UIDockspace* dockspace, unsigned int border_index) const;
 
 			unsigned int GetLastGeneralIndex(const UIDockspace* dockspace, unsigned int border_index) const;
+
+			void* GetLastClickableData(const UIDockspace* dockspace, unsigned int border_index) const;
+
+			void* GetLastHoverableData(const UIDockspace* dockspace, unsigned int border_index) const;
+
+			void* GetLastGeneralData(const UIDockspace* dockspace, unsigned int border_index) const;
 
 			void GetFixedDockspaceRegionsFromMouse(
 				float2 mouse_position,

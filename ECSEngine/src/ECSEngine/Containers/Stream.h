@@ -71,6 +71,29 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			return previous_size;
 		}
 
+		// Returns the previous buffer
+		void* AddResize(AllocatorPolymorphic allocator, size_t new_elements, bool deallocate_old = false) {
+			void* old_buffer = buffer;
+
+			void* allocation = Allocate(allocator, MemoryOf(size + new_elements));
+			CopyTo(allocation);
+			InitializeFromBuffer(allocation, size + new_elements);
+
+			if (deallocate_old) {
+				Deallocate(allocator);
+			}
+
+			return old_buffer;
+		}
+
+		// Increments the pointer and decrements the size
+		ECS_INLINE void Advance(int64_t amount = 1) {
+			// Adding a negative value will result in the appropriate outcome
+			size_t unsigned_amount = (size_t)amount;
+			buffer += unsigned_amount;
+			size -= unsigned_amount;
+		}
+
 		// it will set the size
 		ECS_INLINE void Copy(const void* memory, size_t count) {
 			memcpy(buffer, memory, count * sizeof(T));
@@ -98,16 +121,38 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// Added return type in order to be compatible with StreamDeepCopy
 		ECS_INLINE Stream<T> CopyTo(uintptr_t& memory) const {
+			return CopyTo(memory, size);
+		}
+
+		// Can select how many elements to copy
+		ECS_INLINE Stream<T> CopyTo(uintptr_t& memory, size_t element_count) const {
 			void* current_buffer = (void*)memory;
 
-			memcpy(current_buffer, buffer, sizeof(T) * size);
-			memory += sizeof(T) * size;
+			memcpy(current_buffer, buffer, sizeof(T) * element_count);
+			memory += sizeof(T) * element_count;
 
-			return Stream<T>(current_buffer, size);
+			return Stream<T>(current_buffer, element_count);
 		}
 
 		ECS_INLINE size_t CopySize() const {
 			return sizeof(T) * size;
+		}
+
+		// Does not change the size or the pointer
+		// It only deallocates if the size is greater than 0
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+			if (size > 0) {
+				ECSEngine::Deallocate(allocator, buffer);
+			}
+		}
+
+		// Does not change the size or the pointer
+		// It only deallocates if the size is greater than 0
+		template<typename Allocator>
+		ECS_INLINE void Deallocate(Allocator* allocator) const {
+			if (size > 0) {
+				allocator->Deallocate(buffer);
+			}
 		}
 
 		ECS_INLINE void Insert(size_t index, T value) {
@@ -130,17 +175,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 					buffer[index + displacement] = buffer[index];
 				}
 			}
-		}
-		
-		// Returns the previous buffer
-		void* Resize(AllocatorPolymorphic allocator, size_t new_elements) {
-			void* old_buffer = buffer;
-
-			void* allocation = Allocate(allocator, MemoryOf(size + new_elements));
-			CopyTo(allocation);
-			InitializeFromBuffer(allocation, size + new_elements);
-
-			return old_buffer;
 		}
 
 		// Set the count to the count of elements that you want to be removed
@@ -339,6 +373,14 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 			ECS_ASSERT(size <= capacity);
 		}
 
+		// Increments the pointer and decrements the size and the capacity
+		ECS_INLINE void Advance(int64_t amount = 1) {
+			size_t unsigned_amount = (size_t)amount;
+			buffer += unsigned_amount;
+			size -= unsigned_amount;
+			capacity -= unsigned_amount;
+		}
+
 		// it will set the size
 		ECS_INLINE void Copy(const void* memory, unsigned int count) {
 			ECS_ASSERT(count <= capacity);
@@ -367,15 +409,38 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 		// Added return type to be able to be used with StreamDeepCopy
 		ECS_INLINE CapacityStream<T> CopyTo(uintptr_t& memory) const {
-			void* current_buffer = (void*)memory;
-			memcpy(current_buffer, buffer, sizeof(T) * size);
-			memory += sizeof(T) * size;
+			return CopyTo(memory, size);
+		}
 
-			return CapacityStream<T>(current_buffer, size, size);
+		// Can select how many elements to copy
+		ECS_INLINE CapacityStream<T> CopyTo(uintptr_t& memory, unsigned int count) const {
+			void* current_buffer = (void*)memory;
+
+			memcpy(current_buffer, buffer, sizeof(T) * count);
+			memory += sizeof(T) * count;
+
+			return CapacityStream<T>(current_buffer, count, count);
 		}
 		
 		ECS_INLINE size_t CopySize() const {
 			return sizeof(T) * size;
+		}
+
+		// Does not change the size or the pointer
+		// It only deallocates if the size is greater than 0
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) const {
+			if (size > 0) {
+				ECSEngine::Deallocate(allocator, buffer);
+			}
+		}
+
+		// Does not change the size or the pointer
+		// It only deallocates if the size is greater than 0
+		template<typename Allocator>
+		ECS_INLINE void Deallocate(Allocator* allocator) const {
+			if (size > 0) {
+				allocator->Deallocate(buffer);
+			}
 		}
 
 		ECS_INLINE bool IsFull() const {
@@ -615,8 +680,13 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		// If it is desirable to be used with StreamDeepCopy, the problem is that
 		// it cannot use coallesced allocation. Wait for a use case to decide
 		ECS_INLINE void CopyTo(uintptr_t& memory) const {
-			memcpy((void*)memory, buffer, sizeof(T) * size);
-			memory += sizeof(T) * size;
+			CopyTo(memory, size);
+		}
+
+		// Can choose how many elements to copy
+		ECS_INLINE void CopyTo(uintptr_t& memory, unsigned int count) const {
+			memcpy((void*)memory, buffer, sizeof(T) * count);
+			memory += sizeof(T) * count;
 		}
 
 		ECS_INLINE size_t CopySize() const {
@@ -733,16 +803,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 
 			return -1;
 		}
-
-		/*template<typename Functor>
-		unsigned int SearchFunctor(Functor&& functor) const {
-			for (unsigned int index = 0; index < size; index++) {
-				if (functor(buffer[index])) {
-					return index;
-				}
-			}
-			return -1;
-		}*/
 
 		void Trim() {
 			T* allocation = (T*)Allocate(allocator, sizeof(T) * size, alignof(T));
@@ -1176,14 +1236,6 @@ ECSEngine::CapacityStream<wchar_t> name(name##_temp_memory, 0, size);
 		unsigned int capacity;
 		AllocatorPolymorphic allocator;
 	};
-
-	/*ECS_INLINE Stream<char> const char* string {
-		return Stream<char>(string, strlen(string));
-	}
-
-	ECS_INLINE Stream<wchar_t> const wchar_t* string {
-		return Stream<wchar_t>(string, wcslen(string));
-	}*/
 
 	// The template parameter of the stream must have as functions
 	// size_t CopySize() const;

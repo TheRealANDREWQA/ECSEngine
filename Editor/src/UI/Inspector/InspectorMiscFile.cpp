@@ -12,11 +12,10 @@ using namespace ECSEngine;
 ECS_TOOLS;
 
 struct InspectorDrawMiscFileData {
-	GPUSamplerMetadata sampler_metadata;
-	Stream<wchar_t> path;
+	MiscAsset asset;
 };
 
-void InspectorCleanMisc(EditorState* editor_state, void* _data) {
+void InspectorCleanMisc(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawMiscFileData* data = (InspectorDrawMiscFileData*)_data;
 	//AssetSettingsHelperDestroy(editor_state, &data->helper_data);
 }
@@ -24,17 +23,20 @@ void InspectorCleanMisc(EditorState* editor_state, void* _data) {
 void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
 	InspectorDrawMiscFileData* data = (InspectorDrawMiscFileData*)_data;
 
+	ECS_STACK_CAPACITY_STREAM(wchar_t, path_storage, 512);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
+	Stream<wchar_t> path = function::MountPathOnlyRel(data->asset.file, assets_folder, path);
 	// Check to see if the file still exists - else revert to draw nothing
-	if (!ExistsFileOrFolder(data->path)) {
+	if (!ExistsFileOrFolder(path)) {
 		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
 
 	InspectorIconDouble(drawer, ECS_TOOLS_UI_TEXTURE_FILE_BLANK, ASSET_MISC_ICON, drawer->color_theme.text, drawer->color_theme.theme);
 
-	InspectorIconNameAndPath(drawer, data->path);
-	InspectorDrawFileTimes(drawer, data->path);
-	InspectorOpenAndShowButton(drawer, data->path);
+	InspectorIconNameAndPath(drawer, path);
+	InspectorDrawFileTimes(drawer, path);
+	InspectorOpenAndShowButton(drawer, path);
 	drawer->CrossLine();
 
 	// Draw the settings
@@ -45,8 +47,7 @@ void InspectorDrawMiscFile(EditorState* editor_state, unsigned int inspector_ind
 
 void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, unsigned int inspector_index) {
 	InspectorDrawMiscFileData data;
-	data.path = path;
-	memset(&data.sampler_metadata, 0, sizeof(data.sampler_metadata));
+	memset(&data.asset, 0, sizeof(data.asset));
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
@@ -61,8 +62,8 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 	if (inspector_index != -1) {
 		// Get the data and set the path
 		InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->path = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.Copy(path);
+		draw_data->asset.file = { function::OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
+		draw_data->asset.file.Copy(path);
 	}
 }
 

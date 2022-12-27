@@ -126,9 +126,25 @@ EditorModuleInfo* GetModuleInfo(const EditorState* editor_state, unsigned int in
 
 void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& module_folder_path);
 
-void GetModuleFolder(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
+void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
+
+void GetModuleFilename(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
+
+void GetModuleFilenameNoConfig(Stream<wchar_t> library_name, CapacityStream<wchar_t>& module_path);
 
 void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path);
+
+// This will go through the .vcxproj file to read the imports
+void GetModuleDLLImports(EditorState* editor_state, unsigned int index);
+
+// It will fill in all the indices of the modules that are being used by this module
+void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, CapacityStream<unsigned int>& dll_imports);
+
+void GetModuleDLLExternalReferences(
+	const EditorState* editor_state, 
+	unsigned int index,  
+	CapacityStream<unsigned int>& external_references
+);
 
 size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path);
 
@@ -154,9 +170,9 @@ EDITOR_MODULE_CONFIGURATION GetModuleLoadedConfiguration(const EditorState* edit
 ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor_state, unsigned int module_index, Stream<char> name);
 
 // Fills in the indices of the modules that the types from the given module index depend upon
-void GetModuleDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);
+void GetModuleTypesDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);
 
-void GetModulesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);
+void GetModulesTypesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies);
 
 bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration);
 
@@ -173,7 +189,11 @@ void ReflectModule(EditorState* editor_state, unsigned int index);
 // Does not check to see if the module is being used by a sandbox
 // Deallocates the streams and releases the OS library handle
 // If the configuration is defaulted, it will release all the configurations
-void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT);
+void ReleaseModuleStreamsAndHandle(
+	EditorState* editor_state, 
+	unsigned int index, 
+	EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT
+);
 
 // Does not check to see if the module is being used by a sandbox
 // Deallocates the streams and releases the OS library handle
@@ -197,7 +217,7 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, Stream<wchar_t> solu
 // Releases all the modules and basically no module will be kept
 void ResetModules(EditorState* editor_state);
 
-void SetModuleLoadStatus(EditorModule* module, bool has_functions, EDITOR_MODULE_CONFIGURATION configuration);
+void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool is_failed, EDITOR_MODULE_CONFIGURATION configuration);
 
 // Returns whether or not the module has been modified; it updates both the solution and the library last write times
 // If the configuration is defaulted, it will update all configurations for the library. In this case, it will return true
@@ -212,6 +232,11 @@ bool UpdateModuleSolutionLastWrite(EditorState* editor_state, unsigned int index
 // If the configuration is defaulted, it will update all the configurations for the library. In this case, it will return true
 // if any of the configurations was updated
 bool UpdateModuleLibraryLastWrite(EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration = EDITOR_MODULE_CONFIGURATION_COUNT);
+
+// Updates the DLL imports of all modules
+void UpdateModulesDLLImports(EditorState* editor_state);
+
+void TickUpdateModulesDLLImports(EditorState* editor_state);
 
 size_t GetVisualStudioLockedFilesSize(const EditorState* editor_state);
 

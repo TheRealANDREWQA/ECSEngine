@@ -633,7 +633,7 @@ namespace ECSEngine {
 		unsigned int int_type = (unsigned int)type;
 		
 		Stream<ResourceIdentifier> identifiers;
-		identifiers.Resize(allocator, m_resource_types[int_type].GetCount());
+		identifiers.Initialize(allocator, m_resource_types[int_type].GetCount());
 		identifiers.size = 0;
 
 		// Iterate through all resources and check their new stamps
@@ -1483,11 +1483,13 @@ namespace ECSEngine {
 				converted_material->v_textures[converted_material->v_texture_count] = resource_view;
 				converted_material->v_texture_slot[converted_material->v_texture_count] = user_material->textures[index].slot;
 				converted_material->v_texture_count++;
+				ECS_ASSERT(converted_material->v_texture_count <= ECS_MATERIAL_VERTEX_TEXTURES_COUNT);
 				break;
 			case ECS_SHADER_PIXEL:
 				converted_material->p_textures[converted_material->p_texture_count] = resource_view;
 				converted_material->p_texture_slot[converted_material->p_texture_count] = user_material->textures[index].slot;
 				converted_material->p_texture_count++;
+				ECS_ASSERT(converted_material->p_texture_count <= ECS_MATERIAL_PIXEL_TEXTURES_COUNT);
 				break;
 			}
 		}
@@ -1512,12 +1514,31 @@ namespace ECSEngine {
 				converted_material->v_buffers[v_index] = buffer;
 				converted_material->v_buffer_slot[v_index] = user_material->buffers[index].slot;
 				converted_material->v_buffer_count++;
+				ECS_ASSERT(converted_material->v_buffer_count <= ECS_MATERIAL_VERTEX_CONSTANT_BUFFER_COUNT);
 			}
 			else {
 				unsigned char p_index = converted_material->v_buffer_count;
 				converted_material->p_buffers[p_index] = buffer;
 				converted_material->p_buffer_slot[p_index] = user_material->buffers[index].slot;
 				converted_material->p_buffer_count++;
+				ECS_ASSERT(converted_material->p_buffer_count <= ECS_MATERIAL_PIXEL_CONSTANT_BUFFER_COUNT);
+			}
+		}
+
+		for (size_t index = 0; index < user_material->samplers.size; index++) {
+			if (user_material->samplers[index].shader_type == ECS_SHADER_VERTEX) {
+				unsigned char v_index = converted_material->v_sampler_count;
+				converted_material->v_samplers[v_index] = user_material->samplers[index].state;
+				converted_material->v_sampler_slot[v_index] = user_material->samplers[index].slot;
+				converted_material->v_sampler_count++;
+				ECS_ASSERT(converted_material->v_sampler_count <= ECS_MATERIAL_VERTEX_TEXTURES_COUNT);
+			}
+			else {
+				unsigned char p_index = converted_material->p_sampler_count;
+				converted_material->p_samplers[p_index] = user_material->samplers[index].state;
+				converted_material->p_sampler_slot[p_index] = user_material->samplers[index].slot;
+				converted_material->p_sampler_count++;
+				ECS_ASSERT(converted_material->p_sampler_count <= ECS_MATERIAL_PIXEL_TEXTURES_COUNT);
 			}
 		}
 

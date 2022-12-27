@@ -11,18 +11,18 @@ namespace ECSEngine {
 
 	struct AssetDatabase;
 
-	// ------------------------------------------------------------------------------------------------------------
-
 	struct LinkComponentAssetField {
 		unsigned int field_index;
 		ECS_ASSET_TYPE type;
 	};
 
+	// ------------------------------------------------------------------------------------------------------------
+
 	// Fills in the field indices of the fields that contain asset handles
-	ECSENGINE_API void GetAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices);
+	ECSENGINE_API void GetAssetFieldsFromLinkComponent(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& typed_handles);
 
 	// Returns true if it has conformant types. (for example we don't support basic arrays of ResourceView for textures)
-	ECSENGINE_API bool GetAssetFieldsFromLinkComponentTarget(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& field_indices);
+	ECSENGINE_API bool GetAssetFieldsFromLinkComponentTarget(const Reflection::ReflectionType* type, CapacityStream<LinkComponentAssetField>& typed_handles);
 
 	struct AssetTargetFieldFromReflection {
 		ECS_ASSET_TYPE type;
@@ -132,6 +132,15 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type,
 		const void* link_component,
 		const AssetDatabase* database,
+		Stream<LinkComponentAssetField> asset_fields,
+		Stream<void>* field_data
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	ECSENGINE_API void GetLinkComponentAssetDataForTarget(
+		const Reflection::ReflectionType* type,
+		const void* target,
 		Stream<LinkComponentAssetField> asset_fields,
 		Stream<void>* field_data
 	);

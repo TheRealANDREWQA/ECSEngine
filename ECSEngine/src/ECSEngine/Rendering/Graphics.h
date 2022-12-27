@@ -914,6 +914,10 @@ namespace ECSEngine {
 		// Returns ECS_SHADER_TYPE_COUNT if it couldn't determine the shader type for a given shader
 		ECS_SHADER_TYPE DetermineShaderType(Stream<char> source_code) const;
 
+		ECS_INLINE const ShaderReflection* GetShaderReflection() const {
+			return m_shader_reflection;
+		}
+
 		// The vertex byte code needs to be given from the compilation of the vertex shader
 		InputLayout ReflectVertexShaderInput(
 			Stream<char> source_code, 
@@ -924,15 +928,18 @@ namespace ECSEngine {
 		);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers);
+		bool ReflectShaderBuffers(Stream<char> source_code, CapacityStream<ShaderReflectedBuffer>& buffers, AllocatorPolymorphic allocator);
 
 		// The memory needed for the buffer names will be allocated from the assigned allocator
-		bool ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures);
+		bool ReflectShaderTextures(Stream<char> source_code, CapacityStream<ShaderReflectedTexture>& textures, AllocatorPolymorphic allocator);
 
 		bool ReflectShaderMacros(Stream<char> source_code, CapacityStream<Stream<char>>* defined_macros, CapacityStream<Stream<char>>* conditional_macros, AllocatorPolymorphic allocator);
 		
 		// No memory needs to be allocated
 		bool ReflectVertexBufferMapping(Stream<char> source_code, CapacityStream<ECS_MESH_INDEX>& mapping);
+
+		// The memory for the names will be allocated from the given allocator
+		bool ReflectShaderSamplers(Stream<char> source_code, CapacityStream<ShaderReflectedSampler>& samplers, AllocatorPolymorphic allocator);
 
 #pragma endregion
 

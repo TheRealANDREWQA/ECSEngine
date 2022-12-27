@@ -232,6 +232,10 @@ namespace ECSEngine {
 			// It will set the fields of the data according to the defaults
 			void SetInstanceDefaultData(const ReflectionType* type, void* data) const;
 
+			// It will memset to 0 initially then will set the other fields
+			// It will set the fields of the data according to the defaults
+			void SetInstanceFieldDefaultData(const ReflectionField* field, void* data) const;
+
 			// If ignoring some fields, you can set this value manually in order
 			// to correctly have the byte size
 			void SetTypeByteSize(ReflectionType* type, size_t byte_size);
@@ -370,20 +374,43 @@ namespace ECSEngine {
 			ReflectionEnum& enum_
 		);
 
+		// Can optionally give field definitions to be considered as trivially copyable
+		ECSENGINE_API bool SearchIsBlittable(
+			const ReflectionManager* reflection_manager,
+			const ReflectionType* type
+		);
+
+		// Returns true if it can be copied with memcpy, else false
+		// It returns true when all fields are fundamental types non pointer
+		// Can optionally give field definitions to be considered as trivially copyable
+		ECSENGINE_API bool SearchIsBlittable(
+			const ReflectionManager* reflection_manager,
+			Stream<char> definition
+		);
+
+		// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
+		ECSENGINE_API void CopyReflectionType(
+			const Reflection::ReflectionManager* reflection_manager,
+			const Reflection::ReflectionType* type,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic field_allocator
+		);
+
+		// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
+		ECSENGINE_API void CopyReflectionType(
+			const Reflection::ReflectionManager* reflection_manager,
+			Stream<char> definition,
+			const void* source,
+			void* destination,
+			AllocatorPolymorphic field_allocator
+		);
+
 		// Works for user defined types aswell
 		ECSENGINE_API size_t GetFieldTypeAlignmentEx(const ReflectionManager* reflection_manager, ReflectionField field);
 
 		// Copies non used defined field
 		ECSENGINE_API void CopyReflectionFieldBasic(const ReflectionFieldInfo* info, const void* source, void* destination, AllocatorPolymorphic allocator);
-
-		// Checks for single, double, triple and quadruple component integers
-		ECSENGINE_API bool IsIntegral(ReflectionBasicFieldType type);
-
-		ECSENGINE_API bool IsIntegralSingleComponent(ReflectionBasicFieldType type);
-
-		ECSENGINE_API bool IsIntegralMultiComponent(ReflectionBasicFieldType type);
-
-		ECSENGINE_API unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type);
 
 		ECSENGINE_API size_t GetBasicTypeArrayElementSize(const ReflectionFieldInfo& info);
 
@@ -391,8 +418,23 @@ namespace ECSEngine {
 
 		ECSENGINE_API size_t GetReflectionFieldStreamSize(const ReflectionFieldInfo& info, const void* data);
 
+		// It will offset the data in order to reach the stream field
 		// The size of the void stream is that of the elements, not that of the byte size of the elements
+		// This version does not take into account embedded arrays
 		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoid(const ReflectionFieldInfo& info, const void* data);
+
+		// It will offset the data in order to reach the stream field
+		ECSENGINE_API ResizableStream<void> GetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, const void* data);
+
+		// It will offset the data in order to reach the stream field
+		// This version takes into account embedded arrays. The size of the void stream is the element count, not
+		// the byte size of the elements
+		ECSENGINE_API Stream<void> GetReflectionFieldStreamVoidEx(const ReflectionFieldInfo& info, const void* data);
+
+		// It will offset the data in order to reach the stream field
+		// This version takes into account embedded arrays. The size of the void stream is the element count, not
+		// the byte size of the elements
+		ECSENGINE_API ResizableStream<void> GetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, const void* data);
 
 		ECSENGINE_API size_t GetReflectionFieldStreamElementByteSize(const ReflectionFieldInfo& info);
 
@@ -400,12 +442,63 @@ namespace ECSEngine {
 
 		ECSENGINE_API ReflectionBasicFieldType ConvertBasicTypeMultiComponentToSingle(ReflectionBasicFieldType type);
 
+		// It will offset the data in order to reach the stream field
+		ECSENGINE_API void SetReflectionFieldResizableStreamVoid(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data);
+
+		// It will offset the data in order to reach the stream field
+		// This version takes into account embedded arrays. The size of the void stream is the element count,
+		// not the byte size of the elements
+		ECSENGINE_API void SetReflectionFieldResizableStreamVoidEx(const ReflectionFieldInfo& info, void* data, ResizableStream<void> stream_data);
+
 		// Returns true if both types are the same in their respective reflection managers
 		ECSENGINE_API bool CompareReflectionTypes(
 			const ReflectionManager* first_reflection_manager,
 			const ReflectionManager* second_reflection_manager,
 			const ReflectionType* first, 
 			const ReflectionType* second
+		);
+
+		// Copies the data from the old_type into the new type and checks for remappings
+		// The allocator is needed only when a stream type has changed its underlying type
+		// It will allocate memory in that case for the new stream. If the allocator is not specified,
+		// then it will not allocate and instead be with size 0 and nullptr (that means, the previous data will not be copied, not referenced)
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		ECSENGINE_API void CopyReflectionTypeToNewVersion(
+			const ReflectionManager* old_reflection_manager,
+			const ReflectionManager* new_reflection_manager,
+			const ReflectionType* old_type,
+			const ReflectionType* new_type,
+			const void* old_data,
+			void* new_data,
+			AllocatorPolymorphic allocator = { nullptr },
+			bool always_allocate_for_buffers = false
+		);
+
+		// Does not work for user defined types
+		ECSENGINE_API void ConvertReflectionBasicField(
+			ReflectionBasicFieldType first_type,
+			ReflectionBasicFieldType second_type,
+			const void* first_data,
+			void* second_data,
+			size_t count = 1
+		);
+
+		// It works for used defined types as well
+		// The allocator is needed only when a stream type has changed its underlying type
+		// It will allocate memory in that case for the new stream. If the allocator is not specified,
+		// then it will not allocate and instead be with size 0 and nullptr (that means, the previous data will not be copied, not referenced)
+		// If an allocator is specified, then the always_allocate_for_buffers flag can be set such that
+		// for buffers it will always allocate even when the type is the same
+		ECSENGINE_API void ConvertReflectionFieldToOtherField(
+			const ReflectionManager* first_reflection_manager,
+			const ReflectionManager* second_reflection_manager,
+			const ReflectionField* first_info,
+			const ReflectionField* second_info,
+			const void* first_data,
+			void* second_data,
+			AllocatorPolymorphic allocator = { nullptr },
+			bool always_allocate_for_buffers = false
 		);
 
 		ECSENGINE_API bool IsReflectionTypeComponent(const ReflectionType* type);
@@ -441,60 +534,6 @@ namespace ECSEngine {
 		ECSENGINE_API size_t GetReflectionDataPointerElementByteSize(const ReflectionManager* manager, Stream<char> tag);
 
 		ECSENGINE_API void GetReflectionTypeDependentTypes(const ReflectionManager* manager, const ReflectionType* type, CapacityStream<Stream<char>>& dependent_types);
-
-		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;
-		}
-
-		inline bool IsBoolBasicType(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Bool || IsBoolBasicTypeMultiComponent(type);
-		}
-
-		// Checks for float2, float3, float4
-		inline bool IsFloatBasicTypeMultiComponent(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Float2 || type == ReflectionBasicFieldType::Float3 || type == ReflectionBasicFieldType::Float4;
-		}
-
-		// Checks for float, float2, float3, float4
-		inline bool IsFloatBasicType(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Float || IsFloatBasicTypeMultiComponent(type);
-		}
-
-		// Checks for double2, double3, double4
-		inline bool IsDoubleBasicTypeMultiComponent(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Double4;
-		}
-
-		// Checks for double, double2, double3, double4
-		inline bool IsDoubleBasicType(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Double || IsDoubleBasicTypeMultiComponent(type);
-		}
-
-		// Checks for float, float2, float3, float4, double, double2, double3, double4
-		inline bool IsFloating(ReflectionBasicFieldType type) {
-			return IsFloatBasicType(type) || IsDoubleBasicType(type);
-		}
-
-		inline bool IsUserDefined(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::UserDefined;
-		}
-
-		inline bool IsPointer(ReflectionStreamFieldType type) {
-			return type == ReflectionStreamFieldType::Pointer;
-		}
-
-		inline bool IsEnum(ReflectionBasicFieldType type) {
-			return type == ReflectionBasicFieldType::Enum;
-		}
-
-		inline bool IsArray(ReflectionStreamFieldType type) {
-			return type == ReflectionStreamFieldType::BasicTypeArray;
-		}
-
-		inline bool IsStream(ReflectionStreamFieldType type) {
-			return type == ReflectionStreamFieldType::Stream || type == ReflectionStreamFieldType::CapacityStream 
-				|| type == ReflectionStreamFieldType::ResizableStream;
-		}
 
 	}
 

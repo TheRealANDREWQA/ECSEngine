@@ -1,7 +1,6 @@
 // These macros must be placed at the end of the line i.e. float2 position : Position; ***HERE***
 // ECS_REFLECT_INCREMENT_INPUT_SLOT must be placed after the structure name
-// If no format is specified, then it is considered to be the float DXGI format of the correspoding
-// type width
+// If no format is specified, then it is considered to be the float DXGI format of the correspoding type width
 // Compound basic types like float2x4 or float4x2 will be automatically assigned the vector semantic count
 // e.g. float2x4 will be split into 2 semantic indices
 
@@ -31,3 +30,17 @@
 #define ECS_REFLECT_TANGENT
 #define ECS_REFLECT_BONE_WEIGHT
 #define ECS_REFLECT_BONE_INFLUENCE
+
+// Exclude elements from being reflected
+// It must be placed on the same line before the structure definition
+// E.g. ECS_REFLECT_OMIT cbuffer { ... }
+#define ECS_REFLECT_OMIT
+
+// Constant buffer modifiers
+#define ECS_REFLECT_AS_COLOR
+#define ECS_REFLECT_AS_FLOAT_COLOR
+#define ECS_REFLECT_DEFAULT(default_value)
+// If you don't want a value to be inserted just use a _
+#define ECS_REFLECT_RANGE(lower_bound, upper_bound)
+// If you don't want a value to be inserted just use a  _
+#define ECS_REFLECT_PARAMETERS(default, lower_bound, upper_bound)

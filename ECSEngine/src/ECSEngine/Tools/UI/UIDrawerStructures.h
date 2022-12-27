@@ -1357,6 +1357,30 @@ namespace ECSEngine {
 			void* mappings;
 		};
 
+		// Marks certain values as unavailable
+		struct UIConfigComboBoxUnavailable {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_COMBO_BOX_UNAVAILABLE;
+			}
+
+			bool stable = false;
+			bool* unavailables;
+		};
+
+		struct UIConfigComboBoxDefault {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_COMBO_BOX_DEFAULT;
+			}
+
+			bool is_pointer_value = false;
+			bool mapping_value_stable = false;
+			union {
+				unsigned char char_value;
+				unsigned char* char_pointer;
+				void* mapping_value;
+			};
+		};
+
 		struct UIDrawerInitializeArrayElementData {
 			UIDrawConfig* config;
 			Stream<char> name;
@@ -1456,6 +1480,18 @@ namespace ECSEngine {
 			bool disable_value_to_modify = false;
 		};
 
+		struct UIConfigCheckBoxDefault {
+			inline static size_t GetAssociatedBit() {
+				return UI_CONFIG_CHECK_BOX_DEFAULT;
+			}
+
+			bool is_pointer_variable = false;
+			union {
+				bool value;
+				bool* pointer_variable;
+			};
+		};
+
 		// With this config the path input can be restricted to only paths that start from the given roots
 		struct UIConfigPathInputRoot {
 			inline static size_t GetAssociatedBit() {
@@ -1526,11 +1562,13 @@ namespace ECSEngine {
 			const wchar_t* texture;
 		};
 
+		// If the omit_text is set to true, then it will just padd 
 		struct UIConfigNamePadding {
 			inline static size_t GetAssociatedBit() {
 				return UI_CONFIG_NAME_PADDING;
 			}
 
+			bool omit_text = false;
 			ECS_UI_ALIGN alignment = ECS_UI_ALIGN_LEFT;
 			float total_length = -1.0f;
 			float offset_size = 0.0f;

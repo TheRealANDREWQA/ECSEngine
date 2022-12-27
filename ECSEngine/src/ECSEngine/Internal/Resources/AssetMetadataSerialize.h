@@ -4,8 +4,7 @@
 
 namespace ECSEngine {
 
-	// When deserializing, it will use the backup allocator to allocate its streams
-	
+	// When deserializing, it will use the backup allocator to allocate its streams	
 	struct AssetDatabase;
 
 	ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(MaterialAsset);

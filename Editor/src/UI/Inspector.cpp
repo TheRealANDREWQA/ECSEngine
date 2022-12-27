@@ -68,7 +68,7 @@ void GetInspectorsForModule(const EditorState* editor_state, unsigned int target
 
 // Just calls the clean function 
 void CleanInspectorData(EditorState* editor_state, unsigned int inspector_index) {
-	editor_state->inspector_manager.data[inspector_index].clean_function(editor_state, editor_state->inspector_manager.data[inspector_index].draw_data);
+	editor_state->inspector_manager.data[inspector_index].clean_function(editor_state, inspector_index, editor_state->inspector_manager.data[inspector_index].draw_data);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

@@ -53,7 +53,6 @@ struct AssetSettingsHelperChangedNoFileActionData {
 	EditorState* editor_state;
 	ECS_ASSET_TYPE asset_type;
 	const void* asset;
-	Stream<char> previous_name;
 };
 
 void AssetSettingsHelperChangedNoFileAction(ActionData* action_data);

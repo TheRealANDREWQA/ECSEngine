@@ -303,12 +303,24 @@ namespace ECSEngine {
 			return value >= '0' && value <= '9';
 		}
 
+		inline bool IsNumberCharacter(wchar_t value) {
+			return value >= L'0' && value <= L'9';
+		}
+
 		inline bool IsAlphabetCharacter(char value) {
 			return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z');
 		}
 
+		inline bool IsAlphabetCharacter(wchar_t value) {
+			return (value >= L'a' && value <= L'z') || (value >= L'A' && value <= L'Z');
+		}
+
 		inline bool IsCodeIdentifierCharacter(char value) {
 			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == '_';
+		}
+
+		inline bool IsCodeIdentifierCharacter(wchar_t value) {
+			return IsNumberCharacter(value) || IsAlphabetCharacter(value) || value == L'_';
 		}
 
 		// Can use the increment to go backwards by setting it to -1
@@ -342,6 +354,13 @@ namespace ECSEngine {
 
 		// Can use the increment to go backwards by setting it to -1
 		inline const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
+			while (IsCodeIdentifierCharacter(*pointer)) {
+				pointer += increment;
+			}
+			return pointer;
+		}
+
+		inline const wchar_t* SkipCodeIdentifier(const wchar_t* pointer, int increment = 1) {
 			while (IsCodeIdentifierCharacter(*pointer)) {
 				pointer += increment;
 			}
@@ -489,8 +508,13 @@ namespace ECSEngine {
 		// it searches for spaces and next line characters
 		ECSENGINE_API size_t ParseWordsFromSentence(Stream<char> sentence, char separator_token = ' ');
 
-		// positions will be filled with the 4 corners of the rectangle
+		// Positions will be filled with the 4 corners of the rectangle
 		ECSENGINE_API void ObliqueRectangle(float2* positions, float2 a, float2 b, float thickness);
+
+		ECSENGINE_API void CopyStreamAndMemset(void* destination, size_t destination_capacity, Stream<void> data, int memset_value = 0);
+
+		// It will advance the ptr with the destination_capacity
+		ECSENGINE_API void CopyStreamAndMemset(uintptr_t& ptr, size_t destination_capacity, Stream<void> data, int memset_value = 0);
 
 		constexpr ECS_INLINE float CalculateFloatPrecisionPower(size_t precision) {
 			float value = 1.0f;
@@ -540,6 +564,12 @@ namespace ECSEngine {
 		// until the end of the character string
 		ECSENGINE_API Stream<char> FindFirstCharacter(Stream<char> characters, char token);
 
+		// It will return the first appereance of the token inside the character stream
+		// It will not call strchr, this function being well suited if searching a large string
+		// Returns { nullptr, 0 } if it doesn't exit, else a string that starts with the token
+		// until the end of the character string
+		ECSENGINE_API Stream<wchar_t> FindFirstCharacter(Stream<wchar_t> characters, wchar_t token);
+
 		// It will search from the end of the characters string till its start
 		// It uses SIMD to speed up the find
 		ECSENGINE_API Stream<char> FindTokenReverse(Stream<char> characters, Stream<char> token);
@@ -553,6 +583,26 @@ namespace ECSEngine {
 
 		// It will search the string from the last character until the starting one
 		ECSENGINE_API Stream<wchar_t> FindCharacterReverse(Stream<wchar_t> characters, wchar_t character);
+
+		// Returns nullptr if it doesn't find a match or there is an invalid number of parenthesis
+		ECSENGINE_API const char* FindMatchingParenthesis(
+			const char* start_character, 
+			const char* end_character, 
+			char opened_char,
+			char closed_char,
+			unsigned int opened_count = 1
+		);
+
+		// Returns nullptr if it doesn't find a match or there is an invalid number of parenthesis
+		ECSENGINE_API const wchar_t* FindMatchingParenthesis(
+			const wchar_t* start_character, 
+			const wchar_t* end_character, 
+			wchar_t opened_char, 
+			wchar_t closed_char,
+			unsigned int opened_count = 1
+		);
+
+		ECSENGINE_API Stream<char> FindDelimitedString(Stream<char> range, char opened_delimiter, char closed_delimiter, bool skip_whitespace = false);
 
 		ECSENGINE_API unsigned int FindString(const char* ECS_RESTRICT string, Stream<const char*> other);
 
@@ -569,6 +619,20 @@ namespace ECSEngine {
 		// Looks up into a stream at the given offset to look for the string.
 		// Also needs to specify if capacity or not
 		ECSENGINE_API unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
+
+		// Generates the string variants of the given numbers
+		ECSENGINE_API void FromNumbersToStrings(Stream<unsigned int> values, CapacityStream<char>& storage, Stream<char>* strings);
+
+		// Generates the string variants of the given numbers
+		ECSENGINE_API void FromNumbersToStrings(size_t count, CapacityStream<char>& storage, Stream<char>* strings, size_t offset = 0);
+
+		// Returns the string after the count'th character. If there are less than count characters of that type,
+		// it will return { nullptr, 0 }
+		ECSENGINE_API Stream<char> SkipCharacters(Stream<char> characters, char character, unsigned int count);
+
+		// Returns the string after the count'th token. If there are less than count token of that type,
+		// it will return { nullptr, 0 }
+		ECSENGINE_API Stream<char> SkipTokens(Stream<char> characters, Stream<char> token, unsigned int count);
 
 		// If allocating a stream alongside its data, this function sets it up
 		ECSENGINE_API void* CoallesceStreamWithData(void* allocation, size_t size);
@@ -607,6 +671,9 @@ namespace ECSEngine {
 		// will be returned as |hey   | -> stream.buffer = 'h', stream.buffer + stream.size = ' '
 		ECSENGINE_API Stream<char> SkipCodeIdentifier(Stream<char> characters, int increment = 1);
 
+		// Returns the string that is delimited by the character in reverse order
+		ECSENGINE_API Stream<char> SkipUntilCharacterReverse(const char* string, const char* bound, char character);
+
 		ECSENGINE_API unsigned int GetAlphabetIndex(char character);
 
 		ECSENGINE_API unsigned int GetAlphabetIndex(char character, CharacterType& type);
@@ -642,6 +709,10 @@ namespace ECSEngine {
 		ECSENGINE_API void ReplaceCharacter(Stream<char> string, char token_to_be_replaced, char replacement);
 
 		ECSENGINE_API void ReplaceCharacter(Stream<wchar_t> string, wchar_t token_to_be_replaced, wchar_t replacement);
+
+		ECSENGINE_API Stream<char> ReplaceToken(Stream<char> string, Stream<char> token, Stream<char> replacement, AllocatorPolymorphic allocator);
+
+		ECSENGINE_API Stream<wchar_t> ReplaceToken(Stream<wchar_t> string, Stream<wchar_t> token, Stream<wchar_t> replacement, AllocatorPolymorphic allocator);
 
 		template<typename CharacterType>
 		struct ReplaceOccurence {

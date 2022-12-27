@@ -463,6 +463,23 @@ unsigned int FindAsset(const EditorState* editor_state, Stream<char> name, Strea
 
 // ----------------------------------------------------------------------------------------------
 
+unsigned int FindOrAddAsset(EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool increment_reference_count)
+{
+	unsigned int existing_asset = FindAsset(editor_state, name, file, type);
+	if (existing_asset != -1) {
+		if (increment_reference_count) {
+			editor_state->asset_database->AddAsset(existing_asset, type);
+		}
+		return existing_asset;
+	}
+	else {
+		// Insert the asset
+		return editor_state->asset_database->AddAsset(name, file, type);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
 void FromAssetNameToThunkOrForwardingFile(Stream<char> name, Stream<wchar_t> extension, CapacityStream<wchar_t>& relative_path)
 {
 	function::ConvertASCIIToWide(relative_path, name);

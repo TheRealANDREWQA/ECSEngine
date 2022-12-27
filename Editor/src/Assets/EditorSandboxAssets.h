@@ -1,11 +1,17 @@
 #pragma once
 #include "ECSEngineContainers.h"
 #include "ECSEngineAssets.h"
+#include "ECSEngineComponents.h"
 #include "../Editor/EditorEvent.h"
 
 struct EditorState;
 
 using namespace ECSEngine;
+
+struct LinkComponentWithAssetFields {
+	const Reflection::ReflectionType* type;
+	Stream<LinkComponentAssetField> asset_fields;
+};
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -25,6 +31,35 @@ void DeallocateAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsi
 
 // It fills in assets which are missing. There must be ECS_ASSET_TYPE_COUNT missing assets streams, one for each type
 void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// There must be unique_count elements in the given pointer
+// These are mapped to the component value - can index directly
+void GetLinkComponentsWithAssetFieldsUnique(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	LinkComponentWithAssetFields* link_with_fields, 
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// There must be shared_count elements in the given pointer
+// These are mapped to the component value - can index directly
+void GetLinkComponentWithAssetFieldsShared(
+	const EditorState* editor_state,
+	unsigned int sandbox_index,
+	LinkComponentWithAssetFields* link_with_fields,
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types
+);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// If the sandbox index is left to -1, then it will search all sandboxes
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 

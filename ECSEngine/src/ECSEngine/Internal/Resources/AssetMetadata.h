@@ -22,6 +22,11 @@ namespace ECSEngine {
 		ECS_ASSET_TYPE_COUNT
 	};
 
+	struct AssetTypedHandle {
+		unsigned int handle;
+		ECS_ASSET_TYPE type;
+	};
+
 	ECSENGINE_API bool AssetHasFile(ECS_ASSET_TYPE type);
 
 	ECSENGINE_API ResourceType AssetTypeToResourceType(ECS_ASSET_TYPE type);
@@ -190,13 +195,22 @@ namespace ECSEngine {
 
 	// Constant buffer description
 	// If it is dynamic, the data can be missing (the size must still be specified,
-	// the pointer can be nullptr then). When the data is static
+	// the pointer can be nullptr then).
 	struct MaterialAssetBuffer {
 		Stream<void> data;
 		bool dynamic;
-		ECS_SHADER_TYPE shader_type;
 		unsigned char slot;
 	};
+
+	enum ECS_MATERIAL_SHADER : unsigned char {
+		ECS_MATERIAL_SHADER_VERTEX,
+		ECS_MATERIAL_SHADER_PIXEL,
+		ECS_MATERIAL_SHADER_COUNT
+	};
+
+	inline ECS_SHADER_TYPE GetShaderFromMaterialShaderType(ECS_MATERIAL_SHADER material_shader) {
+		return material_shader == ECS_MATERIAL_SHADER_VERTEX ? ECS_SHADER_VERTEX : ECS_SHADER_PIXEL;
+	}
 
 	// The name is separately allocated from the other buffers
 	// The MaterialAssetResource buffers are maintained as a single coallesced buffer
@@ -204,13 +218,7 @@ namespace ECSEngine {
 		MaterialAsset() = default;
 		MaterialAsset(Stream<char> name, AllocatorPolymorphic allocator);
 
-		void AddTexture(MaterialAssetResource texture, AllocatorPolymorphic allocator);
-
-		void AddSampler(MaterialAssetResource sampler, AllocatorPolymorphic allocator);
-
-		void AddBuffer(MaterialAssetBuffer buffer, AllocatorPolymorphic allocator);
-
-		// This asset can only be copied with an allocator because the buffers can be independently allocated
+		// This asset can only be copied with an allocator
 		MaterialAsset Copy(AllocatorPolymorphic allocator) const;
 
 		void DeallocateMemory(AllocatorPolymorphic allocator) const;
@@ -218,13 +226,57 @@ namespace ECSEngine {
 		// Sets default values and aliases the name and the file
 		void Default(Stream<char> name, Stream<wchar_t> file);
 
-		void RemoveTexture(unsigned int index, AllocatorPolymorphic allocator);
+		// The textures can be iterated as if from a single stream
+		size_t GetTextureTotalCount() const;
 
-		void RemoveSampler(unsigned int index, AllocatorPolymorphic allocator);
+		// The samplers can be iterated as if from a single stream
+		size_t GetSamplerTotalCount() const;
 
-		void RemoveBuffer(unsigned int index, AllocatorPolymorphic allocator);
+		// The buffers can be iterated as if from a single strema
+		size_t GetBufferTotalCount() const;
 
-		void Resize(unsigned int texture_count, unsigned int sampler_count, unsigned int buffer_count, AllocatorPolymorphic allocator);
+		// Can be iterated in a single round
+		inline Stream<MaterialAssetResource> GetCombinedTextures() const {
+			return { textures[0].buffer, GetTextureTotalCount() };
+		}
+
+		// Can be iterated in a single round
+		inline Stream<MaterialAssetResource> GetCombinedSamplers() const {
+			return { samplers[0].buffer, GetSamplerTotalCount() };
+		}
+
+		// Can be iterated in a single round
+		inline Stream<MaterialAssetBuffer> GetCombinedBuffers() const {
+			return { buffers[0].buffer, GetBufferTotalCount() };
+		}
+
+		// There must be ECS_MATERIAL_SHADER_COUNT elements for each pointer type
+		// If the do_not_copy flag is set to true, then it will not copy the data that is already stored in it
+		void Resize(
+			const unsigned int* texture_count, 
+			const unsigned int* sampler_count, 
+			const unsigned int* buffer_count, 
+			AllocatorPolymorphic allocator, 
+			bool do_not_copy = false
+		);
+
+		// Same as the above version, in this version the counts are contiguous
+		void Resize(
+			const unsigned int* counts,
+			AllocatorPolymorphic allocator,
+			bool do_not_copy = false
+		);
+
+		void WriteCounts(bool write_texture, bool write_sampler, bool write_buffers, unsigned int* counts) const;
+
+		// The counts is a contiguous array with all the counts for textures, samplers and buffers
+		static void WriteTextureCount(unsigned int vertex, unsigned int pixel, unsigned int* counts);
+
+		// The counts is a contiguous array with all the counts for textures, samplers and buffers
+		static void WriteSamplerCount(unsigned int vertex, unsigned int pixel, unsigned int* counts);
+		
+		// The counts is a contiguous array with all the counts for textures, samplers and buffers
+		static void WriteBufferCount(unsigned int vertex, unsigned int pixel, unsigned int* counts);
 
 		ECS_INLINE void* Pointer() const {
 			return material_pointer;
@@ -236,9 +288,9 @@ namespace ECSEngine {
 
 		Stream<char> name;
 		// These are maintained as a coallesced buffer
-		Stream<MaterialAssetResource> textures;
-		Stream<MaterialAssetResource> samplers;
-		Stream<MaterialAssetBuffer> buffers;
+		Stream<MaterialAssetResource> textures[ECS_MATERIAL_SHADER_COUNT];
+		Stream<MaterialAssetResource> samplers[ECS_MATERIAL_SHADER_COUNT];
+		Stream<MaterialAssetBuffer> buffers[ECS_MATERIAL_SHADER_COUNT];
 		unsigned int vertex_shader_handle;
 		unsigned int pixel_shader_handle;
 

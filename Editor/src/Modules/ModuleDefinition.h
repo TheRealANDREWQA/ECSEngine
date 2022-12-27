@@ -49,6 +49,7 @@ struct EditorModuleReflectedSetting {
 struct EditorModule {
 	ECSEngine::Stream<wchar_t> solution_path;
 	ECSEngine::Stream<wchar_t> library_name;
+	ECSEngine::Stream<ECSEngine::Stream<char>> dll_imports;
 	size_t solution_last_write_time;
 	bool is_graphics_module;
 

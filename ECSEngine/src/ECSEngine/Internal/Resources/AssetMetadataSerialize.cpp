@@ -34,60 +34,91 @@ namespace ECSEngine {
 		// Write the sizes of the streams as unsigned shorts to not consume too much memory
 		size_t write_size = 0;
 		
+		auto write_size_for_stream = [&write_size, data](auto stream) {
+			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+				write_size += Write(data->stream, &stream[index].size, sizeof(unsigned short), data->write_data);
+			}
+		};
+
 		write_size += WriteWithSizeShort(data->stream, asset->name.buffer, asset->name.size * sizeof(char), data->write_data);
-		write_size += Write(data->stream, &asset->textures.size, sizeof(unsigned short), data->write_data);
-		write_size += Write(data->stream, &asset->samplers.size, sizeof(unsigned short), data->write_data);
-		write_size += Write(data->stream, &asset->buffers.size, sizeof(unsigned short), data->write_data);
+		write_size_for_stream(asset->textures);
+		write_size_for_stream(asset->samplers);
+		write_size_for_stream(asset->buffers);
 		write_size += Write(data->stream, &asset->vertex_shader_handle, sizeof(asset->vertex_shader_handle), data->write_data);
 		write_size += Write(data->stream, &asset->pixel_shader_handle, sizeof(asset->pixel_shader_handle), data->write_data);
 
-		// Get the names of the resources being referenced and serialize these as well
-		for (size_t index = 0; index < asset->textures.size; index++) {
-			const auto* texture = database->GetTextureConst(asset->textures[index].metadata_handle);
-			Stream<char> current_name = texture->name;
-			Stream<wchar_t> file = texture->file;
-			write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
-			write_size += WriteWithSizeShort(data->stream, file, data->write_data);
-			write_size += Write(data->stream, &asset->textures[index].slot, sizeof(asset->textures[index].slot), data->write_data);
-		}
+		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+			// Get the names of the resources being referenced and serialize these as well
+			for (size_t index = 0; index < asset->textures[type].size; index++) {
+				MaterialAssetResource texture = asset->textures[type][index];
+				Stream<char> current_name = { nullptr, 0 };
+				Stream<wchar_t> file = { nullptr, 0 };
 
-		// Get the names of the resources being referenced and serialize these as well
-		for (size_t index = 0; index < asset->samplers.size; index++) {
-			const auto* sampler = database->GetGPUSamplerConst(asset->samplers[index].metadata_handle);
-			Stream<char> current_name = sampler->name;
-			write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
-			write_size += Write(data->stream, &asset->textures[index].slot, sizeof(asset->textures[index].slot), data->write_data);
-		}
+				if (texture.metadata_handle != -1) {
+					const auto* texture_metadata = database->GetTextureConst(texture.metadata_handle);
+					current_name = texture_metadata->name;
+					file = texture_metadata->file;
+				}
 
-		for (size_t index = 0; index < asset->buffers.size; index++) {
-			write_size += Write(data->stream, &asset->buffers[index].shader_type, sizeof(asset->buffers[index].shader_type), data->write_data);
-			write_size += Write(data->stream, &asset->buffers[index].slot, sizeof(asset->buffers[index].slot), data->write_data);
-			write_size += Write(data->stream, &asset->buffers[index].dynamic, sizeof(asset->buffers[index].dynamic), data->write_data);
-			if (!asset->buffers[index].dynamic) {
-				// If static, the data needs to be specified
-				ECS_ASSERT(asset->buffers[index].data.buffer != nullptr);
-				write_size += WriteWithSizeShort(data->stream, asset->buffers[index].data, data->write_data);
+				write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
+				write_size += WriteWithSizeShort(data->stream, file, data->write_data);
+				write_size += Write(data->stream, &texture.slot, sizeof(texture.slot), data->write_data);
 			}
-			else {
-				// Write a bool indicating whether or not there is data
-				bool has_data = asset->buffers[index].data.buffer != nullptr;
-				write_size += Write(data->stream, &has_data, sizeof(has_data), data->write_data);
-				if (has_data) {
-					write_size += WriteWithSizeShort(data->stream, asset->buffers[index].data, data->write_data);
+
+			// Get the names of the resources being referenced and serialize these as well
+			for (size_t index = 0; index < asset->samplers[type].size; index++) {
+				MaterialAssetResource sampler = asset->samplers[type][index];
+				Stream<char> current_name = { nullptr, 0 };
+				if (sampler.metadata_handle) {
+					const auto* sampler_metadata = database->GetGPUSamplerConst(sampler.metadata_handle);
+					current_name = sampler_metadata->name;
+				}
+				write_size += WriteWithSizeShort(data->stream, current_name, data->write_data);
+				write_size += Write(data->stream, &sampler.slot, sizeof(sampler.slot), data->write_data);
+			}
+
+			for (size_t index = 0; index < asset->buffers[type].size; index++) {
+				MaterialAssetBuffer buffer = asset->buffers[type][index];
+				write_size += Write(data->stream, &buffer.slot, sizeof(buffer.slot), data->write_data);
+				write_size += Write(data->stream, &buffer.dynamic, sizeof(buffer.dynamic), data->write_data);
+				if (!asset->buffers[type][index].dynamic) {
+					// If static, the data needs to be specified
+					ECS_ASSERT(buffer.data.buffer != nullptr);
+					write_size += WriteWithSizeShort(data->stream, buffer.data, data->write_data);
 				}
 				else {
-					write_size += Write(data->stream, &asset->buffers[index].data.size, sizeof(unsigned short), data->write_data);
+					// Write a bool indicating whether or not there is data
+					bool has_data = buffer.data.buffer != nullptr;
+					write_size += Write(data->stream, &has_data, sizeof(has_data), data->write_data);
+					if (has_data) {
+						write_size += WriteWithSizeShort(data->stream, buffer.data, data->write_data);
+					}
+					else {
+						write_size += Write(data->stream, &buffer.data.size, sizeof(unsigned short), data->write_data);
+					}
 				}
 			}
 		}
+		
+		Stream<char> vertex_name = { nullptr, 0 };
+		Stream<wchar_t> vertex_file = { nullptr, 0 };
+		if (asset->vertex_shader_handle != -1) {
+			const auto* vertex_shader = database->GetShaderConst(asset->vertex_shader_handle);
+			vertex_name = vertex_shader->name;
+			vertex_file = vertex_shader->file;
+		}
+		write_size += WriteWithSizeShort(data->stream, vertex_name, data->write_data);
+		write_size += WriteWithSizeShort(data->stream, vertex_file, data->write_data);
 
-		const auto* vertex_shader = database->GetShaderConst(asset->vertex_shader_handle);
-		write_size += WriteWithSizeShort(data->stream, vertex_shader->name, data->write_data);
-		write_size += WriteWithSizeShort(data->stream, vertex_shader->file, data->write_data);
-
-		const auto* pixel_shader = database->GetShaderConst(asset->vertex_shader_handle);
-		write_size += WriteWithSizeShort(data->stream, pixel_shader->name, data->write_data);
-		write_size += WriteWithSizeShort(data->stream, pixel_shader->file, data->write_data);
+		Stream<char> pixel_name = { nullptr, 0 };
+		Stream<wchar_t> pixel_file = { nullptr, 0 };
+		if (asset->pixel_shader_handle != -1) {
+			const auto* pixel_shader = database->GetShaderConst(asset->pixel_shader_handle);
+			pixel_name = pixel_shader->name;
+			pixel_file = pixel_shader->file;
+		}
+		write_size += WriteWithSizeShort(data->stream, pixel_name, data->write_data);
+		write_size += WriteWithSizeShort(data->stream, pixel_file, data->write_data);
 
 		return write_size;
 	}
@@ -110,97 +141,105 @@ namespace ECSEngine {
 		size_t read_size = 0;
 		AllocatorPolymorphic allocator = data->options->field_allocator;
 
+		Stream<char> asset_name = { nullptr, 0 };
 		if (data->read_data) {
-			Stream<void> name = ReadAllocateDataShort<true>(data->stream, allocator);
+			asset_name = ReadAllocateDataShort<true>(data->stream, allocator).As<char>();
 		}
 		else {
 			read_size += IgnoreWithSizeShort(data->stream);
 		}
 		
-		unsigned short texture_size = 0;
-		unsigned short sampler_size = 0;
-		unsigned short buffer_size = 0;
-		Read<true>(data->stream, &texture_size, sizeof(unsigned short));
-		Read<true>(data->stream, &sampler_size, sizeof(unsigned short));
-		Read<true>(data->stream, &buffer_size, sizeof(unsigned short));
+		unsigned short counts[ECS_MATERIAL_SHADER_COUNT * 3];
+		Read<true>(data->stream, counts, sizeof(counts));
 
 		ECS_STACK_CAPACITY_STREAM(char, name_buffer, 256);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, file_buffer, 256);
 
 		if (data->read_data) {
-			// Allocate the buffers;
+			unsigned int int_counts[ECS_MATERIAL_SHADER_COUNT * 3];
+			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT * 3; index++) {
+				int_counts[index] = counts[index];
+			}
+
+			// Allocate the buffers
 			memset(asset, 0, sizeof(*asset));
-			asset->Resize(texture_size, sampler_size, buffer_size, allocator);
+			asset->Resize(int_counts, allocator, true);
+			asset->name = asset_name;
 		}
+
 		Read(data->stream, &asset->vertex_shader_handle, sizeof(asset->vertex_shader_handle), data->read_data);
 		Read(data->stream, &asset->pixel_shader_handle, sizeof(asset->pixel_shader_handle), data->read_data);
 
-		// Read the names now. Then use the database to get the handles for those resources
-		for (unsigned short index = 0; index < texture_size; index++) {
-			unsigned short name_size = 0;
-			read_size += ReadWithSizeShort(data->stream, name_buffer.buffer, name_size, data->read_data);
-			name_buffer.size = name_size / sizeof(char);
+		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
+			// Read the names now. Then use the database to get the handles for those resources
+			for (unsigned short index = 0; index < asset->textures[type].size; index++) {
+				unsigned short name_size = 0;
+				read_size += ReadWithSizeShort(data->stream, name_buffer.buffer, name_size, data->read_data);
+				name_buffer.size = name_size / sizeof(char);
 
-			unsigned short file_size = 0;
-			read_size += ReadWithSizeShort(data->stream, file_buffer.buffer, file_size, data->read_data);
-			file_buffer.size = file_size / sizeof(wchar_t);
+				unsigned short file_size = 0;
+				read_size += ReadWithSizeShort(data->stream, file_buffer.buffer, file_size, data->read_data);
+				file_buffer.size = file_size / sizeof(wchar_t);
 
-			unsigned char slot = 0;
-			Read(data->stream, &slot, sizeof(slot), data->read_data);
-			if (data->read_data) {
-				unsigned int handle = database->AddTexture(name_buffer, file_buffer);
-				asset->textures[index].metadata_handle = handle;
-				asset->textures[index].slot = slot;
+				unsigned char slot = 0;
+				Read(data->stream, &slot, sizeof(slot), data->read_data);
+				if (data->read_data) {
+					unsigned int handle = -1;
+					if (name_buffer.size > 0 && file_buffer.size > 0) {
+						handle = database->AddTexture(name_buffer, file_buffer);
+					}
+					asset->textures[type][index].metadata_handle = handle;
+					asset->textures[type][index].slot = slot;
+				}
 			}
-		}
 
-		for (unsigned short index = 0; index < sampler_size; index++) {
-			unsigned short name_size = 0;
-			read_size += ReadWithSizeShort(data->stream, name_buffer.buffer, name_size, data->read_data);
-			name_buffer.size = name_size / sizeof(char);
+			for (unsigned short index = 0; index < asset->samplers[type].size; index++) {
+				unsigned short name_size = 0;
+				read_size += ReadWithSizeShort(data->stream, name_buffer.buffer, name_size, data->read_data);
+				name_buffer.size = name_size / sizeof(char);
 
-			unsigned char slot = 0;
-			Read(data->stream, &slot, sizeof(slot), data->read_data);
-			if (data->read_data) {
-				unsigned int handle = database->AddGPUSampler(name_buffer);
-				asset->samplers[index].metadata_handle = handle;
-				asset->textures[index].slot = slot;
+				unsigned char slot = 0;
+				Read(data->stream, &slot, sizeof(slot), data->read_data);
+				if (data->read_data) {
+					unsigned int handle = -1;
+					if (name_buffer.size > 0 && file_buffer.size > 0) {
+						handle = database->AddGPUSampler(name_buffer);
+					}
+					asset->samplers[type][index].metadata_handle = handle;
+					asset->samplers[type][index].slot = slot;
+				}
 			}
-		}
 
-		for (unsigned short index = 0; index < buffer_size; index++) {
-			ECS_SHADER_TYPE shader_type;
-			unsigned char slot;
-			bool dynamic;
-			Read<true>(data->stream, &shader_type, sizeof(shader_type));
-			Read<true>(data->stream, &slot, sizeof(slot));
-			Read<true>(data->stream, &dynamic, sizeof(dynamic));
+			for (unsigned short index = 0; index < asset->buffers[type].size; index++) {
+				unsigned char slot;
+				bool dynamic;
+				Read<true>(data->stream, &slot, sizeof(slot));
+				Read<true>(data->stream, &dynamic, sizeof(dynamic));
 
-			Stream<void> current_data = { nullptr, 0 };
-			if (!dynamic) {
-				current_data = ReadAllocateDataShort(data->stream, allocator, data->read_data);
-			}
-			else {
-				bool has_data;
-				Read<true>(data->stream, &has_data, sizeof(has_data));
-				if (has_data) {
+				Stream<void> current_data = { nullptr, 0 };
+				if (!dynamic) {
 					current_data = ReadAllocateDataShort(data->stream, allocator, data->read_data);
 				}
 				else {
-					unsigned short data_size;
-					Read<true>(data->stream, &data_size, sizeof(data_size));
-					Ignore(data->stream, data_size);
-					current_data.size = data_size;
+					bool has_data;
+					Read<true>(data->stream, &has_data, sizeof(has_data));
+					if (has_data) {
+						current_data = ReadAllocateDataShort(data->stream, allocator, data->read_data);
+					}
+					else {
+						unsigned short data_size;
+						Read<true>(data->stream, &data_size, sizeof(data_size));
+						current_data.size = data_size;
+					}
 				}
-			}
 
-			if (data->read_data) {
-				asset->buffers[index].data = current_data;
-				asset->buffers[index].dynamic = dynamic;
-				asset->buffers[index].shader_type = shader_type;
-				asset->buffers[index].slot = slot;
+				if (data->read_data) {
+					asset->buffers[type][index].data = current_data;
+					asset->buffers[type][index].dynamic = dynamic;
+					asset->buffers[type][index].slot = slot;
+				}
+				read_size += current_data.size;
 			}
-			read_size += current_data.size;
 		}
 
 		if (data->read_data) {
@@ -212,7 +251,10 @@ namespace ECSEngine {
 			read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, vertex_shader_file_size);
 			file_buffer.size = vertex_shader_file_size / sizeof(wchar_t);
 
-			unsigned int vertex_handle = database->AddShader(name_buffer, file_buffer);
+			unsigned int vertex_handle = -1;
+			if (name_buffer.size > 0 && file_buffer.size > 0) {
+				vertex_handle = database->AddShader(name_buffer, file_buffer);
+			}
 			asset->vertex_shader_handle = vertex_handle;
 
 			unsigned short pixel_shader_name_size = 0;
@@ -223,13 +265,18 @@ namespace ECSEngine {
 			read_size += ReadWithSizeShort<true>(data->stream, file_buffer.buffer, pixel_shader_file_size);
 			file_buffer.size = pixel_shader_file_size / sizeof(wchar_t);
 
-			unsigned int pixel_handle = database->AddShader(name_buffer, file_buffer);
+			unsigned int pixel_handle = -1;
+			if (name_buffer.size > 0 && file_buffer.size > 0) {
+				pixel_handle = database->AddShader(name_buffer, file_buffer);
+			}
 			asset->pixel_shader_handle = pixel_handle;
 		}
 		else {
-			// The vertex shader name
+			// The vertex shader name + file
 			IgnoreWithSizeShort(data->stream);
-			// The pixel shader name
+			IgnoreWithSizeShort(data->stream);
+			// The pixel shader name + file
+			IgnoreWithSizeShort(data->stream);
 			IgnoreWithSizeShort(data->stream);
 		}
 
@@ -238,8 +285,16 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(MaterialAsset) {
+	ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(MaterialAsset) {
 		return false;
+	}
+
+	// --------------------------------------------------------------------------------------------
+
+	ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(MaterialAsset) {
+		MaterialAsset* source = (MaterialAsset*)data->source;
+		MaterialAsset* destination = (MaterialAsset*)data->destination;
+		*destination = source->Copy(data->allocator);
 	}
 
 	// --------------------------------------------------------------------------------------------

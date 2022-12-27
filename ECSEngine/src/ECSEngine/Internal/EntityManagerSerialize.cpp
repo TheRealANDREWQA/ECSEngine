@@ -2091,14 +2091,14 @@ namespace ECSEngine {
 	struct ReflectionSerializeComponentData {
 		const Reflection::ReflectionManager* reflection_manager;
 		const Reflection::ReflectionType* type;
-		bool is_trivially_copyable;
+		bool is_blittable;
 	};
 
 	unsigned int ReflectionSerializeEntityManagerComponent(SerializeEntityManagerComponentData* data) {
 		ReflectionSerializeComponentData* functor_data = (ReflectionSerializeComponentData*)data->extra_data;
 		
 		size_t type_byte_size = Reflection::GetReflectionTypeByteSize(functor_data->type);
-		if (functor_data->is_trivially_copyable) {
+		if (functor_data->is_blittable) {
 			size_t write_size = type_byte_size * data->count;
 			if (data->buffer_capacity < write_size) {
 				return write_size;
@@ -2144,7 +2144,7 @@ namespace ECSEngine {
 		ReflectionSerializeComponentData* functor_data = (ReflectionSerializeComponentData*)data->extra_data;
 		// Write the type table
 		uintptr_t ptr = (uintptr_t)data->buffer;
-		functor_data->is_trivially_copyable = IsTriviallyCopyable(functor_data->reflection_manager, functor_data->type);
+		functor_data->is_blittable = IsBlittable(functor_data->type);
 		SerializeFieldTable(functor_data->reflection_manager, functor_data->type, ptr);
 
 		return ptr - (uintptr_t)data->buffer;
@@ -2191,14 +2191,14 @@ namespace ECSEngine {
 		DeserializeFieldTable field_table;
 		// This allocator is used for the field table
 		AllocatorPolymorphic allocator;
-		bool is_unchanged_and_trivially_copyable;
+		bool is_unchanged_and_blittable;
 	};
 
 	bool ReflectionDeserializeEntityManagerComponent(DeserializeEntityManagerComponentData* data) {
 		ReflectionDeserializeComponentData* functor_data = (ReflectionDeserializeComponentData*)data->extra_data;
 
 		size_t type_byte_size = Reflection::GetReflectionTypeByteSize(functor_data->type);
-		if (functor_data->is_unchanged_and_trivially_copyable) {
+		if (functor_data->is_unchanged_and_blittable) {
 			memcpy(data->components, data->file_data, data->count * type_byte_size);
 			// This line is useful for linked components
 			data->file_data = function::OffsetPointer(data->file_data, data->count * type_byte_size);
@@ -2249,31 +2249,19 @@ namespace ECSEngine {
 
 		bool is_unchanged = functor_data->field_table.IsUnchanged(type_index, functor_data->reflection_manager, functor_data->type);
 		if (is_unchanged) {
-			functor_data->is_unchanged_and_trivially_copyable = IsTriviallyCopyable(functor_data->reflection_manager, functor_data->type);
+			functor_data->is_unchanged_and_blittable = IsBlittable(functor_data->type);
 		}
 		else {
-			functor_data->is_unchanged_and_trivially_copyable = false;
+			functor_data->is_unchanged_and_blittable = false;
 		}
 		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	// Type punned with the unique data.
-	struct ReflectionDeserializeSharedComponentData {
-		const Reflection::ReflectionManager* reflection_manager;
-		const Reflection::ReflectionType* type;
-		DeserializeFieldTable field_table;
-		// This allocator is used for the field table, not for the buffers of the deserialized data
-		AllocatorPolymorphic allocator;
-		bool is_unchanged_trivially_copyable;
-	};
-
-	static_assert(sizeof(ReflectionDeserializeSharedComponentData) == sizeof(ReflectionDeserializeComponentData));
+	typedef ReflectionDeserializeComponentData ReflectionDeserializeSharedComponentData;
 
 	bool ReflectionDeserializeEntityManagerSharedComponent(DeserializeEntityManagerSharedComponentData* data) {
-		// The extra data is type punned, but it is fine since they have the same layout
-
 		// Same as the unique component, just the count is 1
 		DeserializeEntityManagerComponentData unique_data;
 		unique_data.components = data->component;

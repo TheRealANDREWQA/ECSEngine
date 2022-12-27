@@ -1455,10 +1455,17 @@ namespace ECSEngine {
 		ECS_SHADER_TYPE shader_type;
 	};
 
+	struct UserMaterialSampler {
+		SamplerState state;
+		ECS_SHADER_TYPE shader_type;
+		unsigned char slot;
+	};
+
 	// A user material which is based only on textures and constant buffers
 	struct UserMaterial {
 		Stream<UserMaterialTexture> textures;
 		Stream<UserMaterialBuffer> buffers;
+		Stream<UserMaterialSampler> samplers;
 		Stream<wchar_t> vertex_shader;
 		Stream<wchar_t> pixel_shader;
 		ShaderCompileOptions vertex_compile_options;

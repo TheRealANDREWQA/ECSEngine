@@ -200,7 +200,7 @@ void DrawShaderMacro(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayD
 	config->flag_count--;
 }
 
-void InspectorCleanShader(EditorState* editor_state, void* _data) {
+void InspectorCleanShader(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawShaderFileData* data = (InspectorDrawShaderFileData*)_data;
 	editor_state->editor_allocator->Deallocate(data->shader_metadata.name.buffer);
 	editor_state->editor_allocator->Deallocate(data->target_file.buffer);
@@ -645,12 +645,17 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunction(
+	inspector_index = ChangeInspectorDrawFunctionWithSearch(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawShaderFile, InspectorCleanShader },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * path.size
+		sizeof(data) + sizeof(wchar_t) * path.size,
+		-1,
+		[=](void* inspector_data) {
+			InspectorDrawShaderFileData* other_data = (InspectorDrawShaderFileData*)inspector_data;
+			return function::CompareStrings(other_data->path, path);
+		}
 	);
 
 	if (inspector_index != -1) {

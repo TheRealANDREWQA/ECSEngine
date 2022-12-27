@@ -420,6 +420,22 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	void GetLinkComponentAssetDataForTarget(
+		const Reflection::ReflectionType* type, 
+		const void* target, 
+		Stream<LinkComponentAssetField> asset_fields, 
+		Stream<void>* field_data
+	)
+	{
+		for (size_t index = 0; index < asset_fields.size; index++) {
+			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, target);
+			ECS_ASSERT(target_field.type == asset_fields[index].type && target_field.success);
+			field_data[index] = target_field.asset;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	bool ValidateLinkComponent(const Reflection::ReflectionType* link_type, const Reflection::ReflectionType* target_type)
 	{
 		bool needs_dll = Reflection::GetReflectionTypeLinkComponentNeedsDLL(link_type);

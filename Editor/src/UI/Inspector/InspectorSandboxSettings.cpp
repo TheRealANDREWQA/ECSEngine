@@ -19,7 +19,7 @@ struct DrawSandboxSettingsData {
 	bool collapsing_runtime_state;
 };
 
-void InspectorDrawSandboxSettingsClean(EditorState* editor_state, void* _data) {
+void InspectorDrawSandboxSettingsClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
 	// Destroy the UI reflection
 	editor_state->ui_reflection->DestroyInstance(data->ui_reflection_instance_name.buffer);

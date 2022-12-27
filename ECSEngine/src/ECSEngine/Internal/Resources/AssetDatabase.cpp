@@ -38,7 +38,7 @@ namespace ECSEngine {
 	// --------------------------------------------------------------------------------------
 
 	template<typename AssetType, typename AssetSet>
-	unsigned int AddAssetDefault(AssetDatabase* database, AssetSet& set, Stream<char> name, Stream<wchar_t> file, const char* serialize_string, ECS_ASSET_TYPE type, bool* loaded_now) {
+	unsigned int AddAssetDefault(AssetDatabase* database, AssetSet& set, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool* loaded_now) {
 		unsigned int handle = database->FindAsset(name, file, type);
 
 		if (handle == -1) {
@@ -96,7 +96,7 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::AddMesh(Stream<char> name, Stream<wchar_t> file, bool* loaded_now)
 	{
-		return AddAssetDefault<MeshMetadata>(this, mesh_metadata, name, file, STRING(MeshMetadata), ECS_ASSET_MESH, loaded_now);
+		return AddAssetDefault<MeshMetadata>(this, mesh_metadata, name, file, ECS_ASSET_MESH, loaded_now);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -110,7 +110,7 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::AddTexture(Stream<char> name, Stream<wchar_t> file, bool* loaded_now)
 	{
-		return AddAssetDefault<TextureMetadata>(this, texture_metadata, name, file, STRING(TextureMetadata), ECS_ASSET_TEXTURE, loaded_now);
+		return AddAssetDefault<TextureMetadata>(this, texture_metadata, name, file, ECS_ASSET_TEXTURE, loaded_now);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::AddGPUSampler(Stream<char> name, bool* loaded_now)
 	{
-		return AddAssetDefault<GPUSamplerMetadata>(this, gpu_sampler_metadata, name, {}, STRING(GPUSamplerMetadata), ECS_ASSET_GPU_SAMPLER, loaded_now);
+		return AddAssetDefault<GPUSamplerMetadata>(this, gpu_sampler_metadata, name, {}, ECS_ASSET_GPU_SAMPLER, loaded_now);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::AddShader(Stream<char> name, Stream<wchar_t> file, bool* loaded_now)
 	{
-		return AddAssetDefault<ShaderMetadata>(this, shader_metadata, name, file, STRING(ShaderMetadata), ECS_ASSET_SHADER, loaded_now);
+		return AddAssetDefault<ShaderMetadata>(this, shader_metadata, name, file, ECS_ASSET_SHADER, loaded_now);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -152,52 +152,7 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::AddMaterial(Stream<char> name, bool* loaded_now)
 	{
-		unsigned int handle = FindMaterial(name);
-
-		if (handle == -1) {
-			MaterialAsset asset;
-
-			if (loaded_now != nullptr) {
-				*loaded_now = true;
-			}
-
-			memset(&asset, 0, sizeof(asset));
-			ECS_STACK_CAPACITY_STREAM(wchar_t, path, 256);
-			FileLocationMaterial(name, path);
-
-			if (ExistsFileOrFolder(path)) {
-				const size_t STACK_ALLOCATION_CAPACITY = ECS_KB * 4;
-				void* stack_allocation = ECS_STACK_ALLOC(STACK_ALLOCATION_CAPACITY);
-				LinearAllocator linear_allocator(stack_allocation, STACK_ALLOCATION_CAPACITY);
-
-				DeserializeOptions options;
-				options.backup_allocator = GetAllocatorPolymorphic(&linear_allocator);
-				options.file_allocator = options.backup_allocator;
-				ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, reflection_manager->GetType(STRING(MaterialAsset)), &asset, path, &options);
-				if (code == ECS_DESERIALIZE_OK) {
-					MaterialAsset allocated_asset = asset.Copy(material_asset.allocator);
-					// The file allocation doesn't need to be deallocated since its allocated from the stack
-					return material_asset.Add({ allocated_asset, 1 });
-				}
-				else {
-					return -1;
-				}
-			}
-			else {
-				name = function::StringCopy(material_asset.allocator, name);
-				asset.Default(name, {});
-				WriteMaterialFile(&asset);
-				return material_asset.Add({ asset, 1 });
-			}
-		}
-		else {
-			if (loaded_now != nullptr) {
-				*loaded_now = false;
-			}
-
-			material_asset[handle].reference_count++;
-			return handle;
-		}
+		return AddAssetDefault<ShaderMetadata>(this, shader_metadata, name, {}, ECS_ASSET_MATERIAL, loaded_now);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -211,7 +166,7 @@ namespace ECSEngine {
 
 	unsigned int AssetDatabase::AddMisc(Stream<char> name, Stream<wchar_t> file, bool* loaded_now)
 	{
-		return AddAssetDefault<MiscAsset>(this, misc_asset, name, file, STRING(MiscAsset), ECS_ASSET_MISC, loaded_now);
+		return AddAssetDefault<MiscAsset>(this, misc_asset, name, file, ECS_ASSET_MISC, loaded_now);
 	}
 
 	// --------------------------------------------------------------------------------------
@@ -1109,7 +1064,13 @@ namespace ECSEngine {
 			deserialize_options.file_allocator = database->Allocator();
 			deserialize_options.field_allocator = database->Allocator();
 			deserialize_options.backup_allocator = database->Allocator();
-			ECS_DESERIALIZE_CODE serialize_code = Deserialize(database->reflection_manager, database->reflection_manager->GetType(asset_string), asset, path, &deserialize_options);
+
+			SetSerializeCustomMaterialAssetDatabase(database);
+
+			ECS_DESERIALIZE_CODE serialize_code = DeserializeEx(database->reflection_manager, asset_string, asset, path, &deserialize_options);
+			
+			SetSerializeCustomMaterialAssetDatabase((AssetDatabase*)nullptr);
+
 			if (serialize_code == ECS_DESERIALIZE_OK) {
 				return true;
 			}
@@ -1444,12 +1405,14 @@ namespace ECSEngine {
 		unsigned int count = database->GetAssetCount(type);
 		for (unsigned int subindex = 0; subindex < count; subindex++) {
 			unsigned int subindex_handle = database->GetAssetHandleFromIndex(subindex, type);
-			const void* subindex_metadata = database->GetAssetConst(subindex_handle, type);
-			Stream<char> subindex_name = GetAssetName(subindex_metadata, type);
-			Stream<wchar_t> subindex_file = GetAssetFile(subindex_metadata, type);
-			if (function::CompareStrings(subindex_name, new_name) && function::CompareStrings(subindex_file, new_file)) {
-				// An identical asset already exists
-				return false;
+			if (subindex_handle != handle) {
+				const void* subindex_metadata = database->GetAssetConst(subindex_handle, type);
+				Stream<char> subindex_name = GetAssetName(subindex_metadata, type);
+				Stream<wchar_t> subindex_file = GetAssetFile(subindex_metadata, type);
+				if (function::CompareStrings(subindex_name, new_name) && function::CompareStrings(subindex_file, new_file)) {
+					// An identical asset already exists
+					return false;
+				}
 			}
 		}
 		
@@ -1632,9 +1595,14 @@ namespace ECSEngine {
 			omit_fields[1].name = STRING(file);
 			omit_fields.size = 2;
 
+			SetSerializeCustomMaterialAssetDatabase(database);
+
 			SerializeOptions serialize_options;
 			serialize_options.omit_fields = omit_fields;
-			ECS_SERIALIZE_CODE serialize_code = Serialize(database->reflection_manager, database->reflection_manager->GetType(asset_string), asset, path, &serialize_options);
+			ECS_SERIALIZE_CODE serialize_code = SerializeEx(database->reflection_manager, asset_string, asset, path, &serialize_options);
+
+			SetSerializeCustomMaterialAssetDatabase((AssetDatabase*)nullptr);
+
 			if (serialize_code == ECS_SERIALIZE_OK) {
 				// If the renamed file exists, delete it
 				if (renamed_file.size > 0) {

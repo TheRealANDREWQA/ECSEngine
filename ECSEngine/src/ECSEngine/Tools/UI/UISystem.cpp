@@ -283,6 +283,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void* UISystem::AllocateFromHandlerAllocator(unsigned int thread_id, ECS_UI_DRAW_PHASE phase, size_t size)
+		{
+			return TemporaryAllocator(thread_id, phase)->Allocate(size);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AddActionHandler(
 			LinearAllocator* allocator,
 			UIHandler* handler,
@@ -6799,6 +6806,27 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void* UISystem::GetLastClickableData(const UIDockspace* dockspace, unsigned int border_index) const
+		{
+			return dockspace->borders[border_index].clickable_handler.GetLastHandler()->data;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void* UISystem::GetLastHoverableData(const UIDockspace* dockspace, unsigned int border_index) const
+		{
+			return dockspace->borders[border_index].hoverable_handler.GetLastHandler()->data;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void* UISystem::GetLastGeneralData(const UIDockspace* dockspace, unsigned int border_index) const
+		{
+			return dockspace->borders[border_index].general_handler.GetLastHandler()->data;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::GetFixedDockspaceRegionsFromMouse(float2 mouse_position, UIDockspace** output_dockspaces, DockspaceType* types, unsigned int& count) const
 		{
 			UIDockspace* dockspaces[] = {
@@ -11739,82 +11767,41 @@ namespace ECSEngine {
 				counts[ECS_TOOLS_UI_SOLID_COLOR]
 			);
 
-			if (data->vertices != nullptr) {
-				size_t validated_vertices = data->vertex_count;
-				Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>(data->vertices, data->vertex_count);
-				float2 text_span = GetTextSpan(vertices, !data->vertical_text);
-
-				size_t before_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
-				counts[ECS_TOOLS_UI_TEXT_SPRITE] += data->vertex_count;
-				if (data->horizontal_cull) {
-					if (data->vertical_text) {
-						if (position.x + data->text_offset.x + text_span.x < data->horizontal_cull_bound) {
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->vertex_count;
-							validated_vertices = 0;
+			size_t before_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
+			system->ConvertCharactersToTextSprites(
+				data->text,
+				{ position.x + data->text_offset.x, position.y + data->text_offset.y }, 
+				(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE], 
+				data->text_color, 
+				counts[ECS_TOOLS_UI_TEXT_SPRITE],
+				data->font_size, 
+				data->character_spacing,
+				!data->vertical_text
+			);
+			counts[ECS_TOOLS_UI_TEXT_SPRITE] += data->text.size * 6;
+			if (data->horizontal_cull || data->vertical_cull) {
+				Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>((UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE] + before_count, data->text.size * 6);
+				float2 text_span;
+				if (data->vertical_text) {
+					text_span = GetTextSpan(vertices, false);
+					if (data->horizontal_cull) {
+						if (position.x + data->text_offset.x + text_span.x > data->horizontal_cull_bound) {
+							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6;
 						}
 					}
-					else {
-						validated_vertices = CullTextSprites<0>(vertices, data->horizontal_cull_bound);
-						counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->vertex_count - validated_vertices;
-					}
-				}
-				if (data->vertical_cull) {
-					if (data->vertical_text) {
-						if (validated_vertices > 0) {
-							validated_vertices = CullTextSprites<3>(vertices, data->vertical_cull_bound);
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->vertex_count - validated_vertices;
-						}
-					}
-					else {
-						if (validated_vertices > 0 && position.y + data->text_offset.y + text_span.y > data->vertical_cull_bound) {
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= before_count;
-							validated_vertices = 0;
-						}
+					if (data->vertical_cull) {
+						size_t validated_vertices = CullTextSprites<3>(vertices, data->vertical_cull_bound);
+						counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
 					}
 				}
-				vertices.buffer = (UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE] + before_count;
-				vertices.size = validated_vertices;
-				memcpy(vertices.buffer, data->vertices, sizeof(UISpriteVertex) * validated_vertices);	
-
-				TranslateText(position.x + data->text_offset.x, position.y + data->text_offset.y, vertices, 0, 0);
-			}
-			else {
-				size_t before_count = counts[ECS_TOOLS_UI_TEXT_SPRITE];
-				system->ConvertCharactersToTextSprites(
-					data->text,
-					{ position.x + data->text_offset.x, position.y + data->text_offset.y }, 
-					(UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE], 
-					data->text_color, 
-					counts[ECS_TOOLS_UI_TEXT_SPRITE],
-					data->font_size, 
-					data->character_spacing,
-					!data->vertical_text
-				);
-				counts[ECS_TOOLS_UI_TEXT_SPRITE] += data->text.size * 6;
-				if (data->horizontal_cull || data->vertical_cull) {
-					Stream<UISpriteVertex> vertices = Stream<UISpriteVertex>((UISpriteVertex*)buffers[ECS_TOOLS_UI_TEXT_SPRITE] + before_count, data->text.size * 6);
-					float2 text_span;
-					if (data->vertical_text) {
-						text_span = GetTextSpan(vertices, false);
-						if (data->horizontal_cull) {
-							if (position.x + data->text_offset.x + text_span.x > data->horizontal_cull_bound) {
-								counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6;
-							}
-						}
-						if (data->vertical_cull) {
-							size_t validated_vertices = CullTextSprites<3>(vertices, data->vertical_cull_bound);
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
-						}
+				else {
+					text_span = GetTextSpan(vertices);
+					if (data->horizontal_cull) {
+						size_t validated_vertices = CullTextSprites<0>(vertices, data->horizontal_cull_bound);
+						counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
 					}
-					else {
-						text_span = GetTextSpan(vertices);
-						if (data->horizontal_cull) {
-							size_t validated_vertices = CullTextSprites<0>(vertices, data->horizontal_cull_bound);
-							counts[ECS_TOOLS_UI_TEXT_SPRITE] -= data->text.size * 6 - validated_vertices;
-						}
-					}
-
 				}
+
 			}
 		}
 

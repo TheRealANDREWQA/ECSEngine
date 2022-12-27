@@ -16,7 +16,7 @@ struct EditorState;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorCleanNothing(EditorState* editor_state, void* data);
+void InspectorCleanNothing(EditorState* editor_state, unsigned int inspector_index, void* data);
 
 // ----------------------------------------------------------------------------------------------------------------------------
 

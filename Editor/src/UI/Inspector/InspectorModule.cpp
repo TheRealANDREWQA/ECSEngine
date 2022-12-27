@@ -131,7 +131,7 @@ void CreateModuleSettingsCallback(ActionData* action_data) {
 
 #pragma endregion
 
-void InspectorDrawModuleClean(EditorState* editor_state, void* _data) {
+void InspectorDrawModuleClean(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	EDITOR_STATE(editor_state);
 	DrawModuleData* data = (DrawModuleData*)_data;
 
@@ -402,7 +402,6 @@ void InspectorDrawModule(EditorState* editor_state, unsigned int inspector_index
 
 				bool is_active = data->active_settings != nullptr ? function::CompareStrings(stem, *data->active_settings) : false;
 				UIDrawConfig config;
-				UIConfigCheckBoxCallback callback;
 
 				struct SetNewSettingData {
 					EditorState* editor_state;

@@ -98,6 +98,9 @@ namespace ECSEngine {
 			// Add the corresponding transform such that it gets rendered as it should be
 			void GetTransform(UIDrawConfig& config, size_t& configuration);
 
+			// Reduces the x scale
+			void IndentRow(float scale);
+
 			void SetRowYScale(float scale);
 
 			void SetIndentation(float indentation);
@@ -857,7 +860,7 @@ namespace ECSEngine {
 
 					Stream<char> tool_tip_stream;
 					Stream<char> identifier = HandleResourceIdentifier(name);
-					ECS_STACK_CAPACITY_STREAM(char, tool_tip_name, 128);
+					ECS_STACK_CAPACITY_STREAM(char, tool_tip_name, 512);
 					tool_tip_name.Copy(identifier);
 					tool_tip_name.AddStream("tool tip");
 					tool_tip_name.AssertCapacity();
@@ -1835,7 +1838,7 @@ namespace ECSEngine {
 			typedef void (*UIDrawerArrayDrawFunction)(UIDrawer& drawer, Stream<char> element_name, UIDrawerArrayDrawData data);
 
 			// Optional handler for when an element has been dragged to a new position
-			// The new order points indicates elements in the new order
+			// The new order indicates elements in the new order
 			typedef void (*UIDrawerArrayDragFunction)(UIDrawer& drawer, void* elements, unsigned int element_count, unsigned int* new_order, void* additional_data);
 
 			// Only accepts CapacityStream or ResizableStream as StreamType
@@ -2008,20 +2011,6 @@ namespace ECSEngine {
 					UIConfigAbsoluteTransform arrow_transform;
 					arrow_transform.scale = ARROW_SIZE;
 
-					// If there is window dependent size, modify it such that it conforms to the window alignment
-					if (element_config != nullptr) {
-						if (element_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-							UIConfigWindowDependentSize* size = (UIConfigWindowDependentSize*)element_config->GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
-							float x_scale = GetWindowSizeScaleElement(size->type, size->scale_factor).x;
-							x_scale -= layout.node_indentation;
-							
-							// The arrow size must also be taken into account
-							x_scale -= ARROW_SIZE.x + layout.element_indentation;
-							size->scale_factor.x = GetWindowSizeFactors(size->type, { x_scale, 0.0f }).x;
-
-						}
-					}
-
 					UIDrawConfig internal_element_config;
 					memcpy(&internal_element_config, element_config, sizeof(internal_element_config));
 
@@ -2052,12 +2041,32 @@ namespace ECSEngine {
 
 					const char* draw_element_name = temp_name.buffer;
 					bool has_drag = !function::HasFlag(configuration, UI_CONFIG_ARRAY_DISABLE_DRAG);
+					bool multi_line_element = function::HasFlag(configuration, UI_CONFIG_ARRAY_MULTI_LINE);
 
-					auto select_name = [&](unsigned int index, CapacityStream<char> temporary_provided_name_string) {
-						draw_element_name = temp_name.buffer;
+					auto draw_drag_arrow = [&](unsigned int index, float row_y_scale, auto has_action) {
+						arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
+						arrow_config.AddFlag(arrow_transform);
+						SpriteRectangle(
+							UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
+							arrow_config,
+							ECS_TOOLS_UI_TEXTURE_ARROW,
+							color_theme.text
+						);
+						arrow_config.flag_count--;
+
+						if constexpr (has_action) {
+							drag_data.index = index;
+							drag_data.row_y_scale = row_y_scale;
+							float2 action_position = arrow_transform.position - region_render_offset;
+							float2 action_scale;
+							action_position = ExpandRectangle(action_position, arrow_transform.scale, { 1.25f, 1.25f }, action_scale);
+							AddClickable(element_configuration, action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
+							AddDefaultHoverable(element_configuration, action_position, action_scale, color_theme.theme);
+						}
 					};
 
-					auto draw_row = [&](unsigned int index) {
+					// Has auto is a true/false flag that tells whether or not to add an action
+					auto draw_row = [&](unsigned int index, auto has_action) {
 						if (has_drag) {
 							arrow_transform.position.x = current_x;
 							// Indent the arrow position in order to align to row Y
@@ -2065,12 +2074,17 @@ namespace ECSEngine {
 							OffsetX(ARROW_SIZE.x);
 						}
 
-						ECS_TEMP_ASCII_STRING(provided_name_string, 256);
-
 						PushIdentifierStackRandom(index);
 						function::ConvertIntToChars(temp_name, index);
-						
-						select_name(index, provided_name_string);
+
+						float previous_current_y = current_y;
+
+						if (multi_line_element) {
+							TextLabel(UI_CONFIG_LABEL_TRANSPARENT, config, temp_name);
+							draw_drag_arrow(index, current_row_y_scale, has_action);
+							NextRow();
+							CrossLine();
+						}
 
 						bool has_name_action = function::HasFlag(element_configuration, UI_CONFIG_ELEMENT_NAME_ACTION);
 						if (has_name_action) {
@@ -2093,8 +2107,6 @@ namespace ECSEngine {
 
 						select_element_data.index = index;
 
-						float previous_current_y = current_y;
-
 						draw_function(*this, draw_element_name, function_data);
 
 						if (has_name_action) {
@@ -2105,76 +2117,14 @@ namespace ECSEngine {
 						}
 
 						// Get the row y scale
-						float row_y_scale = current_y - previous_current_y;
+						float row_y_scale = current_y - previous_current_y + current_row_y_scale;
 						data->row_y_scale = row_y_scale;
-
-						if (has_drag) {
-							arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
-							arrow_config.AddFlag(arrow_transform);
-							SpriteRectangle(
-								UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
-								arrow_config,
-								ECS_TOOLS_UI_TEXTURE_ARROW,
-								color_theme.text
-							);
-							arrow_config.flag_count--;
-
-							drag_data.index = index;
-							drag_data.row_y_scale = row_y_scale;
-							float2 action_position = arrow_transform.position - region_render_offset;
-							float2 action_scale;
-							action_position = ExpandRectangle(action_position, arrow_transform.scale, { 1.25f, 1.25f }, action_scale);
-							AddClickable(element_configuration, action_position, action_scale, { ArrayDragAction, &drag_data, sizeof(drag_data) });
-							AddDefaultHoverable(element_configuration, action_position, action_scale, color_theme.theme);
+						if (!multi_line_element) {
+							if (has_drag) {
+								draw_drag_arrow(index, row_y_scale, has_action);
+							}
 						}
 						
-						NextRow();
-						temp_name.size = base_name_size;
-						PopIdentifierStack();
-					};
-
-					auto draw_row_no_action = [&](unsigned int index) {
-						if (has_drag) {
-							arrow_transform.position.x = current_x;
-							// Indent the arrow position in order to align to row Y
-							Indent();
-							OffsetX(ARROW_SIZE.x);
-						}
-
-						ECS_TEMP_ASCII_STRING(provided_name_string, 256);
-
-						select_name(index, provided_name_string);
-
-						PushIdentifierStackRandom(index);
-						function::ConvertIntToChars(temp_name, index);
-
-						UIDrawerArrayDrawData function_data;
-						function_data.additional_data = additional_data;
-						function_data.current_index = index;
-						function_data.element_data = elements->buffer + index;
-						function_data.configuration = element_configuration;
-						function_data.config = &internal_element_config;
-
-						float previous_current_y = current_y;
-
-						draw_function(*this, draw_element_name, function_data);
-
-						// Get the row y scale
-						float row_y_scale = current_y - previous_current_y;
-						data->row_y_scale = row_y_scale;
-
-						if (has_drag) {
-							arrow_transform.position.y = AlignMiddle(current_y, row_y_scale, ARROW_SIZE.y);
-							arrow_config.AddFlag(arrow_transform);
-							SpriteRectangle(
-								UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE,
-								arrow_config,
-								ECS_TOOLS_UI_TEXTURE_ARROW,
-								color_theme.text
-							);
-							arrow_config.flag_count--;
-						}
-
 						NextRow();
 						temp_name.size = base_name_size;
 						PopIdentifierStack();
@@ -2201,73 +2151,77 @@ namespace ECSEngine {
 						}
 					}
 
-					if (data->drag_index == -1) {
-						for (; index < elements->size && current_y - region_render_offset.y - data->row_y_scale <= region_limit.y; index++) {
-							draw_row(index);
-						}
-					}
-					// There is currently a drag active - no other drag actions should be added
-					// And the draw should be effective 
-					else {
-						if (data->drag_is_released) {
-							// Make a buffer that will point for each element which is the new element that
-							// will replace it
-							unsigned int* _order_allocation = nullptr;
+					auto draw_when_drag = [&](auto is_released) {
+						// Make a buffer that will point for each element which is the new element that
+						// will replace it
+						unsigned int* _order_allocation = nullptr;
+						Stream<unsigned int> order_allocation = { nullptr, 0 };
+						unsigned int skip_count_start = skip_count + (data->drag_index < skip_count);
+						
+						if constexpr (is_released) {
 							_order_allocation = (unsigned int*)GetTempBuffer(sizeof(unsigned int) * elements->size);
-							Stream<unsigned int> order_allocation(_order_allocation, 0);
-							unsigned int skip_count_start = skip_count + (data->drag_index < skip_count);
+							order_allocation = { _order_allocation, 0 };
+
 							for (unsigned int counter = 0; counter < skip_count_start; counter++) {
 								counter += data->drag_index == counter;
 								if (counter < skip_count_start) {
 									order_allocation.Add(counter);
 								}
 							}
+						}
 
-							index = skip_count_start;
-							position.y = current_y - region_render_offset.y;
-							unsigned int drawn_elements = 0;
-							while (position.y + data->row_y_scale < data->drag_current_position && drawn_elements < elements->size - 1 - skip_count) {
-								index += data->drag_index == index;
+						index = skip_count_start;
+						position.y = current_y - region_render_offset.y;
+						unsigned int drawn_elements = 0;
+						while (position.y + data->row_y_scale < data->drag_current_position && drawn_elements < elements->size - 1 - skip_count) {
+							index += data->drag_index == index;
+							if constexpr (is_released) {
 								order_allocation.Add(index);
-								draw_row_no_action(index);
-								drawn_elements++;
-								index++;
-								position.y = current_y - region_render_offset.y;
 							}
+							draw_row(index, std::false_type{});
+							drawn_elements++;
+							index++;
+							position.y = current_y - region_render_offset.y;
+						}
 
+						if constexpr (is_released) {
 							// Reached the dragged element
 							order_allocation.Add(data->drag_index);
+						}
 
-							// Draw a small highlight
-							float x_highlight_scale = GetXScaleUntilBorder(current_x - region_render_offset.x);
-							float y_hightlight_scale = data->row_y_scale * 1.25f;
-							float y_highlight_position = AlignMiddle(current_y, data->row_y_scale, y_hightlight_scale);
-							Color highlight_color = color_theme.theme;
-							highlight_color.alpha = 100;
-							// Offset the x a little to the left
-							SpriteRectangle(
-								0,
-								{ current_x - 0.01f - region_render_offset.x, y_highlight_position - region_render_offset.y }, 
-								{ x_highlight_scale, y_hightlight_scale }, 
-								ECS_TOOLS_UI_TEXTURE_MASK,
-								highlight_color
-							);
-						
-							draw_row_no_action(data->drag_index);
-							unsigned int last_element = data->drag_index == elements->size - 1 ? elements->size - 1 : elements->size;
-							for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
-								// Skip the current drag index if it is before drawn
-								index += data->drag_index == index;
+						// Draw a small highlight
+						float x_highlight_scale = GetXScaleUntilBorder(position.x - region_render_offset.x);
+						float y_hightlight_scale = data->row_y_scale * 1.25f;
+						float y_highlight_position = AlignMiddle(current_y, data->row_y_scale, y_hightlight_scale);
+						Color highlight_color = color_theme.theme;
+						highlight_color.alpha = 100;
+						// Offset the x a little to the left
+						SpriteRectangle(
+							0,
+							{ current_x - 0.01f - region_render_offset.x, y_highlight_position - region_render_offset.y },
+							{ x_highlight_scale, y_hightlight_scale },
+							ECS_TOOLS_UI_TEXTURE_MASK,
+							highlight_color
+						);
+						draw_row(data->drag_index, std::false_type{});
+
+						unsigned int last_element = data->drag_index == elements->size - 1 ? elements->size - 1 : elements->size;
+						for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
+							// Skip the current drag index if it is before drawn
+							index += data->drag_index == index;
+							if constexpr (is_released) {
 								order_allocation.Add(index);
-								draw_row_no_action(index);
 							}
+							draw_row(index, std::false_type{});
+						}
+						index += data->drag_index == index;
 
+						if constexpr (is_released) {
 							for (unsigned int counter = index; counter < last_element; counter++) {
 								// Skip the current drag index if it is before drawn
 								counter += data->drag_index == counter;
 								order_allocation.Add(counter);
 							}
-							index += data->drag_index == index;
 							ECS_ASSERT(order_allocation.size == elements->size);
 
 							// The default drag behaviour is to simply memcpy the new data
@@ -2278,73 +2232,36 @@ namespace ECSEngine {
 
 								void* temp_allocation = GetTempBuffer(element_byte_size * elements->size);
 								for (size_t index = 0; index < elements->size; index++) {
-									memcpy(function::OffsetPointer(temp_allocation, index* element_byte_size), &elements->buffer[order_allocation[index]], element_byte_size);
+									memcpy(function::OffsetPointer(temp_allocation, index * element_byte_size), &elements->buffer[order_allocation[index]], element_byte_size);
 									//temp_allocation[index] = elements->buffer[order_allocation[index]];
-								}							
+								}
 
 								memcpy(elements->buffer, temp_allocation, element_byte_size * elements->size);
 								ReturnTempAllocator(temp_marker);
-								
+
 							}
 							else {
 								drag_function(*this, elements->buffer, elements->size, order_allocation.buffer, additional_data);
 							}
-							
+
 							data->drag_is_released = false;
 							data->drag_index = -1;
 						}
-						else {
-							// The version without the oder_allocation - no adds or memory pressure onto the temp allocator
-							unsigned int skip_count_start = skip_count + (data->drag_index < skip_count);
+					};
 
-							index = skip_count_start;
-							position.y = current_y - region_render_offset.y;
-							unsigned int drawn_elements = 0;
-							while (position.y + data->row_y_scale < data->drag_current_position && drawn_elements < elements->size - 1 - skip_count) {
-								index += data->drag_index == index;
-								draw_row_no_action(index);
-								drawn_elements++;
-								index++;
-								position.y = current_y - region_render_offset.y;
-							}
-							// Reached the dragged element
-							
-							// Draw a small highlight
-							float x_highlight_scale = GetXScaleUntilBorder(current_x - region_render_offset.x);
-							float y_hightlight_scale = data->row_y_scale * 1.25f;
-							float y_highlight_position = AlignMiddle(current_y, data->row_y_scale, y_hightlight_scale);
-							Color highlight_color = color_theme.theme;
-							highlight_color.alpha = 100;
-							// Offset the x a little to the left
-							SpriteRectangle(
-								0,
-								{ current_x - 0.01f - region_render_offset.x, y_highlight_position - region_render_offset.y },
-								{ x_highlight_scale, y_hightlight_scale },
-								ECS_TOOLS_UI_TEXTURE_MASK,
-								highlight_color
-							);
-
-							draw_row_no_action(data->drag_index);
-							unsigned int last_element = data->drag_index == elements->size - 1 ? elements->size - 1 : elements->size;
-							for (; index < last_element && current_y - region_render_offset.y <= region_limit.y; index++) {
-								// Skip the current drag index if it is before drawn
-								index += data->drag_index == index;
-								draw_row_no_action(index);
-							}
-							index += data->drag_index == index;
+					if (data->drag_index == -1) {
+						for (; index < elements->size && current_y - region_render_offset.y - data->row_y_scale <= region_limit.y; index++) {
+							draw_row(index, std::true_type{});
 						}
 					}
-
-					// If there is window dependent size, restore the previous config
-					if (element_config != nullptr) {
-						if (element_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-							UIConfigWindowDependentSize* size = (UIConfigWindowDependentSize*)element_config->GetParameter(UI_CONFIG_WINDOW_DEPENDENT_SIZE);
-							float x_scale = GetWindowSizeScaleElement(size->type, size->scale_factor).x;
-							x_scale += layout.node_indentation;
-
-							// The arrow size must also be taken into account
-							x_scale += ARROW_SIZE.x + layout.element_indentation;
-							size->scale_factor.x = GetWindowSizeFactors(size->type, { x_scale, 0.0f }).x;
+					// There is currently a drag active - no other drag actions should be added
+					// And the draw should be effective 
+					else {
+						if (data->drag_is_released) {
+							draw_when_drag(std::true_type{});
+						}
+						else {
+							draw_when_drag(std::false_type{});
 						}
 					}
 
@@ -3634,6 +3551,11 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void* GetTempBuffer(size_t size, ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL, size_t alignment = 8);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Returns memory from the memory handler of the callbacks - it is temporary (valid for this drawer only)
+			void* GetHandlerBuffer(size_t size, ECS_UI_DRAW_PHASE phase);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
