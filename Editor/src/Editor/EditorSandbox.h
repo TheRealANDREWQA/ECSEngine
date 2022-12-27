@@ -379,12 +379,20 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 
 // -------------------------------------------------------------------------------------------------------------
 
-template<typename Functor>
+// Return true to early exit
+template<bool early_exit = false, typename Functor>
 void SandboxAction(const EditorState* editor_state, unsigned int sandbox_index, Functor&& functor) {
 	if (sandbox_index == -1) {
 		unsigned int count = editor_state->sandboxes.size;
 		for (unsigned int index = 0; index < count; index++) {
-			functor(index);
+			if constexpr (early_exit) {
+				if (functor(index)) {
+					break;
+				}
+			}
+			else {
+				functor(index);
+			}
 		}
 	}
 	else {

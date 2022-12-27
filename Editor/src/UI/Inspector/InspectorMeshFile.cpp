@@ -31,7 +31,7 @@ struct InspectorDrawMeshFileData {
 	AssetSettingsHelperData helper_data;
 };
 
-void InspectorCleanMeshFile(EditorState* editor_state, void* _data) {
+void InspectorCleanMeshFile(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawMeshFileData* data = (InspectorDrawMeshFileData*)_data;
 
 	// Unload the mesh and free the resources only if the mesh was previously loaded
@@ -304,12 +304,17 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunction(
+	inspector_index = ChangeInspectorDrawFunctionWithSearch(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawMeshFile, InspectorCleanMeshFile },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1)
+		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		-1,
+		[=](void* inspector_data) {
+			InspectorDrawMeshFileData* other_data = (InspectorDrawMeshFileData*)inspector_data;
+			return function::CompareStrings(other_data->path, path);
+		}
 	);
 
 	if (inspector_index != -1) {

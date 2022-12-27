@@ -589,19 +589,19 @@ namespace ECSEngine {
 		char ConvertCharactersToBoolImpl(Stream<CharacterType> characters)
 		{
 			if constexpr (std::is_same_v<char, CharacterType>) {
-				if (memcmp(characters.buffer, "true", sizeof("true") - 1) == 0) {
+				if (memcmp(characters.buffer, "true", sizeof("true") - sizeof(char)) == 0) {
 					return 1;
 				}
-				else if (memcmp(characters.buffer, "false", sizeof("false") - 1) == 0) {
+				else if (memcmp(characters.buffer, "false", sizeof("false") - sizeof(char)) == 0) {
 					return 0;
 				}
 				return -1;
 			}
 			else {
-				if (memcmp(characters.buffer, L"true", sizeof(L"true") - 2) == 0) {
+				if (memcmp(characters.buffer, L"true", sizeof(L"true") - sizeof(wchar_t)) == 0) {
 					return 1;
 				}
-				else if (memcmp(characters.buffer, L"false", sizeof(L"false") - 2) == 0) {
+				else if (memcmp(characters.buffer, L"false", sizeof(L"false") - sizeof(wchar_t)) == 0) {
 					return 0;
 				}
 				return -1;
@@ -623,59 +623,227 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		float ParseFloat(const CharacterType** characters, Stream<CharacterType> delimiters)
+		float ParseFloat(Stream<CharacterType>* characters, CharacterType delimiter)
 		{
-			return ParseType<CharacterType, float>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
+			return ParseType<CharacterType, float>(characters, delimiter, [](Stream<CharacterType> stream_characters) {
 				return ConvertCharactersToFloat(stream_characters);
 			});
 		}
 
-		template ECSENGINE_API float ParseFloat(const char**, Stream<char>);
-		template ECSENGINE_API float ParseFloat(const wchar_t**, Stream<wchar_t>);
+		template ECSENGINE_API float ParseFloat(Stream<char>*, char);
+		template ECSENGINE_API float ParseFloat(Stream<wchar_t>*, wchar_t);
 
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		double ParseDouble(const CharacterType** characters, Stream<CharacterType> delimiters)
+		double ParseDouble(Stream<CharacterType>* characters, CharacterType delimiter)
 		{
-			return ParseType<CharacterType, double>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
+			return ParseType<CharacterType, double>(characters, delimiter, [](Stream<CharacterType> stream_characters) {
 				return ConvertCharactersToDouble(stream_characters);
 			});
 		}
 
-		template ECSENGINE_API double ParseDouble(const char**, Stream<char>);
-		template ECSENGINE_API double ParseDouble(const wchar_t**, Stream<wchar_t>);
+		template ECSENGINE_API double ParseDouble(Stream<char>*, char);
+		template ECSENGINE_API double ParseDouble(Stream<wchar_t>*, wchar_t);
 
 		// ----------------------------------------------------------------------------------------------------------
 
 		template<typename CharacterType>
-		bool ParseBool(const CharacterType** characters, Stream<CharacterType> delimiters)
+		bool ParseBool(Stream<CharacterType>* characters, CharacterType delimiter)
 		{
-			return ParseType<CharacterType, bool>(characters, delimiters, [](Stream<CharacterType> stream_characters) {
-				size_t offset = 0;
-				if constexpr (std::is_same_v<CharacterType, char> || std::is_same_v<CharacterType, int8_t>) {
-					while (offset < stream_characters.size && stream_characters[offset] < '0' && stream_characters[offset] > '9') {
-						offset++;
-					}
-					if (offset == stream_characters.size) {
-						return false;
-					}
-					return stream_characters[offset] != '0' ? true : false;
-				}
-				else {
-					while (stream_characters[offset] < L'0' && stream_characters[offset] > L'9') {
-						offset++;
-					}
-					if (offset == stream_characters.size) {
-						return false;
-					}
-					return stream_characters[offset] != L'0' ? true : false;
-				}
+			return ParseType<CharacterType, bool>(characters, delimiter, [](Stream<CharacterType> stream_characters) {
+				return (bool)ConvertCharactersToBool(stream_characters);
 			});
 		}
 
-		template ECSENGINE_API bool ParseBool(const char**, Stream<char>);
-		template ECSENGINE_API bool ParseBool(const wchar_t**, Stream<wchar_t>);
+		template ECSENGINE_API bool ParseBool(Stream<char>*, char);
+		template ECSENGINE_API bool ParseBool(Stream<wchar_t>*, wchar_t);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		double4 ParseDouble4(
+			Stream<CharacterType>* characters, 
+			CharacterType external_delimiter, 
+			CharacterType internal_delimiter,
+			Stream<CharacterType> ignore_tag
+		)
+		{
+			double4 result = { 0.0, 0.0, 0.0, 0.0 };
+
+			Stream<CharacterType> ext_delimiter = function::FindFirstCharacter(*characters, Character<CharacterType>('}'));
+			if (ext_delimiter.size > 0) {
+				Stream<CharacterType> parse_range = { characters->buffer, function::PointerDifference(ext_delimiter.buffer, characters->buffer) / sizeof(CharacterType) };
+				// Multiple values
+				Stream<CharacterType> delimiter = function::FindFirstCharacter(parse_range, internal_delimiter);
+
+				double* double_array = (double*)&result;
+				size_t double_array_index = 0;
+				while (delimiter.size > 0 && double_array_index < 4) {
+					Stream<CharacterType> current_range = { parse_range.buffer, function::PointerDifference(delimiter.buffer, parse_range.buffer) / sizeof(CharacterType) };
+					double_array[double_array_index++] = function::ConvertCharactersToDouble(current_range);
+
+					delimiter.buffer++;
+					delimiter.size--;
+					Stream<CharacterType> new_delimiter = function::FindFirstCharacter(delimiter, internal_delimiter);
+					if (new_delimiter.size > 0) {
+						parse_range = { delimiter.buffer, function::PointerDifference(new_delimiter.buffer, delimiter.buffer) / sizeof(CharacterType) };
+						delimiter = new_delimiter;
+					}
+					else {
+						parse_range = delimiter;
+						delimiter.size = 0;
+					}
+				}
+
+				if (double_array_index < 4) {
+					// Try to parse a last value
+					double_array[double_array_index] = function::ConvertCharactersToDouble(parse_range);
+				}
+				*characters = ext_delimiter;
+				Stream<CharacterType> new_characters = function::FindFirstCharacter(*characters, external_delimiter);
+				if (new_characters.size == 0) {
+					characters->size = 0;
+				}
+				else {
+					*characters = new_characters;
+					characters->Advance();
+				}
+			}
+			else {
+				// Check the ignore tag
+				if (ignore_tag.size > 0) {
+					const CharacterType* starting_value = function::SkipWhitespace(characters->buffer);
+					const CharacterType* delimiter = function::FindFirstCharacter(*characters, external_delimiter).buffer;
+					if (delimiter == nullptr) {
+						result.x = ConvertCharactersToDouble(*characters);
+						characters->size = 0;
+						return result;
+					}
+					else {
+						// It has a delimiter
+						const CharacterType* ending_value = function::SkipCodeIdentifier(delimiter, -1);
+						Stream<CharacterType> compare_characters = { starting_value, function::PointerDifference(ending_value, starting_value) / sizeof(wchar_t) };
+						if (function::CompareStrings(compare_characters, ignore_tag)) {
+							*characters = delimiter;
+							characters->Advance();
+							return double4(DBL_MAX, DBL_MAX, DBL_MAX, DBL_MAX);
+						}
+					}
+				}
+				else {
+					// Single value
+					result.x = ParseDouble(characters, external_delimiter);
+				}
+			}
+			
+
+			return result;
+		}
+
+		template ECSENGINE_API double4 ParseDouble4(Stream<char>*, char, char, Stream<char>);
+		template ECSENGINE_API double4 ParseDouble4(Stream<wchar_t>*, wchar_t, wchar_t, Stream<wchar_t>);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void ParseFloats(
+			Stream<CharacterType> characters,
+			CharacterType delimiter,
+			CapacityStream<float>& values
+		) {
+			while (characters.size > 0) {
+				values.AddSafe(ParseFloat(&characters, delimiter));
+				if (characters.size > 0) {
+					characters.Advance();
+				}
+			}
+		}
+
+		template ECSENGINE_API void ParseFloats(Stream<char>, char, CapacityStream<float>&);
+		template ECSENGINE_API void ParseFloats(Stream<wchar_t>, wchar_t, CapacityStream<float>&);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void ParseDoubles(
+			Stream<CharacterType> characters,
+			CharacterType delimiter,
+			CapacityStream<double>& values
+		) {
+			while (characters.size > 0) {
+				values.AddSafe(ParseDouble(&characters, delimiter));
+				if (characters.size > 0) {
+					characters.Advance();
+				}
+			}
+		}
+
+		template ECSENGINE_API void ParseDoubles(Stream<char>, char, CapacityStream<double>&);
+		template ECSENGINE_API void ParseDoubles(Stream<wchar_t>, wchar_t, CapacityStream<double>&);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void ParseBools(
+			Stream<CharacterType> characters,
+			CharacterType delimiter,
+			CapacityStream<bool>& values
+		) {
+			if constexpr (std::is_same_v<CharacterType, char>) {
+				characters = function::SkipWhitespaceEx(characters);
+			}
+			else {
+				const CharacterType* skipped = function::SkipWhitespace(characters.buffer);
+				if (skipped < characters.buffer + characters.size) {
+					characters.size -= function::PointerDifference(skipped, characters.buffer) / sizeof(CharacterType);
+					characters.buffer = (CharacterType*)skipped;
+				}
+			}
+
+			while (characters.size > 0) {
+				values.AddSafe(ParseBool(&characters, delimiter));
+				if (characters.size > 0) {
+					characters.Advance();
+				}
+
+				if constexpr (std::is_same_v<CharacterType, char>) {
+					characters = function::SkipWhitespaceEx(characters);
+				}
+				else {
+					const CharacterType* skipped = function::SkipWhitespace(characters.buffer);
+					if (skipped < characters.buffer + characters.size) {
+						characters.size -= function::PointerDifference(skipped, characters.buffer) / sizeof(CharacterType);
+						characters.buffer = (CharacterType*)skipped;
+					}
+				}
+			}
+		}
+
+		template ECSENGINE_API void ParseBools(Stream<char>, char, CapacityStream<bool>&);
+		template ECSENGINE_API void ParseBools(Stream<wchar_t>, wchar_t, CapacityStream<bool>&);
+
+		// ----------------------------------------------------------------------------------------------------------
+
+		template<typename CharacterType>
+		void ParseDouble4s(
+			Stream<CharacterType> characters, 
+			CapacityStream<double4>& values, 
+			CharacterType external_delimiter, 
+			CharacterType internal_delimiter, 
+			Stream<CharacterType> ignore_tag
+		)
+		{
+			while (characters.size > 0) {
+				values.AddSafe(ParseDouble4(&characters, external_delimiter, internal_delimiter, ignore_tag));
+				if (characters.size > 0) {
+					characters.Advance();
+				}
+			}
+		}
+
+		template ECSENGINE_API void ParseDouble4s(Stream<char>, CapacityStream<double4>&, char, char, Stream<char>);
+		template ECSENGINE_API void ParseDouble4s(Stream<wchar_t>, CapacityStream<double4>&, wchar_t, wchar_t, Stream<wchar_t>);
 
 		// ----------------------------------------------------------------------------------------------------------
 

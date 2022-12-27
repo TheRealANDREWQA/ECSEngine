@@ -101,9 +101,12 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_COMBO_BOX_CALLBACK = (size_t)1 << 48;
 		constexpr size_t UI_CONFIG_COMBO_BOX_NAME_WITH_SCALE = (size_t)1 << 49;
 		constexpr size_t UI_CONFIG_COMBO_BOX_MAPPING = (size_t)1 << 50;
+		constexpr size_t UI_CONFIG_COMBO_BOX_UNAVAILABLE = (size_t)1 << 51;
+		constexpr size_t UI_CONFIG_COMBO_BOX_DEFAULT = (size_t)1 << 52;
 
 		constexpr size_t UI_CONFIG_CHECK_BOX_NO_NAME = (size_t)1 << 45;
 		constexpr size_t UI_CONFIG_CHECK_BOX_CALLBACK = (size_t)1 << 46;
+		constexpr size_t UI_CONFIG_CHECK_BOX_DEFAULT = (size_t)1 << 47;
 
 		constexpr size_t UI_CONFIG_CROSS_LINE_DO_NOT_INFER = (size_t)1 << 45;
 
@@ -210,6 +213,9 @@ namespace ECSEngine {
 		constexpr size_t UI_CONFIG_ARRAY_REMOVE_ANYWHERE = (size_t)1 << 57;
 		constexpr size_t UI_CONFIG_ARRAY_DISABLE_DRAG = (size_t)1 << 58;
 		constexpr size_t UI_CONFIG_ARRAY_PRE_POST_DRAW = (size_t)1 << 59;
+		// Tells the array that the element has multi line values
+		// and that it should add a header (not a collapsing one) before the values
+		constexpr size_t UI_CONFIG_ARRAY_MULTI_LINE = (size_t)1 << 60;
 
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_DEFAULT_VALUE = (size_t)1 << 50;
 		constexpr size_t UI_CONFIG_COLOR_FLOAT_CALLBACK = (size_t)1 << 51;

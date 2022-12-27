@@ -59,18 +59,21 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(GeneralisModules)\$(ProjectName)\$(Configuration)\</OutDir>
-    <IntDir>..\..\..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(GeneralisModules)\</OutDir>
+    <IntDir>bin-int\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(GeneralisModules)\$(ProjectName)\$(Configuration)\</OutDir>
-    <IntDir>..\..\..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(GeneralisModules)\</OutDir>
+    <IntDir>bin-int\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(GeneralisModules)\$(ProjectName)\$(Configuration)\</OutDir>
-    <IntDir>..\..\..\bin-int\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(GeneralisModules)\</OutDir>
+    <IntDir>bin-int\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -88,6 +91,8 @@
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -117,6 +122,9 @@
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -172,11 +180,14 @@
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">pch.h</PrecompiledHeaderFile>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">pch.h</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="src\TempHeader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Components.h" />
+    <ClInclude Include="src\Export.h" />
     <ClInclude Include="src\ModuleFunction.h" />
     <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\TempHeader.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -664,6 +664,27 @@ namespace ECSEngine {
 			});
 		}
 
+		// Return true if you want to early exit. The component functor receives only the Component,
+		// The functor receives the Component + SharedInstance
+		template<bool early_exit = false, typename ComponentFunctor, typename Functor>
+		void ForAllSharedInstances(ComponentFunctor&& component_functor, Functor&& functor) const {
+			ForEachSharedComponent<early_exit>([&](Component component) {
+				bool early_return = false;
+				component_functor(component);
+
+				ForEachSharedInstance<early_exit>(component, [&](SharedInstance instance) {
+					if constexpr (early_exit) {
+						early_return = functor(component, instance);
+					}
+					else {
+						functor(component, instance);
+					}
+					return early_return;
+				});
+				return early_return;
+			});
+		}
+
 		// Return true to exit early, if desired.
 		// The functor receives the archetype as a Archetype*
 		// This iterates over all archetypes in the entity manager
@@ -672,6 +693,25 @@ namespace ECSEngine {
 			unsigned int archetype_count = GetArchetypeCount();
 			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
 				Archetype* archetype = GetArchetype(archetype_index);
+				if constexpr (early_exit) {
+					if (functor(archetype)) {
+						return;
+					}
+				}
+				else {
+					functor(archetype);
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the archetype as a const Archetype*
+		// This iterates over all archetypes in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachArchetype(Functor&& functor) const {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				const Archetype* archetype = GetArchetype(archetype_index);
 				if constexpr (early_exit) {
 					if (functor(archetype)) {
 						return;
@@ -694,6 +734,29 @@ namespace ECSEngine {
 				unsigned int base_count = archetype->GetBaseCount();
 				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
 					ArchetypeBase* base_archetype = archetype->GetBase(base_index);
+					if constexpr (early_exit) {
+						if (functor(archetype, base_archetype)) {
+							return;
+						}
+					}
+					else {
+						functor(archetype, base_archetype);
+					}
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the main archetype as const Archetype* and the base archetype as const ArchetypeBase*
+		// This iterates over all base archetypes in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachBaseArchetype(Functor&& functor) const {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				const Archetype* archetype = GetArchetype(archetype_index);
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const ArchetypeBase* base_archetype = archetype->GetBase(base_index);
 					if constexpr (early_exit) {
 						if (functor(archetype, base_archetype)) {
 							return;
@@ -754,11 +817,66 @@ namespace ECSEngine {
 		}
 
 		// Return true to exit early, if desired.
+		// The functor receives the main archetype as const Archetype*, the base archetype as const ArchetypeBase*, the entity as Entity, void** unique_components
+		// The ArchetypeInitializeFunctor receives an const Archetype*, the ArchetypeBaseInitializeFunctor receives an const Archetype* and an const ArchetypeBase*
+		// This iterates over all entities in the entity manager.
+		template<bool early_exit = false, typename ArchetypeInitializeFunctor, typename ArchetypeBaseInitializeFunctor, typename Functor>
+		void ForEachEntity(ArchetypeInitializeFunctor&& archetype_initialize, ArchetypeBaseInitializeFunctor&& base_initialize, Functor&& functor) const {
+			unsigned int archetype_count = GetArchetypeCount();
+			for (unsigned int archetype_index = 0; archetype_index < archetype_count; archetype_index++) {
+				const Archetype* archetype = GetArchetype(archetype_index);
+				archetype_initialize(archetype);
+
+				unsigned int base_count = archetype->GetBaseCount();
+				for (unsigned int base_index = 0; base_index < base_count; base_index++) {
+					const ArchetypeBase* base_archetype = archetype->GetBase(base_index);
+					base_initialize(archetype, base_archetype);
+
+					unsigned int entity_count = base_archetype->EntityCount();
+
+					void* entity_components[ECS_ARCHETYPE_MAX_COMPONENTS];
+					unsigned int component_sizes[ECS_ARCHETYPE_MAX_COMPONENTS];
+
+					ComponentSignature unique_signature = archetype->GetUniqueSignature();
+					unsigned char unique_count = unique_signature.count;
+
+					memcpy(entity_components, base_archetype->m_buffers, sizeof(*base_archetype->m_buffers) * unique_count);
+					for (unsigned char component_index = 0; component_index < unique_count; component_index++) {
+						component_sizes[component_index] = ComponentSize(unique_signature[component_index]);
+					}
+
+					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
+						if constexpr (early_exit) {
+							if (functor(archetype, base_archetype, base_archetype->m_entities[entity_index], entity_components)) {
+								return;
+							}
+						}
+						else {
+							functor(archetype, base_archetype, base_archetype->m_entities[entity_index], entity_components);
+						}
+
+						for (unsigned char component_index = 0; component_index < unique_count; component_index++) {
+							entity_components[component_index] = function::OffsetPointer(entity_components[component_index], component_sizes[component_index]);
+						}
+					}
+				}
+			}
+		}
+
+		// Return true to exit early, if desired.
 		// The functor receives the main archetype as Archetype*, the base archetype as ArchetypeBase*, the entity as Entity, void** unique_components
 		// This iterates over all entities in the entity manager
 		template<bool early_exit = false, typename Functor>
 		void ForEachEntity(Functor&& functor) {
 			ForEachEntity<early_exit>([](Archetype* archetype) {}, [](Archetype* archetype, ArchetypeBase* base_archetype) {}, functor)
+		}
+
+		// Return true to exit early, if desired.
+		// The functor receives the main archetype as Archetype*, the base archetype as ArchetypeBase*, the entity as Entity, void** unique_components
+		// This iterates over all entities in the entity manager
+		template<bool early_exit = false, typename Functor>
+		void ForEachEntity(Functor&& functor) const {
+			ForEachEntity<early_exit>([](const Archetype* archetype) {}, [](const Archetype* archetype, const ArchetypeBase* base_archetype) {}, functor)
 		}
 
 		// ---------------------------------------------------------------------------------------------------

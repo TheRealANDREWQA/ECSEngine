@@ -700,8 +700,6 @@ namespace ECSEngine {
 		struct UIDefaultTextHoverableData {
 			Color color;
 			float percentage = 1.25f;
-			UISpriteVertex* vertices = nullptr;
-			unsigned int vertex_count = 0;
 			float2 text_offset;
 			Color text_color = ECS_TOOLS_UI_TEXT_COLOR;
 			float2 font_size = { ECS_TOOLS_UI_FONT_SIZE * ECS_TOOLS_UI_FONT_X_FACTOR, ECS_TOOLS_UI_FONT_SIZE };

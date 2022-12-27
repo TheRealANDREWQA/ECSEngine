@@ -124,6 +124,7 @@ namespace ECSEngine {
 		ECS_SERIALIZE_OK,
 		ECS_SERIALIZE_COULD_NOT_OPEN_OR_WRITE_FILE,
 		ECS_SERIALIZE_MISSING_DEPENDENT_TYPES,
+		ECS_SERIALIZE_CUSTOM_TYPE_FAILED
 	};
 
 	enum ECS_DESERIALIZE_CODE : unsigned char {
@@ -135,7 +136,7 @@ namespace ECSEngine {
 		ECS_DESERIALIZE_CORRUPTED_FILE
 	};
 
-	// Takes into consideration the custom serializer aswell
+	// Takes into consideration the custom serializer as well
 	ECSENGINE_API bool SerializeHasDependentTypes(
 		const Reflection::ReflectionManager* reflection_manager, 
 		const Reflection::ReflectionType* type, 
@@ -244,5 +245,62 @@ namespace ECSEngine {
 		DeserializeFieldTable field_table,
 		const Reflection::ReflectionManager* deserialized_manager = nullptr 
 	);
+
+#pragma region String versions
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> string,
+		const void* data,
+		Stream<wchar_t> file,
+		SerializeOptions* options = nullptr
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API ECS_SERIALIZE_CODE SerializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> string,
+		const void* data,
+		uintptr_t& ptr,
+		SerializeOptions* options = nullptr
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API size_t SerializeSizeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> string,
+		const void* data,
+		SerializeOptions* options = nullptr
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> string,
+		void* address,
+		Stream<wchar_t> file,
+		DeserializeOptions* options = nullptr,
+		void** file_data = nullptr
+	);
+
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> string,
+		void* address,
+		uintptr_t& stream,
+		DeserializeOptions* options = nullptr
+	);
+	
+	// Determines if it is a reflected type or a custom type and call the function appropriately
+	ECSENGINE_API size_t DeserializeSizeEx(
+		const Reflection::ReflectionManager* reflection_manager,
+		Stream<char> string,
+		uintptr_t& stream,
+		DeserializeOptions* options = nullptr
+	);
+
+#pragma endregion
 
 }

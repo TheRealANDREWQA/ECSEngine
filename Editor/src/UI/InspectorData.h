@@ -4,7 +4,7 @@
 struct EditorState;
 
 typedef void (*InspectorDrawFunction)(EditorState* editor_state, unsigned int inspector_index, void* data, ECSEngine::Tools::UIDrawer* drawer);
-typedef void (*InspectorCleanDrawFunction)(EditorState* editor_state, void* data);
+typedef void (*InspectorCleanDrawFunction)(EditorState* editor_state, unsigned int inspector_index, void* data);
 struct InspectorFunctions {
 	InspectorDrawFunction draw_function;
 	InspectorCleanDrawFunction clean_function;

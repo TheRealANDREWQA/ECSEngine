@@ -49,7 +49,11 @@ namespace ECSEngine {
 
 		Color(const unsigned char* values);
 
+		// Assumes the values are in the 0.0f - 1.0f range
 		Color(const float* values);
+
+		// Assumes the values are in the 0-255 range
+		Color(const double* values);
 
 		Color(const Color& other) = default;
 		Color& operator = (const Color& other) = default;
@@ -97,6 +101,9 @@ namespace ECSEngine {
 		ColorFloat(Color color);
 
 		ColorFloat(const float* values);
+
+		// Assumes the values are in the 0.0 - 1.0 range
+		ColorFloat(const double* values);
 
 		ColorFloat(const ColorFloat& other) = default;
 		ColorFloat& operator = (const ColorFloat& other) = default;

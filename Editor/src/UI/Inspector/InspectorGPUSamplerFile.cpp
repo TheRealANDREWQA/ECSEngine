@@ -23,7 +23,7 @@ struct InspectorDrawGPUSamplerFileData {
 	char anisotropic_label_storage[ANISOTROPIC_CHAR_STORAGE];
 };
 
-void InspectorCleanGPUSampler(EditorState* editor_state, void* _data) {
+void InspectorCleanGPUSampler(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawGPUSamplerFileData* data = (InspectorDrawGPUSamplerFileData*)_data;
 	editor_state->editor_allocator->Deallocate(data->sampler_metadata.name.buffer);
 }
@@ -133,12 +133,17 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 
 	// Allocate the data and embedd the path in it
 	// Later on. It is fine to read from the stack more bytes
-	inspector_index = ChangeInspectorDrawFunction(
+	inspector_index = ChangeInspectorDrawFunctionWithSearch(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawGPUSamplerFile, InspectorCleanGPUSampler },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1)
+		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		-1,
+		[=](void* inspector_data) {
+			InspectorDrawGPUSamplerFileData* other_data = (InspectorDrawGPUSamplerFileData*)inspector_data;
+			return function::CompareStrings(other_data->path, path);
+		}
 	);
 
 	if (inspector_index != -1) {

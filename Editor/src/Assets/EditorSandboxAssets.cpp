@@ -332,6 +332,169 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
+	const EditorState* editor_state,
+	Component component,
+	bool shared,
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types
+) {
+	LinkComponentWithAssetFields info_type;
+
+	Stream<char> target_type_name = editor_state->editor_components.TypeFromID(component.value, shared);
+	ECS_ASSERT(target_type_name.size > 0);
+
+	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 64);
+
+	info_type.type = editor_state->editor_components.GetType(target_type_name);
+	GetAssetFieldsFromLinkComponentTarget(info_type.type, asset_fields);
+
+	// Go through the asset fields. If the component doesn't have the given asset type, then don't bother with it
+	for (unsigned int index = 0; index < asset_fields.size; index++) {
+		size_t asset_index = 0;
+		for (; asset_index < asset_types.size; asset_index++) {
+			if (asset_types[asset_index] == asset_fields[index].type) {
+				break;
+			}
+		}
+
+		if (asset_index == asset_types.size) {
+			asset_fields.RemoveSwapBack(index);
+			index--;
+		}
+	}
+
+	info_type.asset_fields.InitializeAndCopy(allocator, asset_fields);
+	return info_type;
+}
+
+void GetLinkComponentsWithAssetFieldsUnique(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	LinkComponentWithAssetFields* link_with_fields, 
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types
+)
+{
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	entity_manager->ForEachComponent([&](Component component) {
+		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, false, allocator, asset_types);
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void GetLinkComponentWithAssetFieldsShared(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	LinkComponentWithAssetFields* link_with_fields, 
+	AllocatorPolymorphic allocator,
+	Stream<ECS_ASSET_TYPE> asset_types
+)
+{
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	entity_manager->ForEachSharedComponent([&](Component component) {
+		link_with_fields[component.value] = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, allocator, asset_types);
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+{
+	bool return_value = false;
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
+	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(&_stack_allocator);
+	Stream<void> asset_pointer = GetAssetFromMetadata(metadata, type);
+
+	SandboxAction<true>(editor_state, sandbox_index, [&](unsigned int sandbox_index) {
+		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		unsigned int unique_component_count = entity_manager->GetMaxComponent().value + 1;
+		unsigned int shared_component_count = entity_manager->GetMaxSharedComponent().value + 1;
+
+		ECS_STACK_CAPACITY_STREAM_DYNAMIC(LinkComponentWithAssetFields, link_with_fields, std::max(unique_component_count, shared_component_count));
+		GetLinkComponentsWithAssetFieldsUnique(editor_state, sandbox_index, link_with_fields.buffer, allocator, { &type, 1 });
+
+		unsigned char components_to_visit[ECS_ARCHETYPE_MAX_COMPONENTS];
+		unsigned char component_to_visit_count = 0;
+		const Reflection::ReflectionType* component_reflection_types[ECS_ARCHETYPE_MAX_COMPONENTS];
+
+		SandboxForAllUniqueComponents(editor_state, sandbox_index,
+			[&](const Archetype* archetype) {
+				component_to_visit_count = 0;
+				ComponentSignature signature = archetype->GetUniqueSignature();
+				for (unsigned char index = 0; index < signature.count; index++) {
+					if (link_with_fields[signature[index]].asset_fields.size > 0) {
+						components_to_visit[component_to_visit_count] = index;
+						component_reflection_types[component_to_visit_count++] = editor_state->editor_components.GetType(editor_state->editor_components.TypeFromID(signature[index], false));
+						ECS_ASSERT(component_reflection_types[component_to_visit_count - 1] != nullptr);
+					}
+				}
+			},
+			[&](const Archetype* archetype, const ArchetypeBase* base, Entity entity, void** unique_components) {
+				ComponentSignature signature = archetype->GetUniqueSignature();
+				ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, ECS_ARCHETYPE_MAX_COMPONENTS);
+				for (unsigned char index = 0; index < component_to_visit_count; index++) {
+					Stream<LinkComponentAssetField> asset_fields = link_with_fields[signature[components_to_visit[index]]].asset_fields;
+					GetLinkComponentAssetDataForTarget(
+						component_reflection_types[index],
+						unique_components[components_to_visit[index]],
+						asset_fields,
+						asset_data.buffer
+					);
+
+					for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
+						if (CompareAssetPointers(asset_data[subindex].buffer, asset_pointer.buffer, type)) {
+							return_value = true;
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+		);
+
+		_stack_allocator.ClearBackup();
+		if (!return_value) {
+			GetLinkComponentWithAssetFieldsShared(editor_state, sandbox_index, link_with_fields.buffer, allocator, { &type,1 });
+
+			// Check the shared components as well
+			SandboxForAllSharedComponents<true>(editor_state, sandbox_index,
+				[&](Component component) {
+					component_reflection_types[0] = editor_state->editor_components.GetType(editor_state->editor_components.TypeFromID(component, true));
+					ECS_ASSERT(component_reflection_types[0] != nullptr);
+				}, 
+				[&](Component component, SharedInstance shared_instance) {
+					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, ECS_ARCHETYPE_MAX_COMPONENTS);
+					Stream<LinkComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
+					GetLinkComponentAssetDataForTarget(
+						component_reflection_types[0],
+						entity_manager->GetSharedData(component, shared_instance),
+						asset_fields,
+						asset_data.buffer
+					);
+
+					for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
+						if (CompareAssetPointers(asset_data[subindex].buffer, asset_pointer.buffer, type)) {
+							return_value = true;
+							return true;
+						}
+					}
+
+					return return_value;
+				}
+			);
+			_stack_allocator.ClearBackup();
+		}
+
+		return return_value;
+	});
+
+	return return_value;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets)
 {
 	LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, sandbox_index, missing_assets);
@@ -967,9 +1130,15 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 	}
 
 	ECS_STACK_CAPACITY_STREAM(bool, valid_types, ECS_ASSET_TYPE_COUNT);
+	ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, assets_to_check, ECS_ASSET_TYPE_COUNT);
 	memset(valid_types.buffer, 0, sizeof(bool) * ECS_ASSET_TYPE_COUNT);
 	for (size_t index = 0; index < elements.size; index++) {
 		valid_types[elements[index].type] = true;
+	}
+	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+		if (valid_types[index]) {
+			assets_to_check.Add((ECS_ASSET_TYPE)index);
+		}
 	}
 
 	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
@@ -983,37 +1152,10 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 	max_unique_count.value = max_unique_count.value == -1 ? 0 : max_unique_count.value;
 	max_shared_count.value = max_shared_count.value == -1 ? 0 : max_shared_count.value;
 
-	struct ComponentInfo {
-		const Reflection::ReflectionType* type;
-		Stream<LinkComponentAssetField> asset_fields;
-	};
-
-	CapacityStream<ComponentInfo> unique_types;
+	CapacityStream<LinkComponentWithAssetFields> unique_types;
 	unique_types.Initialize(stack_allocator, 0, max_unique_count.value);
 
-	auto for_each_component = [&](Component component, ComponentInfo* info_type, bool shared) {
-		Stream<char> target_type_name = editor_state->editor_components.TypeFromID(component.value, shared);
-		ECS_ASSERT(target_type_name.size > 0);
-
-		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 64);
-
-		info_type->type = editor_state->editor_components.GetType(target_type_name);
-		GetAssetFieldsFromLinkComponentTarget(info_type->type, asset_fields);
-
-		// Go through the asset fields. If the component doesn't have the given asset type, then don't bother with it
-		for (unsigned int index = 0; index < asset_fields.size; index++) {
-			if (!valid_types[asset_fields[index].type]) {
-				asset_fields.RemoveSwapBack(index);
-				index--;
-			}
-		}
-
-		info_type->asset_fields.InitializeAndCopy(stack_allocator, asset_fields);
-	};
-
-	entity_manager->ForEachComponent([&](Component component) {
-		for_each_component(component, &unique_types[component.value], false);
-	});
+	GetLinkComponentsWithAssetFieldsUnique(editor_state, sandbox_index, unique_types.buffer, stack_allocator, assets_to_check);
 
 	Component components_to_check[ECS_ARCHETYPE_MAX_COMPONENTS];
 	unsigned char components_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
@@ -1064,18 +1206,17 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 	_stack_allocator.Clear();
 
 	// Do the same for shared components
-	ComponentInfo shared_info;
 	entity_manager->ForEachSharedComponent([&](Component component) {
-		for_each_component(component, &shared_info, true);
+		LinkComponentWithAssetFields link_with_fields = GetLinkComponentWithAssetFieldForComponent(editor_state, component, true, stack_allocator, assets_to_check);
 
-		if (shared_info.asset_fields.size > 0) {
+		if (link_with_fields.asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
 				void* instance_data = entity_manager->GetSharedData(component, instance);
-				for (size_t index = 0; index < shared_info.asset_fields.size; index++) {
+				for (size_t index = 0; index < link_with_fields.asset_fields.size; index++) {
 					for (size_t element_index = 0; element_index < elements.size; element_index++) {
 						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-							shared_info.type,
-							shared_info.asset_fields[index].field_index,
+							link_with_fields.type,
+							link_with_fields.asset_fields[index].field_index,
 							instance_data,
 							elements[element_index].new_asset,
 							elements[element_index].type,

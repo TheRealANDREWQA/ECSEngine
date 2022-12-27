@@ -27,7 +27,7 @@ struct InspectorDrawTextureData {
 	AssetSettingsHelperData helper_data;
 };
 
-void InspectorCleanTexture(EditorState* editor_state, void* _data) {
+void InspectorCleanTexture(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawTextureData* data = (InspectorDrawTextureData*)_data;
 	AssetSettingsHelperDestroy(editor_state, &data->helper_data);
 }
@@ -116,12 +116,17 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 	InspectorDrawTextureData* draw_data = function::CreateCoallescedStreamIntoType<InspectorDrawTextureData>(_draw_data_storage, path, &write_size);
 	memset(&draw_data->helper_data, 0, sizeof(draw_data->helper_data));
 
-	ChangeInspectorDrawFunction(
+	ChangeInspectorDrawFunctionWithSearch(
 		editor_state,
 		inspector_index,
 		{ InspectorDrawTextureFile, InspectorCleanTexture },
 		draw_data,
-		write_size
+		write_size,
+		-1,
+		[=](void* inspector_data) {
+			InspectorDrawTextureData* other_data = (InspectorDrawTextureData*)inspector_data;
+			return function::CompareStrings(other_data->Path(), path);
+		}
 	);
 }
 

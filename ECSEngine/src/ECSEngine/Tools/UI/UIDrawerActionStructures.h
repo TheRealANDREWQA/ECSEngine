@@ -333,8 +333,12 @@ namespace ECSEngine {
 
 			unsigned short mapping_byte_size;
 			// The number of mappings reserved
-			unsigned short mapping_capacity;
+			unsigned char mapping_capacity;
+			// The number of unavailable slots reserved
+			unsigned char unavailables_capacity;
 			void* mappings;
+
+			bool* unavailables;
 		};
 
 		struct UIDrawerComboBoxClickable {

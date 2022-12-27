@@ -17,8 +17,19 @@ struct AssetOverrideSetSandboxIndexData {
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetSandboxIndex);
 
+struct AssetOverrideCallbackVerifyData {
+	ECSEngine::Stream<char> name;
+	ECSEngine::Stream<wchar_t> file;
+	EditorState* editor_state;
+	bool prevent_registering;
+};
+
+// Can optionally mark the callback as a verify callback that will receive
+// in the additional data field a AssetOverrideCallbackVerifyData* which
+// it can use to prevent the registering/unregistering part of the
 struct AssetOverrideBindCallbackData {
 	ECSEngine::Tools::UIActionHandler handler;
+	bool verify_handler = false;
 };
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback);

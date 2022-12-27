@@ -48,6 +48,7 @@ constexpr unsigned int CHECK_FILE_STATUS_THREAD_SLEEP_TICK = 200;
 #define BLOCK_THREAD_FOR_MODULE_STATUS_SLEEP_TICK 20
 
 #define MODULE_BUILD_USING_SHELL
+#define LAZY_UPDATE_MODULE_DLL_IMPORTS_MS 300
 
 // -------------------------------------------------------------------------------------------------------------------------
 
@@ -106,7 +107,7 @@ void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
 #endif
 
 	// Every module will have all of its configurations added to the search path
-	size_t path_count = 2 + editor_state->project_modules->size * (size_t)EDITOR_MODULE_CONFIGURATION_COUNT;
+	size_t path_count = 2 + editor_state->project_modules->size;
 
 	// Update the pdb paths in order to get stack unwinding for the crash handler
 	Stream<wchar_t>* pdb_paths = (Stream<wchar_t>*)ECS_STACK_ALLOC(sizeof(Stream<wchar_t>) * path_count);
@@ -121,12 +122,10 @@ void SetCrashHandlerPDBPaths(const EditorState* editor_state) {
 
 		// Add all the configurations as search paths - they will be different based on the name
 		const EditorModule* current_module = editor_state->project_modules->buffer + index;
-		for (size_t configuration_index = 0; configuration_index < (size_t)EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
-			GetModuleFolder(editor_state, current_module->library_name, (EDITOR_MODULE_CONFIGURATION)index, pdb_characters);
-			// Advance the '\0'
-			pdb_characters.size++;
-			pdb_paths[pdb_index++] = current_path;
-		}
+		GetModulesFolder(editor_state, pdb_characters);
+		// Advance the '\0'
+		pdb_characters.size++;
+		pdb_paths[pdb_index++] = current_path;
 	}
 	OS::SetSymbolicLinksPaths({ pdb_paths, path_count });
 }
@@ -195,6 +194,7 @@ bool AddModule(EditorState* editor_state, Stream<wchar_t> solution_path, Stream<
 	module->library_name[module->library_name.size] = L'\0';
 	module->solution_last_write_time = 0;
 	module->is_graphics_module = is_graphics_module;
+	module->dll_imports = { nullptr, 0 };
 
 	for (size_t index = 0; index < EDITOR_MODULE_CONFIGURATION_COUNT; index++) {
 		module->infos[index].load_status = EDITOR_MODULE_LOAD_FAILED;
@@ -440,29 +440,198 @@ void CommandLineString(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-// Returns whether or not the command actually will be executed. The command can be skipped if the module is in flight
-// running another command
+struct ReloadModuleEventData {
+	bool allocated_finish_status;
+	EDITOR_MODULE_CONFIGURATION configuration;
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* finish_status;
+	Stream<unsigned int> dependencies;
+};
+
+// This is used to reload modules that have been unloaded
+// during a build/reload/clean
+EDITOR_EVENT(ReloadModuleEvent) {
+	ReloadModuleEventData* data = (ReloadModuleEventData*)_data;
+
+	if (*data->finish_status != EDITOR_FINISH_BUILD_COMMAND_WAITING) {
+		// No matter what the outcome is, we need to rebuild the old modules
+		for (size_t index = 0; index < data->dependencies.size; index++) {
+			const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index], data->configuration);
+			EDITOR_LAUNCH_BUILD_COMMAND_STATUS build_status = BuildModule(editor_state, data->dependencies[index], data->configuration);
+			if (build_status == EDITOR_LAUNCH_BUILD_COMMAND_ERROR_WHEN_LAUNCHING) {
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to reload module {#} after unloading it to let a build/rebuild operation be performed.", editor_state->project_modules->buffer[data->dependencies[index]].library_name);
+				EditorSetConsoleError(console_message);
+			}
+		}
+
+		if (data->dependencies.size > 0) {
+			editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
+		}
+		if (data->allocated_finish_status) {
+			editor_state->editor_allocator->Deallocate(data->finish_status);
+		}
+		return false;
+	}
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	EditorState* editor_state,
 	unsigned int index,
 	Stream<wchar_t> command,
 	EDITOR_MODULE_CONFIGURATION configuration,
-	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status = nullptr
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status
+);
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+struct RunCmdCommandDLLImportData {
+	struct Dependency {
+		unsigned int module_index;
+		EDITOR_FINISH_BUILD_COMMAND_STATUS status;
+		bool verified_once;
+	};
+
+	unsigned int module_index;
+	EDITOR_MODULE_CONFIGURATION configuration;
+	Stream<wchar_t> command;
+	Stream<Dependency> dependencies;
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* original_status;
+};
+
+EDITOR_EVENT(RunCmdCommandDLLImport) {
+	RunCmdCommandDLLImportData* data = (RunCmdCommandDLLImportData*)_data;
+
+	editor_state->launched_module_compilation_lock.lock();
+
+	bool have_not_finished = false;
+	bool has_failed = false;
+	// Check to see if they have a command pending
+	for (size_t index = 0; index < data->dependencies.size; index++) {
+		if (!data->dependencies[index].verified_once) {
+			Stream<wchar_t> library_name = editor_state->project_modules->buffer[data->dependencies[index].module_index].library_name;
+			unsigned int launched_index = function::FindString(library_name, editor_state->launched_module_compilation[data->configuration]);
+			if (launched_index == -1) {
+				// See if the module exists
+				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
+				if (info->load_status != EDITOR_MODULE_LOAD_GOOD) {
+					editor_state->launched_module_compilation_lock.unlock();
+					BuildModule(editor_state, data->dependencies[index].module_index, data->configuration, &data->dependencies[index].status);
+					editor_state->launched_module_compilation_lock.lock();
+					have_not_finished = true;
+				}
+				data->dependencies[index].verified_once = true;
+			}
+			else {
+				have_not_finished = true;
+			}
+		}
+		else {
+			if (data->dependencies[index].status == EDITOR_FINISH_BUILD_COMMAND_WAITING) {
+				have_not_finished = true;
+			}
+			else if (data->dependencies[index].status == EDITOR_FINISH_BUILD_COMMAND_FAILED) {
+				has_failed = true;
+			}
+		}
+	}
+
+	editor_state->launched_module_compilation_lock.unlock();
+
+	if (!have_not_finished) {
+		// If all the build finished with ok status, then continue
+		if (!has_failed) {
+			RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->original_status);
+		}
+
+		editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
+		return false;
+	}
+	return true;
+}
+
+
+struct RunCmdCommandAfterExternalDependencyData {
+	unsigned int module_index;
+	Stream<wchar_t> command;
+	EDITOR_MODULE_CONFIGURATION configuration;
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status;
+	Stream<unsigned int> dependencies;
+	ResizableStream<unsigned int> unloaded_dependencies;
+};
+
+EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
+	RunCmdCommandAfterExternalDependencyData* data = (RunCmdCommandAfterExternalDependencyData*)_data;
+
+	// Determine if all the dependencies have finished their respective actions
+	editor_state->launched_module_compilation_lock.lock();
+
+	for (size_t index = 0; index < data->dependencies.size; index++) {
+		// Check if it has an already pending action on it and wait for it then
+		unsigned int already_launched_index = function::FindString(
+			editor_state->project_modules->buffer[data->dependencies[index]].library_name, 
+			editor_state->launched_module_compilation[data->configuration]
+		);
+		if (already_launched_index == -1) {
+			EditorModuleInfo* current_info = GetModuleInfo(editor_state, data->dependencies[index], data->configuration);
+			// See if the module is loaded - if it is then we need to unload it
+			if (current_info->load_status != EDITOR_MODULE_LOAD_FAILED) {
+				ReleaseModuleStreamsAndHandle(editor_state, data->dependencies[index], data->configuration);
+				data->unloaded_dependencies.Add(data->dependencies[index]);
+			}
+			data->dependencies.RemoveSwapBack(index);
+			index--;
+		}
+	}
+
+	editor_state->launched_module_compilation_lock.unlock();
+
+	if (data->dependencies.size == 0) {
+		editor_state->editor_allocator->Deallocate(data->dependencies.buffer);
+		bool allocated_report_status = false;
+		if (data->report_status == nullptr) {
+			data->report_status = (EDITOR_FINISH_BUILD_COMMAND_STATUS*)editor_state->editor_allocator->Allocate(sizeof(EDITOR_FINISH_BUILD_COMMAND_STATUS));
+			*data->report_status = EDITOR_FINISH_BUILD_COMMAND_WAITING;
+			allocated_report_status = true;
+		}
+		RunCmdCommand(editor_state, data->module_index, data->command, data->configuration, data->report_status);
+		
+		if (!function::CompareStrings(data->command, CLEAN_PROJECT_STRING_WIDE)) {
+			ReloadModuleEventData reload_data;
+			reload_data.configuration = data->configuration;
+			reload_data.dependencies = data->unloaded_dependencies.ToStream();
+			reload_data.finish_status = data->report_status;
+			reload_data.allocated_finish_status = allocated_report_status;
+			EditorAddEvent(editor_state, ReloadModuleEvent, &reload_data, sizeof(reload_data));
+		}
+
+		return false;
+	}
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
+	EditorState* editor_state,
+	unsigned int index,
+	Stream<wchar_t> command,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status
 ) {
 	EDITOR_STATE(editor_state);
-
 	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
 
 	// First check that the module is not executing another build command - it doesn't necessarly 
 	// have to be the same type. A clean cannot be executed while a build is running
 	// The lock must be acquired so a thread that wants to remove an element 
-	// does not interfere with this reading
+	// does not interfere with this reading.
 	editor_state->launched_module_compilation_lock.lock();
-	for (size_t index = 0; index < editor_state->launched_module_compilation[configuration].size; index++) {
-		if (memcmp(library_name.buffer, editor_state->launched_module_compilation[configuration][index].buffer, sizeof(wchar_t) * library_name.size) == 0) {
-			editor_state->launched_module_compilation_lock.unlock();
-			return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
-		}
+	unsigned int already_launched_index = function::FindString(library_name, editor_state->launched_module_compilation[configuration]);
+	if (already_launched_index != -1) {
+		editor_state->launched_module_compilation_lock.unlock();
+		return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
 	}
 	editor_state->launched_module_compilation_lock.unlock();
 
@@ -517,7 +686,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 		// Log the command status
 		CheckBuildStatusThreadData check_data;
 		check_data.editor_state = editor_state;
-		check_data.path.buffer = (wchar_t*)multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * (flag_file.size + 1));
+		check_data.path.buffer = (wchar_t*)multithreaded_editor_allocator->Allocate_ts(sizeof(wchar_t) * flag_file.size);
 		check_data.path.Copy(flag_file);
 		check_data.report_status = report_status;
 
@@ -525,6 +694,78 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	}
 	return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
 #endif
+}
+
+// Returns whether or not the command actually will be executed. The command can be skipped if the module is in flight
+// running another command
+EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
+	EditorState* editor_state,
+	unsigned int index,
+	Stream<wchar_t> command,
+	EDITOR_MODULE_CONFIGURATION configuration,
+	EDITOR_FINISH_BUILD_COMMAND_STATUS* report_status = nullptr
+) {
+	Stream<wchar_t> library_name = editor_state->project_modules->buffer[index].library_name;
+
+	// First check that the module is not executing another build command - it doesn't necessarly 
+	// have to be the same type. A clean cannot be executed while a build is running
+	// The lock must be acquired so a thread that wants to remove an element 
+	// does not interfere with this reading.
+	editor_state->launched_module_compilation_lock.lock();
+	unsigned int already_launched_index = function::FindString(library_name, editor_state->launched_module_compilation[configuration]);
+	if (already_launched_index != -1) {
+		editor_state->launched_module_compilation_lock.unlock();
+		return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
+	}
+	editor_state->launched_module_compilation_lock.unlock();
+
+	ECS_STACK_CAPACITY_STREAM(unsigned int, external_references, 512);
+	// Get the external references. We need to unload these before trying to procede
+	GetModuleDLLExternalReferences(editor_state, index, external_references);
+
+	// Returns true if there are import to be made
+	auto execute_import = [&]() {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, import_references, 512);
+		GetModuleDLLImports(editor_state, index, import_references);
+
+		if (import_references.size > 0) {
+			// We also need the dll imports to be finished
+			RunCmdCommandDLLImportData import_data;
+			import_data.command = command;
+			import_data.configuration = configuration;
+			import_data.module_index = index;
+			import_data.original_status = report_status;
+			import_data.dependencies.Initialize(editor_state->EditorAllocator(), import_references.size);
+			for (unsigned int subindex = 0; subindex < import_references.size; subindex++) {
+				import_data.dependencies[subindex].module_index = import_references[subindex];
+				import_data.dependencies[subindex].verified_once = false;
+				import_data.dependencies[subindex].status = EDITOR_FINISH_BUILD_COMMAND_WAITING;
+			}
+			EditorAddEvent(editor_state, RunCmdCommandDLLImport, &import_data, sizeof(import_data));
+			return true;
+		}
+		return false;
+	};
+
+	if (external_references.size > 0) {
+		RunCmdCommandAfterExternalDependencyData wait_data;
+		wait_data.command = command;
+		wait_data.configuration = configuration;
+		wait_data.module_index = index;
+		wait_data.report_status = report_status;
+		wait_data.unloaded_dependencies.Initialize(editor_state->EditorAllocator(), 0);
+		wait_data.dependencies.InitializeAndCopy(editor_state->EditorAllocator(), external_references);
+		EditorAddEvent(editor_state, RunCmdCommandAfterExternalDependency, &wait_data, sizeof(wait_data));
+
+		execute_import();
+
+		return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
+	}
+	else if (execute_import()) {
+		return EDITOR_LAUNCH_BUILD_COMMAND_EXECUTING;
+	}
+
+	return RunCmdCommand(editor_state, index, command, configuration, report_status);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -539,8 +780,11 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS BuildModule(
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 
 	if (UpdateModuleLastWrite(editor_state, index, configuration) || info->load_status != EDITOR_MODULE_LOAD_GOOD) {
-		info->load_status = EDITOR_MODULE_LOAD_FAILED;
-		return RunCmdCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status);
+		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
+		return RunBuildCommand(editor_state, index, BUILD_PROJECT_STRING_WIDE, configuration, report_status);
+	}
+	if (report_status != nullptr) {
+		*report_status = EDITOR_FINISH_BUILD_COMMAND_OK;
 	}
 	// The callback will check the status of this function and report accordingly to the console
 	return EDITOR_LAUNCH_BUILD_COMMAND_SKIPPED;
@@ -595,7 +839,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS CleanModule(
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	info->load_status = EDITOR_MODULE_LOAD_STATUS::EDITOR_MODULE_LOAD_FAILED;
-	return RunCmdCommand(editor_state, index, CLEAN_PROJECT_STRING_WIDE, configuration);
+	return RunBuildCommand(editor_state, index, CLEAN_PROJECT_STRING_WIDE, configuration);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -620,7 +864,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RebuildModule(
 ) {
 	EditorModuleInfo* info = GetModuleInfo(editor_state, index, configuration);
 	info->load_status = EDITOR_MODULE_LOAD_FAILED;
-	return RunCmdCommand(editor_state, index, REBUILD_PROJECT_STRING_WIDE, configuration);
+	return RunBuildCommand(editor_state, index, REBUILD_PROJECT_STRING_WIDE, configuration);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -770,26 +1014,126 @@ void GetModulesFolder(const EditorState* editor_state, CapacityStream<wchar_t>& 
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
+void GetModuleStem(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
 {
-	GetModuleFolder(editor_state, library_name, configuration, module_path);
-	module_path.Add(ECS_OS_PATH_SEPARATOR);
 	module_path.AddStream(library_name);
+	module_path.Add(L'_');
+	module_path.AddStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]);
+	module_path[module_path.size] = L'\0';
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleFilename(Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
+{
+	GetModuleStem(library_name, configuration, module_path);
 	module_path.AddStreamSafe(ECS_MODULE_EXTENSION);
 	module_path[module_path.size] = L'\0';
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModuleFolder(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
+void GetModuleFilenameNoConfig(Stream<wchar_t> library_name, CapacityStream<wchar_t>& module_path)
+{
+	module_path.AddStream(library_name);
+	module_path.AddStream(ECS_MODULE_EXTENSION);
+	module_path[module_path.size] = L'\0';
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModulePath(const EditorState* editor_state, Stream<wchar_t> library_name, EDITOR_MODULE_CONFIGURATION configuration, CapacityStream<wchar_t>& module_path)
 {
 	GetModulesFolder(editor_state, module_path);
 	module_path.Add(ECS_OS_PATH_SEPARATOR);
-	// This is the folder part
-	module_path.AddStream(library_name);
-	module_path.Add(ECS_OS_PATH_SEPARATOR);
-	module_path.AddStream(MODULE_CONFIGURATIONS_WIDE[(unsigned int)configuration]);
-	module_path[module_path.size] = L'\0';
+	GetModuleFilename(library_name, configuration, module_path);
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleDLLImports(EditorState* editor_state, unsigned int index)
+{
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
+
+	editor_state->project_modules->buffer[index].dll_imports.Deallocate(editor_state->EditorAllocator());
+	editor_state->project_modules->buffer[index].dll_imports = GetModuleDLLDependenciesFromVCX(
+		editor_state->project_modules->buffer[index].solution_path, 
+		GetAllocatorPolymorphic(&_stack_allocator), 
+		true
+	);
+
+	Stream<char> search_token = "_$(Configuration)";
+	AllocatorPolymorphic stack_allocator = GetAllocatorPolymorphic(&_stack_allocator);
+
+	Stream<Stream<char>> dll_imports = editor_state->project_modules->buffer[index].dll_imports;
+
+	for (size_t index = 0; index < dll_imports.size; index++) {
+		Stream<char> token = function::FindFirstToken(dll_imports[index], search_token);
+		if (token.size > 0) {
+			dll_imports[index] = function::ReplaceToken(dll_imports[index], search_token, "", stack_allocator);
+		}
+		else {
+			dll_imports[index] = dll_imports[index];
+		}
+	}
+
+	editor_state->project_modules->buffer[index].dll_imports = StreamDeepCopy(dll_imports, editor_state->EditorAllocator());
+
+	_stack_allocator.ClearBackup();
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, CapacityStream<unsigned int>& dll_imports)
+{
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 64, ECS_MB);
+	const size_t WIDE_IMPORT_CAPACITY = 512;
+	ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, wide_imports, WIDE_IMPORT_CAPACITY);
+
+	Stream<Stream<char>> dll_dependencies = editor_state->project_modules->buffer[index].dll_imports;
+
+	ECS_ASSERT(dll_dependencies.size <= WIDE_IMPORT_CAPACITY);
+	for (size_t import_index = 0; import_index < dll_dependencies.size; import_index++) {
+		wide_imports[import_index].Initialize(&_stack_allocator, dll_dependencies[import_index].size);
+		CapacityStream<wchar_t> temp_wide = wide_imports[import_index];
+		temp_wide.size = 0;
+		function::ConvertASCIIToWide(temp_wide, dll_dependencies[import_index]);
+	}
+	wide_imports.size = dll_dependencies.size;
+
+	for (unsigned int subindex = 0; subindex < editor_state->project_modules->size; subindex++) {
+		if (subindex != index) {
+			ECS_STACK_CAPACITY_STREAM(wchar_t, dll_library_name, 512);
+			GetModuleFilenameNoConfig(editor_state->project_modules->buffer[subindex].library_name, dll_library_name);
+			if (function::FindString(dll_library_name, wide_imports) != -1) {
+				dll_imports.AddSafe(subindex);
+			}
+		}
+	}
+
+	_stack_allocator.ClearBackup();
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void GetModuleDLLExternalReferences(
+	const EditorState* editor_state, 
+	unsigned int index, 
+	CapacityStream<unsigned int>& external_references
+)
+{
+	ECS_STACK_CAPACITY_STREAM(wchar_t, library_name, 512);
+	ECS_STACK_CAPACITY_STREAM(char, ascii_library_name, 512);
+	GetModuleFilenameNoConfig(editor_state->project_modules->buffer[index].library_name, library_name);
+	function::ConvertWideCharsToASCII(library_name, ascii_library_name);
+
+	for (unsigned int subindex = 0; subindex < editor_state->project_modules->size; subindex++) {
+		if (subindex != index) {
+			if (function::FindString(ascii_library_name, editor_state->project_modules->buffer[subindex].dll_imports) != -1) {
+				external_references.AddSafe(subindex);
+			}
+		}
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -921,7 +1265,6 @@ bool LoadEditorModule(EditorState* editor_state, unsigned int index, EDITOR_MODU
 	// If the module is already loaded, release it
 	if (IsEditorModuleLoaded(editor_state, index, configuration)) {
 		ReleaseModuleStreamsAndHandle(editor_state, index, configuration);
-		info->ecs_module.base_module.code = ECS_GET_MODULE_FAULTY_PATH;
 	}
 
 	const ProjectModules* modules = (const ProjectModules*)editor_state->project_modules;
@@ -966,7 +1309,7 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 	EditorModule* module = editor_state->project_modules->buffer + index;
 
 	ECS_TEMP_STRING(source_path, 512);
-	bool success = GetModuleReflectSolutionPath(editor_state, editor_state->project_modules->size - 1, source_path);
+	bool success = GetModuleReflectSolutionPath(editor_state, index, source_path);
 	if (success) {
 		unsigned int folder_hierarchy = editor_state->module_reflection->reflection->GetHierarchyIndex(source_path);
 		if (folder_hierarchy == -1) {
@@ -1054,16 +1397,16 @@ ModuleLinkComponentTarget GetModuleLinkComponentTarget(const EditorState* editor
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModuleDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
+void GetModuleTypesDependencies(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
 {
-	editor_state->editor_components.GetModuleTypeDependencies(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
+	editor_state->editor_components.GetModuleTypesDependencies(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetModulesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
+void GetModulesTypesDependentUpon(const EditorState* editor_state, unsigned int module_index, CapacityStream<unsigned int>& dependencies)
 {
-	editor_state->editor_components.GetModulesDependentUpon(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
+	editor_state->editor_components.GetModulesTypesDependentUpon(editor_state->editor_components.ModuleIndexFromReflection(editor_state, module_index), &dependencies, editor_state);
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1110,6 +1453,16 @@ void ReleaseModuleStreamsAndHandle(EditorState* editor_state, unsigned int index
 	AllocatorPolymorphic allocator = GetAllocatorPolymorphic(editor_state->editor_allocator);
 
 	ReleaseAppliedModule(&info->ecs_module, allocator);
+	info->load_status = EDITOR_MODULE_LOAD_FAILED;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void ReleaseModuleStreamsAndHandle(EditorState* editor_state, Stream<unsigned int> indices, EDITOR_MODULE_CONFIGURATION configuration)
+{
+	for (size_t index = 0; index < indices.size; index++) {
+		ReleaseModuleStreamsAndHandle(editor_state, indices[index], configuration);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1137,8 +1490,31 @@ bool UpdateModuleSolutionLastWrite(EditorState* editor_state, unsigned int index
 	ProjectModules* modules = editor_state->project_modules;
 
 	size_t solution_last_write = modules->buffer[index].solution_last_write_time;
-	modules->buffer[index].solution_last_write_time = GetModuleSolutionLastWrite(modules->buffer[index].solution_path);
-	return solution_last_write < modules->buffer[index].solution_last_write_time || modules->buffer[index].solution_last_write_time == 0;
+	size_t new_last_write = GetModuleSolutionLastWrite(modules->buffer[index].solution_path);
+	modules->buffer[index].solution_last_write_time = new_last_write;
+	bool is_updated = solution_last_write < new_last_write || new_last_write == 0;
+	if (is_updated) {
+		// Make the modules already loaded out of date if that is the case
+		// Also do the same for the external dependencies
+		for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+			EditorModuleInfo* info = GetModuleInfo(editor_state, index, (EDITOR_MODULE_CONFIGURATION)configuration_index);
+			if (info->library_last_write_time < new_last_write && info->load_status == EDITOR_MODULE_LOAD_GOOD) {
+				info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
+			}
+		}
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, external_dependencies, 512);
+		GetModuleDLLExternalReferences(editor_state, index, external_dependencies);
+		for (unsigned int subindex = 0; subindex < external_dependencies.size; subindex++) {
+			for (size_t configuration_index = 0; configuration_index < EDITOR_MODULE_CONFIGURATION_COUNT; configuration_index++) {
+				EditorModuleInfo* info = GetModuleInfo(editor_state, external_dependencies[subindex], (EDITOR_MODULE_CONFIGURATION)configuration_index);
+				if (info->library_last_write_time < new_last_write && info->load_status == EDITOR_MODULE_LOAD_GOOD) {
+					info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
+				}
+			}
+		}
+	}
+	return is_updated;
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1235,7 +1611,8 @@ void RemoveModuleAssociatedFiles(EditorState* editor_state, unsigned int module_
 	Stream<Stream<wchar_t>> associated_file_extensions(MODULE_ASSOCIATED_FILES, MODULE_ASSOCIATED_FILES_SIZE());
 
 	ECS_TEMP_STRING(path, 256);
-	GetModuleFolder(editor_state, modules->buffer[module_index].library_name, configuration, path);
+	GetModulesFolder(editor_state, path);
+	GetModuleStem(modules->buffer[module_index].library_name, configuration, path);
 	size_t path_size = path.size;
 
 	for (size_t index = 0; index < MODULE_ASSOCIATED_FILES_SIZE(); index++) {
@@ -1274,12 +1651,31 @@ void ResetModules(EditorState* editor_state)
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void SetModuleLoadStatus(EditorModule* module, bool has_functions, EDITOR_MODULE_CONFIGURATION configuration)
+void SetModuleLoadStatus(EditorState* editor_state, unsigned int module_index, bool has_failed, EDITOR_MODULE_CONFIGURATION configuration)
 {
-	EditorModuleInfo* info = &module->infos[configuration];
+	EditorModuleInfo* info = GetModuleInfo(editor_state, module_index, configuration);
 
-	bool library_write_greater_than_solution = info->library_last_write_time >= module->solution_last_write_time;
-	info->load_status = (EDITOR_MODULE_LOAD_STATUS)((has_functions + library_write_greater_than_solution) * has_functions);
+	bool library_write_greater_than_solution = info->library_last_write_time >= editor_state->project_modules->buffer[module_index].solution_last_write_time;
+	info->load_status = (EDITOR_MODULE_LOAD_STATUS)((has_failed + library_write_greater_than_solution) * has_failed);
+	//if (info->load_status)
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void UpdateModulesDLLImports(EditorState* editor_state)
+{
+	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
+		GetModuleDLLImports(editor_state, index);
+	}
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+void TickUpdateModulesDLLImports(EditorState* editor_state)
+{
+	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_UPDATE_MODULE_DLL_IMPORTS, LAZY_UPDATE_MODULE_DLL_IMPORTS_MS)) {
+		UpdateModulesDLLImports(editor_state);
+	}
 }
 
 // -------------------------------------------------------------------------------------------------------------------------

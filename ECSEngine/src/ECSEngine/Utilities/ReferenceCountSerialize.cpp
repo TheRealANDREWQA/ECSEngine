@@ -36,12 +36,12 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(ReferenceCounted) {
+	ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
-		return IsTriviallyCopyable(data->reflection_manager, template_type);
+		return SearchIsBlittable(data->reflection_manager, template_type);
 	}
 
-	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(ReferenceCounted) {
+	ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(ReferenceCounted) {
 		Stream<char> template_type = Reflection::ReflectionCustomTypeGetTemplateArgument(data->definition);
 		CopyReflectionType(data->reflection_manager, template_type, data->source, data->destination, data->allocator);
 

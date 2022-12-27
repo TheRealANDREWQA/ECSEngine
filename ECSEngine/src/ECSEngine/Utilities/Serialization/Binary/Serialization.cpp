@@ -243,6 +243,8 @@ namespace ECSEngine {
 		}
 	}
 
+	// ------------------------------------------------------------------------------------------------------------------
+
 	template<bool write_data>
 	size_t WriteTypeTable(
 		const ReflectionManager* reflection_manager,
@@ -265,6 +267,70 @@ namespace ECSEngine {
 		write_total += WriteTypeTable<write_data>(reflection_manager, type, stream, deserialized_type_names, omit_fields);
 
 		return write_total;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	// The functor must take as parameter a uintptr_t& and write into it and return an ECS_SERIALIZE_CODE
+	template<typename Functor>
+	ECS_SERIALIZE_CODE SerializeFileImpl(size_t serialize_size, Stream<wchar_t> file, SerializeOptions* options, Functor&& functor) {
+		AllocatorPolymorphic file_allocator = options == nullptr ? AllocatorPolymorphic{ nullptr } : options->allocator;
+
+		ECS_SERIALIZE_CODE code = ECS_SERIALIZE_OK;
+		bool serialize_status = SerializeWriteFile(file, file_allocator, serialize_size, true, [&](uintptr_t& buffer) {
+			code = functor(buffer);
+			});
+
+		if (!serialize_status) {
+			if (options != nullptr) {
+				ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not open file {#} for serialization.", file);
+			}
+			return ECS_SERIALIZE_COULD_NOT_OPEN_OR_WRITE_FILE;
+		}
+
+		return code;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	// The functor must take as parameter a uintptr_t& and read from it and return an ECS_DESERIALIZE_CODE
+	template<typename Functor>
+	ECS_DESERIALIZE_CODE DeserializeFileImpl(Stream<wchar_t> file, DeserializeOptions* options, void** file_data, Functor&& functor) {
+		ECS_DESERIALIZE_CODE code = ECS_DESERIALIZE_OK;
+
+		AllocatorPolymorphic file_allocator = options != nullptr ? options->file_allocator : AllocatorPolymorphic{ nullptr };
+
+		void* file_allocation = DeserializeReadBinaryFileAndKeepMemory(file, file_allocator, [&](uintptr_t& buffer) {
+			code = functor(buffer);
+			});
+
+		// Could not open file
+		if (file_allocation == nullptr) {
+			code = ECS_DESERIALIZE_COULD_NOT_OPEN_OR_READ_FILE;
+			if (options != nullptr) {
+				ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not open file {#} for deserialization.", file);
+			}
+			if (file_data != nullptr) {
+				*file_data = nullptr;
+			}
+		}
+		// Deallocate the file data if the deserialization failed or if a  field allocator is specified
+		else if (code != ECS_DESERIALIZE_OK || (options != nullptr && options->field_allocator.allocator != nullptr)) {
+			DeallocateEx(file_allocator, file_allocation);
+			if (file_data != nullptr) {
+				*file_data = nullptr;
+			}
+		}
+		else {
+			if (file_data != nullptr) {
+				*file_data = file_allocation;
+			}
+			else {
+				DeallocateEx(file_allocator, file_allocation);
+			}
+		}
+
+		return code;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -361,22 +427,9 @@ namespace ECSEngine {
 		Stream<wchar_t> file,
 		SerializeOptions* options
 	) {
-		size_t serialize_size = SerializeSize(reflection_manager, type, data, options);
-		AllocatorPolymorphic file_allocator = options == nullptr ? AllocatorPolymorphic{ nullptr } : options->allocator;
-
-		ECS_SERIALIZE_CODE code = ECS_SERIALIZE_OK;
-		bool serialize_status = SerializeWriteFile(file, file_allocator, serialize_size, true, [&](uintptr_t& buffer) {
-			 code = Serialize(reflection_manager, type, data, buffer, options);
+		return SerializeFileImpl(SerializeSize(reflection_manager, type, data, options), file, options, [&](uintptr_t& buffer) {
+			return Serialize(reflection_manager, type, data, buffer, options);
 		});
-
-		if (!serialize_status) {
-			if (options != nullptr) {
-				ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not serialize type {#}. Could not open file {#}.", type->name, file);
-			}
-			return ECS_SERIALIZE_COULD_NOT_OPEN_OR_WRITE_FILE;
-		}
-
-		return code;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -595,41 +648,9 @@ namespace ECSEngine {
 		DeserializeOptions* options,
 		void** file_data
 	) {
-		ECS_DESERIALIZE_CODE code = ECS_DESERIALIZE_OK;
-
-		AllocatorPolymorphic file_allocator = options != nullptr ? options->file_allocator : AllocatorPolymorphic{ nullptr };
-
-		void* file_allocation = DeserializeReadBinaryFileAndKeepMemory(file, file_allocator, [&](uintptr_t& buffer) {
-			code = Deserialize(reflection_manager, type, address, buffer, options);
+		return DeserializeFileImpl(file, options, file_data, [&](uintptr_t& buffer) {
+			return Deserialize(reflection_manager, type, address, buffer, options);
 		});
-		
-		// Could not open file
-		if (file_allocation == nullptr) {
-			code = ECS_DESERIALIZE_COULD_NOT_OPEN_OR_READ_FILE;
-			if (options != nullptr) {
-				ECS_FORMAT_ERROR_MESSAGE(options->error_message, "Could not open file {#} to deserialize type {#}.", file, type->name);
-			}
-			if (file_data != nullptr) {
-				*file_data = nullptr;
-			}
-		}
-		// Deallocate the file data if the deserialization failed or if a  field allocator is specified
-		else if (code != ECS_DESERIALIZE_OK || (options != nullptr && options->field_allocator.allocator != nullptr)) {
-			DeallocateEx(file_allocator, file_allocation);
-			if (file_data != nullptr) {
-				*file_data = nullptr;
-			}
-		}
-		else {
-			if (file_data != nullptr) {
-				*file_data = file_allocation;
-			}
-			else {
-				DeallocateEx(file_allocator, file_allocation);
-			}
-		}
-
-		return code;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -843,7 +864,7 @@ namespace ECSEngine {
 			nested_options->omit_fields = omit_fields;
 		}
 
-		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, DeserializeFieldInfo file_info, ReflectionFieldInfo type_info) {
+		auto deserialize_incompatible_basic = [](uintptr_t& data, void* field_data, const DeserializeFieldInfo& file_info, const ReflectionFieldInfo& type_info) {
 			// Read the data from file into a double and then convert the double into the appropriate type
 			unsigned int file_basic_component_count = BasicTypeComponentCount(file_info.basic_type);
 			unsigned int type_basic_component_count = BasicTypeComponentCount(type_info.basic_type);
@@ -851,54 +872,16 @@ namespace ECSEngine {
 			ReflectionBasicFieldType file_single_type = ConvertBasicTypeMultiComponentToSingle(file_info.basic_type);
 			ReflectionBasicFieldType type_single_type = ConvertBasicTypeMultiComponentToSingle(type_info.basic_type);
 
-			size_t file_data[1];
-			double current_file_data = 0.0;
+			double file_data[4];
 
 			unsigned int iteration_count = function::ClampMin(file_basic_component_count, type_basic_component_count);
+			unsigned int pointer_increment = type_info.byte_size / type_basic_component_count;
+			unsigned int per_component_byte_size = file_info.byte_size / file_basic_component_count;
 			for (unsigned int index = 0; index < iteration_count; index++) {
-				void* type_data = function::OffsetPointer(field_data, type_info.byte_size / type_basic_component_count * index);
-				Read<true>(&data, &file_data, file_info.byte_size / file_basic_component_count);
+				void* type_data = function::OffsetPointer(field_data, pointer_increment * index);
+				Read<true>(&data, &file_data, per_component_byte_size);
 
-#define CASE(reflection_type, normal_type) case ReflectionBasicFieldType::reflection_type: current_file_data = *(normal_type*)file_data; break;
-
-				// Convert the file data into a double now
-				switch (file_single_type) {
-					CASE(Bool, bool);
-					CASE(Enum, char);
-					CASE(Float, float);
-					CASE(Double, double);
-					CASE(Int8, int8_t);
-					CASE(UInt8, uint8_t);
-					CASE(Int16, int16_t);
-					CASE(UInt16, uint16_t);
-					CASE(Int32, int32_t);
-					CASE(UInt32, uint32_t);
-					CASE(Int64, int64_t);
-					CASE(UInt64, uint64_t);
-					CASE(Wchar_t, wchar_t);
-				}
-
-#undef CASE
-
-#define CASE(reflection_type, normal_type) case ReflectionBasicFieldType::reflection_type: { normal_type* type_value = (normal_type*)type_data; *type_value = current_file_data; } break;
-
-				switch (type_single_type) {
-					CASE(Bool, bool);
-					CASE(Enum, char);
-					CASE(Float, float);
-					CASE(Double, double);
-					CASE(Int8, int8_t);
-					CASE(UInt8, uint8_t);
-					CASE(Int16, int16_t);
-					CASE(UInt16, uint16_t);
-					CASE(Int32, int32_t);
-					CASE(UInt32, uint32_t);
-					CASE(Int64, int64_t);
-					CASE(UInt64, uint64_t);
-					CASE(Wchar_t, wchar_t);
-				}
-
-#undef CASE
+				ConvertReflectionBasicField(file_info.basic_type, type_info.basic_type, file_data, field_data);
 			}
 		};
 
@@ -1625,6 +1608,133 @@ namespace ECSEngine {
 		// The type to be ignored is the first one from the field table
 		IgnoreType(data, field_table, 0, deserialized_manager);
 	}
+
+#pragma region String versions
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> string, const void* data, Stream<wchar_t> file, SerializeOptions* options)
+	{
+		return SerializeFileImpl(SerializeSizeEx(reflection_manager, string, data, options), file, options, [&](uintptr_t& buffer) {
+			return SerializeEx(reflection_manager, string, data, buffer, options);
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	ECS_SERIALIZE_CODE SerializeEx(const ReflectionManager* reflection_manager, Stream<char> string, const void* data, uintptr_t& ptr, SerializeOptions* options)
+	{
+		ReflectionType reflection_type;
+		if (reflection_manager->TryGetType(string, reflection_type)) {
+			return Serialize(reflection_manager, &reflection_type, data, ptr, options);
+		}
+		else {
+			// Try a custom type
+			unsigned int custom_index = FindSerializeCustomType(string);
+			ECS_ASSERT(custom_index != -1);
+
+			SerializeCustomTypeWriteFunctionData write_data;
+			write_data.reflection_manager = reflection_manager;
+			write_data.data = data;
+			write_data.definition = string;
+			write_data.options = options;
+			write_data.stream = &ptr;
+			write_data.write_data = true;
+			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data) == -1 ? ECS_SERIALIZE_CUSTOM_TYPE_FAILED : ECS_SERIALIZE_OK;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	size_t SerializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, const void* data, SerializeOptions* options)
+	{
+		ReflectionType reflection_type;
+		if (reflection_manager->TryGetType(string, reflection_type)) {
+			return SerializeSize(reflection_manager, &reflection_type, data, options);
+		}
+		else {
+			// Try a custom type
+			unsigned int custom_index = FindSerializeCustomType(string);
+			ECS_ASSERT(custom_index != -1);
+
+			SerializeCustomTypeWriteFunctionData write_data;
+			write_data.reflection_manager = reflection_manager;
+			write_data.data = data;
+			write_data.definition = string;
+			write_data.options = options;
+			write_data.stream = nullptr;
+			write_data.write_data = false;
+			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].write(&write_data);
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	ECS_DESERIALIZE_CODE DeserializeEx(
+		const ReflectionManager* reflection_manager, 
+		Stream<char> string, 
+		void* address, 
+		Stream<wchar_t> file, 
+		DeserializeOptions* options, 
+		void** file_data
+	)
+	{
+		return DeserializeFileImpl(file, options, file_data, [&](uintptr_t& buffer) {
+			return DeserializeEx(reflection_manager, string, address, buffer, options);
+		});
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	ECS_DESERIALIZE_CODE DeserializeEx(const ReflectionManager* reflection_manager, Stream<char> string, void* address, uintptr_t& stream, DeserializeOptions* options)
+	{
+		ReflectionType reflection_type;
+		if (reflection_manager->TryGetType(string, reflection_type)) {
+			return Deserialize(reflection_manager, &reflection_type, address, stream, options);
+		}
+		else {
+			unsigned int custom_index = FindSerializeCustomType(string);
+			ECS_ASSERT(custom_index != -1);
+
+			SerializeCustomTypeReadFunctionData read_data;
+			read_data.data = address;
+			read_data.definition = string;
+			read_data.reflection_manager = reflection_manager;
+			read_data.options = options;
+			read_data.stream = &stream;
+			read_data.read_data = true;
+			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
+			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	size_t DeserializeSizeEx(const ReflectionManager* reflection_manager, Stream<char> string, uintptr_t& stream, DeserializeOptions* options)
+	{
+		ReflectionType reflection_type;
+		if (reflection_manager->TryGetType(string, reflection_type)) {
+			return DeserializeSize(reflection_manager, &reflection_type, stream, options);
+		}
+		else {
+			unsigned int custom_index = FindSerializeCustomType(string);
+			ECS_ASSERT(custom_index != -1);
+
+			SerializeCustomTypeReadFunctionData read_data;
+			read_data.data = nullptr;
+			read_data.definition = string;
+			read_data.reflection_manager = reflection_manager;
+			read_data.options = options;
+			read_data.stream = &stream;
+			read_data.read_data = false;
+			read_data.version = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].version;
+			return ECS_SERIALIZE_CUSTOM_TYPES[custom_index].read(&read_data) == -1 ? ECS_DESERIALIZE_CORRUPTED_FILE : ECS_DESERIALIZE_OK;
+		}
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+#pragma endregion
 
 	// ------------------------------------------------------------------------------------------------------------------
 

@@ -152,7 +152,6 @@ void AddModuleWizardDraw(void* window_data, void* drawer_descriptor, bool initia
 		action_data->data = &data->os_data;
 
 		Stream<wchar_t> extensions[] = {
-			L".sln",
 			L".vcxproj"
 		};
 
@@ -292,7 +291,7 @@ void ModuleExplorerRemoveModule(ActionData* action_data) {
 	if (data->selected_module != -1) {
 		// Detect if another module depends on this one
 		ECS_STACK_CAPACITY_STREAM(unsigned int, dependent_modules, 512);
-		GetModulesDependentUpon(data->editor_state, data->selected_module, dependent_modules);
+		GetModulesTypesDependentUpon(data->editor_state, data->selected_module, dependent_modules);
 		if (dependent_modules.size == 0) {
 			// Check to see if any sandboxes depend upon on it
 			bool is_used = IsModuleInfoUsed(data->editor_state, data->selected_module, false, EDITOR_MODULE_CONFIGURATION_COUNT, &dependent_modules);

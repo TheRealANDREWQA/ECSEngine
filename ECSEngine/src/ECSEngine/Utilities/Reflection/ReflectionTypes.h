@@ -7,6 +7,8 @@ namespace ECSEngine {
 
 	namespace Reflection {
 
+		struct ReflectionManager;
+
 		enum class ReflectionBasicFieldType : unsigned char {
 			Int8,
 			UInt8,
@@ -191,6 +193,7 @@ namespace ECSEngine {
 			unsigned int folder_hierarchy_index;
 			unsigned int byte_size;
 			unsigned int alignment;
+			bool is_blittable;
 		};
 
 		struct ECSENGINE_API ReflectionEnum {
@@ -224,7 +227,7 @@ namespace ECSEngine {
 
 		struct ReflectionCustomTypeByteSizeData {
 			Stream<char> definition;
-			const Reflection::ReflectionManager* reflection_manager;
+			const ReflectionManager* reflection_manager;
 		};
 
 		// Return 0 if you cannot determine right now the byte size (e.g. you are template<typename T> struct { T data; ... })
@@ -243,22 +246,126 @@ namespace ECSEngine {
 
 #define ECS_REFLECTION_CUSTOM_TYPE_DEPENDENT_TYPES_FUNCTION(name) void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data)
 
+		struct ReflectionCustomTypeIsBlittableData {
+			Stream<char> definition;
+			const ReflectionManager* reflection_manager;
+		};
+
+		typedef bool (*ReflectionCustomTypeIsBlittable)(ReflectionCustomTypeIsBlittableData* data);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_IS_BLITTABLE_FUNCTION(name) bool ReflectionCustomTypeIsBlittable_##name(Reflection::ReflectionCustomTypeIsBlittableData* data)
+
+		struct ReflectionCustomTypeCopyData {
+			const Reflection::ReflectionManager* reflection_manager;
+			Stream<char> definition;
+			const void* source;
+			void* destination;
+			AllocatorPolymorphic allocator;
+		};
+
+		typedef void (*ReflectionCustomTypeCopy)(ReflectionCustomTypeCopyData* data);
+
+#define ECS_REFLECTION_CUSTOM_TYPE_COPY_FUNCTION(name) void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data)
+
 		struct ReflectionCustomType {
 			ReflectionCustomTypeMatch match;
 			ReflectionCustomTypeDependentTypes dependent_types;
 			ReflectionCustomTypeByteSize byte_size;
+			ReflectionCustomTypeIsBlittable is_blittable;
+			ReflectionCustomTypeCopy copy;
 		};
+
+		// Uses a jump table
+		ECSENGINE_API size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType basic_type);
 
 		// Works only for non user-defined_types
 		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionBasicFieldType field_type);
 
 		ECSENGINE_API size_t GetFieldTypeAlignment(ReflectionStreamFieldType stream_type);
 
+		// Returns a stable value
+		ECSENGINE_API Stream<char> GetBasicFieldDefinition(ReflectionBasicFieldType basic_type);
+
+		ECSENGINE_API void ConvertFromDouble4ToBasic(ReflectionBasicFieldType basic_type, double4 values, void* converted_values);
+
+		// Checks for single, double, triple and quadruple component integers
+		ECSENGINE_API bool IsIntegral(ReflectionBasicFieldType type);
+
+		ECSENGINE_API bool IsIntegralSingleComponent(ReflectionBasicFieldType type);
+
+		ECSENGINE_API bool IsIntegralMultiComponent(ReflectionBasicFieldType type);
+
+		ECSENGINE_API unsigned char BasicTypeComponentCount(ReflectionBasicFieldType type);
+
+		// If it is a 2, 3 or 4 type then it will return the basic one with a single component
+		ECSENGINE_API ReflectionBasicFieldType ReduceMultiComponentReflectionType(ReflectionBasicFieldType type);
+
+		inline bool IsBlittable(const ReflectionType* type) {
+			return type->is_blittable;
+		}
+
+		inline bool IsBoolBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Bool2 || type == ReflectionBasicFieldType::Bool3 || type == ReflectionBasicFieldType::Bool4;
+		}
+
+		inline bool IsBoolBasicType(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Bool || IsBoolBasicTypeMultiComponent(type);
+		}
+
+		// Checks for float2, float3, float4
+		inline bool IsFloatBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Float2 || type == ReflectionBasicFieldType::Float3 || type == ReflectionBasicFieldType::Float4;
+		}
+
+		// Checks for float, float2, float3, float4
+		inline bool IsFloatBasicType(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Float || IsFloatBasicTypeMultiComponent(type);
+		}
+
+		// Checks for double2, double3, double4
+		inline bool IsDoubleBasicTypeMultiComponent(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Double2 || type == ReflectionBasicFieldType::Double3 || type == ReflectionBasicFieldType::Double4;
+		}
+
+		// Checks for double, double2, double3, double4
+		inline bool IsDoubleBasicType(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Double || IsDoubleBasicTypeMultiComponent(type);
+		}
+
+		// Checks for float, float2, float3, float4, double, double2, double3, double4
+		inline bool IsFloating(ReflectionBasicFieldType type) {
+			return IsFloatBasicType(type) || IsDoubleBasicType(type);
+		}
+
+		inline bool IsUserDefined(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::UserDefined;
+		}
+
+		inline bool IsPointer(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::Pointer;
+		}
+
+		inline bool IsEnum(ReflectionBasicFieldType type) {
+			return type == ReflectionBasicFieldType::Enum;
+		}
+
+		inline bool IsArray(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::BasicTypeArray;
+		}
+
+		inline bool IsStream(ReflectionStreamFieldType type) {
+			return type == ReflectionStreamFieldType::Stream || type == ReflectionStreamFieldType::CapacityStream
+				|| type == ReflectionStreamFieldType::ResizableStream;
+		}
+
 #define ECS_REFLECTION_CUSTOM_TYPE_FUNCTION_HEADER(name) ECSENGINE_API bool ReflectionCustomTypeMatch_##name(Reflection::ReflectionCustomTypeMatchData* data); \
 															ECSENGINE_API ulong2 ReflectionCustomTypeByteSize_##name(Reflection::ReflectionCustomTypeByteSizeData* data); \
-															ECSENGINE_API void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data);
+															ECSENGINE_API void ReflectionCustomTypeDependentTypes_##name(Reflection::ReflectionCustomTypeDependentTypesData* data); \
+															ECSENGINE_API bool ReflectionCustomTypeIsBlittable_##name(Reflection::ReflectionCustomTypeIsBlittableData* data); \
+															ECSENGINE_API void ReflectionCustomTypeCopy_##name(Reflection::ReflectionCustomTypeCopyData* data);
 
-#define ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name) { ReflectionCustomTypeMatch_##name, ReflectionCustomTypeDependentTypes_##name, ReflectionCustomTypeByteSize_##name }
+#define ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name) { ReflectionCustomTypeMatch_##name, ReflectionCustomTypeDependentTypes_##name, ReflectionCustomTypeByteSize_##name, \
+		ReflectionCustomTypeIsBlittable_##name, ReflectionCustomTypeCopy_##name }
 
 	}
 

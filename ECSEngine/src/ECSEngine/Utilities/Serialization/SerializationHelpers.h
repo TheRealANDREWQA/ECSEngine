@@ -47,40 +47,15 @@ namespace ECSEngine {
 
 #define ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name) size_t SerializeCustomTypeRead_##name(SerializeCustomTypeReadFunctionData* data)
 
-	struct SerializeCustomTypeIsTriviallyCopyableData {
-		Stream<char> definition;
-		const Reflection::ReflectionManager* reflection_manager;
-	};
-
-	typedef bool (*SerializeCustomTypeIsTriviallyCopyable)(SerializeCustomTypeIsTriviallyCopyableData* data);
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name) bool SerializeCustomTypeIsTriviallyCopyable_##name(SerializeCustomTypeIsTriviallyCopyableData* data)
-
-	struct SerializeCustomTypeCopyData {
-		const Reflection::ReflectionManager* reflection_manager;
-		Stream<char> definition;
-		const void* source;
-		void* destination;
-		AllocatorPolymorphic allocator;
-	};
-
-	typedef void (*SerializeCustomTypeCopy)(SerializeCustomTypeCopyData* data);
-
-#define ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(name) void SerializeCustomTypeCopy_##name(SerializeCustomTypeCopyData* data)
-
 #define ECS_SERIALIZE_CUSTOM_TYPE_FUNCTION_HEADER(name) ECS_SERIALIZE_CUSTOM_TYPE_WRITE_FUNCTION(name); \
-														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name); \
-														ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(name); \
-														ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(name);
+														ECS_SERIALIZE_CUSTOM_TYPE_READ_FUNCTION(name);
 
-#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, SerializeCustomTypeIsTriviallyCopyable_##name, SerializeCustomTypeCopy_##name, version, nullptr } 
+#define ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(name, version) { ECS_REFLECTION_CUSTOM_TYPE_STRUCT(name), SerializeCustomTypeWrite_##name, SerializeCustomTypeRead_##name, version, nullptr } 
 
 	struct SerializeCustomType {
 		Reflection::ReflectionCustomType container_type;
 		SerializeCustomTypeWriteFunction write;
 		SerializeCustomTypeReadFunction read;
-		SerializeCustomTypeIsTriviallyCopyable is_trivially_copyable;
-		SerializeCustomTypeCopy copy_function;
 		unsigned int version;
 
 		// Can modify the behaviour of the serializer
@@ -188,44 +163,12 @@ namespace ECSEngine {
 	// into a single step. Returns what DeserializeCustomReadHelper would return, the number of buffer bytes
 	ECSENGINE_API size_t DeserializeCustomReadHelperEx(DeserializeCustomReadHelperExData* data);
 
-	ECSENGINE_API void SerializeCustomTypeCopyBlit(SerializeCustomTypeCopyData* data, size_t byte_size);
+	ECSENGINE_API void SerializeCustomTypeCopyBlit(Reflection::ReflectionCustomTypeCopyData* data, size_t byte_size);
 
 	// Returns -1 if it doesn't exist
 	ECSENGINE_API unsigned int FindSerializeCustomType(Stream<char> definition);
 
 	ECSENGINE_API unsigned int SerializeCustomTypeCount();
-
-	// Can optionally give field definitions to be considered as trivially copyable
-	ECSENGINE_API bool IsTriviallyCopyable(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type
-	);
-
-	// Returns true if it can be copied with memcpy, else false
-	// It returns true when all fields are fundamental types non pointer
-	// Can optionally give field definitions to be considered as trivially copyable
-	ECSENGINE_API bool IsTriviallyCopyable(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition
-	);
-
-	// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
-	ECSENGINE_API void CopyReflectionType(
-		const Reflection::ReflectionManager* reflection_manager,
-		const Reflection::ReflectionType* type,
-		const void* source,
-		void* destination,
-		AllocatorPolymorphic field_allocator
-	);
-
-	// Makes a deep copy of the given reflection type. The blittable streams need to be specified at the same time.
-	ECSENGINE_API void CopyReflectionType(
-		const Reflection::ReflectionManager* reflection_manager,
-		Stream<char> definition,
-		const void* source,
-		void* destination,
-		AllocatorPolymorphic field_allocator
-	);
 
 #pragma region User defined influence
 
@@ -307,7 +250,7 @@ namespace ECSEngine {
 
 	template<bool write_data>
 	inline size_t WriteWithSizeShort(uintptr_t* stream, Stream<void> data) {
-		return WriteWithSize<write_data>(stream, data.buffer, data.size);
+		return WriteWithSizeShort<write_data>(stream, data.buffer, data.size);
 	}
 
 	inline size_t WriteWithSizeShort(uintptr_t* stream, const void* data, unsigned short data_size, bool write_data) {
@@ -462,7 +405,7 @@ namespace ECSEngine {
 	}
 
 	inline Stream<void> ReadAllocateDataShort(uintptr_t* stream, AllocatorPolymorphic allocator, bool read_data) {
-		return read_data ? ReadAllocateData<true>(stream, allocator) : ReadAllocateData<false>(stream, allocator);
+		return read_data ? ReadAllocateDataShort<true>(stream, allocator) : ReadAllocateDataShort<false>(stream, allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------

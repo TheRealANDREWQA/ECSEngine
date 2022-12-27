@@ -37,6 +37,14 @@ namespace ECSEngine {
 
 	Color::Color(const float* values) : red(values[0] * COLOR_RANGE), green(values[1] * COLOR_RANGE), blue(values[2] * COLOR_RANGE), alpha(values[3] * COLOR_RANGE) {}
 
+	Color::Color(const double* values)
+	{
+		red = (unsigned char)values[0];
+		green = (unsigned char)values[1];
+		blue = (unsigned char)values[2];
+		alpha = (unsigned char)values[3];
+	}
+
 	bool Color::operator==(const Color& other) const
 	{
 		return red == other.red && green == other.green && blue == other.blue && alpha == other.alpha;
@@ -114,6 +122,14 @@ namespace ECSEngine {
 	}
 
 	ColorFloat::ColorFloat(const float* values) : red(values[0]), green(values[1]), blue(values[2]), alpha(values[3]) {}
+
+	ColorFloat::ColorFloat(const double* values)
+	{
+		red = (float)values[0];
+		green = (float)values[1];
+		blue = (float)values[2];
+		alpha = (float)values[3];
+	}
 
 	ColorFloat ColorFloat::operator*(const ColorFloat& other) const
 	{

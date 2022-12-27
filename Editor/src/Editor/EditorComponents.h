@@ -160,12 +160,12 @@ struct EditorComponents {
 	// Fills in the indices of the modules inside loaded_modules that the given module depends upon.
 	// If the editor_state is given then it will fill in with the ProjectModules* indices instead
 	// of the loaded_modules ones. If it depends on an ECS type then it will skip it - it will always consider it to be available
-	void GetModuleTypeDependencies(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state = nullptr) const;
+	void GetModuleTypesDependencies(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state = nullptr) const;
 
 	// Fills in the indices of the modules inside loaded_modules that depend upon the given module.
 	// If the editor_state is given then it will fill in with the ProjectModules* indices instead
 	// of the loaded_modules ones.
-	void GetModulesDependentUpon(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state = nullptr) const;
+	void GetModulesTypesDependentUpon(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state = nullptr) const;
 
 	// Returns true if the component name contains non trivially copyable types
 	bool HasBuffers(ECSEngine::Stream<char> component_name) const;

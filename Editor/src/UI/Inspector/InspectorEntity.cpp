@@ -241,7 +241,7 @@ struct InspectorDrawEntityData {
 	Stream<CreatedInstance> created_instances;
 };
 
-void InspectorCleanEntity(EditorState* editor_state, void* _data) {
+void InspectorCleanEntity(EditorState* editor_state, unsigned int inspector_index, void* _data) {
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 	data->Clear(editor_state);
 }

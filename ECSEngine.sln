@@ -15,7 +15,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTK_Desktop_2019", "E
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTex", "ECSEngine\Dependencies\DirectXTex\DirectXTex\DirectXTex_Desktop_2019_Win10.vcxproj", "{371B9FA9-4C90-4AC6-A123-ACED756D6C77}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Graphics", "Modules\Graphics\Graphics\Graphics.vcxproj", "{737DA5FD-1447-4B07-B900-2FC298AD259B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CollisionDetection", "Modules\CollisionDetection\CollisionDetection.vcxproj", "{ADDF6156-DF7C-41D4-8A60-743C36D76F17}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Graphics", "Modules\Graphics\Graphics.vcxproj", "{737DA5FD-1447-4B07-B900-2FC298AD259B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -48,6 +50,12 @@ Global
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Distribution|x64.Build.0 = Release|x64
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Release|x64.ActiveCfg = Release|x64
 		{371B9FA9-4C90-4AC6-A123-ACED756D6C77}.Release|x64.Build.0 = Release|x64
+		{ADDF6156-DF7C-41D4-8A60-743C36D76F17}.Debug|x64.ActiveCfg = Debug|x64
+		{ADDF6156-DF7C-41D4-8A60-743C36D76F17}.Debug|x64.Build.0 = Debug|x64
+		{ADDF6156-DF7C-41D4-8A60-743C36D76F17}.Distribution|x64.ActiveCfg = Distribution|x64
+		{ADDF6156-DF7C-41D4-8A60-743C36D76F17}.Distribution|x64.Build.0 = Distribution|x64
+		{ADDF6156-DF7C-41D4-8A60-743C36D76F17}.Release|x64.ActiveCfg = Release|x64
+		{ADDF6156-DF7C-41D4-8A60-743C36D76F17}.Release|x64.Build.0 = Release|x64
 		{737DA5FD-1447-4B07-B900-2FC298AD259B}.Debug|x64.ActiveCfg = Debug|x64
 		{737DA5FD-1447-4B07-B900-2FC298AD259B}.Debug|x64.Build.0 = Debug|x64
 		{737DA5FD-1447-4B07-B900-2FC298AD259B}.Distribution|x64.ActiveCfg = Distribution|x64

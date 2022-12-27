@@ -5,6 +5,7 @@
 #include "../Reflection/Reflection.h"
 #include "../Reflection/ReflectionMacros.h"
 #include "../ReferenceCountSerialize.h"
+#include "../../Internal/Resources/AssetMetadataSerialize.h"
 #include "../../Containers/SparseSet.h"
 
 namespace ECSEngine {
@@ -571,108 +572,9 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	void SerializeCustomTypeCopyBlit(SerializeCustomTypeCopyData* data, size_t byte_size)
+	void SerializeCustomTypeCopyBlit(Reflection::ReflectionCustomTypeCopyData* data, size_t byte_size)
 	{
 		memcpy(data->destination, data->source, byte_size);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void CopyReflectionType(
-		const ReflectionManager* reflection_manager,
-		const ReflectionType* type,
-		const void* source,
-		void* destination,
-		AllocatorPolymorphic field_allocator
-	)
-	{
-		for (size_t index = 0; index < type->fields.size; index++) {
-			const void* source_field = function::OffsetPointer(source, type->fields[index].info.pointer_offset);
-			void* destination_field = function::OffsetPointer(destination, type->fields[index].info.pointer_offset);
-
-			if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				// If the byte size is given, then do a blit copy
-				if (type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION))) {
-					memcpy(destination_field, source_field, type->fields[index].info.byte_size);
-				}
-				else {
-					CopyReflectionType(reflection_manager, type->fields[index].definition, source_field, destination_field, field_allocator);
-				}
-			}
-			else {
-				CopyReflectionFieldBasic(&type->fields[index].info, source_field, destination_field, field_allocator);
-			}
-		}
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	void CopyReflectionType(
-		const Reflection::ReflectionManager* reflection_manager, 
-		Stream<char> definition,
-		const void* source, 
-		void* destination, 
-		AllocatorPolymorphic field_allocator
-	)
-	{
-		// Check blittable exceptions
-		uint2 exception_index = reflection_manager->FindBlittableException(definition);
-		if (exception_index.x != -1) {
-			memcpy(destination, source, exception_index.x);
-		}
-		else {
-			// Check fundamental type
-			ReflectionField field = GetReflectionFieldInfo(reflection_manager, definition);
-			if (field.info.basic_type != ReflectionBasicFieldType::UserDefined && field.info.basic_type != ReflectionBasicFieldType::Unknown) {
-				CopyReflectionFieldBasic(&field.info, source, destination, field_allocator);
-			}
-			else {
-				ReflectionType reflection_type;
-				if (reflection_manager->TryGetType(definition, reflection_type)) {
-					// Forward the call
-					CopyReflectionType(reflection_manager, &reflection_type, source, destination, field_allocator);
-				}
-				else {
-					// Check to see if it is a custom type
-					unsigned int custom_index = FindSerializeCustomType(definition);
-					if (custom_index != -1) {
-						SerializeCustomTypeIsTriviallyCopyableData trivially_data;
-						trivially_data.definition = definition;
-						trivially_data.reflection_manager = reflection_manager;
-						bool trivially_copyable = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].is_trivially_copyable(&trivially_data);
-						if (trivially_copyable) {
-							ReflectionCustomTypeByteSizeData byte_size_data;
-							byte_size_data.definition = definition;
-							byte_size_data.reflection_manager = reflection_manager;
-							size_t byte_size = ECS_SERIALIZE_CUSTOM_TYPES[custom_index].container_type.byte_size(&byte_size_data).x;
-
-							memcpy(destination, source, byte_size);
-						}
-						else {
-							SerializeCustomTypeCopyData copy_data;
-							copy_data.allocator = field_allocator;
-							copy_data.definition = definition;
-							copy_data.destination = destination;
-							copy_data.source = source;
-							copy_data.reflection_manager = reflection_manager;
-
-							ECS_SERIALIZE_CUSTOM_TYPES[custom_index].copy_function(&copy_data);
-						}
-					}
-					else {
-						// Try with an enum
-						ReflectionEnum enum_;
-						if (reflection_manager->TryGetEnum(definition, enum_)) {
-							memcpy(destination, source, sizeof(unsigned char));
-						}
-						else {
-							// Error - no type matched
-							ECS_ASSERT(false, "Copy reflection type unexpected error.");
-						}
-					}
-				}
-			}
-		}
 	}
 	
 	// -----------------------------------------------------------------------------------------
@@ -797,56 +699,6 @@ namespace ECSEngine {
 		//);
 
 		//return total_deserialize_size;
-	}
-
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(Stream) {
-		return false;
-	}
-
-	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(Stream) {
-		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
-		size_t element_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
-		bool trivially_copyable = IsTriviallyCopyable(data->reflection_manager, data->definition);
-		
-		Stream<char>* source = (Stream<char>*)data->source;
-		Stream<char>* destination = (Stream<char>*)data->destination;
-		size_t allocation_size = element_size * source->size;
-		void* allocation = nullptr;
-		if (allocation_size > 0) {
-			allocation = Allocate(data->allocator, allocation_size);
-			memcpy(allocation, source->buffer, allocation_size);
-		}
-
-		destination->buffer = (char*)allocation;
-		destination->size = source->size;
-
-		if (!trivially_copyable) {
-			size_t count = source->size;
-			
-			ReflectionType nested_type;
-			if (data->reflection_manager->TryGetType(template_type, nested_type)) {
-				for (size_t index = 0; index < count; index++) {
-					CopyReflectionType(
-						data->reflection_manager,
-						&nested_type,
-						function::OffsetPointer(source->buffer, index * element_size),
-						function::OffsetPointer(allocation, element_size * index),
-						data->allocator
-					);
-				}
-			}
-			else {
-				unsigned int custom_type_index = FindSerializeCustomType(template_type);
-				ECS_ASSERT(custom_type_index != -1);
-				data->definition = template_type;
-				
-				for (size_t index = 0; index < count; index++) {
-					data->source = function::OffsetPointer(source->buffer, index * element_size);
-					data->destination = function::OffsetPointer(allocation, element_size * index);
-					ECS_SERIALIZE_CUSTOM_TYPES[custom_type_index].copy_function(data);
-				}
-			}
-		}
 	}
 
 #pragma endregion
@@ -1022,62 +874,6 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(SparseSet) {
-		return false;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(SparseSet) {
-		Stream<char> template_type = ReflectionCustomTypeGetTemplateArgument(data->definition);
-		size_t element_byte_size = SearchReflectionUserDefinedTypeByteSize(data->reflection_manager, template_type);
-
-		bool trivially_copyable = IsTriviallyCopyable(data->reflection_manager, template_type);
-		if (trivially_copyable) {
-			// Can blit the data type
-			SparseSetCopyTypeErased(data->source, data->destination, element_byte_size, data->allocator);
-		}
-		else {
-			data->definition = template_type;
-			struct CopyData {
-				SerializeCustomTypeCopyData* custom_data;
-				const ReflectionType* type;
-				unsigned int custom_type_index;
-			};
-			
-			// Need to copy each and every element
-			auto copy_function = [](const void* source, void* destination, AllocatorPolymorphic allocator, void* extra_data) {
-				CopyData* data = (CopyData*)extra_data;
-				if (data->type != nullptr) {
-					CopyReflectionType(data->custom_data->reflection_manager, data->type, source, destination, allocator);
-				}
-				else {
-					data->custom_data->source = source;
-					data->custom_data->destination = destination;
-					ECS_SERIALIZE_CUSTOM_TYPES[data->custom_type_index].copy_function(data->custom_data);
-				}
-			};
-
-			CopyData copy_data;
-			copy_data.custom_data = data;
-			copy_data.type = nullptr;
-
-			ReflectionType nested_type;
-			
-			if (data->reflection_manager->TryGetType(template_type, nested_type)) {
-				copy_data.type = &nested_type;
-			}
-			else {
-				copy_data.custom_type_index = FindSerializeCustomType(template_type);
-				ECS_ASSERT(copy_data.custom_type_index != -1);
-			}
-
-			SparseSetCopyTypeErasedFunction(data->source, data->destination, element_byte_size, data->allocator, copy_function, &copy_data);
-		}
-	}
-
-	// -----------------------------------------------------------------------------------------
-
 #pragma endregion
 
 #pragma region Color
@@ -1115,18 +911,6 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(Color) {
-		return true;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(Color) {
-		SerializeCustomTypeCopyBlit(data, sizeof(char) * 4);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
 #pragma endregion
 
 #pragma region Color Float
@@ -1160,18 +944,6 @@ namespace ECSEngine {
 			Read<false>(data->stream, data->data, sizeof(float) * 4);
 		}
 		return 0;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(ColorFloat) {
-		return true;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(ColorFloat) {
-		SerializeCustomTypeCopyBlit(data, sizeof(float) * 4);
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -1228,29 +1000,6 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
-	ECS_SERIALIZE_CUSTOM_TYPE_IS_TRIVIALLY_COPYABLE_FUNCTION(DataPointer) {
-		return false;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	ECS_SERIALIZE_CUSTOM_TYPE_COPY_FUNCTION(DataPointer) {
-		DataPointer* source = (DataPointer*)data->source;
-		DataPointer* destination = (DataPointer*)data->destination;
-	
-		unsigned short source_size = source->GetData();
-		void* allocation = nullptr;
-		if (source_size > 0) {
-			allocation = Allocate(data->allocator, source_size);
-			memcpy(allocation, source->GetPointer(), source_size);
-		}
-
-		destination->SetData(source_size);
-		destination->SetPointer(allocation);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
 #pragma endregion
 
 	// -----------------------------------------------------------------------------------------
@@ -1261,6 +1010,7 @@ namespace ECSEngine {
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(SparseSet, SERIALIZE_SPARSE_SET_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(Color, SERIALIZE_CUSTOM_COLOR_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(ColorFloat, SERIALIZE_CUSTOM_COLOR_FLOAT_VERSION),
+		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(MaterialAsset, ECS_SERIALIZE_CUSTOM_TYPE_MATERIAL_ASSET_VERSION),
 		ECS_SERIALIZE_CUSTOM_TYPE_STRUCT(DataPointer, SERIALIZE_CUSTOM_DATA_POINTER_VERSION)
 	};
 
@@ -1308,107 +1058,6 @@ namespace ECSEngine {
 	unsigned int SerializeCustomTypeCount()
 	{
 		return std::size(ECS_SERIALIZE_CUSTOM_TYPES);
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	bool IsTriviallyCopyable(
-		const Reflection::ReflectionManager* reflection_manager, 
-		const Reflection::ReflectionType* type
-	) {
-		for (size_t index = 0; index < type->fields.size; index++) {
-			// Check exceptions
-			uint2 exception_index = reflection_manager->FindBlittableException(type->fields[index].definition);
-			if (exception_index.x != -1) {
-				// Go to the next iteration
-				continue;
-			}
-
-			if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Basic && type->fields[index].info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-				// Stream type or pointer type, not trivially copyable
-				return false;
-			}
-
-			if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				// Check it
-				ReflectionType nested_type;
-				if (reflection_manager->TryGetType(type->fields[index].definition, nested_type)) {
-					if (!IsTriviallyCopyable(reflection_manager, &nested_type)) {
-						return false;
-					}
-				}
-				else {
-					// Check container type
-					unsigned int container_type = FindReflectionCustomType(type->fields[index].definition);
-					if (container_type != -1) {
-						SerializeCustomTypeIsTriviallyCopyableData data;
-						data.reflection_manager = reflection_manager;
-						data.definition = type->fields[index].definition;
-						if (!ECS_SERIALIZE_CUSTOM_TYPES[container_type].is_trivially_copyable(&data)) {
-							return false;
-						}
-					}
-					else {
-						// Check for ECS_GIVE_SIZE_REFLECTION tag. If it present, assume it is trivially copyable
-						// because we don't know its fields
-						ECS_ASSERT(type->fields[index].Has(STRING(ECS_GIVE_SIZE_REFLECTION)));
-					}
-				}
-			}
-		}
-
-		return true;
-	}
-
-	// -----------------------------------------------------------------------------------------
-
-	bool IsTriviallyCopyable(
-		const Reflection::ReflectionManager* reflection_manager, 
-		Stream<char> definition
-	)
-	{
-		ReflectionType type;
-		if (reflection_manager->TryGetType(definition, type)) {
-			// If we have the type, return its trivial status
-			return IsTriviallyCopyable(reflection_manager, &type);
-		}
-		else {
-			// Might be another container type
-			unsigned int container_index = Reflection::FindReflectionCustomType(definition);
-			if (container_index != -1) {
-				SerializeCustomTypeIsTriviallyCopyableData is_data;
-				is_data.definition = definition;
-				is_data.reflection_manager = reflection_manager;
-				return ECS_SERIALIZE_CUSTOM_TYPES[container_index].is_trivially_copyable(&is_data);
-			}
-			else {
-				// Try enum
-				Reflection::ReflectionEnum enum_;
-				if (reflection_manager->TryGetEnum(definition, enum_)) {
-					return true;
-				}
-			}
-		}
-
-		// It is not a user defined, not a container type. Either error or fundamental type
-		ReflectionBasicFieldType basic_type;
-		ReflectionStreamFieldType stream_type;
-		ConvertStringToPrimitiveType(definition, basic_type, stream_type);
-		if (IsUserDefined(basic_type) || basic_type == ReflectionBasicFieldType::Unknown) {
-			return false;
-		}
-
-		if (stream_type != ReflectionStreamFieldType::Basic && stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-			// Check exceptions
-			uint2 exception_index = reflection_manager->FindBlittableException(definition);
-			if (exception_index.x != -1) {
-				return true;
-			}
-			
-			// Pointer or stream type
-			return false;
-		}
-		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------

@@ -118,10 +118,7 @@ void TickModuleStatus(EditorState* editor_state) {
 					if (info->library_last_write_time != 0) {
 						success = HasModuleFunction(editor_state, index, configuration);
 					}
-					SetModuleLoadStatus(&project_modules->buffer[index], success, configuration);
-				}
-				if (is_solution_updated && info->load_status == EDITOR_MODULE_LOAD_GOOD) {
-					info->load_status = EDITOR_MODULE_LOAD_OUT_OF_DATE;
+					SetModuleLoadStatus(editor_state, index, success, configuration);
 				}
 			}
 		}
@@ -242,6 +239,8 @@ void EditorStateProjectTick(EditorState* editor_state) {
 
 		TickEditorComponents(editor_state);
 		TickAsset(editor_state);
+
+		TickUpdateModulesDLLImports(editor_state);
 	}
 }
 

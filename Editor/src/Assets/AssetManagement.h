@@ -66,6 +66,10 @@ bool ExistsAsset(const EditorState* editor_state, Stream<char> name, Stream<wcha
 // Returns the handle of the asset. Returns -1 if it doesn't exist
 unsigned int FindAsset(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type);
 
+// Returns the handle to that asset. If it doesn't exist, it will add it without creating the runtime asset
+// Can optionally specify whether or not to update the reference count (when it already exists)
+unsigned int FindOrAddAsset(EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, bool increment_reference_count = false);
+
 // Fills in the relative path to the asset from the name (materials, gpu samplers, shaders and misc are available at the moment)
 void FromAssetNameToThunkOrForwardingFile(Stream<char> name, Stream<wchar_t> extension, CapacityStream<wchar_t>& relative_path);
 

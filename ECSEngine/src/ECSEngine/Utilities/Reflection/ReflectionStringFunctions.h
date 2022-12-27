@@ -7,9 +7,6 @@ namespace ECSEngine {
 	namespace Reflection {
 
 		// Uses a jump table
-		ECSENGINE_API size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType type);
-
-		// Uses a jump table
 		ECSENGINE_API size_t GetReflectionBasicFieldTypeStringSize(ReflectionBasicFieldType type);
 
 		// Uses a jump table

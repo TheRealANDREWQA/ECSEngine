@@ -527,64 +527,6 @@ namespace ECSEngine {
 
 #undef PARSE_INTEGER_GROUP
 
-		size_t REFLECTION_BASIC_FIELD_TYPE_BYTE_SIZE[] = {
-			sizeof(int8_t),
-			sizeof(uint8_t),
-			sizeof(int16_t),
-			sizeof(uint16_t),
-			sizeof(int32_t),
-			sizeof(uint32_t),
-			sizeof(int64_t),
-			sizeof(uint64_t),
-			sizeof(wchar_t),
-			sizeof(float),
-			sizeof(double),
-			sizeof(bool),
-			sizeof(unsigned char),
-			sizeof(char2),
-			sizeof(uchar2),
-			sizeof(short2),
-			sizeof(ushort2),
-			sizeof(int2),
-			sizeof(uint2),
-			sizeof(long2),
-			sizeof(ulong2),
-			sizeof(char3),
-			sizeof(uchar3),
-			sizeof(short3),
-			sizeof(ushort3),
-			sizeof(int3),
-			sizeof(uint3),
-			sizeof(long3),
-			sizeof(ulong3),
-			sizeof(char4),
-			sizeof(uchar4),
-			sizeof(short4),
-			sizeof(ushort4),
-			sizeof(int4),
-			sizeof(uint4),
-			sizeof(long4),
-			sizeof(ulong4),
-			sizeof(float2),
-			sizeof(float3),
-			sizeof(float4),
-			sizeof(double2),
-			sizeof(double3),
-			sizeof(double4),
-			sizeof(bool2),
-			sizeof(bool3),
-			sizeof(bool4),
-			0,
-			0
-		};
-
-		// ----------------------------------------------------------------------------------------------------------------------------
-
-		size_t GetReflectionBasicFieldTypeByteSize(ReflectionBasicFieldType type)
-		{
-			return REFLECTION_BASIC_FIELD_TYPE_BYTE_SIZE[(unsigned int)type];
-		}
-
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		size_t GetReflectionBasicFieldTypeStringSize(ReflectionBasicFieldType type)

@@ -9,7 +9,7 @@ ECS_TOOLS;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void InspectorCleanNothing(EditorState* editor_state, void* data) {}
+void InspectorCleanNothing(EditorState* editor_state, unsigned int inspector_index, void* data) {}
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
@@ -179,7 +179,7 @@ unsigned int ChangeInspectorDrawFunction(
 
 	if (inspector_index != -1) {
 		InspectorData* inspector_data = editor_state->inspector_manager.data.buffer + inspector_index;
-		inspector_data->clean_function(editor_state, inspector_data->draw_data);
+		inspector_data->clean_function(editor_state, inspector_index, inspector_data->draw_data);
 
 		if (inspector_data->data_size > 0) {
 			editor_allocator->Deallocate(inspector_data->draw_data);

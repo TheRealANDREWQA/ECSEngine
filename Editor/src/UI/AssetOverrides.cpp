@@ -26,6 +26,8 @@ struct BaseDrawData {
 
 	Action callback_action;
 	void* callback_action_data;
+	bool callback_verify;
+
 	EditorState* editor_state;
 	CapacityStream<char> filter;
 	ResizableLinearAllocator resizable_allocator;
@@ -120,7 +122,7 @@ bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 				else {
 					Stream<Stream<char>>* settings = hash_table.GetValuePtrFromIndex(table_index);			
 					settings_count = settings->size;
-					settings->Resize(allocator_polymorphic, 1);
+					settings->AddResize(allocator_polymorphic, 1);
 					settings_buffer = settings->buffer;
 				}
 				settings_buffer[settings_count] = allocated_name;
@@ -157,6 +159,7 @@ struct SelectActionData {
 
 	Action action;
 	void* action_data;
+	bool verify_action;
 };
 
 void SelectAction(ActionData* action_data) {
@@ -168,8 +171,24 @@ void SelectAction(ActionData* action_data) {
 		data->name.buffer = (char*)function::OffsetPointer(data, sizeof(*data));
 	}
 
-	// If now it is loaded, launch the resource manager load task as well
-	RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, true, { data->action, data->action_data, 0 });
+	bool register_asset = true;
+	if (data->verify_action) {
+		AssetOverrideCallbackVerifyData verify_data;
+		verify_data.editor_state = data->editor_state;
+		verify_data.name = data->name;
+		verify_data.file = data->file;
+		verify_data.prevent_registering = false;
+		action_data->data = data->action_data;
+		action_data->additional_data = &verify_data;
+		data->action(action_data);
+
+		register_asset = !verify_data.prevent_registering;
+	}
+
+	if (register_asset) {
+		// If now it is loaded, launch the resource manager load task as well
+		RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, true, { data->action, data->action_data, 0 });
+	}
 
 	system->PushDestroyWindowHandler(system->GetWindowIndexFromBorder(dockspace, border_index));
 	if (data->destroy_selection) {
@@ -188,13 +207,32 @@ struct DeselectActionData {
 
 	Action callback_action;
 	void* callback_action_data;
+	bool verify_action;
 };
 
 void DeselectAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	DeselectActionData* data = (DeselectActionData*)_data;
-	UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+
+	bool unregister_asset = true;
+	if (data->verify_action) {
+		AssetOverrideCallbackVerifyData verify_data;
+		verify_data.editor_state = data->editor_state;
+		verify_data.name = data->editor_state->asset_database->GetAssetName(*data->handle, data->asset_type);
+		verify_data.file = data->editor_state->asset_database->GetAssetPath(*data->handle, data->asset_type);
+		verify_data.prevent_registering = false;
+		action_data->data = data->callback_action_data;
+		action_data->additional_data = &verify_data;
+		data->callback_action(action_data);
+
+		unregister_asset = !verify_data.prevent_registering;
+	}
+
+	if (unregister_asset) {
+		UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, { data->callback_action, data->callback_action_data, 0 });
+	}
+
 	unsigned int selection_input = system->GetWindowFromName(SELECTION_INPUT_WINDOW_NAME);
 	if (selection_input != -1) {
 		system->PushDestroyWindowHandler(selection_input);
@@ -212,6 +250,7 @@ void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* b
 	select_data->type = asset_type;
 	select_data->action = base_data->callback_action;
 	select_data->action_data = base_data->callback_action_data;
+	select_data->verify_action = base_data->callback_verify;
 }
 
 // The stack allocation must be at least ECS_KB * 4 large
@@ -344,6 +383,7 @@ void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET
 		deselect_data.asset_type = type;
 		deselect_data.callback_action = base_return->select_data->action;
 		deselect_data.callback_action_data = base_return->select_data->action_data;
+		deselect_data.verify_action = base_return->select_data->verify_action;
 
 		// Draw a none button
 		const size_t BASE_CONFIGURATION = UI_CONFIG_MAKE_SQUARE | UI_CONFIG_RELATIVE_TRANSFORM | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
@@ -583,8 +623,6 @@ void GPUSamplerDraw(void* window_data, void* drawer_descriptor, bool initialize)
 
 #pragma region Shader Draw
 
-#define SHADER_METADATA_FILE_READ_THRESHOLD
-
 struct ShaderDrawData {
 	BaseDrawData base_data;
 	// This shader metadata is in lockstep with the asset_name_with_path
@@ -671,6 +709,7 @@ struct OverrideBaseData {
 	unsigned int sandbox_index;
 	bool callback_is_ptr;
 	Action callback;
+	bool callback_verify;
 
 	union {
 		// Embedd the data directly into it
@@ -701,6 +740,7 @@ void OverrideAssetHandle(
 	base_window_data->sandbox_index = base_data->sandbox_index;
 	base_window_data->callback_action = base_data->callback;
 	base_window_data->callback_action_data = base_data->callback_is_ptr ? base_data->callback_data_ptr : base_data->callback_data;
+	base_window_data->callback_verify = base_data->callback_verify;
 
 	UIWindowDescriptor window_descriptor;
 	window_descriptor.draw = window_draw;
@@ -831,6 +871,7 @@ ECS_UI_REFLECTION_INSTANCE_INITIALIZE_OVERRIDE(AssetInitialize) {
 	data->selection.capacity = capacity;
 
 	data->editor_state = global_data->editor_state;
+	data->callback_verify = false;
 }
 
 #pragma endregion
@@ -869,6 +910,7 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 		memcpy(data->callback_data, modify_data->handler.data, modify_data->handler.data_size);
 		data->callback_is_ptr = false;
 	}
+	data->callback_verify = modify_data->verify_handler;
 }
 
 ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetAll) {

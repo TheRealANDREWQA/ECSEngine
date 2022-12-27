@@ -8,8 +8,16 @@ namespace ECSEngine {
 
 #define UI_REFLECTION_DRAWER_TYPE_TABLE_COUNT (128)
 #define UI_REFLECTION_DRAWER_INSTANCE_TABLE_COUNT (256)
+#define UI_REFLECTION_MAX_GROUPINGS_PER_TYPE 8
 
 #define ECS_UI_OMIT_FIELD_REFLECT
+
+		// Can tell the UI the default value for that element
+#define ECS_UI_DEFAULT_REFLECT(default_value)
+		// Can tell the UI the bounds for that element (ints, floats and doubles)
+#define ECS_UI_RANGE_REFLECT(lower_bound, upper_bound)
+		// Can tell the UI the default value + the bounds for that element(ints, floats and doubles)
+#define ECS_UI_PARAMETERS_REFLECT(default_value, lower_bound, upper_bound)
 
 		enum class UIReflectionIndex : unsigned char {
 			FloatSlider,
@@ -57,25 +65,37 @@ namespace ECSEngine {
 		};
 
 		// Only drawer will be called, the initializer is not involved
-		using UIReflectionFieldDraw = void (*)(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, void* data);
+		typedef void (*UIReflectionFieldDraw)(UIDrawer& drawer, UIDrawConfig& config, size_t configuration, Stream<char> name, void* data);
 
 		// Used for TextInput, FileInput and DirectoryInput to not write the stream to the target
 		// (useful for example if it is desired to have a callback do a change)
 		constexpr size_t UI_CONFIG_REFLECTION_INPUT_DONT_WRITE_STREAM = (size_t)1 << 63;
 
+		struct UIReflectionTypeFieldGrouping {
+			unsigned int range;
+			unsigned int field_index;
+			Stream<char> name;
+
+			// If this field is set to { nullptr, 0 }, then it will keep the names for the rows the same
+			Stream<char> per_element_name = { nullptr, 0 };
+		};
+
 		struct UIReflectionType {
 			Stream<char> name;
 			CapacityStream<UIReflectionTypeField> fields;
+			bool has_overriden_identifier;
+			Stream<UIReflectionTypeFieldGrouping> groupings;
 		};
 
 		struct UIReflectionInstance {
 			Stream<char> type_name;
 			Stream<char> name;
 			Stream<void*> data;
+			bool grouping_open_state[UI_REFLECTION_MAX_GROUPINGS_PER_TYPE];
 		};
 
-		using UIReflectionTypeTable = HashTableDefault<UIReflectionType>;
-		using UIReflectionInstanceTable = HashTableDefault<UIReflectionInstance>;
+		typedef HashTableDefault<UIReflectionType> UIReflectionTypeTable;
+		typedef HashTableDefault<UIReflectionInstance> UIReflectionInstanceTable;
 
 		struct UIReflectionBindDefaultValue {
 			Stream<char> field_name;
@@ -88,8 +108,8 @@ namespace ECSEngine {
 			void* max;
 		};
 
-		using UIReflectionBindLowerBound = UIReflectionBindDefaultValue;
-		using UIReflectionBindUpperBound = UIReflectionBindDefaultValue;
+		typedef UIReflectionBindDefaultValue UIReflectionBindLowerBound;
+		typedef UIReflectionBindDefaultValue UIReflectionBindUpperBound;
 		
 		struct UIReflectionBindPrecision {
 			Stream<char> field_name;
@@ -297,6 +317,8 @@ namespace ECSEngine {
 			void AddTypeConfiguration(Stream<char> type_name, Stream<char> field_name, size_t field_configuration);
 			void AddTypeConfiguration(UIReflectionType* type, Stream<char> field_name, size_t field_configuration);
 
+			void AddTypeGrouping(UIReflectionType* type, UIReflectionTypeFieldGrouping grouping);
+
 			// For every resizable stream, it will assign the allocator. If allocate inputs is true, it will allocate
 			// for every text input, directory input or file input a default sized buffer (256 element long)
 			void AssignInstanceResizableAllocator(Stream<char> instance_name, AllocatorPolymorphic allocator, bool allocate_inputs = true);
@@ -365,7 +387,8 @@ namespace ECSEngine {
 
 			void BindInstanceResizableStreamAllocator(Stream<char> instance_name, Stream<UIReflectionBindResizableStreamAllocator> data);
 			void BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamAllocator> data);
-			void BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, Stream<unsigned int> field_indices, AllocatorPolymorphic allocator);
+			// If the field indices is not specified, then all streams that are resizable are going to have the allocator set
+			void BindInstanceResizableStreamAllocator(UIReflectionInstance* instance, AllocatorPolymorphic allocator, Stream<unsigned int> field_indices = { nullptr, 0 });
 
 			void BindInstanceResizableStreamData(Stream<char> instance_name, Stream<UIReflectionBindResizableStreamData> data);
 			void BindInstanceResizableStreamData(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamData> data);
@@ -374,6 +397,16 @@ namespace ECSEngine {
 			void BindInstanceFieldOverride(Stream<char> instance_name, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data);
 			// This will be called for all fields of that override type
 			void BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data);
+			
+			// If the allocator is left unspecified, then it will use the allocator for this
+			// UIReflectionDrawer
+			void BindInstanceFieldOverride(
+				void* override_data, 
+				Stream<char> tag, 
+				UIReflectionInstanceModifyOverride modify_override, 
+				void* user_data,
+				AllocatorPolymorphic allocator = { nullptr }
+			);
 
 			void ConvertTypeResizableStream(Stream<char> type_name, Stream<Stream<char>> field_names);
 			void ConvertTypeResizableStream(UIReflectionType* type, Stream<Stream<char>> field_names);
@@ -392,11 +425,14 @@ namespace ECSEngine {
 			void ChangeDirectoryToFile(Stream<char> type_name, Stream<char> field_name);
 			void ChangeDirectoryToFile(UIReflectionType* type, Stream<char> field_name);
 
+			// Gets the type from the internal reflection
 			UIReflectionType* CreateType(Stream<char> name);
-			UIReflectionType* CreateType(const Reflection::ReflectionType* type);
+			// Can optionally specify a name by which it will be identified
+			UIReflectionType* CreateType(const Reflection::ReflectionType* type, Stream<char> identifier_name = { nullptr, 0 });
 
 			UIReflectionInstance* CreateInstance(Stream<char> name, Stream<char> type_name);
-			UIReflectionInstance* CreateInstance(Stream<char> name, const UIReflectionType* type);
+			// If the identifier name is specified, it will use that as the type_name instead of type->name
+			UIReflectionInstance* CreateInstance(Stream<char> name, const UIReflectionType* type, Stream<char> identifier_name = { nullptr, 0 });
 
 			// It will create a type for each reflected type from the given hierarchy.
 			// Returns how many types were created
@@ -435,6 +471,10 @@ namespace ECSEngine {
 			// DirectoryInput will be disabled
 			void DisableInputWrites(UIReflectionType* type, bool all_writes = true);
 			
+			// User facing method. If the allocator is left unspecified then it will use the
+			// allocator from this UIReflectionDrawer
+			void DeallocateFieldOverride(Stream<char> tag, void* data, AllocatorPolymorphic allocator = { nullptr });
+
 			void DeallocateInstance(UIReflectionInstance* instance);
 			void DeallocateInstanceFields(UIReflectionInstance* instance);
 
@@ -461,6 +501,18 @@ namespace ECSEngine {
 				const UIReflectionDrawInstanceOptions* options
 			);
 
+			void DrawFieldOverride(
+				Stream<char> tag,
+				void* data,
+				void* field_data,
+				UIDrawer* drawer,
+				size_t configuration,
+				UIDrawConfig* config,
+				Stream<char> name,
+				UIReflectionStreamType stream_type = UIReflectionStreamType::None,
+				AllocatorPolymorphic allocator = { nullptr }
+			);
+
 			// Destroys all instances and types that originate from the given hierarchy
 			void DestroyAllFromFolderHierarchy(unsigned int hierarchy_index);
 
@@ -476,6 +528,9 @@ namespace ECSEngine {
 			// that match the name of the type with the suffix appended will be deleted.
 			// The include and exclude tags are used for the instance's parent type tags
 			void DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, UIReflectionDrawerSearchOptions options = {});
+
+			// Returns -1 if it doesn't find it
+			unsigned int FindFieldOverride(Stream<char> tag) const;
 
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
@@ -519,6 +574,9 @@ namespace ECSEngine {
 			
 			unsigned int GetTypeFieldIndex(UIReflectionType type, Stream<char> field_name) const;
 			unsigned int GetTypeFieldIndex(Stream<char> type_name, Stream<char> field_name);
+
+			// User facing method
+			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name);
 
 			void OmitTypeField(Stream<char> type_name, Stream<char> field_name);
 			void OmitTypeField(UIReflectionType* type, Stream<char> field_name);

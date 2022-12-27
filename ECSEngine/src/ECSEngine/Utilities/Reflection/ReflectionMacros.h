@@ -32,6 +32,11 @@
 // Used to describe the type of element that the data pointer is used for
 #define ECS_DATA_POINTER_TAG(a)
 
+// When a type is changed and you want to keep the old data, use this tag in order
+// tell the runtime what name it should map to. It will ignore this tag if it doesn't
+// find the old name
+#define ECS_MAP_FIELD_REFLECTION(old_name)
+
 // Used with the IsTag function of the ReflectionType
 #define ECS_COMPONENT_TAG "COMPONENT"
 // Used with the IsTag function of the ReflectionType

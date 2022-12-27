@@ -2732,6 +2732,7 @@ namespace ECSEngine {
 			if (ValidatePosition(configuration, position)) {
 				if (slider->interpolate_value) {
 					if (!mouse_draggable_fixed_offset) {
+						slider->slider_position = function::Clamp(slider->slider_position, 0.0f, 1.0f);
 						functions.interpolate(lower_bound, upper_bound, value_to_modify, slider->slider_position);
 					}
 					else {
@@ -3366,6 +3367,23 @@ namespace ECSEngine {
 					data->mapping_byte_size = 0;
 				}
 
+				if (configuration & UI_CONFIG_COMBO_BOX_UNAVAILABLE) {
+					const UIConfigComboBoxUnavailable* unavailables = (const UIConfigComboBoxUnavailable*)config.GetParameter(UI_CONFIG_COMBO_BOX_UNAVAILABLE);
+					if (unavailables->stable) {
+						data->unavailables = unavailables->unavailables;
+					}
+					else {
+						size_t copy_size = sizeof(bool) * labels.size;
+						data->unavailables = (bool*)GetMainAllocatorBuffer(copy_size);
+						memcpy(data->unavailables, unavailables->unavailables, copy_size);
+					}
+					data->unavailables_capacity = labels.size;
+				}
+				else {
+					data->unavailables = nullptr;
+					data->unavailables_capacity = 0;
+				}
+
 				return data;
 			});
 
@@ -3397,8 +3415,72 @@ namespace ECSEngine {
 
 		template<typename NameType>
 		void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, bool* value_to_modify, float2 position, float2 scale) {
+			struct DefaultActionData {
+				bool* value_to_modify;
+				UIConfigCheckBoxDefault default_value;
+				UIActionHandler callback;
+			};
+
+			auto return_default_action = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				DefaultActionData* data = (DefaultActionData*)_data;
+				if (mouse_tracker->RightButton() == MBPRESSED) {
+					bool new_value = false;
+					if (data->default_value.is_pointer_variable) {
+						new_value = *data->default_value.pointer_variable;
+					}
+					else {
+						new_value = data->default_value.value;
+					}
+
+					if (new_value != *data->value_to_modify) {
+						*data->value_to_modify = new_value;
+						if (data->callback.action != nullptr) {
+							action_data->data = data->callback.data;
+							data->callback.action(action_data);
+						}
+					}
+				}
+			};
+
+			// Returns a pointer to the config to be used for the name and the configuration
+			auto check_box_name = [&]() {
+				UIDrawConfig name_config;
+				DefaultActionData default_data;
+
+				size_t name_configuration = configuration;
+				const UIDrawConfig* config_to_use = &config;
+				if (configuration & UI_CONFIG_CHECK_BOX_DEFAULT) {
+					memcpy(&name_config, &config, sizeof(name_config));
+
+					const UIConfigCheckBoxDefault* default_value = (const UIConfigCheckBoxDefault*)config.GetParameter(UI_CONFIG_CHECK_BOX_DEFAULT);
+
+					default_data.value_to_modify = value_to_modify;
+					default_data.default_value = *default_value;
+					default_data.callback.action = nullptr;
+					default_data.callback.phase = ECS_UI_DRAW_NORMAL;
+
+					if (configuration & UI_CONFIG_CHECK_BOX_CALLBACK) {
+						const UIConfigCheckBoxCallback* callback = (const UIConfigCheckBoxCallback*)config.GetParameter(UI_CONFIG_CHECK_BOX_CALLBACK);
+						default_data.callback = callback->handler;
+						if (callback->handler.data_size > 0) {
+							default_data.callback.data = drawer->GetHandlerBuffer(callback->handler.data_size, callback->handler.phase);
+							memcpy(default_data.callback.data, callback->handler.data, callback->handler.data_size);
+						}
+					}
+
+					UIConfigElementNameAction name_action;
+					name_action.hoverable_handler = { return_default_action, &default_data, sizeof(default_data), default_data.callback.phase };				
+					name_config.AddFlag(name_action);
+
+					config_to_use = &name_config;
+				}
+				drawer->ElementName(name_configuration, *config_to_use, name, position, scale);
+			};
+
 			if (IsElementNameFirst(configuration, UI_CONFIG_CHECK_BOX_NO_NAME)) {
-				drawer->ElementName(configuration, config, name, position, scale);
+				check_box_name();
 			}
 
 			if (configuration & UI_CONFIG_GET_TRANSFORM) {
@@ -3497,7 +3579,7 @@ namespace ECSEngine {
 			drawer->FinalizeRectangle(finalize_configuration, position, scale);
 
 			if (is_name_after) {
-				drawer->ElementName(configuration, config, name, position, scale);
+				check_box_name();
 			}
 		}
 
@@ -3549,6 +3631,19 @@ namespace ECSEngine {
 				}
 			}
 
+			// Copy the unavailables if needed
+			if (configuration & UI_CONFIG_COMBO_BOX_UNAVAILABLE) {
+				const UIConfigComboBoxUnavailable* unavailables = (const UIConfigComboBoxUnavailable*)config.GetParameter(UI_CONFIG_COMBO_BOX_UNAVAILABLE);
+				if (!unavailables->stable) {
+					size_t copy_size = data->labels.size * sizeof(bool);
+					if (data->labels.size != data->unavailables_capacity) {
+						RemoveAllocation(data->unavailables);
+						data->unavailables = (bool*)GetMainAllocatorBuffer(copy_size);
+					}
+					memcpy(data->unavailables, unavailables->unavailables, copy_size);
+				}
+			}
+
 			float2 element_scale = scale;
 			if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 				// Reduce the scale
@@ -3581,8 +3676,99 @@ namespace ECSEngine {
 
 			AlignToRowY(this, configuration, position, scale);
 
+			struct ReturnToDefaultData {
+				UIDrawerComboBox* combo_box;
+				UIConfigComboBoxDefault default_value;
+			};
+
+			auto return_to_default_data = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				ReturnToDefaultData* data = (ReturnToDefaultData*)_data;
+				if (mouse_tracker->RightButton() == MBPRESSED) {
+					if (data->combo_box->mapping_byte_size > 0) {
+						// Find the index of the mapping
+						size_t mapping_index = function::SearchBytesEx(
+							data->combo_box->mappings, 
+							data->combo_box->mapping_capacity, 
+							data->default_value.mapping_value, 
+							data->combo_box->mapping_byte_size
+						);
+						ECS_ASSERT(mapping_index != -1);
+
+						if ((unsigned char)mapping_index != *data->combo_box->active_label) {
+							// The value needs to be changed
+							*data->combo_box->active_label = mapping_index;
+
+							if (data->combo_box->callback != nullptr) {
+								action_data->data = data->combo_box->callback_data;
+								data->combo_box->callback(action_data);
+							}
+						}
+					}
+					else {
+						unsigned char value = 0;
+						if (data->default_value.is_pointer_value) {
+							value = *data->default_value.char_pointer;
+						}
+						else {
+							value = data->default_value.char_value;
+						}
+
+						if (value != *data->combo_box->active_label) {
+							*data->combo_box->active_label = value;
+
+							if (data->combo_box->callback != nullptr) {
+								action_data->data = data->combo_box->callback_data;
+								data->combo_box->callback(action_data);
+							}
+						}
+					}
+				}
+			};
+
+			auto name = [&](float2& name_position) {
+				size_t name_configuration = configuration;
+				const UIDrawConfig* config_to_use = &config;
+
+				UIDrawConfig name_config;
+				ReturnToDefaultData return_data;
+
+				if (configuration & UI_CONFIG_COMBO_BOX_DEFAULT) {
+					const UIConfigComboBoxDefault* default_value = (const UIConfigComboBoxDefault*)config.GetParameter(UI_CONFIG_COMBO_BOX_DEFAULT);
+
+					ECS_UI_DRAW_PHASE draw_phase = ECS_UI_DRAW_NORMAL;
+					if (configuration & UI_CONFIG_COMBO_BOX_CALLBACK) {
+						const UIConfigComboBoxCallback* combo_callback = (const UIConfigComboBoxCallback*)config.GetParameter(UI_CONFIG_COMBO_BOX_CALLBACK);
+						draw_phase = combo_callback->handler.phase;
+					}
+
+					return_data.default_value = *default_value;
+					return_data.combo_box = data;
+
+					if (data->mapping_byte_size > 0 && !default_value->mapping_value_stable) {
+						return_data.default_value.mapping_value = GetHandlerBuffer(data->mapping_byte_size, draw_phase);
+						memcpy(return_data.default_value.mapping_value, default_value->mapping_value, data->mapping_byte_size);
+					}
+
+					UIConfigElementNameAction name_action;
+					name_action.hoverable_handler = { 
+						return_to_default_data, 
+						&return_data, 
+						(unsigned int)sizeof(return_data), 
+						draw_phase
+					};
+					name_config.AddFlag(name_action);
+					
+					name_configuration |= UI_CONFIG_ELEMENT_NAME_ACTION;
+					config_to_use = &name_config;
+				}
+
+				ElementName(name_configuration, *config_to_use, &data->name, name_position, scale);
+			};
+
 			if (IsElementNameFirst(configuration, UI_CONFIG_COMBO_BOX_NO_NAME)) {
-				ElementName(configuration, config, &data->name, position, scale);
+				name(position);
 			}
 
 			float2 border_position = position;
@@ -3689,7 +3875,8 @@ namespace ECSEngine {
 			FinalizeRectangle(configuration, border_position, border_scale);
 
 			if (IsElementNameAfter(configuration, UI_CONFIG_COMBO_BOX_NO_NAME)) {
-				ElementName(configuration, config, &data->name, border_position, scale);
+				position = { border_position.x + border_scale.x, border_position.y };
+				name(position);
 			}
 		}
 
@@ -8391,6 +8578,7 @@ namespace ECSEngine {
 				label_configuration |= UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW;
 			}
 
+			bool omit_text = false;
 			bool has_name_padding = function::HasFlag(configuration, UI_CONFIG_NAME_PADDING);
 			if (has_name_padding) {
 				const UIConfigNamePadding* name_padding = (const UIConfigNamePadding*)config.GetParameter(UI_CONFIG_NAME_PADDING);
@@ -8398,6 +8586,7 @@ namespace ECSEngine {
 				scale.x = name_padding->total_length < 0.0f ? scale.x : name_padding->total_length;
 				scale.x += name_padding->offset_size;
 				label_configuration |= UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X;
+				omit_text = name_padding->omit_text;
 
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
 					if (text->TextScale()->x >= scale.x - 2.0f * drawer->element_descriptor.label_padd.x) {
@@ -8435,13 +8624,17 @@ namespace ECSEngine {
 			float2 draw_scale = scale;
 			if (label_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
+					if (!omit_text) {
+						drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
+					}
 					draw_scale.x = text->scale.x + drawer->layout.element_indentation * !has_name_padding;
 					position.x += draw_scale.x;
 				}
 				else {
 					if (!drawer->initializer) {
-						drawer->TextLabelWithCull(function::ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
+						if (!omit_text) {
+							drawer->TextLabelWithCull(function::ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
+						}
 						position.x += scale.x;
 						draw_scale.x = scale.x;
 					}
@@ -8449,7 +8642,9 @@ namespace ECSEngine {
 			}
 			else {
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					drawer->TextLabel(label_configuration, label_config, text, position, scale);
+					if (!omit_text) {
+						drawer->TextLabel(label_configuration, label_config, text, position, scale);
+					}
 					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
 						if (~configuration & UI_CONFIG_NAME_PADDING) {
 							draw_scale.x = text->scale.x + drawer->element_descriptor.label_padd.x * 2.0f;
@@ -8462,16 +8657,25 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					Stream<UISpriteVertex> text_vertices = drawer->GetTextStream(label_configuration, text.size * 6);
-					drawer->TextLabel(label_configuration, label_config, text, position, scale);
-					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
-						if (~configuration & UI_CONFIG_NAME_PADDING) {
-							draw_scale.x = GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
-							position.x += draw_scale.x;
+					if (!omit_text) {
+						Stream<UISpriteVertex> text_vertices = drawer->GetTextStream(label_configuration, text.size * 6);
+						if (!omit_text) {
+							drawer->TextLabel(label_configuration, label_config, text, position, scale);
 						}
-						else {
-							position.x += scale.x;
-							draw_scale.x = scale.x;
+						if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
+							if (~configuration & UI_CONFIG_NAME_PADDING) {
+								if (!omit_text) {
+									draw_scale.x = GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
+								}
+								else {
+									draw_scale.x = drawer->GetLabelScale(text).x;
+								}
+								position.x += draw_scale.x;
+							}
+							else {
+								position.x += scale.x;
+								draw_scale.x = scale.x;
+							}
 						}
 					}
 				}
@@ -9383,7 +9587,6 @@ namespace ECSEngine {
 					if (~configuration & UI_CONFIG_BUTTON_HOVERABLE) {
 						Color label_color = HandleColor(configuration, config);
 
-						//AddDefaultHoverable(position, scale, label_color, 1.25f, handler.phase);
 						if (handler.phase == ECS_UI_DRAW_NORMAL) {
 							UIDefaultHoverableData hoverable_data;
 							hoverable_data.colors[0] = label_color;
@@ -9399,19 +9602,16 @@ namespace ECSEngine {
 							AddDefaultClickable(configuration, position, scale, { DefaultHoverableAction, &hoverable_data, sizeof(hoverable_data), phase }, handler);
 						}
 						else {
-							UISpriteVertex* vertices = HandleTextSpriteBuffer(configuration);
 							size_t* count = HandleTextSpriteCount(configuration);
 							Stream<char> identifier = HandleResourceIdentifier(text);
-							size_t text_vertex_count = ParseStringIdentifier(identifier) * 6;
+							size_t text_size = ParseStringIdentifier(identifier);
+							size_t text_vertex_count = text_size * 6;
 
 							if (*count >= text_vertex_count) {
 								UIDefaultTextHoverableData hoverable_data;
 								hoverable_data.color = label_color;
-								hoverable_data.vertices = vertices + *count - text_vertex_count;
-								hoverable_data.vertex_count = text_vertex_count;
 
-								hoverable_data.text_offset = { vertices[*count - text_vertex_count].position.x - position.x, -vertices[*count - text_vertex_count].position.y - position.y };
-								
+								hoverable_data.text_offset = element_descriptor.label_padd;
 								
 								Color text_color;
 								float2 text_size;
@@ -9429,7 +9629,12 @@ namespace ECSEngine {
 								else if (configuration & UI_CONFIG_SYSTEM_DRAW) {
 									hoverable_phase = ECS_UI_DRAW_SYSTEM;
 								}
+
 								AddDefaultClickable(configuration, position, scale, { DefaultTextHoverableAction, &hoverable_data, sizeof(hoverable_data), hoverable_phase }, handler);
+							
+								UIDefaultTextHoverableData* handler_hoverable_data = (UIDefaultTextHoverableData*)system->GetLastHoverableData(dockspace, border_index);
+								handler_hoverable_data->text.buffer = (char*)GetHandlerBuffer(identifier.size, hoverable_phase);
+								handler_hoverable_data->text.Copy(identifier);
 							}
 						}
 					}
@@ -9719,7 +9924,8 @@ namespace ECSEngine {
 
 		void UIDrawer::ComboBox(size_t configuration, UIDrawConfig& config, Stream<char> name, Stream<Stream<char>> labels, unsigned int label_display_count, unsigned char* active_label) {
 			ECS_TOOLS_UI_DRAWER_HANDLE_TRANSFORM(configuration, config);
-
+			
+			label_display_count = label_display_count > labels.size ? labels.size : label_display_count;
 			if (!initializer) {
 				if (configuration & UI_CONFIG_DO_CACHE) {
 					UIDrawerComboBox* data = (UIDrawerComboBox*)GetResource(name);
@@ -9830,7 +10036,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		void UIDrawer::ComboBoxDropDownDrawer(size_t configuration, UIDrawConfig& config, UIDrawerComboBox* data) {
-			float2 position = region_position;
+			float2 position = region_position - region_render_offset;
 			float2 scale = { region_scale.x, data->label_y_scale };
 
 			size_t text_label_configuration = UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_TEXT_ALIGNMENT
@@ -9851,16 +10057,29 @@ namespace ECSEngine {
 					click_data.index = index;
 					click_data.box = data;
 
+					if (data->unavailables != nullptr) {
+						UIConfigActiveState active_state;
+						active_state.state = !data->unavailables[index];
+						config.AddFlag(active_state);
+
+						text_label_configuration |= UI_CONFIG_ACTIVE_STATE;
+					}
+
 					Button(text_label_configuration, config, data->labels[index], { ComboBoxLabelClickable, &click_data, sizeof(click_data), ECS_UI_DRAW_SYSTEM });
-					UpdateCurrentRowScale(scale.y);
-					NextRow();
+
+					if (data->unavailables != nullptr) {
+						config.flag_count--;
+						text_label_configuration ^= UI_CONFIG_ACTIVE_STATE;
+					}
 				}
+				FinalizeRectangle(0, position, { 0.0f, scale.y });
+				NextRow();
 				position.y += scale.y;
 			}
 
-			if (position.y < region_position.y + region_scale.y) {
-				SolidColorRectangle(text_label_configuration, { position.x + region_render_offset.x, position.y }, { 2.0f, region_position.y + region_scale.y - position.y }, color);
-			}
+			//if (position.y < region_position.y + region_scale.y) {
+				//SolidColorRectangle(text_label_configuration, { position.x + region_render_offset.x, position.y }, { 2.0f, region_position.y + region_scale.y - position.y }, color);
+			//}
 
 			config.flag_count--;
 		}
@@ -11304,6 +11523,13 @@ namespace ECSEngine {
 
 		void* UIDrawer::GetTempBuffer(size_t size, ECS_UI_DRAW_PHASE phase, size_t alignment) {
 			return system->TemporaryAllocator(thread_id, phase)->Allocate(size, alignment);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		void* UIDrawer::GetHandlerBuffer(size_t size, ECS_UI_DRAW_PHASE phase)
+		{
+			return system->AllocateFromHandlerAllocator(thread_id, phase, size);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -16290,6 +16516,8 @@ namespace ECSEngine {
 					// Call the remove function
 					UIDrawerArrayRemoveAction(action_data);
 				}
+				// It can happen that the add/remove buttons modify the value and this fires later on
+				// after the callbacks were called. So check that the size is smaller or greater
 			}
 			// For the capacity stream nothing needs to be done 
 			// Only the change in the size is sufficient
@@ -16316,6 +16544,8 @@ namespace ECSEngine {
 						data->array_data->add_callback(action_data);
 					}
 				}
+				// It can happen that the add/remove buttons modify the value and this fires later on
+				// after the callbacks were called. So check that the size is smaller or greater
 
 				data->capacity_data->size = data->new_size;
 			}
@@ -17085,6 +17315,13 @@ namespace ECSEngine {
 				ECS_ASSERT(false);
 			}
 			current_index++;
+		}
+
+		// --------------------------------------------------------------------------------------------------------------
+
+		void UIDrawerRowLayout::IndentRow(float scale)
+		{
+			row_scale.x -= scale;
 		}
 
 		// --------------------------------------------------------------------------------------------------------------

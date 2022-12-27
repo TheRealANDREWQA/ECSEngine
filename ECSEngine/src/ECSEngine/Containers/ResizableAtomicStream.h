@@ -20,18 +20,10 @@ namespace ECSEngine {
 		ResizableAtomicStream(AllocatorPolymorphic allocator, unsigned int initial_capacity) : stream(allocator, initial_capacity) {}
 
 		ResizableAtomicStream(const ResizableAtomicStream<T>& other) {
-			buffer = other.buffer;
-			size.store(other.size.load(ECS_RELAXED), ECS_RELAXED);
-			capacity = other.capacity;
-			lock = other.lock;
-			allocator = other.allocator;
+			memcpy(this, &other, sizeof(*this));
 		}
 		ResizableAtomicStream<T>& operator = (const ResizableAtomicStream<T>& other) {
-			buffer = other.buffer;
-			size.store(other.size.load(ECS_RELAXED), ECS_RELAXED);
-			capacity = other.capacity;
-			lock = other.lock;
-			allocator = other.allocator;
+			memcpy(this, &other, sizeof(*this));
 		}
 
 		// Thread safe

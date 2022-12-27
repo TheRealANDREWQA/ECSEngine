@@ -864,7 +864,10 @@ void EditorComponents::FinalizeEvent(const ReflectionManager* reflection_manager
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	{
 		// Update the UIDrawer, the destroy call will destroy all instances of that type
-		ui_drawer->DestroyType(event.name);
+		// If it still exists. If the module is released all at once, then this type might not exist
+		if (ui_drawer->GetTypePtr(event.name) != nullptr) {
+			ui_drawer->DestroyType(event.name);
+		}
 	}
 	break;
 	case EDITOR_COMPONENT_EVENT_ALLOCATOR_SIZE_CHANGED:
@@ -985,7 +988,7 @@ bool EditorComponents::HasBuffers(Stream<char> name) const
 {
 	ReflectionType reflection_type;
 	if (internal_manager->type_definitions.TryGetValue(name, reflection_type)) {
-		return !IsTriviallyCopyable(internal_manager, &reflection_type);
+		return !SearchIsBlittable(internal_manager, &reflection_type);
 	}
 
 	ECS_ASSERT(false);
@@ -1081,7 +1084,7 @@ void EditorComponents::GetTypeDependencies(Stream<char> type, CapacityStream<Str
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::GetModuleTypeDependencies(unsigned int loaded_module_index, CapacityStream<unsigned int>* module_indices, const EditorState* editor_state) const
+void EditorComponents::GetModuleTypesDependencies(unsigned int loaded_module_index, CapacityStream<unsigned int>* module_indices, const EditorState* editor_state) const
 {
 	ECS_STACK_CAPACITY_STREAM(Stream<char>, type_dependencies, 128);
 
@@ -1116,14 +1119,14 @@ void EditorComponents::GetModuleTypeDependencies(unsigned int loaded_module_inde
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::GetModulesDependentUpon(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state) const
+void EditorComponents::GetModulesTypesDependentUpon(unsigned int loaded_module_index, ECSEngine::CapacityStream<unsigned int>* module_indices, const EditorState* editor_state) const
 {
 	ECS_STACK_CAPACITY_STREAM(unsigned int, dependent_indices, 512);
 
 	for (unsigned int index = 0; index < loaded_modules.size; index++) {
 		if (index != loaded_module_index) {
 			dependent_indices.size = 0;
-			GetModuleTypeDependencies(index, &dependent_indices);
+			GetModuleTypesDependencies(index, &dependent_indices);
 			bool exists = function::SearchBytes(dependent_indices.buffer, dependent_indices.size, loaded_module_index, sizeof(loaded_module_index)) != -1;
 			if (exists) {
 				unsigned int index_to_add = index;
@@ -1702,7 +1705,7 @@ void EditorComponents::UpdateComponents(
 
 				double allocator_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 
-				bool has_buffers = !IsTriviallyCopyable(reflection_manager, type);
+				bool has_buffers = !SearchIsBlittable(reflection_manager, type);
 				if (allocator_size != DBL_MAX) {
 					if (!has_buffers) {
 						events.Add({ EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS, type->name });
@@ -1728,7 +1731,7 @@ void EditorComponents::UpdateComponents(
 			const ReflectionType* type = reflection_manager->GetType(indices[index]);
 			unsigned int old_type_index = internal_manager->type_definitions.Find(type->name);
 
-			bool is_trivially_copyable = IsTriviallyCopyable(reflection_manager, type);
+			bool is_trivially_copyable = SearchIsBlittable(reflection_manager, type);
 			double buffer_size = type->GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 
 			if (!is_trivially_copyable) {
@@ -2303,7 +2306,7 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 		else if (component_event.type == EDITOR_COMPONENT_EVENT_HAS_BUFFERS_BUT_NO_ALLOCATOR || component_event.type == EDITOR_COMPONENT_EVENT_HAS_ALLOCATOR_BUT_NO_BUFFERS) {
 			ReflectionType type;
 			if (editor_state->module_reflection->reflection->TryGetType(component_event.name, type)) {
-				bool is_trivially_copyable = IsTriviallyCopyable(editor_state->module_reflection->reflection, &type);
+				bool is_trivially_copyable = SearchIsBlittable(editor_state->module_reflection->reflection, &type);
 
 				double evaluation = type.GetEvaluation(ECS_COMPONENT_ALLOCATOR_SIZE_FUNCTION);
 				if (evaluation != DBL_MAX && !is_trivially_copyable) {

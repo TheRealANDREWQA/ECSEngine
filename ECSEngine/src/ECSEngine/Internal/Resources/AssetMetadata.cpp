@@ -143,35 +143,57 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	// Meant to be used only with an increment of 1 for the new counts
 	void MaterialAssetRelocate(
 		MaterialAsset* material, 
-		unsigned int new_texture_count,
-		unsigned int new_sampler_count,
-		unsigned int new_buffer_count,
-		AllocatorPolymorphic allocator
+		const unsigned int* texture_count,
+		const unsigned int* sampler_count,
+		const unsigned int* buffer_count,
+		AllocatorPolymorphic allocator,
+		bool do_not_copy
 	) 
 	{
-		// Allocate a new buffer
-		size_t total_count = sizeof(MaterialAssetResource) * (new_texture_count + new_sampler_count) + sizeof(MaterialAssetBuffer) * new_buffer_count;
-		void* allocation = AllocateEx(allocator, total_count);
-
-		// Copy into it
-		MaterialAssetResource* resources = (MaterialAssetResource*)allocation;
-		uintptr_t ptr = (uintptr_t)resources;
-		material->textures.CopyTo(ptr);
-		material->samplers.CopyTo(ptr);
-		material->buffers.CopyTo(ptr);
-
-		// Release the old buffer
-		if (material->textures.buffer != nullptr) {
-			DeallocateEx(allocator, material->textures.buffer);
+		unsigned int total_texture_count = 0;
+		unsigned int total_sampler_count = 0;
+		unsigned int total_buffer_count = 0;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			total_texture_count += texture_count[index];
+			total_sampler_count += sampler_count[index];
+			total_buffer_count += buffer_count[index];
 		}
 
-		ptr = (uintptr_t)resources;
-		material->textures.InitializeFromBuffer(ptr, new_texture_count);
-		material->samplers.InitializeFromBuffer(ptr, new_sampler_count);
-		material->buffers.InitializeFromBuffer(ptr, new_buffer_count);
+		// Allocate a new buffer
+		size_t total_count = sizeof(MaterialAssetResource) * (total_texture_count + total_sampler_count) + sizeof(MaterialAssetBuffer) * total_buffer_count;
+		void* allocation = Allocate(allocator, total_count);
+
+		uintptr_t ptr = (uintptr_t)allocation;
+		if (!do_not_copy) {
+			// Copy into it
+			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+				function::CopyStreamAndMemset(ptr, sizeof(MaterialAssetResource) * texture_count[index], material->textures[index]);
+			}
+			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+				function::CopyStreamAndMemset(ptr, sizeof(MaterialAssetResource) * sampler_count[index], material->samplers[index]);
+			}
+			for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+				function::CopyStreamAndMemset(ptr, sizeof(MaterialAssetBuffer) * buffer_count[index], material->buffers[index]);
+			}
+		}
+
+		// Release the old buffer
+		if (material->textures[0].buffer != nullptr) {
+			DeallocateIfBelongs(allocator, material->textures[0].buffer);
+		}
+
+		ptr = (uintptr_t)allocation;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			material->textures[index].InitializeFromBuffer(ptr, texture_count[index]);
+		}
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			material->samplers[index].InitializeFromBuffer(ptr, sampler_count[index]);
+		}
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			material->buffers[index].InitializeFromBuffer(ptr, buffer_count[index]);
+		}
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -183,47 +205,25 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::AddTexture(MaterialAssetResource texture, AllocatorPolymorphic allocator)
-	{
-		MaterialAssetRelocate(this, textures.size + 1, samplers.size, buffers.size, allocator);
-		textures[textures.size - 1] = texture;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
-	void MaterialAsset::AddSampler(MaterialAssetResource sampler, AllocatorPolymorphic allocator)
-	{
-		MaterialAssetRelocate(this, textures.size, samplers.size + 1, buffers.size, allocator);
-		samplers[samplers.size - 1] = sampler;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
-	void MaterialAsset::AddBuffer(MaterialAssetBuffer buffer, AllocatorPolymorphic allocator)
-	{
-		if (buffer.data.buffer != nullptr) {
-			buffer.data = function::Copy(allocator, buffer.data);
-		}
-		MaterialAssetRelocate(this, textures.size, samplers.size, buffers.size + 1, allocator);
-		buffers[buffers.size - 1] = buffer;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
 	MaterialAsset MaterialAsset::Copy(AllocatorPolymorphic allocator) const
 	{
 		MaterialAsset material;
 
-		material.name = function::StringCopy(allocator, name);
-		material.Resize(textures.size, samplers.size, buffers.size, allocator);
-		material.textures.Copy(textures);
-		material.samplers.Copy(samplers);
-		material.buffers.Copy(buffers);
+		unsigned int sizes[ECS_MATERIAL_SHADER_COUNT * 3];
 
-		for (size_t index = 0; index < buffers.size; index++) {
-			if (buffers[index].data.buffer != nullptr) {
-				material.buffers[index].data = function::Copy(allocator, buffers[index].data);
-			}
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			sizes[index] = textures[index].size;
+			sizes[index + ECS_MATERIAL_SHADER_COUNT] = samplers[index].size;
+			sizes[index + ECS_MATERIAL_SHADER_COUNT * 2] = buffers[index].size;
+		}
+
+		material.name = function::StringCopy(allocator, name);
+		material.Resize(sizes, sizes + ECS_MATERIAL_SHADER_COUNT, sizes + ECS_MATERIAL_SHADER_COUNT * 2, allocator);
+
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			material.textures[index].Copy(textures[index]);
+			material.samplers[index].Copy(samplers[index]);
+			material.buffers[index].Copy(buffers[index]);
 		}
 
 		material.pixel_shader_handle = pixel_shader_handle;
@@ -238,14 +238,9 @@ namespace ECSEngine {
 	void MaterialAsset::DeallocateMemory(AllocatorPolymorphic allocator) const
 	{
 		DeallocateIfBelongs(allocator, name.buffer);
-
-		for (size_t index = 0; index < buffers.size; index++) {
-			if (buffers[index].data.buffer != nullptr) {
-				DeallocateIfBelongs(allocator, buffers[index].data.buffer);
-			}
+		if (textures[0].buffer != nullptr) {
+			DeallocateIfBelongs(allocator, textures[0].buffer);
 		}
-
-		DeallocateIfBelongs(allocator, textures.buffer);
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -254,40 +249,95 @@ namespace ECSEngine {
 	{
 		memset(this, 0, sizeof(*this));
 		name = _name;
+		pixel_shader_handle = -1;
+		vertex_shader_handle = -1;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::RemoveTexture(unsigned int index, AllocatorPolymorphic allocator)
-	{
-		textures.RemoveSwapBack(index);
-		// The size was already decremented
-		MaterialAssetRelocate(this, textures.size, samplers.size, buffers.size, allocator);
+	size_t MaterialAsset::GetTextureTotalCount() const {
+		size_t total = 0;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			total += textures[index].size;
+		}
+		return total;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::RemoveSampler(unsigned int index, AllocatorPolymorphic allocator)
-	{
-		samplers.RemoveSwapBack(index);
-		// The size was already decremented
-		MaterialAssetRelocate(this, textures.size, samplers.size, buffers.size, allocator);
+	size_t MaterialAsset::GetSamplerTotalCount() const {
+		size_t total = 0;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			total += samplers[index].size;
+		}
+		return total;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::RemoveBuffer(unsigned int index, AllocatorPolymorphic allocator)
-	{
-		buffers.RemoveSwapBack(index);
-		// The size was already decremented
-		MaterialAssetRelocate(this, textures.size, samplers.size, buffers.size, allocator);
+	size_t MaterialAsset::GetBufferTotalCount() const {
+		size_t total = 0;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			total += buffers[index].size;
+		}
+		return total;
 	}
 
 	// ------------------------------------------------------------------------------------------------------
 
-	void MaterialAsset::Resize(unsigned int texture_count, unsigned int sampler_count, unsigned int buffer_count, AllocatorPolymorphic allocator)
+	void MaterialAsset::Resize(
+		const unsigned int* texture_count,
+		const unsigned int* sampler_count,
+		const unsigned int* buffer_count,
+		AllocatorPolymorphic allocator,
+		bool do_not_copy
+	)
 	{
-		MaterialAssetRelocate(this, texture_count, sampler_count, buffer_count, allocator);
+		MaterialAssetRelocate(this, texture_count, sampler_count, buffer_count, allocator, do_not_copy);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::Resize(const unsigned int* counts, AllocatorPolymorphic allocator, bool do_not_copy)
+	{
+		Resize(counts, counts + ECS_MATERIAL_SHADER_COUNT, counts + ECS_MATERIAL_SHADER_COUNT * 2, allocator, do_not_copy);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::WriteCounts(bool write_texture, bool write_sampler, bool write_buffers, unsigned int* counts) const
+	{
+		auto write_stream = [counts](bool write, unsigned int offset, auto stream) {
+			if (write) {
+				counts[offset + ECS_MATERIAL_SHADER_VERTEX] = stream[ECS_MATERIAL_SHADER_VERTEX].size;
+				counts[offset + ECS_MATERIAL_SHADER_PIXEL] = stream[ECS_MATERIAL_SHADER_PIXEL].size;
+			}
+		};
+
+		write_stream(write_texture, 0, textures);
+		write_stream(write_sampler, ECS_MATERIAL_SHADER_COUNT, samplers);
+		write_stream(write_buffers, ECS_MATERIAL_SHADER_COUNT * 2, buffers);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::WriteTextureCount(unsigned int vertex, unsigned int pixel, unsigned int* counts) {
+		counts[ECS_MATERIAL_SHADER_VERTEX] = vertex;
+		counts[ECS_MATERIAL_SHADER_PIXEL] = pixel;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::WriteSamplerCount(unsigned int vertex, unsigned int pixel, unsigned int* counts) {
+		counts[ECS_MATERIAL_SHADER_COUNT + ECS_MATERIAL_SHADER_VERTEX] = vertex;
+		counts[ECS_MATERIAL_SHADER_COUNT + ECS_MATERIAL_SHADER_PIXEL] = pixel;
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void MaterialAsset::WriteBufferCount(unsigned int vertex, unsigned int pixel, unsigned int* counts) {
+		counts[ECS_MATERIAL_SHADER_COUNT * 2 + ECS_MATERIAL_SHADER_VERTEX] = vertex;
+		counts[ECS_MATERIAL_SHADER_COUNT * 2 + ECS_MATERIAL_SHADER_PIXEL] = pixel;
 	}
 
 	// ------------------------------------------------------------------------------------------------------

@@ -280,26 +280,50 @@ namespace ECSEngine {
 		Stream<wchar_t> mount_point
 	)
 	{
-		user_material->textures.Initialize(allocator, material->textures.size);
-		user_material->buffers.Initialize(allocator, material->buffers.size);
-
-		for (size_t index = 0; index < material->textures.size; index++) {
-			const TextureMetadata* texture_metadata = database->GetTextureConst(material->textures[index].metadata_handle);
-			Stream<wchar_t> final_texture_path = function::MountPath(texture_metadata->file, mount_point, allocator);
-
-			user_material->textures[index].filename = final_texture_path;
-			user_material->textures[index].srgb = texture_metadata->sRGB;
-			user_material->textures[index].slot = material->textures[index].slot;
-			user_material->textures[index].generate_mips = texture_metadata->generate_mip_maps;
-			user_material->textures[index].compression = texture_metadata->compression_type;
-			user_material->textures[index].shader_type = ECS_SHADER_PIXEL;
+		unsigned int texture_total_count = 0;
+		unsigned int buffer_total_count = 0;
+		unsigned int sampler_total_count = 0;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			texture_total_count += material->textures[index].size;
+			buffer_total_count += material->buffers[index].size;
+			sampler_total_count += material->samplers[index].size;
 		}
 
-		for (size_t index = 0; index < material->buffers.size; index++) {
-			user_material->buffers[index].data = material->buffers[index].data;
-			user_material->buffers[index].dynamic = material->buffers[index].dynamic;
-			user_material->buffers[index].shader_type = material->buffers[index].shader_type;
-			user_material->buffers[index].slot = material->buffers[index].slot;
+		user_material->textures.Initialize(allocator, texture_total_count);
+		user_material->buffers.Initialize(allocator, buffer_total_count);
+		user_material->samplers.Initialize(allocator, sampler_total_count);
+
+		texture_total_count = 0;
+		buffer_total_count = 0;
+		sampler_total_count = 0;
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			ECS_SHADER_TYPE shader_type = GetShaderFromMaterialShaderType((ECS_MATERIAL_SHADER)index);
+			for (size_t subindex = 0; subindex < material->textures[index].size; subindex++) {
+				const TextureMetadata* texture_metadata = database->GetTextureConst(material->textures[index][subindex].metadata_handle);
+				Stream<wchar_t> final_texture_path = function::MountPath(texture_metadata->file, mount_point, allocator);
+
+				user_material->textures[texture_total_count].filename = final_texture_path;
+				user_material->textures[texture_total_count].srgb = texture_metadata->sRGB;
+				user_material->textures[texture_total_count].slot = material->textures[index][subindex].slot;
+				user_material->textures[texture_total_count].generate_mips = texture_metadata->generate_mip_maps;
+				user_material->textures[texture_total_count].compression = texture_metadata->compression_type;
+				user_material->textures[texture_total_count].shader_type = shader_type;
+				texture_total_count++;
+			}
+
+			for (size_t subindex = 0; subindex < material->buffers[index].size; subindex++) {
+				user_material->buffers[buffer_total_count].data = material->buffers[index][subindex].data;
+				user_material->buffers[buffer_total_count].dynamic = material->buffers[index][subindex].dynamic;
+				user_material->buffers[buffer_total_count].shader_type = shader_type;
+				user_material->buffers[buffer_total_count].slot = material->buffers[index][subindex].slot;
+				buffer_total_count++;
+			}
+
+			for (size_t subindex = 0; subindex < material->samplers[index].size; subindex++) {
+				user_material->samplers[sampler_total_count].shader_type = shader_type;
+				user_material->samplers[sampler_total_count].state = database->GetGPUSamplerConst(material->samplers[index][subindex].metadata_handle)->sampler;
+				sampler_total_count++;
+			}
 		}
 
 		const ShaderMetadata* pixel_shader_metadata = database->GetShaderConst(material->pixel_shader_handle);
@@ -499,6 +523,142 @@ namespace ECSEngine {
 		else {
 			return (size_t)metadata->material_pointer >= ECS_ASSET_RANDOMIZED_ASSET_LIMIT;
 		}
+	}
+
+	// -------------------------------------------------------------------------------------------------------------------------
+
+	bool IsMaterialFromMetadataLoadedEx(
+		const MaterialAsset* metadata, 
+		const ResourceManager* resource_manager, 
+		const AssetDatabase* database, 
+		IsMaterialFromMetadataLoadedExDesc* load_desc
+	)
+	{
+		bool has_typed_handles = false;
+		bool has_error_string = false;
+		bool has_segmened_error_string = false;
+		bool early_exit = true;
+		Stream<wchar_t> mount_point = { nullptr, 0 };
+
+		if (load_desc != nullptr) {
+			has_typed_handles = load_desc->missing_handles != nullptr;
+			has_error_string = load_desc->error_string != nullptr;
+			has_segmened_error_string = load_desc->segmented_error_string != nullptr;
+			ECS_ASSERT(!has_segmened_error_string || has_error_string);
+
+			mount_point = load_desc->mount_point;
+
+			early_exit &= ~has_typed_handles;
+			early_exit &= ~has_error_string;
+			early_exit &= ~has_segmened_error_string;
+		}
+
+		bool success = true;
+
+		bool is_loaded = IsMaterialFromMetadataLoaded(metadata, true);
+		if (!is_loaded && early_exit) {
+			return false;
+		}
+
+		auto fail = [&](unsigned int handle, ECS_ASSET_TYPE type, const char* not_loaded_string, const char* invalid_handle_string, size_t index = -1) {
+			success = false;
+			if (has_typed_handles) {
+				load_desc->missing_handles->AddSafe({ handle, type });
+			}
+
+			Stream<char> previous_error_string = *load_desc->error_string;
+			if (has_error_string) {
+				if (load_desc->error_string->size == 0) {
+					// Add a basic message
+					load_desc->error_string->AddStreamSafe("The material is not created. Referenced assets that are missing/unspecified:\n");
+					if (has_segmened_error_string) {
+						load_desc->segmented_error_string->AddSafe(*load_desc->error_string);
+						load_desc->segmented_error_string->buffer[0].size--;
+					}
+					previous_error_string = *load_desc->error_string;
+				}
+
+				if (handle == -1) {
+					if (index == -1) {
+						load_desc->error_string->AddStreamSafe(invalid_handle_string);
+					}
+					else {
+						ECS_FORMAT_STRING(*load_desc->error_string, invalid_handle_string, index);
+					}
+				}
+				else {
+					ECS_STACK_CAPACITY_STREAM(char, asset_string, 256);
+					AssetToString(database->GetAssetConst(handle, type), type, asset_string);
+					ECS_FORMAT_STRING(*load_desc->error_string, not_loaded_string, asset_string);
+				}
+				load_desc->error_string->AddSafe('\n');
+			}
+
+			if (has_segmened_error_string) {
+				load_desc->segmented_error_string->AddSafe({ previous_error_string.buffer + previous_error_string.size, load_desc->error_string->size - previous_error_string.size - 1 });
+			}
+		};
+
+		// Start with the textures
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			for (size_t subindex = 0; subindex < metadata->textures[index].size; subindex++) {
+				unsigned int handle = metadata->textures[index][subindex].metadata_handle;
+				if (handle == -1 || !IsTextureFromMetadataLoaded(resource_manager, database->GetTextureConst(handle), mount_point)) {
+					if (early_exit) {
+						return false;
+					}
+					else {
+						fail(handle, ECS_ASSET_TEXTURE, "Texture {#} is not loaded", "Texture with index {#} is unspecified", subindex);
+					}
+				}
+			}
+		}
+
+		// Continue with the shaders
+		if (metadata->vertex_shader_handle == -1 || !IsShaderFromMetadataLoaded(resource_manager, database->GetShaderConst(metadata->vertex_shader_handle), mount_point)) {
+			if (early_exit) {
+				return false;
+			}
+			else {
+				fail(metadata->vertex_shader_handle, ECS_ASSET_SHADER, "The vertex shader {#} is not loaded", "The vertex shader is unspecified");
+			}
+		}
+
+		if (metadata->pixel_shader_handle == -1 || !IsShaderFromMetadataLoaded(resource_manager, database->GetShaderConst(metadata->pixel_shader_handle), mount_point)) {
+			if (early_exit) {
+				return false;
+			}
+			else {
+				fail(metadata->pixel_shader_handle, ECS_ASSET_SHADER, "The pixel shader {#} is not loaded", "The pixel shader is unspecified");
+			}
+		}
+
+		// Verify the samplers as well (if they are empty)
+		for (size_t index = 0; index < ECS_MATERIAL_SHADER_COUNT; index++) {
+			for (size_t subindex = 0; subindex < metadata->samplers[index].size; subindex++) {
+				unsigned int handle = metadata->samplers[index][subindex].metadata_handle;
+				if (handle == -1 || !IsGPUSamplerFromMetadataLoaded(database->GetGPUSamplerConst(handle), true)) {
+					if (early_exit) {
+						return false;
+					}
+					else {
+						fail(handle, ECS_ASSET_GPU_SAMPLER, "GPU Sampler {#} is not created", "The GPU Sampler at index {#} is unspecified", subindex);
+					}
+				}
+			}
+		}
+
+		// Add a basic error message
+		if (has_error_string) {
+			if (success && !is_loaded) {
+				load_desc->error_string->AddStream("The material is not created but dependencies are ready");
+				if (has_segmened_error_string) {
+					load_desc->segmented_error_string->AddSafe(*load_desc->error_string);
+				}
+			}
+		}
+
+		return success && is_loaded;
 	}
 
 	// -------------------------------------------------------------------------------------------------------------------------

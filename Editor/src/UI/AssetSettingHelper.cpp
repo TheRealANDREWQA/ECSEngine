@@ -307,7 +307,7 @@ void AssetSettingsHelperChangedAction(ActionData* action_data)
 	unsigned int handle = data->editor_state->asset_database->FindAsset(name, file, data->asset_type);
 	bool success = true;
 	if (handle != -1) {
-		success = data->editor_state->asset_database->UpdateAsset(handle, &data->helper_data->metadata, data->asset_type);
+		success = data->editor_state->asset_database->UpdateAsset(handle, data->helper_data->metadata, data->asset_type);
 	}
 	else {
 		success = data->editor_state->asset_database->WriteAssetFile(data->helper_data->metadata, data->asset_type);

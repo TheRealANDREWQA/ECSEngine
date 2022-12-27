@@ -737,9 +737,10 @@ namespace ECSEngine {
 				continue;
 			}
 
+			Stream<MaterialAssetResource> combined_textures = material_asset->GetCombinedTextures();
 			size_t subindex = 0;
-			for (; subindex < material_asset->textures.size; subindex++) {
-				unsigned int texture_index = data->FindTexture(material_asset->textures[subindex].metadata_handle);
+			for (; subindex < combined_textures.size; subindex++) {
+				unsigned int texture_index = data->FindTexture(combined_textures[subindex].metadata_handle);
 				if (texture_index == -1) {
 					fail(index, true);
 					continue;
